@@ -33,13 +33,13 @@ function formatActionType(t: string): string {
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'IN_PROGRESS':
-      return <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+      return <Loader2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
     case 'CANCELLING':
-      return <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+      return <Loader2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-spin" />
     case 'PENDING':
     case 'QUEUED':
     default:
-      return <Clock className="w-3.5 h-3.5 text-blue-600" />
+      return <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
   }
 }
 
@@ -107,14 +107,14 @@ export default function ActiveJobsStrip() {
 
   return (
     <div className="px-6 pb-2 flex-shrink-0">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
-        <div className="px-3 py-2 flex items-center justify-between border-b border-blue-200">
+      <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
+        <div className="px-3 py-2 flex items-center justify-between border-b border-blue-200 dark:border-blue-900">
           <div className="text-sm font-semibold text-blue-900 uppercase tracking-wide">
             Active Jobs · {jobs.length}
           </div>
           <Link
             href="/bulk-operations/history"
-            className="text-sm font-medium text-blue-700 hover:text-blue-900"
+            className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-900"
           >
             View all →
           </Link>
@@ -139,7 +139,7 @@ export default function ActiveJobsStrip() {
                 <StatusIcon status={job.status} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-base font-medium text-slate-900 truncate">
+                    <span className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
                       {job.jobName}
                     </span>
                     <Badge variant="info" size="sm">
@@ -150,19 +150,19 @@ export default function ActiveJobsStrip() {
                         {job.channel}
                       </Badge>
                     )}
-                    <span className="text-xs text-slate-500 uppercase tracking-wide">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                       {job.status.replace(/_/g, ' ')}
                     </span>
                   </div>
                   {/* Progress bar — only meaningful while IN_PROGRESS;
                       for PENDING / QUEUED keep a flat indeterminate bar. */}
                   <div className="mt-1 flex items-center gap-2">
-                    <div className="h-1 bg-blue-100 rounded-full overflow-hidden flex-1">
+                    <div className="h-1 bg-blue-100 dark:bg-blue-900/60 rounded-full overflow-hidden flex-1">
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
                           job.status === 'IN_PROGRESS'
-                            ? 'bg-blue-600'
+                            ? 'bg-blue-600 dark:bg-blue-700'
                             : 'bg-blue-300',
                         )}
                         style={{
@@ -170,10 +170,10 @@ export default function ActiveJobsStrip() {
                         }}
                       />
                     </div>
-                    <span className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                    <span className="text-xs text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">
                       {job.processedItems} / {job.totalItems}
                       {job.failedItems > 0 && (
-                        <span className="text-red-700 ml-1">
+                        <span className="text-red-700 dark:text-red-300 ml-1">
                           · {job.failedItems} failed
                         </span>
                       )}
@@ -185,7 +185,7 @@ export default function ActiveJobsStrip() {
                     type="button"
                     onClick={() => cancelJob(job.id)}
                     disabled={cancellingId === job.id}
-                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-sm text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
+                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded disabled:opacity-50"
                     title={`Cancel ${job.jobName}`}
                   >
                     <Ban className="w-3 h-3" />
@@ -197,7 +197,7 @@ export default function ActiveJobsStrip() {
           })}
         </div>
         {error && (
-          <div className="px-3 py-1.5 bg-red-50 border-t border-red-200 text-sm text-red-700">
+          <div className="px-3 py-1.5 bg-red-50 dark:bg-red-950/40 border-t border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}

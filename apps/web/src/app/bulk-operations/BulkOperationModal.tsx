@@ -553,18 +553,18 @@ export default function BulkOperationModal({
       onClick={() => !executing && onClose()}
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[640px] max-w-[92vw] flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-[640px] max-w-[92vw] flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Bulk apply
           </h2>
           <button
             type="button"
             onClick={() => !executing && onClose()}
-            className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50"
             disabled={executing}
             aria-label="Close"
           >
@@ -584,12 +584,12 @@ export default function BulkOperationModal({
                   className={cn(
                     'text-left rounded-md border px-3 py-2 transition-colors',
                     opType === o.type
-                      ? 'border-blue-500 bg-blue-50 text-blue-900'
-                      : 'border-slate-200 hover:border-slate-300',
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-900'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                 >
                   <div className="text-md font-medium">{o.label}</div>
-                  <div className="text-sm text-slate-500 mt-0.5 line-clamp-2">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                     {o.description}
                   </div>
                 </button>
@@ -600,15 +600,15 @@ export default function BulkOperationModal({
                 className={cn(
                   'text-left rounded-md border px-3 py-2 transition-colors',
                   isSchemaOp
-                    ? 'border-blue-500 bg-blue-50 text-blue-900'
-                    : 'border-slate-200 hover:border-slate-300',
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-900'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 <div className="text-md font-medium inline-flex items-center gap-1.5">
                   <Globe className="w-3.5 h-3.5" />
                   Set channel attribute
                 </div>
-                <div className="text-sm text-slate-500 mt-0.5 line-clamp-2">
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                   Schema-driven update of any Amazon attribute across the
                   selected marketplaces. Operates on visible products in
                   the grid.
@@ -632,13 +632,13 @@ export default function BulkOperationModal({
               <SchemaTargetsBanner targets={marketplaceTargets} />
               <div className="mt-3 space-y-3">
                 {schemaLoading && (
-                  <div className="text-base text-slate-500 inline-flex items-center gap-1.5">
+                  <div className="text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     Loading schema fields…
                   </div>
                 )}
                 {schemaError && (
-                  <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+                  <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-start gap-2">
                     <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                     <div>{schemaError}</div>
                   </div>
@@ -673,7 +673,7 @@ export default function BulkOperationModal({
                             onChange={(v) => setSchemaValue(v)}
                           />
                           {schemaField.description && (
-                            <p className="mt-1 text-xs text-slate-500">
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                               {schemaField.description}
                             </p>
                           )}
@@ -682,13 +682,13 @@ export default function BulkOperationModal({
                     </>
                   )}
               </div>
-              <div className="mt-3 text-sm text-slate-500">
+              <div className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                 Targets {visibleProductIds.length.toLocaleString()} visible
                 product{visibleProductIds.length === 1 ? '' : 's'} ×{' '}
                 {marketplaceTargets.length} marketplace
                 {marketplaceTargets.length === 1 ? '' : 's'}
                 {visibleProductIds.length > 1000 && (
-                  <span className="text-amber-700">
+                  <span className="text-amber-700 dark:text-amber-300">
                     {' '}
                     (capped at 1000 — refine the grid filter to narrow it
                     down)
@@ -697,11 +697,11 @@ export default function BulkOperationModal({
                 .
               </div>
               {schemaResult && (
-                <div className="mt-3 text-base text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                <div className="mt-3 text-base text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded px-3 py-2">
                   Updated {schemaResult.updated.toLocaleString()} listing
                   {schemaResult.updated === 1 ? '' : 's'}.
                   {schemaResult.errors.length > 0 && (
-                    <span className="text-amber-700 ml-1">
+                    <span className="text-amber-700 dark:text-amber-300 ml-1">
                       {' '}
                       {schemaResult.errors.length} error
                       {schemaResult.errors.length === 1 ? '' : 's'} (see
@@ -723,7 +723,7 @@ export default function BulkOperationModal({
                 label={
                   <>
                     Current filter result{' '}
-                    <span className="text-slate-500">
+                    <span className="text-slate-500 dark:text-slate-400">
                       (uses the grid&apos;s active filters)
                     </span>
                   </>
@@ -744,7 +744,7 @@ export default function BulkOperationModal({
                 label={
                   <>
                     Selected rows{' '}
-                    <span className="text-slate-500">
+                    <span className="text-slate-500 dark:text-slate-400">
                       ({selectedProductIds.length}
                       {selectedProductIds.length === 0
                         ? ' — pick rows on the grid first'
@@ -857,28 +857,28 @@ export default function BulkOperationModal({
           {!isSchemaOp && payloadValid && (
             <Section title="Preview">
               {previewLoading && (
-                <div className="text-base text-slate-500 inline-flex items-center gap-1.5">
+                <div className="text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Computing…
                 </div>
               )}
               {previewError && (
-                <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+                <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-start gap-2">
                   <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                   <div>{previewError}</div>
                 </div>
               )}
               {!previewLoading && !previewError && preview && (
                 <>
-                  <div className="text-md font-medium text-slate-900 mb-2">
+                  <div className="text-md font-medium text-slate-900 dark:text-slate-100 mb-2">
                     {preview.affectedCount.toLocaleString()}{' '}
                     {preview.affectedCount === 1 ? 'item' : 'items'} will be
                     affected.
                   </div>
                   {preview.sampleItems.length > 0 && (
-                    <div className="border border-slate-200 rounded-md overflow-hidden">
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                       <table className="w-full text-base">
-                        <thead className="bg-slate-50 text-slate-500">
+                        <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                           <tr>
                             <th className="text-left px-3 py-1.5 font-medium">
                               SKU
@@ -898,15 +898,15 @@ export default function BulkOperationModal({
                           {preview.sampleItems.map((s) => (
                             <tr
                               key={s.id}
-                              className="border-t border-slate-100"
+                              className="border-t border-slate-100 dark:border-slate-800"
                             >
-                              <td className="px-3 py-1.5 font-mono text-sm text-slate-700 truncate max-w-[220px]">
+                              <td className="px-3 py-1.5 font-mono text-sm text-slate-700 dark:text-slate-300 truncate max-w-[220px]">
                                 {s.sku ?? '—'}
                               </td>
-                              <td className="px-3 py-1.5 text-slate-600 tabular-nums">
+                              <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 tabular-nums">
                                 {String(s.currentValue ?? '—')}
                               </td>
-                              <td className="px-3 py-1.5 text-slate-900 tabular-nums">
+                              <td className="px-3 py-1.5 text-slate-900 dark:text-slate-100 tabular-nums">
                                 {String(s.newValue ?? '—')}
                               </td>
                               <td className="px-3 py-1.5">
@@ -914,8 +914,8 @@ export default function BulkOperationModal({
                                   className={cn(
                                     'text-xs px-1.5 py-0.5 rounded',
                                     s.status === 'processed'
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-amber-100 text-amber-800',
+                                      ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800'
+                                      : 'bg-amber-100 dark:bg-amber-900/60 text-amber-800',
                                   )}
                                 >
                                   {s.status}
@@ -926,7 +926,7 @@ export default function BulkOperationModal({
                         </tbody>
                       </table>
                       {preview.affectedCount > preview.sampleItems.length && (
-                        <div className="px-3 py-1.5 text-sm text-slate-500 bg-slate-50 border-t border-slate-100">
+                        <div className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800">
                           + {preview.affectedCount - preview.sampleItems.length}{' '}
                           more
                         </div>
@@ -942,24 +942,24 @@ export default function BulkOperationModal({
           {job && (
             <Section title="Execution">
               <div className="space-y-2">
-                <div className="text-base text-slate-700 inline-flex items-center gap-2">
+                <div className="text-base text-slate-700 dark:text-slate-300 inline-flex items-center gap-2">
                   {executing && !jobTerminal && (
                     <Loader2 className="w-3 h-3 animate-spin" />
                   )}
                   {jobTerminal && job.status === 'COMPLETED' && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                   )}
                   {jobTerminal && job.status !== 'COMPLETED' && (
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                   )}
                   Status: <strong>{job.status}</strong>
                   {job.progressPercent > 0 && (
-                    <span className="text-slate-500">
+                    <span className="text-slate-500 dark:text-slate-400">
                       · {job.progressPercent}%
                     </span>
                   )}
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                   <div
                     className={cn(
                       'h-full transition-all',
@@ -973,14 +973,14 @@ export default function BulkOperationModal({
                   />
                 </div>
                 {jobTerminal && (
-                  <div className="text-base text-slate-700 grid grid-cols-3 gap-2 mt-2">
+                  <div className="text-base text-slate-700 dark:text-slate-300 grid grid-cols-3 gap-2 mt-2">
                     <Stat label="Processed" value={job.processedItems} tone="ok" />
                     <Stat label="Skipped" value={job.skippedItems} tone="warn" />
                     <Stat label="Failed" value={job.failedItems} tone="danger" />
                   </div>
                 )}
                 {job.lastError && (
-                  <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mt-2">
+                  <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 mt-2">
                     Last error: {job.lastError}
                   </div>
                 )}
@@ -992,9 +992,9 @@ export default function BulkOperationModal({
               touch overlapping products + same actionType. Operator
               must explicitly check "Run anyway" before Execute unlocks. */}
           {conflicts.length > 0 && !job && !isSchemaOp && (
-            <div className="text-base bg-amber-50 border border-amber-300 rounded px-3 py-2.5 space-y-2">
+            <div className="text-base bg-amber-50 dark:bg-amber-950/40 border border-amber-300 rounded px-3 py-2.5 space-y-2">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                 <div className="space-y-1.5 flex-1">
                   <div className="font-semibold text-amber-900">
                     {conflicts.length === 1
@@ -1012,18 +1012,18 @@ export default function BulkOperationModal({
                     {conflicts.map((c) => (
                       <li
                         key={c.jobId}
-                        className="text-sm text-amber-900 bg-white/60 border border-amber-200 rounded px-2 py-1.5 flex items-center justify-between gap-3"
+                        className="text-sm text-amber-900 bg-white/60 border border-amber-200 dark:border-amber-900 rounded px-2 py-1.5 flex items-center justify-between gap-3"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="font-medium truncate">
                             {c.jobName}
                           </div>
-                          <div className="text-amber-700 text-xs">
+                          <div className="text-amber-700 dark:text-amber-300 text-xs">
                             {c.status} · {c.progressPercent}% · {c.totalItems.toLocaleString()} items
                             {c.createdBy ? ` · by ${c.createdBy}` : ''}
                           </div>
                         </div>
-                        <div className="flex-shrink-0 text-xs font-mono bg-amber-100 text-amber-900 border border-amber-200 rounded px-1.5 py-0.5">
+                        <div className="flex-shrink-0 text-xs font-mono bg-amber-100 dark:bg-amber-900/60 text-amber-900 border border-amber-200 dark:border-amber-900 rounded px-1.5 py-0.5">
                           ~{c.overlapCount.toLocaleString()}
                           {c.overlapTruncated ? '+' : ''} overlap
                         </div>
@@ -1047,7 +1047,7 @@ export default function BulkOperationModal({
           )}
 
           {executeError && (
-            <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-start gap-2">
+            <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <div>{executeError}</div>
             </div>
@@ -1055,7 +1055,7 @@ export default function BulkOperationModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 flex-shrink-0">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
           <Button
             variant="secondary"
             size="sm"
@@ -1122,7 +1122,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
         {title}
       </div>
       {children}
@@ -1141,12 +1141,12 @@ function Radio({
   label: React.ReactNode
 }) {
   return (
-    <label className="flex items-start gap-2 text-md text-slate-700 cursor-pointer hover:text-slate-900">
+    <label className="flex items-start gap-2 text-md text-slate-700 dark:text-slate-300 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100">
       <input
         type="radio"
         checked={checked}
         onChange={onChange}
-        className="mt-0.5 w-3.5 h-3.5 border-slate-300 text-blue-600 focus:ring-blue-500"
+        className="mt-0.5 w-3.5 h-3.5 border-slate-300 dark:border-slate-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
       />
       <span>{label}</span>
     </label>
@@ -1164,16 +1164,16 @@ function Stat({
 }) {
   const toneClass =
     tone === 'ok'
-      ? 'text-emerald-700'
+      ? 'text-emerald-700 dark:text-emerald-300'
       : tone === 'warn'
-        ? 'text-amber-700'
-        : 'text-red-700'
+        ? 'text-amber-700 dark:text-amber-300'
+        : 'text-red-700 dark:text-red-300'
   return (
-    <div className="text-center bg-slate-50 rounded px-2 py-1.5">
+    <div className="text-center bg-slate-50 dark:bg-slate-800 rounded px-2 py-1.5">
       <div className={cn('text-xl font-semibold tabular-nums', toneClass)}>
         {value.toLocaleString()}
       </div>
-      <div className="text-xs text-slate-500 uppercase tracking-wide">
+      <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
         {label}
       </div>
     </div>
@@ -1187,7 +1187,7 @@ function SchemaTargetsBanner({
 }) {
   if (targets.length === 0) {
     return (
-      <div className="text-base text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 inline-flex items-start gap-2">
+      <div className="text-base text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-3 py-2 inline-flex items-start gap-2">
         <Globe className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
         <div>
           No marketplace targets selected. Use the marketplace picker in
@@ -1198,7 +1198,7 @@ function SchemaTargetsBanner({
     )
   }
   return (
-    <div className="text-base text-blue-800 bg-blue-50 border border-blue-200 rounded px-3 py-2 inline-flex items-start gap-2">
+    <div className="text-base text-blue-800 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded px-3 py-2 inline-flex items-start gap-2">
       <Globe className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
       <div>
         Will fan out to{' '}

@@ -174,17 +174,17 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
       aria-label="Upload products"
     >
       <div
-        className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">
+            <FileSpreadsheet className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Upload products
             </h2>
             {preview && (
-              <span className="text-base text-slate-500 truncate max-w-[280px]">
+              <span className="text-base text-slate-500 dark:text-slate-400 truncate max-w-[280px]">
                 {preview.filename}
               </span>
             )}
@@ -193,7 +193,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
             type="button"
             onClick={onClose}
             disabled={stage === 'uploading' || stage === 'applying'}
-            className="text-slate-400 hover:text-slate-700 rounded p-1 hover:bg-slate-100 disabled:opacity-40"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -219,8 +219,8 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                 className={cn(
                   'border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors',
                   isDragOver
-                    ? 'border-blue-400 bg-blue-50'
-                    : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50',
+                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/40'
+                    : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
                 <input
@@ -233,63 +233,63 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                     if (f) handleFile(f)
                   }}
                 />
-                <Upload className="w-7 h-7 mx-auto text-slate-400 mb-3" />
-                <div className="text-md font-medium text-slate-700">
+                <Upload className="w-7 h-7 mx-auto text-slate-400 dark:text-slate-500 mb-3" />
+                <div className="text-md font-medium text-slate-700 dark:text-slate-300">
                   Drop CSV, Excel, or ZIP file here
                 </div>
-                <div className="text-base text-slate-500 mt-0.5">
+                <div className="text-base text-slate-500 dark:text-slate-400 mt-0.5">
                   or click to browse
                 </div>
-                <div className="text-sm text-slate-400 mt-3">
+                <div className="text-sm text-slate-400 dark:text-slate-500 mt-3">
                   Supported: .csv, .xlsx, .xls, .zip · Max 50 MB · 50,000 rows
                 </div>
-                <div className="text-sm text-slate-400 mt-1">
+                <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
                   ZIP layout: <code className="font-mono">SKU/data.json</code> +{' '}
                   <code className="font-mono">SKU/description.html</code> per
                   product folder
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-md px-4 py-3 bg-slate-50/50">
-                <div className="text-base font-semibold text-slate-700 mb-1.5">
+              <div className="border border-slate-200 dark:border-slate-700 rounded-md px-4 py-3 bg-slate-50/50">
+                <div className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Need a template?
                 </div>
                 <div className="flex flex-col gap-1 text-base">
                   <a
                     href={`${templateBase}?view=full`}
-                    className="text-blue-700 hover:text-blue-900 hover:underline"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 hover:underline"
                   >
                     ↓ Download CSV template — all editable fields
                   </a>
                   <a
                     href={`${templateBase}?view=pricing`}
-                    className="text-blue-700 hover:text-blue-900 hover:underline"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 hover:underline"
                   >
                     ↓ Download CSV template — pricing focus
                   </a>
                   <a
                     href={`${templateBase}?view=inventory`}
-                    className="text-blue-700 hover:text-blue-900 hover:underline"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 hover:underline"
                   >
                     ↓ Download CSV template — inventory focus
                   </a>
                   <a
                     href={`${templateBase}?view=physical`}
-                    className="text-blue-700 hover:text-blue-900 hover:underline"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 hover:underline"
                   >
                     ↓ Download CSV template — physical / dimensions
                   </a>
                 </div>
-                <div className="text-sm text-slate-500 mt-2">
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                   Templates include a sample row demonstrating the format
-                  (e.g. <code className="bg-white px-1 rounded">5kg</code> for
-                  weight, <code className="bg-white px-1 rounded">60cm</code>{' '}
+                  (e.g. <code className="bg-white dark:bg-slate-900 px-1 rounded">5kg</code> for
+                  weight, <code className="bg-white dark:bg-slate-900 px-1 rounded">60cm</code>{' '}
                   for dimensions). Empty cells in your file mean "no change".
                 </div>
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-base text-red-800">
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-md text-base text-red-800">
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -298,8 +298,8 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
           )}
 
           {stage === 'uploading' && (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600 dark:text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400 dark:text-slate-500" />
               <div className="text-md">Parsing and validating…</div>
             </div>
           )}
@@ -313,7 +313,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                   {preview.warnings.map((w, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-900"
+                      className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md text-base text-amber-900"
                     >
                       <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                       <span>{w}</span>
@@ -325,28 +325,28 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
               {preview.errors.length > 0 && (
                 <PreviewSection
                   title={`Errors (${preview.errorRows})`}
-                  iconClass="text-amber-600"
-                  rowClass="bg-amber-50/40 border-amber-200"
+                  iconClass="text-amber-600 dark:text-amber-400"
+                  rowClass="bg-amber-50/40 border-amber-200 dark:border-amber-900"
                 >
                   {preview.errors.slice(0, PREVIEW_LIMIT).map((e, i) => (
                     <li
                       key={`${e.row}:${e.field ?? ''}:${i}`}
                       className="px-3 py-1.5 flex items-center gap-2 text-base"
                     >
-                      <span className="text-slate-400 tabular-nums w-12">
+                      <span className="text-slate-400 dark:text-slate-500 tabular-nums w-12">
                         Row {e.row}
                       </span>
-                      <span className="font-mono text-slate-500 truncate max-w-[140px]">
+                      <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
                         {e.sku || '(no sku)'}
                       </span>
                       {e.field && (
-                        <span className="text-slate-700">{e.field}:</span>
+                        <span className="text-slate-700 dark:text-slate-300">{e.field}:</span>
                       )}
                       <span className="text-amber-800">{e.message}</span>
                     </li>
                   ))}
                   {preview.errors.length > PREVIEW_LIMIT && (
-                    <li className="px-3 py-1.5 text-sm text-slate-500 italic">
+                    <li className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 italic">
                       + {preview.errors.length - PREVIEW_LIMIT} more
                     </li>
                   )}
@@ -356,8 +356,8 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
               {preview.sampleChanges.length > 0 && (
                 <PreviewSection
                   title="Sample changes"
-                  iconClass="text-slate-500"
-                  rowClass="bg-slate-50/50 border-slate-200"
+                  iconClass="text-slate-500 dark:text-slate-400"
+                  rowClass="bg-slate-50/50 border-slate-200 dark:border-slate-700"
                 >
                   {preview.sampleChanges
                     .slice(0, PREVIEW_LIMIT)
@@ -366,24 +366,24 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
                         key={`${c.row}:${c.field}:${i}`}
                         className="px-3 py-1.5 flex items-center gap-2 text-base"
                       >
-                        <span className="text-slate-400 tabular-nums w-12">
+                        <span className="text-slate-400 dark:text-slate-500 tabular-nums w-12">
                           Row {c.row}
                         </span>
-                        <span className="font-mono text-slate-500 truncate max-w-[140px]">
+                        <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
                           {c.sku}
                         </span>
-                        <span className="text-slate-700">{c.field}:</span>
-                        <span className="text-slate-400 line-through tabular-nums">
+                        <span className="text-slate-700 dark:text-slate-300">{c.field}:</span>
+                        <span className="text-slate-400 dark:text-slate-500 line-through tabular-nums">
                           {formatValue(c.oldValue)}
                         </span>
-                        <span className="text-slate-400">→</span>
+                        <span className="text-slate-400 dark:text-slate-500">→</span>
                         <span className="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded tabular-nums">
                           {formatValue(c.newValue)}
                         </span>
                       </li>
                     ))}
                   {preview.totalChanges > preview.sampleChanges.length && (
-                    <li className="px-3 py-1.5 text-sm text-slate-500 italic">
+                    <li className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 italic">
                       + {preview.totalChanges - preview.sampleChanges.length}{' '}
                       more changes across {preview.toUpdate} rows
                     </li>
@@ -392,7 +392,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
               )}
 
               {error && (
-                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-base text-red-800">
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-md text-base text-red-800">
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -401,8 +401,8 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
           )}
 
           {stage === 'applying' && (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-600 dark:text-slate-400">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400 dark:text-slate-500" />
               <div className="text-md">
                 Applying {preview?.totalChanges ?? 0} change
                 {preview?.totalChanges === 1 ? '' : 's'}…
@@ -411,7 +411,7 @@ export default function UploadModal({ open, onClose, onApplied }: Props) {
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-2">
           {stage === 'preview' && (
             <>
               <Button variant="secondary" size="sm" onClick={onClose}>
@@ -444,23 +444,23 @@ function PreviewSummaryGrid({ preview }: { preview: PreviewSummary }) {
     {
       label: 'Total rows',
       value: preview.totalRows.toLocaleString(),
-      tone: 'text-slate-700',
+      tone: 'text-slate-700 dark:text-slate-300',
     },
     {
       label: 'Will update',
       value: preview.toUpdate.toLocaleString(),
-      tone: 'text-emerald-700',
+      tone: 'text-emerald-700 dark:text-emerald-300',
     },
     {
       label: 'Total changes',
       value: preview.totalChanges.toLocaleString(),
-      tone: 'text-blue-700',
+      tone: 'text-blue-700 dark:text-blue-300',
     },
     {
       label: 'Error rows',
       value: preview.errorRows.toLocaleString(),
       tone:
-        preview.errorRows > 0 ? 'text-amber-700' : 'text-slate-500',
+        preview.errorRows > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-500 dark:text-slate-400',
     },
   ]
   return (
@@ -468,9 +468,9 @@ function PreviewSummaryGrid({ preview }: { preview: PreviewSummary }) {
       {cells.map((c) => (
         <div
           key={c.label}
-          className="border border-slate-200 rounded-md px-3 py-2 bg-white"
+          className="border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 bg-white dark:bg-slate-900"
         >
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             {c.label}
           </div>
           <div className={cn('text-2xl font-semibold tabular-nums mt-0.5', c.tone)}>
@@ -496,7 +496,7 @@ function PreviewSection({
   const Icon = title.startsWith('Errors') ? AlertCircle : CheckCircle2
   return (
     <div>
-      <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+      <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
         <Icon className={cn('w-3 h-3', iconClass)} />
         {title}
       </div>

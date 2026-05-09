@@ -77,15 +77,15 @@ export default function PreviewChangesModal({
       aria-label="Preview pending changes"
     >
       <div
-        className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Pending Changes
             </h2>
-            <p className="text-base text-slate-500 mt-0.5">
+            <p className="text-base text-slate-500 dark:text-slate-400 mt-0.5">
               {changes.size} cell{changes.size === 1 ? '' : 's'} edited across{' '}
               {new Set(sortedChanges.map((c) => c.rowId)).size} product
               {new Set(sortedChanges.map((c) => c.rowId)).size === 1 ? '' : 's'}
@@ -94,7 +94,7 @@ export default function PreviewChangesModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900"
+            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -103,18 +103,18 @@ export default function PreviewChangesModal({
 
         <div className="overflow-y-auto flex-1">
           <table className="w-full">
-            <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
+            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 z-10">
               <tr>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   SKU
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Field
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Was
                 </th>
-                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-4 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   New
                 </th>
               </tr>
@@ -126,18 +126,18 @@ export default function PreviewChangesModal({
                 return (
                   <tr
                     key={`${c.rowId}:${c.columnId}`}
-                    className="border-b border-slate-100"
+                    className="border-b border-slate-100 dark:border-slate-800"
                   >
-                    <td className="px-4 py-2 font-mono text-base text-slate-900">
+                    <td className="px-4 py-2 font-mono text-base text-slate-900 dark:text-slate-100">
                       {sku}
                     </td>
-                    <td className="px-4 py-2 text-base text-slate-700">
+                    <td className="px-4 py-2 text-base text-slate-700 dark:text-slate-300">
                       {COLUMN_LABELS[c.columnId] ?? c.columnId}
                     </td>
-                    <td className="px-4 py-2 text-base text-slate-500 line-through tabular-nums">
+                    <td className="px-4 py-2 text-base text-slate-500 dark:text-slate-400 line-through tabular-nums">
                       {formatValue(c.columnId, c.oldValue)}
                     </td>
-                    <td className="px-4 py-2 text-base text-slate-900 font-medium bg-yellow-50 tabular-nums">
+                    <td className="px-4 py-2 text-base text-slate-900 dark:text-slate-100 font-medium bg-yellow-50 tabular-nums">
                       {formatValue(c.columnId, c.newValue)}
                     </td>
                   </tr>
@@ -147,8 +147,8 @@ export default function PreviewChangesModal({
           </table>
         </div>
 
-        <div className="border-t border-slate-200 px-5 py-3 flex items-center justify-between gap-3 flex-shrink-0">
-          <div className="flex items-start gap-2 text-base text-amber-700">
+        <div className="border-t border-slate-200 dark:border-slate-700 px-5 py-3 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-start gap-2 text-base text-amber-700 dark:text-amber-300">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
             <span>
               Save flow ships in Phase C. For now this is a preview only —

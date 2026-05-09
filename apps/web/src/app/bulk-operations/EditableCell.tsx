@@ -659,7 +659,7 @@ export const EditableCell = memo(
 
     if (isEditing) {
       const baseInputClass =
-        'w-full h-full px-2 outline-none ring-2 ring-blue-500 bg-white text-md select-text'
+        'w-full h-full px-2 outline-none ring-2 ring-blue-500 bg-white dark:bg-slate-900 text-md select-text'
       if (meta.fieldType === 'select') {
         return (
           <select
@@ -721,14 +721,14 @@ export const EditableCell = memo(
               onKeyDown={
                 handleKeyDown as unknown as React.KeyboardEventHandler<HTMLDivElement>
               }
-              className="absolute z-10 left-0 top-0 min-w-full bg-white ring-2 ring-blue-500 rounded-sm shadow-md max-h-48 overflow-auto p-1 outline-none"
+              className="absolute z-10 left-0 top-0 min-w-full bg-white dark:bg-slate-900 ring-2 ring-blue-500 rounded-sm shadow-md max-h-48 overflow-auto p-1 outline-none"
             >
               {meta.options.map((opt) => {
                 const checked = selected.includes(opt)
                 return (
                   <label
                     key={opt}
-                    className="flex items-center gap-2 px-2 py-1 text-md hover:bg-slate-50 cursor-pointer rounded"
+                    className="flex items-center gap-2 px-2 py-1 text-md hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer rounded"
                   >
                     <input
                       type="checkbox"
@@ -773,13 +773,13 @@ export const EditableCell = memo(
           ? ''
           : String(draftValue)
         return (
-          <div className="w-full h-full flex items-stretch bg-white ring-2 ring-blue-500">
+          <div className="w-full h-full flex items-stretch bg-white dark:bg-slate-900 ring-2 ring-blue-500">
             <input
               type="color"
               value={hex}
               onChange={(e) => setDraftValue(e.target.value.toLowerCase())}
               onBlur={handleBlur}
-              className="w-7 border-r border-slate-200 cursor-pointer"
+              className="w-7 border-r border-slate-200 dark:border-slate-700 cursor-pointer"
               aria-label="Pick color"
             />
             <input
@@ -871,8 +871,8 @@ export const EditableCell = memo(
       if (meta.fieldType === 'currency') {
         const code = (meta.currency ?? 'EUR').toUpperCase()
         return (
-          <div className="w-full h-full flex items-stretch bg-white ring-2 ring-blue-500">
-            <span className="flex items-center px-2 text-xs uppercase tracking-wide text-slate-500 bg-slate-50 border-r border-slate-200">
+          <div className="w-full h-full flex items-stretch bg-white dark:bg-slate-900 ring-2 ring-blue-500">
+            <span className="flex items-center px-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">
               {code}
             </span>
             <input
@@ -911,7 +911,7 @@ export const EditableCell = memo(
         return (
           <div
             className={cn(
-              'w-full h-full flex items-center justify-center bg-white ring-2 ring-blue-500',
+              'w-full h-full flex items-center justify-center bg-white dark:bg-slate-900 ring-2 ring-blue-500',
             )}
           >
             <input
@@ -971,23 +971,23 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center gap-1 text-md cursor-default',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {raw ? (
             label ? (
-              <span className="truncate text-blue-700">→ {label}</span>
+              <span className="truncate text-blue-700 dark:text-blue-300">→ {label}</span>
             ) : (
               <span
-                className="truncate text-amber-700"
+                className="truncate text-amber-700 dark:text-amber-300"
                 title="Linked record not found"
               >
                 → {raw}
               </span>
             )
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1007,17 +1007,17 @@ export const EditableCell = memo(
           title={cellError ?? `${meta.fieldType === 'formula' ? 'Computed' : 'Lookup from related record'} (read-only)`}
           className={cn(
             'w-full h-full px-2 flex items-center gap-1 text-md cursor-default bg-slate-50/40',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           <span
-            className="text-[10px] text-slate-400 font-mono select-none flex-shrink-0"
+            className="text-[10px] text-slate-400 dark:text-slate-500 font-mono select-none flex-shrink-0"
             aria-hidden="true"
           >
             {icon}
           </span>
-          <span className="truncate text-slate-700">
-            {display || <span className="text-slate-300">—</span>}
+          <span className="truncate text-slate-700 dark:text-slate-300">
+            {display || <span className="text-slate-300 dark:text-slate-600">—</span>}
           </span>
         </div>
       )
@@ -1037,14 +1037,14 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center gap-2 text-md cursor-cell',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {url ? (
             <ImageCellThumb url={url} />
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1065,24 +1065,24 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center gap-1 text-md cursor-cell overflow-hidden',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {tags.length === 0 ? (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           ) : (
             <>
               {visible.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center max-w-[120px] truncate px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-700 border border-slate-200"
+                  className="inline-flex items-center max-w-[120px] truncate px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                 >
                   {tag}
                 </span>
               ))}
               {overflow > 0 && (
-                <span className="text-xs text-slate-500 flex-shrink-0">
+                <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
                   +{overflow}
                 </span>
               )}
@@ -1106,27 +1106,27 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center gap-2 text-md cursor-cell',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {normalised ? (
             <>
               <span
-                className="w-4 h-4 rounded border border-slate-300 flex-shrink-0"
+                className="w-4 h-4 rounded border border-slate-300 dark:border-slate-600 flex-shrink-0"
                 style={{ backgroundColor: normalised }}
                 aria-label={`Color swatch ${normalised}`}
               />
-              <span className="truncate tabular-nums text-slate-700">
+              <span className="truncate tabular-nums text-slate-700 dark:text-slate-300">
                 {normalised}
               </span>
             </>
           ) : raw ? (
-            <span className="truncate text-amber-700" title="Invalid color">
+            <span className="truncate text-amber-700 dark:text-amber-300" title="Invalid color">
               {raw}
             </span>
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1154,8 +1154,8 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center text-md cursor-cell',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {raw ? (
@@ -1165,17 +1165,17 @@ export const EditableCell = memo(
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="truncate text-blue-600 hover:underline"
+                className="truncate text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {display}
               </a>
             ) : (
-              <span className="truncate text-amber-700" title="Invalid URL">
+              <span className="truncate text-amber-700 dark:text-amber-300" title="Invalid URL">
                 {raw}
               </span>
             )
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1193,8 +1193,8 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center text-md cursor-cell',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {raw ? (
@@ -1202,17 +1202,17 @@ export const EditableCell = memo(
               <a
                 href={`mailto:${valid}`}
                 onClick={(e) => e.stopPropagation()}
-                className="truncate text-blue-600 hover:underline"
+                className="truncate text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {valid}
               </a>
             ) : (
-              <span className="truncate text-amber-700" title="Invalid email">
+              <span className="truncate text-amber-700 dark:text-amber-300" title="Invalid email">
                 {raw}
               </span>
             )
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1229,8 +1229,8 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center text-md cursor-cell tabular-nums',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {raw ? (
@@ -1238,17 +1238,17 @@ export const EditableCell = memo(
               <a
                 href={`tel:${valid}`}
                 onClick={(e) => e.stopPropagation()}
-                className="truncate text-blue-600 hover:underline"
+                className="truncate text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {valid}
               </a>
             ) : (
-              <span className="truncate text-amber-700" title="Invalid phone">
+              <span className="truncate text-amber-700 dark:text-amber-300" title="Invalid phone">
                 {raw}
               </span>
             )
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1268,14 +1268,14 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center text-md cursor-cell tabular-nums',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {formatted ? (
             <span className="truncate">{formatted}</span>
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1292,14 +1292,14 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center justify-end text-md cursor-cell tabular-nums',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {formatted ? (
             <span className="truncate">{formatted}</span>
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1320,16 +1320,16 @@ export const EditableCell = memo(
           className={cn(
             'w-full h-full px-2 flex items-center justify-center text-md cursor-pointer',
             isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           )}
         >
           {b === true ? (
-            <span className="text-emerald-600 font-semibold" aria-label="True">✓</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-semibold" aria-label="True">✓</span>
           ) : b === false ? (
-            <span className="text-slate-400 font-semibold" aria-label="False">✗</span>
+            <span className="text-slate-400 dark:text-slate-500 font-semibold" aria-label="False">✗</span>
           ) : (
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
           )}
         </div>
       )
@@ -1348,13 +1348,13 @@ export const EditableCell = memo(
         className={cn(
           'w-full h-full px-2 flex items-center text-md cursor-cell',
           isDirty && !cellError && !cellCascading && 'bg-yellow-50',
-          isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
-          cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          isDirty && !cellError && cellCascading && 'bg-orange-50 dark:bg-orange-950/40 ring-1 ring-inset ring-orange-300',
+          cellError && 'bg-red-50 dark:bg-red-950/40 ring-1 ring-inset ring-red-400',
           meta.numeric && 'tabular-nums justify-end'
         )}
       >
-        {meta.prefix && display && <span className="text-slate-500 mr-1">{meta.prefix}</span>}
-        <span className="truncate">{display || <span className="text-slate-300">—</span>}</span>
+        {meta.prefix && display && <span className="text-slate-500 dark:text-slate-400 mr-1">{meta.prefix}</span>}
+        <span className="truncate">{display || <span className="text-slate-300 dark:text-slate-600">—</span>}</span>
       </div>
     )
   },
@@ -1403,7 +1403,7 @@ function ImageCellThumb({ url }: { url: string }) {
     <>
       {failed ? (
         <span
-          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 border border-slate-200 text-slate-400 text-[10px]"
+          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 text-[10px]"
           aria-label="Broken image"
           title="Broken image"
         >
@@ -1416,10 +1416,10 @@ function ImageCellThumb({ url }: { url: string }) {
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}
-          className="w-7 h-7 object-cover rounded border border-slate-200 flex-shrink-0"
+          className="w-7 h-7 object-cover rounded border border-slate-200 dark:border-slate-700 flex-shrink-0"
         />
       )}
-      <span className="truncate text-xs text-slate-600">{filename}</span>
+      <span className="truncate text-xs text-slate-600 dark:text-slate-400">{filename}</span>
     </>
   )
 }

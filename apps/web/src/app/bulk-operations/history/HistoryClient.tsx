@@ -108,22 +108,22 @@ function StatusIcon({ status, className }: { status: string; className?: string 
   switch (status) {
     case 'COMPLETED':
     case 'SUCCEEDED':
-      return <CheckCircle2 className={cn(cls, 'text-green-600')} />
+      return <CheckCircle2 className={cn(cls, 'text-green-600 dark:text-green-400')} />
     case 'PARTIALLY_COMPLETED':
-      return <AlertCircle className={cn(cls, 'text-amber-600')} />
+      return <AlertCircle className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
     case 'FAILED':
-      return <XCircle className={cn(cls, 'text-red-600')} />
+      return <XCircle className={cn(cls, 'text-red-600 dark:text-red-400')} />
     case 'CANCELLED':
-      return <Ban className={cn(cls, 'text-slate-500')} />
+      return <Ban className={cn(cls, 'text-slate-500 dark:text-slate-400')} />
     case 'SKIPPED':
-      return <SkipForward className={cn(cls, 'text-amber-600')} />
+      return <SkipForward className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
     case 'PENDING':
     case 'QUEUED':
-      return <Clock className={cn(cls, 'text-blue-600')} />
+      return <Clock className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
     case 'IN_PROGRESS':
-      return <Loader2 className={cn(cls, 'text-blue-600 animate-spin')} />
+      return <Loader2 className={cn(cls, 'text-blue-600 dark:text-blue-400 animate-spin')} />
     default:
-      return <Clock className={cn(cls, 'text-slate-400')} />
+      return <Clock className={cn(cls, 'text-slate-400 dark:text-slate-500')} />
   }
 }
 
@@ -274,7 +274,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
   ]
 
   return (
-    <div className="bg-slate-50 border-t border-slate-200 px-5 py-4">
+    <div className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-5 py-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-1">
           {ITEM_FILTERS.map((f) => (
@@ -285,8 +285,8 @@ function ItemsPanel({ jobId }: { jobId: string }) {
               className={cn(
                 'px-2.5 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               {f.label}
@@ -302,7 +302,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
               type="button"
               onClick={retryFailed}
               disabled={retrying}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900 rounded hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50 transition-colors"
               title={`Create a new job that re-runs only the ${counts.FAILED} failed items`}
             >
               <RotateCw className={cn('w-3 h-3', retrying && 'animate-spin')} />
@@ -315,7 +315,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
             type="button"
             onClick={fetchItems}
             disabled={loading}
-            className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
+            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 disabled:opacity-50"
           >
             <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
             Refresh
@@ -324,14 +324,14 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       </div>
 
       {retryNotice && (
-        <div className="text-base text-green-800 bg-green-50 border border-green-200 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+        <div className="text-base text-green-800 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
           {retryNotice}
         </div>
       )}
 
       {error && (
-        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">
+        <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 mb-3">
           {error}
         </div>
       )}
@@ -345,7 +345,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-9 bg-white border border-slate-200 rounded flex items-center px-3"
+              className="h-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded flex items-center px-3"
             >
               <Skeleton variant="text" width="60%" />
             </div>
@@ -354,15 +354,15 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       )}
 
       {items && items.length === 0 && !loading && (
-        <div className="text-center py-6 text-base text-slate-500">
+        <div className="text-center py-6 text-base text-slate-500 dark:text-slate-400">
           No items match this filter.
         </div>
       )}
 
       {items && items.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-3 py-2 w-32">Status</th>
                 <th className="text-left font-medium px-3 py-2">Target</th>
@@ -375,7 +375,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                 const diffs = diffEntries(it.beforeState, it.afterState)
                 const changed = diffs.filter((d) => d.changed)
                 return (
-                  <tr key={it.id} className="border-b border-slate-100 last:border-0 align-top">
+                  <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
                     <td className="px-3 py-2">
                       <Badge variant={statusVariant(it.status)} size="sm">
                         <StatusIcon status={it.status} className="w-3 h-3" />
@@ -383,22 +383,22 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                       </Badge>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="font-mono text-sm text-slate-900">
-                        {it.sku ?? <span className="text-slate-400">(deleted)</span>}
+                      <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
+                        {it.sku ?? <span className="text-slate-400 dark:text-slate-500">(deleted)</span>}
                       </div>
                       {it.channelLabel && (
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           {it.channelLabel}
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {it.errorMessage ? (
-                        <div className="text-red-700 text-sm">
+                        <div className="text-red-700 dark:text-red-300 text-sm">
                           {it.errorMessage}
                         </div>
                       ) : changed.length === 0 ? (
-                        <span className="text-slate-400 text-sm">no change</span>
+                        <span className="text-slate-400 dark:text-slate-500 text-sm">no change</span>
                       ) : (
                         <div className="space-y-0.5">
                           {changed.map((d) => (
@@ -406,14 +406,14 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                               key={d.key}
                               className="flex items-center gap-1.5 text-sm"
                             >
-                              <span className="text-slate-500 font-medium">
+                              <span className="text-slate-500 dark:text-slate-400 font-medium">
                                 {d.key}:
                               </span>
-                              <span className="font-mono text-slate-500 line-through">
+                              <span className="font-mono text-slate-500 dark:text-slate-400 line-through">
                                 {formatStateValue(d.before)}
                               </span>
-                              <ArrowRight className="w-3 h-3 text-slate-400" />
-                              <span className="font-mono text-slate-900 font-medium">
+                              <ArrowRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />
+                              <span className="font-mono text-slate-900 dark:text-slate-100 font-medium">
                                 {formatStateValue(d.after)}
                               </span>
                             </div>
@@ -421,7 +421,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-sm text-slate-500">
+                    <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                       {relativeTime(it.completedAt ?? it.createdAt)}
                     </td>
                   </tr>
@@ -500,23 +500,23 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left"
+        className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
       >
         <div className="flex-shrink-0">
           {expanded ? (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           )}
         </div>
         <StatusIcon status={job.status} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-medium text-slate-900 text-md truncate">
+            <h3 className="font-medium text-slate-900 dark:text-slate-100 text-md truncate">
               {job.jobName}
             </h3>
             <Badge variant="default" size="sm">
@@ -533,24 +533,24 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
             <Badge variant={statusVariant(job.status)} size="sm">
               {job.status.replace(/_/g, ' ')}
             </Badge>
             <span>
-              <span className="font-medium text-green-700">
+              <span className="font-medium text-green-700 dark:text-green-300">
                 {job.processedItems}
               </span>
               {' / '}
               <span>{job.totalItems}</span> processed
             </span>
             {job.failedItems > 0 && (
-              <span className="text-red-700 font-medium">
+              <span className="text-red-700 dark:text-red-300 font-medium">
                 {job.failedItems} failed
               </span>
             )}
             {job.skippedItems > 0 && (
-              <span className="text-amber-700">
+              <span className="text-amber-700 dark:text-amber-300">
                 {job.skippedItems} skipped
               </span>
             )}
@@ -560,7 +560,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
             </span>
           </div>
           {job.lastError && job.status !== 'COMPLETED' && (
-            <div className="mt-1.5 text-sm text-red-700 truncate">
+            <div className="mt-1.5 text-sm text-red-700 dark:text-red-300 truncate">
               {job.lastError}
             </div>
           )}
@@ -570,7 +570,7 @@ function JobCard({ job, onChanged }: { job: JobRow; onChanged: () => Promise<voi
             type="button"
             onClick={handleRollback}
             disabled={rollingBack}
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50"
+            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium text-amber-800 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 disabled:opacity-50"
             title="Apply each item's beforeState (basePrice / totalStock / status) back through the master cascade"
           >
             {rollingBack ? (
@@ -658,8 +658,8 @@ export default function HistoryClient() {
               className={cn(
                 'px-3 py-1 text-sm font-medium rounded border transition-colors',
                 statusFilter === f.key
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               {f.label}
@@ -674,7 +674,7 @@ export default function HistoryClient() {
 
       {/* Error */}
       {error && (
-        <div className="text-md text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2">
           Failed to load: {error}
         </div>
       )}
@@ -689,7 +689,7 @@ export default function HistoryClient() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="border border-slate-200 rounded-lg bg-white p-3"
+              className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-3"
             >
               <Skeleton variant="text" lines={2} />
             </div>

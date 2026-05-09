@@ -73,16 +73,16 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
       aria-label="Paste preview"
     >
       <div
-        className="bg-white rounded-lg shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ClipboardPaste className="w-4 h-4 text-slate-500" />
-            <h2 className="text-lg font-semibold text-slate-900">
+            <ClipboardPaste className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Paste preview
             </h2>
-            <span className="text-base text-slate-500 tabular-nums">
+            <span className="text-base text-slate-500 dark:text-slate-400 tabular-nums">
               {plan.length} change{plan.length === 1 ? '' : 's'}
               {errors.length > 0 && ` · ${errors.length} skipped`}
             </span>
@@ -90,7 +90,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
           <button
             type="button"
             onClick={onCancel}
-            className="text-slate-400 hover:text-slate-700 rounded p-1 hover:bg-slate-100"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-700"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -100,23 +100,23 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
         <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
           {hasChanges ? (
             <div>
-              <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
                 Changes
               </div>
-              <ul className="divide-y divide-slate-100 border border-slate-200 rounded-md bg-slate-50/50">
+              <ul className="divide-y divide-slate-100 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50">
                 {previewItems.map((c) => (
                   <li
                     key={`${c.rowId}:${c.columnId}`}
                     className="px-3 py-1.5 flex items-center gap-2 text-base"
                   >
-                    <span className="font-mono text-slate-500 truncate max-w-[180px]">
+                    <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
                       {c.sku}
                     </span>
-                    <span className="text-slate-700">{c.fieldLabel}:</span>
-                    <span className="text-slate-400 line-through tabular-nums">
+                    <span className="text-slate-700 dark:text-slate-300">{c.fieldLabel}:</span>
+                    <span className="text-slate-400 dark:text-slate-500 line-through tabular-nums">
                       {formatValue(c.oldValue)}
                     </span>
-                    <span className="text-slate-400">→</span>
+                    <span className="text-slate-400 dark:text-slate-500">→</span>
                     <span className="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded tabular-nums">
                       {formatValue(c.newValue)}
                     </span>
@@ -124,39 +124,39 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
                 ))}
               </ul>
               {hiddenCount > 0 && (
-                <div className="mt-1 text-sm text-slate-500">
+                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   + {hiddenCount} more
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-base text-slate-500 italic">
+            <div className="text-base text-slate-500 dark:text-slate-400 italic">
               Nothing applicable to paste.
             </div>
           )}
 
           {errors.length > 0 && (
             <div>
-              <div className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <AlertCircle className="w-3 h-3 text-amber-600" />
+              <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                 Skipped ({errors.length})
               </div>
-              <ul className="divide-y divide-slate-100 border border-amber-200 rounded-md bg-amber-50/40">
+              <ul className="divide-y divide-slate-100 border border-amber-200 dark:border-amber-900 rounded-md bg-amber-50/40">
                 {errors.slice(0, PREVIEW_LIMIT).map((e, i) => (
                   <li
                     key={`${e.rowIdx}:${e.colIdx}:${i}`}
                     className="px-3 py-1.5 flex items-center gap-2 text-base"
                   >
-                    <span className="font-mono text-slate-500 truncate max-w-[180px]">
+                    <span className="font-mono text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
                       {e.sku}
                     </span>
-                    <span className="text-slate-700">{e.fieldLabel}:</span>
-                    <span className="text-amber-700">{e.reason}</span>
+                    <span className="text-slate-700 dark:text-slate-300">{e.fieldLabel}:</span>
+                    <span className="text-amber-700 dark:text-amber-300">{e.reason}</span>
                   </li>
                 ))}
               </ul>
               {errors.length > PREVIEW_LIMIT && (
-                <div className="mt-1 text-sm text-slate-500">
+                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   + {errors.length - PREVIEW_LIMIT} more
                 </div>
               )}
@@ -164,7 +164,7 @@ export default function PastePreviewModal({ preview, onCancel, onApply }: Props)
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>

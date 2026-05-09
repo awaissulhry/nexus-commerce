@@ -178,26 +178,26 @@ interface GroupTone {
 // per-product BulkEditClient.tsx TONE_BY_GROUP so users get the same
 // colour-per-group identity in either tool.
 const GROUP_TONE: Record<string, GroupTone> = {
-  Identity: { band: 'bg-slate-100 border-slate-300', text: 'text-slate-900', ring: 'border-slate-300', cell: 'bg-white' },
-  Identifiers: { band: 'bg-indigo-50 border-indigo-200', text: 'text-indigo-900', ring: 'border-indigo-200', cell: 'bg-indigo-50/30' },
-  'Marketing copy': { band: 'bg-violet-50 border-violet-200', text: 'text-violet-900', ring: 'border-violet-200', cell: 'bg-violet-50/30' },
+  Identity: { band: 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600', text: 'text-slate-900 dark:text-slate-100', ring: 'border-slate-300 dark:border-slate-600', cell: 'bg-white dark:bg-slate-900' },
+  Identifiers: { band: 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900', text: 'text-indigo-900', ring: 'border-indigo-200 dark:border-indigo-900', cell: 'bg-indigo-50/30' },
+  'Marketing copy': { band: 'bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-900', text: 'text-violet-900', ring: 'border-violet-200 dark:border-violet-900', cell: 'bg-violet-50/30' },
   'Variation attributes': { band: 'bg-fuchsia-50 border-fuchsia-200', text: 'text-fuchsia-900', ring: 'border-fuchsia-200', cell: 'bg-fuchsia-50/30' },
   Audience: { band: 'bg-cyan-50 border-cyan-200', text: 'text-cyan-900', ring: 'border-cyan-200', cell: 'bg-cyan-50/30' },
-  Categorisation: { band: 'bg-rose-50 border-rose-200', text: 'text-rose-900', ring: 'border-rose-200', cell: 'bg-rose-50/30' },
-  Pricing: { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200', cell: 'bg-emerald-50/30' },
-  Inventory: { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200', cell: 'bg-amber-50/30' },
-  'Pricing & fulfillment': { band: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', ring: 'border-emerald-200', cell: 'bg-emerald-50/30' },
-  Physical: { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
-  'Physical attributes': { band: 'bg-sky-50 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
-  'Compliance & safety': { band: 'bg-amber-50 border-amber-200', text: 'text-amber-900', ring: 'border-amber-200', cell: 'bg-amber-50/30' },
-  'Other attributes': { band: 'bg-slate-50 border-slate-200', text: 'text-slate-700', ring: 'border-slate-200', cell: 'bg-slate-50/30' },
+  Categorisation: { band: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900', text: 'text-rose-900', ring: 'border-rose-200 dark:border-rose-900', cell: 'bg-rose-50/30' },
+  Pricing: { band: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900', text: 'text-emerald-900', ring: 'border-emerald-200 dark:border-emerald-900', cell: 'bg-emerald-50/30' },
+  Inventory: { band: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900', text: 'text-amber-900', ring: 'border-amber-200 dark:border-amber-900', cell: 'bg-amber-50/30' },
+  'Pricing & fulfillment': { band: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900', text: 'text-emerald-900', ring: 'border-emerald-200 dark:border-emerald-900', cell: 'bg-emerald-50/30' },
+  Physical: { band: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
+  'Physical attributes': { band: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200', text: 'text-sky-900', ring: 'border-sky-200', cell: 'bg-sky-50/30' },
+  'Compliance & safety': { band: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900', text: 'text-amber-900', ring: 'border-amber-200 dark:border-amber-900', cell: 'bg-amber-50/30' },
+  'Other attributes': { band: 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700', text: 'text-slate-700 dark:text-slate-300', ring: 'border-slate-200 dark:border-slate-700', cell: 'bg-slate-50/30' },
 }
 
 const NEUTRAL_TONE: GroupTone = {
-  band: 'bg-slate-100 border-slate-200',
-  text: 'text-slate-900',
-  ring: 'border-slate-200',
-  cell: 'bg-white',
+  band: 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+  text: 'text-slate-900 dark:text-slate-100',
+  ring: 'border-slate-200 dark:border-slate-700',
+  cell: 'bg-white dark:bg-slate-900',
 }
 
 // W.1 — keys are now schema-style display names; the label map only
@@ -419,7 +419,7 @@ function DeleteRowButton({
           ? `Delete master ${sku} (cascades to its variants + listings)`
           : `Delete variant ${sku}`
       }
-      className="w-full h-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+      className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
     >
       <Trash2 className="w-3 h-3" />
     </button>
@@ -3174,7 +3174,7 @@ export default function BulkOperationsClient() {
         visibleColumns={visibleColumnsList}
       />
       {!online && (
-        <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
+        <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md text-base text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
           <span>You're offline. Changes are kept locally and will save when you reconnect.</span>
         </div>
@@ -3185,7 +3185,7 @@ export default function BulkOperationsClient() {
           knows they're in a filtered slice rather than the full
           catalog, and can drop back to the full view in one click. */}
       {isScoped && (
-        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-base text-blue-900">
+        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 px-3 py-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md text-base text-blue-900">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
             <span className="truncate">
@@ -3196,7 +3196,7 @@ export default function BulkOperationsClient() {
               product{scopedProductIds.length === 1 ? '' : 's'} from your
               /products selection.
               {products.length > 0 && products.length !== scopedProductIds.length && (
-                <span className="text-slate-600">
+                <span className="text-slate-600 dark:text-slate-400">
                   {' '}({products.length} loaded
                   {products.length < scopedProductIds.length
                     ? ` — ${scopedProductIds.length - products.length} not found`
@@ -3208,7 +3208,7 @@ export default function BulkOperationsClient() {
           <button
             type="button"
             onClick={clearScope}
-            className="flex-shrink-0 h-7 px-2 text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded inline-flex items-center gap-1"
+            className="flex-shrink-0 h-7 px-2 text-sm text-blue-700 dark:text-blue-300 hover:text-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded inline-flex items-center gap-1"
           >
             <X className="w-3 h-3" />
             Show all products
@@ -3258,7 +3258,7 @@ export default function BulkOperationsClient() {
           even though they are at z-30 internally. Elevating the whole
           toolbar wrapper above the table's SC keeps the popovers
           visually on top whenever they expand downward over the grid. */}
-      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 bg-white relative z-30">
+      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 relative z-30">
         {/* ── Row 1 — primary scope + write actions ─────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Left: scope */}
@@ -3272,22 +3272,22 @@ export default function BulkOperationsClient() {
               />
             )}
 
-            <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+            <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
 
             <div className="relative flex items-center">
-              <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search SKU, name, brand…"
-                className="h-7 pl-7 pr-7 text-base border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="h-7 pl-7 pr-7 text-base border border-slate-200 dark:border-slate-700 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-1.5 text-slate-400 hover:text-slate-700"
+                  className="absolute right-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                   aria-label="Clear search"
                 >
                   <X className="w-3 h-3" />
@@ -3314,7 +3314,7 @@ export default function BulkOperationsClient() {
               pulse={showContextBanner}
             />
 
-            <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+            <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" aria-hidden="true" />
 
             <Button
               variant="secondary"
@@ -3341,7 +3341,7 @@ export default function BulkOperationsClient() {
                 size="sm"
                 onClick={() => void handleBatchDelete()}
                 title={`Delete ${selectedRowCount} selected rows + their cascades`}
-                className="text-rose-700 border-rose-200 hover:bg-rose-50"
+                className="text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40"
               >
                 <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                 Delete {selectedRowCount}
@@ -3401,7 +3401,7 @@ export default function BulkOperationsClient() {
           {/* Left: history. V.2 — count badges show stack depth at a
               glance so undo/redo state is visible in real time. */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
+            <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded-md">
               <button
                 type="button"
                 onClick={undo}
@@ -3414,16 +3414,16 @@ export default function BulkOperationsClient() {
                     : 'Nothing to undo'
                 }
                 aria-label="Undo"
-                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
+                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:cursor-default rounded-l-md"
               >
                 <Undo2 className="w-3.5 h-3.5" />
                 {canUndo && (
-                  <span className="text-xs tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                     {historyIndex + 1}
                   </span>
                 )}
               </button>
-              <div className="w-px h-4 bg-slate-200" />
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
               <button
                 type="button"
                 onClick={redo}
@@ -3438,11 +3438,11 @@ export default function BulkOperationsClient() {
                     : 'Nothing to redo'
                 }
                 aria-label="Redo"
-                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
+                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-30 disabled:cursor-default rounded-r-md"
               >
                 <Redo2 className="w-3.5 h-3.5" />
                 {canRedo && (
-                  <span className="text-xs tabular-nums text-slate-500">
+                  <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                     {history.length - 1 - historyIndex}
                   </span>
                 )}
@@ -3459,8 +3459,8 @@ export default function BulkOperationsClient() {
               className={cn(
                 'h-7 px-2 inline-flex items-center gap-1 rounded border text-xs font-medium transition-colors',
                 conditionalRules.some((r) => r.enabled)
-                  ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+                  ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               <Wand2 className="w-3 h-3" />
@@ -3490,7 +3490,7 @@ export default function BulkOperationsClient() {
                   'h-7 px-1.5 text-xs border rounded',
                   groupByColumnId
                     ? 'bg-purple-50 border-purple-300 text-purple-700'
-                    : 'bg-white border-slate-200 text-slate-600',
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
                 )}
               >
                 <option value="">Group: (none)</option>
@@ -3521,7 +3521,7 @@ export default function BulkOperationsClient() {
               U.9 — bare "Loading…" replaced with spinner + label so
               the inline status reads as actually-running rather than
               static text on a slow fetch. */}
-          <div className="flex-1 min-w-0 text-slate-500 tabular-nums truncate">
+          <div className="flex-1 min-w-0 text-slate-500 dark:text-slate-400 tabular-nums truncate">
             {loading ? (
               <span className="inline-flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -3571,7 +3571,7 @@ export default function BulkOperationsClient() {
                       ? `Add every schema-driven category attribute plus channel-specific fields for ${scopeLabel} as columns`
                       : 'Add every schema-driven category attribute (attr_*) for the loaded productTypes as columns'
                   }
-                  className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+                  className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/40"
                 >
                   + {missingFields.length}
                   {scopeLabel
@@ -3605,8 +3605,8 @@ export default function BulkOperationsClient() {
                 className={cn(
                   'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded-md transition-colors',
                   updateFlash === 'saved'
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                    : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                    ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                 )}
               >
                 {updateFlash === 'saving'
@@ -3621,7 +3621,7 @@ export default function BulkOperationsClient() {
                 type="button"
                 onClick={resetColumnWidths}
                 title="Reset column widths to defaults"
-                className="inline-flex items-center gap-1 h-7 px-2 text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
+                className="inline-flex items-center gap-1 h-7 px-2 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset widths
@@ -3631,8 +3631,8 @@ export default function BulkOperationsClient() {
                 it's always reachable; clicking the band chevrons one
                 by one is fine for a few groups but tedious past 5+. */}
             {groupedFields.length > 1 && (
-              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-sm text-slate-600 border border-slate-200 rounded-md bg-white">
-                <span className="px-1.5 text-slate-400">Groups</span>
+              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+                <span className="px-1.5 text-slate-400 dark:text-slate-500">Groups</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -3648,12 +3648,12 @@ export default function BulkOperationsClient() {
                     'h-5 px-1.5 rounded transition-colors',
                     collapsedGroups.size === 0
                       ? 'opacity-40 cursor-not-allowed'
-                      : 'hover:bg-slate-100 hover:text-slate-900',
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100',
                   )}
                 >
                   Expand all
                 </button>
-                <span className="text-slate-300">·</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -3670,7 +3670,7 @@ export default function BulkOperationsClient() {
                     'h-5 px-1.5 rounded transition-colors',
                     collapsedGroups.size >= groupedFields.length
                       ? 'opacity-40 cursor-not-allowed'
-                      : 'hover:bg-slate-100 hover:text-slate-900',
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100',
                   )}
                 >
                   Collapse all
@@ -3683,7 +3683,7 @@ export default function BulkOperationsClient() {
 
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg select-none relative"
+        className="flex-1 min-h-0 overflow-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg select-none relative"
         style={{ contain: 'strict' }}
       >
         {/* U.9 — empty-grid overlay. The virtualized table renders no
@@ -3696,38 +3696,38 @@ export default function BulkOperationsClient() {
         {!loading && !error && filteredProducts.length === 0 && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/95 pointer-events-none">
             <div className="max-w-md w-full mx-6 text-center pointer-events-auto">
-              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 border border-slate-200 mb-3">
-                <Search className="w-4 h-4 text-slate-500" />
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-3">
+                <Search className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               </div>
               {products.length > 0 ? (
                 <>
-                  <div className="text-md font-semibold text-slate-900 mb-1">
+                  <div className="text-md font-semibold text-slate-900 dark:text-slate-100 mb-1">
                     No products match your filters
                   </div>
-                  <div className="text-base text-slate-600 mb-3">
+                  <div className="text-base text-slate-600 dark:text-slate-400 mb-3">
                     {products.length.toLocaleString()} loaded · 0 visible
                   </div>
                   <button
                     type="button"
                     onClick={resetFilters}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 dark:bg-slate-100 text-white text-sm font-medium hover:bg-slate-800"
                   >
                     Clear filters
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="text-md font-semibold text-slate-900 mb-1">
+                  <div className="text-md font-semibold text-slate-900 dark:text-slate-100 mb-1">
                     No products in your catalog
                   </div>
-                  <div className="text-base text-slate-600 mb-3">
+                  <div className="text-base text-slate-600 dark:text-slate-400 mb-3">
                     Upload a CSV or create your first product to get going.
                   </div>
                   <div className="inline-flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setUploadOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 dark:bg-slate-100 text-white text-sm font-medium hover:bg-slate-800"
                     >
                       <Upload className="w-3 h-3" />
                       Upload CSV
@@ -3735,7 +3735,7 @@ export default function BulkOperationsClient() {
                     <button
                       type="button"
                       onClick={() => setNewProductOpen(true)}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       New product
                     </button>
@@ -3752,7 +3752,7 @@ export default function BulkOperationsClient() {
             the table. */}
         {groupedFields.length > 0 && (
           <div
-            className="sticky top-0 z-30 bg-white border-b border-slate-200 flex"
+            className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex"
             style={{ minWidth: tableMinWidth, height: 28 }}
           >
             {groupedFields.map((g) => {
@@ -3878,13 +3878,13 @@ export default function BulkOperationsClient() {
                 sticky-right so it stays aligned with the frozen
                 actions column on horizontal scroll. */}
             <div
-              className="sticky right-0 z-[5] bg-white"
+              className="sticky right-0 z-[5] bg-white dark:bg-slate-900"
               style={{ width: 60, flexShrink: 0 }}
             />
           </div>
         )}
         <div
-          className="sticky z-20 bg-slate-50 border-b border-slate-200 flex"
+          className="sticky z-20 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex"
           style={{
             top: groupedFields.length > 0 ? 28 : 0,
             height: HEADER_HEIGHT,
@@ -4013,7 +4013,7 @@ export default function BulkOperationsClient() {
                       header.column.id === 'sku' ||
                       header.column.id === '__actions'
                     ) {
-                      return 'border-r border-slate-200/70 last:border-r-0 text-slate-700'
+                      return 'border-r border-slate-200/70 last:border-r-0 text-slate-700 dark:text-slate-300'
                     }
                     return cn(
                       tone.band,
@@ -4027,13 +4027,13 @@ export default function BulkOperationsClient() {
                   draggedColumnId === header.column.id && 'opacity-40',
                   // W.6 — pin SKU column to the left + actions to the
                   // right so they stay visible when the grid scrolls
-                  // horizontally past the viewport. bg-slate-50 matches
+                  // horizontally past the viewport. bg-slate-50 dark:bg-slate-800 matches
                   // the header row's background so the sticky cell
                   // obscures non-pinned cells scrolling beneath.
                   header.column.id === 'sku' &&
-                    'sticky left-0 z-[25] bg-slate-50',
+                    'sticky left-0 z-[25] bg-slate-50 dark:bg-slate-800',
                   header.column.id === '__actions' &&
-                    'sticky right-0 z-[25] bg-slate-50',
+                    'sticky right-0 z-[25] bg-slate-50 dark:bg-slate-800',
                 )}
                 style={{ width: header.getSize(), flexShrink: 0 }}
                 title={
@@ -4072,7 +4072,7 @@ export default function BulkOperationsClient() {
                     the column is draggable. */}
                 {isDraggable && (
                   <span
-                    className="text-slate-400 flex-shrink-0"
+                    className="text-slate-400 dark:text-slate-500 flex-shrink-0"
                     aria-hidden="true"
                     title="Drag to reorder"
                   >
@@ -4096,7 +4096,7 @@ export default function BulkOperationsClient() {
                   const k = sortKeys[sortIdx]
                   return (
                     <span
-                      className="inline-flex items-center gap-0.5 text-blue-600 font-mono text-[10px] flex-shrink-0"
+                      className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-mono text-[10px] flex-shrink-0"
                       aria-label={`Sorted ${k.direction} (${sortIdx + 1} of ${sortKeys.length})`}
                       title={`Sorted ${k.direction}${sortKeys.length > 1 ? ` · key ${sortIdx + 1} of ${sortKeys.length}` : ''}`}
                     >
@@ -4111,7 +4111,7 @@ export default function BulkOperationsClient() {
                 })()}
                 {isReadOnly && (
                   <Lock
-                    className="w-2.5 h-2.5 text-slate-400 flex-shrink-0"
+                    className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 flex-shrink-0"
                     aria-label="Read-only"
                   />
                 )}
@@ -4184,18 +4184,18 @@ export default function BulkOperationsClient() {
           // Retry button so the user can recover without reloading
           // the whole page.
           <div className="absolute inset-0 flex items-center justify-center bg-white/90">
-            <div className="max-w-md w-full mx-6 border border-red-200 bg-white rounded-lg shadow-elevated p-4 text-center">
-              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 border border-red-200 mb-3">
-                <AlertTriangle className="w-4 h-4 text-red-600" />
+            <div className="max-w-md w-full mx-6 border border-red-200 dark:border-red-900 bg-white dark:bg-slate-900 rounded-lg shadow-elevated p-4 text-center">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 mb-3">
+                <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
               </div>
-              <div className="text-md font-semibold text-slate-900 mb-1">
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100 mb-1">
                 Failed to load products
               </div>
-              <div className="text-base text-slate-600 mb-3 break-words">{error}</div>
+              <div className="text-base text-slate-600 dark:text-slate-400 mb-3 break-words">{error}</div>
               <button
                 type="button"
                 onClick={reloadProducts}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 dark:bg-slate-100 text-white text-sm font-medium hover:bg-slate-800"
               >
                 <RefreshCw className="w-3 h-3" />
                 Retry
