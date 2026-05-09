@@ -70,6 +70,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import { AutomationRulesCard } from './_shared/AutomationRulesCard'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
+import { ScenariosCard } from './_shared/ScenariosCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -786,6 +787,11 @@ export default function ReplenishmentWorkspace() {
           shows the 8 templates with enable/disable toggles + dry-run
           badges + per-rule counters. */}
       <AutomationRulesCard />
+
+      {/* W5.4 — scenarios card. Empty by default; once an operator
+          creates a what-if scenario it lists with last-run summary
+          and a Run button. Pure analysis — never modifies real recs. */}
+      <ScenariosCard />
 
       {/* W3.2 — command-center KPI strip. Five tiles answering
           "what should I do today?" — open POs / awaiting review /
