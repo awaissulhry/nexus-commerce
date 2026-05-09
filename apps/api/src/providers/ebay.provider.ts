@@ -83,8 +83,11 @@ export class eBayAPIProvider implements MarketplaceProvider {
         price: input.price,
       });
 
-      // Simulate API call
-      await this.simulateAPICall();
+      // T.1 — real Trading API call when credentials + opt-in env are
+      // both set. Otherwise honour the legacy simulate path locally
+      // but FAIL LOUD in production so silent overselling can't
+      // happen. See callTradingApi for the full discipline.
+      await this.callTradingApi('ReviseInventoryStatus', xmlPayload);
 
       // Decrement rate limit
       this.rateLimitInfo.remaining--;
@@ -142,8 +145,11 @@ export class eBayAPIProvider implements MarketplaceProvider {
         quantity: input.quantity,
       });
 
-      // Simulate API call
-      await this.simulateAPICall();
+      // T.1 — real Trading API call when credentials + opt-in env are
+      // both set. Otherwise honour the legacy simulate path locally
+      // but FAIL LOUD in production so silent overselling can't
+      // happen. See callTradingApi for the full discipline.
+      await this.callTradingApi('ReviseInventoryStatus', xmlPayload);
 
       // Decrement rate limit
       this.rateLimitInfo.remaining--;
@@ -199,8 +205,7 @@ export class eBayAPIProvider implements MarketplaceProvider {
       // Build ReviseItem request
       const xmlPayload = this.buildReviseItemRequest(input);
 
-      // Simulate API call
-      await this.simulateAPICall();
+      await this.callTradingApi('ReviseItem', xmlPayload);
 
       // Decrement rate limit
       this.rateLimitInfo.remaining--;
@@ -310,12 +315,78 @@ export class eBayAPIProvider implements MarketplaceProvider {
   }
 
   /**
-   * Simulate API call with delay
+   * T.1 — eBay Trading API call discipline.
+   *
+   * Three modes by env:
+   *   1. NEXUS_EBAY_REAL_API=true + credentials present
+   *      → real HTTPS POST to api.ebay.com (or sandbox.ebay.com when
+   *        EBAY_SANDBOX=true). Parses Ack/Errors from response;
+   *        throws on Failure so the OutboundSyncQueue lands FAILED
+   *        instead of silently COMPLETED.
+   *   2. NODE_ENV !== 'production' (and not real-API mode)
+   *      → simulated 100ms delay, succeeds. Local dev / CI.
+   *   3. NODE_ENV === 'production' (and not real-API mode)
+   *      → THROW. Silent fake-success in prod is the overselling
+   *        bug we're closing. The OutboundSyncQueue will mark the
+   *        row FAILED, which surfaces to operator dashboards.
+   *
+   * The opt-in (NEXUS_EBAY_REAL_API) lets ops cut over deliberately
+   * once a sandbox-credential test has succeeded. Until then,
+   * production-mode rows are loud-fail rather than silent-success.
    */
-  private async simulateAPICall(): Promise<void> {
-    return new Promise((resolve) => {
-      setTimeout(resolve, 100);
-    });
+  private async callTradingApi(callName: string, xmlPayload: string): Promise<void> {
+    const realApiOptIn = process.env.NEXUS_EBAY_REAL_API === 'true';
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (realApiOptIn && this.isConfigured()) {
+      const sandbox = process.env.EBAY_SANDBOX === 'true';
+      const endpoint = sandbox
+        ? 'https://api.sandbox.ebay.com/ws/api.dll'
+        : this.baseUrl;
+      const compatLevel = process.env.EBAY_COMPAT_LEVEL || '1193';
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'X-EBAY-API-CALL-NAME': callName,
+          'X-EBAY-API-COMPATIBILITY-LEVEL': compatLevel,
+          'X-EBAY-API-DEV-NAME': this.credentials.devId,
+          'X-EBAY-API-APP-NAME': this.credentials.appId,
+          'X-EBAY-API-CERT-NAME': this.credentials.certId,
+          'X-EBAY-API-SITEID': this.credentials.siteId,
+          'Content-Type': 'text/xml',
+        },
+        body: xmlPayload,
+      });
+
+      if (!res.ok) {
+        throw new Error(`eBay ${callName} HTTP ${res.status}`);
+      }
+      const body = await res.text();
+      // Lightweight Ack inspection — eBay returns <Ack>Success|Warning|Failure</Ack>.
+      // Full XML parse deferred until we wire response-typed error
+      // codes; today we just need to surface Failure as a thrown
+      // error so the queue marks FAILED.
+      const ackMatch = body.match(/<Ack>([^<]+)<\/Ack>/);
+      const ack = ackMatch?.[1];
+      if (ack === 'Failure') {
+        const errMatch = body.match(/<ShortMessage>([^<]+)<\/ShortMessage>/);
+        throw new Error(`eBay ${callName} Failure: ${errMatch?.[1] ?? 'unknown'}`);
+      }
+      return;
+    }
+
+    if (isProduction) {
+      // The bug we're closing: silent fake-success in prod. Throw so
+      // the queue marks FAILED and the operator sees the gap.
+      throw new Error(
+        `eBay ${callName} not invoked: NEXUS_EBAY_REAL_API not enabled in production. ` +
+        `Refusing to fake-success — would cause overselling. Set the env or migrate adapter.`,
+      );
+    }
+
+    // Dev / CI fall-through: simulate.
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
 }
 
