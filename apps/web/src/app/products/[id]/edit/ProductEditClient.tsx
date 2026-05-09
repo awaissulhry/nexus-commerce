@@ -6,6 +6,8 @@ import {
   ChevronLeft,
   AlertCircle,
   CheckCircle2,
+  FileText,
+  LayoutGrid,
   TableProperties,
   X,
 } from 'lucide-react'
@@ -355,7 +357,7 @@ export default function ProductEditClient({
                 onClick={() => router.push(`/products/${product.id}/matrix`)}
                 title={t('products.edit.matrixTooltip')}
               >
-                <Grid3x3 className="w-3.5 h-3.5 mr-1.5" />
+                <LayoutGrid className="w-3.5 h-3.5 mr-1.5" />
                 {t('products.edit.matrix')}
               </Button>
             )}

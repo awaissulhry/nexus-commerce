@@ -22,6 +22,7 @@ import {
   Keyboard,
   Plus,
   RefreshCw,
+  TableProperties,
   X,
   Truck,
   ShieldAlert,
@@ -367,6 +368,79 @@ const PAGE_COMMANDS: Command[] = [
     group: 'On this page',
     contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
     keywords: 'variant child sku size color matrix',
+  },
+  // W14.2 — cross-surface routes. Same dispatch pattern as W14.1 jump-
+  // to-tab but carries a `route` detail. Page listener does the
+  // router.push with its own productId so this stays generic.
+  {
+    id: 'page-products-edit-open-datasheet',
+    label: 'Open printable datasheet',
+    icon: FileText,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-route', {
+          detail: { route: 'datasheet' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'print pdf spec sheet scheda tecnica datasheet',
+  },
+  {
+    id: 'page-products-edit-open-matrix',
+    label: 'Open variant matrix editor',
+    icon: Boxes,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-route', {
+          detail: { route: 'matrix' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'matrix variant grid size color bulk',
+  },
+  {
+    id: 'page-products-edit-open-list-wizard',
+    label: 'Open listing wizard (publish to a channel)',
+    icon: Boxes,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-route', {
+          detail: { route: 'list-wizard' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'list publish channel amazon ebay shopify woocommerce wizard guida pubblica',
+  },
+  {
+    id: 'page-products-edit-open-images',
+    label: 'Open image manager',
+    icon: FileText,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-route', {
+          detail: { route: 'images' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'image photo media gallery upload immagini foto',
+  },
+  {
+    id: 'page-products-edit-open-bulk',
+    label: 'Open spreadsheet view (this product + variants)',
+    icon: TableProperties,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-route', {
+          detail: { route: 'bulk' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'bulk spreadsheet grid table edit variants foglio modifica',
   },
 ]
 
