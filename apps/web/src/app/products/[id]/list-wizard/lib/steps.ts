@@ -121,3 +121,21 @@ export function findStep(id: number): StepConfig | undefined {
 }
 
 export const TOTAL_STEPS = STEPS.length
+
+/**
+ * I.3 — i18n key composers for step labels. Components that render
+ * step titles / descriptions / short labels should call these and
+ * pass to t() rather than reading STEPS[i].title directly, so the
+ * locale picker is honoured. The English values in STEPS remain as
+ * the fallback chain's last resort (the translate() helper falls
+ * back catalog → English → key).
+ */
+export function stepTitleKey(id: number): string {
+  return `listWizard.steps.${id}.title`
+}
+export function stepShortLabelKey(id: number): string {
+  return `listWizard.steps.${id}.shortLabel`
+}
+export function stepDescriptionKey(id: number): string {
+  return `listWizard.steps.${id}.description`
+}

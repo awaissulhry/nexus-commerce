@@ -1,7 +1,8 @@
 'use client'
 
 import { Sparkles } from 'lucide-react'
-import type { StepConfig } from '../lib/steps'
+import { useTranslations } from '@/lib/i18n/use-translations'
+import { stepDescriptionKey, stepTitleKey, type StepConfig } from '../lib/steps'
 
 interface Props {
   step: StepConfig
@@ -13,6 +14,7 @@ interface Props {
  * adding / re-ordering steps doesn't churn this file.
  */
 export default function PlaceholderStep({ step }: Props) {
+  const { t } = useTranslations()
   return (
     <div className="max-w-2xl mx-auto py-12 px-6">
       <div className="text-center mb-8">
@@ -20,10 +22,10 @@ export default function PlaceholderStep({ step }: Props) {
           <Sparkles className="w-6 h-6" />
         </div>
         <h2 className="text-xl font-semibold text-slate-900">
-          {step.title}
+          {t(stepTitleKey(step.id))}
         </h2>
         <p className="text-lg text-slate-600 mt-1">
-          {step.description}
+          {t(stepDescriptionKey(step.id))}
         </p>
       </div>
 

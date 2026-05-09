@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
 import { History, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { STEPS, findStep } from '../lib/steps'
+import { STEPS, findStep, stepTitleKey } from '../lib/steps'
 
 type Translator = ReturnType<typeof useTranslations>['t']
 
@@ -127,7 +127,9 @@ export default function ResumeBanner({
           {t('listWizard.resume.stepLabel', { n: step.id })}
         </span>
         {' — '}
-        <span className="text-blue-700 dark:text-blue-300">{step.title}</span>
+        <span className="text-blue-700 dark:text-blue-300">
+          {t(stepTitleKey(step.id))}
+        </span>
         <span className="mx-1.5 text-blue-700 dark:text-blue-300">·</span>
         <span className="text-blue-700 dark:text-blue-300">
           {t('listWizard.resume.lastEdited', { when: relative })}

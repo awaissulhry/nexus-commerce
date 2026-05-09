@@ -4,7 +4,7 @@ import { Fragment } from 'react'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { STEPS } from '../lib/steps'
+import { STEPS, stepTitleKey } from '../lib/steps'
 
 interface Props {
   currentStep: number
@@ -66,6 +66,10 @@ export default function WizardStepper({
                 // C.0 / A9 — per-step blocker badge.
                 const blockers = blockerCounts?.[step.id] ?? 0
                 const showBadge = blockers > 0 && !isCurrent
+                // I.3 — resolve step title through the catalog so
+                // Italian operators see "Canali e mercati" instead
+                // of "Channels & Markets" in tooltips + aria-labels.
+                const localizedTitle = t(stepTitleKey(step.id))
                 const ariaSuffix = isCompleted
                   ? t('listWizard.stepper.aria.completedSuffix')
                   : isSkipped
@@ -82,18 +86,18 @@ export default function WizardStepper({
                 const titleStr = isSkipped
                   ? t('listWizard.stepper.title.skipped', {
                       id: step.id,
-                      title: step.title,
+                      title: localizedTitle,
                     })
                   : showBadge
                     ? t(
                         blockers === 1
                           ? 'listWizard.stepper.title.withBlockerOne'
                           : 'listWizard.stepper.title.withBlockerOther',
-                        { id: step.id, title: step.title, n: blockers },
+                        { id: step.id, title: localizedTitle, n: blockers },
                       )
                     : t('listWizard.stepper.title.plain', {
                         id: step.id,
-                        title: step.title,
+                        title: localizedTitle,
                       })
                 return (
                   <button
@@ -104,7 +108,7 @@ export default function WizardStepper({
                     aria-label={`${t('listWizard.stepper.aria.step', {
                       n: step.id,
                       total: STEPS.length,
-                      title: step.title,
+                      title: localizedTitle,
                     })}${ariaSuffix}${blockerSuffix}`}
                     tabIndex={isCurrent ? 0 : -1}
                     onClick={() => {
