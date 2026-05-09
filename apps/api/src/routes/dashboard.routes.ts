@@ -458,6 +458,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       //
       // The sparkline uses the same `from` as the headline KPI window
       // to guarantee the headline number == area-under-the-curve.
+      //
+      // DO.10 — also bucket per-KPI series so each KpiCard can render
+      // its own mini sparkline. Revenue/orders/AOV come from the
+      // Order bucketing here; units comes from a parallel OrderItem
+      // bucket query. All filtered by primary currency to keep the
+      // headline-vs-curve invariant from DO.1.
       const sparkBucketIsHour = window === 'today'
       let sparkBuckets: number
       if (window === 'today') sparkBuckets = 24
@@ -469,21 +475,45 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       } else sparkBuckets = 30
       const sparkFrom = from
       let sparkRows: Array<{ d: string; revenue: number; orders: bigint }> = []
+      let unitsRows: Array<{ d: string; units: bigint }> = []
       try {
         const groupExpr = sparkBucketIsHour
           ? `to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24')`
           : `to_char(date_trunc('day',  "createdAt"), 'YYYY-MM-DD')`
-        sparkRows = (await prisma.$queryRawUnsafe(
-          `SELECT ${groupExpr} AS d,
-                  COALESCE(SUM("totalPrice"), 0)::float AS revenue,
-                  COUNT(*)::bigint AS orders
-           FROM "Order"
-           WHERE "createdAt" >= $1 AND "createdAt" <= $2
-           GROUP BY 1
-           ORDER BY 1 ASC`,
-          sparkFrom,
-          to,
-        )) as Array<{ d: string; revenue: number; orders: bigint }>
+        const orderGroupExpr = sparkBucketIsHour
+          ? `to_char(date_trunc('hour', o."createdAt"), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  o."createdAt"), 'YYYY-MM-DD')`
+        ;[sparkRows, unitsRows] = (await Promise.all([
+          prisma.$queryRawUnsafe(
+            `SELECT ${groupExpr} AS d,
+                    COALESCE(SUM("totalPrice"), 0)::float AS revenue,
+                    COUNT(*)::bigint AS orders
+             FROM "Order"
+             WHERE "createdAt" >= $1 AND "createdAt" <= $2
+               AND COALESCE("currencyCode", 'EUR') = $3
+             GROUP BY 1
+             ORDER BY 1 ASC`,
+            sparkFrom,
+            to,
+            primaryCurrency,
+          ),
+          prisma.$queryRawUnsafe(
+            `SELECT ${orderGroupExpr} AS d,
+                    COALESCE(SUM(oi.quantity), 0)::bigint AS units
+             FROM "OrderItem" oi
+             JOIN "Order" o ON o.id = oi."orderId"
+             WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+               AND COALESCE(o."currencyCode", 'EUR') = $3
+             GROUP BY 1
+             ORDER BY 1 ASC`,
+            sparkFrom,
+            to,
+            primaryCurrency,
+          ),
+        ])) as [
+          Array<{ d: string; revenue: number; orders: bigint }>,
+          Array<{ d: string; units: bigint }>,
+        ]
       } catch (err) {
         request.log.warn({ err }, '[dashboard] sparkline raw query failed')
       }
@@ -491,7 +521,15 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       for (const r of sparkRows) {
         sparkMap.set(r.d, { revenue: r.revenue, orders: Number(r.orders) })
       }
+      const unitsMap = new Map<string, number>()
+      for (const r of unitsRows) {
+        unitsMap.set(r.d, Number(r.units))
+      }
       const sparkline: Array<{ date: string; revenue: number; orders: number }> = []
+      const seriesRevenue: number[] = []
+      const seriesOrders: number[] = []
+      const seriesUnits: number[] = []
+      const seriesAov: number[] = []
       for (let i = 0; i < sparkBuckets; i++) {
         const d = new Date(sparkFrom)
         if (sparkBucketIsHour) d.setHours(d.getHours() + i)
@@ -500,7 +538,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           ? d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
           : d.toISOString().slice(0, 10)
         const slot = sparkMap.get(key) ?? { revenue: 0, orders: 0 }
+        const units = unitsMap.get(key) ?? 0
         sparkline.push({ date: key, revenue: slot.revenue, orders: slot.orders })
+        seriesRevenue.push(slot.revenue)
+        seriesOrders.push(slot.orders)
+        seriesUnits.push(units)
+        seriesAov.push(slot.orders > 0 ? slot.revenue / slot.orders : 0)
       }
 
       // ── Recent activity (BulkOperation + AuditLog) ──────────────
@@ -589,21 +632,25 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             current: revenue.current,
             previous: revenue.previous,
             deltaPct: deltaPct(revenue.current, revenue.previous),
+            series: seriesRevenue,
           },
           orders: {
             current: orderCounts.current,
             previous: orderCounts.previous,
             deltaPct: deltaPct(orderCounts.current, orderCounts.previous),
+            series: seriesOrders,
           },
           aov: {
             current: aov.current,
             previous: aov.previous,
             deltaPct: deltaPct(aov.current, aov.previous),
+            series: seriesAov,
           },
           units: {
             current: units.current,
             previous: units.previous,
             deltaPct: deltaPct(units.current, units.previous),
+            series: seriesUnits,
           },
         },
         byChannel,

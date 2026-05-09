@@ -17,6 +17,12 @@ export interface TotalEntry {
   current: number
   previous: number
   deltaPct: number | null
+  // DO.10 — per-bucket series for the in-card sparkline. Same
+  // bucket count as the main Sparkline component (24 hourly for
+  // Today, N daily for the other windows). Optional so older
+  // server responses degrade gracefully (cards just hide the
+  // sparkline).
+  series?: number[]
 }
 
 export interface OverviewPayload {

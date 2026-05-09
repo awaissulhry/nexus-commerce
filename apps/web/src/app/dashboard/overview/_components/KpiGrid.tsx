@@ -39,6 +39,8 @@ export default function KpiGrid({
           value={formatCurrency(totals.revenue.current, primary)}
           delta={formatDelta(totals.revenue.deltaPct, t)}
           prevValue={formatCurrency(totals.revenue.previous, primary)}
+          series={totals.revenue.series}
+          sparkColor="emerald"
         />
         <KpiCard
           t={t}
@@ -46,6 +48,8 @@ export default function KpiGrid({
           value={NUM_FMT.format(totals.orders.current)}
           delta={formatDelta(totals.orders.deltaPct, t)}
           prevValue={NUM_FMT.format(totals.orders.previous)}
+          series={totals.orders.series}
+          sparkColor="blue"
         />
         <KpiCard
           t={t}
@@ -53,6 +57,8 @@ export default function KpiGrid({
           value={formatCurrency(totals.aov.current, primary)}
           delta={formatDelta(totals.aov.deltaPct, t)}
           prevValue={formatCurrency(totals.aov.previous, primary)}
+          series={totals.aov.series}
+          sparkColor="violet"
         />
         <KpiCard
           t={t}
@@ -60,6 +66,8 @@ export default function KpiGrid({
           value={NUM_FMT.format(totals.units.current)}
           delta={formatDelta(totals.units.deltaPct, t)}
           prevValue={NUM_FMT.format(totals.units.previous)}
+          series={totals.units.series}
+          sparkColor="amber"
         />
       </div>
       {secondaries.length > 0 && (
@@ -80,18 +88,31 @@ export default function KpiGrid({
   )
 }
 
+type SparkColor = 'emerald' | 'blue' | 'violet' | 'amber'
+
+const SPARK_STROKE: Record<SparkColor, string> = {
+  emerald: 'rgb(16 185 129)',
+  blue: 'rgb(59 130 246)',
+  violet: 'rgb(139 92 246)',
+  amber: 'rgb(245 158 11)',
+}
+
 function KpiCard({
   t,
   label,
   value,
   delta,
   prevValue,
+  series,
+  sparkColor,
 }: {
   t: T
   label: string
   value: string
   delta: { label: string; tone: 'pos' | 'neg' | 'flat' | 'na' }
   prevValue: string
+  series?: number[]
+  sparkColor: SparkColor
 }) {
   // Use Card with custom className to tighten the default p-4 down
   // to the px-4 py-3 the KPI strip wants. The dark-mode bg/border
@@ -107,11 +128,58 @@ function KpiCard({
         </div>
         <DeltaPill delta={delta} />
       </div>
+      {series && series.length > 1 && (
+        <MiniSpark series={series} color={sparkColor} />
+      )}
       <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
         {t('overview.kpi.prev')}{' '}
         <span className="tabular-nums">{prevValue}</span>
       </div>
     </Card>
+  )
+}
+
+/**
+ * In-card mini sparkline. ~24px tall, fills full width. Decorative
+ * — no axis, no tooltip — its job is to give the operator's eye a
+ * shape for "is this trend up, down, or flat?" before they commit
+ * to reading the headline number.
+ */
+function MiniSpark({
+  series,
+  color,
+}: {
+  series: number[]
+  color: SparkColor
+}) {
+  const w = 100
+  const h = 24
+  const pad = 1
+  const max = Math.max(1, ...series)
+  const xStep = (w - pad * 2) / Math.max(1, series.length - 1)
+  const yScale = (v: number) => h - pad - ((h - pad * 2) * v) / max
+  const path = series
+    .map(
+      (v, i) =>
+        `${i === 0 ? 'M' : 'L'} ${(pad + i * xStep).toFixed(2)},${yScale(v).toFixed(2)}`,
+    )
+    .join(' ')
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="w-full h-[24px] mt-1.5"
+      role="img"
+      aria-hidden="true"
+    >
+      <path
+        d={path}
+        fill="none"
+        stroke={SPARK_STROKE[color]}
+        strokeWidth="1.25"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   )
 }
 
