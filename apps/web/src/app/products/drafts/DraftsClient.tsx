@@ -331,9 +331,11 @@ const DraftRow = memo(function DraftRow({
   return (
     <tr
       className={cn(
-        'border-b border-slate-100 last:border-0 transition-colors',
-        d.isStale ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50',
-        isSelected && 'bg-blue-50/40',
+        'border-b border-slate-100 dark:border-slate-800 last:border-0 transition-colors',
+        d.isStale
+          ? 'bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30'
+          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+        isSelected && 'bg-blue-50/40 dark:bg-blue-950/30',
       )}
     >
       <td className="px-4 py-2.5">
@@ -342,28 +344,28 @@ const DraftRow = memo(function DraftRow({
           checked={isSelected}
           onChange={() => onToggleSelect(d)}
           aria-label={`Select ${d.productName ?? d.productSku ?? 'draft'}`}
-          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+          className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500"
         />
       </td>
       <td className="px-4 py-2.5">
         <Link href={resumeHref} className="block min-w-0">
-          <div className="text-slate-900 truncate max-w-[420px] flex items-center gap-2">
+          <div className="text-slate-900 dark:text-slate-100 truncate max-w-[420px] flex items-center gap-2">
             {d.kind === 'product' && (
               <Tooltip
                 content="Standalone product without a wizard yet"
                 placement="top"
               >
-                <span className="inline-flex items-center justify-center w-4 h-4 text-slate-400">
+                <span className="inline-flex items-center justify-center w-4 h-4 text-slate-400 dark:text-slate-500">
                   <Box className="w-3 h-3" aria-hidden="true" />
                 </span>
               </Tooltip>
             )}
-            {d.productName ?? <em className="text-slate-400">Untitled</em>}
+            {d.productName ?? <em className="text-slate-400 dark:text-slate-500">Untitled</em>}
           </div>
-          <div className="text-sm text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono mt-0.5 flex items-center gap-2">
             <span>{d.productSku ?? '—'}</span>
             {d.productIsParent && (
-              <span className="inline-flex items-center h-4 px-1 rounded text-xs font-medium bg-blue-50 text-blue-700">
+              <span className="inline-flex items-center h-4 px-1 rounded text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                 parent
               </span>
             )}
@@ -373,7 +375,7 @@ const DraftRow = memo(function DraftRow({
       <td className="px-4 py-2.5">
         <div className="flex flex-wrap gap-1">
           {d.channels.length === 0 && (
-            <span className="text-slate-400 text-sm">
+            <span className="text-slate-400 dark:text-slate-500 text-sm">
               {d.kind === 'product' ? 'no wizard yet' : 'none yet'}
             </span>
           )}
@@ -401,7 +403,7 @@ const DraftRow = memo(function DraftRow({
         {d.kind === 'wizard' && typeof d.currentStep === 'number' ? (
           <div className="flex flex-col gap-1 min-w-[140px]">
             <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold tabular-nums bg-blue-50 text-blue-700">
+              <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold tabular-nums bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                 {d.currentStep}/{totalSteps}
               </span>
               <span className="text-slate-600 dark:text-slate-300 text-sm truncate">
@@ -449,12 +451,14 @@ const DraftRow = memo(function DraftRow({
           <span
             className={cn(
               'text-sm cursor-default',
-              d.isStale ? 'text-amber-700' : 'text-slate-500',
+              d.isStale
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-slate-500 dark:text-slate-400',
             )}
           >
             {formatRelative(d.updatedAt)}
             {d.isStale && (
-              <span className="ml-1 text-xs uppercase tracking-wide font-semibold text-amber-700">
+              <span className="ml-1 text-xs uppercase tracking-wide font-semibold text-amber-700 dark:text-amber-300">
                 stale
               </span>
             )}
@@ -479,7 +483,7 @@ const DraftRow = memo(function DraftRow({
               onClick={() => onDelete(d)}
               aria-label="Delete draft"
               size="md"
-              className="h-11 w-11 sm:h-7 sm:w-7 text-slate-400 hover:text-rose-700 hover:bg-rose-50"
+              className="h-11 w-11 sm:h-7 sm:w-7 text-slate-400 dark:text-slate-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:text-rose-300 dark:hover:bg-rose-950/40"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </IconButton>
@@ -892,7 +896,7 @@ export default function DraftsClient() {
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[260px]">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
@@ -913,15 +917,15 @@ export default function DraftsClient() {
               // DR-S.5 — 44px on mobile, original 32px on desktop.
               'inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 sm:px-2.5 text-base rounded-md border transition-colors',
               staleOnly
-                ? 'bg-amber-50 border-amber-300 text-amber-800'
-                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
+                ? 'bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'
+                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600',
             )}
             aria-pressed={staleOnly}
           >
             <Clock className="w-3 h-3" />
             {t('drafts.staleOnly')}
             {staleCount > 0 && !staleOnly && (
-              <span className="text-xs text-amber-700 font-semibold ml-1">
+              <span className="text-xs text-amber-700 dark:text-amber-300 font-semibold ml-1">
                 {staleCount}
               </span>
             )}
@@ -932,7 +936,7 @@ export default function DraftsClient() {
           value={source}
           onChange={(e) => setSource(e.target.value as SourceFilter)}
           aria-label="Filter by source"
-          className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+          className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
         >
           {SOURCE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -945,7 +949,7 @@ export default function DraftsClient() {
           value={sort}
           onChange={(e) => setSort(e.target.value as SortOption)}
           aria-label="Sort drafts"
-          className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300"
+          className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 dark:focus:border-blue-500"
         >
           {SORT_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -960,12 +964,12 @@ export default function DraftsClient() {
         <div
           role="toolbar"
           aria-label="Bulk draft actions"
-          className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-blue-900"
+          className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-900 dark:text-blue-100"
         >
           <span className="text-base font-medium tabular-nums">
             {t('drafts.bulkSelected', { n: selectedKeys.size })}
           </span>
-          <span className="text-blue-300">·</span>
+          <span className="text-blue-300 dark:text-blue-700">·</span>
           <Button
             variant="danger"
             size="sm"
@@ -987,7 +991,7 @@ export default function DraftsClient() {
       )}
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
+        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>Failed to load drafts: {error}</span>
         </div>
@@ -1011,7 +1015,7 @@ export default function DraftsClient() {
                   }}
                   onChange={toggleSelectAll}
                   aria-label="Select all visible drafts"
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500"
                 />
               </th>
               <th className="px-4 py-2.5">{t('drafts.col.product')}</th>
@@ -1025,7 +1029,7 @@ export default function DraftsClient() {
             {loading && drafts.length === 0 && (
               <>
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i} className="border-b border-slate-100">
+                  <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="px-4 py-3">
                       <Skeleton variant="block" width={16} height={16} />
                     </td>
@@ -1052,13 +1056,13 @@ export default function DraftsClient() {
             {!loading && drafts.length === 0 && !error && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center">
-                  <FileEdit className="w-6 h-6 mx-auto text-slate-300" />
-                  <div className="mt-2 text-slate-500">
+                  <FileEdit className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600" />
+                  <div className="mt-2 text-slate-500 dark:text-slate-400">
                     {debouncedSearch || staleOnly || source !== 'all'
                       ? t('common.noResults')
                       : t('drafts.empty')}
                   </div>
-                  <div className="mt-1 text-sm text-slate-400">
+                  <div className="mt-1 text-sm text-slate-400 dark:text-slate-500">
                     {t('drafts.emptyHint')}
                   </div>
                 </td>
@@ -1083,7 +1087,7 @@ export default function DraftsClient() {
       </div>
 
       {!loading && drafts.length > 0 && (
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           Showing {drafts.length} of {total} drafts
           {staleCount > 0 && !staleOnly && (
             <>
@@ -1091,7 +1095,7 @@ export default function DraftsClient() {
               <button
                 type="button"
                 onClick={() => setStaleOnly(true)}
-                className="text-amber-700 hover:underline"
+                className="text-amber-700 dark:text-amber-300 hover:underline"
               >
                 {staleCount} stale (&gt; 7 days)
               </button>
