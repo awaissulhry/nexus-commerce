@@ -162,6 +162,14 @@ export default function LocalesTab({
   const [translatingLocale, setTranslatingLocale] = useState<string | null>(
     null,
   )
+  // W4.3 — bulk-translate progress. null when idle, otherwise tracks
+  // current/total + the locale currently in flight so the CTA can
+  // show running progress instead of a frozen spinner.
+  const [bulkProgress, setBulkProgress] = useState<{
+    current: number
+    total: number
+    locale: string
+  } | null>(null)
 
   const reportDirty = useCallback(() => {
     let n = 0
@@ -458,6 +466,79 @@ export default function LocalesTab({
     }
   }
 
+  // W4.3 — bulk-translate: iterate every supported locale that lacks
+  // a translation row and call the per-locale AI endpoint serially.
+  // Serial (not parallel) keeps us inside the provider's rate limit
+  // and gives the operator a clear "X of Y" progress indicator. Each
+  // locale's row is patched in-place as it lands so the list grows
+  // visibly. Failures don't abort — they're collected and reported
+  // alongside the success count at the end.
+  const onBulkTranslate = async (targets: string[]) => {
+    if (targets.length === 0) return
+    let succeeded = 0
+    let failed: string[] = []
+    let totalTranslated = 0
+    for (let i = 0; i < targets.length; i++) {
+      const lang = targets[i]
+      setBulkProgress({ current: i + 1, total: targets.length, locale: lang })
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/${product.id}/translations/${lang}/ai-translate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fields: ['title', 'bullets', 'description', 'keywords'],
+            }),
+          },
+        )
+        if (!res.ok) {
+          failed.push(lang)
+          continue
+        }
+        const json = (await res.json()) as {
+          row: TranslationRow
+          fieldsTranslated: string[]
+        }
+        succeeded++
+        totalTranslated += json.fieldsTranslated.length
+        setTranslations((prev) => {
+          const idx = prev.findIndex((r) => r.language === lang)
+          if (idx === -1) return [...prev, json.row]
+          const next = prev.slice()
+          next[idx] = json.row
+          return next
+        })
+        setDrafts((prev) => ({ ...prev, [lang]: rowToDraft(json.row) }))
+      } catch {
+        failed.push(lang)
+      }
+    }
+    setBulkProgress(null)
+    if (succeeded > 0 && failed.length === 0) {
+      toast.success(
+        t('products.edit.locales.bulkSuccess', {
+          count: succeeded,
+          fields: totalTranslated,
+        }),
+      )
+    } else if (succeeded > 0 && failed.length > 0) {
+      toast.success(
+        t('products.edit.locales.bulkPartial', {
+          succeeded,
+          failed: failed.length,
+          locales: failed.join(', ').toUpperCase(),
+        }),
+      )
+    } else {
+      toast.error(
+        t('products.edit.locales.bulkAllFailed', {
+          locales: failed.join(', ').toUpperCase(),
+        }),
+      )
+    }
+  }
+
   const onMarkReviewed = async (language: string) => {
     try {
       const res = await fetch(
@@ -564,11 +645,33 @@ export default function LocalesTab({
         </div>
       </Card>
 
-      {/* ── Add locale ───────────────────────────────────────── */}
+      {/* ── Add locale + bulk AI translate ───────────────────── */}
       {addable.length > 0 && (
         <Card
           title={t('products.edit.locales.addTitle')}
           description={t('products.edit.locales.addDesc')}
+          action={
+            <Button
+              variant="primary"
+              size="sm"
+              loading={bulkProgress !== null}
+              icon={<Sparkles className="w-3.5 h-3.5" />}
+              onClick={() => void onBulkTranslate([...addable])}
+              title={t('products.edit.locales.bulkTooltip', {
+                count: addable.length,
+              })}
+            >
+              {bulkProgress
+                ? t('products.edit.locales.bulkProgress', {
+                    current: bulkProgress.current,
+                    total: bulkProgress.total,
+                    locale: bulkProgress.locale.toUpperCase(),
+                  })
+                : t('products.edit.locales.bulkButton', {
+                    count: addable.length,
+                  })}
+            </Button>
+          }
         >
           <div className="flex items-center gap-2 flex-wrap">
             {addable.map((l) => (
@@ -578,6 +681,7 @@ export default function LocalesTab({
                 size="sm"
                 icon={<Plus className="w-3.5 h-3.5" />}
                 onClick={() => void onAddLocale(l)}
+                disabled={bulkProgress !== null}
               >
                 <span className="mr-1">{LOCALE_DISPLAY[l]?.flag}</span>
                 {LOCALE_DISPLAY[l]?.label} · {l.toUpperCase()}
@@ -604,9 +708,30 @@ export default function LocalesTab({
         </Card>
       ) : translations.length === 0 ? (
         <Card>
-          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-6 text-center space-y-2">
+          <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-6 text-center space-y-3">
             <Globe className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
             <div>{t('products.edit.locales.empty')}</div>
+            {addable.length > 0 && (
+              <div className="pt-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={bulkProgress !== null}
+                  icon={<Sparkles className="w-3.5 h-3.5" />}
+                  onClick={() => void onBulkTranslate([...addable])}
+                >
+                  {bulkProgress
+                    ? t('products.edit.locales.bulkProgress', {
+                        current: bulkProgress.current,
+                        total: bulkProgress.total,
+                        locale: bulkProgress.locale.toUpperCase(),
+                      })
+                    : t('products.edit.locales.bulkEmptyCta', {
+                        count: addable.length,
+                      })}
+                </Button>
+              </div>
+            )}
           </div>
         </Card>
       ) : (
