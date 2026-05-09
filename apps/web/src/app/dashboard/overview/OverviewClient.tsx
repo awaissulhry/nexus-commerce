@@ -40,6 +40,7 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import PageHeader from '@/components/layout/PageHeader'
 
 // DO.5 — translator type alias so leaf components don't have to
 // import `useTranslations` themselves; the parent threads `t` down.
@@ -247,7 +248,11 @@ export default function OverviewClient() {
   }, [fetchPayload])
 
   return (
-    <div className="space-y-6">
+    // PageHeader has its own `mb-5`. Keep the section-stack at
+    // `space-y-6` but pull it into a sibling div so the header's
+    // bottom margin doesn't compound with the stack gap above the
+    // first section.
+    <div>
       <Header
         t={t}
         currentWindow={window}
@@ -256,6 +261,8 @@ export default function OverviewClient() {
         refreshing={refreshing}
         onRefresh={() => void fetchPayload({ silent: true })}
       />
+
+      <div className="space-y-6">
 
       {loading && !data && (
         <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 inline-flex items-center justify-center gap-2 w-full">
@@ -310,6 +317,7 @@ export default function OverviewClient() {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }
@@ -331,50 +339,52 @@ function Header({
   refreshing: boolean
   onRefresh: () => void
 }) {
+  // DO.7 — adopt the project-standard PageHeader. The Command
+  // Center previously rolled its own h1 + subtitle block, drifting
+  // from the typography (24px → 2xl) and gap conventions used on
+  // every other page. Window selector + refresh + last-refreshed
+  // timestamp slot into the `actions` group on the right; on
+  // narrow viewports PageHeader stacks them below the title.
   return (
-    <div className="flex items-end justify-between gap-3 flex-wrap">
-      <div>
-        <h1 className="text-[24px] font-semibold text-slate-900">
-          {t('overview.title')}
-        </h1>
-        <p className="text-md text-slate-600 mt-0.5">
-          {t('overview.subtitle')}
-        </p>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="inline-flex items-center border border-slate-200 rounded-md p-0.5 bg-white">
-          {WINDOWS.map((w) => (
-            <button
-              key={w.id}
-              type="button"
-              onClick={() => onWindowChange(w.id)}
-              className={cn(
-                'h-6 px-2.5 text-sm rounded transition-colors',
-                w.id === currentWindow
-                  ? 'bg-slate-900 text-white font-semibold'
-                  : 'text-slate-600 hover:text-slate-900',
-              )}
-            >
-              {t(`overview.window.${w.id}`)}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
-        >
-          {refreshing ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            <RefreshCw className="w-3 h-3" />
-          )}
-          {t('overview.refresh')}
-        </button>
-        <RelativeTimestamp t={t} at={lastRefreshed} />
-      </div>
-    </div>
+    <PageHeader
+      title={t('overview.title')}
+      description={t('overview.subtitle')}
+      actions={
+        <>
+          <div className="inline-flex items-center border border-slate-200 rounded-md p-0.5 bg-white">
+            {WINDOWS.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => onWindowChange(w.id)}
+                className={cn(
+                  'h-6 px-2.5 text-sm rounded transition-colors',
+                  w.id === currentWindow
+                    ? 'bg-slate-900 text-white font-semibold'
+                    : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                {t(`overview.window.${w.id}`)}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+          >
+            {refreshing ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3 h-3" />
+            )}
+            {t('overview.refresh')}
+          </button>
+          <RelativeTimestamp t={t} at={lastRefreshed} />
+        </>
+      }
+    />
   )
 }
 
