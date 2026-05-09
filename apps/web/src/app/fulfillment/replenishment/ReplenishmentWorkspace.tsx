@@ -80,24 +80,15 @@ import {
   FbaRestockHealthCard,
   FbaRestockSignalPanel,
 } from './_shared/FbaRestockPanels'
+import {
+  ContainerFillCard,
+  type ContainerFillEntry,
+} from './_shared/ContainerFillCard'
+import { KeyboardHelpOverlay } from './_shared/KeyboardHelpOverlay'
 import type { DetailResponse } from './_shared/types'
 
-interface ContainerFillEntry {
-  supplierId: string
-  supplierName: string
-  mode: 'AIR' | 'SEA_LCL' | 'SEA_FCL_20' | 'SEA_FCL_40' | 'ROAD'
-  totalCbm: number
-  totalKg: number
-  fillPercentByCbm: number | null
-  fillPercentByWeight: number | null
-  freightCostCents: number
-  topUpSuggestions: Array<{
-    productId: string
-    sku: string
-    addUnits: number
-    marginalFreightSavedCents: number
-  }>
-}
+// W9.6l — ContainerFillCard + ContainerFillEntry moved to _shared/.
+//          KeyboardHelpOverlay moved to _shared/.
 
 interface ReplenishmentResponse {
   suggestions: Suggestion[]
@@ -1981,88 +1972,6 @@ function SupplierAlternativesPanel({
 }
 
 
-// R.19 — supplier-level container fill summary. One row per supplier
-// with a SupplierShippingProfile. Surfaces fill %, freight cost, and
-// any top-up suggestions to push toward 100% container utilization.
-function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
-  return (
-    <Card className="p-4 mb-3">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-          Container fill
-        </span>
-        <span className="text-xs text-slate-400">
-          {entries.length} supplier{entries.length === 1 ? '' : 's'} with shipping profile
-        </span>
-      </div>
-      <div className="space-y-3">
-        {entries.map((e) => {
-          const isFcl = e.mode === 'SEA_FCL_20' || e.mode === 'SEA_FCL_40'
-          const fill = e.fillPercentByCbm ?? null
-          const fillColor = fill == null
-            ? 'bg-slate-300'
-            : fill >= 90 ? 'bg-emerald-500'
-            : fill >= 70 ? 'bg-sky-500'
-            : 'bg-amber-500'
-          return (
-            <div key={e.supplierId} className="border border-slate-200 rounded p-2">
-              <div className="flex items-center justify-between text-base mb-1.5">
-                <span className="font-semibold text-slate-900">{e.supplierName}</span>
-                <span className="text-slate-500 font-mono text-xs">{e.mode}</span>
-              </div>
-              {isFcl && fill != null && (
-                <>
-                  <div className="h-2 rounded bg-slate-100 overflow-hidden mb-1">
-                    <div
-                      className={cn('h-full', fillColor)}
-                      style={{ width: `${Math.min(100, fill)}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-sm text-slate-500">
-                    <span>{fill.toFixed(1)}% by volume</span>
-                    <span className="font-mono">
-                      {e.totalCbm.toFixed(2)} m³ · {(e.freightCostCents / 100).toFixed(0)} EUR
-                    </span>
-                  </div>
-                </>
-              )}
-              {!isFcl && (
-                <div className="flex items-center justify-between text-sm text-slate-500">
-                  <span className="font-mono">
-                    {e.totalCbm.toFixed(2)} m³ · {e.totalKg.toFixed(0)} kg
-                  </span>
-                  <span className="font-mono">
-                    {(e.freightCostCents / 100).toFixed(0)} EUR freight
-                  </span>
-                </div>
-              )}
-              {e.topUpSuggestions.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-slate-200">
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">
-                    Top-up suggestions
-                  </div>
-                  <ul className="space-y-0.5">
-                    {e.topUpSuggestions.slice(0, 3).map((t) => (
-                      <li key={t.productId} className="text-sm flex items-center justify-between">
-                        <span className="font-mono truncate">{t.sku}</span>
-                        <span className="text-slate-600">
-                          +{t.addUnits}u → save{' '}
-                          <span className="text-emerald-700 font-semibold">
-                            €{(t.marginalFreightSavedCents / 100).toFixed(0)}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </Card>
-  )
-}
 
 // W9.6e — ReorderMathPanel (R.4) moved to _shared/ReorderMathPanel.tsx
 // (imported at the top of this file).
@@ -2615,105 +2524,3 @@ function ForecastHealthCard() {
 }
 
 
-// Keyboard shortcuts overlay. Shown when the user presses ? or
-// clicks the keyboard hint button. Modal-style with click-backdrop
-// to dismiss; Esc handling lives in the parent's global keydown.
-function KeyboardHelpOverlay({ onClose }: { onClose: () => void }) {
-  const groups: { title: string; rows: { keys: string[]; label: string }[] }[] = [
-    {
-      title: 'Navigation',
-      rows: [
-        { keys: ['j', '↓'], label: 'Move focus down' },
-        { keys: ['k', '↑'], label: 'Move focus up' },
-        { keys: ['g'], label: 'Jump to top' },
-        { keys: ['G'], label: 'Jump to bottom' },
-        { keys: ['Esc'], label: 'Close drawer · clear selection · clear focus' },
-      ],
-    },
-    {
-      title: 'On focused row',
-      rows: [
-        { keys: ['Enter'], label: 'Open detail drawer' },
-        { keys: ['x', 'Space'], label: 'Toggle selection' },
-        { keys: ['p'], label: 'Draft single PO' },
-        { keys: ['d'], label: 'Dismiss recommendation' },
-      ],
-    },
-    {
-      title: 'Filter / search',
-      rows: [
-        { keys: ['1'], label: 'Filter: Critical' },
-        { keys: ['2'], label: 'Filter: High' },
-        { keys: ['3'], label: 'Filter: Medium' },
-        { keys: ['0'], label: 'Filter: All' },
-        { keys: ['/'], label: 'Focus search' },
-        { keys: ['r'], label: 'Refresh data' },
-      ],
-    },
-    {
-      title: 'Help',
-      rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
-    },
-  ]
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm grid place-items-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Keyboard shortcuts"
-    >
-      <div
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <Keyboard size={16} className="text-slate-500" />
-            Keyboard shortcuts
-          </div>
-          <button
-            onClick={onClose}
-            className="h-7 w-7 grid place-items-center text-slate-400 hover:text-slate-700 rounded hover:bg-slate-100"
-            aria-label="Close"
-          >
-            <X size={14} />
-          </button>
-        </div>
-        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
-          {groups.map((g) => (
-            <div key={g.title} className="space-y-2">
-              <div className="text-sm uppercase tracking-wider font-semibold text-slate-500">
-                {g.title}
-              </div>
-              <div className="space-y-1.5">
-                {g.rows.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 text-base">
-                    <span className="text-slate-700">{r.label}</span>
-                    <span className="flex items-center gap-1">
-                      {r.keys.map((k, j) => (
-                        <kbd
-                          key={j}
-                          className="font-mono text-xs px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded shadow-[0_1px_0_0_rgb(226_232_240)] min-w-[20px] text-center text-slate-700"
-                        >
-                          {k}
-                        </kbd>
-                      ))}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="border-t border-slate-200 px-5 py-3 text-sm text-slate-500">
-          Tip: shortcuts pause while typing in inputs. Press{' '}
-          <kbd className="font-mono px-1 py-0.5 bg-slate-50 border border-slate-200 rounded">
-            Esc
-          </kbd>{' '}
-          to leave a search/filter field, then keys work again.
-        </div>
-      </div>
-    </div>
-  )
-}
