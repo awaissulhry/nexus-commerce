@@ -24,6 +24,9 @@ import {
   RefreshCw,
   X,
   Truck,
+  ShieldAlert,
+  ArrowRightLeft,
+  AlertTriangle,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -66,6 +69,11 @@ const COMMANDS: Command[] = [
   { id: 'goto-qc-queue', label: 'Go to QC Queue (inbound supervisor review)', icon: ClipboardList, href: '/fulfillment/inbound/qc-queue', group: 'Navigation', chord: 'g q' },
   { id: 'goto-routing-rules', label: 'Go to Order Routing Rules', icon: FileEdit, href: '/fulfillment/routing-rules', group: 'Navigation' },
   { id: 'goto-cycle-count', label: 'Go to Cycle Counts (physical inventory)', icon: ClipboardList, href: '/fulfillment/stock/cycle-count', group: 'Navigation' },
+  { id: 'goto-recalls', label: 'Go to Lot Recalls (GPSR compliance)', icon: ShieldAlert, href: '/fulfillment/stock/recalls', group: 'Navigation', keywords: 'recall richiamo gpsr lot batch defect compliance safety helmet agv' },
+  { id: 'goto-stock-transfers', label: 'Go to Stock Transfers (inter-location)', icon: ArrowRightLeft, href: '/fulfillment/stock/transfers', group: 'Navigation', keywords: 'transfer trasferimenti location move' },
+  { id: 'goto-stock-reservations', label: 'Go to Stock Reservations (active holds)', icon: Boxes, href: '/fulfillment/stock/reservations', group: 'Navigation', keywords: 'reservations prenotazioni hold cart pending order' },
+  { id: 'goto-stockouts', label: 'Go to Stockouts (loss tracking)', icon: AlertTriangle, href: '/fulfillment/stock/stockouts', group: 'Navigation', keywords: 'stockout esauriti out of stock loss revenue margin' },
+  { id: 'goto-stock-analytics', label: 'Go to Stock Analytics (turnover, DoH, ABC, year-end)', icon: Activity, href: '/fulfillment/stock/analytics', group: 'Navigation', keywords: 'turnover rotazione doh abc rimanenze fiscal year-end valutazione' },
   { id: 'goto-returns', label: 'Go to Returns (RMA + refund workflow)', icon: RefreshCw, href: '/fulfillment/returns', group: 'Navigation', chord: 'g t' },
   { id: 'goto-returns-analytics', label: 'Go to Returns Analytics (rates, top SKUs, processing time)', icon: Activity, href: '/fulfillment/returns/analytics', group: 'Navigation', keywords: 'returns rate sku processing analytics' },
   { id: 'goto-activity', label: 'Go to Sync Logs (observability hub)', icon: Activity, href: '/sync-logs', group: 'Navigation', keywords: 'monitoring observability hub kpi cron channel' },
