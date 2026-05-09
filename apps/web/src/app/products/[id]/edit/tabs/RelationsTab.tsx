@@ -38,6 +38,7 @@ import {
 import {
   AlertCircle,
   ExternalLink,
+  Lightbulb,
   Loader2,
   Plus,
   Search,
@@ -107,6 +108,20 @@ interface SearchResult {
   imageUrl?: string | null
 }
 
+interface SuggestionRow {
+  product: {
+    id: string
+    sku: string
+    name: string
+    brand: string | null
+    basePrice: number | null
+    status: string
+    imageUrl: string | null
+  }
+  score: number
+  reasons: string[]
+}
+
 interface Props {
   product: any
   onDirtyChange: (count: number) => void
@@ -127,6 +142,10 @@ export default function RelationsTab({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showIncoming, setShowIncoming] = useState(false)
+  // W11.1 — suggestion panel state
+  const [suggestions, setSuggestions] = useState<SuggestionRow[] | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
+  const [acceptingId, setAcceptingId] = useState<string | null>(null)
 
   // Add form state
   const [addType, setAddType] = useState<RelationType>('CROSS_SELL')
@@ -219,6 +238,75 @@ export default function RelationsTab({
     }, 250)
     return () => globalThis.clearTimeout(timer)
   }, [addSearch, addType, outgoing, pickedProduct, product.id])
+
+  // W11.1 — load suggestions for the active type. Heuristic-ranked
+  // server-side, so the round-trip is one fetch.
+  const loadSuggestions = useCallback(async () => {
+    setSuggesting(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/relations/suggest?type=${addType}&limit=10`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error ?? `HTTP ${res.status}`)
+      }
+      const json = (await res.json()) as { suggestions: SuggestionRow[] }
+      setSuggestions(json.suggestions ?? [])
+    } catch (e: any) {
+      toast.error(
+        t('products.edit.relations.suggestFailed', {
+          error: e?.message ?? String(e),
+        }),
+      )
+    } finally {
+      setSuggesting(false)
+    }
+  }, [addType, product.id, t, toast])
+
+  // W11.1 — accept a suggestion = create the relation directly.
+  // Reuses the existing reciprocal-by-default-for-type logic so a
+  // CROSS_SELL accepted from the suggestions panel still pairs both
+  // sides like one created via the manual picker.
+  const onAcceptSuggestion = async (suggestion: SuggestionRow) => {
+    setAcceptingId(suggestion.product.id)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/relations`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toProductId: suggestion.product.id,
+            type: addType,
+            reciprocal: RECIPROCAL_BY_DEFAULT.has(addType),
+          }),
+        },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(t('products.edit.relations.added'))
+      // Drop the accepted row from the suggestion list so the panel
+      // updates without a fresh refetch.
+      setSuggestions((prev) =>
+        prev
+          ? prev.filter((s) => s.product.id !== suggestion.product.id)
+          : prev,
+      )
+      void refresh()
+    } catch (e: any) {
+      toast.error(
+        t('products.edit.relations.addFailed', {
+          error: e?.message ?? String(e),
+        }),
+      )
+    } finally {
+      setAcceptingId(null)
+    }
+  }
 
   const onPickResult = (r: SearchResult) => {
     setPickedProduct(r)
@@ -316,6 +404,22 @@ export default function RelationsTab({
       <Card
         title={t('products.edit.relations.addTitle')}
         description={t('products.edit.relations.addDesc')}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={suggesting}
+            icon={<Lightbulb className="w-3.5 h-3.5" />}
+            onClick={() => void loadSuggestions()}
+            title={t('products.edit.relations.suggestTooltip', {
+              type: typeLabel(addType, t),
+            })}
+          >
+            {suggestions === null
+              ? t('products.edit.relations.suggestButton')
+              : t('products.edit.relations.suggestRefresh')}
+          </Button>
+        }
       >
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-3">
           <div className="space-y-1">
@@ -413,6 +517,94 @@ export default function RelationsTab({
           </div>
         </div>
       </Card>
+
+      {/* ── Suggestions panel (W11.1) ────────────────────────── */}
+      {suggestions !== null && (
+        <Card
+          title={t('products.edit.relations.suggestTitle', {
+            type: typeLabel(addType, t),
+          })}
+          description={t('products.edit.relations.suggestDesc')}
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSuggestions(null)}
+            >
+              {t('products.edit.relations.suggestDismiss')}
+            </Button>
+          }
+        >
+          {suggestions.length === 0 ? (
+            <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+              {t('products.edit.relations.suggestEmpty')}
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+              {suggestions.map((s) => (
+                <li
+                  key={s.product.id}
+                  className="px-3 py-2 flex items-center gap-3 bg-white dark:bg-slate-900"
+                >
+                  <div className="flex-shrink-0 w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                    {s.product.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={s.product.imageUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
+                        —
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <span className="text-md text-slate-900 dark:text-slate-100 truncate">
+                        {s.product.name}
+                      </span>
+                      <Badge mono variant="default">
+                        {s.product.sku}
+                      </Badge>
+                      {s.product.basePrice != null && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                          €{s.product.basePrice.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {s.reasons.length > 0
+                        ? s.reasons.join(' · ')
+                        : t('products.edit.relations.suggestNoReason')}
+                    </div>
+                  </div>
+                  <span
+                    className="inline-flex items-center justify-center px-2 py-0.5 rounded font-mono text-xs tabular-nums bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 flex-shrink-0"
+                    title={t('products.edit.relations.suggestScore')}
+                  >
+                    {s.score}
+                  </span>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={acceptingId === s.product.id}
+                    disabled={
+                      acceptingId !== null &&
+                      acceptingId !== s.product.id
+                    }
+                    icon={<Plus className="w-3.5 h-3.5" />}
+                    onClick={() => void onAcceptSuggestion(s)}
+                  >
+                    {t('products.edit.relations.suggestAccept')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       {/* ── Outgoing relations ───────────────────────────────── */}
       {error ? (

@@ -258,6 +258,170 @@ const productRelationsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     return { ok: true, droppedReciprocal }
   })
+
+  // W11.1 — heuristic cross-sell suggestions.
+  //
+  //   GET /api/products/:id/relations/suggest?type=CROSS_SELL&limit=10
+  //     → { suggestions: Array<{ product, score, reasons[] }> }
+  //
+  // Pure ranking — no AI call, no writes. The operator is the
+  // judge; this surface just curates the search space from 281+
+  // SKUs down to 10 ranked candidates so the human picker isn't
+  // staring at a flat list. Scoring weights:
+  //   +30  same brand
+  //   +25  same productType
+  //   +20  basePrice within ±30% of source (cross-sell beat
+  //         tends to land at similar price tiers)
+  //   +10  has main image (otherwise the PDP card is bald)
+  //   +10  has description (otherwise the AI cross-sell ranker
+  //         can't tell what it is)
+  //   +5   has at least 1 channel listing (some channel exposure)
+  //
+  // Excludes: self, already-related (any type), DRAFT-only products,
+  // soft-deleted. Orders by computed score desc, then sku asc for
+  // stability.
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { type?: string; limit?: string }
+  }>('/products/:id/relations/suggest', async (request, reply) => {
+    const { id } = request.params
+    const requestedType = (request.query?.type ?? 'CROSS_SELL').toUpperCase()
+    if (!ALLOWED_TYPES.has(requestedType)) {
+      return reply.code(400).send({
+        error: `type must be one of ${Array.from(ALLOWED_TYPES).join(', ')}`,
+      })
+    }
+    const limit = Math.min(
+      Math.max(Number(request.query?.limit ?? 10), 1),
+      50,
+    )
+
+    const source = await prisma.product.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        sku: true,
+        brand: true,
+        productType: true,
+        basePrice: true,
+      },
+    })
+    if (!source) return reply.code(404).send({ error: 'Product not found' })
+
+    const sourcePrice = source.basePrice ? Number(source.basePrice) : null
+
+    // Already-related set (any direction, any type) so we never
+    // re-suggest a sibling already linked.
+    const existingRelations = await prisma.productRelation.findMany({
+      where: {
+        OR: [{ fromProductId: id }, { toProductId: id }],
+      },
+      select: { fromProductId: true, toProductId: true },
+    })
+    const excluded = new Set<string>([id])
+    for (const r of existingRelations) {
+      excluded.add(r.fromProductId)
+      excluded.add(r.toProductId)
+    }
+
+    // Pull a generously-sized candidate pool. Order by sku for
+    // determinism so two operators see the same ranking on the
+    // same data state.
+    const candidates = await prisma.product.findMany({
+      where: {
+        id: { notIn: Array.from(excluded) },
+        deletedAt: null,
+        status: { in: ['ACTIVE', 'INACTIVE'] }, // skip DRAFT
+        // Standalone or parents only — children are surfaced via
+        // their parent so we don't suggest variant rows individually.
+        parentId: null,
+      },
+      select: {
+        id: true,
+        sku: true,
+        name: true,
+        brand: true,
+        productType: true,
+        basePrice: true,
+        description: true,
+        status: true,
+        images: { where: { type: 'MAIN' }, take: 1, select: { url: true } },
+        _count: { select: { channelListings: true } },
+      },
+      orderBy: { sku: 'asc' },
+      take: 200,
+    })
+
+    // Score each candidate, then sort + slice.
+    const scored = candidates.map((c) => {
+      const reasons: string[] = []
+      let score = 0
+      if (source.brand && c.brand && source.brand === c.brand) {
+        score += 30
+        reasons.push('same brand')
+      }
+      if (
+        source.productType &&
+        c.productType &&
+        source.productType === c.productType
+      ) {
+        score += 25
+        reasons.push('same product type')
+      }
+      const cPrice = c.basePrice ? Number(c.basePrice) : null
+      if (sourcePrice && cPrice && sourcePrice > 0) {
+        const ratio = cPrice / sourcePrice
+        if (ratio >= 0.7 && ratio <= 1.3) {
+          score += 20
+          reasons.push('similar price tier')
+        }
+      }
+      if (c.images?.length > 0) {
+        score += 10
+        reasons.push('has image')
+      }
+      if (
+        typeof c.description === 'string' &&
+        c.description.trim().length > 50
+      ) {
+        score += 10
+        reasons.push('has description')
+      }
+      if ((c._count?.channelListings ?? 0) > 0) {
+        score += 5
+        reasons.push('listed on channels')
+      }
+      return {
+        product: {
+          id: c.id,
+          sku: c.sku,
+          name: c.name,
+          brand: c.brand,
+          basePrice: cPrice,
+          status: c.status,
+          imageUrl: c.images?.[0]?.url ?? null,
+        },
+        score,
+        reasons,
+      }
+    })
+
+    // Filter out zero-score noise (no overlap on any dimension)
+    // unless we'd otherwise return an empty list. Sort high → low.
+    const positive = scored.filter((s) => s.score > 0)
+    const ranked = (positive.length > 0 ? positive : scored)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score
+        return a.product.sku.localeCompare(b.product.sku)
+      })
+      .slice(0, limit)
+
+    return {
+      suggestions: ranked,
+      totalScored: candidates.length,
+      excludedCount: excluded.size,
+    }
+  })
 }
 
 export default productRelationsRoutes
