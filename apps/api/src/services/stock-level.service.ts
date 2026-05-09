@@ -53,7 +53,13 @@ export interface ReserveStockArgs {
   locationId: string
   quantity: number
   orderId?: string
-  reason?: 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION' | 'OPEN_ORDER'
+  reason?: 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION' | 'OPEN_ORDER' | 'CART_HOLD'
+  /** RV.1 — HARD decrements StockLevel.reserved (default, all
+   *  existing callers). SOFT is advisory: row exists but doesn't
+   *  decrement available. Used for cart hold / payment-pending so
+   *  ATP-soft can subtract carts while ATP-hard stays at confirmed-
+   *  orders only. */
+  kind?: 'SOFT' | 'HARD'
   ttlMs?: number
   actor?: string
 }
@@ -67,6 +73,7 @@ export async function reserveStock(args: ReserveStockArgs) {
     quantity,
     orderId,
     reason = 'PENDING_ORDER',
+    kind = 'HARD',
     ttlMs = PENDING_ORDER_TTL_MS,
     actor,
   } = args
@@ -89,12 +96,17 @@ export async function reserveStock(args: ReserveStockArgs) {
       )
     }
 
-    const newReserved = sl.reserved + quantity
-    const newAvailable = sl.quantity - newReserved
-    await tx.stockLevel.update({
-      where: { id: sl.id },
-      data: { reserved: newReserved, available: newAvailable },
-    })
+    // RV.1 — only HARD reservations decrement StockLevel.reserved.
+    // SOFT is visible in the StockReservation table but doesn't
+    // affect available calculations.
+    if (kind === 'HARD') {
+      const newReserved = sl.reserved + quantity
+      const newAvailable = sl.quantity - newReserved
+      await tx.stockLevel.update({
+        where: { id: sl.id },
+        data: { reserved: newReserved, available: newAvailable },
+      })
+    }
 
     const reservation = await tx.stockReservation.create({
       data: {
@@ -102,6 +114,7 @@ export async function reserveStock(args: ReserveStockArgs) {
         quantity,
         orderId: orderId ?? null,
         reason,
+        kind,
         expiresAt: new Date(Date.now() + ttlMs),
       },
     })
@@ -147,7 +160,11 @@ export async function releaseReservation(
     }
 
     const sl = r.stockLevel
-    const newReserved = Math.max(0, sl.reserved - r.quantity)
+    // RV.1 — only HARD reservations affected StockLevel.reserved on
+    // creation; only HARD reservations decrement it on release. SOFT
+    // releases just mark the row.
+    const isHard = (r.kind ?? 'HARD') === 'HARD'
+    const newReserved = isHard ? Math.max(0, sl.reserved - r.quantity) : sl.reserved
     const newAvailable = sl.quantity - newReserved
     await tx.stockLevel.update({
       where: { id: sl.id },

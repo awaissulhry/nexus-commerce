@@ -3743,7 +3743,11 @@ model StockReservation {
   quantity Int
 
   orderId String?
-  reason  String // 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION'
+  reason  String // 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION' | 'CART_HOLD'
+  // RV.1 — HARD decrements available; SOFT is advisory (cart hold,
+  // payment-pending). Default HARD preserves prior behavior. CHECK
+  // constraint enforces valid values at the DB.
+  kind     String @default("HARD")
 
   expiresAt  DateTime
   releasedAt DateTime?
@@ -3757,6 +3761,7 @@ model StockReservation {
   @@index([orderId])
   @@index([expiresAt])
   @@index([releasedAt, consumedAt])
+  @@index([kind])
 }
 
 // Append-only audit trail for every stock change. Parent product totalStock
