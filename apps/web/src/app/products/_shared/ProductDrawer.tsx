@@ -4632,18 +4632,18 @@ interface RelatedRow {
   } | null
 }
 
-const RELATION_TYPES: Array<{ code: string; label: string; hint: string }> = [
-  { code: 'CROSS_SELL', label: 'Cross-sell', hint: 'You might also like' },
-  { code: 'ACCESSORY', label: 'Accessory', hint: 'Works with this' },
-  { code: 'UPSELL', label: 'Upsell', hint: 'Step up to this tier' },
-  { code: 'REPLACEMENT', label: 'Replacement', hint: 'Supersedes' },
-  { code: 'BUNDLE_PART', label: 'Bundle part', hint: 'Member of bundle' },
-  { code: 'RECOMMENDED', label: 'Recommended', hint: 'Generic suggestion' },
+// W5.34 — RELATION_TYPES collapsed to code-only; label + hint are
+// resolved via t() at use-site through products.drawer.related.kind.*
+// keys. relationLabel() is no longer needed (dead — all callers
+// translate inline).
+const RELATION_TYPES: Array<{ code: string }> = [
+  { code: 'CROSS_SELL' },
+  { code: 'ACCESSORY' },
+  { code: 'UPSELL' },
+  { code: 'REPLACEMENT' },
+  { code: 'BUNDLE_PART' },
+  { code: 'RECOMMENDED' },
 ]
-
-function relationLabel(code: string): string {
-  return RELATION_TYPES.find((t) => t.code === code)?.label ?? code
-}
 
 interface SearchResult {
   id: string
@@ -4660,6 +4660,7 @@ function RelatedTab({
   onChanged: () => void
 }) {
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
   const [outgoing, setOutgoing] = useState<RelatedRow[]>([])
   const [incoming, setIncoming] = useState<RelatedRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -4780,7 +4781,7 @@ function RelatedTab({
   }
 
   const remove = async (relationId: string) => {
-    if (!(await askConfirm({ title: 'Remove this related-product link?', confirmLabel: 'Remove', tone: 'danger' }))) return
+    if (!(await askConfirm({ title: t('products.drawer.related.removeConfirm'), confirmLabel: t('products.drawer.related.removeTitle'), tone: 'danger' }))) return
     setBusy(true)
     try {
       await fetch(
@@ -4797,7 +4798,7 @@ function RelatedTab({
   // Group outgoing by type for the rendered sections.
   const outgoingByType = useMemo(() => {
     const m = new Map<string, RelatedRow[]>()
-    for (const t of RELATION_TYPES) m.set(t.code, [])
+    for (const rt of RELATION_TYPES) m.set(rt.code, [])
     for (const r of outgoing) {
       const arr = m.get(r.type) ?? []
       arr.push(r)
@@ -4808,8 +4809,8 @@ function RelatedTab({
 
   if (loading) {
     return (
-      <div className="px-5 py-8 text-center text-base text-slate-400 italic">
-        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
+      <div className="px-5 py-8 text-center text-base text-slate-500 dark:text-slate-400 italic">
+        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t('products.drawer.related.loading')}
       </div>
     )
   }
@@ -4822,20 +4823,25 @@ function RelatedTab({
         </div>
       )}
 
-      {RELATION_TYPES.map((t) => {
-        const rows = outgoingByType.get(t.code) ?? []
+      {RELATION_TYPES.map((rt) => {
+        const rows = outgoingByType.get(rt.code) ?? []
         if (rows.length === 0) return null
         return (
-          <section key={t.code} className="space-y-1.5">
+          <section key={rt.code} className="space-y-1.5">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-base font-semibold text-slate-700">
-                  {t.label}
+                  {t(`products.drawer.related.kind.${rt.code}.label`)}
                 </div>
-                <div className="text-xs text-slate-500">{t.hint}</div>
+                <div className="text-xs text-slate-500">{t(`products.drawer.related.kind.${rt.code}.hint`)}</div>
               </div>
-              <span className="text-xs text-slate-400">
-                {rows.length} item{rows.length === 1 ? '' : 's'}
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {t(
+                  rows.length === 1
+                    ? 'products.drawer.related.itemCount.one'
+                    : 'products.drawer.related.itemCount.other',
+                  { count: rows.length },
+                )}
               </span>
             </div>
             {rows.map((r) => {
@@ -4880,19 +4886,19 @@ function RelatedTab({
                         }),
                       )
                     }
-                    title="Open"
-                    aria-label="Open related"
+                    title={t('products.drawer.related.openTitle')}
+                    aria-label={t('products.drawer.related.openAria')}
                     className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                   <IconButton
-                    aria-label="Remove related"
+                    aria-label={t('products.drawer.related.removeAria')}
                     size="md"
                     tone="danger"
                     onClick={() => remove(r.id)}
                     disabled={busy}
-                    title="Remove"
+                    title={t('products.drawer.related.removeTitle')}
                     className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -4907,34 +4913,34 @@ function RelatedTab({
       {outgoing.length === 0 && !adding && (
         <div className="text-center py-6 text-base text-slate-500 space-y-2">
           <Network className="w-5 h-5 mx-auto text-slate-300" />
-          <div>No related products yet.</div>
+          <div>{t('products.drawer.related.empty')}</div>
         </div>
       )}
 
       {adding ? (
         <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
           <div className="text-sm font-semibold text-purple-700 uppercase tracking-wider">
-            Add related
+            {t('products.drawer.related.addSection')}
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
-              Type
+              {t('products.drawer.related.type')}
             </label>
             <select
               value={pickedType}
               onChange={(e) => setPickedType(e.target.value)}
               className="w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
             >
-              {RELATION_TYPES.map((t) => (
-                <option key={t.code} value={t.code}>
-                  {t.label} — {t.hint}
+              {RELATION_TYPES.map((rt) => (
+                <option key={rt.code} value={rt.code}>
+                  {t(`products.drawer.related.kind.${rt.code}.label`)} — {t(`products.drawer.related.kind.${rt.code}.hint`)}
                 </option>
               ))}
             </select>
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
-              Search product
+              {t('products.drawer.related.searchProduct')}
             </label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -4943,13 +4949,13 @@ function RelatedTab({
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="SKU, name, brand…"
+                placeholder={t('products.drawer.related.searchPlaceholder')}
                 className="w-full h-8 pl-7 pr-2 text-base border border-slate-200 rounded bg-white"
               />
             </div>
             {searching && (
-              <div className="text-xs text-slate-400 mt-1 italic">
-                Searching…
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">
+                {t('products.drawer.related.searching')}
               </div>
             )}
             {results.length > 0 && !selectedTo && (
@@ -5007,7 +5013,7 @@ function RelatedTab({
                   </div>
                 </div>
                 <IconButton
-                  aria-label="Clear selection"
+                  aria-label={t('products.drawer.related.clearSelection')}
                   size="sm"
                   onClick={() => setSelectedTo(null)}
                   className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
@@ -5025,10 +5031,9 @@ function RelatedTab({
               className="mt-0.5"
             />
             <div>
-              <div>Create the reverse link too</div>
+              <div>{t('products.drawer.related.reciprocal.title')}</div>
               <div className="text-xs text-slate-500">
-                Most cross-sells should be symmetric. Untick for asymmetric
-                relations like Replacement.
+                {t('products.drawer.related.reciprocal.body')}
               </div>
             </div>
           </label>
@@ -5044,7 +5049,7 @@ function RelatedTab({
               }}
               className="!h-7 !px-2 !text-sm"
             >
-              Cancel
+              {t('products.drawer.related.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -5053,7 +5058,7 @@ function RelatedTab({
               disabled={busy || !selectedTo}
               className="!h-7 !px-3 !text-sm !bg-purple-600 hover:!bg-purple-700 !border-purple-600"
             >
-              Add
+              {t('products.drawer.related.addBtn')}
             </Button>
           </div>
         </div>
@@ -5063,7 +5068,7 @@ function RelatedTab({
           onClick={() => setAdding(true)}
           className="w-full h-8 text-base border border-dashed border-slate-300 rounded text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
         >
-          <Plus className="w-3 h-3" /> Add related product
+          <Plus className="w-3 h-3" /> {t('products.drawer.related.add')}
         </button>
       )}
 
@@ -5072,12 +5077,15 @@ function RelatedTab({
       {incoming.length > 0 && (
         <section className="pt-3 border-t border-slate-100 space-y-1.5">
           <div className="text-sm font-semibold text-slate-700">
-            Linked from {incoming.length} product
-            {incoming.length === 1 ? '' : 's'}
+            {t(
+              incoming.length === 1
+                ? 'products.drawer.related.linkedFrom.one'
+                : 'products.drawer.related.linkedFrom.other',
+              { count: incoming.length },
+            )}
           </div>
           <div className="text-xs text-slate-500">
-            These products have an outgoing link to this one. Editing
-            them happens in their own drawer.
+            {t('products.drawer.related.linkedFromBody')}
           </div>
           {incoming.map((r) => {
             const p = r.fromProduct
@@ -5110,7 +5118,7 @@ function RelatedTab({
                   </div>
                   <div className="text-xs text-slate-500 font-mono truncate">
                     {p.sku} ·{' '}
-                    <span className="uppercase">{relationLabel(r.type)}</span>
+                    <span className="uppercase">{t(`products.drawer.related.kind.${r.type}.label`)}</span>
                   </div>
                 </div>
               </div>
