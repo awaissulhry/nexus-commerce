@@ -749,6 +749,12 @@ function RuleEditModal({
   const [maxExecutionsPerDay, setMaxExecutionsPerDay] = useState<string>('')
   const [maxValueEur, setMaxValueEur] = useState<string>('') // EUR (not cents) for friendlier input
   const [submitting, setSubmitting] = useState(false)
+  // W4.14 — conditions + actions JSON tabs. Visual drag-drop builder
+  // is a future commit; v0 ships full edit access via validated JSON
+  // textareas so operators can tune templates without API edits.
+  const [tab, setTab] = useState<'basics' | 'conditions' | 'actions'>('basics')
+  const [conditionsText, setConditionsText] = useState('[]')
+  const [actionsText, setActionsText] = useState('[]')
 
   // Re-seed form whenever a different rule opens.
   useEffect(() => {
@@ -764,6 +770,9 @@ function RuleEditModal({
         ? String(Math.round(rule.maxValueCentsEur / 100))
         : '',
     )
+    setConditionsText(JSON.stringify(rule.conditions ?? [], null, 2))
+    setActionsText(JSON.stringify(rule.actions ?? [], null, 2))
+    setTab('basics')
   }, [rule])
 
   if (!rule) return null
@@ -799,6 +808,35 @@ function RuleEditModal({
       }
       data.maxValueCentsEur = Math.round(eur * 100)
     }
+    // W4.14 — parse + validate JSON tabs. Both must be arrays.
+    let conditions: unknown
+    try {
+      conditions = JSON.parse(conditionsText)
+    } catch {
+      toast.error(t('replenishment.automation.edit.invalidConditionsJson'))
+      setTab('conditions')
+      return
+    }
+    if (!Array.isArray(conditions)) {
+      toast.error(t('replenishment.automation.edit.conditionsMustBeArray'))
+      setTab('conditions')
+      return
+    }
+    let actions: unknown
+    try {
+      actions = JSON.parse(actionsText)
+    } catch {
+      toast.error(t('replenishment.automation.edit.invalidActionsJson'))
+      setTab('actions')
+      return
+    }
+    if (!Array.isArray(actions)) {
+      toast.error(t('replenishment.automation.edit.actionsMustBeArray'))
+      setTab('actions')
+      return
+    }
+    data.conditions = conditions
+    data.actions = actions
     setSubmitting(true)
     try {
       const res = await fetch(
@@ -832,9 +870,35 @@ function RuleEditModal({
       open={rule !== null}
       onClose={onClose}
       title={t('replenishment.automation.edit.title')}
-      size="md"
+      size="lg"
     >
-      <div className="space-y-3">
+      <div
+        className="flex items-center gap-1 mb-3 border-b border-slate-200 dark:border-slate-800"
+        role="tablist"
+      >
+        {(['basics', 'conditions', 'actions'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={cn(
+              'px-3 py-1.5 text-sm border-b-2 -mb-px transition-colors',
+              tab === k
+                ? 'border-blue-600 text-blue-700 dark:text-blue-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200',
+            )}
+          >
+            {t(`replenishment.automation.edit.tab.${k}`)}
+          </button>
+        ))}
+      </div>
+
+      <div
+        className={cn('space-y-3', tab !== 'basics' && 'hidden')}
+        role="tabpanel"
+      >
         <div>
           <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">
             {t('replenishment.automation.edit.nameLabel')}
@@ -911,6 +975,50 @@ function RuleEditModal({
           {t('replenishment.automation.edit.dryRunHint')}
         </div>
       </div>
+
+      {/* W4.14 — conditions JSON editor. Validated on submit; tab
+          auto-switches to this panel on parse error. */}
+      <div
+        className={cn('space-y-2', tab !== 'conditions' && 'hidden')}
+        role="tabpanel"
+      >
+        <div className="text-xs text-slate-600 dark:text-slate-400">
+          {t('replenishment.automation.edit.conditionsHint')}
+        </div>
+        <textarea
+          value={conditionsText}
+          onChange={(e) => setConditionsText(e.target.value)}
+          rows={14}
+          spellCheck={false}
+          className="w-full text-xs font-mono rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label={t('replenishment.automation.edit.conditionsAriaLabel')}
+        />
+        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+          {t('replenishment.automation.edit.conditionsExample')}
+        </div>
+      </div>
+
+      {/* W4.14 — actions JSON editor. */}
+      <div
+        className={cn('space-y-2', tab !== 'actions' && 'hidden')}
+        role="tabpanel"
+      >
+        <div className="text-xs text-slate-600 dark:text-slate-400">
+          {t('replenishment.automation.edit.actionsHint')}
+        </div>
+        <textarea
+          value={actionsText}
+          onChange={(e) => setActionsText(e.target.value)}
+          rows={14}
+          spellCheck={false}
+          className="w-full text-xs font-mono rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label={t('replenishment.automation.edit.actionsAriaLabel')}
+        />
+        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+          {t('replenishment.automation.edit.actionsExample')}
+        </div>
+      </div>
+
       <ModalFooter>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button
