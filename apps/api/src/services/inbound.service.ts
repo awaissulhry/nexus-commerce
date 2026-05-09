@@ -90,6 +90,12 @@ interface ReceiveItemInput {
   expiresAt?: string
   supplierLotRef?: string
   lotNotes?: string
+  /** F1.13 — optional bin assignment on receive. When set, the bin
+   *  must already exist at the shipment's StockLocation; the helper
+   *  upserts StockBinQuantity += delta and decorates the receive
+   *  StockMovement with the binId. Failures don't roll back the
+   *  receive — the operator can put away the bin manually after. */
+  binCode?: string
 }
 
 interface ReceiveArgs {
@@ -187,6 +193,50 @@ export async function receiveItems(args: ReceiveArgs) {
           logger.error('inbound receive: lot capture failed (stock movement kept)', {
             stockMovementId,
             lotNumber: upd.lotNumber,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+
+      // F1.13 — bin put-away on receive. Same try/catch discipline as
+      // L.11: failures are logged but the receive itself stands. The
+      // operator can put away later via /api/stock/bins/move once the
+      // bin exists.
+      if (sign > 0 && upd.binCode?.trim()) {
+        try {
+          const { assignReceivedToBin } = await import('./bin.service.js')
+          // Resolve the StockLocation. shipment.warehouseId is a
+          // string keyed off StockLocation.warehouseId; we need the
+          // actual StockLocation.id for the bin lookup.
+          let locationId: string | null = null
+          if (shipment.warehouseId) {
+            const sl = await prisma.stockLocation.findUnique({
+              where: { warehouseId: shipment.warehouseId },
+              select: { id: true },
+            })
+            locationId = sl?.id ?? null
+          }
+          if (!locationId) {
+            const itMain = await prisma.stockLocation.findUnique({
+              where: { code: 'IT-MAIN' },
+              select: { id: true },
+            })
+            locationId = itMain?.id ?? null
+          }
+          if (locationId) {
+            await assignReceivedToBin({
+              productId: orig.productId,
+              variationId: null,
+              locationId,
+              binCode: upd.binCode,
+              quantity: delta,
+              receiveMovementId: stockMovementId ?? undefined,
+            })
+          }
+        } catch (err) {
+          logger.error('inbound receive: bin put-away failed (stock movement kept)', {
+            stockMovementId,
+            binCode: upd.binCode,
             error: err instanceof Error ? err.message : String(err),
           })
         }

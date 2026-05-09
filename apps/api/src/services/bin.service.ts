@@ -175,6 +175,93 @@ export async function moveStockBetweenBins(args: {
 }
 
 /**
+ * F1.13 — assign N just-received units to a bin by code.
+ *
+ * Called from inbound receive AFTER applyStockMovement has incremented
+ * StockLevel; this helper only touches the per-bin sub-grain
+ * (StockBinQuantity) and decorates the receive movement with the
+ * binId so the audit trail captures put-away location.
+ *
+ * Throws when:
+ *   - the bin code doesn't exist at the given location (operator
+ *     should create the bin first via /api/stock/bins)
+ *   - the bin is inactive
+ *   - no StockLevel exists for the product at this location (means
+ *     applyStockMovement didn't run yet — caller order bug)
+ */
+export async function assignReceivedToBin(args: {
+  productId: string
+  variationId?: string | null
+  locationId: string
+  binCode: string
+  quantity: number
+  /** StockMovement row that recorded the receive — we update its
+   *  binId for traceability. Optional: when not provided we still
+   *  upsert StockBinQuantity but the audit row won't carry the bin. */
+  receiveMovementId?: string
+}) {
+  if (args.quantity <= 0) {
+    throw new Error('assignReceivedToBin: quantity must be > 0')
+  }
+  const code = args.binCode.trim()
+  if (!code) throw new Error('assignReceivedToBin: binCode required')
+
+  return prisma.$transaction(async (tx) => {
+    const bin = await tx.stockBin.findUnique({
+      where: { locationId_code: { locationId: args.locationId, code } },
+    })
+    if (!bin) {
+      throw new Error(
+        `assignReceivedToBin: bin "${code}" does not exist at location ${args.locationId}. Create it first via POST /api/stock/bins.`,
+      )
+    }
+    if (!bin.isActive) {
+      throw new Error(`assignReceivedToBin: bin "${code}" is inactive — pick an active bin or reactivate.`)
+    }
+
+    const sl = await tx.stockLevel.findFirst({
+      where: {
+        productId: args.productId,
+        variationId: args.variationId ?? null,
+        locationId: args.locationId,
+      },
+      select: { id: true },
+    })
+    if (!sl) {
+      throw new Error(
+        `assignReceivedToBin: no StockLevel for product ${args.productId} at location ${args.locationId} — apply receive movement first.`,
+      )
+    }
+
+    const existing = await tx.stockBinQuantity.findUnique({
+      where: { stockLevelId_binId: { stockLevelId: sl.id, binId: bin.id } },
+    })
+    if (existing) {
+      await tx.stockBinQuantity.update({
+        where: { id: existing.id },
+        data: {
+          quantity: existing.quantity + args.quantity,
+          lastUpdatedAt: new Date(),
+        },
+      })
+    } else {
+      await tx.stockBinQuantity.create({
+        data: { stockLevelId: sl.id, binId: bin.id, quantity: args.quantity },
+      })
+    }
+
+    if (args.receiveMovementId) {
+      await tx.stockMovement.update({
+        where: { id: args.receiveMovementId },
+        data: { binId: bin.id },
+      })
+    }
+
+    return { binId: bin.id, binCode: bin.code, quantity: args.quantity }
+  })
+}
+
+/**
  * Health helper: sum(binQuantities) for a StockLevel must equal
  * stockLevel.quantity. Drift indicates a missed bin write somewhere.
  */

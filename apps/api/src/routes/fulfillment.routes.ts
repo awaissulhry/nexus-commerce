@@ -4639,6 +4639,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           expiresAt?: string
           supplierLotRef?: string
           lotNotes?: string
+          // F1.13 — optional bin put-away per item
+          binCode?: string
         }>
         actor?: string
         receivedById?: string

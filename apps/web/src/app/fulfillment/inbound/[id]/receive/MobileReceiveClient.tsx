@@ -387,6 +387,11 @@ function ItemReceiveDetail({
   const [lotNumber, setLotNumber] = useState('')
   const [lotExpiresAt, setLotExpiresAt] = useState('')
   const [lotSupplierRef, setLotSupplierRef] = useState('')
+  // F1.13 — optional bin put-away. Pre-typed code is fine (warehouse
+  // operators know their bins by heart); we round-trip the value
+  // through the receive endpoint.
+  const [binOpen, setBinOpen] = useState(false)
+  const [binCode, setBinCode] = useState('')
 
   const remaining = Math.max(0, item.quantityExpected - item.quantityReceived)
   const onHold = item.qcStatus === 'HOLD' || item.qcStatus === 'FAIL'
@@ -415,6 +420,12 @@ function ItemReceiveDetail({
                 expiresAt: lotExpiresAt || undefined,
                 supplierLotRef: lotSupplierRef.trim() || undefined,
               }
+              : {}),
+            // F1.13 — bin put-away on receive. Empty when the operator
+            // didn't pick a bin; service handles the missing-bin case
+            // (logged warning, receive itself still succeeds).
+            ...(binOpen && binCode.trim()
+              ? { binCode: binCode.trim() }
               : {}),
           }],
         }),
@@ -615,6 +626,47 @@ function ItemReceiveDetail({
             </div>
             <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded p-2">
               Same lot received again? Use the same number — units accumulate, origin chain preserved.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* F1.13 — Bin put-away (collapsed by default; expand when the
+          operator wants to record exactly which shelf received the
+          stock). Bin must already exist at the location — see
+          /fulfillment/stock/bins to manage bins. */}
+      <div className="bg-white rounded-lg border-2 border-slate-300 p-4">
+        <button
+          type="button"
+          onClick={() => setBinOpen((o) => !o)}
+          className="w-full flex items-center justify-between text-sm uppercase tracking-wider text-slate-500 font-semibold"
+          aria-expanded={binOpen}
+          aria-controls={`bin-capture-panel-${item.id}`}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Package size={11} aria-hidden="true" />
+            Bin put-away {binCode.trim() && binOpen && <span className="text-slate-700 normal-case font-mono">· {binCode}</span>}
+          </span>
+          <span className="text-xs text-slate-400">{binOpen ? '▾' : '▸'}</span>
+        </button>
+        {binOpen && (
+          <div id={`bin-capture-panel-${item.id}`} className="mt-3 space-y-2">
+            <div>
+              <label htmlFor={`bin-code-${item.id}`} className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+                Bin code
+              </label>
+              <input
+                id={`bin-code-${item.id}`}
+                type="text"
+                value={binCode}
+                onChange={(e) => setBinCode(e.target.value)}
+                placeholder="e.g. A-12-03"
+                autoCapitalize="characters"
+                className="w-full h-12 px-3 text-md border-2 border-slate-200 rounded font-mono"
+              />
+            </div>
+            <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
+              Bin must exist at this location. Receive stands even if put-away fails — fix the bin and retry from /fulfillment/stock/bins.
             </div>
           </div>
         )}
