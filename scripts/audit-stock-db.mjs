@@ -268,8 +268,8 @@ await run('28. Recent movements - daily volume (30d)', `
 await run('29. StockoutEvent (R.12)', `
   SELECT
     count(*)::int AS total,
-    count(*) FILTER (WHERE "resolvedAt" IS NULL)::int AS open,
-    count(*) FILTER (WHERE "createdAt" > now() - interval '30 days')::int AS last_30d
+    count(*) FILTER (WHERE "endedAt" IS NULL)::int AS open,
+    count(*) FILTER (WHERE "startedAt" > now() - interval '30 days')::int AS last_30d
   FROM "StockoutEvent"
 `).catch(()=>{})
 
