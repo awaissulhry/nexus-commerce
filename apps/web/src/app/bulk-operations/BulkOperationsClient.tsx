@@ -141,6 +141,7 @@ import {
   DisplayModeToggle,
   ExpandCollapseControls,
 } from './components/DisplayControls'
+import { useBulkUndoRedo } from './lib/use-bulk-undo-redo'
 
 // Re-export BulkProduct so any sibling file (modals, cells, etc.) that
 // used to import it from this file still finds it here.
@@ -864,30 +865,33 @@ export default function BulkOperationsClient() {
   }, [])
 
   // ── D.6.3: undo / redo history ──────────────────────────────────
-  // Capped at 50 entries to bound memory; truncates forward history
-  // when the user edits after undoing (standard Excel/Sheets feel).
-  const HISTORY_LIMIT = 50
-  const [history, setHistory] = useState<HistoryEntry[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
-  // Suppresses re-recording while undo/redo is in flight.
-  const isUndoingRef = useRef(false)
-  const pushHistoryEntry = useCallback((entry: HistoryEntry) => {
-    setHistory((prev) => {
-      const next = prev.slice(0, historyIndexRef.current + 1)
-      next.push(entry)
-      const trimmed =
-        next.length > HISTORY_LIMIT
-          ? next.slice(next.length - HISTORY_LIMIT)
-          : next
-      historyIndexRef.current = trimmed.length - 1
-      setHistoryIndex(trimmed.length - 1)
-      return trimmed
-    })
-  }, [])
-  const historyIndexRef = useRef(historyIndex)
-  useEffect(() => {
-    historyIndexRef.current = historyIndex
-  }, [historyIndex])
+  // W1.4 — bookkeeping (history stack, cursor, Cmd+Z handler) lives
+  // in the useBulkUndoRedo hook now. The "what does undo MEAN for the
+  // grid" callback (applyEntryDirection) stays here because it touches
+  // changes/productsRef/editHandlers/resetKeys/saveStatus — all caller-
+  // owned state. Behaviour is preserved verbatim; only the housekeeping
+  // moved out.
+  const applyEntryDirectionRef = useRef<
+    ((entry: HistoryEntry, direction: 'undo' | 'redo') => void) | null
+  >(null)
+  const {
+    history,
+    historyIndex,
+    pushEntry: pushHistoryEntry,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    clearHistory,
+    isUndoingRef,
+  } = useBulkUndoRedo({
+    applyEntry: useCallback(
+      (entry: HistoryEntry, direction: 'undo' | 'redo') => {
+        applyEntryDirectionRef.current?.(entry, direction)
+      },
+      [],
+    ),
+  })
 
   /** Add or update an entry in the changesMap. Drops the entry when the
    * new value matches the original (revert). Updates cascade tracking
@@ -971,106 +975,73 @@ export default function BulkOperationsClient() {
   // Apply a history entry in either direction. For each cell delta,
   // either set the changes-map entry directly (dirty target value) or
   // delete it and bump resetKey so EditableCell snaps back to its
-  // server-side initialValue. isUndoingRef suppresses re-recording.
+  // server-side initialValue. The hook flips isUndoingRef around this
+  // call so writeChange's history-recording branch is suppressed.
+  //
+  // W1.4 — kept here (not in the hook) because it touches
+  // changes/productsRef/editHandlers/resetKeys/saveStatus, all caller-
+  // owned. Registered into a ref the hook reads via its applyEntry
+  // adapter so the closure picks up the freshest copy.
   const applyEntryDirection = useCallback(
     (entry: HistoryEntry, direction: 'undo' | 'redo') => {
-      isUndoingRef.current = true
-      try {
-        setChanges((prev) => {
-          const next = new Map(prev)
-          for (const d of entry.cells) {
-            const k = `${d.rowId}:${d.columnId}`
-            const target = direction === 'undo' ? d.before : d.after
-            if (target === null) next.delete(k)
-            else next.set(k, target)
-          }
-          return next
-        })
+      setChanges((prev) => {
+        const next = new Map(prev)
         for (const d of entry.cells) {
           const k = `${d.rowId}:${d.columnId}`
           const target = direction === 'undo' ? d.before : d.after
-          const handle = editHandlers.get(k)
-          if (target === null) {
-            // U.39 — was setResetKeys-only, relying on the resetKey
-            // prop change to flow through TableRow → cell renderer →
-            // EditableCell's useEffect to revert draftValue. But
-            // <TableRow> is memo'd on (row.original, rowIdx, top,
-            // columnsKey) — none of which change for an undo, so
-            // the row never re-renders and EditableCell never sees
-            // the bumped resetKey. Cell stayed yellow with the new
-            // value forever.
-            // Fix: call applyValue directly with the row's canonical
-            // server value (from productsRef), the same path the
-            // non-null branch uses. resetKeys still bumps so any
-            // virtualized-out cell that re-mounts later picks up
-            // the reset.
-            setResetKeys((prev) => {
-              const next = new Map(prev)
-              next.set(k, (next.get(k) ?? 0) + 1)
-              return next
-            })
-            if (handle) {
-              const product = productsRef.current.find(
-                (p) => p.id === d.rowId,
-              )
-              if (product) {
-                const canonical = (
-                  product as unknown as Record<string, unknown>
-                )[d.columnId]
-                handle.applyValue(canonical)
-              }
-            }
-          } else if (handle) {
-            handle.applyValue(target.newValue)
-          }
+          if (target === null) next.delete(k)
+          else next.set(k, target)
         }
-        setSaveStatus((prev) =>
-          prev.kind === 'saving' ? prev : { kind: 'dirty' },
-        )
-      } finally {
-        isUndoingRef.current = false
+        return next
+      })
+      for (const d of entry.cells) {
+        const k = `${d.rowId}:${d.columnId}`
+        const target = direction === 'undo' ? d.before : d.after
+        const handle = editHandlers.get(k)
+        if (target === null) {
+          // U.39 — was setResetKeys-only, relying on the resetKey
+          // prop change to flow through TableRow → cell renderer →
+          // EditableCell's useEffect to revert draftValue. But
+          // <TableRow> is memo'd on (row.original, rowIdx, top,
+          // columnsKey) — none of which change for an undo, so
+          // the row never re-renders and EditableCell never sees
+          // the bumped resetKey. Cell stayed yellow with the new
+          // value forever.
+          // Fix: call applyValue directly with the row's canonical
+          // server value (from productsRef), the same path the
+          // non-null branch uses. resetKeys still bumps so any
+          // virtualized-out cell that re-mounts later picks up
+          // the reset.
+          setResetKeys((prev) => {
+            const next = new Map(prev)
+            next.set(k, (next.get(k) ?? 0) + 1)
+            return next
+          })
+          if (handle) {
+            const product = productsRef.current.find(
+              (p) => p.id === d.rowId,
+            )
+            if (product) {
+              const canonical = (
+                product as unknown as Record<string, unknown>
+              )[d.columnId]
+              handle.applyValue(canonical)
+            }
+          }
+        } else if (handle) {
+          handle.applyValue(target.newValue)
+        }
       }
+      setSaveStatus((prev) =>
+        prev.kind === 'saving' ? prev : { kind: 'dirty' },
+      )
     },
     [],
   )
-  const undo = useCallback(() => {
-    const idx = historyIndexRef.current
-    if (idx < 0) return
-    applyEntryDirection(history[idx], 'undo')
-    historyIndexRef.current = idx - 1
-    setHistoryIndex(idx - 1)
-  }, [history, applyEntryDirection])
-  const redo = useCallback(() => {
-    const idx = historyIndexRef.current
-    if (idx >= history.length - 1) return
-    applyEntryDirection(history[idx + 1], 'redo')
-    historyIndexRef.current = idx + 1
-    setHistoryIndex(idx + 1)
-  }, [history, applyEntryDirection])
-  // Cmd/Ctrl+Z and Cmd/Ctrl+Shift+Z keyboard shortcuts.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return
-      if (e.key.toLowerCase() !== 'z') return
-      const ae = document.activeElement as HTMLElement | null
-      if (
-        ae &&
-        (ae.tagName === 'INPUT' ||
-          ae.tagName === 'TEXTAREA' ||
-          ae.isContentEditable)
-      ) {
-        // Let the input element handle its own native undo.
-        return
-      }
-      e.preventDefault()
-      if (e.shiftKey) redo()
-      else undo()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo])
-  const canUndo = historyIndex >= 0
-  const canRedo = historyIndex < history.length - 1
+  // Always register the latest applyEntryDirection into the ref the
+  // hook adapter reads — keeps the hook's stable closure pointing at
+  // fresh state without making the hook re-subscribe.
+  applyEntryDirectionRef.current = applyEntryDirection
 
   // Cascade-aware commit. Decides whether to write directly or open
   // the choice modal. Modal appears only when:
@@ -1412,16 +1383,14 @@ export default function BulkOperationsClient() {
       // D.6.3: changes successfully sent to the backend can no longer
       // be undone via the local history stack — clear it so the
       // toolbar buttons disable and Cmd+Z is a no-op until the user
-      // makes new edits.
+      // makes new edits. (W1.4 — delegated to useBulkUndoRedo.)
       if (succeededChanges.length > 0) {
-        setHistory([])
-        setHistoryIndex(-1)
-        historyIndexRef.current = -1
+        clearHistory()
       }
     } catch (err: any) {
       setSaveStatus({ kind: 'error', message: err?.message ?? String(err) })
     }
-  }, [saveStatus.kind, marketplaceTargets])
+  }, [saveStatus.kind, marketplaceTargets, clearHistory])
 
   // Cmd/Ctrl+S
   useEffect(() => {
