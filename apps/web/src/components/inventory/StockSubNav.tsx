@@ -27,6 +27,7 @@ import {
   Store,
   Truck,
   Globe,
+  ShieldAlert,
 } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -34,9 +35,13 @@ import { cn } from '@/lib/utils'
 interface StockSubNavProps {
   /** Number of active (DRAFT or IN_PROGRESS) cycle-count sessions. */
   cycleCountActive?: number
+  /** L.4 — Number of OPEN lot recalls. Surfaces as a red badge on
+   *  the Recalls tab so the operator sees compliance issues
+   *  immediately on every stock surface. */
+  recallsOpen?: number
 }
 
-export function StockSubNav({ cycleCountActive = 0 }: StockSubNavProps) {
+export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0 }: StockSubNavProps) {
   const pathname = usePathname()
   const { t } = useTranslations()
 
@@ -47,6 +52,7 @@ export function StockSubNav({ cycleCountActive = 0 }: StockSubNavProps) {
     { href: '/fulfillment/stock/reservations', labelKey: 'stock.reservations.title', icon: LockIcon },
     { href: '/fulfillment/stock/analytics', labelKey: 'stock.analytics.title', icon: Activity },
     { href: '/fulfillment/stock/stockouts', labelKey: 'stock.stockouts.title', icon: AlertTriangle },
+    { href: '/fulfillment/stock/recalls', labelKey: 'stock.recalls.title', icon: ShieldAlert, badge: recallsOpen, badgeTone: 'rose' as const },
     { href: '/fulfillment/stock/import', labelKey: 'stock.import.title', icon: Upload },
     { href: '/fulfillment/stock/shopify-locations', labelKey: 'stock.shopifyLocations.title', icon: Store },
     { href: '/fulfillment/stock/mcf', labelKey: 'stock.mcf.title', icon: Truck },
@@ -98,7 +104,12 @@ export function StockSubNav({ cycleCountActive = 0 }: StockSubNavProps) {
                   {t(tab.labelKey)}
                   {badge > 0 && (
                     <span
-                      className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full bg-amber-500 text-white tabular-nums"
+                      className={cn(
+                        'ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full text-white tabular-nums',
+                        (tab as { badgeTone?: 'rose' | 'amber' }).badgeTone === 'rose'
+                          ? 'bg-rose-600'
+                          : 'bg-amber-500',
+                      )}
                       aria-label={t('stock.subnav.badgeAriaLabel', { n: badge })}
                     >
                       {badge}
