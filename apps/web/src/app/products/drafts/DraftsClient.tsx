@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -8,7 +8,10 @@ import {
   ArrowRight,
   Box,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
+  ExternalLink,
   FileEdit,
   Hourglass,
   Layers,
@@ -17,6 +20,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -214,6 +218,19 @@ const FACTOR_LABEL_KEYS: Record<string, string> = {
   image: 'drafts.factor.image',
 }
 
+// DR-S.4 — full ordered factor list for the expanded row checklist.
+// Mirrors the server-side scoreCompleteness() factor sequence so the
+// passing/failing list stays consistent with the badge percentage.
+const ALL_FACTORS = [
+  'name',
+  'price',
+  'brand',
+  'type',
+  'description',
+  'gtin',
+  'image',
+] as const
+
 // DR-A.3 — chips for `brand` and `type` are AI-suggestable via the
 // existing /api/products/:id/ai/suggest-fields endpoint. When the
 // row carries a name + description (signal for the LLM), make the
@@ -400,6 +417,149 @@ function marketplaceForAi(d: Draft): string {
   return d.channels[0]?.marketplace?.toUpperCase() || 'IT'
 }
 
+// DR-S.4 — expanded-row detail. Click the chevron in the row to
+// open this in-place underneath the row (colSpan'd <tr>). Lighter
+// than a separate drawer overlay because the operator stays in
+// list context — adjacent rows still visible — and there's no
+// modal/focus-trap plumbing. Shows the full pass/fail factor
+// checklist and a richer channel enumeration that the row itself
+// doesn't have room for.
+function DraftExpandedDetail({
+  draft: d,
+  t,
+}: {
+  draft: Draft
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const passing = ALL_FACTORS.filter(
+    (f) => !d.missingFactors.includes(f),
+  )
+  return (
+    <td
+      colSpan={7}
+      className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Completeness checklist — every factor with its
+            pass/fail glyph. Cheaper to render statically from
+            d.missingFactors than to round-trip a per-row endpoint. */}
+        <div>
+          <div className="text-xs uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+            {t('drafts.detail.completenessHeader')}
+          </div>
+          <ul className="space-y-1">
+            {ALL_FACTORS.map((f) => {
+              const ok = !d.missingFactors.includes(f)
+              return (
+                <li
+                  key={f}
+                  className="flex items-center gap-1.5 text-sm"
+                >
+                  {ok ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  )}
+                  <span
+                    className={cn(
+                      ok
+                        ? 'text-slate-700 dark:text-slate-300'
+                        : 'text-rose-700 dark:text-rose-300 font-medium',
+                    )}
+                  >
+                    {t(FACTOR_LABEL_KEYS[f] ?? `drafts.factor.${f}`)}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            {passing.length}/{ALL_FACTORS.length} ·{' '}
+            <span className="font-semibold">{d.completenessPct}%</span>
+          </div>
+        </div>
+
+        {/* Channels — wizard rows expose the full target list with
+            platform + marketplace; product-only rows show "no
+            wizard yet" hint pointing the operator at the
+            Configure flow. */}
+        <div>
+          <div className="text-xs uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+            {t('drafts.detail.channelsHeader')}
+          </div>
+          {d.channels.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {d.kind === 'product'
+                ? t('drafts.detail.noWizardYet')
+                : t('drafts.detail.noChannelsYet')}
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {d.channels.map((c, i) => (
+                <li
+                  key={`${c.platform}:${c.marketplace}:${i}`}
+                  className="flex items-center gap-1.5 text-sm font-mono"
+                >
+                  <span
+                    className={cn(
+                      'inline-flex items-center h-4 px-1 rounded text-xs font-medium border',
+                      CHANNEL_TONE[c.platform] ??
+                        'bg-slate-100 text-slate-700 border-slate-200',
+                    )}
+                  >
+                    {c.platform}
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-300">
+                    {c.marketplace}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Quick links — full product edit (master data) and the
+            wizard URL for direct-link bookmarking. The row already
+            has Resume/Configure as the primary CTA; this is the
+            "I want the actual page" escape hatch. */}
+        <div>
+          <div className="text-xs uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+            {t('drafts.detail.linksHeader')}
+          </div>
+          <ul className="space-y-1.5">
+            <li>
+              <Link
+                href={`/products/${d.productId}/edit`}
+                className="inline-flex items-center gap-1 text-sm text-blue-700 dark:text-blue-400 hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {t('drafts.detail.openProductEdit')}
+              </Link>
+            </li>
+            {d.kind === 'wizard' && (
+              <li>
+                <Link
+                  href={`/products/${d.productId}/list-wizard`}
+                  className="inline-flex items-center gap-1 text-sm text-blue-700 dark:text-blue-400 hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  {t('drafts.detail.openWizard')}
+                </Link>
+              </li>
+            )}
+            <li className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+              {t('drafts.detail.created')}: {new Date(d.createdAt).toLocaleString()}
+            </li>
+            <li className="text-xs text-slate-500 dark:text-slate-400">
+              {t('drafts.detail.updated')}: {new Date(d.updatedAt).toLocaleString()}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </td>
+  )
+}
+
 // E.18 — memoized draft row. Was a 150-line inline `<tr>` inside
 // drafts.map(...) which re-rendered every row on every parent state
 // change (selection, search-typing, filter changes). Now extracted
@@ -415,6 +575,8 @@ const DraftRow = memo(function DraftRow({
   aiFilling,
   onAiSuggest,
   aiSuggesting,
+  isExpanded,
+  onToggleExpand,
 }: {
   draft: Draft
   isSelected: boolean
@@ -424,6 +586,8 @@ const DraftRow = memo(function DraftRow({
   aiFilling: boolean
   onAiSuggest: (d: Draft) => void
   aiSuggesting: boolean
+  isExpanded: boolean
+  onToggleExpand: (d: Draft) => void
 }) {
   // useTranslations() is stable across renders (the t function is
   // memoized in the provider) so the memo equality check holds.
@@ -455,6 +619,25 @@ const DraftRow = memo(function DraftRow({
           aria-label={`Select ${d.productName ?? d.productSku ?? 'draft'}`}
           className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500"
         />
+      </td>
+      {/* DR-S.4 — chevron toggles an in-place expanded row with the
+          full completeness checklist + channel detail + quick links.
+          aria-expanded is set so screen readers announce the toggle
+          state correctly. */}
+      <td className="px-2 py-2.5 w-[28px]">
+        <button
+          type="button"
+          onClick={() => onToggleExpand(d)}
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+          className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+        >
+          {isExpanded ? (
+            <ChevronDown className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5" />
+          )}
+        </button>
       </td>
       <td className="px-4 py-2.5">
         <Link href={resumeHref} className="block min-w-0">
@@ -833,6 +1016,24 @@ export default function DraftsClient() {
     () => drafts.filter((d) => d.isStale).length,
     [drafts],
   )
+
+  // DR-S.4 — expand state. Set keyed on the same composite
+  // (kind:id) selection key so a wizard and product DRAFT for the
+  // same product can be expanded independently. Bookmarkable via
+  // `?expand=<key>` (single-row at a time keeps the URL bounded).
+  const initialExpandedKey = params.get('expand')
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    initialExpandedKey ? new Set([initialExpandedKey]) : new Set(),
+  )
+  const toggleExpand = useCallback((d: Draft) => {
+    setExpandedKeys((prev) => {
+      const k = selectionKey(d)
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }, [])
 
   // Selection state — composite keys so wizard+product ids can coexist.
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
@@ -1592,6 +1793,9 @@ export default function DraftsClient() {
                   className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500"
                 />
               </th>
+              {/* DR-S.4 — chevron column for the per-row expand
+                  toggle. Empty header label keeps the column tight. */}
+              <th className="px-2 py-2.5 w-[28px]" />
               <th className="px-4 py-2.5">{t('drafts.col.product')}</th>
               <th className="px-4 py-2.5">{t('drafts.col.channels')}</th>
               <th className="px-4 py-2.5">{t('drafts.col.step')}</th>
@@ -1605,6 +1809,9 @@ export default function DraftsClient() {
                 {Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="px-4 py-3">
+                      <Skeleton variant="block" width={16} height={16} />
+                    </td>
+                    <td className="px-2 py-3">
                       <Skeleton variant="block" width={16} height={16} />
                     </td>
                     <td className="px-4 py-3">
@@ -1629,7 +1836,7 @@ export default function DraftsClient() {
 
             {!loading && drafts.length === 0 && !error && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-4 py-10 text-center">
                   <FileEdit className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600" />
                   <div className="mt-2 text-slate-500 dark:text-slate-400">
                     {debouncedSearch || staleOnly || source !== 'all'
@@ -1646,18 +1853,27 @@ export default function DraftsClient() {
             {drafts.map((d) => {
               const k = selectionKey(d)
               const isSelected = selectedKeys.has(k)
+              const isExpanded = expandedKeys.has(k)
               return (
-                <DraftRow
-                  key={k}
-                  draft={d}
-                  isSelected={isSelected}
-                  onToggleSelect={toggleSelect}
-                  onDelete={onDeleteRow}
-                  onAiFill={onAiFillRow}
-                  aiFilling={aiBusyIds.has(d.productId)}
-                  onAiSuggest={onAiSuggestRow}
-                  aiSuggesting={aiSuggestBusyIds.has(d.productId)}
-                />
+                <Fragment key={k}>
+                  <DraftRow
+                    draft={d}
+                    isSelected={isSelected}
+                    onToggleSelect={toggleSelect}
+                    onDelete={onDeleteRow}
+                    onAiFill={onAiFillRow}
+                    aiFilling={aiBusyIds.has(d.productId)}
+                    onAiSuggest={onAiSuggestRow}
+                    aiSuggesting={aiSuggestBusyIds.has(d.productId)}
+                    isExpanded={isExpanded}
+                    onToggleExpand={toggleExpand}
+                  />
+                  {isExpanded && (
+                    <tr>
+                      <DraftExpandedDetail draft={d} t={t} />
+                    </tr>
+                  )}
+                </Fragment>
               )
             })}
           </tbody>
