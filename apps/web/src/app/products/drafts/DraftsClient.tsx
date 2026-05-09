@@ -696,8 +696,8 @@ export default function DraftsClient() {
         </div>
       )}
 
-      <div className="border border-slate-200 rounded-lg bg-white overflow-hidden dark:border-slate-800 dark:bg-slate-900">
-        <table className="w-full text-base">
+      <div className="border border-slate-200 rounded-lg bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-900">
+        <table className="w-full min-w-[720px] text-base">
           <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
             <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               <th className="px-4 py-2.5 w-[40px]">
