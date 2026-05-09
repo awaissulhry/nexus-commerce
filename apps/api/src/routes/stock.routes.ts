@@ -21,6 +21,9 @@ import {
   createLot,
   traceLotForward,
   traceLotBackward,
+  openRecall,
+  closeRecall,
+  listRecalls,
 } from '../services/lot.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
@@ -1690,6 +1693,78 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       }
       fastify.log.error({ err: error }, '[stock/lots POST] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/recalls ───────────────────────────────────────
+  // L.4 — list recalls. Defaults to OPEN-only so the dashboard surfaces
+  // what needs attention. Pass status=CLOSED for history; status=ALL
+  // for everything.
+  fastify.get('/stock/recalls', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const statusRaw = typeof q.status === 'string' ? q.status.toUpperCase() : 'OPEN'
+      const status = (['OPEN', 'CLOSED', 'ALL'] as const).includes(statusRaw)
+        ? (statusRaw as 'OPEN' | 'CLOSED' | 'ALL')
+        : 'OPEN'
+      const productId = typeof q.productId === 'string' ? q.productId : undefined
+      const limit = Math.min(500, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
+      const items = await listRecalls({ status, productId, limit })
+      return { items, total: items.length, limit, status }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/recalls] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/recalls ──────────────────────────────────────
+  // L.4 — open a recall. Idempotent: if an OPEN recall already exists
+  // for the lot, returns it with alreadyOpen=true (HTTP 200, not 409 —
+  // the operator's intent succeeded, the recall just predates this call).
+  fastify.post<{
+    Body: { lotId: string; reason: string; openedBy?: string | null; notes?: string | null }
+  }>('/stock/recalls', async (request, reply) => {
+    try {
+      const b = request.body
+      if (!b?.lotId || !b?.reason?.trim()) {
+        return reply.code(400).send({ error: 'lotId and reason are required' })
+      }
+      const lot = await prisma.lot.findUnique({ where: { id: b.lotId }, select: { id: true } })
+      if (!lot) return reply.code(404).send({ error: 'Lot not found' })
+      const result = await openRecall({
+        lotId: b.lotId,
+        reason: b.reason,
+        openedBy: b.openedBy ?? null,
+        notes: b.notes ?? null,
+      })
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/recalls POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/recalls/:id/close ────────────────────────────
+  // L.4 — close an open recall. The recalled lot is NOT auto-restocked
+  // — the operator decides whether to dispose remaining units, return
+  // them to the supplier, or accept them back into the FEFO pool.
+  fastify.post<{
+    Params: { id: string }
+    Body: { closedBy?: string | null; notes?: string | null }
+  }>('/stock/recalls/:id/close', async (request, reply) => {
+    try {
+      const b = request.body ?? {}
+      const result = await closeRecall({
+        recallId: request.params.id,
+        closedBy: b.closedBy ?? null,
+        notes: b.notes ?? null,
+      })
+      return result
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      fastify.log.error({ err: error }, '[stock/recalls/:id/close] failed')
+      return reply.code(500).send({ error: msg })
     }
   })
 

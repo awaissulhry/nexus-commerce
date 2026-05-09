@@ -3910,11 +3910,35 @@ model Lot {
   originMovement StockMovement?   @relation("LotOrigin", fields: [originStockMovementId], references: [id], onDelete: SetNull)
   movements     StockMovement[]   @relation("LotMovements")
   costLayers    StockCostLayer[]  @relation("LotCostLayers")
+  recalls       LotRecall[]
 
   @@unique([productId, lotNumber])
   @@index([productId, receivedAt])
   @@index([expiresAt])
   @@index([productId, unitsRemaining])
+}
+
+// L.4 — Lot recall lifecycle. One row per recall instance; partial
+// unique index on (lotId WHERE status='OPEN') enforces "at most one
+// open recall per lot". When a recall is OPEN, FEFO consume skips
+// the affected lot so remaining sellable units are not allocated.
+model LotRecall {
+  id        String    @id @default(cuid())
+  lotId     String
+  reason    String
+  status    String    @default("OPEN")
+  openedAt  DateTime  @default(now())
+  openedBy  String?
+  closedAt  DateTime?
+  closedBy  String?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  lot       Lot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@index([lotId])
+  @@index([status])
 }
 
 // T.8 part 2 — Year-end inventory valuation snapshot ("rimanenze

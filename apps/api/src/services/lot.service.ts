@@ -172,6 +172,10 @@ export interface LotPickPlan {
  * ASC order until the requested quantity is covered or all lots with
  * remaining stock are consumed. Lots without expiresAt sort to the
  * end (treated as "never expire", picked only after dated lots).
+ *
+ * L.4 — lots with an OPEN recall are excluded so recalled units stop
+ * being allocated as soon as the recall opens. They stay queryable for
+ * the affected-orders report but never enter the consume plan.
  */
 export async function pickLotsForConsume(args: PickLotsArgs): Promise<LotPickPlan> {
   const { productId, variationId, quantity } = args
@@ -183,6 +187,8 @@ export async function pickLotsForConsume(args: PickLotsArgs): Promise<LotPickPla
       productId,
       ...(variationId !== undefined ? { variationId } : {}),
       unitsRemaining: { gt: 0 },
+      // L.4 — exclude lots with any OPEN recall.
+      recalls: { none: { status: 'OPEN' } },
     },
     orderBy: [
       // Postgres orders NULLs last by default for ASC, which matches
@@ -226,6 +232,98 @@ export async function pickLotsForConsume(args: PickLotsArgs): Promise<LotPickPla
  * The CHECK is the safety net; this app-layer guard gives a clearer
  * error message at the call site.
  */
+/**
+ * L.4 — Open a recall on a lot. Idempotent: if an OPEN recall already
+ * exists for this lot, returns it instead of creating a duplicate
+ * (the partial unique index would reject the second insert anyway,
+ * but we surface a clearer error to the caller).
+ *
+ * Side effect: subsequent FEFO consume picks skip this lot until the
+ * recall is closed.
+ */
+export async function openRecall(args: {
+  lotId: string
+  reason: string
+  openedBy?: string | null
+  notes?: string | null
+}) {
+  if (!args.reason?.trim()) {
+    throw new Error('openRecall: reason is required')
+  }
+  const existing = await prisma.lotRecall.findFirst({
+    where: { lotId: args.lotId, status: 'OPEN' },
+  })
+  if (existing) {
+    return { recall: existing, alreadyOpen: true as const }
+  }
+  const recall = await prisma.lotRecall.create({
+    data: {
+      lotId: args.lotId,
+      reason: args.reason.trim(),
+      status: 'OPEN',
+      openedBy: args.openedBy ?? null,
+      notes: args.notes ?? null,
+    },
+  })
+  return { recall, alreadyOpen: false as const }
+}
+
+/**
+ * L.4 — Close an open recall. Returns the updated row. Throws if the
+ * recall doesn't exist or is already CLOSED.
+ */
+export async function closeRecall(args: {
+  recallId: string
+  closedBy?: string | null
+  notes?: string | null
+}) {
+  const existing = await prisma.lotRecall.findUnique({
+    where: { id: args.recallId },
+  })
+  if (!existing) throw new Error(`closeRecall: recall ${args.recallId} not found`)
+  if (existing.status === 'CLOSED') {
+    return { recall: existing, alreadyClosed: true as const }
+  }
+  const recall = await prisma.lotRecall.update({
+    where: { id: args.recallId },
+    data: {
+      status: 'CLOSED',
+      closedAt: new Date(),
+      closedBy: args.closedBy ?? null,
+      notes: args.notes ?? existing.notes,
+    },
+  })
+  return { recall, alreadyClosed: false as const }
+}
+
+/**
+ * L.4 — List recalls. Filter by status (default OPEN-only) so the
+ * recall dashboard surface defaults to "what needs attention".
+ */
+export async function listRecalls(args: {
+  status?: 'OPEN' | 'CLOSED' | 'ALL'
+  productId?: string
+  limit?: number
+} = {}) {
+  const status = args.status ?? 'OPEN'
+  const limit = Math.min(500, Math.max(1, args.limit ?? 100))
+  return prisma.lotRecall.findMany({
+    where: {
+      ...(status === 'ALL' ? {} : { status }),
+      ...(args.productId ? { lot: { productId: args.productId } } : {}),
+    },
+    orderBy: [{ status: 'asc' }, { openedAt: 'desc' }],
+    take: limit,
+    include: {
+      lot: {
+        include: {
+          product: { select: { id: true, sku: true, name: true } },
+        },
+      },
+    },
+  })
+}
+
 export async function decrementLotInTx(tx: Tx, lotId: string, qty: number) {
   if (qty <= 0) throw new Error('decrementLot: qty must be > 0')
   const lot = await tx.lot.findUnique({

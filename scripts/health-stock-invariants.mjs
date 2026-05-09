@@ -313,6 +313,20 @@ await c.connect()
     r.rows[0].n > 0 ? `${r.rows[0].n} lots have unitsRemaining out of [0, unitsReceived]` : null)
 }
 
+// 22. L.4 — At most one OPEN recall per lot (partial unique index
+//     enforces; this verifies the index is present and effective).
+{
+  const r = await c.query(`
+    SELECT count(*)::int n FROM (
+      SELECT "lotId", count(*) AS c FROM "LotRecall"
+      WHERE status = 'OPEN'
+      GROUP BY "lotId" HAVING count(*) > 1
+    ) sub
+  `)
+  record('L.4: at most one OPEN recall per lot', r.rows[0].n === 0,
+    r.rows[0].n > 0 ? `${r.rows[0].n} lots have multiple OPEN recalls — partial unique index broken` : null)
+}
+
 await c.end()
 
 const failed = checks.filter((c) => !c.pass).length
