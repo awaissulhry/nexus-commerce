@@ -4105,5 +4105,11 @@
   "listWizard.aiSuggestPricing.applyAll": "Applica tutto",
   "listWizard.aiSuggestPricing.applied": "Applicato {price} {currency} su {channel}",
   "listWizard.aiSuggestPricing.appliedAll": "Applicat{plural} {n} suggeriment{plural} di prezzo",
-  "listWizard.aiSuggestPricing.error": "Impossibile ottenere suggerimenti di prezzo"
+  "listWizard.aiSuggestPricing.error": "Impossibile ottenere suggerimenti di prezzo",
+  "listWizard.aiScoreQuality.button": "IA: valuta qualità inserzione",
+  "listWizard.aiScoreQuality.title": "Punteggio qualità IA",
+  "listWizard.aiScoreQuality.overallTooltip": "Punteggio complessivo qualità inserzione (0–100)",
+  "listWizard.aiScoreQuality.busy": "Valutazione qualità inserzione in corso…",
+  "listWizard.aiScoreQuality.error": "Impossibile valutare la qualità dell'inserzione",
+  "listWizard.aiScoreQuality.topImprovementsLabel": "Principali miglioramenti"
 }

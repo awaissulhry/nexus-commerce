@@ -4054,5 +4054,11 @@
   "listWizard.aiSuggestPricing.applyAll": "Apply all",
   "listWizard.aiSuggestPricing.applied": "Applied {price} {currency} to {channel}",
   "listWizard.aiSuggestPricing.appliedAll": "Applied {n} AI pricing pick{plural}",
-  "listWizard.aiSuggestPricing.error": "Couldn't get pricing recommendations"
+  "listWizard.aiSuggestPricing.error": "Couldn't get pricing recommendations",
+  "listWizard.aiScoreQuality.button": "AI: score listing quality",
+  "listWizard.aiScoreQuality.title": "AI quality score",
+  "listWizard.aiScoreQuality.overallTooltip": "Overall listing quality score (0–100)",
+  "listWizard.aiScoreQuality.busy": "Scoring listing quality…",
+  "listWizard.aiScoreQuality.error": "Couldn't score listing quality",
+  "listWizard.aiScoreQuality.topImprovementsLabel": "Top improvements"
 }
