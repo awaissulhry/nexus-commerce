@@ -110,6 +110,7 @@ export default function FamilyEditorClient({
   const [effective, setEffective] = useState<EffectiveAttribute[]>(initialEffective)
   const [error, setError] = useState<string | null>(initialError)
   const [adding, setAdding] = useState(false)
+  const [reparentOpen, setReparentOpen] = useState(false)
   const confirm = useConfirm()
   const { toast } = useToast()
 
@@ -277,6 +278,16 @@ export default function FamilyEditorClient({
           <span className="text-sm text-slate-500 dark:text-slate-400">
             · {family._count.products} product{family._count.products === 1 ? '' : 's'} attached
           </span>
+          {/* W5.7 — Reparent button. Opens a small modal with a
+              parent picker; server-side cycle detection handles
+              the safety net. */}
+          <button
+            type="button"
+            onClick={() => setReparentOpen(true)}
+            className="text-xs text-blue-700 dark:text-blue-300 hover:underline"
+          >
+            edit parent
+          </button>
         </div>
         {family.childFamilies.length > 0 && (
           <div className="text-sm text-slate-600 dark:text-slate-400 inline-flex items-center gap-1.5 flex-wrap">
@@ -393,6 +404,18 @@ export default function FamilyEditorClient({
           onClose={() => setAdding(false)}
           onAdded={() => {
             setAdding(false)
+            refresh()
+          }}
+        />
+      )}
+      {reparentOpen && (
+        <ReparentModal
+          familyId={family.id}
+          familyLabel={family.label}
+          currentParentId={family.parentFamilyId}
+          onClose={() => setReparentOpen(false)}
+          onUpdated={() => {
+            setReparentOpen(false)
             refresh()
           }}
         />
@@ -621,6 +644,135 @@ function ChannelsTagInput({
       autoFocus
       className="w-full h-7 px-1.5 text-sm font-mono border border-slate-300 dark:border-slate-700 rounded dark:bg-slate-900 dark:text-slate-100"
     />
+  )
+}
+
+// ── W5.7 — Reparent modal ──────────────────────────────────────
+
+function ReparentModal({
+  familyId,
+  familyLabel,
+  currentParentId,
+  onClose,
+  onUpdated,
+}: {
+  familyId: string
+  familyLabel: string
+  currentParentId: string | null
+  onClose: () => void
+  onUpdated: () => void
+}) {
+  const [families, setFamilies] = useState<
+    Array<{ id: string; code: string; label: string; parentFamilyId: string | null }>
+  >([])
+  const [parentId, setParentId] = useState<string>(currentParentId ?? '')
+  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  // Load all families for the picker. The server-side
+  // PATCH /families/:id walks the candidate's chain to detect a
+  // would-be cycle, so we don't need to filter descendants here —
+  // a 409 surfaces with an actionable error if the operator tries.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/families`, { cache: 'no-store' })
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)),
+      )
+      .then((data) => {
+        if (cancelled) return
+        const list = (data.families ?? []).filter(
+          (f: { id: string }) => f.id !== familyId,
+        )
+        list.sort((a: { label: string }, b: { label: string }) =>
+          a.label.localeCompare(b.label),
+        )
+        setFamilies(list)
+      })
+      .catch((e) => !cancelled && setErr(e?.message ?? String(e)))
+    return () => {
+      cancelled = true
+    }
+  }, [familyId])
+
+  const submit = async () => {
+    setErr(null)
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/families/${familyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentFamilyId: parentId || null }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(
+        parentId
+          ? `Reparented "${familyLabel}"`
+          : `Promoted "${familyLabel}" to root`,
+      )
+      onUpdated()
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const dirty = (parentId || null) !== currentParentId
+
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      size="lg"
+      title={`Edit parent for "${familyLabel}"`}
+      description="Inheritance is Akeneo-strict additive — moving the parent changes which attributes this family inherits. The server walks the candidate chain to refuse cycles + surfaces a 409 if the proposed parent would create one."
+    >
+      <div className="p-5 space-y-3">
+        <div className="space-y-1">
+          <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+            Parent family
+          </label>
+          <select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+            autoFocus
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          >
+            <option value="">— root (no parent) —</option>
+            {families.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label} ({f.code})
+              </option>
+            ))}
+          </select>
+        </div>
+        {err && (
+          <div className="border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300">
+            {err}
+          </div>
+        )}
+      </div>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={submit}
+          disabled={submitting || !dirty}
+          loading={submitting}
+        >
+          {parentId ? 'Reparent' : 'Promote to root'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
