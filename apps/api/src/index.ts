@@ -1,4 +1,12 @@
 import "./db.js"; // ensure dotenv loads before anything else
+import { initOtel } from "./utils/otel-setup.js";
+// L.26.0 — start OTel SDK as early as possible so HTTP/Prisma
+// auto-instrumentation hooks are in place before route handlers
+// load. Fire-and-forget init: NodeSDK.start() is synchronous and
+// the dynamic-import chain inside initOtel is short. The SDK is
+// usable on every subsequent require call.
+// No-op when NEXUS_OTEL_ENABLED is not '1'.
+void initOtel();
 import Fastify from "fastify";
 import { runWithRequestId } from "./utils/request-context.js";
 import cors from "@fastify/cors";

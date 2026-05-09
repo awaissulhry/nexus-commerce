@@ -69,6 +69,7 @@ import {
   getRequestSource,
 } from '../utils/request-context.js'
 import { logTraceEvent } from '../utils/trace-log.js'
+import { withSpan } from '../utils/otel-setup.js'
 
 type Channel =
   | 'AMAZON'
@@ -205,6 +206,29 @@ export function instrumentSellingPartner(
 }
 
 export async function recordApiCall<T>(
+  ctx: ApiCallContext,
+  fn: () => Promise<T>,
+): Promise<T> {
+  // L.26.0 — wrap the call in an OTel span when the SDK is
+  // initialised. withSpan is a no-op fallback when disabled, so
+  // the existing recording behaviour below stays intact.
+  return withSpan(
+    `${ctx.channel.toLowerCase()}.${ctx.operation}`,
+    {
+      'channel': ctx.channel,
+      'operation': ctx.operation,
+      'marketplace': ctx.marketplace,
+      'http.method': ctx.method,
+      'http.endpoint': ctx.endpoint,
+      'product.id': ctx.productId,
+      'listing.id': ctx.listingId,
+      'order.id': ctx.orderId,
+    },
+    () => recordApiCallInner(ctx, fn),
+  )
+}
+
+async function recordApiCallInner<T>(
   ctx: ApiCallContext,
   fn: () => Promise<T>,
 ): Promise<T> {
