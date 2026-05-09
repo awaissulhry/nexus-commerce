@@ -146,6 +146,10 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
       options: field.options,
     }
   }
+  // W2.7 — image: 32×32 thumbnail + URL editor. Stored as a string
+  // URL today; W11 image-upload pipeline will wrap this in an upload
+  // shim so paste of a local file works too.
+  if (field.type === 'image') return { editable: true, fieldType: 'image' }
   // Weight + dimension fields are typed as 'number' in the registry
   // but rendered as text inputs so the user can type "5kg" or "60cm".
   // The smart-parsing in handleCommit splits the unit suffix into the

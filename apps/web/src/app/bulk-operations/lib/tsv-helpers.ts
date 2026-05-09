@@ -214,6 +214,21 @@ export function coercePasteValue(
     }
     return { value: parts }
   }
+  // W2.7 — image: any string the URL constructor accepts (with a
+  // protocol; W11 will add an upload-from-paste path for local
+  // images). Same coercion as 'url' minus the prefix-completion since
+  // a thumbnail-rendering cell needs a real fetchable URL.
+  if (field.type === 'image') {
+    try {
+      const u = new URL(trimmed)
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        return { value: u.toString() }
+      }
+      return { value: null, error: 'Image URL must be http or https' }
+    } catch {
+      return { value: null, error: 'Not a valid image URL' }
+    }
+  }
   // W2.5 — color: accepts #rrggbb, #rgb, rgb(), or a named color.
   if (field.type === 'color') {
     const lower = trimmed.toLowerCase()

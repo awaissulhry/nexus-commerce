@@ -107,6 +107,13 @@ export type FieldType =
    * categories, marketplace tags.
    */
   | 'multiSelect'
+  /**
+   * W2.7 — image. Stores an image URL; display renders a 32×32
+   * thumbnail + the URL; edit reveals the URL as a text input. The
+   * thumbnail's onError handler downgrades to a broken-image
+   * placeholder so a 404'd CDN doesn't blank the cell.
+   */
+  | 'image'
 
 export interface EditableMeta {
   editable: true
@@ -625,6 +632,30 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.7 — image edit: URL text input. Future revision will add
+      // an upload handler (Cloudinary / S3) but for now operators
+      // paste an asset URL — same wire shape as everywhere else in
+      // the catalog (Product.images stores URLs).
+      if (meta.fieldType === 'image') {
+        return (
+          <input
+            ref={(el) => {
+              inputRef.current = el
+            }}
+            type="url"
+            value={
+              draftValue === null || draftValue === undefined
+                ? ''
+                : String(draftValue)
+            }
+            onChange={(e) => setDraftValue(e.target.value || null)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            placeholder="https://cdn.xavia.it/..."
+            className={baseInputClass}
+          />
+        )
+      }
       // W2.6 — multiSelect edit: a popover-style checkbox list inside
       // the cell. Operators tick on/off; blur commits the array. When
       // meta.options isn't provided we fall back to a comma-separated
@@ -874,6 +905,33 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.7 — image display: 32×32 thumbnail + filename. Wrapped in a
+    // small component so the broken-image state is local — the cell
+    // itself doesn't need to track load failures across re-renders.
+    if (meta.fieldType === 'image') {
+      const url = draftValue === null || draftValue === undefined
+        ? ''
+        : String(draftValue)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? url}
+          className={cn(
+            'w-full h-full px-2 flex items-center gap-2 text-md cursor-cell',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {url ? (
+            <ImageCellThumb url={url} />
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       )
     }
 
@@ -1203,4 +1261,50 @@ function shallowEquals(a: unknown, b: unknown): boolean {
   // Numbers: compare as numbers (handles 5 vs 5.0)
   if (typeof a === 'number' && typeof b === 'number') return a === b
   return String(a) === String(b)
+}
+
+/**
+ * W2.7 — image-cell thumbnail with local broken-image fallback. Lives
+ * outside EditableCell so its `failed` state is per-thumbnail, not
+ * per-cell — keeps EditableCell's memo comparator honest (no extra
+ * state slot to invalidate on every value change).
+ */
+function ImageCellThumb({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false)
+  // Reset the failed flag when the URL itself changes — operators
+  // edit a 404'd path to a working one and expect the thumbnail to
+  // come back without remounting the cell.
+  useEffect(() => {
+    setFailed(false)
+  }, [url])
+  const filename = (() => {
+    try {
+      return new URL(url).pathname.split('/').filter(Boolean).pop() ?? url
+    } catch {
+      return url
+    }
+  })()
+  return (
+    <>
+      {failed ? (
+        <span
+          className="w-7 h-7 flex items-center justify-center rounded bg-slate-100 border border-slate-200 text-slate-400 text-[10px]"
+          aria-label="Broken image"
+          title="Broken image"
+        >
+          ⚠
+        </span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="w-7 h-7 object-cover rounded border border-slate-200 flex-shrink-0"
+        />
+      )}
+      <span className="truncate text-xs text-slate-600">{filename}</span>
+    </>
+  )
 }
