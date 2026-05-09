@@ -17,6 +17,7 @@ import { Sparkles, CheckCircle2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
 import { CHANNEL_TONE } from '@/lib/products/theme'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface DraftRow {
   id: string
@@ -40,6 +41,7 @@ interface DraftsData {
 }
 
 export function DraftsLens() {
+  const { t } = useTranslations()
   const [channel, setChannel] = useState('AMAZON')
   const [data, setData] = useState<DraftsData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -71,7 +73,7 @@ export function DraftsLens() {
     <div className="space-y-3">
       <div className="flex items-center gap-1">
         <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-2">
-          Channel:
+          {t('products.lens.drafts.channelPicker')}
         </span>
         {['AMAZON', 'EBAY', 'SHOPIFY'].map((c) => (
           <button
@@ -94,7 +96,7 @@ export function DraftsLens() {
             aria-live="polite"
             className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
           >
-            Loading drafts…
+            {t('products.lens.drafts.loading')}
           </div>
         </Card>
       )}
@@ -102,29 +104,27 @@ export function DraftsLens() {
         <Card>
           <div role="alert" className="py-8 text-center space-y-2">
             <div className="text-md text-rose-600 dark:text-rose-400">
-              Failed to load drafts: {error}
+              {t('products.lens.drafts.failed', { error })}
             </div>
             <button
               type="button"
               onClick={() => void refresh()}
               className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
             >
-              Retry
+              {t('products.lens.drafts.retry')}
             </button>
           </div>
         </Card>
       )}
       {!loading && !error && data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card title={`Drafts (${data.draftCount})`}>
+          <Card title={t('products.lens.drafts.title', { count: data.draftCount })}>
             {data.drafts.length === 0 ? (
               <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
                 <Sparkles className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-                No drafts on {channel}.
-                <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                  Drafts appear here when wizards leave content
-                  unpublished — usually pending review or marketplace
-                  validation.
+                {t('products.lens.drafts.empty', { channel })}
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  {t('products.lens.drafts.emptyHint')}
                 </div>
               </div>
             ) : (
@@ -146,20 +146,20 @@ export function DraftsLens() {
                       href={`/products/${d.productId}/list-wizard?channel=${d.channel}`}
                       className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
                     >
-                      Publish
+                      {t('products.lens.drafts.publish')}
                     </Link>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
-          <Card title={`Uncovered (${data.uncoveredCount})`}>
+          <Card title={t('products.lens.uncovered.title', { count: data.uncoveredCount })}>
             {data.uncovered.length === 0 ? (
               <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
-                <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-400 dark:text-emerald-500 mb-2" />
-                Every product is listed on {channel}.
-                <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                  No coverage gaps to fix on this marketplace.
+                <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 dark:text-emerald-400 mb-2" />
+                {t('products.lens.uncovered.empty', { channel })}
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  {t('products.lens.uncovered.emptyHint')}
                 </div>
               </div>
             ) : (
@@ -181,7 +181,7 @@ export function DraftsLens() {
                       href={`/products/${p.id}/list-wizard?channel=${channel}`}
                       className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
                     >
-                      List
+                      {t('products.lens.uncovered.list')}
                     </Link>
                   </li>
                 ))}

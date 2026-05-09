@@ -29,6 +29,7 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface PricingProduct {
   id: string
@@ -54,6 +55,7 @@ export function PricingLens({
   products: PricingProduct[]
   loading: boolean
 }) {
+  const { t } = useTranslations()
   const [snapshots, setSnapshots] = useState<
     Record<string, Record<string, SnapshotCell>>
   >({})
@@ -124,8 +126,8 @@ export function PricingLens({
           aria-live="polite"
           className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full"
         >
-          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading pricing
-          matrix…
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />{' '}
+          {t('products.lens.pricing.loading')}
         </div>
       </Card>
     )
@@ -135,14 +137,14 @@ export function PricingLens({
       <Card>
         <div role="alert" className="py-8 text-center space-y-2">
           <div className="text-md text-rose-600 dark:text-rose-400">
-            Failed to load pricing matrix: {error}
+            {t('products.lens.pricing.failed', { error })}
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
             className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
           >
-            Retry
+            {t('products.lens.pricing.retry')}
           </button>
         </div>
       </Card>
@@ -152,9 +154,12 @@ export function PricingLens({
     return (
       <EmptyState
         icon={DollarSign}
-        title="No products to price"
-        description="The Pricing matrix shows base price + per-channel overrides + min/max clamps. Match at least one product with your filter to see the matrix."
-        action={{ label: 'Clear filters', href: '/products' }}
+        title={t('products.lens.pricing.empty.title')}
+        description={t('products.lens.pricing.empty.body')}
+        action={{
+          label: t('products.lens.pricing.empty.action'),
+          href: '/products',
+        }}
       />
     )
   }
@@ -180,34 +185,32 @@ export function PricingLens({
     <div className="space-y-3">
       <Card>
         <div className="flex items-center gap-4 text-base">
-          <span className="text-slate-700 dark:text-slate-300">
-            <span className="font-semibold tabular-nums">{cellCount}</span>{' '}
-            cells
+          <span className="text-slate-700 dark:text-slate-300 tabular-nums">
+            {t('products.lens.pricing.summary.cells', { count: cellCount })}
           </span>
           {clampedCount > 0 && (
-            <span className="text-amber-700 dark:text-amber-300 inline-flex items-center gap-1">
+            <span className="text-amber-700 dark:text-amber-300 inline-flex items-center gap-1 tabular-nums">
               <span className="inline-block w-2 h-2 bg-amber-500 rounded-full" />
-              <span className="tabular-nums">{clampedCount}</span> clamped
+              {t('products.lens.pricing.summary.clamped', { count: clampedCount })}
             </span>
           )}
           {warningCount > 0 && (
-            <span className="text-rose-700 dark:text-rose-300 inline-flex items-center gap-1">
+            <span className="text-rose-700 dark:text-rose-300 inline-flex items-center gap-1 tabular-nums">
               <span className="inline-block w-2 h-2 bg-rose-500 rounded-full" />
-              <span className="tabular-nums">{warningCount}</span> with warnings
+              {t('products.lens.pricing.summary.warnings', { count: warningCount })}
             </span>
           )}
           {missingCount > 0 && (
-            <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
+            <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1 tabular-nums">
               <span className="inline-block w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full" />
-              <span className="tabular-nums">{missingCount}</span> missing
-              snapshots
+              {t('products.lens.pricing.summary.missing', { count: missingCount })}
             </span>
           )}
           <Link
             href="/pricing"
             className="ml-auto text-base text-blue-700 hover:underline dark:text-blue-300 inline-flex items-center gap-1"
           >
-            Open full pricing matrix <ChevronRight size={12} />
+            {t('products.lens.pricing.openMatrix')} <ChevronRight size={12} />
           </Link>
         </div>
       </Card>
@@ -217,7 +220,7 @@ export function PricingLens({
             <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-800 dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px] dark:text-slate-300 dark:bg-slate-800">
-                  Product
+                  {t('products.lens.pricing.col.product')}
                 </th>
                 {MARKETPLACES.map((mp) => (
                   <th
@@ -255,7 +258,7 @@ export function PricingLens({
                         <td
                           key={mp}
                           className="px-2 py-2 text-center text-slate-300 dark:text-slate-600 text-sm"
-                          title="No pricing snapshot — rule may not have run yet"
+                          title={t('products.lens.pricing.cell.noSnapshot')}
                         >
                           —
                         </td>
@@ -269,14 +272,14 @@ export function PricingLens({
                           : 'bg-white text-slate-900 border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-800'
                     const titleParts: string[] = []
                     if (cell.isClamped)
-                      titleParts.push('clamped to floor/ceiling')
+                      titleParts.push(t('products.lens.pricing.cell.clamped'))
                     if (cell.warnings.length > 0)
                       titleParts.push(...cell.warnings)
                     return (
                       <td key={mp} className="px-2 py-2 text-center">
                         <Link
                           href={`/pricing?search=${encodeURIComponent(p.sku)}&marketplace=${mp}`}
-                          title={titleParts.join(' · ') || 'Open in pricing matrix'}
+                          title={titleParts.join(' · ') || t('products.lens.pricing.cell.openIn')}
                           className={`inline-flex items-center px-2 py-1 border rounded text-sm tabular-nums hover:opacity-80 ${tone}`}
                         >
                           {Number(cell.price).toFixed(2)} {cell.currency}
@@ -292,8 +295,7 @@ export function PricingLens({
       </Card>
       {products.length > 100 && (
         <div className="text-sm text-slate-500 dark:text-slate-400 text-center">
-          Showing first 100 products. Open the full pricing matrix or narrow
-          filters to see more.
+          {t('products.lens.pricing.cap')}
         </div>
       )}
     </div>
