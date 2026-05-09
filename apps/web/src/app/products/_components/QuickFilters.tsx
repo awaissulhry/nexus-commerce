@@ -23,12 +23,7 @@ import {
   ACTIVE_CHANNELS_OPTIONS,
   ACTIVE_MARKETPLACES_OPTIONS,
 } from '@/components/ui/MultiSelectChips'
-
-const STATUS_OPTIONS = [
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'INACTIVE', label: 'Inactive' },
-]
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface QuickFiltersProps {
   statusFilters: string[]
@@ -45,10 +40,16 @@ export function QuickFilters({
   channelFilters,
   updateUrl,
 }: QuickFiltersProps) {
+  const { t } = useTranslations()
+  const STATUS_OPTIONS = [
+    { value: 'ACTIVE', label: t('products.status.active') },
+    { value: 'DRAFT', label: t('products.status.draft') },
+    { value: 'INACTIVE', label: t('products.status.inactive') },
+  ]
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
       <MultiSelectChips
-        label="Status"
+        label={t('products.quickFilters.status')}
         options={STATUS_OPTIONS}
         value={statusFilters}
         onChange={(next) =>
@@ -71,7 +72,7 @@ export function QuickFilters({
       />
 
       <MultiSelectChips
-        label="Market"
+        label={t('products.quickFilters.market')}
         options={ACTIVE_MARKETPLACES_OPTIONS}
         value={marketplaceFilters}
         onChange={(next) =>
@@ -83,7 +84,7 @@ export function QuickFilters({
       />
 
       <MultiSelectChips
-        label="Channel"
+        label={t('products.quickFilters.channel')}
         options={ACTIVE_CHANNELS_OPTIONS}
         value={channelFilters}
         onChange={(next) =>
@@ -95,8 +96,8 @@ export function QuickFilters({
       />
 
       {/* Hint that more filters live in the accordion below. */}
-      <div className="ml-auto text-xs text-slate-400 dark:text-slate-500 inline-flex items-center gap-1">
-        <Filter size={11} /> More in Filters below
+      <div className="ml-auto text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
+        <Filter size={11} /> {t('products.quickFilters.moreHint')}
       </div>
     </div>
   )
@@ -109,23 +110,24 @@ function StockSingleSelect({
   value: string
   onChange: (v: string) => void
 }) {
+  const { t } = useTranslations()
   const opts = [
-    { value: 'in', label: 'In' },
-    { value: 'low', label: 'Low' },
-    { value: 'out', label: 'Out' },
+    { value: 'in', label: t('products.quickFilters.stock.in') },
+    { value: 'low', label: t('products.quickFilters.stock.low') },
+    { value: 'out', label: t('products.quickFilters.stock.out') },
   ]
   return (
     <div className="inline-flex items-center gap-2">
       <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-        Stock
+        {t('products.quickFilters.stock')}
       </span>
       <div className="inline-flex items-center gap-1 flex-wrap">
         <Pill
           active={!value}
           onClick={() => onChange('')}
-          title="Any stock level"
+          title={t('products.quickFilters.stock.allTitle')}
         >
-          All
+          {t('products.quickFilters.stock.all')}
         </Pill>
         {opts.map((opt) => {
           const active = value === opt.value

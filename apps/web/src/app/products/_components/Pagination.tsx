@@ -18,6 +18,7 @@ import {
   ChevronsRight,
 } from 'lucide-react'
 import { IconButton } from '@/components/ui/IconButton'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface PaginationProps {
   page: number
@@ -26,39 +27,36 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, totalPages, onPage }: PaginationProps) {
+  const { t } = useTranslations()
   const numbers = useMemo(
     () => buildPageRange(page, totalPages),
     [page, totalPages],
   )
   return (
     <nav
-      aria-label="Pagination"
+      aria-label={t('products.pagination.aria')}
       // U.25 — wrapper used `text-base` while the inner `<span>` used
       // `text-sm`; the wrapper text leaked through hover states. Drop
       // both to `text-sm` so the strip reads as one consistent scale.
       className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400"
     >
-      <span>
-        Page{' '}
-        <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
-          {page}
-        </span>{' '}
-        of <span className="tabular-nums">{totalPages}</span>
+      <span className="tabular-nums">
+        {t('products.pagination.pageOf', { page, total: totalPages })}
       </span>
       <div className="flex items-center gap-1">
         <PageBtn
           onClick={() => onPage(1)}
           disabled={page === 1}
-          ariaLabel="First page"
-          title="First page"
+          ariaLabel={t('products.pagination.first')}
+          title={t('products.pagination.first')}
         >
           <ChevronsLeft className="w-3.5 h-3.5" />
         </PageBtn>
         <PageBtn
           onClick={() => onPage(Math.max(1, page - 1))}
           disabled={page === 1}
-          ariaLabel="Previous page"
-          title="Previous page"
+          ariaLabel={t('products.pagination.prev')}
+          title={t('products.pagination.prev')}
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </PageBtn>
@@ -66,7 +64,7 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
           n === 'gap' ? (
             <span
               key={`gap-${i}`}
-              className="px-1 text-slate-400 dark:text-slate-500 select-none"
+              className="px-1 text-slate-500 dark:text-slate-400 select-none"
               aria-hidden="true"
             >
               …
@@ -77,7 +75,7 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
               type="button"
               onClick={() => onPage(n)}
               aria-current={n === page ? 'page' : undefined}
-              aria-label={`Page ${n}`}
+              aria-label={t('products.pagination.pageN', { n })}
               className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-[1.75rem] sm:h-7 px-2 text-sm tabular-nums rounded border transition-colors inline-flex items-center justify-center ${
                 n === page
                   ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
@@ -91,16 +89,16 @@ export function Pagination({ page, totalPages, onPage }: PaginationProps) {
         <PageBtn
           onClick={() => onPage(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
-          ariaLabel="Next page"
-          title="Next page"
+          ariaLabel={t('products.pagination.next')}
+          title={t('products.pagination.next')}
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </PageBtn>
         <PageBtn
           onClick={() => onPage(totalPages)}
           disabled={page >= totalPages}
-          ariaLabel="Last page"
-          title="Last page"
+          ariaLabel={t('products.pagination.last')}
+          title={t('products.pagination.last')}
         >
           <ChevronsRight className="w-3.5 h-3.5" />
         </PageBtn>

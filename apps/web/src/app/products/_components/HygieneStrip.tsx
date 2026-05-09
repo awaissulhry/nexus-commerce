@@ -24,6 +24,7 @@
  */
 
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface HygieneCounts {
   total: number
@@ -50,6 +51,7 @@ export function HygieneStrip({
   hasGtin,
   updateUrl,
 }: HygieneStripProps) {
+  const { t } = useTranslations()
   // U.30 — bail out when there are no products at all (catalog is
   // empty / heavily filtered); the strip would otherwise render
   // "Catalog hygiene complete across 0 products" which is misleading.
@@ -64,28 +66,28 @@ export function HygieneStrip({
   }> = [
     {
       key: 'photos',
-      label: 'photos',
+      label: t('products.hygiene.field.photos'),
       count: hygiene.missingPhotos,
       active: hasPhotos === 'false',
       paramKey: 'hasPhotos',
     },
     {
       key: 'description',
-      label: 'description',
+      label: t('products.hygiene.field.description'),
       count: hygiene.missingDescription,
       active: hasDescription === 'false',
       paramKey: 'hasDescription',
     },
     {
       key: 'brand',
-      label: 'brand',
+      label: t('products.hygiene.field.brand'),
       count: hygiene.missingBrand,
       active: hasBrand === 'false',
       paramKey: 'hasBrand',
     },
     {
       key: 'gtin',
-      label: 'GTIN',
+      label: t('products.hygiene.field.gtin'),
       count: hygiene.missingGtin,
       active: hasGtin === 'false',
       paramKey: 'hasGtin',
@@ -103,9 +105,9 @@ export function HygieneStrip({
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 text-sm w-fit">
         <CheckCircle2 size={14} />
-        <span className="font-medium">Catalog hygiene complete</span>
+        <span className="font-medium">{t('products.hygiene.complete.title')}</span>
         <span className="text-emerald-700 dark:text-emerald-400">
-          across {hygiene.total} products
+          {t('products.hygiene.complete.body', { count: hygiene.total })}
         </span>
       </div>
     )
@@ -115,7 +117,7 @@ export function HygieneStrip({
     <div className="flex items-center gap-2 flex-wrap">
       <div className="inline-flex items-center gap-1.5 text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
         <AlertCircle size={12} className="text-rose-500" />
-        Hygiene gaps
+        {t('products.hygiene.header')}
       </div>
       {chips.map((c) => {
         const empty = c.count === 0
@@ -138,17 +140,26 @@ export function HygieneStrip({
             aria-pressed={c.active}
             title={
               empty
-                ? `Every product has ${c.label}`
+                ? t('products.hygiene.tip.empty', { field: c.label })
                 : c.active
-                  ? `Clear filter — show all`
-                  : `Show only the ${c.count} product${c.count === 1 ? '' : 's'} missing ${c.label}`
+                  ? t('products.hygiene.tip.clear')
+                  : t(
+                      c.count === 1
+                        ? 'products.hygiene.tip.showMissing.one'
+                        : 'products.hygiene.tip.showMissing.other',
+                      { count: c.count, field: c.label },
+                    )
             }
             className={`min-h-11 sm:min-h-0 sm:h-7 px-3 text-sm border rounded-full inline-flex items-center gap-1.5 transition-colors disabled:cursor-not-allowed ${tone}`}
           >
             <span className="font-semibold tabular-nums">{c.count}</span>
-            <span className="font-normal">missing {c.label}</span>
+            <span className="font-normal">
+              {t('products.hygiene.chip.missing', { field: c.label })}
+            </span>
             {c.active && (
-              <span className="text-xs ml-0.5 opacity-80">(active)</span>
+              <span className="text-xs ml-0.5 opacity-80">
+                {t('products.hygiene.chip.active')}
+              </span>
             )}
           </button>
         )
