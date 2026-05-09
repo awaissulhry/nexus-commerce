@@ -7928,6 +7928,132 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // W3.1 — Operator command-center KPIs. The "what should I do
+  // today?" view, distinct from the W1.4 pipeline-health (which
+  // answers "is the system working?"). Single round-trip aggregation
+  // for the strip above the urgency tiles.
+  //
+  // Returns:
+  //   openPos: { count, totalCents, oldestExpectedDeliveryDate }
+  //     non-terminal POs (not CANCELLED / RECEIVED)
+  //   recommendationsAwaitingReview: { count, byUrgency, totalCents }
+  //     ACTIVE recommendations not yet acted-on
+  //   stockoutRisk7d: { count }
+  //     ACTIVE recs with daysOfStockLeft < 7
+  //   workingCapital: { totalCents }
+  //     SUM(effectiveStock × unitCostCents) across active SKUs
+  //   forecastAccuracy: { avgPercentError, withinBandRate, sampleCount }
+  //     30d MAPE summary
+  fastify.get(
+    '/fulfillment/replenishment/command-center/kpis',
+    async (_request, reply) => {
+      const dayStart7d = new Date()
+      dayStart7d.setUTCHours(0, 0, 0, 0)
+      const day30dAgo = new Date()
+      day30dAgo.setUTCDate(day30dAgo.getUTCDate() - 30)
+      day30dAgo.setUTCHours(0, 0, 0, 0)
+
+      const [openPosRows, awaitingRows, stockoutRisk, accuracyAgg, workingCapAgg] =
+        await Promise.all([
+          prisma.$queryRaw<
+            Array<{ count: bigint; total_cents: bigint | null; oldest: Date | null }>
+          >`
+            SELECT
+              count(*)::bigint AS count,
+              SUM("totalCents")::bigint AS total_cents,
+              MIN("expectedDeliveryDate") AS oldest
+            FROM "PurchaseOrder"
+            WHERE status NOT IN ('CANCELLED', 'RECEIVED')`,
+          prisma.$queryRaw<
+            Array<{
+              urgency: string
+              count: bigint
+              total_cents: bigint | null
+            }>
+          >`
+            SELECT
+              urgency,
+              count(*)::bigint AS count,
+              SUM(COALESCE("landedCostPerUnitCents", "unitCostCents", 0) * "reorderQuantity")::bigint AS total_cents
+            FROM "ReplenishmentRecommendation"
+            WHERE status = 'ACTIVE' AND "needsReorder" = true
+            GROUP BY urgency`,
+          prisma.replenishmentRecommendation.count({
+            where: {
+              status: 'ACTIVE',
+              needsReorder: true,
+              daysOfStockLeft: { lt: 7 },
+            },
+          }),
+          prisma.$queryRaw<
+            Array<{
+              count: bigint
+              avg_pct: number | null
+              within: bigint
+            }>
+          >`
+            SELECT
+              count(*)::bigint AS count,
+              AVG("percentError")::float AS avg_pct,
+              count(*) FILTER (WHERE "withinBand" = true)::bigint AS within
+            FROM "ForecastAccuracy"
+            WHERE day >= ${day30dAgo}::date`,
+          prisma.$queryRaw<Array<{ total_cents: bigint | null }>>`
+            SELECT
+              SUM(rec."effectiveStock" * COALESCE(rec."landedCostPerUnitCents", rec."unitCostCents", 0))::bigint AS total_cents
+            FROM "ReplenishmentRecommendation" rec
+            WHERE rec.status = 'ACTIVE'`,
+        ])
+
+      const openPos = openPosRows[0]
+      const awaitingByUrgency = {
+        CRITICAL: 0,
+        HIGH: 0,
+        MEDIUM: 0,
+        LOW: 0,
+      }
+      let awaitingTotal = 0
+      let awaitingCount = 0
+      for (const row of awaitingRows) {
+        const urg = row.urgency as keyof typeof awaitingByUrgency
+        if (urg in awaitingByUrgency) {
+          awaitingByUrgency[urg] = Number(row.count)
+        }
+        awaitingCount += Number(row.count)
+        awaitingTotal += Number(row.total_cents ?? 0)
+      }
+
+      const acc = accuracyAgg[0]
+      const accSample = Number(acc?.count ?? 0)
+
+      reply.header('Cache-Control', 'private, max-age=30')
+      return {
+        openPos: {
+          count: Number(openPos?.count ?? 0),
+          totalCents: Number(openPos?.total_cents ?? 0),
+          oldestExpectedDeliveryDate: openPos?.oldest ?? null,
+        },
+        recommendationsAwaitingReview: {
+          count: awaitingCount,
+          byUrgency: awaitingByUrgency,
+          totalCents: awaitingTotal,
+        },
+        stockoutRisk7d: {
+          count: stockoutRisk,
+        },
+        workingCapital: {
+          totalCents: Number(workingCapAgg[0]?.total_cents ?? 0),
+        },
+        forecastAccuracy: {
+          avgPercentError: acc?.avg_pct ?? null,
+          withinBandRate: accSample > 0 ? Number(acc?.within ?? 0) / accSample : null,
+          sampleCount: accSample,
+          windowDays: 30,
+        },
+      }
+    },
+  )
+
   // ── W4.3 — Automation rules CRUD + test ─────────────────────────
   // Surface for the rule-builder UI (W4.5). All routes scoped under
   // /fulfillment/replenishment/automation/rules so the page-level
