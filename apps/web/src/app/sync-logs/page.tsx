@@ -25,6 +25,7 @@
 
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
+import { getServerT } from '@/lib/i18n/server'
 import SyncLogsHubClient, {
   type HealthRollup,
   type CronRunsRollup,
@@ -105,13 +106,16 @@ async function fetchInitial(): Promise<{
 }
 
 export default async function SyncLogsHubPage() {
-  const initial = await fetchInitial()
+  const [initial, t] = await Promise.all([fetchInitial(), getServerT()])
   return (
     <div>
       <PageHeader
-        title="Sync Logs"
-        subtitle="Channel sync health · cron execution · audit trail · outbound queue"
-        breadcrumbs={[{ label: 'Monitoring' }, { label: 'Sync Logs' }]}
+        title={t('syncLogs.hub.title')}
+        subtitle={t('syncLogs.hub.subtitle')}
+        breadcrumbs={[
+          { label: t('syncLogs.breadcrumb.monitoring') },
+          { label: t('syncLogs.hub.title') },
+        ]}
       />
       <SyncLogsHubClient initial={initial} />
     </div>

@@ -9,21 +9,23 @@
  */
 
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import ErrorGroupsClient from './ErrorGroupsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function ErrorsPage() {
+export default async function ErrorsPage() {
+  const t = await getServerT()
   return (
     <div>
       <PageHeader
-        title="Error Groups"
-        subtitle="Rolled-up sync errors with first/last seen, count, and resolution workflow"
+        title={t('syncLogs.errors.title')}
+        subtitle={t('syncLogs.errors.subtitle')}
         breadcrumbs={[
-          { label: 'Monitoring' },
-          { label: 'Sync Logs', href: '/sync-logs' },
-          { label: 'Errors' },
+          { label: t('syncLogs.breadcrumb.monitoring') },
+          { label: t('syncLogs.hub.title'), href: '/sync-logs' },
+          { label: t('syncLogs.breadcrumb.errors') },
         ]}
       />
       <ErrorGroupsClient />

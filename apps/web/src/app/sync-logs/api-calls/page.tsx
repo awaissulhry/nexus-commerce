@@ -13,21 +13,23 @@
  */
 
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import ApiCallsClient from './ApiCallsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function ApiCallsPage() {
+export default async function ApiCallsPage() {
+  const t = await getServerT()
   return (
     <div>
       <PageHeader
-        title="Outbound API Calls"
-        subtitle="Every Amazon SP-API / eBay / Shopify request — latency, status, error"
+        title={t('syncLogs.apiCalls.title')}
+        subtitle={t('syncLogs.apiCalls.subtitle')}
         breadcrumbs={[
-          { label: 'Monitoring' },
-          { label: 'Sync Logs', href: '/sync-logs' },
-          { label: 'API Calls' },
+          { label: t('syncLogs.breadcrumb.monitoring') },
+          { label: t('syncLogs.hub.title'), href: '/sync-logs' },
+          { label: t('syncLogs.breadcrumb.apiCalls') },
         ]}
       />
       <ApiCallsClient />

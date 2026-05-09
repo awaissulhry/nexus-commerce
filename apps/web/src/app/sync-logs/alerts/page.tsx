@@ -8,21 +8,23 @@
  */
 
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import AlertsClient from './AlertsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function AlertsPage() {
+export default async function AlertsPage() {
+  const t = await getServerT()
   return (
     <div>
       <PageHeader
-        title="Alerts"
-        subtitle="Rule-based alerts on error rate, latency, queue depth, error groups, and stale crons"
+        title={t('syncLogs.alerts.title')}
+        subtitle={t('syncLogs.alerts.subtitle')}
         breadcrumbs={[
-          { label: 'Monitoring' },
-          { label: 'Sync Logs', href: '/sync-logs' },
-          { label: 'Alerts' },
+          { label: t('syncLogs.breadcrumb.monitoring') },
+          { label: t('syncLogs.hub.title'), href: '/sync-logs' },
+          { label: t('syncLogs.breadcrumb.alerts') },
         ]}
       />
       <AlertsClient />

@@ -87,6 +87,11 @@ export function useTranslations() {
     setLocaleState(next)
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, next)
+      // L.23.0 — mirror to a cookie so server components can read
+      // the locale during SSR. 1-year expiry, sameSite=lax so it
+      // survives reloads but doesn't ride cross-site fetches.
+      const oneYear = 60 * 60 * 24 * 365
+      document.cookie = `${STORAGE_KEY}=${next};path=/;max-age=${oneYear};samesite=lax`
     }
   }, [])
 

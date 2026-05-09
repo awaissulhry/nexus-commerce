@@ -8,21 +8,23 @@
  */
 
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import WebhooksClient from './WebhooksClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function WebhooksPage() {
+export default async function WebhooksPage() {
+  const t = await getServerT()
   return (
     <div>
       <PageHeader
-        title="Inbound Webhooks"
-        subtitle="Every webhook received from Shopify / WooCommerce / Etsy with payload + processing state"
+        title={t('syncLogs.webhooks.title')}
+        subtitle={t('syncLogs.webhooks.subtitle')}
         breadcrumbs={[
-          { label: 'Monitoring' },
-          { label: 'Sync Logs', href: '/sync-logs' },
-          { label: 'Webhooks' },
+          { label: t('syncLogs.breadcrumb.monitoring') },
+          { label: t('syncLogs.hub.title'), href: '/sync-logs' },
+          { label: t('syncLogs.breadcrumb.webhooks') },
         ]}
       />
       <WebhooksClient />

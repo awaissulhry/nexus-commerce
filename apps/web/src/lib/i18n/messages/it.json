@@ -2064,5 +2064,11 @@
   "syncLogs.savedSearch.noFilters": "(nessun filtro)",
   "syncLogs.savedSearch.noFiltersSet": "(nessun filtro impostato)",
   "syncLogs.savedSearch.savedToast": "Salvato \"{name}\"",
-  "syncLogs.savedSearch.deletedToast": "Eliminato \"{name}\""
+  "syncLogs.savedSearch.deletedToast": "Eliminato \"{name}\"",
+
+  "syncLogs.breadcrumb.monitoring": "Monitoraggio",
+  "syncLogs.breadcrumb.apiCalls": "Chiamate API",
+  "syncLogs.breadcrumb.errors": "Errori",
+  "syncLogs.breadcrumb.webhooks": "Webhook",
+  "syncLogs.breadcrumb.alerts": "Avvisi"
 }
