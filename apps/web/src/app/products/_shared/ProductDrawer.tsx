@@ -470,10 +470,11 @@ export default function ProductDrawer({
             }}
             className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]"
           >
-          <DrawerTab active={tab === 'details'} onClick={() => setTab('details')}>
+          <DrawerTab tabKey="details" active={tab === 'details'} onClick={() => setTab('details')}>
             <Edit3 className="w-3 h-3" /> {t('products.drawer.tabs.details')}
           </DrawerTab>
           <DrawerTab
+            tabKey="listings"
             active={tab === 'listings'}
             onClick={() => setTab('listings')}
             count={data?._count?.channelListings}
@@ -485,6 +486,7 @@ export default function ProductDrawer({
               products don't have variants by definition. */}
           {data?.isParent && (
             <DrawerTab
+              tabKey="variations"
               active={tab === 'variations'}
               onClick={() => setTab('variations')}
               count={data?._count?.children}
@@ -499,6 +501,7 @@ export default function ProductDrawer({
               docblock) to surface the image gallery; this tab finally
               fulfils that promise. */}
           <DrawerTab
+            tabKey="images"
             active={tab === 'images'}
             onClick={() => setTab('images')}
             count={data?._count?.images}
@@ -506,6 +509,7 @@ export default function ProductDrawer({
             <ImageIcon className="w-3 h-3" /> {t('products.drawer.tabs.images')}
           </DrawerTab>
           <DrawerTab
+            tabKey="translations"
             active={tab === 'translations'}
             onClick={() => setTab('translations')}
             count={data?._count?.translations}
@@ -517,12 +521,14 @@ export default function ProductDrawer({
               per-product hub; until now operators had to leave it to
               see the price matrix. */}
           <DrawerTab
+            tabKey="pricing"
             active={tab === 'pricing'}
             onClick={() => setTab('pricing')}
           >
             <DollarSign className="w-3 h-3" /> {t('products.drawer.tabs.pricing')}
           </DrawerTab>
           <DrawerTab
+            tabKey="related"
             active={tab === 'related'}
             onClick={() => setTab('related')}
             count={data?._count?.relationsFrom}
@@ -534,6 +540,7 @@ export default function ProductDrawer({
               ran. Swapped so the daily tab sits closer to the
               center of the row. */}
           <DrawerTab
+            tabKey="activity"
             active={tab === 'activity'}
             onClick={() => setTab('activity')}
           >
@@ -541,6 +548,7 @@ export default function ProductDrawer({
           </DrawerTab>
           {/* F.3.c — pending scheduled changes for this product. */}
           <DrawerTab
+            tabKey="schedule"
             active={tab === 'schedule'}
             onClick={() => setTab('schedule')}
           >
@@ -551,6 +559,7 @@ export default function ProductDrawer({
               meaningful when the product has a workflowStage; tab
               renders an "attach workflow" CTA when stageless. */}
           <DrawerTab
+            tabKey="workflow"
             active={tab === 'workflow'}
             onClick={() => setTab('workflow')}
           >
@@ -575,73 +584,104 @@ export default function ProductDrawer({
               <span>Failed to load: {error}</span>
             </div>
           )}
+          {/* W5.44 — each panel wrapped in role="tabpanel" + aria-
+              labelledby pointing back at its tab. Only the active
+              panel renders (conditional on `tab === 'X'`), so screen
+              readers announce the right panel for the active tab and
+              skip dead-link aria-controls targets. */}
           {data && tab === 'details' && (
-            <DetailsTab
-              product={data}
-              onSaved={() => {
-                fetchDetail()
-                onChanged?.()
-              }}
-            />
+            <div role="tabpanel" id="panel-details" aria-labelledby="tab-details">
+              <DetailsTab
+                product={data}
+                onSaved={() => {
+                  fetchDetail()
+                  onChanged?.()
+                }}
+              />
+            </div>
           )}
           {data && tab === 'listings' && (
-            <ListingsTab
-              listings={data.channelListings ?? []}
-              onChanged={() => {
-                fetchDetail()
-                onChanged?.()
-              }}
-            />
+            <div role="tabpanel" id="panel-listings" aria-labelledby="tab-listings">
+              <ListingsTab
+                listings={data.channelListings ?? []}
+                onChanged={() => {
+                  fetchDetail()
+                  onChanged?.()
+                }}
+              />
+            </div>
           )}
           {data && tab === 'variations' && data.isParent && (
-            <VariationsTab
-              parentId={data.id}
-              parentSku={data.sku}
-              onChanged={() => {
-                fetchDetail()
-                onChanged?.()
-              }}
-            />
+            <div role="tabpanel" id="panel-variations" aria-labelledby="tab-variations">
+              <VariationsTab
+                parentId={data.id}
+                parentSku={data.sku}
+                onChanged={() => {
+                  fetchDetail()
+                  onChanged?.()
+                }}
+              />
+            </div>
           )}
           {data && tab === 'images' && (
-            <ImagesTab
-              productId={data.id}
-              images={data.images ?? []}
-            />
+            <div role="tabpanel" id="panel-images" aria-labelledby="tab-images">
+              <ImagesTab
+                productId={data.id}
+                images={data.images ?? []}
+              />
+            </div>
           )}
           {data && tab === 'translations' && (
-            <TranslationsTab
-              productId={data.id}
-              masterName={data.name}
-              masterDescription={data.description ?? null}
-              masterBullets={data.bulletPoints ?? []}
-              masterKeywords={data.keywords ?? []}
-              onChanged={() => {
-                fetchDetail()
-                onChanged?.()
-              }}
-            />
+            <div role="tabpanel" id="panel-translations" aria-labelledby="tab-translations">
+              <TranslationsTab
+                productId={data.id}
+                masterName={data.name}
+                masterDescription={data.description ?? null}
+                masterBullets={data.bulletPoints ?? []}
+                masterKeywords={data.keywords ?? []}
+                onChanged={() => {
+                  fetchDetail()
+                  onChanged?.()
+                }}
+              />
+            </div>
           )}
           {data && tab === 'pricing' && (
-            <PricingTab
-              productId={data.id}
-              sku={data.sku}
-              basePrice={data.basePrice}
-              channelListings={data.channelListings ?? []}
-            />
+            <div role="tabpanel" id="panel-pricing" aria-labelledby="tab-pricing">
+              <PricingTab
+                productId={data.id}
+                sku={data.sku}
+                basePrice={data.basePrice}
+                channelListings={data.channelListings ?? []}
+              />
+            </div>
           )}
           {data && tab === 'related' && (
-            <RelatedTab
-              productId={data.id}
-              onChanged={() => {
-                fetchDetail()
-                onChanged?.()
-              }}
-            />
+            <div role="tabpanel" id="panel-related" aria-labelledby="tab-related">
+              <RelatedTab
+                productId={data.id}
+                onChanged={() => {
+                  fetchDetail()
+                  onChanged?.()
+                }}
+              />
+            </div>
           )}
-          {data && tab === 'schedule' && <ScheduleTab productId={data.id} />}
-          {data && tab === 'workflow' && <WorkflowTab productId={data.id} />}
-          {data && tab === 'activity' && <ActivityTab productId={data.id} />}
+          {data && tab === 'schedule' && (
+            <div role="tabpanel" id="panel-schedule" aria-labelledby="tab-schedule">
+              <ScheduleTab productId={data.id} />
+            </div>
+          )}
+          {data && tab === 'workflow' && (
+            <div role="tabpanel" id="panel-workflow" aria-labelledby="tab-workflow">
+              <WorkflowTab productId={data.id} />
+            </div>
+          )}
+          {data && tab === 'activity' && (
+            <div role="tabpanel" id="panel-activity" aria-labelledby="tab-activity">
+              <ActivityTab productId={data.id} />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -682,18 +722,26 @@ function DrawerTab({
   onClick,
   children,
   count,
+  tabKey,
 }: {
   active: boolean
   onClick: () => void
   children: React.ReactNode
   count?: number | null
+  /** W5.44 — wires aria-controls + id for the tab/panel relationship.
+   *  Pair: this tab's id="tab-<key>" + the matching panel's
+   *  id="panel-<key>" + aria-labelledby pointing back. Without it
+   *  screen readers can't announce which panel each tab governs. */
+  tabKey: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       role="tab"
+      id={`tab-${tabKey}`}
       aria-selected={active}
+      aria-controls={`panel-${tabKey}`}
       tabIndex={active ? 0 : -1}
       className={cn(
         // U.60 — whitespace-nowrap stops labels like "Translations"
