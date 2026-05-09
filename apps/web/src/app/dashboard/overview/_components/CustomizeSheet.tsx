@@ -100,6 +100,7 @@ export default function CustomizeSheet({
   onClose,
   hiddenWidgets,
   widgetOrder,
+  activeView,
   onSaved,
 }: {
   t: T
@@ -107,6 +108,10 @@ export default function CustomizeSheet({
   onClose: () => void
   hiddenWidgets: string[]
   widgetOrder: string[]
+  /** DO.49 — when a saved view is active, the sheet offers an
+   * "Update this view" path that overwrites the source row. null
+   * when no saved view is active (just live state). */
+  activeView: { id: string; name: string } | null
   onSaved: (next: { hiddenWidgets: string[]; widgetOrder: string[] }) => void
 }) {
   const [draftHidden, setDraftHidden] = useState<Set<string>>(
@@ -174,6 +179,49 @@ export default function CustomizeSheet({
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      onSaved({ hiddenWidgets: nextHidden, widgetOrder: draftOrder })
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // DO.49 — overwrite the active saved view with the current draft.
+  // PUT /api/dashboard/views/:id with the new hidden + order arrays
+  // (existing endpoint from DO.39). Also writes the same draft to
+  // the live layout so the dashboard reflects immediately.
+  const saveToActiveView = async () => {
+    if (!activeView) return
+    setSaving(true)
+    setError(null)
+    try {
+      const nextHidden = Array.from(draftHidden)
+      const viewRes = await fetch(
+        `${getBackendUrl()}/api/dashboard/views/${activeView.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hiddenWidgets: nextHidden,
+            widgetOrder: draftOrder,
+          }),
+        },
+      )
+      if (!viewRes.ok) {
+        const j = await viewRes.json().catch(() => ({}))
+        throw new Error(j?.error ?? `HTTP ${viewRes.status}`)
+      }
+      // Mirror to live layout so the dashboard updates.
+      await fetch(`${getBackendUrl()}/api/dashboard/layout`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hiddenWidgets: nextHidden,
+          widgetOrder: draftOrder,
+        }),
+      })
       onSaved({ hiddenWidgets: nextHidden, widgetOrder: draftOrder })
       onClose()
     } catch (err) {
@@ -254,9 +302,38 @@ export default function CustomizeSheet({
           <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
             {t('common.cancel')}
           </Button>
-          <Button variant="primary" size="sm" onClick={save} loading={saving}>
-            {t('common.save')}
-          </Button>
+          {/* DO.49 — when a saved view is active, the primary action
+              becomes "Update [view name]" (overwrites the view). The
+              "Save (live)" secondary saves to the live layout only,
+              leaving the view untouched. When no view is active, the
+              single Save button persists to the live layout. */}
+          {activeView ? (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={save}
+                loading={saving}
+              >
+                {t('overview.views.saveLiveOnly')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={saveToActiveView}
+                loading={saving}
+                title={t('overview.views.updateThisView', {
+                  name: activeView.name,
+                })}
+              >
+                {t('overview.views.updateThisView', { name: activeView.name })}
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" size="sm" onClick={save} loading={saving}>
+              {t('common.save')}
+            </Button>
+          )}
         </div>
       </div>
     </Modal>

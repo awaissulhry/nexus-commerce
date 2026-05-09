@@ -1688,6 +1688,8 @@
   "overview.views.saveLabel": "Salva l'attuale come nuova vista",
   "overview.views.savePlaceholder": "Nome vista",
   "overview.views.saveAs": "Salva vista",
+  "overview.views.saveLiveOnly": "Salva (solo live)",
+  "overview.views.updateThisView": "Aggiorna {name}",
 
   "overview.customize.title": "Personalizza dashboard",
   "overview.customize.description": "Mostra, nascondi o riordina le sezioni. KPI e Avvisi restano sempre visibili. Trascina la maniglia per riordinare all'interno della colonna.",

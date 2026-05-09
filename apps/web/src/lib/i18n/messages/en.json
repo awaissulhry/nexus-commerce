@@ -1700,6 +1700,8 @@
   "overview.views.saveLabel": "Save current as a new view",
   "overview.views.savePlaceholder": "View name",
   "overview.views.saveAs": "Save as view",
+  "overview.views.saveLiveOnly": "Save (live only)",
+  "overview.views.updateThisView": "Update {name}",
 
   "overview.customize.title": "Customise dashboard",
   "overview.customize.description": "Show, hide, or reorder individual sections. KPI strip and Alerts panel are always visible. Drag the grip handle to reorder within a column.",

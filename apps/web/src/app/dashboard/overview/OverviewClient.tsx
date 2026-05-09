@@ -281,6 +281,11 @@ export default function OverviewClient() {
         onClose={() => setCustomizeOpen(false)}
         hiddenWidgets={hiddenWidgets}
         widgetOrder={widgetOrder}
+        activeView={(() => {
+          if (!activeViewId) return null
+          const v = savedViews.find((sv) => sv.id === activeViewId)
+          return v ? { id: v.id, name: v.name } : null
+        })()}
         onSaved={(next) => {
           setHiddenWidgets(next.hiddenWidgets)
           setWidgetOrder(next.widgetOrder)
