@@ -28,15 +28,15 @@
  * multipart limit.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
   Loader2,
   Upload,
-  X,
   XCircle,
 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
@@ -81,17 +81,6 @@ export default function BulkImageUploadModal({
   const [resolving, setResolving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
-
-  // U.22 — a11y. Esc dismisses (matching every other modal in the
-  // app); active phase 'uploading' blocks the dismiss so a half-fired
-  // batch isn't abandoned mid-flight.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && phase !== 'uploading') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, phase])
 
   const acceptedImages = (files: File[]) =>
     files.filter((f) => /\.(jpe?g|png|webp|gif|tiff?|avif)$/i.test(f.name))
@@ -297,43 +286,23 @@ export default function BulkImageUploadModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="bulk-image-upload-title"
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-      onClick={() => {
-        if (phase !== 'uploading') onClose()
-      }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={phase !== 'uploading'}
+      dismissOnEscape={phase !== 'uploading'}
+      size="3xl"
+      title="Upload product photos"
+      description={
+        <>
+          We match each file to its SKU by filename. Add{' '}
+          <span className="font-mono">-1</span>,{' '}
+          <span className="font-mono">-2</span>,{' '}
+          <span className="font-mono">-MAIN</span>, or{' '}
+          <span className="font-mono">-LIFESTYLE</span> for slot control.
+        </>
+      }
     >
-      <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
-          <div>
-            <div
-              id="bulk-image-upload-title"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Upload product photos
-            </div>
-            <div className="text-sm text-slate-500">
-              We match each file to its SKU by filename. Add{' '}
-              <span className="font-mono">-1</span>,{' '}
-              <span className="font-mono">-2</span>,{' '}
-              <span className="font-mono">-MAIN</span>, or{' '}
-              <span className="font-mono">-LIFESTYLE</span> for slot control.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-600"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
 
         {phase === 'drop' && (
           <div className="p-5 space-y-3">
@@ -680,8 +649,7 @@ export default function BulkImageUploadModal({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }
 
