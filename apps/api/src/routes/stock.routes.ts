@@ -24,6 +24,7 @@ import {
   openRecall,
   closeRecall,
   listRecalls,
+  getRecall,
 } from '../services/lot.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
@@ -1740,6 +1741,20 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return result
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/recalls POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/recalls/:id ───────────────────────────────────
+  // L.7 — single recall fetch. Removes the L.6 detail-page workaround
+  // that listed all recalls and filtered by id client-side.
+  fastify.get<{ Params: { id: string } }>('/stock/recalls/:id', async (request, reply) => {
+    try {
+      const recall = await getRecall(request.params.id)
+      if (!recall) return reply.code(404).send({ error: 'Recall not found' })
+      return recall
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/recalls/:id] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })

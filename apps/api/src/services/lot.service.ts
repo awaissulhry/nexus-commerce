@@ -297,6 +297,24 @@ export async function closeRecall(args: {
 }
 
 /**
+ * L.7 — Get a single recall by id. Returns null when the recall
+ * doesn't exist. Used by the detail page so it doesn't have to
+ * list-and-filter via the L.4 listRecalls endpoint.
+ */
+export async function getRecall(recallId: string) {
+  return prisma.lotRecall.findUnique({
+    where: { id: recallId },
+    include: {
+      lot: {
+        include: {
+          product: { select: { id: true, sku: true, name: true } },
+        },
+      },
+    },
+  })
+}
+
+/**
  * L.4 — List recalls. Filter by status (default OPEN-only) so the
  * recall dashboard surface defaults to "what needs attention".
  */

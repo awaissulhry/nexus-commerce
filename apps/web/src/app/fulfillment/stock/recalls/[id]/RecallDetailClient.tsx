@@ -112,17 +112,15 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
     setLoading(true)
     setError(null)
     try {
-      // Fetch the recall (via the list endpoint with status=ALL — there
-      // is no GET /recalls/:id today; if scope demands it later, we can
-      // add one. For now the list filters down to one row).
-      const recallsRes = await fetch(
-        `${getBackendUrl()}/api/stock/recalls?status=ALL&limit=500`,
+      // L.7 — direct fetch via /recalls/:id. Replaces the earlier
+      // list-and-filter workaround that scaled with total recall count.
+      const recallRes = await fetch(
+        `${getBackendUrl()}/api/stock/recalls/${recallId}`,
         { cache: 'no-store' },
       )
-      if (!recallsRes.ok) throw new Error(`recalls HTTP ${recallsRes.status}`)
-      const { items } = await recallsRes.json()
-      const r = (items as Recall[]).find((x) => x.id === recallId)
-      if (!r) throw new Error(t('stock.recallDetail.notFound'))
+      if (recallRes.status === 404) throw new Error(t('stock.recallDetail.notFound'))
+      if (!recallRes.ok) throw new Error(`recall HTTP ${recallRes.status}`)
+      const r = (await recallRes.json()) as Recall
       setRecall(r)
 
       const traceRes = await fetch(
