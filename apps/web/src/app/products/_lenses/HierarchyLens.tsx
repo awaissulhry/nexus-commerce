@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { ChevronDown, FolderTree, Package } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface PimItem {
   id: string
@@ -27,6 +28,7 @@ interface PimItem {
 }
 
 export function HierarchyLens({ search }: { search: string }) {
+  const { t } = useTranslations()
   const [parents, setParents] = useState<PimItem[]>([])
   const [standalones, setStandalones] = useState<PimItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,7 +73,7 @@ export function HierarchyLens({ search }: { search: string }) {
           aria-live="polite"
           className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
         >
-          Loading hierarchy…
+          {t('products.lens.hierarchy.loading')}
         </div>
       </Card>
     )
@@ -80,14 +82,14 @@ export function HierarchyLens({ search }: { search: string }) {
       <Card>
         <div role="alert" className="py-8 text-center space-y-2">
           <div className="text-md text-rose-600 dark:text-rose-400">
-            Failed to load hierarchy: {error}
+            {t('products.lens.hierarchy.failed', { error })}
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
             className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
           >
-            Retry
+            {t('products.lens.hierarchy.retry')}
           </button>
         </div>
       </Card>
@@ -96,19 +98,19 @@ export function HierarchyLens({ search }: { search: string }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card
-        title={`Parents (${parents.length})`}
-        description="Products with at least one child variation"
+        title={t('products.lens.hierarchy.parents.title', { count: parents.length })}
+        description={t('products.lens.hierarchy.parents.subtitle')}
       >
         {parents.length === 0 ? (
           <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
             <FolderTree className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-            No parent products yet.
-            <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-              Use{' '}
+            {t('products.lens.hierarchy.parents.empty')}
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               <Link href="/catalog/organize" className="text-blue-700 hover:underline dark:text-blue-300">
-                Organize → Parents
+                {t('products.lens.hierarchy.parents.organizeLink')}
               </Link>
-              {' '}to group SKUs that share variant attributes.
+              {' — '}
+              {t('products.lens.hierarchy.parents.emptyHint')}
             </div>
           </div>
         ) : (
@@ -124,7 +126,13 @@ export function HierarchyLens({ search }: { search: string }) {
                       {p.name}
                     </div>
                     <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
-                      {p.sku} · {p.childCount ?? 0} children
+                      {p.sku} ·{' '}
+                      {t(
+                        (p.childCount ?? 0) === 1
+                          ? 'products.lens.hierarchy.children.one'
+                          : 'products.lens.hierarchy.children.other',
+                        { count: p.childCount ?? 0 },
+                      )}
                     </div>
                   </div>
                   <ChevronDown
@@ -138,15 +146,15 @@ export function HierarchyLens({ search }: { search: string }) {
         )}
       </Card>
       <Card
-        title={`Standalones (${standalones.length})`}
-        description="Products that aren't parents (could be promoted, attached, or kept standalone)"
+        title={t('products.lens.hierarchy.standalones.title', { count: standalones.length })}
+        description={t('products.lens.hierarchy.standalones.subtitle')}
       >
         {standalones.length === 0 ? (
           <div className="py-8 text-center text-base text-slate-500 dark:text-slate-400">
             <Package className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-            All products belong to a parent.
-            <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-              Standalone products will appear here as you create new SKUs.
+            {t('products.lens.hierarchy.standalones.empty')}
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {t('products.lens.hierarchy.standalones.emptyHint')}
             </div>
           </div>
         ) : (
@@ -168,7 +176,7 @@ export function HierarchyLens({ search }: { search: string }) {
                   href="/catalog/organize"
                   className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                 >
-                  Group →
+                  {t('products.lens.hierarchy.standalones.group')}
                 </Link>
               </li>
             ))}

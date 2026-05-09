@@ -20,6 +20,7 @@ import { Network } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { CHANNEL_TONE } from '@/lib/products/theme'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 // Minimal shape — subset of ProductRow that this lens actually
 // reads. Defined locally so the lens doesn't need to import the
@@ -45,6 +46,7 @@ export function CoverageLens({
   products: CoverageProduct[]
   loading: boolean
 }) {
+  const { t } = useTranslations()
   if (loading)
     return (
       <Card>
@@ -53,7 +55,7 @@ export function CoverageLens({
           aria-live="polite"
           className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
         >
-          Loading coverage…
+          {t('products.lens.coverage.loading')}
         </div>
       </Card>
     )
@@ -63,9 +65,12 @@ export function CoverageLens({
     return (
       <EmptyState
         icon={Network}
-        title="No products to map across channels"
-        description="The Coverage matrix shows which products are listed on which channel × marketplace. Once your filter matches at least one product, the matrix renders here."
-        action={{ label: 'Clear filters', href: '/products' }}
+        title={t('products.lens.coverage.empty.title')}
+        description={t('products.lens.coverage.empty.body')}
+        action={{
+          label: t('products.lens.coverage.empty.action'),
+          href: '/products',
+        }}
       />
     )
 
@@ -101,8 +106,12 @@ export function CoverageLens({
       <Card>
         <div className="flex items-center gap-3 flex-wrap text-base">
           <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-            Coverage across {visible.length} product
-            {visible.length === 1 ? '' : 's'}
+            {t(
+              visible.length === 1
+                ? 'products.lens.coverage.summary.one'
+                : 'products.lens.coverage.summary.other',
+              { count: visible.length },
+            )}
           </span>
           <div className="flex items-center gap-2 flex-wrap ml-auto">
             {channelStats.map((s) => {
@@ -116,7 +125,11 @@ export function CoverageLens({
                 <span
                   key={s.channel}
                   className={`inline-flex items-center gap-1.5 px-2 py-1 border rounded ${CHANNEL_TONE[s.channel]}`}
-                  title={`${s.live} live, ${s.listed - s.live} listed but not live, ${s.missing} missing`}
+                  title={t('products.lens.coverage.tooltip', {
+                    live: s.live,
+                    listed: s.listed - s.live,
+                    missing: s.missing,
+                  })}
                 >
                   <span className="font-semibold text-xs">
                     {s.channel.slice(0, 3)}
@@ -139,7 +152,7 @@ export function CoverageLens({
             <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-800 dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[260px] dark:text-slate-300 dark:bg-slate-800">
-                  Product
+                  {t('products.lens.coverage.col.product')}
                 </th>
                 {channels.map((c) => (
                   <th
