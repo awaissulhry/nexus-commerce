@@ -228,6 +228,11 @@ const LOCATION_TONE: Record<string, string> = {
 //      can split WRITE_OFFs into damage/theft/scrap via SQL LIKE.
 // The free-text notes survive as the suffix of the string the
 // operator typed (or empty if they didn't type anything).
+// Italian fiscal options (T.9): DETERIORATION, DESTRUCTION, INTERNAL_USE
+// distinguish operator pick for "rimanenze finali" reconciliation —
+// DESTRUCTION specifically supports the IVA destruction-cert workflow
+// which can't be claimed under generic SCRAP. The schema enum stays
+// tight; the operator's pick survives in the notes prefix.
 type AdjustSubReason =
   | 'DAMAGE'
   | 'THEFT'
@@ -235,6 +240,9 @@ type AdjustSubReason =
   | 'FOUND'
   | 'RECOUNT'
   | 'INITIAL_LOAD'
+  | 'DETERIORATION'
+  | 'DESTRUCTION'
+  | 'INTERNAL_USE'
   | 'OTHER'
 
 const SUB_REASON_OPTIONS: ReadonlyArray<{
@@ -242,13 +250,16 @@ const SUB_REASON_OPTIONS: ReadonlyArray<{
   labelKey: string
   schemaReason: 'WRITE_OFF' | 'INVENTORY_COUNT' | 'MANUAL_ADJUSTMENT'
 }> = [
-  { value: 'OTHER',        labelKey: 'stock.subReason.other',       schemaReason: 'MANUAL_ADJUSTMENT' },
-  { value: 'DAMAGE',       labelKey: 'stock.subReason.damage',      schemaReason: 'WRITE_OFF' },
-  { value: 'THEFT',        labelKey: 'stock.subReason.theft',       schemaReason: 'WRITE_OFF' },
-  { value: 'SCRAP',        labelKey: 'stock.subReason.scrap',       schemaReason: 'WRITE_OFF' },
-  { value: 'FOUND',        labelKey: 'stock.subReason.found',       schemaReason: 'MANUAL_ADJUSTMENT' },
-  { value: 'RECOUNT',      labelKey: 'stock.subReason.recount',     schemaReason: 'INVENTORY_COUNT' },
-  { value: 'INITIAL_LOAD', labelKey: 'stock.subReason.initialLoad', schemaReason: 'MANUAL_ADJUSTMENT' },
+  { value: 'OTHER',         labelKey: 'stock.subReason.other',         schemaReason: 'MANUAL_ADJUSTMENT' },
+  { value: 'DAMAGE',        labelKey: 'stock.subReason.damage',        schemaReason: 'WRITE_OFF' },
+  { value: 'DETERIORATION', labelKey: 'stock.subReason.deterioration', schemaReason: 'WRITE_OFF' },
+  { value: 'THEFT',         labelKey: 'stock.subReason.theft',         schemaReason: 'WRITE_OFF' },
+  { value: 'SCRAP',         labelKey: 'stock.subReason.scrap',         schemaReason: 'WRITE_OFF' },
+  { value: 'DESTRUCTION',   labelKey: 'stock.subReason.destruction',   schemaReason: 'WRITE_OFF' },
+  { value: 'INTERNAL_USE',  labelKey: 'stock.subReason.internalUse',   schemaReason: 'MANUAL_ADJUSTMENT' },
+  { value: 'FOUND',         labelKey: 'stock.subReason.found',         schemaReason: 'MANUAL_ADJUSTMENT' },
+  { value: 'RECOUNT',       labelKey: 'stock.subReason.recount',       schemaReason: 'INVENTORY_COUNT' },
+  { value: 'INITIAL_LOAD',  labelKey: 'stock.subReason.initialLoad',   schemaReason: 'MANUAL_ADJUSTMENT' },
 ]
 
 /** Translate the operator's structured pick into the (reason, notes)
