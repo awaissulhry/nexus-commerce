@@ -136,7 +136,10 @@ export default function WizardNav({
   return (
     <div
       className={cn(
-        'px-6 py-3 border-t flex items-center justify-between flex-shrink-0',
+        // M.2 — tighter padding on mobile so Back + Continue + the
+        // blocker pill fit on a 375px viewport without buttons
+        // wrapping. Desktop gets the original generous spacing.
+        'px-3 md:px-6 py-2 md:py-3 border-t flex items-center justify-between flex-shrink-0 gap-2',
         'border-slate-200 bg-white',
         'dark:border-slate-800 dark:bg-slate-950',
       )}
@@ -156,17 +159,26 @@ export default function WizardNav({
               : ''}
       </div>
 
-      <div className="flex items-center gap-3 text-base text-slate-500 dark:text-slate-400">
+      <div className="flex items-center gap-2 md:gap-3 text-sm md:text-base text-slate-500 dark:text-slate-400 min-w-0">
+        {/* M.2 — Save & exit collapses to icon-only on mobile to free
+            horizontal room for Back / Continue. Desktop keeps the
+            text label. */}
         <button
           type="button"
           onClick={onSaveAndExit}
-          className="hover:text-slate-900 dark:hover:text-slate-100"
+          aria-label={t('listWizard.nav.saveExit')}
+          className="hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center"
         >
-          {t('listWizard.nav.saveExit')}
+          <span className="hidden md:inline">
+            {t('listWizard.nav.saveExit')}
+          </span>
+          <span className="md:hidden text-base" aria-hidden="true">
+            ⤴
+          </span>
         </button>
         {onDiscard && (
           <>
-            <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+            <span className="hidden md:inline text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
             <Tooltip
               content={t('listWizard.nav.discardTooltip')}
               placement="top"
@@ -174,33 +186,48 @@ export default function WizardNav({
               <button
                 type="button"
                 onClick={onDiscard}
-                className="text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300"
+                aria-label={t('listWizard.nav.discard')}
+                className="text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 inline-flex items-center"
               >
-                {t('listWizard.nav.discard')}
+                <span className="hidden md:inline">
+                  {t('listWizard.nav.discard')}
+                </span>
+                <span className="md:hidden text-base" aria-hidden="true">
+                  ✕
+                </span>
               </button>
             </Tooltip>
           </>
         )}
-        <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+        <span className="hidden md:inline text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
         {/* U.10 — save state gets explicit iconography. Spinner for
             in-flight, emerald check for success, red alert for error.
             The plain "Step X of N" stays icon-less so the wizard's
             ambient state doesn't shout when nothing's happening. */}
+        {/* M.2 — save-state pill. Idle "Step X of N" hidden on mobile
+            (the new compact stepper above already shows the count, so
+            duplicating it in the footer wastes pixels). saving / saved
+            / error states still render on mobile because they're
+            transient + load-bearing for trust. Desktop unchanged. */}
         <span className="inline-flex items-center gap-1.5">
           {saveState === 'saving' && (
             <>
               <Loader2 className="w-3 h-3 animate-spin" />
-              {t('listWizard.nav.saving')}
+              <span className="hidden md:inline">
+                {t('listWizard.nav.saving')}
+              </span>
             </>
           )}
           {saveState === 'saved' && (
             <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="w-3 h-3" />
-              {t('listWizard.nav.saved')}
+              <span className="hidden md:inline">
+                {t('listWizard.nav.saved')}
+              </span>
             </span>
           )}
           {saveState === 'idle' && (
-            <span className="tabular-nums">
+            <span className="tabular-nums hidden md:inline">
               {t('listWizard.nav.stepXofN', {
                 n: currentStep,
                 total: STEPS.length,
@@ -216,7 +243,9 @@ export default function WizardNav({
           {saveState === 'error' && (
             <span className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400">
               <AlertCircle className="w-3 h-3" />
-              {t('listWizard.nav.saveFailed')}
+              <span className="hidden md:inline">
+                {t('listWizard.nav.saveFailed')}
+              </span>
             </span>
           )}
         </span>
