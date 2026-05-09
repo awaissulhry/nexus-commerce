@@ -66,6 +66,7 @@ import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   type Density,
   DENSITY_ROW_HEIGHT,
@@ -152,6 +153,7 @@ export function VirtualizedGrid({
   searchTerm,
   riskFlaggedSkus,
 }: VirtualizedGridProps) {
+  const { t } = useTranslations()
   // Build the flat row list. Order: each parent followed by its
   // expanded children (or a loading/empty placeholder). Memo deps
   // cover everything that can change row identity.
@@ -380,7 +382,7 @@ export function VirtualizedGrid({
                   className="px-1 py-2"
                   style={{ width: 24, minWidth: 24 }}
                   role="columnheader"
-                  aria-label="Expand variants"
+                  aria-label={t('products.grid.expandVariants')}
                 />
                 {visible.map((col) => {
                   const sortable =
@@ -573,7 +575,7 @@ export function VirtualizedGrid({
                           className="bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2 text-base text-slate-500 dark:text-slate-400 italic flex-1"
                           role="cell"
                         >
-                          Loading variants…
+                          {t('products.grid.loadingVariants')}
                         </div>
                       )}
                       {row.kind === 'empty' && (
@@ -630,6 +632,7 @@ function ColumnResizeHandle({
   tableRootRef: React.RefObject<HTMLDivElement | null>
   onCommit: (width: number) => void
 }) {
+  const { t } = useTranslations()
   const dragRef = useRef<{ startX: number; startW: number } | null>(null)
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -679,8 +682,8 @@ function ColumnResizeHandle({
       onMouseDown={onMouseDown}
       onClick={(e) => e.stopPropagation()}
       role="separator"
-      aria-label={`Resize ${columnKey} column`}
-      title={`Resize ${columnKey}`}
+      aria-label={t('products.grid.resizeAria', { column: columnKey })}
+      title={t('products.grid.resizeAria', { column: columnKey })}
       className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 transition-colors"
     />
   )
@@ -871,6 +874,7 @@ const ProductRow = memo(function ProductRow({
   onTagEdit: (id: string) => void
   onChanged: () => void
 }) {
+  const { t } = useTranslations()
   const childCount = product.childCount ?? 0
   const canExpand = !isChild && product.isParent && childCount > 0
   // E.10 — focus ring (ring-2 ring-blue-500) applied to every cell of
@@ -960,10 +964,18 @@ const ProductRow = memo(function ProductRow({
             aria-expanded={isExpanded}
             aria-label={
               isExpanded
-                ? `Collapse variants of ${product.sku}`
-                : `Expand variants of ${product.sku} (${childCount})`
+                ? t('products.grid.collapseVariantsAria', { sku: product.sku })
+                : t('products.grid.expandVariantsAria', {
+                    sku: product.sku,
+                    count: childCount,
+                  })
             }
-            title={`${childCount} variant${childCount === 1 ? '' : 's'}`}
+            title={t(
+              childCount === 1
+                ? 'products.mobile.variants.one'
+                : 'products.mobile.variants.other',
+              { count: childCount },
+            )}
             // E.22 — single ChevronRight that rotates 90° on expand
             // (was: swap between ChevronRight + ChevronDown). One
             // element, smooth transform, no jitter on toggle.
@@ -1007,13 +1019,14 @@ const ProductRow = memo(function ProductRow({
 // (rate vs mean, σ above) and decides whether to act on the listing
 // (size chart, photos, copy).
 function RiskBadge({ sku }: { sku: string }) {
+  const { t } = useTranslations()
   const flagged = useContext(RiskFlaggedContext)
   if (!flagged.has(sku)) return null
   return (
     <Link
       href="/fulfillment/returns/analytics"
       className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider px-1 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100"
-      title="High return rate (>2σ above productType mean) — click for analytics"
+      title={t('products.grid.returnRate')}
     >
       ↩ HI
     </Link>
@@ -1280,6 +1293,7 @@ function EditableCell({
 }) {
   const meta = EDITABLE_FIELDS[field]
   const searchQuery = useContext(SearchContext)
+  const { t } = useTranslations()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<string>('')
   const [cellError, setCellError] = useState<string | null>(null)
@@ -1381,7 +1395,7 @@ function EditableCell({
       <button
         onClick={() => setCellError(null)}
         className="hover:bg-rose-100 rounded px-0.5"
-        aria-label="Dismiss error"
+        aria-label={t('products.grid.dismissError')}
       >
         <X size={10} />
       </button>
@@ -1478,6 +1492,7 @@ const ProductCell = memo(function ProductCell({
   // of swallowing the error. useToast returns a stable object so the
   // hook call doesn't bust ProductCell's React.memo.
   const { toast } = useToast()
+  const { t } = useTranslations()
   const p = product
 
   switch (col) {
@@ -1530,7 +1545,7 @@ const ProductCell = memo(function ProductCell({
         return (
           <span
             className="text-xs italic text-slate-400 dark:text-slate-500"
-            title="No PIM family attached. Use BulkActionBar → Attach family to categorise."
+            title={t('products.grid.noFamily')}
           >
             —
           </span>
@@ -1540,7 +1555,7 @@ const ProductCell = memo(function ProductCell({
         <Link
           href={`/settings/pim/families/${p.family.id}`}
           className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs bg-slate-100 dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 max-w-full truncate"
-          title={`Family: ${p.family.label} (${p.family.code}) — open editor`}
+          title={t('products.grid.familyTooltip', { label: p.family.label, code: p.family.code })}
         >
           <span className="truncate">{p.family.label}</span>
         </Link>
@@ -1554,7 +1569,7 @@ const ProductCell = memo(function ProductCell({
         return (
           <span
             className="text-xs italic text-slate-400 dark:text-slate-500"
-            title="No workflow attached. Attach a family with a workflow, or use BulkActionBar → Move stage."
+            title={t('products.grid.noWorkflow')}
           >
             —
           </span>
@@ -1589,7 +1604,7 @@ const ProductCell = memo(function ProductCell({
         <div className="flex items-center gap-1 flex-wrap">
           <span
             className="text-xs text-slate-400 mr-0.5 tabular-nums"
-            title={`${coveredCount} of ${ALL_CHANNELS.length} channels listed`}
+            title={t('products.grid.coverageTooltip', { covered: coveredCount, total: ALL_CHANNELS.length })}
           >
             {coveredCount}/{ALL_CHANNELS.length}
           </span>
@@ -1608,7 +1623,7 @@ const ProductCell = memo(function ProductCell({
                 <Link
                   key={ch}
                   href={`/listings/${ch.toLowerCase()}?search=${encodeURIComponent(p.sku)}`}
-                  title={`${ch}: ${c.live} live, ${c.draft} draft, ${c.error} error / ${c.total} total`}
+                  title={t('products.grid.channelTooltip', { channel: ch, live: c.live, draft: c.draft, error: c.error, total: c.total })}
                   className={`inline-flex items-center gap-1 px-1.5 h-5 text-xs font-mono border rounded ${tone} hover:opacity-80`}
                 >
                   {ch.slice(0, 3)}
@@ -1620,7 +1635,7 @@ const ProductCell = memo(function ProductCell({
               <Link
                 key={ch}
                 href={`/products/${p.id}/list-wizard?channel=${ch}`}
-                title={`Not listed on ${ch} — click to start a listing`}
+                title={t('products.grid.notListedOn', { channel: ch })}
                 className="inline-flex items-center gap-0.5 px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50"
               >
                 {ch.slice(0, 3)}
@@ -1723,8 +1738,8 @@ const ProductCell = memo(function ProductCell({
           )}
           <button
             onClick={() => onTagEdit(p.id)}
-            aria-label="Edit tags"
-            title="Edit tags"
+            aria-label={t('products.grid.editTags')}
+            title={t('products.grid.editTags')}
             // U.22 — was `h-4 w-4 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0`
             // which collapsed the desktop hit zone to 4×4 (visible icon
             // mismatched click area). Desktop now uses h-5/w-5; mobile
@@ -1792,8 +1807,8 @@ const ProductCell = memo(function ProductCell({
           className="flex items-center gap-2 w-full"
           title={
             missing.length === 0
-              ? 'All quality checks pass'
-              : `Missing: ${missing.join(', ')}`
+              ? t('products.grid.qualityPass')
+              : t('products.grid.qualityMissing', { fields: missing.join(', ') })
           }
         >
           <span
@@ -1825,7 +1840,7 @@ const ProductCell = memo(function ProductCell({
         return (
           <span
             className="text-xs italic text-slate-400 dark:text-slate-500"
-            title="No family attached → not family-scoreable. Use BulkActionBar → Attach family."
+            title={t('products.grid.notFamilyScoreable')}
           >
             —
           </span>
@@ -1840,7 +1855,7 @@ const ProductCell = memo(function ProductCell({
       return (
         <span
           className={`inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded tabular-nums ${fcTone}`}
-          title={`${fc.filled} of ${fc.totalRequired} required attributes filled`}
+          title={t('products.grid.familyScore', { filled: fc.filled, total: fc.totalRequired })}
         >
           {fc.score}%
         </span>
@@ -1876,16 +1891,16 @@ const ProductCell = memo(function ProductCell({
               )
             }}
             className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center justify-center transition-colors"
-            title="Quick view (Esc closes)"
+            title={t('products.grid.action.viewTitle')}
           >
-            View
+            {t('products.grid.action.view')}
           </button>
           <Link
             href={`/products/${p.id}/list-wizard`}
             className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded inline-flex items-center justify-center transition-colors"
-            title="Open the listing wizard for this product"
+            title={t('products.grid.action.listTitle')}
           >
-            List
+            {t('products.grid.action.list')}
           </Link>
         </div>
       )
