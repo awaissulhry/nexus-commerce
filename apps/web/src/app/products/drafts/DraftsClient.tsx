@@ -9,6 +9,8 @@ import {
   Box,
   Clock,
   FileEdit,
+  Hourglass,
+  Layers,
   Search,
   Trash2,
   X,
@@ -25,7 +27,10 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
-import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import {
+  emitInvalidation,
+  useInvalidationChannel,
+} from '@/lib/sync/invalidation-channel'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface ChannelTuple {
@@ -54,6 +59,26 @@ interface DraftsResponse {
   success: boolean
   total: number
   drafts: Draft[]
+}
+
+// DR-S.1 — KPI strip data shape, mirrors GET /api/listing-wizard/drafts/summary.
+interface DraftsSummary {
+  total: number
+  wizards: number
+  productDrafts: number
+  stale: number
+  expiring: number
+  byStep: Record<string, number>
+  oldestCreatedAt: string | null
+}
+
+function formatAgeDays(iso: string | null): string {
+  if (!iso) return '—'
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (days < 1) return '<1d'
+  if (days < 30) return `${days}d`
+  const months = Math.floor(days / 30)
+  return `${months}mo`
 }
 
 const STEP_LABELS: Record<number, string> = {
@@ -104,6 +129,76 @@ function formatRelative(iso: string): string {
 // theoretically share the same uuid (separate tables) so we prefix.
 function selectionKey(d: Draft): string {
   return `${d.kind}:${d.id}`
+}
+
+// DR-S.1 — KPI tile for the drafts summary strip. Compact card,
+// optional click-through (used by the Stale tile to scope the list).
+function KpiTile({
+  icon: Icon,
+  label,
+  value,
+  help,
+  loading,
+  tone = 'default',
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: number | string
+  help?: string
+  loading?: boolean
+  tone?: 'default' | 'warn'
+  onClick?: () => void
+}) {
+  const toneClasses =
+    tone === 'warn'
+      ? 'border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30'
+      : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
+  const valueClasses =
+    tone === 'warn'
+      ? 'text-amber-800 dark:text-amber-200'
+      : 'text-slate-900 dark:text-slate-100'
+  const Body = (
+    <div
+      className={cn(
+        'flex flex-col gap-0.5 rounded-md border px-3 py-2 transition-colors',
+        toneClasses,
+        onClick && 'cursor-pointer hover:border-slate-400 dark:hover:border-slate-600',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400">
+          {label}
+        </span>
+        <Icon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+      </div>
+      <div className="flex items-baseline justify-between gap-2">
+        {loading ? (
+          <Skeleton variant="text" width={48} />
+        ) : (
+          <span className={cn('text-2xl font-semibold tabular-nums', valueClasses)}>
+            {value}
+          </span>
+        )}
+        {help && (
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {help}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+  if (!onClick) return Body
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left"
+      aria-label={`${label}: ${value} — click to filter`}
+    >
+      {Body}
+    </button>
+  )
 }
 
 // E.18 — memoized draft row. Was a 150-line inline `<tr>` inside
@@ -361,6 +456,43 @@ export default function DraftsClient() {
       ],
     })
 
+  // DR-S.1 — KPI strip. Separate fetch from the list so the strip
+  // shows aggregate counts independent of the active filters (an
+  // operator filtered to staleOnly should still see the global
+  // total). Polled on the same 30s cadence and refreshed on the
+  // same invalidation events.
+  const [summary, setSummary] = useState<DraftsSummary | null>(null)
+  const summaryUrl = useMemo(
+    () => `${getBackendUrl()}/api/listing-wizard/drafts/summary`,
+    [],
+  )
+  const fetchSummary = useCallback(async () => {
+    try {
+      const r = await fetch(summaryUrl, { cache: 'no-store' })
+      if (r.ok) setSummary((await r.json()) as DraftsSummary)
+    } catch {
+      // Strip is informational; swallow errors so the list stays usable.
+    }
+  }, [summaryUrl])
+  useEffect(() => {
+    void fetchSummary()
+    const id = window.setInterval(() => void fetchSummary(), 30_000)
+    return () => window.clearInterval(id)
+  }, [fetchSummary])
+  useInvalidationChannel(
+    [
+      'wizard.created',
+      'wizard.submitted',
+      'wizard.deleted',
+      'product.deleted',
+      'product.created',
+      'product.updated',
+    ],
+    () => {
+      void fetchSummary()
+    },
+  )
+
   const draftsRaw = data?.drafts ?? []
   // C.12 — optimistic-delete state. Keys hidden here disappear from
   // the displayed list immediately on a delete attempt, before the
@@ -593,6 +725,48 @@ export default function DraftsClient() {
           />
         }
       />
+
+      {/* DR-S.1 — KPI strip. Numbers reflect the unfiltered total
+          set so the operator sees scope at a glance, regardless of
+          which filters are active. Stale tile is clickable: tapping
+          it scopes the list to stale-only as a quick triage path. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <KpiTile
+          icon={Layers}
+          label={t('drafts.kpi.total')}
+          value={summary?.total ?? '—'}
+          help={t('drafts.kpi.totalHelp')}
+          loading={!summary}
+        />
+        <KpiTile
+          icon={Clock}
+          label={t('drafts.kpi.stale')}
+          value={summary?.stale ?? '—'}
+          help={t('drafts.kpi.staleHelp')}
+          loading={!summary}
+          tone={(summary?.stale ?? 0) > 0 ? 'warn' : 'default'}
+          onClick={
+            (summary?.stale ?? 0) > 0
+              ? () => setStaleOnly(true)
+              : undefined
+          }
+        />
+        <KpiTile
+          icon={Hourglass}
+          label={t('drafts.kpi.expiring')}
+          value={summary?.expiring ?? '—'}
+          help={t('drafts.kpi.expiringHelp')}
+          loading={!summary}
+          tone={(summary?.expiring ?? 0) > 0 ? 'warn' : 'default'}
+        />
+        <KpiTile
+          icon={FileEdit}
+          label={t('drafts.kpi.oldest')}
+          value={formatAgeDays(summary?.oldestCreatedAt ?? null)}
+          help={t('drafts.kpi.oldestHelp')}
+          loading={!summary}
+        />
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[260px]">

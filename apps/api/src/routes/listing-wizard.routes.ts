@@ -337,6 +337,71 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
    * Returns a flat list shape (productSku/productName lifted out of the
    * product relation) so the client doesn't have to walk a nested object.
    */
+  // ── DR-S.1 — GET /api/listing-wizard/drafts/summary ───────────
+  // Lightweight aggregation for the /products/drafts KPI strip.
+  // Cheap (4 count() queries + 1 groupBy); not paginated. Distinct
+  // from the /drafts list endpoint so the KPI strip can refresh on
+  // its own cadence without invalidating the ETag-cached list.
+  fastify.get('/listing-wizard/drafts/summary', async (_request, reply) => {
+    try {
+      const now = new Date()
+      const staleCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const expiringCutoff = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+      const [
+        wizardsTotal,
+        wizardsStale,
+        wizardsExpiring,
+        productDraftsTotal,
+        wizardStepDist,
+        wizardOldest,
+      ] = await Promise.all([
+        prisma.listingWizard.count({ where: { status: 'DRAFT' } }),
+        prisma.listingWizard.count({
+          where: { status: 'DRAFT', updatedAt: { lt: staleCutoff } },
+        }),
+        prisma.listingWizard.count({
+          where: {
+            status: 'DRAFT',
+            expiresAt: { gte: now, lt: expiringCutoff },
+          },
+        }),
+        prisma.product.count({ where: { status: 'DRAFT' } }),
+        prisma.listingWizard.groupBy({
+          by: ['currentStep'],
+          where: { status: 'DRAFT' },
+          _count: { _all: true },
+          orderBy: { currentStep: 'asc' },
+        }),
+        prisma.listingWizard.findFirst({
+          where: { status: 'DRAFT' },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
+      ])
+
+      const byStep: Record<string, number> = {}
+      for (const row of wizardStepDist) {
+        byStep[String(row.currentStep)] = row._count._all
+      }
+
+      return {
+        total: wizardsTotal + productDraftsTotal,
+        wizards: wizardsTotal,
+        productDrafts: productDraftsTotal,
+        stale: wizardsStale,
+        expiring: wizardsExpiring,
+        byStep,
+        oldestCreatedAt: wizardOldest?.createdAt ?? null,
+      }
+    } catch (err) {
+      fastify.log.error({ err }, '[listing-wizard] drafts/summary failed')
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   fastify.get<{
     Querystring: {
       search?: string
