@@ -280,6 +280,7 @@ model Product {
   stockLevels               StockLevel[] // H.1: per-location stock ledger
   fbaInventoryDetails       FbaInventoryDetail[] // S.25: per-FC FBA snapshot
   lots                      Lot[] // L.1: lot tracking for recall traceability
+  serials                   SerialNumber[] // SR.1: per-unit serial tracking
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -1095,6 +1096,8 @@ model ProductVariation {
   stockLevels StockLevel[]
   // L.1: lot tracking for recall traceability
   lots        Lot[]
+  // SR.1: per-unit serial tracking
+  serials     SerialNumber[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3682,6 +3685,7 @@ model StockLocation {
   @@index([type])
   @@index([isActive])
   @@index([externalChannel, externalLocationId])
+  serials      SerialNumber[]   @relation("StockLocationSerials")
 }
 
 // Per-location, per-product (or per-variation) quantity ledger.
@@ -3795,11 +3799,16 @@ model StockMovement {
   // a lotNumber and on consumes that depleted a specific lot.
   lotId          String?
 
+  // SR.1 — serial-number reference. Set when a movement touched a
+  // specific unit (premium helmet receive, outbound, RMA).
+  serialNumberId String?
+
   warehouse       Warehouse?     @relation(fields: [warehouseId], references: [id])
   location        StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
   fromLocation    StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
   toLocation      StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
   lot             Lot?           @relation("LotMovements", fields: [lotId], references: [id])
+  serial          SerialNumber?  @relation("SerialMovements", fields: [serialNumberId], references: [id])
   // Back-relation for the Lot.originStockMovementId FK (one movement
   // can be the origin receive of one or more lots — split-receive case).
   lotsOriginated  Lot[]          @relation("LotOrigin")
@@ -3814,6 +3823,7 @@ model StockMovement {
   @@index([shipmentId])
   @@index([returnId])
   @@index([lotId])
+  @@index([serialNumberId])
 }
 
 // S.20 — One row per stock receive event. FIFO/LIFO consume in
@@ -3911,11 +3921,50 @@ model Lot {
   movements     StockMovement[]   @relation("LotMovements")
   costLayers    StockCostLayer[]  @relation("LotCostLayers")
   recalls       LotRecall[]
+  serials       SerialNumber[]    @relation("LotSerials")
 
   @@unique([productId, lotNumber])
   @@index([productId, receivedAt])
   @@index([expiresAt])
   @@index([productId, unitsRemaining])
+}
+
+
+// SR.1 — Serial number tracking. Per-unit identification (lot = batch,
+// serial = individual). For Xavia: premium helmet warranty + recall
+// granularity beyond lot. Lifecycle: AVAILABLE -> RESERVED -> SHIPPED
+// -> RETURNED -> AVAILABLE | DISPOSED.
+model SerialNumber {
+  id             String   @id @default(cuid())
+  productId      String
+  variationId    String?
+  serialNumber   String
+  lotId          String?
+  status         String   @default("AVAILABLE")
+  locationId     String?
+  receivedAt     DateTime @default(now())
+  shippedAt      DateTime?
+  returnedAt     DateTime?
+  disposedAt     DateTime?
+  currentOrderId    String?
+  currentShipmentId String?
+  lastReturnId      String?
+  manufacturerRef   String?
+  notes             String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  lot       Lot?              @relation("LotSerials", fields: [lotId], references: [id], onDelete: SetNull)
+  location  StockLocation?    @relation("StockLocationSerials", fields: [locationId], references: [id], onDelete: SetNull)
+  movements StockMovement[]   @relation("SerialMovements")
+
+  @@unique([productId, serialNumber])
+  @@index([status])
+  @@index([lotId])
+  @@index([locationId])
+  @@index([currentOrderId])
 }
 
 // L.4 — Lot recall lifecycle. One row per recall instance; partial
