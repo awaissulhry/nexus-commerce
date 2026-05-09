@@ -2062,20 +2062,32 @@ function RefundDeadlineBadge({
 
   if (!data || data.status === 'no_receive_date' || data.status === 'safe') return null
 
+  // F1.12 — non-color signals: explicit severity prefix + role=status
+  // + aria-label + dark-mode tones. Colorblind operators (and screen
+  // readers) get the urgency from the leading "Critical" / "Warning"
+  // word, not from rose/amber alone (WCAG 1.4.1).
   const isOverdue = data.status === 'overdue'
   const tone = isOverdue
-    ? 'bg-rose-50 text-rose-700 border-rose-200'
-    : 'bg-amber-50 text-amber-700 border-amber-200'
-  const label = isOverdue
+    ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900'
+  const severityWord = isOverdue ? 'Critical' : 'Warning'
+  const detail = isOverdue
     ? `Overdue ${Math.abs(data.daysUntilDeadline ?? 0)}d`
     : `Refund due in ${data.daysUntilDeadline}d`
+  const ariaLabel = isOverdue
+    ? `Critical: refund overdue by ${Math.abs(data.daysUntilDeadline ?? 0)} days under Italian consumer law (${data.refundDeadlineDays}-day deadline)`
+    : `Warning: refund due in ${data.daysUntilDeadline} days under Italian consumer law (${data.refundDeadlineDays}-day deadline)`
 
   return (
     <span
+      role="status"
+      aria-label={ariaLabel}
       className={`inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${tone}`}
       title={`Italian consumer law: refund within ${data.refundDeadlineDays} days of receipt`}
     >
-      <AlertTriangle size={11} /> {label}
+      <AlertTriangle size={11} aria-hidden="true" />
+      <span className="font-bold">{severityWord}:</span>
+      <span>{detail}</span>
     </span>
   )
 }
