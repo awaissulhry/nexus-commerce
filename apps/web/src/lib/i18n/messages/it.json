@@ -3037,6 +3037,19 @@
   "replenishment.supplierSpend.cell.leadTime": "{d}g LT",
   "replenishment.supplierSpend.cell.currencies": "valute",
   "replenishment.supplierSpend.cell.currencyMixTooltip": "Multi-valuta: {list}",
+  "replenishment.forecastBias.loading": "Caricamento bias previsioni…",
+  "replenishment.forecastBias.header.title": "Bias previsioni",
+  "replenishment.forecastBias.header.summary": "Finestra {window}g · {over} sopra · {under} sotto · {calibrated} calibrati",
+  "replenishment.forecastBias.col.sku": "SKU",
+  "replenishment.forecastBias.col.direction": "Direzione",
+  "replenishment.forecastBias.col.bias": "Bias",
+  "replenishment.forecastBias.col.mape": "MAPE",
+  "replenishment.forecastBias.col.withinBand": "Entro banda",
+  "replenishment.forecastBias.col.samples": "Campioni",
+  "replenishment.forecastBias.direction.overforecast": "Sopra",
+  "replenishment.forecastBias.direction.underforecast": "Sotto",
+  "replenishment.forecastBias.direction.calibrated": "OK",
+  "replenishment.forecastBias.openProduct": "Trova prodotto",
   "replenishment.slowMovers.suggestMarkdown": "Suggerisci sconto 10%",
   "replenishment.slowMovers.suggestMarkdownAria": "Suggerisci sconto per {sku}",
   "replenishment.slowMovers.flagWriteOff": "Segnala per write-off",
@@ -3517,5 +3530,6 @@
   "channelDrift.ignore.help": "Segna questo drift come risolto senza modificare lo stock locale. Usalo quando il canale è sbagliato (es: overselling già gestito).",
   "channelDrift.ignore.placeholder": "Motivo — es: \"Già corretto via /fulfillment/stock con aggiustamento manuale\"",
   "channelDrift.ignore.submit": "Ignora",
-  "channelDrift.ignore.submitting": "Ignorando…"
+  "channelDrift.ignore.submitting": "Ignorando…",
+  "replenishment.forecastBias.openProduct": "Apri prodotto"
 }

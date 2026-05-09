@@ -72,6 +72,7 @@ import { ScenariosCard } from './_shared/ScenariosCard'
 import { SlowMoversCard } from './_shared/SlowMoversCard'
 import { PanEuDistributionCard } from './_shared/PanEuDistributionCard'
 import { SupplierSpendCard } from './_shared/SupplierSpendCard'
+import { ForecastBiasCard } from './_shared/ForecastBiasCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -803,6 +804,13 @@ export default function ReplenishmentWorkspace() {
           spend + open commitment, sorted by 90d spend desc. */}
       <div id="supplier-spend" className="scroll-mt-4">
         <SupplierSpendCard />
+      </div>
+
+      {/* W8.4b — forecast bias card. Hides itself when there's no
+          ForecastAccuracy data or every SKU is calibrated; otherwise
+          surfaces top 20 most-miscalibrated SKUs by bias direction. */}
+      <div id="forecast-bias" className="scroll-mt-4">
+        <ForecastBiasCard />
       </div>
 
       {/* W3.2 — command-center KPI strip. Five tiles answering
