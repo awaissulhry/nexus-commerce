@@ -1,7 +1,7 @@
 // Memoised row + selection / fill overlays + skeleton row used inside
 // the virtualised body of the bulk-ops grid.
 
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import { flexRender } from '@tanstack/react-table'
 import type { Row } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,7 @@ export const TableRow = memo(
     row,
     rowIdx,
     top,
+    findMatchSig,
   }: {
     row: Row<BulkProduct>
     rowIdx: number
@@ -35,12 +36,35 @@ export const TableRow = memo(
     /** Bumped when the visible-column set OR sizes change; forces a
      *  re-render so body cells track header widths during a drag. */
     columnsKey: string
+    /**
+     * W3.3 — comma-separated colIdx list of cells in THIS row that
+     * currently match the Find / Replace query (or empty string).
+     * Including it as a prop busts the memo when the operator types
+     * in the find bar so the amber highlight repaints; the parent
+     * builds it from findMatchKeys before the render so each row
+     * only sees a tiny string change when its row actually has
+     * matches.
+     */
+    findMatchSig?: string
   }) {
     const hier = (row.original as Partial<HierarchyRow>)._hier
     const isAggregateRow =
       hierarchyCtxRef.current.mode === 'hierarchy' &&
       hier?.level === 0 &&
       hier?.hasChildren
+    // W3.3 — parse the per-row find-match signature once per render
+    // (cheap, comma-separated string). Each cell looks up its colIdx
+    // here in O(1) — no need to re-walk findMatchKeys for every cell
+    // and no string parse per cell.
+    const matchCols = useMemo(() => {
+      if (!findMatchSig) return null
+      const s = new Set<number>()
+      for (const part of findMatchSig.split(',')) {
+        const n = parseInt(part, 10)
+        if (!Number.isNaN(n)) s.add(n)
+      }
+      return s
+    }, [findMatchSig])
     return (
       <div
         className="absolute left-0 right-0 flex border-b border-slate-100"
@@ -74,6 +98,11 @@ export const TableRow = memo(
           const tone = columnTonesRef.current.get(cell.column.id)
           const isSystemCol =
             cell.column.id === 'sku' || cell.column.id === '__actions'
+          // W3.3 — Find / Replace match highlight. matchCols comes
+          // from the parsed `findMatchSig` prop the parent computed
+          // for this row; bound to the row's memo so the highlight
+          // repaints as the operator types into the find bar.
+          const isFindMatch = matchCols?.has(colIdx) ?? false
           return (
             <div
               key={cell.id}
@@ -111,6 +140,12 @@ export const TableRow = memo(
                   : 'border-r border-slate-100/60 last:border-r-0',
                 isReadOnlyCell && 'bg-slate-50/40',
                 selectable && 'hover:bg-slate-50',
+                // W3.3 — Find / Replace match tint. Inset amber ring +
+                // soft fill so the cell stands out without blocking
+                // the dirty (yellow) / cascade (orange) / error (red)
+                // signals that win at the EditableCell layer.
+                isFindMatch &&
+                  'ring-1 ring-inset ring-amber-400 bg-amber-50/60',
                 // W.6 — frozen left/right columns. Opaque bg so cells
                 // scrolling underneath don't bleed through.
                 cell.column.id === 'sku' &&
@@ -131,7 +166,11 @@ export const TableRow = memo(
     prev.row.original === next.row.original &&
     prev.rowIdx === next.rowIdx &&
     prev.top === next.top &&
-    (prev as any).columnsKey === (next as any).columnsKey,
+    (prev as any).columnsKey === (next as any).columnsKey &&
+    // W3.3 — bust the memo when the find-match signature for THIS
+    // row changes; otherwise the highlight overlay would only repaint
+    // when some other prop changed (selection, value, …).
+    prev.findMatchSig === next.findMatchSig,
 )
 
 // Three absolutely-positioned overlays that draw the selection on

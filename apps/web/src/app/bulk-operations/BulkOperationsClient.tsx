@@ -1205,9 +1205,6 @@ export default function BulkOperationsClient() {
     cascadeKeys,
     pendingValues,
     onCommitNavigate,
-    // W3.2 — published into the cell-render context so GridRow's
-    // overlay layer can highlight matches without taking a new prop.
-    findMatchKeys,
   }
   allFieldsRef.current = allFields
 
@@ -2634,6 +2631,35 @@ export default function BulkOperationsClient() {
     }
   })()
 
+  // ── W3.3 — per-row find-match signature ────────────────────────
+  // findMatchKeys is a flat 'rowIdx:colIdx' Set; bucket it into
+  // per-row strings so each TableRow's memo only busts when ITS row's
+  // matches change. Empty bucket → undefined so most rows see prop
+  // identity stable across find-bar typing.
+  const findMatchSigByRow = useMemo(() => {
+    if (findMatchKeys.size === 0) return new Map<number, string>()
+    const buckets = new Map<number, number[]>()
+    for (const k of findMatchKeys) {
+      const idx = k.indexOf(':')
+      if (idx <= 0) continue
+      const r = parseInt(k.slice(0, idx), 10)
+      const c = parseInt(k.slice(idx + 1), 10)
+      if (Number.isNaN(r) || Number.isNaN(c)) continue
+      let arr = buckets.get(r)
+      if (!arr) {
+        arr = []
+        buckets.set(r, arr)
+      }
+      arr.push(c)
+    }
+    const out = new Map<number, string>()
+    for (const [r, arr] of buckets) {
+      arr.sort((a, b) => a - b)
+      out.set(r, arr.join(','))
+    }
+    return out
+  }, [findMatchKeys])
+
   // ── W3.2 — find/replace cell tape ──────────────────────────────
   // Flatten the visible grid into a {rowIdx, colIdx, rowId, columnId,
   // value} list the find-replace bar can scan against. Only built
@@ -2680,16 +2706,27 @@ export default function BulkOperationsClient() {
     [visibleLeafCols, fieldsById],
   )
 
-  // W3.2 — onActivate: when the operator clicks Next/Prev, jump the
-  // selection there. The grid's existing virtualizer handles the
-  // scroll-into-view side of things via the selection effect.
+  // W3.3 — onActivate: when the operator clicks Next/Prev, jump the
+  // selection AND scroll the row into view. The selection move alone
+  // doesn't trigger a scroll (the grid's selection effect tracks
+  // navigation by direction, not absolute position), so we ask the
+  // virtualizer directly. align: 'center' keeps the current match
+  // visually obvious without snapping to the edge.
   const handleFindActivate = useCallback(
     (m: { rowIdx: number; colIdx: number }) => {
       setSelection({
         anchor: { rowIdx: m.rowIdx, colIdx: m.colIdx },
         active: { rowIdx: m.rowIdx, colIdx: m.colIdx },
       })
+      try {
+        rowVirtualizer.scrollToIndex(m.rowIdx, { align: 'center' })
+      } catch {
+        // virtualizer may not be ready (initial mount race) — silent
+        // fallback: the selection move alone usually nudges the
+        // overscan window enough to reveal the row.
+      }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
 
@@ -3849,6 +3886,7 @@ export default function BulkOperationsClient() {
                 rowIdx={vRow.index}
                 top={vRow.start}
                 columnsKey={columnsKey}
+                findMatchSig={findMatchSigByRow.get(vRow.index)}
               />
             )
           })}
