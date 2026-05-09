@@ -1313,22 +1313,25 @@ function InsightsPanel({
         <div className="inline-flex items-center gap-2">
           <Lightbulb size={14} className="text-amber-500" />
           <span className="text-md font-semibold text-slate-900 dark:text-slate-100">Insights</span>
-          <span className="text-sm text-slate-500 dark:text-slate-400">
+          {/* T.29 — polite live region: signal counts change in
+              real time as the cron flips conflicts; screen-reader
+              users hear the new total without re-focusing. */}
+          <span className="text-sm text-slate-500 dark:text-slate-400" role="status" aria-live="polite" aria-atomic="true">
             {insights.stockoutRisk.length > 0 && (
               <span className="inline-flex items-center gap-1 mr-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" aria-hidden="true" />
                 {insights.stockoutRisk.length} at-risk
               </span>
             )}
             {insights.allocationGaps.length > 0 && (
               <span className="inline-flex items-center gap-1 mr-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500" aria-hidden="true" />
                 {insights.allocationGaps.length} allocation gap{insights.allocationGaps.length === 1 ? '' : 's'}
               </span>
             )}
             {insights.syncConflicts.length > 0 && (
               <span className="inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" aria-hidden="true" />
                 {insights.syncConflicts.length} sync diff{insights.syncConflicts.length === 1 ? '' : 's'} (24h)
               </span>
             )}
@@ -2562,20 +2565,32 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
     fbaConfiguredButDisabled ? 'FBA cron off' :
     'Synced'
 
+  // T.29 — sync status changes are operationally important; surface
+  // via aria-live so screen-reader users hear "3 failed" the moment
+  // it appears, not just on next focus pass.
+  const ariaState = failed ? 'failed' : stale ? 'stale' : fbaConfiguredButDisabled ? 'disabled' : 'healthy'
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className={`h-11 sm:h-8 px-2.5 text-sm border rounded inline-flex items-center gap-1.5 font-medium ${tone}`}
         title="Sync engine status"
+        aria-label={`Sync engine status: ${ariaState} — ${label}`}
+        aria-expanded={open}
       >
-        <span className={`w-1.5 h-1.5 rounded-full ${
-          failed ? 'bg-rose-500' :
-          stale ? 'bg-amber-500' :
-          fbaConfiguredButDisabled ? 'bg-slate-400' :
-          'bg-emerald-500 animate-pulse'
-        }`} />
-        {label}
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            failed ? 'bg-rose-500' :
+            stale ? 'bg-amber-500' :
+            fbaConfiguredButDisabled ? 'bg-slate-400' :
+            'bg-emerald-500 animate-pulse'
+          }`}
+          aria-hidden="true"
+        />
+        <span role="status" aria-live="polite" aria-atomic="true">
+          {label}
+        </span>
       </button>
       {open && (
         <div
