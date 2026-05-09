@@ -271,15 +271,36 @@ export class AlertService {
   }
 
   /**
-   * Log alert history
+   * Log alert history.
+   *
+   * Persists each lifecycle transition (CREATED → ACKNOWLEDGED →
+   * RESOLVED, or escalations between) into AuditLog with
+   * entityType='MonitoringAlert' so the existing audit viewer +
+   * forensics tooling cover monitoring alerts the same way they
+   * cover product/order edits. Fail-open: audit-write failures
+   * don't propagate; the in-memory state is the source of truth
+   * for live alerts and the DB row is for after-the-fact review.
    */
   private async logAlertHistory(
     alertId: string,
     action: 'CREATED' | 'ACKNOWLEDGED' | 'RESOLVED' | 'ESCALATED',
     details?: Record<string, any>
   ): Promise<void> {
-    // TODO: Store in database
-    console.log(`[ALERT_HISTORY] ${alertId}: ${action}`, details)
+    try {
+      await prisma.auditLog.create({
+        data: {
+          entityType: 'MonitoringAlert',
+          entityId: alertId,
+          action: `monitoring-alert-${action.toLowerCase()}`,
+          metadata: details ? (details as any) : undefined,
+        },
+      })
+    } catch (err) {
+      console.warn(
+        `[ALERT_HISTORY] persist failed for ${alertId}:${action}`,
+        err instanceof Error ? err.message : err,
+      )
+    }
   }
 
   /**

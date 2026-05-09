@@ -1420,8 +1420,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // bin has a who-deleted-when trail. Cascading channel teardown is
   // intentionally NOT triggered here — operators may restore within
   // minutes; we keep ChannelListings dormant rather than tearing
-  // them down + needing to recreate. A separate hard-purge job
-  // cleans up rows with deletedAt > 30 days old (TODO).
+  // them down + needing to recreate. The hard-purge job
+  // (jobs/purge-soft-deleted-products.job.ts) cleans up rows with
+  // deletedAt > 30 days old; registered in cron-registry as
+  // 'purge-soft-deleted-products'.
   //
   // Cap: 200 ids per call, mirroring bulk-status.
   // ═══════════════════════════════════════════════════════════════════
