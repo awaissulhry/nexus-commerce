@@ -757,16 +757,18 @@ export default function SyncLogsHubClient({
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byChannel.map((c) => (
-                        <li
-                          key={c.channel}
-                          className="text-sm flex justify-between"
-                        >
-                          <span className="font-medium text-slate-700 dark:text-slate-300">
-                            {c.channel}
-                          </span>
-                          <span className="font-mono text-slate-500 dark:text-slate-500">
-                            {c.count.toLocaleString()}
-                          </span>
+                        <li key={c.channel}>
+                          <Link
+                            href={`/sync-logs/api-calls?channel=${encodeURIComponent(c.channel)}`}
+                            className="text-sm flex justify-between hover:bg-slate-50 dark:hover:bg-slate-800 -mx-1 px-1 rounded transition-colors"
+                          >
+                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                              {c.channel}
+                            </span>
+                            <span className="font-mono text-slate-500 dark:text-slate-500">
+                              {c.count.toLocaleString()}
+                            </span>
+                          </Link>
                         </li>
                       ))}
                     </ul>
@@ -783,16 +785,18 @@ export default function SyncLogsHubClient({
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byOperation.slice(0, 5).map((o) => (
-                        <li
-                          key={o.operation}
-                          className="text-sm flex justify-between gap-2"
-                        >
-                          <span className="font-mono text-slate-700 dark:text-slate-300 truncate">
-                            {o.operation}
-                          </span>
-                          <span className="font-mono text-slate-500 dark:text-slate-500 whitespace-nowrap">
-                            {o.count.toLocaleString()}
-                          </span>
+                        <li key={o.operation}>
+                          <Link
+                            href={`/sync-logs/api-calls?operation=${encodeURIComponent(o.operation)}`}
+                            className="text-sm flex justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 -mx-1 px-1 rounded transition-colors"
+                          >
+                            <span className="font-mono text-slate-700 dark:text-slate-300 truncate">
+                              {o.operation}
+                            </span>
+                            <span className="font-mono text-slate-500 dark:text-slate-500 whitespace-nowrap">
+                              {o.count.toLocaleString()}
+                            </span>
+                          </Link>
                         </li>
                       ))}
                     </ul>

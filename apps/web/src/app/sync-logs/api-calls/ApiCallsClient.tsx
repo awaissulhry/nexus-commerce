@@ -111,6 +111,7 @@ export default function ApiCallsClient() {
   const urlErrorType = searchParams.get('errorType') ?? ''
   const urlSuccess = searchParams.get('success') ?? ''
   const urlRequestId = searchParams.get('requestId') ?? ''
+  const urlOperation = searchParams.get('operation') ?? ''
 
   const [rollup, setRollup] = useState<RollupResponse | null>(null)
   const [recent, setRecent] = useState<ApiCallRow[]>([])
@@ -162,6 +163,7 @@ export default function ApiCallsClient() {
         if (urlErrorType) filters.errorType = urlErrorType
         if (urlSuccess) filters.success = urlSuccess
         if (urlRequestId) filters.requestId = urlRequestId
+        if (urlOperation) filters.operation = urlOperation
 
         const qs = new URLSearchParams(filters)
         const recentParams = new URLSearchParams(qs)
@@ -207,7 +209,7 @@ export default function ApiCallsClient() {
         else setLoadingMore(false)
       }
     },
-    [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, nextCursor],
+    [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, urlOperation, nextCursor],
   )
 
   useEffect(() => {
@@ -215,7 +217,7 @@ export default function ApiCallsClient() {
     // fetchAll changes when filters change; avoid loop by depending only
     // on filter inputs, not nextCursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId])
+  }, [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, urlOperation])
 
   // L.7.0 — live tail. Opens an EventSource against the backend SSE
   // endpoint while `live` is true. Each api-call.recorded event is
@@ -384,6 +386,21 @@ export default function ApiCallsClient() {
             Failures only
           </button>
 
+          {/* L.14.1 — operation chip. Visible only when filtering by
+              a specific operation (set via deep-link from the hub
+              byOperation list); click X to clear. */}
+          {urlOperation && (
+            <button
+              type="button"
+              onClick={() => updateUrl({ operation: '' })}
+              className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
+              title="Clear operation filter"
+            >
+              op: {urlOperation}
+              <X className="w-3 h-3" />
+            </button>
+          )}
+
           {/* L.12.0 — request-id chip. Visible only when filtering
               by a specific request; click X to clear. */}
           {urlRequestId && (
@@ -518,7 +535,7 @@ export default function ApiCallsClient() {
         <TimeSeriesChart
           sinceMs={sinceMs}
           channel={urlChannel}
-          operation=""
+          operation={urlOperation}
         />
       )}
 
