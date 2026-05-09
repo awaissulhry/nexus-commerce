@@ -3,6 +3,7 @@
 import { Fragment } from 'react'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { STEPS } from '../lib/steps'
 
 interface Props {
@@ -35,6 +36,7 @@ export default function WizardStepper({
   blockerCounts,
   onStepClick,
 }: Props) {
+  const { t } = useTranslations()
   // NN.15 — accessibility. Stepper is a single-select tablist by
   // semantics. aria-current marks the active step so screen readers
   // announce 'current page' / 'current step' on focus. Step labels
@@ -42,7 +44,7 @@ export default function WizardStepper({
   // the human title.
   return (
     <nav
-      aria-label="Listing wizard steps"
+      aria-label={t('listWizard.stepper.aria.steps')}
       className="flex items-center justify-center px-6 py-3 border-b border-slate-200 bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-950"
     >
       <ol
@@ -64,31 +66,52 @@ export default function WizardStepper({
                 // C.0 / A9 — per-step blocker badge.
                 const blockers = blockerCounts?.[step.id] ?? 0
                 const showBadge = blockers > 0 && !isCurrent
+                const ariaSuffix = isCompleted
+                  ? t('listWizard.stepper.aria.completedSuffix')
+                  : isSkipped
+                    ? t('listWizard.stepper.aria.skippedSuffix')
+                    : ''
+                const blockerSuffix = showBadge
+                  ? t(
+                      blockers === 1
+                        ? 'listWizard.stepper.aria.blockerSuffixOne'
+                        : 'listWizard.stepper.aria.blockerSuffixOther',
+                      { n: blockers },
+                    )
+                  : ''
+                const titleStr = isSkipped
+                  ? t('listWizard.stepper.title.skipped', {
+                      id: step.id,
+                      title: step.title,
+                    })
+                  : showBadge
+                    ? t(
+                        blockers === 1
+                          ? 'listWizard.stepper.title.withBlockerOne'
+                          : 'listWizard.stepper.title.withBlockerOther',
+                        { id: step.id, title: step.title, n: blockers },
+                      )
+                    : t('listWizard.stepper.title.plain', {
+                        id: step.id,
+                        title: step.title,
+                      })
                 return (
                   <button
                     type="button"
                     role="tab"
                     aria-selected={isCurrent}
                     aria-current={isCurrent ? 'step' : undefined}
-                    aria-label={`Step ${step.id} of ${STEPS.length}: ${step.title}${
-                      isCompleted ? ' (completed)' : isSkipped ? ' (skipped)' : ''
-                    }${
-                      showBadge
-                        ? ` — ${blockers} blocker${blockers === 1 ? '' : 's'}`
-                        : ''
-                    }`}
+                    aria-label={`${t('listWizard.stepper.aria.step', {
+                      n: step.id,
+                      total: STEPS.length,
+                      title: step.title,
+                    })}${ariaSuffix}${blockerSuffix}`}
                     tabIndex={isCurrent ? 0 : -1}
                     onClick={() => {
                       if (isClickable && !isCurrent) onStepClick(step.id)
                     }}
                     disabled={!isClickable}
-                    title={
-                      isSkipped
-                        ? `Step ${step.id}: ${step.title} (auto-skipped)`
-                        : showBadge
-                          ? `Step ${step.id}: ${step.title} — ${blockers} blocker${blockers === 1 ? '' : 's'}`
-                          : `Step ${step.id}: ${step.title}`
-                    }
+                    title={titleStr}
                     className={cn(
                       'relative flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium transition-colors flex-shrink-0',
                       isCurrent &&

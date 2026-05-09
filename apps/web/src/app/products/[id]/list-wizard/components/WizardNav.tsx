@@ -11,7 +11,10 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { STEPS } from '../lib/steps'
+
+type Translator = ReturnType<typeof useTranslations>['t']
 
 interface Props {
   currentStep: number
@@ -48,19 +51,38 @@ interface Props {
 }
 
 function buildBlockerSummary(
+  t: Translator,
   blockerCount: number | undefined,
   reasons: string[] | undefined,
 ): string | undefined {
   if (!blockerCount || blockerCount <= 0) return undefined
+  // Compose the count fragment with singular/plural picked from the
+  // catalog rather than English's '' / 's' suffix shortcut so Italian
+  // reads as "1 blocco" / "2 blocchi" instead of "1 blockers".
+  const countFragment = t(
+    blockerCount === 1
+      ? 'listWizard.nav.blockerCountOne'
+      : 'listWizard.nav.blockerCountOther',
+    { n: blockerCount },
+  )
   const top = (reasons ?? []).slice(0, 3)
   if (top.length === 0) {
-    return `${blockerCount} blocker${blockerCount === 1 ? '' : 's'} prevent Continue.`
+    return t('listWizard.nav.blockerSummaryNoReasons', { count: countFragment })
   }
-  const more =
-    reasons && reasons.length > top.length
-      ? ` and ${reasons.length - top.length} more`
-      : ''
-  return `${blockerCount} blocker${blockerCount === 1 ? '' : 's'}: ${top.join('; ')}${more}.`
+  const reasonsText = top.join('; ')
+  const more = reasons && reasons.length > top.length
+    ? reasons.length - top.length
+    : 0
+  return more > 0
+    ? t('listWizard.nav.blockerSummaryWithTopAndMore', {
+        count: countFragment,
+        reasons: reasonsText,
+        more,
+      })
+    : t('listWizard.nav.blockerSummaryWithTop', {
+        count: countFragment,
+        reasons: reasonsText,
+      })
 }
 
 // A7 — compact mm:ss formatter for the time-on-step pill.
@@ -84,11 +106,12 @@ export default function WizardNav({
   onDiscard,
   timeOnStepSeconds,
 }: Props) {
+  const { t } = useTranslations()
   const isFirst = currentStep <= 1
   const isLast = currentStep >= STEPS.length
   const isGated = !!continueDisabled && !isLast
   const showBlockerPill = isGated && (blockerCount ?? 0) > 0
-  const blockerSummary = buildBlockerSummary(blockerCount, blockerReasons)
+  const blockerSummary = buildBlockerSummary(t, blockerCount, blockerReasons)
 
   // Bug #1 — useId() so the pill's aria-describedby target is unique
   // even if two WizardNavs ever co-render in the same tree.
@@ -127,9 +150,9 @@ export default function WizardNav({
         {isGated && blockerSummary
           ? blockerSummary
           : isLast
-            ? 'Final step.'
+            ? t('listWizard.nav.finalStepAlert')
             : saveState === 'error'
-              ? 'Save failed.'
+              ? t('listWizard.nav.saveFailedAlert')
               : ''}
       </div>
 
@@ -139,13 +162,13 @@ export default function WizardNav({
           onClick={onSaveAndExit}
           className="hover:text-slate-900 dark:hover:text-slate-100"
         >
-          Save & exit
+          {t('listWizard.nav.saveExit')}
         </button>
         {onDiscard && (
           <>
             <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
             <Tooltip
-              content="Discard this draft (the wizard will be removed)"
+              content={t('listWizard.nav.discardTooltip')}
               placement="top"
             >
               <button
@@ -153,7 +176,7 @@ export default function WizardNav({
                 onClick={onDiscard}
                 className="text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300"
               >
-                Discard
+                {t('listWizard.nav.discard')}
               </button>
             </Tooltip>
           </>
@@ -167,18 +190,21 @@ export default function WizardNav({
           {saveState === 'saving' && (
             <>
               <Loader2 className="w-3 h-3 animate-spin" />
-              Saving…
+              {t('listWizard.nav.saving')}
             </>
           )}
           {saveState === 'saved' && (
             <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="w-3 h-3" />
-              Saved
+              {t('listWizard.nav.saved')}
             </span>
           )}
           {saveState === 'idle' && (
             <span className="tabular-nums">
-              Step {currentStep} of {STEPS.length}
+              {t('listWizard.nav.stepXofN', {
+                n: currentStep,
+                total: STEPS.length,
+              })}
               {typeof timeOnStepSeconds === 'number' &&
                 timeOnStepSeconds >= 30 && (
                   <span className="ml-2 text-slate-400 dark:text-slate-500" aria-hidden="true">
@@ -190,7 +216,7 @@ export default function WizardNav({
           {saveState === 'error' && (
             <span className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400">
               <AlertCircle className="w-3 h-3" />
-              Save failed
+              {t('listWizard.nav.saveFailed')}
             </span>
           )}
         </span>
@@ -203,7 +229,7 @@ export default function WizardNav({
           disabled={isFirst}
         >
           <ChevronLeft className="w-3.5 h-3.5 mr-0.5" />
-          Back
+          {t('listWizard.nav.back')}
         </Button>
         {/* U.10 — kbd hint for the existing ⌘← / ⌘→ shortcuts wired
             in ListWizardClient. Surfacing them in the nav makes them
@@ -211,7 +237,7 @@ export default function WizardNav({
         <span
           className="hidden md:inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
           aria-hidden="true"
-          title="Use ⌘← / ⌘→ to step through (Ctrl on Windows/Linux)"
+          title={t('listWizard.nav.kbdHint')}
         >
           <kbd className="font-mono px-1 py-px bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500 dark:text-slate-400">⌘←</kbd>
           <kbd className="font-mono px-1 py-px bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500 dark:text-slate-400">⌘→</kbd>
@@ -243,7 +269,9 @@ export default function WizardNav({
                 'opacity-60 cursor-not-allowed hover:opacity-60',
             )}
           >
-            {isLast ? 'Final step' : 'Continue'}
+            {isLast
+              ? t('listWizard.nav.finalStep')
+              : t('listWizard.nav.continue')}
             {showBlockerPill && (
               <span
                 id={blockersId}

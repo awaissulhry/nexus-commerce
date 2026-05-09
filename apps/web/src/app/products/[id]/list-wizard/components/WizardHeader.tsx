@@ -5,6 +5,7 @@ import { ArrowLeft, X } from 'lucide-react'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { CHANNEL_TONE } from '@/lib/theme'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ChannelTuple } from '../ListWizardClient'
 
 interface Props {
@@ -29,13 +30,14 @@ export default function WizardHeader({
   channels,
   onClose,
 }: Props) {
+  const { t } = useTranslations()
   return (
     <div className="px-6 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-4 flex-shrink-0 dark:border-slate-800 dark:bg-slate-950">
       <div className="flex items-center gap-3 min-w-0">
         <Link
           href={`/products/${productId}/edit`}
           className="text-slate-400 hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
-          aria-label="Back to product"
+          aria-label={t('listWizard.header.backToProduct')}
         >
           <ArrowLeft className="w-4 h-4" />
         </Link>
@@ -58,7 +60,7 @@ export default function WizardHeader({
           type="button"
           onClick={onClose}
           className="text-slate-400 hover:text-slate-700 rounded p-1 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800"
-          aria-label="Close wizard"
+          aria-label={t('listWizard.header.closeWizard')}
         >
           <X className="w-4 h-4" />
         </button>
@@ -68,10 +70,11 @@ export default function WizardHeader({
 }
 
 function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
+  const { t } = useTranslations()
   if (channels.length === 0) {
     return (
       <span className="text-base text-slate-400 italic dark:text-slate-500">
-        No channels picked yet
+        {t('listWizard.header.noChannels')}
       </span>
     )
   }
@@ -102,7 +105,9 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap" title={summary}>
       <span className="text-sm text-slate-500 dark:text-slate-400">
-        {channels.length === 1 ? 'Listing on' : `${channels.length} channels:`}
+        {channels.length === 1
+          ? t('listWizard.header.listingOn')
+          : t('listWizard.header.channelsCount', { n: channels.length })}
       </span>
       {visibleChannels.map((c, i) => {
         const tone =
@@ -137,7 +142,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
           className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
           title={summary}
         >
-          +{overflow} more
+          {t('listWizard.header.overflow', { n: overflow })}
         </span>
       )}
     </div>
