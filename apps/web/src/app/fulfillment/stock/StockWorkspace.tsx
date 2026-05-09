@@ -1517,7 +1517,7 @@ function InsightsPanel({
             iconTone="text-rose-500"
             title="Stockout risk"
             description="Products at zero or critically low. Reorder before a customer hits a 'unavailable' page."
-            cta={{ label: 'Open replenishment', href: '/fulfillment/replenishment' }}
+            cta={{ label: 'Open replenishment', href: '/fulfillment/replenishment?filter=CRITICAL' }}
             empty="No SKUs at risk"
           >
             {insights.stockoutRisk.slice(0, 5).map((p) => (
