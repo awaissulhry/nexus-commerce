@@ -66,12 +66,19 @@ const STATUS_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' |
   ON_HOLD: 'warning',
 }
 
+// F1.10 — IN_FLIGHT is a pseudo-status surfaced as a pipeline chip.
+// API translates it to status IN (LABEL_PRINTED, IN_TRANSIT) so the
+// operator gets a single "with the carrier" view instead of
+// toggling between two narrow filters. The aggregated count is
+// computed client-side (counts is a per-row aggregate, not a server
+// fetch).
 const PIPELINE: Array<{ key: string; tKey: string }> = [
   { key: 'ALL', tKey: 'outbound.shipments.pipeline.all' },
   { key: 'DRAFT', tKey: 'outbound.shipments.pipeline.draft' },
   { key: 'READY_TO_PICK', tKey: 'outbound.shipments.pipeline.ready' },
   { key: 'ON_HOLD', tKey: 'outbound.shipments.pipeline.onHold' },
   { key: 'LABEL_PRINTED', tKey: 'outbound.shipments.pipeline.labeled' },
+  { key: 'IN_FLIGHT', tKey: 'outbound.shipments.pipeline.inFlight' },
   { key: 'SHIPPED', tKey: 'outbound.shipments.pipeline.shipped' },
   { key: 'DELIVERED', tKey: 'outbound.shipments.pipeline.delivered' },
 ]
@@ -134,6 +141,11 @@ export default function ShipmentsClient() {
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: items.length }
     for (const it of items) c[it.status] = (c[it.status] ?? 0) + 1
+    // F1.10 — derived IN_FLIGHT aggregate. Counts only reflect what's
+    // currently loaded (matching the active filter); when statusFilter
+    // is something else we still surface a meaningful aggregate
+    // because the next click will refetch with the IN_FLIGHT filter.
+    c.IN_FLIGHT = (c.LABEL_PRINTED ?? 0) + (c.IN_TRANSIT ?? 0)
     return c
   }, [items])
 

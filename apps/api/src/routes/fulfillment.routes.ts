@@ -897,7 +897,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const page = Math.max(1, safeNum(q.page, 1) ?? 1)
       const pageSize = Math.min(200, safeNum(q.pageSize, 50) ?? 50)
       const where: any = {}
-      if (q.status && q.status !== 'ALL') where.status = q.status
+      if (q.status && q.status !== 'ALL') {
+        // F1.10 — IN_FLIGHT pseudo-status. Operationally an aggregate
+        // of "label is with the carrier but hasn't been delivered" —
+        // covers LABEL_PRINTED (still in our hands or just collected)
+        // + IN_TRANSIT (carrier-confirmed pickup). Lets the operator
+        // watch the carrier-side window for any deadline risk in one
+        // view instead of toggling between two filter chips.
+        if (q.status === 'IN_FLIGHT') {
+          where.status = { in: ['LABEL_PRINTED', 'IN_TRANSIT'] }
+        } else {
+          where.status = q.status
+        }
+      }
       if (q.carrierCode) where.carrierCode = q.carrierCode
       if (q.search?.trim()) {
         where.OR = [
@@ -8053,6 +8065,138 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       reply.header('Cache-Control', 'private, max-age=30')
       return { totals, rows: filtered }
+    },
+  )
+
+  // W6.2 — Slow-mover action endpoints. Closes the loop on the W6.1
+  // dashboard: instead of just surfacing dormant inventory, the
+  // operator can route a markdown suggestion to /pricing or flag a
+  // write-off candidate. v0 records the intent via Notification —
+  // actual price changes still happen through the pricing surface
+  // so existing approval gates apply.
+
+  fastify.post(
+    '/fulfillment/replenishment/slow-movers/:productId/suggest-markdown',
+    async (request, reply) => {
+      const { productId } = request.params as { productId: string }
+      const body = (request.body ?? {}) as {
+        discountPercent?: number
+        reason?: string
+        userId?: string
+      }
+      const discount = body.discountPercent ?? 10
+      if (!Number.isFinite(discount) || discount <= 0 || discount >= 100) {
+        return reply
+          .code(400)
+          .send({ error: 'discountPercent must be between 0 and 100 (exclusive)' })
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true, sku: true, name: true, totalStock: true, abcClass: true },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const notification = await prisma.notification.create({
+        data: {
+          userId: body.userId ?? 'default-user',
+          type: 'markdown-suggestion',
+          severity: 'info',
+          title: `Markdown suggested: ${product.sku} (-${discount}%)`,
+          body:
+            body.reason ??
+            `${product.name ?? product.sku} flagged as ${product.abcClass ?? 'D'}-class slow-mover with ${product.totalStock} units in stock. Suggested ${discount}% markdown.`,
+          entityType: 'Product',
+          entityId: product.id,
+          meta: {
+            source: 'replenishment.slowMovers',
+            discountPercent: discount,
+            sku: product.sku,
+            stockUnits: product.totalStock,
+            abcClass: product.abcClass,
+          } as object,
+          href: `/pricing/${product.id}`,
+        },
+        select: { id: true },
+      })
+
+      fastify.log.info(
+        {
+          productId,
+          sku: product.sku,
+          discountPercent: discount,
+          userId: body.userId,
+        },
+        '[replenishment/slow-movers] markdown suggested',
+      )
+
+      return {
+        ok: true,
+        notificationId: notification.id,
+        productId: product.id,
+        sku: product.sku,
+        discountPercent: discount,
+      }
+    },
+  )
+
+  fastify.post(
+    '/fulfillment/replenishment/slow-movers/:productId/flag-write-off',
+    async (request, reply) => {
+      const { productId } = request.params as { productId: string }
+      const body = (request.body ?? {}) as {
+        reason?: string
+        userId?: string
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true, sku: true, name: true, totalStock: true, abcClass: true },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const notification = await prisma.notification.create({
+        data: {
+          userId: body.userId ?? 'default-user',
+          type: 'write-off-candidate',
+          severity: 'warn',
+          title: `Write-off candidate: ${product.sku}`,
+          body:
+            body.reason ??
+            `${product.name ?? product.sku} (${product.abcClass ?? 'D'}-class, ${product.totalStock} units) flagged as a write-off candidate. Review the product detail to confirm or dismiss.`,
+          entityType: 'Product',
+          entityId: product.id,
+          meta: {
+            source: 'replenishment.slowMovers',
+            sku: product.sku,
+            stockUnits: product.totalStock,
+            abcClass: product.abcClass,
+            reason: body.reason ?? null,
+          } as object,
+          href: `/products/${product.id}`,
+        },
+        select: { id: true },
+      })
+
+      fastify.log.warn(
+        {
+          productId,
+          sku: product.sku,
+          userId: body.userId,
+        },
+        '[replenishment/slow-movers] write-off candidate flagged',
+      )
+
+      return {
+        ok: true,
+        notificationId: notification.id,
+        productId: product.id,
+        sku: product.sku,
+      }
     },
   )
 

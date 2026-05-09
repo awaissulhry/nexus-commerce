@@ -280,6 +280,7 @@
   "outbound.shipments.pipeline.draft": "Draft",
   "outbound.shipments.pipeline.ready": "Ready",
   "outbound.shipments.pipeline.labeled": "Labeled",
+  "outbound.shipments.pipeline.inFlight": "In-Flight",
   "outbound.shipments.pipeline.shipped": "Shipped",
   "outbound.shipments.pipeline.delivered": "Delivered",
   "outbound.shipments.pipeline.onHold": "On hold",
