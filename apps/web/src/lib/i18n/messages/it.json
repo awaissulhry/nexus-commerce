@@ -1628,6 +1628,8 @@
   "overview.relTime.minutes": "{n}m fa",
   "overview.relTime.hours": "{n}h fa",
 
+  "overview.live.on": "Live",
+  "overview.live.off": "Live off",
   "overview.activity.live": "live",
   "overview.activity.paused": "in pausa",
   "overview.activity.connecting": "connessione…",

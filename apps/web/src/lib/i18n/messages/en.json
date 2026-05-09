@@ -1640,6 +1640,8 @@
   "overview.relTime.minutes": "{n}m ago",
   "overview.relTime.hours": "{n}h ago",
 
+  "overview.live.on": "Live",
+  "overview.live.off": "Live off",
   "overview.activity.live": "live",
   "overview.activity.paused": "paused",
   "overview.activity.connecting": "connecting…",

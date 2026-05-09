@@ -1,6 +1,6 @@
 'use client'
 
-import { RefreshCw } from 'lucide-react'
+import { CircleDot, RefreshCw } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,8 @@ export default function Header({
   onWindowChange,
   currentCompare,
   onCompareChange,
+  liveMode,
+  onLiveModeChange,
   lastRefreshed,
   refreshing,
   onRefresh,
@@ -38,6 +40,8 @@ export default function Header({
   onWindowChange: (w: WindowKey) => void
   currentCompare: CompareKey
   onCompareChange: (c: CompareKey) => void
+  liveMode: boolean
+  onLiveModeChange: (next: boolean) => void
   lastRefreshed: number
   refreshing: boolean
   onRefresh: () => void
@@ -94,6 +98,33 @@ export default function Header({
               </option>
             ))}
           </select>
+          {/* DO.16 — live-mode toggle. Stripe-pattern emerald dot
+              when on; dim slate when off. role="switch" gives the
+              right keyboard / screen-reader semantics for a binary
+              toggle (vs a button that suggests one-shot action). */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={liveMode}
+            aria-label={t(liveMode ? 'overview.live.on' : 'overview.live.off')}
+            onClick={() => onLiveModeChange(!liveMode)}
+            title={t(liveMode ? 'overview.live.on' : 'overview.live.off')}
+            className={cn(
+              'inline-flex items-center gap-1.5 h-7 px-2.5 text-sm font-medium rounded-md border transition-colors',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+              liveMode
+                ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
+                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+            )}
+          >
+            <CircleDot
+              className={cn(
+                'w-3 h-3',
+                liveMode && 'animate-pulse',
+              )}
+            />
+            {t(liveMode ? 'overview.live.on' : 'overview.live.off')}
+          </button>
           <Button
             variant="secondary"
             size="sm"

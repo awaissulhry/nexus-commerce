@@ -9,7 +9,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -33,6 +33,13 @@ export default function OverviewClient() {
   const { t } = useTranslations()
   const [window, setWindow] = useState<WindowKey>('30d')
   const [compare, setCompare] = useState<CompareKey>('prev')
+  // DO.16 — Live mode. When on, a second EventSource subscribes to
+  // /api/dashboard/events and triggers a silent refetch on every
+  // event (debounced 2s). When off, only the 60s polling and tab-
+  // focus refresh apply. Default on — Command Center is the
+  // operator's daily landing page; stale numbers there are worse
+  // than a few extra fetches.
+  const [liveMode, setLiveMode] = useState(true)
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -90,6 +97,61 @@ export default function OverviewClient() {
     }
   }, [fetchPayload])
 
+  // DO.16 — live-mode SSE: subscribe to /api/dashboard/events and
+  // trigger a silent refetch on each event. Debounced 2s so a burst
+  // (e.g., 20 listing.synced from one bulk publish) collapses into
+  // a single refresh. ActivityFeed runs its own EventSource for the
+  // event-stream UI; this one is a lightweight subscriber that
+  // doesn't render anything — it just exists to keep the KPI strip
+  // and channel grid honest with reality.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!liveMode) return
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined')
+      return
+    const url = `${getBackendUrl()}/api/dashboard/events`
+    const source = new EventSource(url, { withCredentials: false })
+    const onEvent = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => {
+        if (document.visibilityState === 'visible') {
+          void fetchPayload({ silent: true })
+        }
+      }, 2_000)
+    }
+    // Listen on every named event the dashboard bus emits. Skip
+    // 'ping' — that's keepalive only, not a real change signal.
+    const names = [
+      'order.created',
+      'order.updated',
+      'order.cancelled',
+      'order.shipped',
+      'return.created',
+      'shipment.created',
+      'shipment.updated',
+      'shipment.deleted',
+      'tracking.event',
+      'listing.created',
+      'listing.updated',
+      'listing.deleted',
+      'listing.synced',
+      'wizard.submitted',
+      'inbound.created',
+      'inbound.updated',
+      'inbound.received',
+      'inbound.discrepancy',
+      'inbound.cancelled',
+    ]
+    for (const n of names) source.addEventListener(n, onEvent)
+    return () => {
+      source.close()
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
+    }
+  }, [liveMode, fetchPayload])
+
   return (
     // PageHeader has its own `mb-5`. Keep the section-stack at
     // `space-y-6` but pull it into a sibling div so the header's
@@ -102,6 +164,8 @@ export default function OverviewClient() {
         onWindowChange={setWindow}
         currentCompare={compare}
         onCompareChange={setCompare}
+        liveMode={liveMode}
+        onLiveModeChange={setLiveMode}
         lastRefreshed={lastRefreshed}
         refreshing={refreshing}
         onRefresh={() => void fetchPayload({ silent: true })}
