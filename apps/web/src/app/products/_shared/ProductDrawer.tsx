@@ -428,7 +428,41 @@ export default function ProductDrawer({
             + flex-shrink-0 below so labels never wrap and the row stays
             scannable. Right-edge fade gradient hints at hidden tabs. */}
         <div className="relative">
-          <div className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]">
+          <div
+            role="tablist"
+            aria-label="Product sections"
+            onKeyDown={(e) => {
+              // W5.17 — WAI-ARIA tablist keyboard pattern: arrows move
+              // focus between tabs (left/right wrap), Home/End jump to
+              // ends. Tab itself escapes the tablist (handled by
+              // tabIndex=-1 on inactive tabs). Without this, screen-
+              // reader users can reach tabs but can't navigate between
+              // them — they'd have to Shift-Tab back out + re-Tab in.
+              if (
+                e.key !== 'ArrowLeft' &&
+                e.key !== 'ArrowRight' &&
+                e.key !== 'Home' &&
+                e.key !== 'End'
+              )
+                return
+              const tabs = Array.from(
+                e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+              )
+              if (tabs.length === 0) return
+              const idx = tabs.findIndex((t) => t === document.activeElement)
+              let next = idx
+              if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length
+              else if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length
+              else if (e.key === 'Home') next = 0
+              else if (e.key === 'End') next = tabs.length - 1
+              if (next !== idx) {
+                e.preventDefault()
+                tabs[next]?.click()
+                tabs[next]?.focus()
+              }
+            }}
+            className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]"
+          >
           <DrawerTab active={tab === 'details'} onClick={() => setTab('details')}>
             <Edit3 className="w-3 h-3" /> Details
           </DrawerTab>
@@ -653,6 +687,7 @@ function DrawerTab({
       onClick={onClick}
       role="tab"
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       className={cn(
         // U.60 — whitespace-nowrap stops labels like "Translations"
         // wrapping to two lines when the drawer is at min width;
@@ -2287,7 +2322,8 @@ function ScheduleTab({ productId }: { productId: string }) {
       <div
         role="status"
         aria-live="polite"
-        className="flex items-center justify-center py-12 text-slate-400 dark:text-slate-500 text-base"
+        aria-atomic="true"
+        className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-base"
       >
         <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading
         scheduled changes…
@@ -2298,6 +2334,7 @@ function ScheduleTab({ productId }: { productId: string }) {
     return (
       <div
         role="alert"
+        aria-atomic="true"
         className="m-5 border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300"
       >
         Failed to load scheduled changes: {error}

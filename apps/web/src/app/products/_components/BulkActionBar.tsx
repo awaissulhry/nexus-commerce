@@ -157,9 +157,28 @@ export function BulkActionBar({
       if (pubMenuRef.current && !pubMenuRef.current.contains(e.target as Node))
         setPublishMenuOpen(false)
     }
+    // W5.17 — keyboard equivalent of the outside-click dismiss. Without
+    // this Escape didn't close the menu for screen-reader / keyboard
+    // users (WCAG 2.1.2 No Keyboard Trap edge case + 2.4.3 Focus
+    // Order). Refocusing the trigger button keeps the user oriented.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (tagMenuOpen) {
+        setTagMenuOpen(false)
+        ;(tagMenuRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus()
+      }
+      if (publishMenuOpen) {
+        setPublishMenuOpen(false)
+        ;(pubMenuRef.current?.querySelector('button') as HTMLButtonElement | null)?.focus()
+      }
+    }
     document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [tagMenuOpen, publishMenuOpen])
 
   // U.4 — toast feedback for bulk operations. Was a setStatus()
   // string + inline banner that sat in the bulk action bar and
@@ -343,17 +362,21 @@ export function BulkActionBar({
       <span className="font-normal opacity-90">selected</span>
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-slate-100 text-slate-500 text-sm font-medium tabular-nums dark:bg-slate-800 dark:text-slate-400">
-      <CheckCircle2 size={12} className="opacity-50" />
+    <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-slate-100 text-slate-700 text-sm font-medium tabular-nums dark:bg-slate-800 dark:text-slate-300">
+      <CheckCircle2 size={12} className="opacity-60" />
       0 <span className="font-normal opacity-80">selected</span>
-      <span className="hidden sm:inline text-slate-400 dark:text-slate-500">
+      <span className="hidden sm:inline text-slate-500 dark:text-slate-400">
         — tick rows to bulk-edit
       </span>
     </span>
   )
 
   return (
-    <div className="sticky top-0 z-30 -mx-2 px-2 py-1.5 bg-white/95 backdrop-blur border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-800">
+    <div
+      role="region"
+      aria-label="Bulk actions"
+      className="sticky top-0 z-30 -mx-2 px-2 py-1.5 bg-white/95 backdrop-blur border-b border-slate-200 dark:bg-slate-900/95 dark:border-slate-800"
+    >
       <div className="flex items-center gap-2 flex-wrap">
         {countLabel}
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
@@ -426,13 +449,19 @@ export function BulkActionBar({
               onClick={() => setTagMenuOpen(!tagMenuOpen)}
               disabled={busy || !hasSelection}
               icon={<TagIcon size={12} />}
+              aria-haspopup="menu"
+              aria-expanded={tagMenuOpen}
             >
               Tag <ChevronDown size={10} />
             </Button>
             {tagMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto dark:bg-slate-900 dark:border-slate-800">
+              <div
+                role="menu"
+                aria-label="Tag actions"
+                className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-72 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+              >
                 {allTags.length === 0 ? (
-                  <div className="text-base text-slate-400 dark:text-slate-500 text-center py-3">
+                  <div className="text-base text-slate-500 dark:text-slate-400 text-center py-3">
                     No tags yet — create one from a product detail.
                   </div>
                 ) : (
@@ -452,14 +481,18 @@ export function BulkActionBar({
                       </span>
                       <div className="flex items-center gap-1">
                         <button
+                          role="menuitem"
                           onClick={() => tagBulk('add', [t.id])}
-                          className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+                          aria-label={`Add tag ${t.name} to selected products`}
+                          className="text-xs text-emerald-700 hover:underline dark:text-emerald-300"
                         >
                           add
                         </button>
                         <button
+                          role="menuitem"
                           onClick={() => tagBulk('remove', [t.id])}
-                          className="text-xs text-rose-600 hover:underline dark:text-rose-400"
+                          aria-label={`Remove tag ${t.name} from selected products`}
+                          className="text-xs text-rose-700 hover:underline dark:text-rose-300"
                         >
                           remove
                         </button>
@@ -478,17 +511,24 @@ export function BulkActionBar({
               disabled={busy || !hasSelection}
               className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
               icon={<Eye size={12} />}
+              aria-haspopup="menu"
+              aria-expanded={publishMenuOpen}
             >
               Publish <ChevronDown size={10} />
             </Button>
             {publishMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800">
+              <div
+                role="menu"
+                aria-label="Publish destinations"
+                className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-30 p-2 max-h-96 overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+              >
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
                   Amazon EU
                 </div>
                 {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
                   <button
                     key={`amz-${m}`}
+                    role="menuitem"
                     onClick={() => {
                       publish('AMAZON', m)
                       setPublishMenuOpen(false)
@@ -504,6 +544,7 @@ export function BulkActionBar({
                 {['IT', 'DE', 'FR', 'ES', 'UK'].map((m) => (
                   <button
                     key={`ebay-${m}`}
+                    role="menuitem"
                     onClick={() => {
                       publish('EBAY', m)
                       setPublishMenuOpen(false)
@@ -519,6 +560,7 @@ export function BulkActionBar({
                 {['SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((c) => (
                   <button
                     key={c}
+                    role="menuitem"
                     onClick={() => {
                       publish(c, 'GLOBAL')
                       setPublishMenuOpen(false)
