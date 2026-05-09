@@ -140,6 +140,13 @@ model Product {
   // anonymous-customer / qty=1 fallback.
   tierPrices ProductTierPrice[]
 
+  // ── W4.4 — DAM (Plytix DigitalAsset library) ──────────────────
+  // Back-relation to AssetUsage rows that reference this product.
+  // ProductImage stays as the legacy image storage; AssetUsage layer
+  // sits on top + supports asset reuse across products without a
+  // duplicate upload. Migration plan in a follow-up Wave 4 commit.
+  assetUsages AssetUsage[]
+
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
   minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
@@ -737,6 +744,116 @@ model ProductTierPrice {
   @@unique([productId, minQty, customerGroupId])
   @@index([productId])
   @@index([customerGroupId])
+}
+
+/// W4.4 — DigitalAsset (Plytix-parity DAM library).
+///
+/// Top-level uploaded file (image / video / document / 3d-model).
+/// Distinct from ProductImage (the legacy product-bound image store)
+/// in two key ways:
+///
+///   1. Reusable. One DigitalAsset can be used by N products via
+///      AssetUsage join rows — no duplicate uploads when the same
+///      hero photo applies to a parent + every variant.
+///   2. Metadata-rich. Photographer credit, color tags, alt text,
+///      captions live in metadata JSON; per-asset versioning + asset
+///      groups (e.g., 'spring-2026 catalog') come in follow-up
+///      commits.
+///
+/// Storage is provider-pluggable (`storageProvider` enum stored as
+/// string: 'cloudinary' / 's3' / 'r2' / 'local'). The resolver
+/// returns `url` for clients; `storageId` is the provider-specific
+/// reference for delete + variant generation.
+///
+/// Migration plan: ProductImage rows can be backfilled into
+/// DigitalAsset + AssetUsage by a one-shot script (Wave 4 follow-up
+/// commit). Until then, both paths coexist.
+model DigitalAsset {
+  id            String  @id @default(cuid())
+  // Operator-facing slug ('xavia-jacket-hero-front'). Optional —
+  // useful when the operator wants to refer to the asset by name,
+  // but not required (most uploads have no operator-set code).
+  code          String? @unique
+  // Operator-facing label (filename or curator-set name).
+  label         String
+  // 'image' | 'video' | 'document' | 'model3d'. Stored as string
+  // (not enum) so future asset types don't need a migration.
+  type          String  @default("image")
+  mimeType      String  // 'image/jpeg', 'video/mp4', etc.
+  sizeBytes     Int
+  // Provider-specific. 'cloudinary' is canonical for the Xavia
+  // catalog; 's3'/'r2' planned for video + document storage.
+  storageProvider String @default("cloudinary")
+  // Provider-specific identifier (Cloudinary public_id, S3 key).
+  storageId     String
+  // Public URL — what the client renders. Source of truth is
+  // storageProvider + storageId; url is denormalised for quick reads.
+  url           String
+
+  // Original filename at upload time (for download / "is this still
+  // the right photo?" diffing).
+  originalFilename String?
+
+  // Free-form metadata: alt text, photographer credit, color tags,
+  // dominant colors, captions, etc. JSON keeps the schema flexible
+  // until we identify access patterns that warrant a dedicated
+  // column.
+  metadata Json?
+
+  // Back-relation to usages.
+  usages AssetUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+}
+
+/// W4.4 — AssetUsage (DAM join layer).
+///
+/// "This asset is used by Product X as the MAIN image" — one row
+/// per (asset, scope-entity, role). Scopes are intentionally loose
+/// strings instead of an enum so the model can accept future
+/// scopes (channel-listing-specific assets, translation-specific
+/// assets, marketing-collateral-only assets) without migrations.
+///
+/// Cascade rules:
+///   asset → CASCADE (usages reference an asset; deleting the asset
+///                    drops them)
+///   product → CASCADE (when scope='product', product delete drops
+///                      its usages too — explicit FK so the
+///                      cascade is type-safe)
+///
+/// `role` is operator-meaningful — 'main' / 'alt' / 'lifestyle' /
+/// 'hero' / 'detail' / 'packaging'. Stored as string so the per-
+/// channel listing flow can introduce its own role names without
+/// touching the schema.
+///
+/// `sortOrder` controls display order within a (scope, scopeId,
+/// role) group.
+model AssetUsage {
+  id      String @id @default(cuid())
+  assetId String
+  asset   DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  // Scope = which entity uses the asset. 'product' is the only
+  // scope today; productId is the FK target. Future scopes
+  // ('channel_listing', 'translation', 'marketing_campaign') will
+  // gain their own optional FK columns.
+  scope     String  // 'product' for now
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  role      String   // 'main' | 'alt' | 'lifestyle' | 'hero' | 'detail' | 'packaging'
+  sortOrder Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([assetId, scope, productId, role, sortOrder])
+  @@index([assetId])
+  @@index([scope, productId])
+  @@index([productId])
 }
 
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
