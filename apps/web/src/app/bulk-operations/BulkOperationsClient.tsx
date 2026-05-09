@@ -1,4 +1,4 @@
-// @ts-nocheck — U.52 BISECT 3: JSX second half disabled, many unused
+// @ts-nocheck — U.53 BISECT 4: grid disabled, StatusBar + modals rendered
 'use client'
 
 import {
@@ -3474,14 +3474,141 @@ export default function BulkOperationsClient() {
           </div>
         </div>
       </div>
-      {/* U.52 (BISECT 3) — second half of original JSX disabled. The
-          grid (virtualizer + memoised TableRow), StatusBar, and 7
-          modals are not rendered. If sidebar Links navigate now, the
-          bug is in those. If they still die, it's in the toolbar /
-          banners / MarketplaceTabs above. */}
+      {/* U.53 (BISECT 4) — grid stubbed; StatusBar + 7 modals rendered. */}
       <div className="p-4 text-base text-slate-500">
-        BISECT 3 — JSX second half disabled (grid + StatusBar + modals).
+        BISECT 4 — JSX grid (virtualizer + TableRow) disabled. StatusBar + modals enabled.
       </div>
+      <StatusBar
+        status={saveStatus}
+        pendingCount={pendingCount}
+        fetchMs={fetchMs}
+        loading={loading}
+        selectedCellCount={selectedCellCount}
+        selectionMetrics={selectionMetrics}
+        copyFlashCount={copyFlash?.count ?? null}
+      />
+
+      <PreviewChangesModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        changes={changes}
+        products={products}
+      />
+
+      <PastePreviewModal
+        preview={pastePreview}
+        onCancel={cancelPaste}
+        onApply={applyPaste}
+      />
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onApplied={() => {
+          // Refetch products so the grid reflects the saved changes.
+          // Selection + pending edits are local state and unaffected.
+          reloadProducts()
+        }}
+      />
+
+      <BulkOperationModal
+        open={bulkOpModalOpen}
+        onClose={() => {
+          setBulkOpModalOpen(false)
+          // Refresh the grid in case the bulk apply changed visible
+          // rows (price/stock/status/attribute updates).
+          reloadProducts()
+        }}
+        marketplaceTargets={marketplaceTargets}
+        visibleProductIds={products.map((p) => p.id)}
+        selectedProductIds={
+          // P1 #34e — pass the operator's row-range selection as
+          // explicit target IDs so the modal's "Selected rows" scope
+          // mode targets exactly what the grid is highlighting.
+          rangeBounds
+            ? products
+                .slice(rangeBounds.minRow, rangeBounds.maxRow + 1)
+                .map((p) => p.id)
+            : []
+        }
+        currentFilters={(() => {
+          // Map the grid's filterState (status[]/channels[]/stockLevel)
+          // to ScopeFilters. Imperfect but covers the common case.
+          // Channels intentionally not mapped — Product.syncChannels[]
+          // ≠ ChannelListing.marketplace; would need channel-to-marketplace
+          // resolution that's not worth the lift for v1.
+          const scope: {
+            status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE'
+            stockMin?: number
+            stockMax?: number
+          } = {}
+          if (filterState.status.length === 1) {
+            scope.status = filterState.status[0] as
+              | 'DRAFT'
+              | 'ACTIVE'
+              | 'INACTIVE'
+          }
+          if (filterState.stockLevel === 'in') scope.stockMin = 1
+          else if (filterState.stockLevel === 'low') {
+            scope.stockMin = 1
+            scope.stockMax = 5
+          } else if (filterState.stockLevel === 'out') scope.stockMax = 0
+          return scope
+        })()}
+      />
+
+      <CascadeChoiceModal
+        open={cascadeModal !== null}
+        fieldLabel={cascadeModal?.fieldLabel ?? ''}
+        oldValue={cascadeModal?.oldValue}
+        newValue={cascadeModal?.newValue}
+        parentSku={cascadeModal?.parentSku ?? ''}
+        children={cascadeModal?.children ?? []}
+        onApply={handleCascadeApply}
+        onCancel={handleCascadeCancel}
+      />
+
+      <NewProductModal
+        open={newProductOpen}
+        onClose={() => setNewProductOpen(false)}
+        onCreated={() => {
+          // Re-fetch so the new row appears with all the standard
+          // fields the bulk-fetch endpoint hydrates (channel listings,
+          // hierarchy, etc.) — simpler than building that shape locally.
+          void reloadProducts()
+        }}
+        parentCandidates={products
+          .filter((p) => !p.parentId)
+          .map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
+      />
+
+      <ReplicateModal
+        open={replicateOpen}
+        onClose={() => setReplicateOpen(false)}
+        productIds={(() => {
+          // Scope: prefer selected rows when the cell selection
+          // covers >1 row, else fall through to filtered (visible).
+          if (rangeBounds && rangeBounds.maxRow > rangeBounds.minRow) {
+            const ids: string[] = []
+            const rowModel = tableRef.current.getRowModel().rows
+            for (let r = rangeBounds.minRow; r <= rangeBounds.maxRow; r++) {
+              const row = rowModel[r]
+              if (row) ids.push(row.original.id)
+            }
+            return ids
+          }
+          return filteredProducts.map((p) => p.id)
+        })()}
+        scopeLabel={
+          rangeBounds && rangeBounds.maxRow > rangeBounds.minRow
+            ? 'selected rows'
+            : 'visible rows'
+        }
+        options={marketplaceOptions}
+        onReplicated={() => {
+          void reloadProducts()
+        }}
+      />
     </div>
   )
 }
