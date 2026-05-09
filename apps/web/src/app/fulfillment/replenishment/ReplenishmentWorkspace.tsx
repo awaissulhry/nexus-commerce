@@ -63,6 +63,8 @@ import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -238,6 +240,13 @@ export default function ReplenishmentWorkspace() {
   const [data, setData] = useState<ReplenishmentResponse | null>(null)
   const [events, setEvents] = useState<UpcomingEvent[] | null>(null)
   const [loading, setLoading] = useState(true)
+  // W2.2 — replaces window.prompt for dismiss-with-reason. Holds the
+  // pending request; cleared on confirm/cancel. `onConfirm` receives
+  // the trimmed reason or null when the operator left it blank.
+  const [dismissPrompt, setDismissPrompt] = useState<{
+    title: string
+    onConfirm: (reason: string | null) => void
+  } | null>(null)
   // searchInput is local + debounced; the URL param is the persisted value.
   const [searchInput, setSearchInput] = useState(urlSearch)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -460,6 +469,16 @@ export default function ReplenishmentWorkspace() {
     }
   }
 
+  // W2.2 — opens DismissReasonModal with a callback. Replaces 4
+  // window.prompt() callsites with a proper modal that supports dark
+  // mode, focus management, escape-to-cancel, and Italian i18n.
+  const askDismissReason = useCallback(
+    (title: string, onConfirm: (reason: string | null) => void) => {
+      setDismissPrompt({ title, onConfirm })
+    },
+    [],
+  )
+
   // R.21 — Bulk-dismiss every currently-selected recommendation. The
   // backend loops single-id dismiss internally; we get back per-id
   // counts. Toast summarises so operators clearing 200 noisy MEDIUMs
@@ -643,10 +662,12 @@ export default function ReplenishmentWorkspace() {
         }
         if (e.key === 'd') {
           e.preventDefault()
-          const reason = window.prompt(
-            `Dismiss ${focused.sku}? (Reason — optional, helps audit later)`,
+          askDismissReason(
+            t('replenishment.dismiss.titleSku', { sku: focused.sku }),
+            (reason) => {
+              void dismissRow(focused, reason)
+            },
           )
-          if (reason !== null) dismissRow(focused, reason.trim() || null)
           return
         }
       }
@@ -740,6 +761,19 @@ export default function ReplenishmentWorkspace() {
           onChange={(next) => setMarketplaceFilter(next[0] ?? '')}
         />
       </div>
+
+      {/* W2.2 — dismiss-reason modal. Mounted once at the top of the
+          tree; opened imperatively via askDismissReason() from row
+          clicks, the bulk-dismiss button, and the 'd' keyboard shortcut. */}
+      <DismissReasonModal
+        open={dismissPrompt !== null}
+        title={dismissPrompt?.title ?? ''}
+        onClose={() => setDismissPrompt(null)}
+        onConfirm={(reason) => {
+          dismissPrompt?.onConfirm(reason)
+          setDismissPrompt(null)
+        }}
+      />
 
       {/* W1.5 — pipeline health strip. Surfaces foundation-table row
           counts + cron status + a "Run pipeline now" button so silent
@@ -939,15 +973,17 @@ export default function ReplenishmentWorkspace() {
             <button
               type="button"
               onClick={() => {
-                const reason = window.prompt(
-                  `Dismiss ${selectedIds.size} recommendation(s)? (Reason — optional, helps audit later)`,
+                askDismissReason(
+                  t('replenishment.dismiss.titleBulk', { count: selectedIds.size }),
+                  (reason) => {
+                    void bulkDismissSelected(reason)
+                  },
                 )
-                if (reason !== null) bulkDismissSelected(reason.trim() || null)
               }}
               className="h-7 px-3 text-base bg-white text-red-700 border border-red-200 rounded hover:bg-red-50 inline-flex items-center gap-1.5"
-              title="Dismiss all selected recommendations"
+              title={t('replenishment.dismiss.bulkTooltip')}
             >
-              <X size={12} /> Bulk dismiss
+              <X size={12} /> {t('replenishment.dismiss.bulkButton')}
             </button>
             <button
               type="button"
@@ -989,7 +1025,14 @@ export default function ReplenishmentWorkspace() {
               onToggleSelect={() => toggleSelected(s.productId)}
               onOpenDrawer={() => setDrawerProductId(s.productId)}
               onDraftPo={() => draftSinglePo(s)}
-              onDismiss={(reason) => dismissRow(s, reason)}
+              onDismiss={() =>
+                askDismissReason(
+                  t('replenishment.dismiss.titleSku', { sku: s.sku }),
+                  (reason) => {
+                    void dismissRow(s, reason)
+                  },
+                )
+              }
             />
           ))}
         </div>
@@ -1033,7 +1076,14 @@ export default function ReplenishmentWorkspace() {
                     onToggle={() => toggleSelected(s.productId)}
                     onOpenDrawer={() => setDrawerProductId(s.productId)}
                     onDraftPo={() => draftSinglePo(s)}
-                    onDismiss={(reason) => dismissRow(s, reason)}
+                    onDismiss={() =>
+                askDismissReason(
+                  t('replenishment.dismiss.titleSku', { sku: s.sku }),
+                  (reason) => {
+                    void dismissRow(s, reason)
+                  },
+                )
+              }
                   />
                 ))}
               </tbody>
@@ -1228,9 +1278,10 @@ function MobileSuggestionCard({
   onToggleSelect: () => void
   onOpenDrawer: () => void
   onDraftPo: () => void
-  /** R.21 — dismiss this rec. Receives a reason string (or null when
-   *  user declined to provide one). Caller pushes a toast on result. */
-  onDismiss: (reason: string | null) => void
+  /** W2.2 — request to dismiss this rec. Parent opens
+   *  DismissReasonModal, captures the reason, and routes to
+   *  the dismiss endpoint + toast. Row no longer prompts itself. */
+  onDismiss: () => void
 }) {
   const tone = URGENCY_TONE[s.urgency] ?? URGENCY_TONE.LOW
   return (
@@ -1291,12 +1342,7 @@ function MobileSuggestionCard({
           {s.isManufactured ? <><Factory size={11} /> WO</> : <><ShoppingCart size={11} /> PO</>}
         </button>
         <button
-          onClick={() => {
-            const reason = window.prompt(
-              `Dismiss "${s.sku}"? (Reason — optional, helps audit later)`,
-            )
-            if (reason !== null) onDismiss(reason.trim() || null)
-          }}
+          onClick={() => onDismiss()}
           className="h-8 px-2 text-sm border border-red-200 text-red-700 rounded hover:bg-red-50 inline-flex items-center gap-1"
           title="Dismiss this recommendation"
         >
@@ -1379,8 +1425,9 @@ function SuggestionRow({
   onToggle: () => void
   onOpenDrawer: () => void
   onDraftPo: () => void
-  /** R.21 — dismiss this rec. Reason is optional but encouraged. */
-  onDismiss: (reason: string | null) => void
+  /** W2.2 — request to dismiss this rec. Parent opens the
+   *  DismissReasonModal, captures the reason, and dispatches. */
+  onDismiss: () => void
 }) {
   const stockTone =
     s.effectiveStock === 0
@@ -1531,12 +1578,7 @@ function SuggestionRow({
             <span className="text-xs text-slate-400">OK</span>
           )}
           <button
-            onClick={() => {
-              const reason = window.prompt(
-                `Dismiss "${s.sku}"? (Reason — optional, helps audit later)`,
-              )
-              if (reason !== null) onDismiss(reason.trim() || null)
-            }}
+            onClick={() => onDismiss()}
             className="h-7 w-7 flex items-center justify-center text-sm text-slate-400 hover:text-red-700 hover:bg-red-50 border border-transparent hover:border-red-200 rounded"
             title="Dismiss this recommendation"
             aria-label="Dismiss recommendation"
@@ -2219,6 +2261,61 @@ function ChannelCoverPanel({
         })}
       </ul>
     </div>
+  )
+}
+
+// W2.2 — Dismiss-reason prompt. Modal-based replacement for the four
+// window.prompt() callsites that asked for an optional dismiss reason.
+// Centralised so the operator gets focus management, escape-to-cancel,
+// dark mode, and Italian i18n — none of which window.prompt offers.
+function DismissReasonModal({
+  open,
+  title,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  title: string
+  onClose: () => void
+  onConfirm: (reason: string | null) => void
+}) {
+  const { t } = useTranslations()
+  const [reason, setReason] = useState('')
+  // Reset every time the modal opens for a fresh prompt.
+  useEffect(() => {
+    if (open) setReason('')
+  }, [open])
+  return (
+    <Modal open={open} onClose={onClose} title={title} size="md">
+      <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+        {t('replenishment.dismiss.optionalReasonHint')}
+      </p>
+      <textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        rows={3}
+        autoFocus
+        placeholder={t('replenishment.dismiss.placeholder')}
+        aria-label={t('replenishment.dismiss.reasonLabel')}
+        className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        onKeyDown={(e) => {
+          // ⌘+Enter / Ctrl+Enter submits, matching ConfirmDialog ergonomics.
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            onConfirm(reason.trim() || null)
+          }
+        }}
+      />
+      <ModalFooter>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button
+          variant="danger"
+          onClick={() => onConfirm(reason.trim() || null)}
+        >
+          {t('replenishment.dismiss.confirmButton')}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
