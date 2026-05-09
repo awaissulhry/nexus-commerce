@@ -85,6 +85,12 @@
   "drafts.factor.description": "desc",
   "drafts.factor.gtin": "GTIN",
   "drafts.factor.image": "foto",
+  "drafts.aiFill": "Compila con AI",
+  "drafts.aiFillTooltip": "Genera titolo, descrizione, punti elenco e parole chiave",
+  "drafts.aiFillDone": "Compilazione AI completata",
+  "drafts.aiFillFailed": "Compilazione AI fallita",
+  "drafts.aiFillUnavailable": "Provider AI non configurato",
+  "drafts.aiFillRateLimited": "Limite raggiunto — riprova fra un minuto",
 
   "wizard.stepOf": "Passaggio {current} di {total}",
   "wizard.saveAndExit": "Salva ed esci",

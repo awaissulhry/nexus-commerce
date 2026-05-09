@@ -11,7 +11,9 @@ import {
   FileEdit,
   Hourglass,
   Layers,
+  Loader2,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -299,6 +301,24 @@ function KpiTile({
   )
 }
 
+// DR-A.1 — fields the per-row AI fill action targets. Title (name)
+// gets generated when the product is still on the NEW-…/Untitled
+// stub; description always benefits from a regenerate when missing
+// or under-length. Bullets + keywords land in Product columns the
+// downstream wizard reads, so they're worth populating eagerly even
+// when the operator hasn't reached those steps yet.
+const AI_FILL_FIELDS = ['title', 'description', 'bullets', 'keywords'] as const
+
+// Heuristic: AI fill is only useful when there's actually room to
+// fill. Don't show the button on rows that are already 100% — the
+// action would overwrite good data with regenerated text.
+function canAiFill(d: Draft): boolean {
+  if (d.completenessPct >= 100) return false
+  return d.missingFactors.some(
+    (f) => f === 'name' || f === 'description',
+  )
+}
+
 // E.18 — memoized draft row. Was a 150-line inline `<tr>` inside
 // drafts.map(...) which re-rendered every row on every parent state
 // change (selection, search-typing, filter changes). Now extracted
@@ -310,11 +330,15 @@ const DraftRow = memo(function DraftRow({
   isSelected,
   onToggleSelect,
   onDelete,
+  onAiFill,
+  aiFilling,
 }: {
   draft: Draft
   isSelected: boolean
   onToggleSelect: (d: Draft) => void
   onDelete: (d: Draft) => void
+  onAiFill: (d: Draft) => void
+  aiFilling: boolean
 }) {
   // useTranslations() is stable across renders (the t function is
   // memoized in the provider) so the memo equality check holds.
@@ -467,6 +491,28 @@ const DraftRow = memo(function DraftRow({
       </td>
       <td className="px-4 py-2.5 text-right">
         <div className="inline-flex items-center gap-1.5">
+          {/* DR-A.1 — per-row AI fill. Hidden on rows at 100% (no
+              gaps to fill) or where the missing factors are
+              non-AI-fillable (price, brand, etc — those need the
+              operator). Spinner replaces the icon while the call
+              is in flight. */}
+          {canAiFill(d) && (
+            <Tooltip content={t('drafts.aiFillTooltip')} placement="top">
+              <IconButton
+                onClick={() => onAiFill(d)}
+                aria-label={t('drafts.aiFill')}
+                disabled={aiFilling}
+                size="md"
+                className="h-11 w-11 sm:h-7 sm:w-7 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 disabled:opacity-60"
+              >
+                {aiFilling ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip
             content={
               d.kind === 'wizard'
@@ -793,6 +839,93 @@ export default function DraftsClient() {
     [toast, refetch],
   )
 
+  // DR-A.1 — per-row AI fill plumbing. The set tracks which productIds
+  // are currently in-flight so the spinner only shows on the matching
+  // row (operator can fire AI fill on multiple rows in parallel and
+  // each one shows its own state).
+  const [aiBusyIds, setAiBusyIds] = useState<Set<string>>(new Set())
+  const onAiFillRow = useCallback(
+    async (d: Draft) => {
+      if (aiBusyIds.has(d.productId)) return
+      setAiBusyIds((prev) => new Set(prev).add(d.productId))
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/ai/bulk-generate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productIds: [d.productId],
+              fields: AI_FILL_FIELDS,
+              // Awa's primary marketplace; future commit can let the
+              // operator pick when wizard.channels[].marketplace
+              // diverges from IT.
+              marketplace: 'IT',
+            }),
+          },
+        )
+        if (!res.ok) {
+          const json = (await res.json().catch(() => ({}))) as {
+            error?: string
+          }
+          if (res.status === 503) {
+            toast({
+              tone: 'error',
+              title: t('drafts.aiFillUnavailable'),
+              description: json.error,
+            })
+          } else if (res.status === 429) {
+            toast({
+              tone: 'warning',
+              title: t('drafts.aiFillRateLimited'),
+            })
+          } else {
+            toast({
+              tone: 'error',
+              title: t('drafts.aiFillFailed'),
+              description: json.error ?? `HTTP ${res.status}`,
+            })
+          }
+          return
+        }
+        const json = (await res.json()) as {
+          results?: Array<{ ok: boolean; error?: string; written?: string[] }>
+        }
+        const r = json.results?.[0]
+        if (!r?.ok) {
+          toast({
+            tone: 'error',
+            title: t('drafts.aiFillFailed'),
+            description: r?.error,
+          })
+          return
+        }
+        toast({
+          tone: 'success',
+          title: t('drafts.aiFillDone'),
+          description: r.written?.join(', '),
+        })
+        // Cross-tab broadcast + local refresh.
+        emitInvalidation({ type: 'product.updated', id: d.productId })
+        await refetch()
+        await fetchSummary()
+      } catch (err) {
+        toast({
+          tone: 'error',
+          title: t('drafts.aiFillFailed'),
+          description: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        setAiBusyIds((prev) => {
+          const next = new Set(prev)
+          next.delete(d.productId)
+          return next
+        })
+      }
+    },
+    [aiBusyIds, toast, refetch, fetchSummary, t],
+  )
+
   const onDeleteRow = useCallback(
     async (d: Draft) => {
       const ok = await confirm({
@@ -1079,6 +1212,8 @@ export default function DraftsClient() {
                   isSelected={isSelected}
                   onToggleSelect={toggleSelect}
                   onDelete={onDeleteRow}
+                  onAiFill={onAiFillRow}
+                  aiFilling={aiBusyIds.has(d.productId)}
                 />
               )
             })}

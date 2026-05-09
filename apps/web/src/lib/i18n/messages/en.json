@@ -85,6 +85,12 @@
   "drafts.factor.description": "desc",
   "drafts.factor.gtin": "GTIN",
   "drafts.factor.image": "image",
+  "drafts.aiFill": "AI fill",
+  "drafts.aiFillTooltip": "Generate title, description, bullets, keywords",
+  "drafts.aiFillDone": "AI fill complete",
+  "drafts.aiFillFailed": "AI fill failed",
+  "drafts.aiFillUnavailable": "AI provider not configured",
+  "drafts.aiFillRateLimited": "Rate limited — try again in a minute",
 
   "organize.title": "Catalog Organization",
   "organize.description": "Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout.",
