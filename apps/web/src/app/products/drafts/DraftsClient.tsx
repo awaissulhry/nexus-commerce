@@ -195,12 +195,24 @@ const FACTOR_LABEL_KEYS: Record<string, string> = {
   image: 'drafts.factor.image',
 }
 
+// DR-A.3 — chips for `brand` and `type` are AI-suggestable via the
+// existing /api/products/:id/ai/suggest-fields endpoint. When the
+// row carries a name + description (signal for the LLM), make the
+// chip a button so the operator can fire the suggestion inline.
+const AI_SUGGESTABLE_FACTORS = new Set(['brand', 'type'])
+
 function MissingFactorChips({
   missing,
   t,
+  onSuggest,
+  canSuggest,
+  suggesting,
 }: {
   missing: string[]
   t: (key: string, vars?: Record<string, string | number>) => string
+  onSuggest?: () => void
+  canSuggest?: boolean
+  suggesting?: boolean
 }) {
   if (missing.length === 0) return null
   // Show the top 2 most-impactful factors inline; fold the rest
@@ -211,14 +223,42 @@ function MissingFactorChips({
   const overflow = missing.length - visible.length
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {visible.map((f) => (
-        <span
-          key={f}
-          className="inline-flex items-center h-4 px-1.5 rounded text-xs font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-        >
-          {t(FACTOR_LABEL_KEYS[f] ?? `drafts.factor.${f}`)}
-        </span>
-      ))}
+      {visible.map((f) => {
+        const isAiSuggestable =
+          AI_SUGGESTABLE_FACTORS.has(f) && canSuggest && !!onSuggest
+        const label = t(FACTOR_LABEL_KEYS[f] ?? `drafts.factor.${f}`)
+        if (!isAiSuggestable) {
+          return (
+            <span
+              key={f}
+              className="inline-flex items-center h-4 px-1.5 rounded text-xs font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+            >
+              {label}
+            </span>
+          )
+        }
+        return (
+          <Tooltip
+            key={f}
+            content={t('drafts.suggestTooltip')}
+            placement="top"
+          >
+            <button
+              type="button"
+              onClick={onSuggest}
+              disabled={suggesting}
+              className="inline-flex items-center gap-0.5 h-4 px-1.5 rounded text-xs font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-950/40 dark:hover:text-violet-300 transition-colors disabled:opacity-60"
+            >
+              {suggesting ? (
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-2.5 h-2.5" />
+              )}
+              {label}
+            </button>
+          </Tooltip>
+        )
+      })}
       {overflow > 0 && (
         <span
           className="inline-flex items-center h-4 px-1.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
@@ -319,6 +359,14 @@ function canAiFill(d: Draft): boolean {
   )
 }
 
+// DR-A.3 — AI category suggest needs a working name to ground the
+// LLM. Without a name (operator hasn't filled the title yet) the
+// model has nothing to derive brand/type from, so the chip stays
+// non-interactive.
+function canAiSuggest(d: Draft): boolean {
+  return !d.missingFactors.includes('name')
+}
+
 // E.18 — memoized draft row. Was a 150-line inline `<tr>` inside
 // drafts.map(...) which re-rendered every row on every parent state
 // change (selection, search-typing, filter changes). Now extracted
@@ -332,6 +380,8 @@ const DraftRow = memo(function DraftRow({
   onDelete,
   onAiFill,
   aiFilling,
+  onAiSuggest,
+  aiSuggesting,
 }: {
   draft: Draft
   isSelected: boolean
@@ -339,6 +389,8 @@ const DraftRow = memo(function DraftRow({
   onDelete: (d: Draft) => void
   onAiFill: (d: Draft) => void
   aiFilling: boolean
+  onAiSuggest: (d: Draft) => void
+  aiSuggesting: boolean
 }) {
   // useTranslations() is stable across renders (the t function is
   // memoized in the provider) so the memo equality check holds.
@@ -449,7 +501,13 @@ const DraftRow = memo(function DraftRow({
                 pct={d.completenessPct}
                 missing={d.missingFactors}
               />
-              <MissingFactorChips missing={d.missingFactors} t={t} />
+              <MissingFactorChips
+                missing={d.missingFactors}
+                t={t}
+                canSuggest={canAiSuggest(d)}
+                suggesting={aiSuggesting}
+                onSuggest={() => onAiSuggest(d)}
+              />
             </div>
           </div>
         ) : (
@@ -462,7 +520,13 @@ const DraftRow = memo(function DraftRow({
                 pct={d.completenessPct}
                 missing={d.missingFactors}
               />
-              <MissingFactorChips missing={d.missingFactors} t={t} />
+              <MissingFactorChips
+                missing={d.missingFactors}
+                t={t}
+                canSuggest={canAiSuggest(d)}
+                suggesting={aiSuggesting}
+                onSuggest={() => onAiSuggest(d)}
+              />
             </div>
           </div>
         )}
@@ -943,6 +1007,142 @@ export default function DraftsClient() {
     [confirm, performBulkDelete],
   )
 
+  // DR-A.3 — AI brand+type suggestion. Hits the existing P.14
+  // /api/products/:id/ai/suggest-fields endpoint, which returns
+  // { brand, productType, reasoning } without applying anything;
+  // operator gets a toast with the suggested values + an Apply
+  // action button that PATCHes the product. Re-uses the aiBusyIds
+  // set so a row already running per-row AI fill blocks suggest
+  // until that finishes (avoids stale-write conflicts).
+  const [aiSuggestBusyIds, setAiSuggestBusyIds] = useState<Set<string>>(
+    new Set(),
+  )
+  const onAiSuggestRow = useCallback(
+    async (d: Draft) => {
+      if (aiSuggestBusyIds.has(d.productId)) return
+      setAiSuggestBusyIds((prev) => new Set(prev).add(d.productId))
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/${d.productId}/ai/suggest-fields`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+        )
+        if (!res.ok) {
+          const json = (await res.json().catch(() => ({}))) as {
+            error?: string
+          }
+          if (res.status === 503) {
+            toast({
+              tone: 'error',
+              title: t('drafts.aiFillUnavailable'),
+              description: json.error,
+            })
+          } else if (res.status === 429) {
+            toast({ tone: 'warning', title: t('drafts.aiFillRateLimited') })
+          } else {
+            toast({
+              tone: 'error',
+              title: t('drafts.aiSuggestFailed'),
+              description: json.error ?? `HTTP ${res.status}`,
+            })
+          }
+          return
+        }
+        const json = (await res.json()) as {
+          suggestions?: {
+            brand?: string | null
+            productType?: string | null
+            reasoning?: string
+          }
+        }
+        const s = json.suggestions ?? {}
+        const proposed: Record<string, string> = {}
+        if (s.brand && d.missingFactors.includes('brand')) proposed.brand = s.brand
+        if (s.productType && d.missingFactors.includes('type'))
+          proposed.productType = s.productType
+        if (Object.keys(proposed).length === 0) {
+          toast({
+            tone: 'info',
+            title: t('drafts.aiSuggestEmpty'),
+            description: s.reasoning,
+          })
+          return
+        }
+        // Build a human-readable summary for the toast and an Apply
+        // action that PATCHes the product. PATCH is best-effort: on
+        // failure show another toast, don't try to roll back the
+        // suggestion display.
+        const summary = Object.entries(proposed)
+          .map(([k, v]) => `${k} = ${v}`)
+          .join(', ')
+        toast({
+          tone: 'info',
+          title: t('drafts.aiSuggestReady'),
+          description: `${summary}${s.reasoning ? ` — ${s.reasoning}` : ''}`,
+          action: {
+            label: t('drafts.aiSuggestApply'),
+            onClick: async () => {
+              try {
+                const patch = await fetch(
+                  `${getBackendUrl()}/api/products/${d.productId}`,
+                  {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(proposed),
+                  },
+                )
+                if (!patch.ok) {
+                  const j = (await patch.json().catch(() => ({}))) as {
+                    error?: string
+                  }
+                  toast({
+                    tone: 'error',
+                    title: t('drafts.aiSuggestApplyFailed'),
+                    description: j.error ?? `HTTP ${patch.status}`,
+                  })
+                  return
+                }
+                toast({
+                  tone: 'success',
+                  title: t('drafts.aiSuggestApplied'),
+                  description: summary,
+                })
+                emitInvalidation({
+                  type: 'product.updated',
+                  id: d.productId,
+                })
+                await refetch()
+                await fetchSummary()
+              } catch (err) {
+                toast({
+                  tone: 'error',
+                  title: t('drafts.aiSuggestApplyFailed'),
+                  description: err instanceof Error ? err.message : String(err),
+                })
+              }
+            },
+          },
+        })
+      } catch (err) {
+        toast({
+          tone: 'error',
+          title: t('drafts.aiSuggestFailed'),
+          description: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        setAiSuggestBusyIds((prev) => {
+          const next = new Set(prev)
+          next.delete(d.productId)
+          return next
+        })
+      }
+    },
+    [aiSuggestBusyIds, toast, refetch, fetchSummary, t],
+  )
+
   // DR-A.2 — bulk AI fill across the current selection. Filters to
   // rows where AI fill makes sense (canAiFill) so the action doesn't
   // overwrite already-complete drafts. Fans out a single
@@ -1342,6 +1542,8 @@ export default function DraftsClient() {
                   onDelete={onDeleteRow}
                   onAiFill={onAiFillRow}
                   aiFilling={aiBusyIds.has(d.productId)}
+                  onAiSuggest={onAiSuggestRow}
+                  aiSuggesting={aiSuggestBusyIds.has(d.productId)}
                 />
               )
             })}

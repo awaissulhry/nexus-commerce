@@ -95,6 +95,13 @@
   "drafts.aiFillNoneEligible": "No selected drafts have AI-fillable gaps",
   "drafts.aiFillTooMany": "Too many drafts ({n}) — split into batches of 50",
   "drafts.aiFillBulkDone": "AI fill complete — {ok} succeeded, {fail} failed",
+  "drafts.suggestTooltip": "AI-suggest from name + description",
+  "drafts.aiSuggestReady": "AI suggestion ready",
+  "drafts.aiSuggestEmpty": "AI couldn't infer values — fill manually",
+  "drafts.aiSuggestApply": "Apply",
+  "drafts.aiSuggestApplied": "Suggestion applied",
+  "drafts.aiSuggestApplyFailed": "Apply failed",
+  "drafts.aiSuggestFailed": "AI suggest failed",
 
   "organize.title": "Catalog Organization",
   "organize.description": "Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout.",

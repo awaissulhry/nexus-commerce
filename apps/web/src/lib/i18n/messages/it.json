@@ -95,6 +95,13 @@
   "drafts.aiFillNoneEligible": "Nessuna bozza selezionata ha lacune compilabili con AI",
   "drafts.aiFillTooMany": "Troppe bozze ({n}) — dividi in batch da 50",
   "drafts.aiFillBulkDone": "Compilazione AI completata — {ok} riuscite, {fail} fallite",
+  "drafts.suggestTooltip": "Suggerisci con AI da nome + descrizione",
+  "drafts.aiSuggestReady": "Suggerimento AI pronto",
+  "drafts.aiSuggestEmpty": "L'AI non ha trovato valori — compila manualmente",
+  "drafts.aiSuggestApply": "Applica",
+  "drafts.aiSuggestApplied": "Suggerimento applicato",
+  "drafts.aiSuggestApplyFailed": "Applicazione fallita",
+  "drafts.aiSuggestFailed": "Suggerimento AI fallito",
 
   "wizard.stepOf": "Passaggio {current} di {total}",
   "wizard.saveAndExit": "Salva ed esci",
