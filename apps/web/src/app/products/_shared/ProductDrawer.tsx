@@ -3773,6 +3773,7 @@ function VariationsTab({
   parentSku: string
   onChanged: () => void
 }) {
+  const { t } = useTranslations()
   const [children, setChildren] = useState<ChildProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -3847,7 +3848,7 @@ function VariationsTab({
           setSavingError({
             childId: child.id,
             field,
-            message: `Another change landed first (v${errJson.currentVersion ?? '?'}) — refreshing.`,
+            message: t('products.drawer.variations.versionConflict', { version: errJson.currentVersion ?? '?' }),
           })
           void refresh()
           return
@@ -3879,8 +3880,8 @@ function VariationsTab({
 
   if (loading && children.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-400 text-base">
-        <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading variations…
+      <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-base">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t('products.drawer.variations.loading')}
       </div>
     )
   }
@@ -3888,7 +3889,7 @@ function VariationsTab({
     return (
       <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-        <span>Failed to load variations: {error}</span>
+        <span>{t('products.drawer.variations.failed', { error })}</span>
       </div>
     )
   }
@@ -3896,9 +3897,9 @@ function VariationsTab({
     return (
       <div className="px-5 py-10 text-center text-base text-slate-500">
         <Layers className="w-6 h-6 mx-auto text-slate-300 mb-2" />
-        No variations under {parentSku} yet.
-        <div className="text-sm text-slate-400 mt-1">
-          Add child products from the catalog organize page.
+        {t('products.drawer.variations.empty', { sku: parentSku })}
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {t('products.drawer.variations.emptyHint')}
         </div>
       </div>
     )
@@ -3916,23 +3917,27 @@ function VariationsTab({
   return (
     <div className="p-5 space-y-3">
       <div className="text-sm text-slate-500">
-        {children.length} variation{children.length === 1 ? '' : 's'} under{' '}
-        <span className="font-mono text-slate-700">{parentSku}</span>. Click
-        price or stock to edit inline.
+        {t(
+          children.length === 1
+            ? 'products.drawer.variations.summary.one'
+            : 'products.drawer.variations.summary.other',
+          { count: children.length },
+        )}{' '}
+        <span className="font-mono text-slate-700">{parentSku}</span>{t('products.drawer.variations.clickToEdit')}
       </div>
       <div className="overflow-x-auto -mx-5 px-5">
         <table className="w-full text-base">
           <thead>
             <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
-              <th className="text-left py-1.5 px-2 font-semibold">SKU</th>
+              <th className="text-left py-1.5 px-2 font-semibold">{t('products.drawer.variations.col.sku')}</th>
               {axisKeys.map((k) => (
                 <th key={k} className="text-left py-1.5 px-2 font-semibold">
                   {k}
                 </th>
               ))}
-              <th className="text-right py-1.5 px-2 font-semibold">Price</th>
-              <th className="text-right py-1.5 px-2 font-semibold">Stock</th>
-              <th className="text-center py-1.5 px-2 font-semibold">Status</th>
+              <th className="text-right py-1.5 px-2 font-semibold">{t('products.drawer.variations.col.price')}</th>
+              <th className="text-right py-1.5 px-2 font-semibold">{t('products.drawer.variations.col.stock')}</th>
+              <th className="text-center py-1.5 px-2 font-semibold">{t('products.drawer.variations.col.status')}</th>
             </tr>
           </thead>
           <tbody>
@@ -3988,7 +3993,7 @@ function VariationsTab({
                     ) : (
                       <InlineEditTrigger
                         onClick={() => startEdit(c, 'price')}
-                        label={`price for ${c.sku}`}
+                        label={t('products.drawer.variations.priceEditAria', { sku: c.sku })}
                         align="right"
                         size="sm"
                       >
@@ -4019,7 +4024,7 @@ function VariationsTab({
                     ) : (
                       <InlineEditTrigger
                         onClick={() => startEdit(c, 'stock')}
-                        label={`stock for ${c.sku}`}
+                        label={t('products.drawer.variations.stockEditAria', { sku: c.sku })}
                         align="right"
                         size="sm"
                       >
@@ -4047,12 +4052,12 @@ function VariationsTab({
         </table>
       </div>
       <div className="text-sm text-slate-500">
-        Bulk variant operations live on{' '}
+        {t('products.drawer.variations.bulkLink')}{' '}
         <Link
           href={`/products/${parentId}/matrix`}
           className="text-blue-700 hover:underline"
         >
-          the matrix view
+          {t('products.drawer.variations.matrixLink')}
         </Link>
         .
       </div>

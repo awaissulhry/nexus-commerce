@@ -2708,5 +2708,21 @@
   "products.drawer.related.kind.BUNDLE_PART.label": "Parte di bundle",
   "products.drawer.related.kind.BUNDLE_PART.hint": "Membro del bundle",
   "products.drawer.related.kind.RECOMMENDED.label": "Consigliato",
-  "products.drawer.related.kind.RECOMMENDED.hint": "Suggerimento generico"
+  "products.drawer.related.kind.RECOMMENDED.hint": "Suggerimento generico",
+  "products.drawer.variations.loading": "Caricamento varianti…",
+  "products.drawer.variations.failed": "Impossibile caricare le varianti: {error}",
+  "products.drawer.variations.empty": "Nessuna variante sotto {sku} ancora.",
+  "products.drawer.variations.emptyHint": "Aggiungi prodotti figli dalla pagina Organizza catalogo.",
+  "products.drawer.variations.summary.one": "{count} variante sotto",
+  "products.drawer.variations.summary.other": "{count} varianti sotto",
+  "products.drawer.variations.clickToEdit": ". Clicca prezzo o stock per modificare inline.",
+  "products.drawer.variations.col.sku": "SKU",
+  "products.drawer.variations.col.price": "Prezzo",
+  "products.drawer.variations.col.stock": "Stock",
+  "products.drawer.variations.col.status": "Stato",
+  "products.drawer.variations.versionConflict": "Un'altra modifica è arrivata prima (v{version}) — ricarico.",
+  "products.drawer.variations.bulkLink": "Le operazioni in blocco sulle varianti vivono in",
+  "products.drawer.variations.matrixLink": "la vista matrice",
+  "products.drawer.variations.priceEditAria": "prezzo per {sku}",
+  "products.drawer.variations.stockEditAria": "stock per {sku}"
 }
