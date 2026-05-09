@@ -172,6 +172,10 @@ export default function ProductsWorkspace() {
   const lens = (searchParams.get('lens') as Lens) || 'grid'
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
   const sortBy = searchParams.get('sortBy') ?? 'updated'
+  // W5.5 — multi-column sort. URL param `sorts` carries comma-
+  // separated `field:dir` pairs. When non-empty, takes priority
+  // over legacy `sort=` (W5.4 backend handles the override).
+  const sortStack = searchParams.get('sorts')?.split(',').filter(Boolean) ?? []
   const pageSize = Math.min(500, parseInt(searchParams.get('pageSize') ?? '100', 10) || 100)
 
   // F10 — parse the canonical filter contract from 10a. parseFilters
@@ -372,10 +376,11 @@ export default function ProductsWorkspace() {
     if (hasGtin) qs.set('hasGtin', hasGtin)
     if (showDeleted) qs.set('deleted', 'true')
     qs.set('sort', sortBy)
+    if (sortStack.length > 0) qs.set('sorts', sortStack.join(','))
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, showDeleted, sortBy])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, showDeleted, sortBy, sortStack.join(',')])
 
   const {
     data: productsData,
@@ -1012,9 +1017,35 @@ export default function ProductsWorkspace() {
         }
       />
 
+      {/* W5.5 — multi-column sort chip stack. Renders above lens
+          switcher when active; hidden when sortStack is empty. */}
+      {sortStack.length > 0 && (
+        <SortStackBar
+          stack={sortStack}
+          onChange={(next) =>
+            updateUrl({
+              sorts: next.length > 0 ? next.join(',') : undefined,
+              page: undefined,
+            })
+          }
+        />
+      )}
+
       {/* Lens switcher + saved views menu */}
       <div className="flex items-center gap-2 flex-wrap">
         <LensTabs current={lens} onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })} />
+        {/* W5.5 — Add-sort entry-point in the lens row. Always
+            visible so the operator can layer sorts even from the
+            grid lens. Opens a small inline picker. */}
+        <AddSortButton
+          activeStack={sortStack}
+          onAdd={(field, dir) =>
+            updateUrl({
+              sorts: [...sortStack, `${field}:${dir}`].join(','),
+              page: undefined,
+            })
+          }
+        />
 
         <div className="ml-auto flex items-center gap-2">
           <SavedViewsButton
@@ -1784,5 +1815,168 @@ function exportProductsCsv(products: ProductRow[]): void {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+// ────────────────────────────────────────────────────────────────────
+// W5.5 — Multi-column sort UI
+// ────────────────────────────────────────────────────────────────────
+
+const SORT_FIELD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'sku', label: 'SKU' },
+  { value: 'name', label: 'Name' },
+  { value: 'basePrice', label: 'Price' },
+  { value: 'totalStock', label: 'Stock' },
+  { value: 'status', label: 'Status' },
+  { value: 'brand', label: 'Brand' },
+  { value: 'productType', label: 'Type' },
+  { value: 'photos', label: 'Photo count' },
+  { value: 'channels', label: 'Channel count' },
+  { value: 'variants', label: 'Variant count' },
+  { value: 'updated', label: 'Updated' },
+  { value: 'created', label: 'Created' },
+]
+
+const SORT_FIELD_LABELS: Record<string, string> = Object.fromEntries(
+  SORT_FIELD_OPTIONS.map((o) => [o.value, o.label]),
+)
+
+function SortStackBar({
+  stack,
+  onChange,
+}: {
+  stack: string[]
+  onChange: (next: string[]) => void
+}) {
+  const removeAt = (idx: number) =>
+    onChange(stack.filter((_, i) => i !== idx))
+  const flipDir = (idx: number) =>
+    onChange(
+      stack.map((p, i) => {
+        if (i !== idx) return p
+        const [field, dir] = p.split(':')
+        return `${field}:${dir === 'desc' ? 'asc' : 'desc'}`
+      }),
+    )
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap text-sm">
+      <span className="text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold text-xs">
+        Sorting by
+      </span>
+      {stack.map((pair, idx) => {
+        const [field, dir] = pair.split(':')
+        const label = SORT_FIELD_LABELS[field] ?? field
+        return (
+          <span
+            key={`${pair}-${idx}`}
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded text-sm border border-blue-200 dark:border-blue-800"
+          >
+            <button
+              type="button"
+              onClick={() => flipDir(idx)}
+              className="inline-flex items-center gap-0.5 hover:underline"
+              title="Toggle ascending / descending"
+            >
+              {idx > 0 && (
+                <span className="text-blue-500 dark:text-blue-400 text-xs mr-0.5">
+                  then
+                </span>
+              )}
+              <span>{label}</span>
+              <span className="text-xs">{dir === 'desc' ? '↓' : '↑'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => removeAt(idx)}
+              aria-label={`Remove ${label} sort`}
+              className="ml-0.5 text-blue-500 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-100 inline-flex items-center justify-center w-3.5 h-3.5"
+            >
+              ×
+            </button>
+          </span>
+        )
+      })}
+      <button
+        type="button"
+        onClick={() => onChange([])}
+        className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:underline ml-1"
+      >
+        clear
+      </button>
+    </div>
+  )
+}
+
+function AddSortButton({
+  activeStack,
+  onAdd,
+}: {
+  activeStack: string[]
+  onAdd: (field: string, dir: 'asc' | 'desc') => void
+}) {
+  const [open, setOpen] = useState(false)
+  const usedFields = new Set(activeStack.map((p) => p.split(':')[0]))
+  const available = SORT_FIELD_OPTIONS.filter((o) => !usedFields.has(o.value))
+
+  if (available.length === 0) return null
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        title="Add a sort dimension"
+        className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+      >
+        + Sort
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm">
+            <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+              Add sort by
+            </div>
+            {available.map((opt) => (
+              <div
+                key={opt.value}
+                className="flex items-center justify-between px-2 py-0.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <span className="text-slate-700 dark:text-slate-300 px-1">
+                  {opt.label}
+                </span>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAdd(opt.value, 'asc')
+                      setOpen(false)
+                    }}
+                    className="px-1.5 py-0.5 text-xs hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                    title="Ascending"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAdd(opt.value, 'desc')
+                      setOpen(false)
+                    }}
+                    className="px-1.5 py-0.5 text-xs hover:bg-slate-200 dark:hover:bg-slate-700 rounded ml-0.5"
+                    title="Descending"
+                  >
+                    ↓
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
