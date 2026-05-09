@@ -57,10 +57,10 @@ interface EbayCampaign {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-600 border-slate-200',
-  RUNNING: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  PAUSED: 'bg-amber-50 text-amber-700 border-amber-200',
-  ENDED: 'bg-slate-50 text-slate-400 border-slate-200',
+  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  RUNNING: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  PAUSED: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+  ENDED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
 }
 
 export default function EbayCampaignsClient() {
@@ -155,13 +155,13 @@ export default function EbayCampaignsClient() {
       {/* Honest banner — no auto-push to eBay yet. */}
       <Card>
         <div className="flex items-start gap-2 text-sm">
-          <AlertCircle size={14} className="mt-0.5 text-amber-600 flex-shrink-0" />
-          <div className="text-slate-600">
-            <span className="font-semibold text-slate-700">eBay push pending —</span>{' '}
+          <AlertCircle size={14} className="mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <div className="text-slate-600 dark:text-slate-400">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">eBay push pending —</span>{' '}
             campaigns are stored in Nexus only for now. Create the matching campaign on
-            eBay&apos;s Seller Hub side, then flip status to <code className="px-1 bg-slate-100 rounded text-xs">RUNNING</code> here
+            eBay&apos;s Seller Hub side, then flip status to <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">RUNNING</code> here
             so metrics tracking lines up. Direct push to eBay&apos;s Marketing API
-            lands behind <code className="px-1 bg-slate-100 rounded text-xs">NEXUS_ENABLE_EBAY_PUBLISH</code> in a
+            lands behind <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">NEXUS_ENABLE_EBAY_PUBLISH</code> in a
             follow-up commit.
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function EbayCampaignsClient() {
         <select
           value={marketplaceFilter}
           onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+          className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
           aria-label="Filter by marketplace"
         >
           <option value="">All marketplaces</option>
@@ -185,7 +185,7 @@ export default function EbayCampaignsClient() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+          className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
           aria-label="Filter by status"
         >
           <option value="">All statuses</option>
@@ -194,12 +194,12 @@ export default function EbayCampaignsClient() {
           <option value="PAUSED">Paused</option>
           <option value="ENDED">Ended</option>
         </select>
-        <span className="text-sm text-slate-500 ml-2">
+        <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">
           {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}
         </span>
         <button
           onClick={() => setCreateOpen(true)}
-          className="ml-auto h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+          className="ml-auto h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
         >
           <Plus size={12} /> New campaign
         </button>
@@ -212,15 +212,15 @@ export default function EbayCampaignsClient() {
         </Card>
       ) : error && !data ? (
         <Card>
-          <div className="text-rose-600 text-sm">Failed to load: {error}</div>
+          <div className="text-rose-600 dark:text-rose-400 text-sm">Failed to load: {error}</div>
         </Card>
       ) : campaigns.length === 0 ? (
         <Card>
-          <div className="text-center py-8 text-sm text-slate-500">
+          <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
             No campaigns yet.{' '}
             <button
               onClick={() => setCreateOpen(true)}
-              className="text-blue-600 hover:underline"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Create your first campaign
             </button>
@@ -230,23 +230,23 @@ export default function EbayCampaignsClient() {
       ) : (
         <Card noPadding>
           <table className="w-full text-base">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Name</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Market</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Funding</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Status</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Spend</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Sales</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Name</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Market</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Funding</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Spend</th>
+                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Sales</th>
+                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {campaigns.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                <tr key={c.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50">
                   <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900">{c.name}</div>
-                    <div className="text-xs text-slate-500 font-mono">
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{c.name}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                       {c.externalCampaignId.startsWith('local-')
                         ? '(not yet pushed to eBay)'
                         : c.externalCampaignId}
@@ -286,7 +286,7 @@ export default function EbayCampaignsClient() {
                           onClick={() => transition(c.id, 'RUNNING')}
                           title="Start / resume"
                           aria-label={`Start campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded focus:outline-none focus:ring-2 focus:ring-emerald-300"
                         >
                           <Play size={12} />
                         </button>
@@ -296,7 +296,7 @@ export default function EbayCampaignsClient() {
                           onClick={() => transition(c.id, 'PAUSED')}
                           title="Pause"
                           aria-label={`Pause campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-amber-600 hover:bg-amber-50 rounded focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded focus:outline-none focus:ring-2 focus:ring-amber-300"
                         >
                           <Pause size={12} />
                         </button>
@@ -306,7 +306,7 @@ export default function EbayCampaignsClient() {
                           onClick={() => transition(c.id, 'ENDED')}
                           title="End campaign"
                           aria-label={`End campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
                         >
                           <Square size={12} />
                         </button>
@@ -316,7 +316,7 @@ export default function EbayCampaignsClient() {
                           onClick={() => remove(c)}
                           title="Delete"
                           aria-label={`Delete DRAFT campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -403,7 +403,7 @@ function CreateCampaignModal({
       <ModalBody>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Campaign name
             </label>
             <Input
@@ -414,13 +414,13 @@ function CreateCampaignModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Marketplace
             </label>
             <select
               value={marketplace}
               onChange={(e) => setMarketplace(e.target.value)}
-              className="w-full h-9 px-2 text-md border border-slate-200 rounded"
+              className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
             >
               {EBAY_MARKETPLACES.map((m) => (
                 <option key={m.id} value={m.id}>{m.label}</option>
@@ -428,10 +428,10 @@ function CreateCampaignModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Funding strategy
             </label>
-            <div className="space-y-1.5 text-sm text-slate-700">
+            <div className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -464,7 +464,7 @@ function CreateCampaignModal({
           </div>
           {fundingStrategy === 'STANDARD' ? (
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Bid percentage
               </label>
               <Input
@@ -476,14 +476,14 @@ function CreateCampaignModal({
                 onChange={(e) => setBidPercentage(e.target.value)}
                 placeholder="e.g. 5.00"
               />
-              <div className="text-xs text-slate-500 mt-1">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 eBay charges this % of the final sale price for items sold via the campaign.
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Daily budget
                 </label>
                 <Input
@@ -495,13 +495,13 @@ function CreateCampaignModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Currency
                 </label>
                 <select
                   value={budgetCurrency}
                   onChange={(e) => setBudgetCurrency(e.target.value)}
-                  className="h-9 px-2 text-md border border-slate-200 rounded"
+                  className="h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
                 >
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
@@ -512,7 +512,7 @@ function CreateCampaignModal({
           )}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Start date
               </label>
               <Input
@@ -522,8 +522,8 @@ function CreateCampaignModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                End date <span className="text-slate-400 font-normal">(optional)</span>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
               </label>
               <Input
                 type="date"
@@ -538,14 +538,14 @@ function CreateCampaignModal({
         <button
           onClick={onClose}
           disabled={busy}
-          className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50"
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
         <button
           onClick={submit}
           disabled={busy || !name.trim()}
-          className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {busy ? 'Creating…' : 'Create campaign'}
         </button>

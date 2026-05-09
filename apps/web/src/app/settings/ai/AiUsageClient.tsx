@@ -135,11 +135,11 @@ export default function AiUsageClient({
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 inline-flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-purple-600" />
             AI providers + spend
           </h1>
-          <p className="text-base text-slate-500 mt-1 max-w-2xl">
+          <p className="text-base text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
             Per-provider configuration and token + cost telemetry across
             every server-side AI call. Costs are computed at the moment
             each call ran against the provider&apos;s rate card —
@@ -150,7 +150,7 @@ export default function AiUsageClient({
           type="button"
           onClick={() => void refresh()}
           disabled={refreshing}
-          className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {refreshing ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -162,38 +162,38 @@ export default function AiUsageClient({
       </header>
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800">
+        <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800">
           {error}
         </div>
       )}
 
       {/* Providers */}
       <section className="space-y-2">
-        <h2 className="text-md font-semibold text-slate-700 uppercase tracking-wider">
+        <h2 className="text-md font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
           Providers
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {providers.map((p) => (
             <div
               key={p.name}
-              className="border border-slate-200 rounded-md p-3 bg-white"
+              className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-lg font-medium text-slate-900">
+                  <div className="text-lg font-medium text-slate-900 dark:text-slate-100">
                     {PROVIDER_LABEL[p.name] ?? p.name}
                   </div>
-                  <div className="text-sm text-slate-500 font-mono mt-0.5">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                     {p.defaultModel}
                   </div>
                 </div>
                 {p.configured ? (
-                  <span className="inline-flex items-center gap-1 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded px-1.5 py-0.5">
                     <CheckCircle2 className="w-3 h-3" />
                     Configured
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-1.5 py-0.5">
                     Set{' '}
                     <span className="font-mono">
                       {p.name === 'gemini'
@@ -206,7 +206,7 @@ export default function AiUsageClient({
             </div>
           ))}
         </div>
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           Default provider: <span className="font-mono">AI_PROVIDER</span> env
           var (currently{' '}
           <span className="font-mono">
@@ -231,36 +231,36 @@ export default function AiUsageClient({
 
       {/* Recent calls live tail */}
       <section className="space-y-2">
-        <h2 className="text-md font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+        <h2 className="text-md font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
           <Activity className="w-3 h-3" />
           Recent calls
         </h2>
-        <div className="border border-slate-200 rounded-md overflow-hidden bg-white">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden bg-white dark:bg-slate-900">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 uppercase tracking-wider w-24">
+                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-24">
                   When
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 uppercase tracking-wider w-28">
+                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-28">
                   Provider
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Feature
                 </th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 uppercase tracking-wider w-40">
+                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-40">
                   Model
                 </th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-700 uppercase tracking-wider w-20">
+                <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   In
                 </th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-700 uppercase tracking-wider w-20">
+                <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   Out
                 </th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-700 uppercase tracking-wider w-20">
+                <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   Cost
                 </th>
-                <th className="px-3 py-2 text-right font-semibold text-slate-700 uppercase tracking-wider w-16">
+                <th className="px-3 py-2 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
                   ms
                 </th>
               </tr>
@@ -270,7 +270,7 @@ export default function AiUsageClient({
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-3 py-8 text-center text-slate-400 italic"
+                    className="px-3 py-8 text-center text-slate-400 dark:text-slate-500 italic"
                   >
                     No AI calls yet. Trigger a bulk fill on /products and
                     refresh.
@@ -280,36 +280,36 @@ export default function AiUsageClient({
               {recent.map((r) => (
                 <tr
                   key={r.id}
-                  className={`border-b border-slate-100 ${
+                  className={`border-b border-slate-100 dark:border-slate-800 ${
                     r.ok ? '' : 'bg-rose-50/40'
                   }`}
                   title={r.errorMessage ?? undefined}
                 >
-                  <td className="px-3 py-1.5 text-slate-600">
+                  <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">
                     {fmtRelative(r.createdAt)}
                   </td>
-                  <td className="px-3 py-1.5 text-slate-700">
+                  <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
                     {PROVIDER_LABEL[r.provider] ?? r.provider}
                   </td>
-                  <td className="px-3 py-1.5 text-slate-700">
-                    {r.feature ?? <span className="text-slate-400">—</span>}
+                  <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300">
+                    {r.feature ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
                   </td>
-                  <td className="px-3 py-1.5 text-slate-500 font-mono truncate">
+                  <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400 font-mono truncate">
                     {r.model}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">
                     {fmtTokens(r.inputTokens)}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">
                     {fmtTokens(r.outputTokens)}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-900 font-medium">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-900 dark:text-slate-100 font-medium">
                     {fmtUSD(r.costUSD)}
                   </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
                     {r.latencyMs ?? ''}
                     {!r.ok && (
-                      <XCircle className="w-3 h-3 text-rose-600 inline ml-1" />
+                      <XCircle className="w-3 h-3 text-rose-600 dark:text-rose-400 inline ml-1" />
                     )}
                   </td>
                 </tr>
@@ -331,63 +331,63 @@ function RollupCard({
 }) {
   if (!summary) {
     return (
-      <div className="border border-slate-200 rounded-md p-3 bg-white">
-        <div className="text-md font-semibold text-slate-700">{title}</div>
-        <div className="text-base text-slate-500 mt-2 italic">
+      <div className="border border-slate-200 dark:border-slate-700 rounded-md p-3 bg-white dark:bg-slate-900">
+        <div className="text-md font-semibold text-slate-700 dark:text-slate-300">{title}</div>
+        <div className="text-base text-slate-500 dark:text-slate-400 mt-2 italic">
           No data
         </div>
       </div>
     )
   }
   return (
-    <div className="border border-slate-200 rounded-md bg-white">
-      <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
-        <div className="text-md font-semibold text-slate-700">{title}</div>
-        <div className="text-2xl font-semibold tabular-nums text-slate-900">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
+      <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+        <div className="text-md font-semibold text-slate-700 dark:text-slate-300">{title}</div>
+        <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
           {fmtUSD(summary.totals.costUSD)}
         </div>
       </div>
-      <div className="px-3 py-2 grid grid-cols-3 gap-2 text-sm text-slate-600 border-b border-slate-100">
+      <div className="px-3 py-2 grid grid-cols-3 gap-2 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-xs">
+          <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
             Calls
           </div>
-          <div className="text-lg font-medium text-slate-900 tabular-nums">
+          <div className="text-lg font-medium text-slate-900 dark:text-slate-100 tabular-nums">
             {summary.totals.calls.toLocaleString()}
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-xs">
+          <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
             Input
           </div>
-          <div className="text-lg font-medium text-slate-900 tabular-nums">
+          <div className="text-lg font-medium text-slate-900 dark:text-slate-100 tabular-nums">
             {fmtTokens(summary.totals.inputTokens)}
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-xs">
+          <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider text-xs">
             Output
           </div>
-          <div className="text-lg font-medium text-slate-900 tabular-nums">
+          <div className="text-lg font-medium text-slate-900 dark:text-slate-100 tabular-nums">
             {fmtTokens(summary.totals.outputTokens)}
           </div>
         </div>
       </div>
 
       {summary.byProvider.length > 0 && (
-        <div className="px-3 py-2 border-b border-slate-100">
-          <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+        <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+          <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
             By provider
           </div>
           <div className="space-y-1">
             {summary.byProvider.map((p) => (
               <div key={p.name} className="flex items-center justify-between text-base">
-                <span className="text-slate-700">
+                <span className="text-slate-700 dark:text-slate-300">
                   {PROVIDER_LABEL[p.name] ?? p.name}
                 </span>
-                <span className="text-slate-500 tabular-nums">
+                <span className="text-slate-500 dark:text-slate-400 tabular-nums">
                   {p.calls} call{p.calls === 1 ? '' : 's'} ·{' '}
-                  <span className="text-slate-900 font-medium">
+                  <span className="text-slate-900 dark:text-slate-100 font-medium">
                     {fmtUSD(p.costUSD)}
                   </span>
                 </span>
@@ -399,16 +399,16 @@ function RollupCard({
 
       {summary.byFeature.length > 0 && (
         <div className="px-3 py-2">
-          <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+          <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
             By feature
           </div>
           <div className="space-y-1">
             {summary.byFeature.map((f) => (
               <div key={f.name} className="flex items-center justify-between text-base">
-                <span className="text-slate-700 truncate">{f.name}</span>
-                <span className="text-slate-500 tabular-nums">
+                <span className="text-slate-700 dark:text-slate-300 truncate">{f.name}</span>
+                <span className="text-slate-500 dark:text-slate-400 tabular-nums">
                   {f.calls} call{f.calls === 1 ? '' : 's'} ·{' '}
-                  <span className="text-slate-900 font-medium">
+                  <span className="text-slate-900 dark:text-slate-100 font-medium">
                     {fmtUSD(f.costUSD)}
                   </span>
                 </span>

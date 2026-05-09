@@ -66,16 +66,16 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
+  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
   PACKAGE_READY:
-    'bg-blue-50 text-blue-900 border-blue-200',
+    'bg-blue-50 dark:bg-blue-950/40 text-blue-900 border-blue-200 dark:border-blue-900',
   SUBMITTED:
-    'bg-amber-50 text-amber-900 border-amber-200',
+    'bg-amber-50 dark:bg-amber-950/40 text-amber-900 border-amber-200 dark:border-amber-900',
   APPROVED:
-    'bg-emerald-50 text-emerald-900 border-emerald-200',
-  REJECTED: 'bg-red-50 text-red-900 border-red-200',
+    'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 border-emerald-200 dark:border-emerald-900',
+  REJECTED: 'bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-100 border-red-200 dark:border-red-900',
   ABANDONED:
-    'bg-slate-100 text-slate-700 border-slate-200',
+    'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
 }
 
 interface Step1Slice {
@@ -114,15 +114,15 @@ function NotApplicable({ path }: { path: Step1Slice['path'] }) {
     <div className="max-w-2xl mx-auto py-12 px-6">
       <div className="text-center">
         <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-        <h2 className="text-2xl font-semibold text-slate-900">
+        <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
           GTIN exemption not needed
         </h2>
-        <p className="text-md text-slate-600 mt-2 max-w-md mx-auto">
+        <p className="text-md text-slate-600 dark:text-slate-400 mt-2 max-w-md mx-auto">
           {path === 'have-code'
             ? "You provided a GTIN in Step 1, so we'll list this product under that identifier — no exemption required."
             : "Your brand already has an exemption on this marketplace, so we'll apply it automatically when this product is listed."}
         </p>
-        <p className="text-base text-slate-500 mt-4">
+        <p className="text-base text-slate-500 dark:text-slate-400 mt-4">
           Click Continue to move on to product type selection.
         </p>
       </div>
@@ -319,7 +319,7 @@ function ApplyFlow({
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto py-12 px-6 flex items-center justify-center text-slate-500">
+      <div className="max-w-2xl mx-auto py-12 px-6 flex items-center justify-center text-slate-500 dark:text-slate-400">
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
         Loading application…
       </div>
@@ -328,7 +328,7 @@ function ApplyFlow({
   if (error && !app) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6">
-        <div className="px-4 py-3 rounded-md bg-red-50 border border-red-200 text-md text-red-900 flex items-start gap-2">
+        <div className="px-4 py-3 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-md text-red-900 dark:text-red-100 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <div>{error}</div>
         </div>
@@ -349,15 +349,15 @@ function ApplyFlow({
       <header className="flex items-start justify-between gap-4">
         <div>
           {embedded ? (
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               GTIN Exemption — {app.brandName} on Amazon {marketplace}
             </h3>
           ) : (
-            <h2 className="text-xl font-semibold text-slate-900">
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
               GTIN Exemption — {app.brandName} on Amazon {marketplace}
             </h2>
           )}
-          <p className="text-md text-slate-600 mt-1 max-w-2xl">
+          <p className="text-md text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
             We generate the submission package; you upload it to Seller
             Central. Once Amazon approves, every future {app.brandName}{' '}
             listing on Amazon {marketplace} skips this step.
@@ -374,7 +374,7 @@ function ApplyFlow({
       </header>
 
       {error && (
-        <div className="px-4 py-2 rounded-md bg-red-50 border border-red-200 text-base text-red-900 flex items-start gap-2">
+        <div className="px-4 py-2 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-base text-red-900 dark:text-red-100 flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <div>{error}</div>
         </div>
@@ -399,7 +399,7 @@ function ApplyFlow({
           ].map((opt) => (
             <label
               key={opt.v}
-              className="flex items-center gap-2 text-md text-slate-700"
+              className="flex items-center gap-2 text-md text-slate-700 dark:text-slate-300"
             >
               <input
                 type="radio"
@@ -451,7 +451,7 @@ function ApplyFlow({
           <button
             type="button"
             onClick={saveBrandInfo}
-            className="mt-3 text-base text-blue-700 hover:text-blue-900"
+            className="mt-3 text-base text-blue-700 dark:text-blue-300 hover:text-blue-900"
           >
             Save brand info
           </button>
@@ -471,8 +471,8 @@ function ApplyFlow({
             className={cn(
               'inline-flex items-center gap-1.5 h-7 px-2.5 text-base rounded-md border transition-colors',
               validating
-                ? 'border-slate-200 bg-slate-50 text-slate-500'
-                : 'border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100',
+                ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                : 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60',
             )}
           >
             {validating ? (
@@ -486,7 +486,7 @@ function ApplyFlow({
             )}
           </button>
           {app.imageValidation && (
-            <span className="text-base text-slate-600">
+            <span className="text-base text-slate-600 dark:text-slate-400">
               {app.imageValidation.passed} pass · {app.imageValidation.failed}{' '}
               fail · {app.imagesProvided.length} of{' '}
               {app.imageValidation.needed} required
@@ -494,7 +494,7 @@ function ApplyFlow({
           )}
         </div>
         {!app.imageValidation && (
-          <p className="text-base text-slate-500">
+          <p className="text-base text-slate-500 dark:text-slate-400">
             Run validation to check resolution, format, and size against
             Amazon's requirements.
           </p>
@@ -507,13 +507,13 @@ function ApplyFlow({
                 className="flex items-start gap-2 text-base py-1"
               >
                 {item.ok ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
                 ) : (
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <ImageIcon className="w-3 h-3 text-slate-400" />
+                  <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                    <ImageIcon className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                     <span className="font-mono text-xs tabular-nums w-12">
                       img-{String(idx + 1).padStart(2, '0')}
                     </span>
@@ -523,14 +523,14 @@ function ApplyFlow({
                       </span>
                     )}
                     {item.format && (
-                      <span className="text-slate-400">·</span>
+                      <span className="text-slate-400 dark:text-slate-500">·</span>
                     )}
                     {item.format && (
-                      <span className="text-slate-500">{item.format}</span>
+                      <span className="text-slate-500 dark:text-slate-400">{item.format}</span>
                     )}
                   </div>
                   {item.issues.length > 0 && (
-                    <ul className="mt-0.5 text-sm text-amber-700 space-y-0.5">
+                    <ul className="mt-0.5 text-sm text-amber-700 dark:text-amber-300 space-y-0.5">
                       {item.issues.map((iss, i) => (
                         <li key={i}>· {iss}</li>
                       ))}
@@ -542,7 +542,7 @@ function ApplyFlow({
           </ul>
         )}
         {app.imagesProvided.length < 9 && app.imageValidation && (
-          <div className="mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-base text-amber-900">
+          <div className="mt-3 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-base text-amber-900">
             You currently have {app.imagesProvided.length} image
             {app.imagesProvided.length === 1 ? '' : 's'} on this product.
             Amazon needs 9 — add more via the product edit page, then come
@@ -561,13 +561,13 @@ function ApplyFlow({
             href={downloadUrl('pdf')}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-base rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-base rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <FileText className="w-3.5 h-3.5" />
             Preview brand-letter.pdf
           </a>
           {app.brandLetterCustomised && (
-            <span className="text-sm text-slate-500 italic">
+            <span className="text-sm text-slate-500 dark:text-slate-400 italic">
               Customised
             </span>
           )}
@@ -584,7 +584,7 @@ function ApplyFlow({
             href={downloadUrl('zip')}
             className={cn(
               'inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium',
-              'bg-blue-600 text-white hover:bg-blue-700',
+              'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600',
             )}
           >
             <Download className="w-3.5 h-3.5" />
@@ -598,13 +598,13 @@ function ApplyFlow({
             }/`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Open Seller Central
           </a>
         </div>
-        <ul className="mt-3 text-base text-slate-600 space-y-1">
+        <ul className="mt-3 text-base text-slate-600 dark:text-slate-400 space-y-1">
           <li>1. Open Seller Central → Catalog → Add Products</li>
           <li>2. Choose "Don't have a product ID?" → Apply for GTIN exemption</li>
           <li>3. Upload the files from the ZIP, paste the brand info above</li>
@@ -634,7 +634,7 @@ function ApplyFlow({
                   transitionStatus('APPROVED').then(() => null)
                 }
                 disabled={savingStatus}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium bg-emerald-600 text-white hover:bg-emerald-700"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium bg-emerald-600 dark:bg-emerald-700 text-white hover:bg-emerald-700"
               >
                 Mark as approved
               </button>
@@ -642,7 +642,7 @@ function ApplyFlow({
                 type="button"
                 onClick={() => setRejectDialog(true)}
                 disabled={savingStatus}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-md font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Mark as rejected
               </button>
@@ -659,7 +659,7 @@ function ApplyFlow({
             </p>
           )}
           {status === 'REJECTED' && (
-            <div className="text-md text-red-900">
+            <div className="text-md text-red-900 dark:text-red-100">
               <div>
                 Rejected
                 {app.rejectedAt
@@ -668,14 +668,14 @@ function ApplyFlow({
                 .
               </div>
               {app.rejectionReason && (
-                <div className="mt-1 italic text-slate-600">
+                <div className="mt-1 italic text-slate-600 dark:text-slate-400">
                   Amazon's reason: {app.rejectionReason}
                 </div>
               )}
               <button
                 type="button"
                 onClick={() => transitionStatus('DRAFT')}
-                className="mt-2 text-base text-blue-700 hover:text-blue-900"
+                className="mt-2 text-base text-blue-700 dark:text-blue-300 hover:text-blue-900"
               >
                 Update package and try again
               </button>
@@ -697,7 +697,7 @@ function ApplyFlow({
           }}
           confirmLabel="Mark as submitted"
         >
-          <p className="text-md text-slate-700 mb-3">
+          <p className="text-md text-slate-700 dark:text-slate-300 mb-3">
             Did you submit on Amazon Seller Central? Optionally paste the
             case ID Amazon showed you.
           </p>
@@ -721,7 +721,7 @@ function ApplyFlow({
           }}
           confirmLabel="Mark as rejected"
         >
-          <p className="text-md text-slate-700 mb-3">
+          <p className="text-md text-slate-700 dark:text-slate-300 mb-3">
             Paste the rejection reason from Amazon's email — we'll include
             it in the next package iteration.
           </p>
@@ -729,7 +729,7 @@ function ApplyFlow({
             value={pasteRejection}
             onChange={(e) => setPasteRejection(e.target.value)}
             placeholder="Paste Amazon's rejection email text"
-            className="w-full h-24 px-2 py-1 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full h-24 px-2 py-1 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </SmallDialog>
       )}
@@ -747,13 +747,13 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-5 py-4">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-5 py-4">
       <div className="mb-3">
-        <h3 className="text-lg font-semibold text-slate-900">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           {title}
         </h3>
         {description && (
-          <p className="text-base text-slate-500 mt-0.5">{description}</p>
+          <p className="text-base text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
         )}
       </div>
       {children}
@@ -778,7 +778,7 @@ function Input({
 }) {
   return (
     <div>
-      <label className="block text-sm text-slate-500 mb-0.5">
+      <label className="block text-sm text-slate-500 dark:text-slate-400 mb-0.5">
         {label}
       </label>
       <input
@@ -787,7 +787,7 @@ function Input({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full h-8 px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
+        className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
       />
     </div>
   )

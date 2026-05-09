@@ -62,12 +62,12 @@ interface ListingRow {
 }
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-600 border-slate-200',
-  SCHEDULED: 'bg-blue-50 text-blue-700 border-blue-200',
-  ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  ENDED: 'bg-slate-50 text-slate-400 border-slate-200',
-  CANCELLED: 'bg-slate-50 text-slate-400 border-slate-200',
-  FAILED: 'bg-rose-50 text-rose-700 border-rose-200',
+  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  SCHEDULED: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+  ACTIVE: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  ENDED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+  CANCELLED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+  FAILED: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
 }
 
 export default function EbayMarkdownsClient() {
@@ -150,13 +150,13 @@ export default function EbayMarkdownsClient() {
 
       <Card>
         <div className="flex items-start gap-2 text-sm">
-          <AlertCircle size={14} className="mt-0.5 text-amber-600 flex-shrink-0" />
-          <div className="text-slate-600">
-            <span className="font-semibold text-slate-700">eBay push pending —</span>{' '}
+          <AlertCircle size={14} className="mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <div className="text-slate-600 dark:text-slate-400">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">eBay push pending —</span>{' '}
             markdowns are stored in Nexus only. Schedule the sale on eBay&apos;s
-            Seller Hub side, then flip status to <code className="px-1 bg-slate-100 rounded text-xs">ACTIVE</code> here so the
+            Seller Hub side, then flip status to <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">ACTIVE</code> here so the
             engagement metrics line up. Direct push to eBay&apos;s promotion API
-            lands behind <code className="px-1 bg-slate-100 rounded text-xs">NEXUS_ENABLE_EBAY_PUBLISH</code> in a follow-up.
+            lands behind <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">NEXUS_ENABLE_EBAY_PUBLISH</code> in a follow-up.
           </div>
         </div>
       </Card>
@@ -165,7 +165,7 @@ export default function EbayMarkdownsClient() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+          className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
           aria-label="Filter by status"
         >
           <option value="">All statuses</option>
@@ -176,12 +176,12 @@ export default function EbayMarkdownsClient() {
           <option value="CANCELLED">Cancelled</option>
           <option value="FAILED">Failed</option>
         </select>
-        <span className="text-sm text-slate-500 ml-2">
+        <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">
           {markdowns.length} markdown{markdowns.length === 1 ? '' : 's'}
         </span>
         <button
           onClick={() => setCreateOpen(true)}
-          className="ml-auto h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+          className="ml-auto h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
         >
           <Plus size={12} /> New markdown
         </button>
@@ -193,15 +193,15 @@ export default function EbayMarkdownsClient() {
         </Card>
       ) : error && !data ? (
         <Card>
-          <div className="text-rose-600 text-sm">Failed to load: {error}</div>
+          <div className="text-rose-600 dark:text-rose-400 text-sm">Failed to load: {error}</div>
         </Card>
       ) : markdowns.length === 0 ? (
         <Card>
-          <div className="text-center py-8 text-sm text-slate-500">
+          <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
             No markdowns yet.{' '}
             <button
               onClick={() => setCreateOpen(true)}
-              className="text-blue-600 hover:underline"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Schedule your first markdown
             </button>
@@ -211,25 +211,25 @@ export default function EbayMarkdownsClient() {
       ) : (
         <Card noPadding>
           <table className="w-full text-base">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Listing</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Discount</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Original</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Markdown</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Window</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Status</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Listing</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Discount</th>
+                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Original</th>
+                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Markdown</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Window</th>
+                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {markdowns.map((m) => (
-                <tr key={m.id} className="border-b border-slate-100 hover:bg-slate-50/50">
+                <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50">
                   <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900 truncate max-w-xs">
+                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">
                       {m.listing.product.name}
                     </div>
-                    <div className="text-xs text-slate-500 font-mono">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                       {m.listing.product.sku} · {m.listing.marketplace}
                     </div>
                   </td>
@@ -242,13 +242,13 @@ export default function EbayMarkdownsClient() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-sm text-slate-500">
+                  <td className="px-3 py-2 text-right tabular-nums text-sm text-slate-500 dark:text-slate-400">
                     {m.originalPrice.toFixed(2)}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-sm font-semibold">
                     {m.markdownPrice.toFixed(2)} {m.currency}
                   </td>
-                  <td className="px-3 py-2 text-sm text-slate-600 whitespace-nowrap">
+                  <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
                     {new Date(m.startDate).toLocaleDateString()} →{' '}
                     {m.endDate ? new Date(m.endDate).toLocaleDateString() : 'open'}
                   </td>
@@ -264,7 +264,7 @@ export default function EbayMarkdownsClient() {
                           onClick={() => transition(m.id, 'CANCELLED')}
                           title="Cancel"
                           aria-label={`Cancel markdown for "${m.listing.product.sku}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
                         >
                           <Square size={12} />
                         </button>
@@ -274,7 +274,7 @@ export default function EbayMarkdownsClient() {
                           onClick={() => transition(m.id, 'ENDED')}
                           title="End now"
                           aria-label={`End markdown now for "${m.listing.product.sku}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
                         >
                           <Square size={12} />
                         </button>
@@ -284,7 +284,7 @@ export default function EbayMarkdownsClient() {
                           onClick={() => remove(m)}
                           title="Delete"
                           aria-label={`Delete DRAFT markdown for "${m.listing.product.sku}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
+                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -304,25 +304,25 @@ export default function EbayMarkdownsClient() {
           autoRelistCount) so there's nothing for a UI to read/write.
           Surfaced honestly so operators see the roadmap gap. */}
       <Card>
-        <div className="text-sm font-semibold text-slate-700 mb-2">
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
           Coming soon
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-400">
           <div className="flex items-start gap-2">
-            <MessageCircle size={14} className="mt-0.5 text-slate-400 flex-shrink-0" />
+            <MessageCircle size={14} className="mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
             <div>
-              <span className="font-medium text-slate-700">Best Offer manager —</span>{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">Best Offer manager —</span>{' '}
               per-listing toggle + auto-accept/decline thresholds. Needs a{' '}
-              <code className="px-1 bg-slate-100 rounded text-xs">bestOfferEnabled</code>{' '}
+              <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">bestOfferEnabled</code>{' '}
               column on ChannelListing; tracked in the roadmap as a follow-up.
             </div>
           </div>
           <div className="flex items-start gap-2">
-            <Repeat size={14} className="mt-0.5 text-slate-400 flex-shrink-0" />
+            <Repeat size={14} className="mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
             <div>
-              <span className="font-medium text-slate-700">Auto-relist controls —</span>{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">Auto-relist controls —</span>{' '}
               eBay re-lists ENDED items automatically when configured. Needs an{' '}
-              <code className="px-1 bg-slate-100 rounded text-xs">autoRelistCount</code>{' '}
+              <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">autoRelistCount</code>{' '}
               column on ChannelListing; tracked in the roadmap as a follow-up.
             </div>
           </div>
@@ -445,7 +445,7 @@ function CreateMarkdownModal({
       <ModalBody>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               eBay listing
             </label>
             <Input
@@ -454,9 +454,9 @@ function CreateMarkdownModal({
               placeholder="Search SKU, name, or eBay item ID…"
               autoFocus
             />
-            <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 rounded">
+            <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded">
               {listings.length === 0 ? (
-                <div className="text-sm text-slate-400 p-3 text-center">
+                <div className="text-sm text-slate-400 dark:text-slate-500 p-3 text-center">
                   No matching ACTIVE eBay listings
                 </div>
               ) : (
@@ -465,18 +465,18 @@ function CreateMarkdownModal({
                     <li
                       key={l.id}
                       onClick={() => setSelectedListingId(l.id)}
-                      className={`px-3 py-2 cursor-pointer flex items-center gap-2 border-b border-slate-100 last:border-b-0 ${
+                      className={`px-3 py-2 cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 ${
                         selectedListingId === l.id
-                          ? 'bg-blue-50'
-                          : 'hover:bg-slate-50'
+                          ? 'bg-blue-50 dark:bg-blue-950/40'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                       }`}
                     >
-                      <Tag size={11} className="text-slate-400" />
-                      <span className="font-mono text-xs text-slate-500">{l.product.sku}</span>
-                      <span className="text-sm text-slate-700 truncate flex-1">{l.product.name}</span>
-                      <span className="text-xs text-slate-400 font-mono">{l.marketplace}</span>
+                      <Tag size={11} className="text-slate-400 dark:text-slate-500" />
+                      <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{l.product.sku}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">{l.product.name}</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{l.marketplace}</span>
                       {l.price != null && (
-                        <span className="text-sm tabular-nums text-slate-700">
+                        <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">
                           {l.price.toFixed(2)}
                         </span>
                       )}
@@ -488,10 +488,10 @@ function CreateMarkdownModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Discount type
             </label>
-            <div className="space-y-1.5 text-sm text-slate-700">
+            <div className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -516,7 +516,7 @@ function CreateMarkdownModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {discountType === 'PERCENTAGE' ? 'Discount %' : 'Sale price'}
             </label>
             <Input
@@ -528,9 +528,9 @@ function CreateMarkdownModal({
               onChange={(e) => setDiscountValue(e.target.value)}
             />
             {previewPrice != null && (
-              <div className="text-xs text-slate-500 mt-1 tabular-nums">
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
                 Preview:{' '}
-                <span className="font-semibold text-slate-700">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
                   {previewPrice.toFixed(2)}
                 </span>{' '}
                 (vs current{' '}
@@ -541,7 +541,7 @@ function CreateMarkdownModal({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Start date
               </label>
               <Input
@@ -551,8 +551,8 @@ function CreateMarkdownModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                End date <span className="text-slate-400 font-normal">(optional)</span>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
               </label>
               <Input
                 type="date"
@@ -567,14 +567,14 @@ function CreateMarkdownModal({
         <button
           onClick={onClose}
           disabled={busy}
-          className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50"
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
         <button
           onClick={submit}
           disabled={busy || !selectedListingId}
-          className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5 disabled:opacity-50"
+          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5 disabled:opacity-50"
         >
           {busy ? 'Creating…' : 'Schedule markdown'}
         </button>
