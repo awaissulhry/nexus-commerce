@@ -34,6 +34,8 @@ const SAVE_DEBOUNCE_MS = 600
  *  corresponds to a field allowed on the existing
  *  /api/products/bulk PATCH endpoint, so we don't need a new route.
  *  W1.3 added basePrice + status + description.
+ *  W1.4 added bulletPoints + keywords (string[]) and hsCode +
+ *  countryOfOrigin (Italian fiscal compliance).
  */
 const MASTER_FIELDS = [
   'sku',
@@ -45,6 +47,10 @@ const MASTER_FIELDS = [
   'status',
   'basePrice',
   'description',
+  'bulletPoints',
+  'keywords',
+  'hsCode',
+  'countryOfOrigin',
   'weightValue',
   'weightUnit',
   'dimLength',
@@ -71,11 +77,27 @@ const NUMERIC_FIELDS: ReadonlySet<string> = new Set([
   'maxPrice',
 ])
 
+/** W1.4 — fields that the form holds as a raw textarea (one entry per
+ *  line) but the server expects as a string[]. We keep the textarea
+ *  shape in local state for natural editing, then split + trim on
+ *  flush. Empty lines are dropped.
+ */
+const ARRAY_FIELDS: ReadonlySet<string> = new Set([
+  'bulletPoints',
+  'keywords',
+])
+
 function seedFromProduct(product: any): Record<MasterField, string> {
   const seed = {} as Record<MasterField, string>
   for (const f of MASTER_FIELDS) {
     const v = product[f]
-    seed[f] = v == null ? '' : String(v)
+    if (ARRAY_FIELDS.has(f)) {
+      // bulletPoints / keywords come back as string[]. Render as
+      // newline-separated text for natural multi-line editing.
+      seed[f] = Array.isArray(v) ? v.join('\n') : ''
+    } else {
+      seed[f] = v == null ? '' : String(v)
+    }
   }
   if (!seed.weightUnit) seed.weightUnit = 'kg'
   if (!seed.dimUnit) seed.dimUnit = 'cm'
@@ -148,6 +170,14 @@ export default function MasterDataTab({
       if (NUMERIC_FIELDS.has(field)) {
         value = raw === '' ? null : Number(raw)
         if (typeof value === 'number' && Number.isNaN(value)) value = null
+      } else if (ARRAY_FIELDS.has(field)) {
+        // W1.4 — split textarea into a string[] for the server. The
+        // /bulk validator caps at 20, trims, and drops blanks anyway,
+        // but normalising here keeps the round-trip predictable.
+        value = (raw ?? '')
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
       } else if (raw === '') {
         value = null
       }
@@ -357,6 +387,91 @@ export default function MasterDataTab({
       </Card>
 
       <Card
+        title={t('products.edit.master.contentSecondaryTitle')}
+        description={t('products.edit.master.contentSecondaryDesc')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <label
+                htmlFor="master-bullets"
+                className="text-base font-medium text-slate-700 dark:text-slate-300"
+              >
+                {t('products.edit.master.bulletsLabel')}
+              </label>
+              <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                {t('products.edit.master.bulletsCount', {
+                  count: bulletCount(data.bulletPoints),
+                })}
+              </span>
+            </div>
+            <textarea
+              id="master-bullets"
+              value={data.bulletPoints}
+              onChange={(e) => update('bulletPoints', e.target.value)}
+              placeholder={t('products.edit.master.bulletsPlaceholder')}
+              rows={6}
+              className="w-full rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-sans"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('products.edit.master.bulletsHint')}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <label
+              htmlFor="master-keywords"
+              className="text-base font-medium text-slate-700 dark:text-slate-300"
+            >
+              {t('products.edit.master.keywordsLabel')}
+            </label>
+            <textarea
+              id="master-keywords"
+              value={data.keywords}
+              onChange={(e) => update('keywords', e.target.value)}
+              placeholder={t('products.edit.master.keywordsPlaceholder')}
+              rows={6}
+              className="w-full rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-sans"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('products.edit.master.keywordsHint')}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        title={t('products.edit.master.complianceTitle')}
+        description={t('products.edit.master.complianceDesc')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+          <div className="space-y-1">
+            <Input
+              label={t('products.edit.master.hsCodeLabel')}
+              value={data.hsCode}
+              mono
+              onChange={(e) => update('hsCode', e.target.value)}
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('products.edit.master.hsCodeHint')}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Input
+              label={t('products.edit.master.countryOfOriginLabel')}
+              value={data.countryOfOrigin}
+              mono
+              onChange={(e) =>
+                update('countryOfOrigin', e.target.value.toUpperCase())
+              }
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('products.edit.master.countryOfOriginHint')}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
         title={t('products.edit.master.physicalTitle')}
         description={t('products.edit.master.physicalDesc')}
       >
@@ -456,6 +571,13 @@ export default function MasterDataTab({
       </Card>
     </div>
   )
+}
+
+function bulletCount(raw: string): number {
+  return raw
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0).length
 }
 
 function ConflictBanner({

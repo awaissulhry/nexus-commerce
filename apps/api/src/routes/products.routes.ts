@@ -1101,6 +1101,21 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // attribute set; per-listing override stays in
       // platformAttributes.productType (Q.5).
       'productType',
+      // W1.4 — master long-form content + keyword tags. bulletPoints
+      // and keywords are string[] columns on Product; the validator
+      // below accepts both an array of strings and a JSON-string
+      // payload (the bulk-ops grid pastes it as JSON, the master
+      // editor sends it as an array).
+      'bulletPoints',
+      'keywords',
+      // W1.4 — Italian fiscal / customs fields. hsCode is the
+      // tariff classification (digit string) used by customs
+      // declarations; countryOfOrigin is the ISO-2 alpha code used
+      // on commercial invoices and Amazon attributes. Both flow
+      // through PATCH /api/products/bulk so the master editor and
+      // bulk-ops paste workflows share the same validator.
+      'hsCode',
+      'countryOfOrigin',
     ])
     // D.3d: prefixed channel fields write to ChannelListing instead of
     // Product. Only the suffixes in this set are wired today; the rest
@@ -1391,6 +1406,71 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             continue
           }
           value = v
+        }
+      } else if (c.field === 'bulletPoints' || c.field === 'keywords') {
+        // W1.4 — string[] master fields. Accept array literally or a
+        // JSON-string payload (the bulk-ops grid pastes JSON; the
+        // edit-page form sends a real array). Empty / null clears
+        // the column. Caps at 20 entries; trims each; drops blanks.
+        let arr: unknown[] | null = null
+        if (value === null || value === undefined || value === '') {
+          arr = []
+        } else if (Array.isArray(value)) {
+          arr = value as unknown[]
+        } else if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value)
+            arr = Array.isArray(parsed) ? parsed : null
+          } catch {
+            arr = null
+          }
+        }
+        if (arr === null) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: `${c.field} must be a string array or JSON array`,
+          })
+          continue
+        }
+        const cleaned = arr
+          .map((x) => (typeof x === 'string' ? x.trim() : ''))
+          .filter((x) => x.length > 0)
+          .slice(0, 20)
+        value = cleaned
+      } else if (c.field === 'hsCode') {
+        // W1.4 — HS tariff code, digit string (6, 8 or 10 digits in
+        // most jurisdictions; we accept dots/spaces and strip them).
+        // Empty / null clears.
+        if (value === null || value === undefined || value === '') {
+          value = null
+        } else {
+          const raw = String(value).replace(/[\s.]/g, '')
+          if (!/^\d{4,12}$/.test(raw)) {
+            errors.push({
+              id: c.id,
+              field: c.field,
+              error: 'hsCode must be 4–12 digits (dots and spaces ignored)',
+            })
+            continue
+          }
+          value = raw
+        }
+      } else if (c.field === 'countryOfOrigin') {
+        // W1.4 — ISO 3166-1 alpha-2, upper-case. Empty / null clears.
+        if (value === null || value === undefined || value === '') {
+          value = null
+        } else {
+          const raw = String(value).trim().toUpperCase()
+          if (!/^[A-Z]{2}$/.test(raw)) {
+            errors.push({
+              id: c.id,
+              field: c.field,
+              error: 'countryOfOrigin must be a 2-letter ISO country code',
+            })
+            continue
+          }
+          value = raw
         }
       } else {
         // text fields — trim, coerce empty string to null only for
