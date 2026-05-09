@@ -145,6 +145,51 @@ export interface ChannelSuggestion {
   reason: string
 }
 
+// AI-4.4 — variation theme recommendation. Returned by
+// suggestVariationTheme() for the Step 4 "AI: pick the right theme"
+// CTA.
+export interface VariationThemeOption {
+  id: string
+  label: string
+  requiredAttributes: string[]
+}
+export interface VariationThemeRecommendation {
+  themeId: string
+  reason: string
+  alternatives: Array<{
+    themeId: string
+    reason: string
+  }>
+}
+
+export interface SuggestVariationThemeParams {
+  product: ProductContext
+  /** Lowercased attribute keys present across the variation children
+   *  (e.g. ["size", "color"]). Comes from VariationsPayload.
+   *  presentAttributes — the client already has this loaded. */
+  presentAttributes: string[]
+  /** Themes available across the wizard's selected channels (the
+   *  intersection / common-themes set works well here). Pass the full
+   *  list so AI can rank — it'll only recommend from this set. */
+  availableThemes: VariationThemeOption[]
+  budgetScope?: BudgetCheckScope
+  provider?: string | null
+}
+
+export interface SuggestVariationThemeResult {
+  recommendation: VariationThemeRecommendation
+  usage: ProviderUsage
+  redactions: RedactionCount[]
+  redactionTotal: number
+  metadata: {
+    productSku: string
+    model: string
+    provider: ProviderName
+    elapsedMs: number
+    generatedAt: string
+  }
+}
+
 export interface SuggestChannelsParams {
   product: ProductContext
   availableChannels: Array<{ platform: string; marketplace: string }>
@@ -507,6 +552,158 @@ export class ListingContentService {
         generatedAt: new Date().toISOString(),
       },
     }
+  }
+
+  /**
+   * AI-4.4 — recommend the best variation theme for a multi-variant
+   * product given the wizard's available themes (channel
+   * intersection) and the variation axes the children actually use.
+   *
+   * Single AI call. Same cost-safety stack as suggestChannels.
+   *
+   * Returns one primary recommendation + up to 3 alternatives. The
+   * UI surfaces the primary as the suggested radio button and lists
+   * alternatives so operators see the AI's reasoning across options.
+   */
+  async suggestVariationTheme(
+    params: SuggestVariationThemeParams,
+  ): Promise<SuggestVariationThemeResult> {
+    if (isAiKillSwitchOn()) {
+      throw new Error(
+        'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
+      )
+    }
+    const provider = getProvider(params.provider)
+    if (!provider) {
+      throw new Error(
+        'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
+      )
+    }
+    if (params.availableThemes.length === 0) {
+      throw new Error(
+        'No themes available — Step 4 has nothing to choose from. Pick a product type in Step 2 first.',
+      )
+    }
+
+    const prompt = this.suggestVariationThemePrompt(params)
+
+    if (params.budgetScope) {
+      const estimateUSD = estimateCallCostUSD({
+        prompt,
+        maxOutputTokens: 4096,
+        provider: provider.name,
+        model: provider.defaultModel,
+      })
+      const verdict = await checkBudget(estimateUSD, params.budgetScope)
+      if (!verdict.allowed) {
+        throw new BudgetExceededError(
+          verdict.reason ?? 'per_call',
+          verdict.message ??
+            'Variation theme suggestion refused — budget ceiling reached.',
+        )
+      }
+    }
+
+    const start = Date.now()
+    const { text, usage, redactions } = await this.runOne(provider, prompt, 0)
+    const recommendation = this.parseVariationThemeRecommendation(
+      text,
+      params.availableThemes,
+    )
+    const redactionTotal = totalRedactions(redactions)
+    return {
+      recommendation,
+      usage,
+      redactions,
+      redactionTotal,
+      metadata: {
+        productSku: params.product.sku,
+        model: usage.model,
+        provider: usage.provider,
+        elapsedMs: Date.now() - start,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  }
+
+  private suggestVariationThemePrompt(
+    params: SuggestVariationThemeParams,
+  ): string {
+    const themesList = params.availableThemes
+      .map(
+        (t) =>
+          `- id="${t.id}" label="${t.label}" requires=[${t.requiredAttributes
+            .map((a) => `"${a}"`)
+            .join(', ')}]`,
+      )
+      .join('\n')
+    const presentList = params.presentAttributes
+      .map((a) => `"${a}"`)
+      .join(', ')
+    return `You are an Amazon catalog specialist. Pick the best variation theme for this product given the children's actual variation axes.
+
+Product:
+${this.contextBlock(params.product)}
+
+Variation axes used by children: [${presentList}]
+
+Available themes (only choose from these — DO NOT invent new ones):
+${themesList}
+
+Rules:
+- The picked theme's "requires" array MUST be a subset of the children's variation axes (otherwise children would fail Amazon's variation validation).
+- Prefer the most specific theme that fits — e.g. if children use both size and color, "SizeColor" beats plain "Color" because it carries more information for buyers and lets Amazon render the right swatch grid.
+- When two themes equally fit, prefer the one whose label is closer to the product's category convention.
+
+Return JSON only — no markdown, no commentary, no surrounding text:
+{
+  "themeId": "...",
+  "reason": "1–2 sentences explaining why this theme is the right pick for THIS product",
+  "alternatives": [
+    {
+      "themeId": "...",
+      "reason": "1 sentence — why this is also viable but not the top pick"
+    }
+  ]
+}
+
+Up to 3 alternatives. Empty array when no other theme is viable.`
+  }
+
+  private parseVariationThemeRecommendation(
+    raw: string,
+    available: VariationThemeOption[],
+  ): VariationThemeRecommendation {
+    const j = this.parseJson<{
+      themeId?: unknown
+      reason?: unknown
+      alternatives?: unknown
+    }>(raw, 'variation-theme')
+    const allowed = new Set(available.map((t) => t.id))
+    const themeId = typeof j.themeId === 'string' && allowed.has(j.themeId)
+      ? j.themeId
+      : (available[0]?.id ?? '')
+    const reason = typeof j.reason === 'string'
+      ? j.reason.trim().slice(0, 500)
+      : ''
+    const alternatives: VariationThemeRecommendation['alternatives'] = []
+    if (Array.isArray(j.alternatives)) {
+      for (const a of j.alternatives) {
+        if (!a || typeof a !== 'object') continue
+        const alt = a as Record<string, unknown>
+        const altId = typeof alt.themeId === 'string' && allowed.has(alt.themeId)
+          ? alt.themeId
+          : null
+        if (!altId) continue
+        if (altId === themeId) continue // dedupe with primary
+        const altReason = typeof alt.reason === 'string'
+          ? alt.reason.trim().slice(0, 500)
+          : ''
+        alternatives.push({ themeId: altId, reason: altReason })
+        if (alternatives.length >= 3) break
+      }
+    }
+    return { themeId, reason, alternatives }
   }
 
   private suggestChannelsPrompt(params: SuggestChannelsParams): string {

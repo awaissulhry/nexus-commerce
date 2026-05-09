@@ -3846,6 +3846,176 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── AI-4.4 — Step 4 variation theme suggester ──────────────────
+  //
+  // POST /api/listing-wizard/:id/suggest-variation-theme
+  // Body: {
+  //   presentAttributes: string[],
+  //   availableThemes: [{id, label, requiredAttributes}],
+  //   provider?
+  // }
+  //
+  // Single AI call. Caller passes the variation axes used by children
+  // and the themes available across the wizard's selected channels —
+  // the client already has both loaded from the /variations payload,
+  // so this endpoint avoids re-fetching them server-side. Server
+  // reads the product context and asks AI for a primary theme + up
+  // to 3 alternatives.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      presentAttributes?: string[]
+      availableThemes?: Array<{
+        id?: string
+        label?: string
+        requiredAttributes?: string[]
+      }>
+      provider?: string
+    }
+  }>(
+    '/listing-wizard/:id/suggest-variation-theme',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API server.',
+        })
+      }
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const presentAttributes = Array.isArray(request.body?.presentAttributes)
+        ? request.body!.presentAttributes!
+            .filter((a): a is string => typeof a === 'string' && a.length > 0)
+            .map((a) => a.toLowerCase())
+        : []
+      const availableThemes = Array.isArray(request.body?.availableThemes)
+        ? request.body!.availableThemes!
+            .filter(
+              (t): t is { id: string; label: string; requiredAttributes: string[] } =>
+                !!t &&
+                typeof t.id === 'string' &&
+                typeof t.label === 'string' &&
+                Array.isArray(t.requiredAttributes) &&
+                t.requiredAttributes.every((a) => typeof a === 'string'),
+            )
+            .map((t) => ({
+              id: t.id,
+              label: t.label,
+              requiredAttributes: t.requiredAttributes.map((a) => a.toLowerCase()),
+            }))
+        : []
+      if (availableThemes.length === 0) {
+        return reply.code(400).send({
+          error:
+            'availableThemes is required and must contain at least one {id, label, requiredAttributes} entry.',
+        })
+      }
+
+      try {
+        const result = await listingContentService.suggestVariationTheme({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            bulletPoints: product.bulletPoints,
+            keywords: product.keywords,
+            weightValue: product.weightValue
+              ? Number(product.weightValue)
+              : null,
+            weightUnit: product.weightUnit,
+            dimLength: product.dimLength ? Number(product.dimLength) : null,
+            dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+            dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+            dimUnit: product.dimUnit,
+            productType: product.productType,
+            variantAttributes: product.variantAttributes,
+            categoryAttributes: product.categoryAttributes,
+          },
+          presentAttributes,
+          availableThemes,
+          provider: request.body?.provider ?? null,
+          budgetScope: {
+            feature: 'listing-wizard',
+            wizardId: wizard.id,
+          },
+        })
+
+        logUsage({
+          provider: result.usage.provider,
+          model: result.usage.model,
+          feature: 'listing-wizard.suggest-variation-theme',
+          entityType: 'ListingWizard',
+          entityId: wizard.id,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          costUSD: result.usage.costUSD,
+          latencyMs: result.metadata.elapsedMs,
+          ok: true,
+          metadata: {
+            productId: product.id,
+            presentAttributes,
+            themeCount: availableThemes.length,
+            recommended: result.recommendation.themeId,
+            redactionTotal: result.redactionTotal,
+          },
+        })
+
+        return {
+          wizard: { id: wizard.id, productId: wizard.productId },
+          recommendation: result.recommendation,
+          usage: result.usage,
+          redactionTotal: result.redactionTotal,
+          metadata: result.metadata,
+        }
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          fastify.log.warn(
+            { reason: err.reason },
+            '[suggest-variation-theme] refused by budget',
+          )
+          return reply.code(402).send({
+            error: err.message,
+            budget: { reason: err.reason },
+          })
+        }
+        fastify.log.error({ err }, '[suggest-variation-theme] failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // ── AI-4.3 — Step 1 channel suggester ──────────────────────────
   //
   // POST /api/listing-wizard/:id/suggest-channels
