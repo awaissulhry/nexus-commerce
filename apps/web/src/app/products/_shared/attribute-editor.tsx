@@ -8,6 +8,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/Button'
+import { IconButton } from '@/components/ui/IconButton'
 import { type ChannelGroup } from '../[id]/list-wizard/components/ChannelGroupsManager'
 
 // Mirrors UnionField on the backend (apps/api/src/services/listing-
@@ -371,7 +373,8 @@ export function FieldGroupSection({
         <button
           type="button"
           onClick={() => setExpanded((s) => !s)}
-          className="flex-1 flex items-center gap-2 flex-wrap min-w-0 px-4 py-2.5 hover:bg-slate-50 text-left"
+          aria-expanded={expanded}
+          className="flex-1 flex items-center gap-2 flex-wrap min-w-0 px-4 py-2.5 hover:bg-slate-50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
         >
           {expanded ? (
             <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
@@ -570,20 +573,17 @@ export function FieldCard({
 
       {supportsAI && onAIGenerate && (
         <div className="mb-2 flex items-center justify-end">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onAIGenerate}
-            disabled={aiBusy}
-            className="inline-flex items-center gap-1 h-6 px-2 text-sm font-medium text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-40"
+            loading={aiBusy}
+            icon={!aiBusy ? <Sparkles className="w-3 h-3" /> : undefined}
+            className="!h-6 !px-2 !text-sm !text-blue-700 !border-blue-200 hover:!bg-blue-50"
             title={`Generate ${field.label} with AI for the first selected channel`}
           >
-            {aiBusy ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <Sparkles className="w-3 h-3" />
-            )}
             AI generate
-          </button>
+          </Button>
         </div>
       )}
 
@@ -663,7 +663,8 @@ export function FieldCard({
           <button
             type="button"
             onClick={onToggleExpanded}
-            className="text-base text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+            aria-expanded={expanded}
+            className="text-base text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
           >
             {expanded ? (
               <ChevronDown className="w-3 h-3" />
@@ -757,7 +758,8 @@ export function FieldCard({
             <button
               type="button"
               onClick={onToggleVariants}
-              className="text-base text-slate-600 hover:text-slate-900 inline-flex items-center gap-1"
+              aria-expanded={variantsExpanded}
+              className="text-base text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
             >
               {variantsExpanded ? (
                 <ChevronDown className="w-3 h-3" />
@@ -1276,19 +1278,21 @@ export function OverrideMenu({
   const [open, setOpen] = useState(false)
   return (
     <div className="relative flex-shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((s) => !s)}
-        title="Copy or translate"
+      <IconButton
         aria-label="Copy or translate"
-        className="h-6 w-6 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+        size="sm"
+        onClick={() => setOpen((s) => !s)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="Copy or translate"
+        className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
       >
         {translateBusy ? (
           <Loader2 className="w-3 h-3 animate-spin" />
         ) : (
           <span className="text-lg leading-none">⋯</span>
         )}
-      </button>
+      </IconButton>
       {open && (
         <>
           <div
@@ -1501,15 +1505,17 @@ export function VariantBroadcastMenu({
   const emptyOtherIds = otherIds.filter((id) => isEmpty(variantValues[id]))
   return (
     <div className="relative flex-shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((s) => !s)}
-        title="Apply this value to other variants"
+      <IconButton
         aria-label="Apply this value to other variants"
-        className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
+        size="md"
+        onClick={() => setOpen((s) => !s)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="Apply this value to other variants"
+        className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
       >
         <span className="text-lg leading-none">⋯</span>
-      </button>
+      </IconButton>
       {open && (
         <>
           <div
