@@ -3010,5 +3010,21 @@
   "products.drawer.forecast.basis.none": "Nessun segnale di domanda ancora. Genera la storia vendite per proiettare una data di esaurimento.",
   "stock.recallDetail.tabsAria": "Sezioni richiamo",
   "stock.recallDetail.tabAffected": "Ordini interessati ({n})",
-  "stock.recallDetail.tabProvenance": "Provenienza"
+  "stock.recallDetail.tabProvenance": "Provenienza",
+  "stock.lots.pageTitle": "Lotti",
+  "stock.lots.subnav": "Lotti",
+  "stock.lots.pageDescription": "Batch di produzione con ordine di consumo FEFO, tracciamento scadenze e integrazione richiami. Clicca il prodotto di un lotto per ispezionare la provenienza.",
+  "stock.lots.activeOnly": "Solo attivi (con unità rimanenti)",
+  "stock.lots.filter.all": "Tutti",
+  "stock.lots.filter.expiring30": "Scade tra 30g",
+  "stock.lots.filter.expiring90": "Scade tra 90g",
+  "stock.lots.empty.title": "Nessun lotto corrisponde ai filtri",
+  "stock.lots.empty.description": "I lotti vengono creati alla ricezione quando l'operatore registra un numero di batch. Nessuno ancora registrato per questi filtri.",
+  "stock.lots.col.lot": "Lotto",
+  "stock.lots.col.product": "Prodotto",
+  "stock.lots.col.units": "Rimanenti",
+  "stock.lots.col.expires": "Scade",
+  "stock.lots.col.received": "Ricevuto",
+  "stock.lots.col.supplierRef": "Rif. fornitore",
+  "stock.lots.expiringInDays": "{days}g"
 }

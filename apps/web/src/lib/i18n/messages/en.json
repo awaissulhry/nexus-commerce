@@ -3022,5 +3022,21 @@
   "products.drawer.forecast.basis.none": "No demand signal yet. Generate sales history to project a stockout date.",
   "stock.recallDetail.tabsAria": "Recall sections",
   "stock.recallDetail.tabAffected": "Affected orders ({n})",
-  "stock.recallDetail.tabProvenance": "Provenance"
+  "stock.recallDetail.tabProvenance": "Provenance",
+  "stock.lots.pageTitle": "Lots",
+  "stock.lots.subnav": "Lots",
+  "stock.lots.pageDescription": "Manufacturing batches with FEFO consume order, expiry tracking, and recall integration. Click any lot's product link to inspect provenance.",
+  "stock.lots.activeOnly": "Active only (units remaining)",
+  "stock.lots.filter.all": "All",
+  "stock.lots.filter.expiring30": "Expiring 30d",
+  "stock.lots.filter.expiring90": "Expiring 90d",
+  "stock.lots.empty.title": "No lots match these filters",
+  "stock.lots.empty.description": "Lots are created on inbound receive when the operator records a batch number. None recorded yet that match the current filters.",
+  "stock.lots.col.lot": "Lot",
+  "stock.lots.col.product": "Product",
+  "stock.lots.col.units": "Remaining",
+  "stock.lots.col.expires": "Expires",
+  "stock.lots.col.received": "Received",
+  "stock.lots.col.supplierRef": "Supplier ref",
+  "stock.lots.expiringInDays": "{days}d"
 }

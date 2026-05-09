@@ -28,6 +28,7 @@ import {
   Truck,
   Globe,
   ShieldAlert,
+  Package,
 } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -52,6 +53,7 @@ export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0 }: StockSubN
     { href: '/fulfillment/stock/reservations', labelKey: 'stock.reservations.title', icon: LockIcon },
     { href: '/fulfillment/stock/analytics', labelKey: 'stock.analytics.title', icon: Activity },
     { href: '/fulfillment/stock/stockouts', labelKey: 'stock.stockouts.title', icon: AlertTriangle },
+    { href: '/fulfillment/stock/lots', labelKey: 'stock.lots.subnav', icon: Package },
     { href: '/fulfillment/stock/recalls', labelKey: 'stock.recalls.title', icon: ShieldAlert, badge: recallsOpen, badgeTone: 'rose' as const },
     { href: '/fulfillment/stock/import', labelKey: 'stock.import.title', icon: Upload },
     { href: '/fulfillment/stock/shopify-locations', labelKey: 'stock.shopifyLocations.title', icon: Store },
