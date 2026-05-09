@@ -169,6 +169,13 @@ type ReturnRow = {
       deliveredAt: string | null
     }>
   } | null
+  // UI.1 — latest POSTED refund's credit note (when present). Surfaced
+  // on the list row as a "NC-NNNNN/YYYY" badge so the operator sees
+  // fiscal-doc state at a glance without opening the drawer.
+  refunds?: Array<{
+    id: string
+    creditNote: { creditNoteNumber: string; sdiStatus: string | null } | null
+  }>
   createdAt: string
 }
 
@@ -864,7 +871,16 @@ export default function ReturnsWorkspace() {
                     </td>
                     <td className="px-3 py-2 text-base text-slate-600 dark:text-slate-400 truncate max-w-[200px]">{r.reason ?? '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">
-                      {r.refundCents != null ? `€${(r.refundCents / 100).toFixed(2)}` : '—'}
+                      <div>{r.refundCents != null ? `€${(r.refundCents / 100).toFixed(2)}` : '—'}</div>
+                      {/* UI.1 — F1.4 credit-note number on the row. Only
+                          shows for refunded rows where the auto-assign
+                          fired (or the operator manually clicked Assign
+                          via the drawer's CreditNotePanel). */}
+                      {r.refunds?.[0]?.creditNote?.creditNoteNumber && (
+                        <div className="text-xs font-mono mt-0.5 inline-flex items-center gap-1 text-indigo-700 dark:text-indigo-300" title={`SDI: ${r.refunds[0].creditNote.sdiStatus ?? 'queued locally'}`}>
+                          {r.refunds[0].creditNote.creditNoteNumber}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-base text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
                       {new Date(r.createdAt).toLocaleDateString('it-IT', { year: '2-digit', month: 'short', day: 'numeric' })}

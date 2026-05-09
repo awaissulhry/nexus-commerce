@@ -212,7 +212,30 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       const [items, total] = await Promise.all([
         prisma.return.findMany({
           where,
-          include: { items: true },
+          include: {
+            items: true,
+            // UI.1 — surface latest active credit-note number on the
+            // returns list so REFUNDED rows show "NC-NNNNN/YYYY" inline
+            // without forcing the operator into the drawer. Pulls only
+            // the most recent POSTED refund's creditNote (the
+            // operationally interesting one); historical/failed
+            // refunds + their credit notes still live in the drawer's
+            // RefundHistory section.
+            refunds: {
+              where: { channelStatus: 'POSTED' },
+              orderBy: { channelPostedAt: 'desc' },
+              take: 1,
+              select: {
+                id: true,
+                creditNote: {
+                  select: {
+                    creditNoteNumber: true,
+                    sdiStatus: true,
+                  },
+                },
+              },
+            },
+          },
           orderBy: { [sortBy]: sortDir },
           skip,
           take: pageSize,
