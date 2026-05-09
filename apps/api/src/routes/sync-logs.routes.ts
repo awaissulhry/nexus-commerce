@@ -41,6 +41,7 @@ interface CallsQuery {
   operation?: string
   success?: string
   errorType?: string
+  requestId?: string
   limit?: string
   cursor?: string
 }
@@ -65,6 +66,7 @@ function buildWhere(
   if (q.success === 'true') where.success = true
   else if (q.success === 'false') where.success = false
   if (q.errorType) where.errorType = q.errorType
+  if (q.requestId) where.requestId = q.requestId
   return where
 }
 

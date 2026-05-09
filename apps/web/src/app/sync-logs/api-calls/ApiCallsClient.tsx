@@ -110,6 +110,7 @@ export default function ApiCallsClient() {
   const urlChannel = searchParams.get('channel') ?? ''
   const urlErrorType = searchParams.get('errorType') ?? ''
   const urlSuccess = searchParams.get('success') ?? ''
+  const urlRequestId = searchParams.get('requestId') ?? ''
 
   const [rollup, setRollup] = useState<RollupResponse | null>(null)
   const [recent, setRecent] = useState<ApiCallRow[]>([])
@@ -160,6 +161,7 @@ export default function ApiCallsClient() {
         if (urlChannel) filters.channel = urlChannel
         if (urlErrorType) filters.errorType = urlErrorType
         if (urlSuccess) filters.success = urlSuccess
+        if (urlRequestId) filters.requestId = urlRequestId
 
         const qs = new URLSearchParams(filters)
         const recentParams = new URLSearchParams(qs)
@@ -205,7 +207,7 @@ export default function ApiCallsClient() {
         else setLoadingMore(false)
       }
     },
-    [sinceMs, urlChannel, urlErrorType, urlSuccess, nextCursor],
+    [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, nextCursor],
   )
 
   useEffect(() => {
@@ -213,7 +215,7 @@ export default function ApiCallsClient() {
     // fetchAll changes when filters change; avoid loop by depending only
     // on filter inputs, not nextCursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sinceMs, urlChannel, urlErrorType, urlSuccess])
+  }, [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId])
 
   // L.7.0 — live tail. Opens an EventSource against the backend SSE
   // endpoint while `live` is true. Each api-call.recorded event is
@@ -381,6 +383,21 @@ export default function ApiCallsClient() {
           >
             Failures only
           </button>
+
+          {/* L.12.0 — request-id chip. Visible only when filtering
+              by a specific request; click X to clear. */}
+          {urlRequestId && (
+            <button
+              type="button"
+              onClick={() => updateUrl({ requestId: '' })}
+              className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
+              title="Clear request-id filter"
+            >
+              req: {urlRequestId.slice(0, 12)}
+              {urlRequestId.length > 12 && '…'}
+              <X className="w-3 h-3" />
+            </button>
+          )}
 
           <button
             type="button"
@@ -635,7 +652,16 @@ export default function ApiCallsClient() {
       )}
 
       {/* Detail slide-over */}
-      {selected && <DetailPanel row={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <DetailPanel
+          row={selected}
+          onClose={() => setSelected(null)}
+          onFilterByRequestId={(id) => {
+            updateUrl({ requestId: id })
+            setSelected(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -643,9 +669,11 @@ export default function ApiCallsClient() {
 function DetailPanel({
   row,
   onClose,
+  onFilterByRequestId,
 }: {
   row: ApiCallRow
   onClose: () => void
+  onFilterByRequestId: (id: string) => void
 }) {
   return (
     <div
@@ -728,9 +756,15 @@ function DetailPanel({
 
           {row.requestId && (
             <Section label="Request ID">
-              <code className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded">
+              <button
+                type="button"
+                onClick={() => onFilterByRequestId(row.requestId!)}
+                title="Filter the list to show every call from this request"
+                className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 rounded inline-flex items-center gap-1.5 transition-colors"
+              >
                 {row.requestId}
-              </code>
+                <span className="text-slate-400">→ filter</span>
+              </button>
             </Section>
           )}
 
