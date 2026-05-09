@@ -2435,5 +2435,16 @@
   "products.tags.failed.load": "Caricamento tag fallito: {msg}",
   "products.tags.failed.attach": "Aggiunta tag fallita: {msg}",
   "products.tags.failed.remove": "Rimozione tag fallita: {msg}",
-  "products.tags.failed.create": "Creazione tag fallita"
+  "products.tags.failed.create": "Creazione tag fallita",
+  "products.mobile.empty": "Nessun prodotto corrisponde a questi filtri",
+  "products.mobile.loadingVariants": "Caricamento varianti…",
+  "products.mobile.noVariants": "Nessuna variante trovata",
+  "products.mobile.variants.one": "{count} variante",
+  "products.mobile.variants.other": "{count} varianti",
+  "products.mobile.pcs": "pz",
+  "products.mobile.openAria": "Apri {sku} {name}",
+  "products.mobile.select": "Seleziona",
+  "products.mobile.deselect": "Deseleziona",
+  "products.mobile.expandVariants": "Espandi varianti",
+  "products.mobile.collapseVariants": "Comprimi varianti"
 }

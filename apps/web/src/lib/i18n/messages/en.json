@@ -2447,5 +2447,16 @@
   "products.tags.failed.load": "Failed to load tags: {msg}",
   "products.tags.failed.attach": "Attach tag failed: {msg}",
   "products.tags.failed.remove": "Remove tag failed: {msg}",
-  "products.tags.failed.create": "Failed to create tag"
+  "products.tags.failed.create": "Failed to create tag",
+  "products.mobile.empty": "No products match these filters",
+  "products.mobile.loadingVariants": "Loading variants…",
+  "products.mobile.noVariants": "No variants found",
+  "products.mobile.variants.one": "{count} variant",
+  "products.mobile.variants.other": "{count} variants",
+  "products.mobile.pcs": "pcs",
+  "products.mobile.openAria": "Open {sku} {name}",
+  "products.mobile.select": "Select",
+  "products.mobile.deselect": "Deselect",
+  "products.mobile.expandVariants": "Expand variants",
+  "products.mobile.collapseVariants": "Collapse variants"
 }

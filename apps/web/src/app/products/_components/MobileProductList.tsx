@@ -21,6 +21,7 @@
  */
 
 import { CheckCircle2, ChevronRight, Package } from 'lucide-react'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 // Minimal shape — subset of ProductRow that the mobile cards
 // actually read. Defined locally so the module doesn't depend on
@@ -57,6 +58,7 @@ export function MobileProductList({
   loadingChildren,
   onToggleExpand,
 }: MobileProductListProps) {
+  const { t } = useTranslations()
   const openDrawer = (id: string) => {
     window.dispatchEvent(
       new CustomEvent('nexus:open-product-drawer', {
@@ -73,7 +75,7 @@ export function MobileProductList({
         // consistently across the component.
         className="border border-slate-200 dark:border-slate-800 rounded-md py-12 text-center text-base text-slate-500 dark:text-slate-400 italic"
       >
-        No products match these filters
+        {t('products.mobile.empty')}
       </div>
     )
   }
@@ -107,11 +109,11 @@ export function MobileProductList({
               <div className="ml-6 space-y-1 border-l-2 border-slate-200 dark:border-slate-800 pl-2">
                 {isLoading ? (
                   <div className="text-base text-slate-500 dark:text-slate-400 italic px-2 py-1.5 bg-slate-50/60 dark:bg-slate-800/60 rounded">
-                    Loading variants…
+                    {t('products.mobile.loadingVariants')}
                   </div>
                 ) : kids.length === 0 ? (
                   <div className="text-base text-slate-500 dark:text-slate-400 italic px-2 py-1.5 bg-slate-50/60 dark:bg-slate-800/60 rounded">
-                    No variants found
+                    {t('products.mobile.noVariants')}
                   </div>
                 ) : (
                   kids.map((c) => (
@@ -149,6 +151,7 @@ function MobileProductCard({
   onOpen: () => void
   chevron?: { isExpanded: boolean; onClick: () => void; childCount: number }
 }) {
+  const { t } = useTranslations()
   const stock = Number(p.totalStock ?? 0)
   const stockTone =
     stock === 0
@@ -177,7 +180,7 @@ function MobileProductCard({
           onOpen()
         }
       }}
-      aria-label={`Open ${p.sku} ${p.name ?? ''}`}
+      aria-label={t('products.mobile.openAria', { sku: p.sku, name: p.name ?? '' })}
       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-white cursor-pointer active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-700 ${
         isChild
           ? 'border-slate-100 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-800/40'
@@ -194,7 +197,7 @@ function MobileProductCard({
           e.stopPropagation()
           toggleSelect()
         }}
-        aria-label={selected ? 'Deselect' : 'Select'}
+        aria-label={t(selected ? 'products.mobile.deselect' : 'products.mobile.select')}
         aria-pressed={selected}
         className="min-h-11 min-w-11 -m-3 p-3 flex-shrink-0 inline-flex items-center justify-center"
       >
@@ -227,9 +230,14 @@ function MobileProductCard({
         <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate flex items-center gap-1.5">
           <span>{p.sku}</span>
           {chevron && (
-            <span className="text-slate-300 dark:text-slate-600">
-              · {chevron.childCount} variant
-              {chevron.childCount === 1 ? '' : 's'}
+            <span className="text-slate-400 dark:text-slate-500">
+              ·{' '}
+              {t(
+                chevron.childCount === 1
+                  ? 'products.mobile.variants.one'
+                  : 'products.mobile.variants.other',
+                { count: chevron.childCount },
+              )}
             </span>
           )}
         </div>
@@ -239,7 +247,7 @@ function MobileProductCard({
           </span>
           <span className="text-slate-300 dark:text-slate-600">·</span>
           <span className={`tabular-nums ${stockTone}`}>
-            {stock.toLocaleString()} pcs
+            {stock.toLocaleString()} {t('products.mobile.pcs')}
           </span>
           <span
             className={`ml-auto inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${
@@ -257,9 +265,11 @@ function MobileProductCard({
             e.stopPropagation()
             chevron.onClick()
           }}
-          aria-label={
-            chevron.isExpanded ? 'Collapse variants' : 'Expand variants'
-          }
+          aria-label={t(
+            chevron.isExpanded
+              ? 'products.mobile.collapseVariants'
+              : 'products.mobile.expandVariants',
+          )}
           aria-expanded={chevron.isExpanded}
           // U.22 — 44×44 mobile target. The visible chevron stays w-4/h-4
           // for the same compact look; the button itself expands so a
