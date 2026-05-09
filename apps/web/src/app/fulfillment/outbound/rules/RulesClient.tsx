@@ -234,8 +234,8 @@ export default function RulesClient() {
                 onClick={() => setShowInactive((s) => !s)}
                 className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
                   showInactive
-                    ? 'bg-slate-50 text-slate-700 border-slate-300'
-                    : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    ? 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 {showInactive
@@ -243,13 +243,13 @@ export default function RulesClient() {
                   : t('rules.toggleInactive.show', { n: rules.filter((r) => !r.isActive).length })}
               </button>
             )}
-            <button onClick={() => setShowSimulator(true)} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={() => setShowSimulator(true)} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <FlaskConical size={12} /> {t('rules.simulator.openButton')}
             </button>
-            <button onClick={fetchRules} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={fetchRules} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> {t('common.refresh')}
             </button>
-            <button onClick={() => setShowNew(true)} className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5">
+            <button onClick={() => setShowNew(true)} className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('rules.newRule')}
             </button>
           </div>
@@ -257,16 +257,16 @@ export default function RulesClient() {
       />
 
       {loading && rules.length === 0 ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div></Card>
+        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('common.loading')}</div></Card>
       ) : rules.length === 0 ? (
         <Card>
           <div className="py-8 text-center space-y-2">
-            <ScrollText size={28} className="mx-auto text-slate-300" />
-            <div className="text-md text-slate-700 font-medium">{t('rules.empty.title')}</div>
-            <div className="text-base text-slate-500">
+            <ScrollText size={28} className="mx-auto text-slate-300 dark:text-slate-600" />
+            <div className="text-md text-slate-700 dark:text-slate-300 font-medium">{t('rules.empty.title')}</div>
+            <div className="text-base text-slate-500 dark:text-slate-400">
               {t('rules.empty.description')}
             </div>
-            <button onClick={() => setShowNew(true)} className="h-8 px-3 mt-2 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5">
+            <button onClick={() => setShowNew(true)} className="h-8 px-3 mt-2 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('rules.empty.cta')}
             </button>
           </div>
@@ -280,15 +280,15 @@ export default function RulesClient() {
           >
             <SortableContext items={(showInactive ? rules : rules.filter((r) => r.isActive)).map((r) => r.id)} strategy={verticalListSortingStrategy}>
           <table className="w-full text-md">
-            <thead className="border-b border-slate-200 bg-slate-50">
+            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
               <tr>
                 <th className="px-3 py-2 w-8"></th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 w-16">{t('rules.col.priority')}</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.rule')}</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.when')}</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.then')}</th>
-                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('rules.col.activity')}</th>
-                <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 w-16">{t('rules.col.priority')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('rules.col.rule')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('rules.col.when')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('rules.col.then')}</th>
+                <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('rules.col.activity')}</th>
+                <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
               </tr>
             </thead>
             <tbody>
@@ -436,32 +436,32 @@ function RuleEditModal({
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/30 flex justify-end" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-[640px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200">
+      <div className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex-1">
-            <h2 className="text-lg font-semibold text-slate-900">{isNew ? 'New shipping rule' : 'Edit rule'}</h2>
-            <div className="text-sm text-slate-500">WHEN conditions match → THEN actions apply</div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{isNew ? 'New shipping rule' : 'Edit rule'}</h2>
+            <div className="text-sm text-slate-500 dark:text-slate-400">WHEN conditions match → THEN actions apply</div>
           </div>
-          <button onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
+          <button onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
             <X size={16} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <Section title="Identity">
             <Field label="Name" required>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="px-3 h-9 text-md border border-slate-300 rounded outline-none focus:border-blue-500 w-full" placeholder='e.g. "Heavy IT → DHL"' />
+              <input value={name} onChange={(e) => setName(e.target.value)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full" placeholder='e.g. "Heavy IT → DHL"' />
             </Field>
             <Field label="Description (optional)">
-              <input value={description} onChange={(e) => setDescription(e.target.value)} className="px-3 h-9 text-md border border-slate-300 rounded outline-none focus:border-blue-500 w-full" />
+              <input value={description} onChange={(e) => setDescription(e.target.value)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full" />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Priority (lower = first)">
-                <input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded outline-none focus:border-blue-500 w-full" />
+                <input type="number" value={priority} onChange={(e) => setPriority(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full" />
               </Field>
               <Field label="Active">
                 <label className="inline-flex items-center gap-2 h-9 text-md">
                   <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-                  <span className="text-slate-700">{isActive ? 'enabled' : 'disabled'}</span>
+                  <span className="text-slate-700 dark:text-slate-300">{isActive ? 'enabled' : 'disabled'}</span>
                 </label>
               </Field>
             </div>
@@ -469,21 +469,21 @@ function RuleEditModal({
 
           <Section title="When (conditions)">
             <Field label="Channel (comma list — empty = any)">
-              <input value={channel} onChange={(e) => setChannel(e.target.value)} placeholder={CHANNEL_OPTIONS.join(', ')} className="px-3 h-9 text-md border border-slate-300 rounded outline-none focus:border-blue-500 w-full font-mono" />
+              <input value={channel} onChange={(e) => setChannel(e.target.value)} placeholder={CHANNEL_OPTIONS.join(', ')} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full font-mono" />
             </Field>
             <Field label="Destination country (comma ISO-2 — empty = any)">
-              <input value={destCountry} onChange={(e) => setDestCountry(e.target.value)} placeholder="IT, DE, FR" className="px-3 h-9 text-md border border-slate-300 rounded outline-none focus:border-blue-500 w-full font-mono" />
+              <input value={destCountry} onChange={(e) => setDestCountry(e.target.value)} placeholder="IT, DE, FR" className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full font-mono" />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Weight min (grams)">
-                <input type="number" value={weightMin} onChange={(e) => setWeightMin(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded outline-none focus:border-blue-500 w-full" />
+                <input type="number" value={weightMin} onChange={(e) => setWeightMin(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full" />
               </Field>
               <Field label="Weight max (grams)">
-                <input type="number" value={weightMax} onChange={(e) => setWeightMax(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded outline-none focus:border-blue-500 w-full" />
+                <input type="number" value={weightMax} onChange={(e) => setWeightMax(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full" />
               </Field>
             </div>
             <Field label="Amazon Prime">
-              <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 rounded bg-white">
+              <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900">
                 <option value="any">any</option>
                 <option value="yes">Prime only</option>
                 <option value="no">non-Prime only</option>
@@ -493,35 +493,35 @@ function RuleEditModal({
 
           <Section title="Then (actions)">
             <Field label="Prefer carrier">
-              <select value={carrier} onChange={(e) => setCarrier(e.target.value)} className="px-3 h-9 text-md border border-slate-300 rounded bg-white w-full">
+              <select value={carrier} onChange={(e) => setCarrier(e.target.value)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 w-full">
                 <option value="">— no override —</option>
                 {CARRIER_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
             <Field label="Prefer service code (optional)">
-              <input value={service} onChange={(e) => setService(e.target.value)} placeholder="e.g. STANDARD or BRT_BUSINESS" className="px-3 h-9 text-md border border-slate-300 rounded outline-none focus:border-blue-500 w-full font-mono" />
+              <input value={service} onChange={(e) => setService(e.target.value)} placeholder="e.g. STANDARD or BRT_BUSINESS" className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded outline-none focus:border-blue-500 w-full font-mono" />
             </Field>
             <div className="space-y-1.5">
-              <label className="inline-flex items-center gap-2 text-md text-slate-700">
+              <label className="inline-flex items-center gap-2 text-md text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={requireSig} onChange={(e) => setRequireSig(e.target.checked)} />
                 Require signature
               </label>
-              <label className="inline-flex items-center gap-2 text-md text-slate-700">
+              <label className="inline-flex items-center gap-2 text-md text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={requireIns} onChange={(e) => setRequireIns(e.target.checked)} />
                 Require insurance
               </label>
-              <label className="inline-flex items-center gap-2 text-md text-slate-700">
+              <label className="inline-flex items-center gap-2 text-md text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={holdReview} onChange={(e) => setHoldReview(e.target.checked)} />
                 Hold for manual review
               </label>
             </div>
           </Section>
         </div>
-        <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
-          <button onClick={submit} disabled={saving} className="h-9 px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+        <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+          <button onClick={submit} disabled={saving} className="h-9 px-4 text-md bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5">
             {isNew ? 'Create rule' : 'Save changes'}
           </button>
-          <button onClick={onClose} className="h-9 px-3 text-md text-slate-700 hover:bg-white border border-slate-200 rounded">
+          <button onClick={onClose} className="h-9 px-3 text-md text-slate-700 dark:text-slate-300 hover:bg-white border border-slate-200 dark:border-slate-700 rounded">
             Cancel
           </button>
         </div>
@@ -533,7 +533,7 @@ function RuleEditModal({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{title}</div>
+      <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{title}</div>
       <div className="space-y-2">{children}</div>
     </div>
   )
@@ -542,7 +542,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wider text-slate-500">
+      <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
         {label}
         {required && <span className="text-rose-500 ml-0.5">*</span>}
       </span>
@@ -579,41 +579,41 @@ function SortableRuleRow({
     background: isDragging ? '#f1f5f9' : undefined,
   }
   return (
-    <tr ref={setNodeRef} style={style} className="border-b border-slate-100 hover:bg-slate-50">
+    <tr ref={setNodeRef} style={style} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
       <td className="px-2 py-2 w-8 text-center">
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600"
+          className="cursor-grab active:cursor-grabbing text-slate-300 dark:text-slate-600 hover:text-slate-600"
           aria-label={t('rules.dragHandle')}
         >
           <GripVertical size={14} />
         </button>
       </td>
-      <td className="px-3 py-2 tabular-nums text-slate-700">{r.priority}</td>
+      <td className="px-3 py-2 tabular-nums text-slate-700 dark:text-slate-300">{r.priority}</td>
       <td className="px-3 py-2">
-        <div className="font-medium text-slate-900">{r.name}</div>
-        {r.description && <div className="text-sm text-slate-500">{r.description}</div>}
+        <div className="font-medium text-slate-900 dark:text-slate-100">{r.name}</div>
+        {r.description && <div className="text-sm text-slate-500 dark:text-slate-400">{r.description}</div>}
       </td>
-      <td className="px-3 py-2 text-sm text-slate-600">{summarizeConditions(r.conditions)}</td>
-      <td className="px-3 py-2 text-sm text-slate-600">{summarizeActions(r.actions)}</td>
-      <td className="px-3 py-2 text-sm text-slate-600">
+      <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">{summarizeConditions(r.conditions)}</td>
+      <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">{summarizeActions(r.actions)}</td>
+      <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">
         {t('rules.fires', { n: r.triggerCount })}
-        {r.lastFiredAt && <div className="text-xs text-slate-400">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
+        {r.lastFiredAt && <div className="text-xs text-slate-400 dark:text-slate-500">{t('rules.lastFired', { date: new Date(r.lastFiredAt).toLocaleDateString('it-IT') })}</div>}
       </td>
       <td className="px-3 py-2 text-right">
         <div className="flex items-center gap-1 justify-end">
-          <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
+          <button onClick={() => onToggleActive(r)} className="h-6 px-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1" title={r.isActive ? t('rules.action.disable') : t('rules.action.enable')}>
             {r.isActive ? <X size={11} /> : <Check size={11} />}
             {r.isActive ? t('rules.action.disable') : t('rules.action.enable')}
           </button>
-          <button onClick={() => onEdit(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title={t('common.edit') ?? 'Edit'}>
+          <button onClick={() => onEdit(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded" title={t('common.edit') ?? 'Edit'}>
             <Pencil size={11} />
           </button>
-          <button onClick={() => onDuplicate(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded" title={t('rules.action.duplicate')}>
+          <button onClick={() => onDuplicate(r)} className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded" title={t('rules.action.duplicate')}>
             <Copy size={11} />
           </button>
-          <button onClick={() => onDelete(r)} className="h-6 w-6 inline-flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded" title={t('common.delete')}>
+          <button onClick={() => onDelete(r)} className="h-6 w-6 inline-flex items-center justify-center text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded" title={t('common.delete')}>
             <Trash2 size={11} />
           </button>
         </div>
@@ -675,15 +675,15 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/30 flex justify-end" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="w-full max-w-[640px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200">
+      <div className="w-full max-w-[640px] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col h-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex-1">
-            <h2 className="text-lg font-semibold text-slate-900 inline-flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
               <FlaskConical size={16} /> {t('rules.simulator.title')}
             </h2>
-            <div className="text-sm text-slate-500">{t('rules.simulator.subtitle')}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">{t('rules.simulator.subtitle')}</div>
           </div>
-          <button onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
+          <button onClick={onClose} className="h-8 w-8 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
             <X size={16} />
           </button>
         </div>
@@ -691,26 +691,26 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
           <Section title={t('rules.simulator.contextSection')}>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t('rules.field.channel')}>
-                <select value={channel} onChange={(e) => setChannel(e.target.value)} className="px-3 h-9 text-md border border-slate-300 rounded bg-white">
+                <select value={channel} onChange={(e) => setChannel(e.target.value)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900">
                   <option value="AMAZON">AMAZON</option>
                   <option value="EBAY">EBAY</option>
                   <option value="SHOPIFY">SHOPIFY</option>
                 </select>
               </Field>
               <Field label={t('rules.field.country')}>
-                <input value={destinationCountry} onChange={(e) => setDestinationCountry(e.target.value.toUpperCase())} maxLength={2} className="px-3 h-9 text-md border border-slate-300 rounded font-mono" />
+                <input value={destinationCountry} onChange={(e) => setDestinationCountry(e.target.value.toUpperCase())} maxLength={2} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded font-mono" />
               </Field>
               <Field label={t('rules.field.weightMin').replace(' min', '')}>
-                <input type="number" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded" />
+                <input type="number" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded" />
               </Field>
               <Field label={t('rules.simulator.orderTotalCents')}>
-                <input type="number" value={orderTotalCents} onChange={(e) => setOrderTotalCents(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded" />
+                <input type="number" value={orderTotalCents} onChange={(e) => setOrderTotalCents(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded" />
               </Field>
               <Field label={t('rules.simulator.itemCount')}>
-                <input type="number" min="1" value={itemCount} onChange={(e) => setItemCount(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 rounded" />
+                <input type="number" min="1" value={itemCount} onChange={(e) => setItemCount(e.target.value)} className="px-3 h-9 text-md tabular-nums border border-slate-300 dark:border-slate-600 rounded" />
               </Field>
               <Field label={t('rules.field.prime')}>
-                <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 rounded bg-white">
+                <select value={isPrime} onChange={(e) => setIsPrime(e.target.value as any)} className="px-3 h-9 text-md border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900">
                   <option value="any">{t('rules.field.primeAny')}</option>
                   <option value="yes">{t('rules.field.primeYes')}</option>
                   <option value="no">{t('rules.field.primeNo')}</option>
@@ -719,41 +719,41 @@ function SimulatorModal({ onClose }: { onClose: () => void }) {
             </div>
           </Section>
 
-          <button onClick={run} disabled={running} className="h-9 px-4 text-md bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+          <button onClick={run} disabled={running} className="h-9 px-4 text-md bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5">
             <FlaskConical size={14} /> {running ? t('common.loading') : t('rules.simulator.runButton')}
           </button>
 
           {result && (
             <Section title={t('rules.simulator.result')}>
               {result.matchedRule ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-2">
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded p-3 space-y-2">
                   <div className="flex items-center gap-2 text-md font-semibold text-emerald-900">
                     <Check size={14} /> {t('rules.simulator.matched', { name: result.matchedRule.ruleName, priority: result.matchedRule.priority })}
                   </div>
-                  <pre className="text-xs bg-white border border-emerald-200 rounded p-2 overflow-x-auto">
+                  <pre className="text-xs bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900 rounded p-2 overflow-x-auto">
                     {JSON.stringify(result.matchedRule.actions, null, 2)}
                   </pre>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-md text-slate-700">
+                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 text-md text-slate-700 dark:text-slate-300">
                   {t('rules.simulator.noMatch', { n: result.rulesEvaluated })}
                 </div>
               )}
               {result.trace.length > 0 && (
                 <details className="group mt-2">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-700">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hover:text-slate-700 dark:hover:text-slate-300">
                     {t('rules.simulator.trace', { n: result.trace.length })}
                   </summary>
                   <div className="mt-2 space-y-1">
                     {result.trace.map((row) => (
                       <div key={row.ruleId} className="flex items-center gap-2 text-sm">
-                        <span className="text-slate-500 w-8 text-right tabular-nums">{row.priority}</span>
-                        <span className={row.matched ? 'text-emerald-700 font-medium' : 'text-slate-500'}>
+                        <span className="text-slate-500 dark:text-slate-400 w-8 text-right tabular-nums">{row.priority}</span>
+                        <span className={row.matched ? 'text-emerald-700 dark:text-emerald-300 font-medium' : 'text-slate-500 dark:text-slate-400'}>
                           {row.matched ? '✓' : '·'}
                         </span>
-                        <span className="flex-1 text-slate-700">{row.ruleName}</span>
+                        <span className="flex-1 text-slate-700 dark:text-slate-300">{row.ruleName}</span>
                         {row.matched && (
-                          <ArrowRight size={11} className="text-emerald-600" />
+                          <ArrowRight size={11} className="text-emerald-600 dark:text-emerald-400" />
                         )}
                       </div>
                     ))}

@@ -37,7 +37,7 @@ import { Barcode128 } from '@/components/ui/Barcode128'
 import { getBackendUrl } from '@/lib/backend-url'
 
 const GRADES = [
-  { value: 'NEW',       label: 'NEW',        tone: 'bg-emerald-600 text-white' },
+  { value: 'NEW',       label: 'NEW',        tone: 'bg-emerald-600 dark:bg-emerald-700 text-white' },
   { value: 'LIKE_NEW',  label: 'Like new',   tone: 'bg-emerald-500 text-white' },
   { value: 'GOOD',      label: 'Good',       tone: 'bg-blue-500 text-white' },
   { value: 'DAMAGED',   label: 'Damaged',    tone: 'bg-amber-500 text-white' },
@@ -58,7 +58,7 @@ type ItemChecklist = {
 type Disposition = 'SELLABLE' | 'SECOND_QUALITY' | 'REFURBISH' | 'QUARANTINE' | 'SCRAP'
 
 const DISPOSITIONS: ReadonlyArray<{ value: Disposition; label: string; tone: string }> = [
-  { value: 'SELLABLE',       label: 'Sellable',       tone: 'bg-emerald-600 text-white' },
+  { value: 'SELLABLE',       label: 'Sellable',       tone: 'bg-emerald-600 dark:bg-emerald-700 text-white' },
   { value: 'SECOND_QUALITY', label: '2nd quality',    tone: 'bg-blue-500 text-white'    },
   { value: 'REFURBISH',      label: 'Refurbish',      tone: 'bg-violet-500 text-white'  },
   { value: 'QUARANTINE',     label: 'Quarantine',     tone: 'bg-amber-500 text-white'   },
@@ -247,25 +247,25 @@ export default function InspectClient({ returnId }: { returnId: string }) {
 
   if (loading || !ret) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-slate-400" />
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-slate-400 dark:text-slate-500" />
       </div>
     )
   }
 
   if (ret.isFbaReturn) {
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-800">
         <div className="max-w-md mx-auto p-4">
           <Link
             href="/fulfillment/returns"
-            className="inline-flex items-center gap-1.5 text-base text-slate-600 hover:text-slate-900 mb-4"
+            className="inline-flex items-center gap-1.5 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 mb-4"
           >
             <ArrowLeft size={14} /> Back to returns
           </Link>
-          <div className="bg-white border border-amber-200 rounded p-5 text-base">
+          <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900 rounded p-5 text-base">
             <div className="font-semibold text-amber-800 mb-1">FBA return — managed by Amazon</div>
-            <div className="text-slate-700">
+            <div className="text-slate-700 dark:text-slate-300">
               FBA returns mirror read-only from Amazon and don&apos;t flow through warehouse inspection.
               Use the desktop workspace to view detail.
             </div>
@@ -279,21 +279,21 @@ export default function InspectClient({ returnId }: { returnId: string }) {
   const gradedCount = ret.items.filter((it) => grades[it.id]).length
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-32">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-800 pb-32">
       {/* Sticky header — small enough that the per-item cards still
           dominate the viewport on a phone. */}
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200">
+      <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href={`/fulfillment/returns?drawer=${returnId}`}
-            className="h-11 w-11 -ml-2 inline-flex items-center justify-center rounded-md hover:bg-slate-100"
+            className="h-11 w-11 -ml-2 inline-flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
             aria-label="Back to returns"
           >
             <ArrowLeft size={18} />
           </Link>
           <div className="flex-1 min-w-0">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Inspect</div>
-            <div className="text-lg font-mono text-slate-900 truncate">{ret.rmaNumber ?? '—'}</div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Inspect</div>
+            <div className="text-lg font-mono text-slate-900 dark:text-slate-100 truncate">{ret.rmaNumber ?? '—'}</div>
           </div>
           <Badge variant={STATUS_TONE[ret.status] ?? 'default'} size="sm">
             {ret.status.replace(/_/g, ' ')}
@@ -305,7 +305,7 @@ export default function InspectClient({ returnId }: { returnId: string }) {
         {/* Compact RMA barcode for warehouse identification — small
             so it doesn't dominate; printed labels render larger. */}
         {ret.rmaNumber && (
-          <div className="bg-white border border-slate-200 rounded p-3 flex justify-center">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 flex justify-center">
             <Barcode128 value={ret.rmaNumber} moduleWidthPx={1.2} height={40} />
           </div>
         )}
@@ -313,25 +313,25 @@ export default function InspectClient({ returnId }: { returnId: string }) {
         {/* Scan input — autofocus so a USB scanner gun's first read
             lands here without a tap. Camera toggle lets a phone-only
             operator switch in. */}
-        <div className="bg-white border border-slate-200 rounded p-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3">
           <BarcodeScanInput
             label="Scan item barcode"
             placeholder="Scan SKU or product barcode…"
             onScan={onScan}
             autoFocus
           />
-          <div className="mt-1.5 text-xs text-slate-500 inline-flex items-center gap-1.5">
+          <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
             <ScanLine size={11} />
             {gradedCount} / {ret.items.length} graded
           </div>
         </div>
 
         {ret.reason && (
-          <div className="bg-white border border-slate-200 rounded p-3 text-base">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 text-base">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">
               Customer reason
             </div>
-            <div className="text-slate-800">{ret.reason}</div>
+            <div className="text-slate-800 dark:text-slate-200">{ret.reason}</div>
           </div>
         )}
 
@@ -339,10 +339,10 @@ export default function InspectClient({ returnId }: { returnId: string }) {
           <div
             key={it.id}
             ref={(el) => { itemRefs.current[it.id] = el }}
-            className={`bg-white rounded border p-3 space-y-3 ${
+            className={`bg-white dark:bg-slate-900 rounded border p-3 space-y-3 ${
               focusedItemId === it.id
                 ? 'border-blue-500 ring-1 ring-blue-200'
-                : 'border-slate-200'
+                : 'border-slate-200 dark:border-slate-700'
             }`}
           >
             <ItemHeader item={it} graded={!!grades[it.id]} />
@@ -379,15 +379,15 @@ export default function InspectClient({ returnId }: { returnId: string }) {
 
       {/* Sticky bottom CTA. Big enough for thumb tap on a phone.
           Disabled until at least one item is graded. */}
-      <div className="fixed bottom-0 inset-x-0 z-10 bg-white border-t border-slate-200 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+      <div className="fixed bottom-0 inset-x-0 z-10 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={submitInspection}
             disabled={busy || gradedCount === 0}
             className={`w-full h-14 text-lg font-semibold rounded inline-flex items-center justify-center gap-2 transition-colors ${
               allGraded
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                : 'bg-slate-900 hover:bg-slate-800 text-white'
+                ? 'bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-500 text-white'
+                : 'bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 text-white'
             } disabled:opacity-50`}
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
@@ -403,11 +403,11 @@ function ItemHeader({ item, graded }: { item: ItemRow; graded: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
-        <div className="font-mono text-base text-slate-900 truncate">{item.sku}</div>
-        <div className="text-sm text-slate-500 tabular-nums">Qty {item.quantity}</div>
+        <div className="font-mono text-base text-slate-900 dark:text-slate-100 truncate">{item.sku}</div>
+        <div className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">Qty {item.quantity}</div>
       </div>
       {graded && (
-        <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+        <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
       )}
     </div>
   )
@@ -431,7 +431,7 @@ function GradePicker({
             className={`h-11 px-2 text-sm font-semibold rounded border ${
               active
                 ? `${g.tone} border-transparent shadow-sm`
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             {g.label}
@@ -456,7 +456,7 @@ function DispositionPicker({
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
         Disposition
       </div>
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -469,7 +469,7 @@ function DispositionPicker({
               className={`h-11 px-2 text-sm font-semibold rounded border ${
                 active
                   ? `${d.tone} border-transparent shadow-sm`
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               {d.label}
@@ -484,7 +484,7 @@ function DispositionPicker({
             value={scrapReason}
             onChange={(e) => onScrapReasonChange(e.target.value)}
             placeholder="Scrap reason (defective, contaminated, missing parts…)"
-            className="w-full h-10 px-2 text-base border border-rose-200 bg-rose-50 rounded focus:outline-none focus:ring-1 focus:ring-rose-400 placeholder-rose-400"
+            className="w-full h-10 px-2 text-base border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded focus:outline-none focus:ring-1 focus:ring-rose-400 placeholder-rose-400"
           />
         </div>
       )}
@@ -539,9 +539,9 @@ function ItemChecklistEditor({
 
   return (
     <div className="space-y-1.5 text-sm">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-2">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-2">
         Checklist
-        {busy && <Loader2 size={11} className="animate-spin text-slate-400" />}
+        {busy && <Loader2 size={11} className="animate-spin text-slate-400 dark:text-slate-500" />}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         {([
@@ -555,25 +555,25 @@ function ItemChecklistEditor({
             onClick={() => setChk({ [key]: !checklist[key] } as Partial<ItemChecklist>)}
             className={`h-11 px-3 text-sm rounded border inline-flex items-center justify-between ${
               checklist[key]
-                ? 'bg-blue-50 border-blue-300 text-blue-900'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-900'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             <span>{label}</span>
-            {checklist[key] && <CheckCircle2 size={13} className="text-blue-600" />}
+            {checklist[key] && <CheckCircle2 size={13} className="text-blue-600 dark:text-blue-400" />}
           </button>
         ))}
       </div>
       <div className="flex items-center gap-1.5 pt-1">
-        <span className="text-slate-500 text-xs">Signs of use:</span>
+        <span className="text-slate-500 dark:text-slate-400 text-xs">Signs of use:</span>
         {(['NONE', 'LIGHT', 'HEAVY'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setChk({ signsOfUse: s })}
             className={`h-9 px-2.5 text-sm rounded border ${
               checklist.signsOfUse === s
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
           >
             {s}
@@ -644,7 +644,7 @@ function ItemPhotoGallery({
   }
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1.5">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1 inline-flex items-center gap-1.5">
         <ImageIconLucide size={11} /> Photos ({item.photoUrls.length}/10)
       </div>
       {item.photoUrls.length > 0 && (
@@ -656,12 +656,12 @@ function ItemPhotoGallery({
                 <img
                   src={u}
                   alt="Item condition"
-                  className="w-full h-24 object-cover rounded border border-slate-200"
+                  className="w-full h-24 object-cover rounded border border-slate-200 dark:border-slate-700"
                 />
               </a>
               <button
                 onClick={() => remove(u)}
-                className="absolute top-1 right-1 h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/90 text-slate-700 hover:bg-rose-50 hover:text-rose-700 shadow-sm"
+                className="absolute top-1 right-1 h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/90 text-slate-700 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300 shadow-sm"
                 title="Remove photo"
                 aria-label="Remove photo"
               >
@@ -688,7 +688,7 @@ function ItemPhotoGallery({
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={busy || item.photoUrls.length >= 10}
-        className="w-full h-11 px-3 text-sm font-medium border border-slate-300 border-dashed rounded text-slate-700 hover:bg-slate-50 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+        className="w-full h-11 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 border-dashed rounded text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
       >
         <Camera size={14} /> {busy ? 'Uploading…' : 'Capture / upload photo'}
       </button>
@@ -730,9 +730,9 @@ function ItemNotesEditor({
   }
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5 inline-flex items-center gap-2">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5 inline-flex items-center gap-2">
         Notes
-        {dirty && <span className="text-amber-600 normal-case font-normal text-[11px]">unsaved</span>}
+        {dirty && <span className="text-amber-600 dark:text-amber-400 normal-case font-normal text-[11px]">unsaved</span>}
       </div>
       <textarea
         value={value}
@@ -740,10 +740,10 @@ function ItemNotesEditor({
         onBlur={save}
         rows={2}
         placeholder="Defect location, observations…"
-        className="w-full px-2 py-2 text-base border border-slate-200 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+        className="w-full px-2 py-2 text-base border border-slate-200 dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
       />
       {busy && (
-        <div className="mt-1 text-xs text-slate-500 inline-flex items-center gap-1">
+        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
           <Loader2 size={11} className="animate-spin" /> Saving…
         </div>
       )}

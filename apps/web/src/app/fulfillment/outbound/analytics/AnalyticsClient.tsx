@@ -148,13 +148,13 @@ export default function AnalyticsClient() {
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 border border-slate-200 rounded-md bg-white p-0.5">
+            <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 p-0.5">
               {WINDOWS.map((d) => (
                 <button
                   key={d}
                   onClick={() => setDays(d)}
                   className={`h-7 px-3 text-base rounded transition-colors ${
-                    days === d ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-50'
+                    days === d ? 'bg-slate-900 dark:bg-slate-100 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   {t('analytics.days', { n: d })}
@@ -163,7 +163,7 @@ export default function AnalyticsClient() {
             </div>
             <button
               onClick={fetchData}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> {t('common.refresh')}
             </button>
@@ -172,23 +172,23 @@ export default function AnalyticsClient() {
       />
 
       {loading && !data ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div></Card>
+        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('common.loading')}</div></Card>
       ) : !data ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">{t('common.error')}</div></Card>
+        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('common.error')}</div></Card>
       ) : (
         <>
           {/* KPI cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Kpi
               icon={Truck}
-              tone="bg-blue-50 text-blue-600"
+              tone="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
               label={t('analytics.kpi.shipped')}
               value={String(data.totals.shipped)}
               hint={t('analytics.kpi.windowHint', { n: data.windowDays })}
             />
             <Kpi
               icon={Clock}
-              tone="bg-emerald-50 text-emerald-600"
+              tone="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
               label={t('analytics.kpi.medianTtS')}
               value={formatHours(data.timeToShipHours.median)}
               hint={t('analytics.kpi.p95Hint', { p95: formatHours(data.timeToShipHours.p95) })}
@@ -197,8 +197,8 @@ export default function AnalyticsClient() {
               icon={AlertTriangle}
               tone={
                 data.sla.lateRate != null && data.sla.lateRate > 0.04
-                  ? 'bg-rose-50 text-rose-600'
-                  : 'bg-emerald-50 text-emerald-600'
+                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
               }
               label={t('analytics.kpi.lateRate')}
               value={formatPct(data.sla.lateRate)}
@@ -206,7 +206,7 @@ export default function AnalyticsClient() {
             />
             <Kpi
               icon={DollarSign}
-              tone="bg-slate-50 text-slate-700"
+              tone="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
               label={t('analytics.kpi.avgCost')}
               value={formatEur(data.totals.avgCostCents)}
               hint={t('analytics.kpi.totalCostHint', { total: formatEur(data.totals.totalCostCents) })}
@@ -217,9 +217,9 @@ export default function AnalyticsClient() {
           {data.insights && data.insights.length > 0 && (
             <Card>
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   <Lightbulb size={12} /> {t('analytics.insights.title')}
-                  <span className="ml-auto text-xs text-slate-500 font-normal normal-case tracking-normal">
+                  <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 font-normal normal-case tracking-normal">
                     {t('analytics.insights.subtitle')}
                   </span>
                 </div>
@@ -229,8 +229,8 @@ export default function AnalyticsClient() {
                       key={i}
                       className={`flex items-start gap-3 px-3 py-2.5 rounded border ${
                         ins.severity === 'warning'
-                          ? 'bg-amber-50 border-amber-200 text-amber-900'
-                          : 'bg-blue-50 border-blue-200 text-blue-900'
+                          ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-900'
+                          : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-900'
                       }`}
                     >
                       {ins.kind === 'cost' ? (
@@ -249,16 +249,16 @@ export default function AnalyticsClient() {
           {/* Trend */}
           <Card>
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                 <TrendingUp size={12} /> {t('analytics.trend.title')}
-                <span className="ml-auto text-xs text-slate-500 font-normal normal-case tracking-normal">
+                <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 font-normal normal-case tracking-normal">
                   {t('analytics.trend.subtitle', { n: data.windowDays })}
                 </span>
               </div>
               {data.trend.some((d) => d.ships > 0) ? (
                 renderTrend()
               ) : (
-                <div className="text-md text-slate-400 py-8 text-center">{t('analytics.empty')}</div>
+                <div className="text-md text-slate-400 dark:text-slate-500 py-8 text-center">{t('analytics.empty')}</div>
               )}
             </div>
           </Card>
@@ -266,18 +266,18 @@ export default function AnalyticsClient() {
           {/* Per-carrier breakdown */}
           <Card noPadding>
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('analytics.col.carrier')}
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('analytics.col.ships')}
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('analytics.col.avgCost')}
                   </th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     {t('analytics.col.lateRate')}
                   </th>
                 </tr>
@@ -285,25 +285,25 @@ export default function AnalyticsClient() {
               <tbody>
                 {data.byCarrier.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-md text-slate-400">
+                    <td colSpan={4} className="px-3 py-8 text-center text-md text-slate-400 dark:text-slate-500">
                       {t('analytics.empty')}
                     </td>
                   </tr>
                 ) : (
                   data.byCarrier.map((c) => (
-                    <tr key={c.carrierCode} className="border-b border-slate-100">
-                      <td className="px-3 py-2 text-base text-slate-900 font-medium">
+                    <tr key={c.carrierCode} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="px-3 py-2 text-base text-slate-900 dark:text-slate-100 font-medium">
                         {c.carrierCode}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">{c.count}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">{c.count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">
                         {formatEur(c.avgCostCents)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-base">
                         {c.lateRate != null && c.lateRate > 0.04 ? (
                           <Badge variant="danger" size="sm">{formatPct(c.lateRate)}</Badge>
                         ) : (
-                          <span className="text-slate-700">{formatPct(c.lateRate)}</span>
+                          <span className="text-slate-700 dark:text-slate-300">{formatPct(c.lateRate)}</span>
                         )}
                       </td>
                     </tr>
@@ -319,37 +319,37 @@ export default function AnalyticsClient() {
           {data.byPicker && data.byPicker.length > 0 && (
             <Card noPadding>
               <table className="w-full text-md">
-                <thead className="border-b border-slate-200 bg-slate-50">
+                <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                   <tr>
-                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       <span className="inline-flex items-center gap-1.5">
                         <Users size={12} /> {t('analytics.picker.operator')}
                       </span>
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       {t('analytics.picker.shipments')}
                     </th>
-                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                       {t('analytics.picker.medianCycle')}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.byPicker.map((p, idx) => (
-                    <tr key={p.operator} className="border-b border-slate-100">
-                      <td className="px-3 py-2 text-base text-slate-900 font-medium">
+                    <tr key={p.operator} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="px-3 py-2 text-base text-slate-900 dark:text-slate-100 font-medium">
                         {idx === 0 && <span className="mr-1 text-amber-500">★</span>}
                         {p.operator}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">{p.count}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">{p.count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">
                         {p.medianCycleMinutes == null
                           ? '—'
                           : p.medianCycleMinutes < 60
                           ? `${Math.round(p.medianCycleMinutes)}m`
                           : `${(p.medianCycleMinutes / 60).toFixed(1)}h`}
                         {p.samples > 0 && (
-                          <span className="ml-1 text-xs text-slate-400">({p.samples})</span>
+                          <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">({p.samples})</span>
                         )}
                       </td>
                     </tr>
@@ -363,7 +363,7 @@ export default function AnalyticsClient() {
           {totalChannelShips > 0 && (
             <Card>
               <div className="space-y-2">
-                <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   {t('analytics.byChannel')}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -374,10 +374,10 @@ export default function AnalyticsClient() {
                       return (
                         <div
                           key={ch}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded"
                         >
-                          <span className="text-base font-medium text-slate-900">{ch}</span>
-                          <span className="text-sm tabular-nums text-slate-600">
+                          <span className="text-base font-medium text-slate-900 dark:text-slate-100">{ch}</span>
+                          <span className="text-sm tabular-nums text-slate-600 dark:text-slate-400">
                             {count} · {pct.toFixed(0)}%
                           </span>
                         </div>
@@ -397,25 +397,25 @@ export default function AnalyticsClient() {
           {data.byChannelSLA && data.byChannelSLA.length > 0 && (
             <Card>
               <div className="space-y-2">
-                <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   {t('analytics.slaByChannel.title')}
                 </div>
                 <table className="w-full text-base">
-                  <thead className="border-b border-slate-200">
+                  <thead className="border-b border-slate-200 dark:border-slate-700">
                     <tr>
-                      <th className="px-3 py-1.5 text-left text-sm font-semibold text-slate-700">
+                      <th className="px-3 py-1.5 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {t('analytics.slaByChannel.col.channel')}
                       </th>
-                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {t('analytics.slaByChannel.col.shipped')}
                       </th>
-                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {t('analytics.slaByChannel.col.late')}
                       </th>
-                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {t('analytics.slaByChannel.col.lateRate')}
                       </th>
-                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700">
+                      <th className="px-3 py-1.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
                         {t('analytics.slaByChannel.col.avgTtS')}
                       </th>
                     </tr>
@@ -424,19 +424,19 @@ export default function AnalyticsClient() {
                     {data.byChannelSLA.map((row) => {
                       const tone =
                         row.lateRate != null && row.lateRate > 0.1
-                          ? 'text-rose-700'
+                          ? 'text-rose-700 dark:text-rose-300'
                           : row.lateRate != null && row.lateRate > 0.05
-                          ? 'text-amber-700'
-                          : 'text-slate-700'
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-slate-700 dark:text-slate-300'
                       return (
-                        <tr key={row.channel} className="border-b border-slate-100 last:border-0">
-                          <td className="px-3 py-1.5 font-medium text-slate-900">{row.channel}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">{row.count}</td>
+                        <tr key={row.channel} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                          <td className="px-3 py-1.5 font-medium text-slate-900 dark:text-slate-100">{row.channel}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{row.count}</td>
                           <td className={`px-3 py-1.5 text-right tabular-nums ${tone}`}>{row.lateCount}</td>
                           <td className={`px-3 py-1.5 text-right tabular-nums font-medium ${tone}`}>
                             {formatPct(row.lateRate)}
                           </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">
+                          <td className="px-3 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">
                             {formatHours(row.avgTimeToShipHours)}
                           </td>
                         </tr>
@@ -451,10 +451,10 @@ export default function AnalyticsClient() {
           {data.byMarketplaceSLA && data.byMarketplaceSLA.filter((r) => r.marketplace).length > 1 && (
             <Card>
               <div className="space-y-2">
-                <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   {t('analytics.slaByMarketplace.title')}
                 </div>
-                <div className="text-xs text-slate-500">{t('analytics.slaByMarketplace.subtitle')}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t('analytics.slaByMarketplace.subtitle')}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {data.byMarketplaceSLA
                     .filter((r) => r.marketplace)
@@ -462,24 +462,24 @@ export default function AnalyticsClient() {
                       const key = `${row.channel}:${row.marketplace}`
                       const tone =
                         row.lateRate != null && row.lateRate > 0.1
-                          ? 'border-rose-200 bg-rose-50'
+                          ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
                           : row.lateRate != null && row.lateRate > 0.05
-                          ? 'border-amber-200 bg-amber-50'
-                          : 'border-slate-200 bg-slate-50'
+                          ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
                       return (
                         <div
                           key={key}
                           className={`flex items-center justify-between px-3 py-1.5 border rounded ${tone}`}
                         >
-                          <div className="font-medium text-slate-900 text-base">
+                          <div className="font-medium text-slate-900 dark:text-slate-100 text-base">
                             {row.channel}
-                            <span className="text-slate-500 mx-1">·</span>
+                            <span className="text-slate-500 dark:text-slate-400 mx-1">·</span>
                             {row.marketplace}
                           </div>
                           <div className="flex items-center gap-2 text-sm tabular-nums">
-                            <span className="text-slate-600">{row.count}</span>
-                            <span className="text-slate-400">·</span>
-                            <span className="font-medium text-slate-900">{formatPct(row.lateRate)}</span>
+                            <span className="text-slate-600 dark:text-slate-400">{row.count}</span>
+                            <span className="text-slate-400 dark:text-slate-500">·</span>
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{formatPct(row.lateRate)}</span>
                           </div>
                         </div>
                       )
@@ -514,9 +514,9 @@ function Kpi({
           <Icon size={18} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-xs uppercase tracking-wider text-slate-500">{label}</div>
-          <div className="text-2xl font-semibold text-slate-900 tabular-nums">{value}</div>
-          <div className="text-xs text-slate-500 mt-0.5">{hint}</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</div>
+          <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{value}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{hint}</div>
         </div>
       </div>
     </Card>

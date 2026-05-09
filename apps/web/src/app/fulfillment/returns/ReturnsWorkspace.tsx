@@ -186,10 +186,10 @@ const STATUS_TONE: Record<string, 'default' | 'success' | 'warning' | 'danger' |
 
 const CHANNEL_TONE: Record<string, string> = {
   AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
-  EBAY: 'bg-blue-50 text-blue-700 border-blue-200',
-  SHOPIFY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  WOOCOMMERCE: 'bg-violet-50 text-violet-700 border-violet-200',
-  ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
+  EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+  SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
+  ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
 }
 
 // CHANNELS retired in U.67 — now sourced from ACTIVE_CHANNELS_OPTIONS.
@@ -571,11 +571,11 @@ export default function ReturnsWorkspace() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <Card>
             <div className="space-y-0.5">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Last 30 days</div>
-              <div className="text-2xl font-semibold text-slate-900 tabular-nums">{analytics.last30}</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Last 30 days</div>
+              <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{analytics.last30}</div>
               {analytics.trendPct != null && (
                 <div className={`text-xs tabular-nums ${
-                  analytics.trendPct > 5 ? 'text-rose-600' : analytics.trendPct < -5 ? 'text-emerald-600' : 'text-slate-500'
+                  analytics.trendPct > 5 ? 'text-rose-600 dark:text-rose-400' : analytics.trendPct < -5 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
                 }`}>
                   {analytics.trendPct > 0 ? '+' : ''}{analytics.trendPct.toFixed(0)}% vs prior 30d
                 </div>
@@ -584,44 +584,44 @@ export default function ReturnsWorkspace() {
           </Card>
           <Card>
             <div className="space-y-0.5">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Total returns</div>
-              <div className="text-2xl font-semibold text-slate-900 tabular-nums">{analytics.totalCount}</div>
-              <div className="text-xs text-slate-500 tabular-nums">
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Total returns</div>
+              <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{analytics.totalCount}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                 {analytics.warehouseCount} warehouse · {analytics.fbaCount} FBA
               </div>
             </div>
           </Card>
           <Card>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Top channel (30d)</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Top channel (30d)</div>
               {analytics.byChannel.length > 0 ? (
                 <>
-                  <div className="text-base font-semibold text-slate-900">
+                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
                     {analytics.byChannel[0].channel}
                   </div>
-                  <div className="text-xs text-slate-500 tabular-nums">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {analytics.byChannel[0].count} of {analytics.last30}
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-slate-400">—</div>
+                <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
               )}
             </div>
           </Card>
           <Card>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500">Top reason (30d)</div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Top reason (30d)</div>
               {analytics.topReasons.length > 0 ? (
                 <>
-                  <div className="text-base font-semibold text-slate-900 truncate" title={analytics.topReasons[0].reason}>
+                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate" title={analytics.topReasons[0].reason}>
                     {analytics.topReasons[0].reason}
                   </div>
-                  <div className="text-xs text-slate-500 tabular-nums">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {analytics.topReasons[0].count} return{analytics.topReasons[0].count === 1 ? '' : 's'}
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-slate-400">—</div>
+                <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
               )}
             </div>
           </Card>
@@ -632,23 +632,23 @@ export default function ReturnsWorkspace() {
         {/* Top row: search + tab + saved-views + actions */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
             <input
               ref={searchInputRef}
               type="search"
               value={searchInput}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="RMA, order, customer, tracking…   /"
-              className="h-8 w-72 pl-8 pr-2 text-base border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="h-8 w-72 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
           </div>
 
-          <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+          <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
             {(['ALL', 'NON_FBA', 'FBA'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setFilters({ tab: t === 'ALL' ? null : t, page: '1' })}
-                className={`h-7 px-3 text-base font-medium rounded transition-colors ${tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`h-7 px-3 text-base font-medium rounded transition-colors ${tab === t ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
               >
                 {t === 'NON_FBA' ? 'Warehouse' : t === 'FBA' ? 'FBA (read-only)' : 'All'}
               </button>
@@ -659,21 +659,21 @@ export default function ReturnsWorkspace() {
           <div className="relative">
             <button
               onClick={() => setViewsOpen((v) => !v)}
-              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <Bookmark size={12} /> Views{savedViews.length > 0 ? ` (${savedViews.length})` : ''}
             </button>
             {viewsOpen && (
-              <div className="absolute z-20 mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg p-2">
+              <div className="absolute z-20 mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2">
                 {savedViews.length === 0 ? (
-                  <div className="text-sm text-slate-500 px-2 py-1.5">No saved views yet.</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 px-2 py-1.5">No saved views yet.</div>
                 ) : (
                   <div className="max-h-60 overflow-y-auto">
                     {savedViews.map((v) => (
-                      <div key={v.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded">
+                      <div key={v.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">
                         <button
                           onClick={() => applyView(v)}
-                          className="flex-1 text-left text-base text-slate-800 truncate"
+                          className="flex-1 text-left text-base text-slate-800 dark:text-slate-200 truncate"
                           title={`Apply view: ${v.name}`}
                         >
                           {v.isDefault && <Star size={11} className="inline -mt-0.5 mr-1 text-amber-500" />}
@@ -681,7 +681,7 @@ export default function ReturnsWorkspace() {
                         </button>
                         <button
                           onClick={() => deleteView(v)}
-                          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"
+                          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600"
                           title="Delete view"
                         >
                           <Trash2 size={12} />
@@ -690,10 +690,10 @@ export default function ReturnsWorkspace() {
                     ))}
                   </div>
                 )}
-                <div className="border-t border-slate-100 mt-1 pt-1">
+                <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
                   <button
                     onClick={() => { setViewsOpen(false); void saveView() }}
-                    className="w-full text-left text-sm text-blue-700 px-2 py-1.5 hover:bg-blue-50 rounded inline-flex items-center gap-1.5"
+                    className="w-full text-left text-sm text-blue-700 dark:text-blue-300 px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center gap-1.5"
                   >
                     <Plus size={11} /> Save current filters as…
                   </button>
@@ -705,21 +705,21 @@ export default function ReturnsWorkspace() {
           <div className="ml-auto flex items-center gap-2">
             <a
               href="/fulfillment/returns/analytics"
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <Activity size={12} /> Analytics
             </a>
             <button
               onClick={exportCsv}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
               title="Export current filtered set as CSV"
             >
               <Download size={12} /> Export
             </button>
-            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New return
             </button>
-            <button onClick={fetchReturns} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={fetchReturns} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
           </div>
@@ -727,13 +727,13 @@ export default function ReturnsWorkspace() {
 
         {/* Filter chips row: status + channel */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Status</span>
+          <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Status</span>
           <div className="flex items-center gap-1 flex-wrap">
             {(STATUSES as readonly string[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setFilters({ status: s, page: '1' })}
-                className={`h-7 px-2 text-sm border rounded ${statusFilter === s ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                className={`h-7 px-2 text-sm border rounded ${statusFilter === s ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
               >
                 {s.replace(/_/g, ' ')}
               </button>
@@ -756,11 +756,11 @@ export default function ReturnsWorkspace() {
 
       {/* R1.2 — bulk action bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 text-white rounded-md text-base">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 dark:bg-slate-100 text-white rounded-md text-base">
           <span className="font-medium tabular-nums">{selected.size} selected</span>
           <button
             onClick={() => setSelected(new Set())}
-            className="h-7 px-2 text-sm text-slate-300 hover:text-white inline-flex items-center gap-1"
+            className="h-7 px-2 text-sm text-slate-300 dark:text-slate-600 hover:text-white inline-flex items-center gap-1"
           >
             <X size={11} /> Clear
           </button>
@@ -768,14 +768,14 @@ export default function ReturnsWorkspace() {
             <button
               onClick={() => runBulk('approve')}
               disabled={bulkBusy}
-              className="h-7 px-2.5 text-sm bg-emerald-600 hover:bg-emerald-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
+              className="h-7 px-2.5 text-sm bg-emerald-600 dark:bg-emerald-700 hover:bg-emerald-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
             >
               <CheckCircle2 size={11} /> Approve
             </button>
             <button
               onClick={() => runBulk('receive')}
               disabled={bulkBusy}
-              className="h-7 px-2.5 text-sm bg-blue-600 hover:bg-blue-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
+              className="h-7 px-2.5 text-sm bg-blue-600 dark:bg-blue-700 hover:bg-blue-500 rounded inline-flex items-center gap-1 disabled:opacity-50"
             >
               <ArrowDownToLine size={11} /> Mark received
             </button>
@@ -795,7 +795,7 @@ export default function ReturnsWorkspace() {
       )}
 
       {loading && items.length === 0 ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">Loading returns…</div></Card>
+        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">Loading returns…</div></Card>
       ) : items.length === 0 ? (
         <EmptyState
           icon={Undo2}
@@ -808,7 +808,7 @@ export default function ReturnsWorkspace() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 w-8">
                     <input
@@ -822,11 +822,11 @@ export default function ReturnsWorkspace() {
                   <SortHeader col="rmaNumber"  sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">RMA</SortHeader>
                   <SortHeader col="channel"    sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">Channel</SortHeader>
                   <SortHeader col="status"     sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">Status</SortHeader>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Items</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">Reason</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Items</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Reason</th>
                   <SortHeader col="refundCents" sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-right">Refund</SortHeader>
                   <SortHeader col="createdAt"   sortBy={sortBy} sortDir={sortDir} onSort={onSort} className="px-3 py-2 text-left">Created</SortHeader>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
               <tbody>
@@ -838,7 +838,7 @@ export default function ReturnsWorkspace() {
                     ref={(el) => {
                       if (el && idx === activeIdx) el.scrollIntoView({ block: 'nearest' })
                     }}
-                    className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer ${
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer ${
                       selected.has(r.id) ? 'bg-blue-50/40' : ''
                     } ${idx === activeIdx ? 'ring-1 ring-inset ring-slate-900' : ''}`}
                   >
@@ -851,25 +851,25 @@ export default function ReturnsWorkspace() {
                         aria-label={`Select ${r.rmaNumber ?? r.id}`}
                       />
                     </td>
-                    <td className="px-3 py-2 font-mono text-base text-slate-700">{r.rmaNumber ?? '—'}</td>
+                    <td className="px-3 py-2 font-mono text-base text-slate-700 dark:text-slate-300">{r.rmaNumber ?? '—'}</td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{r.channel}</span>
+                      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[r.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>{r.channel}</span>
                       {r.isFbaReturn && <span className="ml-1.5 text-xs font-mono text-orange-700">FBA</span>}
                     </td>
                     <td className="px-3 py-2">
                       <Badge variant={STATUS_TONE[r.status] ?? 'default'} size="sm">{r.status.replace(/_/g, ' ')}</Badge>
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                       <span className="tabular-nums">{r.items.reduce((n, i) => n + i.quantity, 0)}</span> units · {r.items.length} SKU
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-600 truncate max-w-[200px]">{r.reason ?? '—'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-600 dark:text-slate-400 truncate max-w-[200px]">{r.reason ?? '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-base text-slate-700 dark:text-slate-300">
                       {r.refundCents != null ? `€${(r.refundCents / 100).toFixed(2)}` : '—'}
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-500 tabular-nums whitespace-nowrap">
+                    <td className="px-3 py-2 text-base text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
                       {new Date(r.createdAt).toLocaleDateString('it-IT', { year: '2-digit', month: 'short', day: 'numeric' })}
                     </td>
-                    <td className="px-3 py-2 text-right"><ChevronRight size={14} className="text-slate-400 inline" /></td>
+                    <td className="px-3 py-2 text-right"><ChevronRight size={14} className="text-slate-400 dark:text-slate-500 inline" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -877,13 +877,13 @@ export default function ReturnsWorkspace() {
           </div>
 
           {/* R1.1 — pagination footer */}
-          <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 bg-slate-50/40 text-base">
-            <div className="text-sm text-slate-600 tabular-nums">
+          <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50/40 text-base">
+            <div className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
               {total === 0 ? 'No results' : (
                 <>
-                  Showing <span className="font-medium text-slate-900">{(page - 1) * pageSize + 1}</span>–
-                  <span className="font-medium text-slate-900">{Math.min(page * pageSize, total)}</span>{' '}
-                  of <span className="font-medium text-slate-900">{total}</span>
+                  Showing <span className="font-medium text-slate-900 dark:text-slate-100">{(page - 1) * pageSize + 1}</span>–
+                  <span className="font-medium text-slate-900 dark:text-slate-100">{Math.min(page * pageSize, total)}</span>{' '}
+                  of <span className="font-medium text-slate-900 dark:text-slate-100">{total}</span>
                 </>
               )}
             </div>
@@ -891,7 +891,7 @@ export default function ReturnsWorkspace() {
               <select
                 value={pageSize}
                 onChange={(e) => setFilters({ pageSize: e.target.value, page: '1' })}
-                className="h-7 px-1.5 text-sm border border-slate-200 rounded bg-white"
+                className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
                 title="Rows per page"
               >
                 {[25, 50, 100, 200].map((n) => (
@@ -901,7 +901,7 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: '1' })}
                 disabled={page === 1}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="First page"
               >
                 <ChevronsLeft size={13} />
@@ -909,16 +909,16 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: String(Math.max(1, page - 1)) })}
                 disabled={page === 1}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Previous page"
               >
                 <ChevronLeft size={13} />
               </button>
-              <span className="text-sm text-slate-600 px-2 tabular-nums">Page {page} of {totalPages}</span>
+              <span className="text-sm text-slate-600 dark:text-slate-400 px-2 tabular-nums">Page {page} of {totalPages}</span>
               <button
                 onClick={() => setFilters({ page: String(Math.min(totalPages, page + 1)) })}
                 disabled={page >= totalPages}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Next page"
               >
                 <ChevronRight size={13} />
@@ -926,7 +926,7 @@ export default function ReturnsWorkspace() {
               <button
                 onClick={() => setFilters({ page: String(totalPages) })}
                 disabled={page >= totalPages}
-                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Last page"
               >
                 <ChevronsRight size={13} />
@@ -961,10 +961,10 @@ function SortHeader({
 }) {
   const active = sortBy === col
   return (
-    <th className={`${className ?? ''} text-sm font-semibold uppercase tracking-wider text-slate-700`}>
+    <th className={`${className ?? ''} text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>
       <button
         onClick={() => onSort(col)}
-        className={`inline-flex items-center gap-1 hover:text-slate-900 ${active ? 'text-slate-900' : ''}`}
+        className={`inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-slate-100 ${active ? 'text-slate-900 dark:text-slate-100' : ''}`}
       >
         {children}
         {active && (sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
@@ -1093,15 +1093,15 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
   return (
     <div className="fixed inset-0 z-30 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
-      <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <div className="text-md font-semibold text-slate-900 inline-flex items-center gap-2">
+      <aside onClick={(e) => e.stopPropagation()} className="relative h-full w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 z-10">
+          <div className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-2">
             <Undo2 size={14} /> Return {ret?.rmaNumber}
           </div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700"><X size={16} /></button>
         </header>
         <div className="p-5 space-y-4">
-          {loading || !ret ? <div className="text-base text-slate-500">Loading…</div> : (
+          {loading || !ret ? <div className="text-base text-slate-500 dark:text-slate-400">Loading…</div> : (
             <>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ret.channel] ?? ''}`}>{ret.channel}</span>
@@ -1117,20 +1117,20 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
 
               {/* R2.1 — RMA barcode for warehouse identification */}
               {ret.rmaNumber && (
-                <div className="bg-white border border-slate-200 rounded p-3 flex justify-center">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 flex justify-center">
                   <Barcode128 value={ret.rmaNumber} moduleWidthPx={1.4} height={48} />
                 </div>
               )}
 
               {/* R2.1 — customer + order + shipment context */}
               {ret.order && (
-                <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2 text-base">
+                <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2 text-base">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5 min-w-0">
-                      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Customer</div>
-                      <div className="text-slate-900 truncate">{ret.order.customerName ?? 'Unknown customer'}</div>
+                      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Customer</div>
+                      <div className="text-slate-900 dark:text-slate-100 truncate">{ret.order.customerName ?? 'Unknown customer'}</div>
                       {ret.order.customerEmail && (
-                        <a href={`mailto:${ret.order.customerEmail}`} className="text-sm text-blue-700 hover:underline truncate block">
+                        <a href={`mailto:${ret.order.customerEmail}`} className="text-sm text-blue-700 dark:text-blue-300 hover:underline truncate block">
                           {ret.order.customerEmail}
                         </a>
                       )}
@@ -1140,44 +1140,44 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                         const city = a.City ?? a.city
                         const country = a.CountryCode ?? a.countryCode ?? a.country
                         if (!city && !country) return null
-                        return <div className="text-sm text-slate-500 truncate">{[city, country].filter(Boolean).join(', ')}</div>
+                        return <div className="text-sm text-slate-500 dark:text-slate-400 truncate">{[city, country].filter(Boolean).join(', ')}</div>
                       })()}
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
                       <a
                         href={`/fulfillment/outbound?drawer=${ret.order.id}`}
-                        className="h-7 px-2 text-sm border border-slate-200 bg-white rounded hover:bg-slate-100 inline-flex items-center gap-1"
+                        className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1"
                       >
                         <Package size={11} /> Open order
                       </a>
                       {ret.order.shipments[0] && (
                         <a
                           href={`/fulfillment/outbound/pack/${ret.order.shipments[0].id}`}
-                          className="h-7 px-2 text-sm border border-slate-200 bg-white rounded hover:bg-slate-100 inline-flex items-center gap-1"
+                          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded hover:bg-slate-100 dark:hover:bg-slate-700 inline-flex items-center gap-1"
                         >
                           <Truck size={11} /> Shipment
                         </a>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-500 pt-1.5 border-t border-slate-200">
+                  <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200 dark:border-slate-700">
                     {ret.order.channelOrderId && (
                       <span className="inline-flex items-center gap-1">
                         <span className="uppercase text-xs tracking-wider font-semibold">Order</span>
-                        <span className="font-mono text-slate-700">{ret.order.channelOrderId}</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{ret.order.channelOrderId}</span>
                       </span>
                     )}
                     {ret.order.shipments[0]?.trackingNumber && (
                       <span className="inline-flex items-center gap-1">
                         <span className="uppercase text-xs tracking-wider font-semibold">Tracking</span>
-                        <span className="font-mono text-slate-700">{ret.order.shipments[0].trackingNumber}</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{ret.order.shipments[0].trackingNumber}</span>
                       </span>
                     )}
                   </div>
                 </div>
               )}
 
-              {ret.reason && <div><div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Reason</div><div className="text-base text-slate-700 mt-0.5">{ret.reason}</div></div>}
+              {ret.reason && <div><div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Reason</div><div className="text-base text-slate-700 dark:text-slate-300 mt-0.5">{ret.reason}</div></div>}
 
               {/* R2.2 — writable Return-level notes (FBA stays read-only) */}
               {!ret.isFbaReturn && (
@@ -1185,7 +1185,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
               )}
 
               <div>
-                <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Items</div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">Items</div>
                 <div className="space-y-2.5">
                   {ret.items.map((it) => (
                     <ReturnItemCard
@@ -1214,24 +1214,24 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
               )}
 
               {!ret.isFbaReturn && (
-                <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     {ret.status === 'REQUESTED' || ret.status === 'AUTHORIZED' || ret.status === 'IN_TRANSIT' ? (
-                      <button onClick={() => action('receive')} className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5">
+                      <button onClick={() => action('receive')} className="h-8 px-3 text-base bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5">
                         <ArrowDownToLine size={12} /> Mark received
                       </button>
                     ) : null}
                     {(ret.status === 'RECEIVED' || ret.status === 'INSPECTING') && (
-                      <button onClick={submitInspect} className="h-8 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1.5">
+                      <button onClick={submitInspect} className="h-8 px-3 text-base bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 inline-flex items-center gap-1.5">
                         <CheckCircle2 size={12} /> Save inspection
                       </button>
                     )}
                     {ret.status === 'INSPECTING' && (
                       <>
-                        <button onClick={() => action('restock')} className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+                        <button onClick={() => action('restock')} className="h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
                           <Package size={12} /> Restock
                         </button>
-                        <button onClick={() => action('scrap')} className="h-8 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100">Scrap</button>
+                        <button onClick={() => action('scrap')} className="h-8 px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60">Scrap</button>
                       </>
                     )}
                   </div>
@@ -1246,9 +1246,9 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                   )}
 
                   {ret.refundStatus !== 'REFUNDED' && (
-                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-slate-500 mr-1">Refund:</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400 mr-1">Refund:</span>
                         <input
                           type="number"
                           step="0.01"
@@ -1256,13 +1256,13 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                           value={refundCents}
                           onChange={(e) => setRefundCents(e.target.value)}
                           placeholder="0.00"
-                          className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 rounded text-base"
+                          className="h-8 w-24 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded text-base"
                         />
-                        <span className="text-sm text-slate-500">€</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400">€</span>
                         <button
                           onClick={() => submitRefund(false)}
                           disabled={refundBusy}
-                          className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                          className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
                           title={`Issue refund on ${ret.channel} and mark refunded locally`}
                         >
                           {refundBusy ? '…' : `Refund on ${ret.channel}`}
@@ -1270,7 +1270,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                         <button
                           onClick={() => submitRefund(true)}
                           disabled={refundBusy}
-                          className="h-8 px-3 text-base border border-slate-200 text-slate-600 rounded hover:bg-slate-50 disabled:opacity-50"
+                          className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                           title="Already refunded in channel back office — just mark Nexus"
                         >
                           Mark only
@@ -1282,12 +1282,12 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                         <div
                           className={`text-sm rounded px-2.5 py-1.5 ${
                             refundResult.outcome === 'OK'
-                              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800'
                               : refundResult.outcome === 'OK_MANUAL_REQUIRED'
-                                ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                                ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800'
                                 : refundResult.outcome === 'NOT_IMPLEMENTED'
-                                  ? 'bg-slate-50 border border-slate-200 text-slate-700'
-                                  : 'bg-rose-50 border border-rose-200 text-rose-800'
+                                  ? 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                                  : 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800'
                           }`}
                         >
                           <div className="font-medium">
@@ -1315,7 +1315,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
                     </div>
                   )}
                   {ret.refundStatus === 'REFUNDED' && (ret as any).channelRefundId && (
-                    <div className="text-sm text-emerald-700 pt-1">
+                    <div className="text-sm text-emerald-700 dark:text-emerald-300 pt-1">
                       Channel refund id:{' '}
                       <span className="font-mono">
                         {(ret as any).channelRefundId}
@@ -1410,16 +1410,16 @@ function CreateReturnModal({
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center p-6" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40" />
-      <div onClick={(e) => e.stopPropagation()} className="relative bg-white rounded-lg shadow-2xl w-full max-w-xl">
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-          <div className="text-lg font-semibold text-slate-900">New return</div>
-          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100"><X size={16} /></button>
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-xl">
+        <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">New return</div>
+          <button onClick={onClose} className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700"><X size={16} /></button>
         </header>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Channel</div>
-              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="h-8 w-full px-2 text-md border border-slate-200 rounded">
+              <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Channel</div>
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className="h-8 w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded">
                 <option value="AMAZON">Amazon</option>
                 <option value="EBAY">eBay</option>
                 <option value="SHOPIFY">Shopify</option>
@@ -1428,34 +1428,34 @@ function CreateReturnModal({
               </select>
             </div>
             <div>
-              <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Order ID (optional)</div>
-              <input type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)} className="h-8 w-full px-2 text-md font-mono border border-slate-200 rounded" />
+              <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Order ID (optional)</div>
+              <input type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)} className="h-8 w-full px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded" />
               {orderHint && (
-                <div className="text-xs text-slate-500 mt-1">{orderLoading ? 'Loading order…' : orderHint}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{orderLoading ? 'Loading order…' : orderHint}</div>
               )}
             </div>
           </div>
           <div>
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Reason</div>
-            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong size, defective, …" className="h-8 w-full px-2 text-md border border-slate-200 rounded" />
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Reason</div>
+            <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong size, defective, …" className="h-8 w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded" />
           </div>
           <div>
-            <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-1">Items</div>
+            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">Items</div>
             <div className="space-y-1.5">
               {items.map((row, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input type="text" value={row.sku} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))} placeholder="SKU" className="flex-1 h-7 px-2 text-base font-mono border border-slate-200 rounded" />
-                  <input type="number" min="1" value={row.quantity} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantity: Number(e.target.value) || 1 } : s))} className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 rounded" />
-                  <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"><X size={14} /></button>
+                  <input type="text" value={row.sku} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, sku: e.target.value } : s))} placeholder="SKU" className="flex-1 h-7 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded" />
+                  <input type="number" min="1" value={row.quantity} onChange={(e) => setItems(items.map((s, j) => j === i ? { ...s, quantity: Number(e.target.value) || 1 } : s))} className="h-7 w-20 px-2 text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded" />
+                  <button onClick={() => setItems(items.filter((_, j) => j !== i))} className="h-7 w-7 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600"><X size={14} /></button>
                 </div>
               ))}
             </div>
-            <button onClick={() => setItems([...items, { sku: '', quantity: 1 }])} className="mt-2 text-sm text-blue-600 hover:underline">+ Add SKU</button>
+            <button onClick={() => setItems([...items, { sku: '', quantity: 1 }])} className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">+ Add SKU</button>
           </div>
         </div>
-        <footer className="px-5 py-3 border-t border-slate-200 flex items-center gap-2 justify-end">
-          <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50">Cancel</button>
-          <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create return</button>
+        <footer className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 justify-end">
+          <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+          <button onClick={submit} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">Create return</button>
         </footer>
       </div>
     </div>
@@ -1502,8 +1502,8 @@ function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
     info: 'bg-blue-500', success: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-rose-500',
   }
   return (
-    <div className="pt-3 border-t border-slate-100">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Activity</div>
+    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">Activity</div>
       <ol className="space-y-2.5 text-base">
         {entries.map((e) => {
           const meta = ACTION_LABEL[e.action] ?? { label: e.action, tone: 'info' as const }
@@ -1528,11 +1528,11 @@ function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
             <li key={e.id} className="flex items-start gap-3">
               <div className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${TONE_DOT[meta.tone]}`} />
               <div className="flex-1 min-w-0">
-                <div className="text-slate-900">
+                <div className="text-slate-900 dark:text-slate-100">
                   {meta.label}
-                  {detail && <span className="text-slate-500 ml-1.5">— {detail}</span>}
+                  {detail && <span className="text-slate-500 dark:text-slate-400 ml-1.5">— {detail}</span>}
                 </div>
-                <div className="text-xs text-slate-500 tabular-nums">
+                <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                   {fmtRel(e.createdAt)}
                   {e.userId && <span className="ml-2">· {e.userId}</span>}
                   {(md as any).bulk && <span className="ml-2 italic">· bulk</span>}
@@ -1549,46 +1549,46 @@ function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
 // R5.1 — refund history block (multi-refund + multi-attempt audit).
 function RefundHistory({ refunds, onAfterCreditNote }: { refunds: RefundRow[]; onAfterCreditNote?: () => void }) {
   const STATUS_TONE: Record<string, string> = {
-    POSTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    PENDING: 'bg-slate-50 text-slate-600 border-slate-200',
-    FAILED: 'bg-rose-50 text-rose-700 border-rose-200',
-    MANUAL_REQUIRED: 'bg-amber-50 text-amber-700 border-amber-200',
-    NOT_IMPLEMENTED: 'bg-slate-50 text-slate-600 border-slate-200',
+    POSTED: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+    PENDING: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+    FAILED: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+    MANUAL_REQUIRED: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+    NOT_IMPLEMENTED: 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
   }
   return (
-    <div className="pt-3 border-t border-slate-100">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">
+    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
         Refund history ({refunds.length})
       </div>
       <div className="space-y-1.5 text-base">
         {refunds.map((r) => (
-          <div key={r.id} className="bg-white border border-slate-200 rounded p-2.5 space-y-1">
+          <div key={r.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2.5 space-y-1">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="inline-flex items-center gap-2">
-                <span className="font-medium tabular-nums text-slate-900">€{(r.amountCents / 100).toFixed(2)}</span>
-                <span className="text-xs font-mono text-slate-500">{r.currencyCode}</span>
+                <span className="font-medium tabular-nums text-slate-900 dark:text-slate-100">€{(r.amountCents / 100).toFixed(2)}</span>
+                <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{r.currencyCode}</span>
                 {r.kind !== 'CASH' && (
-                  <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded">
+                  <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-900 rounded">
                     {r.kind.replace(/_/g, ' ')}
                   </span>
                 )}
-                <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${STATUS_TONE[r.channelStatus] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                <span className={`text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 border rounded ${STATUS_TONE[r.channelStatus] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
                   {r.channelStatus.replace(/_/g, ' ')}
                 </span>
               </div>
-              <span className="text-xs text-slate-500 tabular-nums">
+              <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                 {new Date(r.createdAt).toLocaleString('it-IT', { year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
             {r.channelRefundId && (
               <div className="text-xs">
-                <span className="text-slate-500">{r.channel} refund id:</span>{' '}
-                <span className="font-mono text-slate-700">{r.channelRefundId}</span>
+                <span className="text-slate-500 dark:text-slate-400">{r.channel} refund id:</span>{' '}
+                <span className="font-mono text-slate-700 dark:text-slate-300">{r.channelRefundId}</span>
               </div>
             )}
-            {r.channelError && <div className="text-xs font-mono text-rose-700">{r.channelError}</div>}
+            {r.channelError && <div className="text-xs font-mono text-rose-700 dark:text-rose-300">{r.channelError}</div>}
             {r.attempts.length > 1 && (
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
                 {r.attempts.length} attempts · last:{' '}
                 <span className="font-mono">
                   {r.attempts[0].outcome}
@@ -1618,7 +1618,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
 
   if (refund.channelStatus !== 'POSTED') {
     return (
-      <div className="text-xs text-slate-400 italic pt-1 border-t border-slate-100">
+      <div className="text-xs text-slate-400 dark:text-slate-500 italic pt-1 border-t border-slate-100 dark:border-slate-800">
         Nota di credito issued after refund posts
       </div>
     )
@@ -1666,25 +1666,25 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
   }
 
   return (
-    <div className="pt-1.5 mt-1 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+    <div className="pt-1.5 mt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
       <div className="inline-flex items-center gap-2 flex-wrap">
-        <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Nota di credito</span>
+        <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Nota di credito</span>
         {cn ? (
           <>
-            <span className="font-mono text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
+            <span className="font-mono text-xs px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900 rounded">
               {cn.creditNoteNumber}
             </span>
             {cn.sdiStatus && (
-              <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 rounded">
+              <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded">
                 SDI: {cn.sdiStatus}
               </span>
             )}
             {cn.causale && (
-              <span className="text-xs text-slate-500 italic">{cn.causale}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 italic">{cn.causale}</span>
             )}
           </>
         ) : (
-          <span className="text-xs text-slate-400 italic">Not yet assigned</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500 italic">Not yet assigned</span>
         )}
       </div>
       <div className="inline-flex items-center gap-1.5">
@@ -1693,7 +1693,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
             type="button"
             onClick={assign}
             disabled={busy !== null}
-            className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50"
+            className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             {busy === 'assign' ? 'Assigning…' : 'Assign number'}
           </button>
@@ -1704,7 +1704,7 @@ function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () 
             onClick={download}
             disabled={busy !== null}
             title="FatturaPA TD04 XML (B2B only)"
-            className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50"
+            className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             {busy === 'download' ? 'Generating…' : 'Download XML'}
           </button>
@@ -1750,9 +1750,9 @@ function ReturnNotesEditor({
   }
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-2">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1 inline-flex items-center gap-2">
         Operator notes
-        {dirty && <span className="text-amber-600 normal-case font-normal text-[11px]">unsaved</span>}
+        {dirty && <span className="text-amber-600 dark:text-amber-400 normal-case font-normal text-[11px]">unsaved</span>}
       </div>
       <textarea
         value={value}
@@ -1760,13 +1760,13 @@ function ReturnNotesEditor({
         onBlur={save}
         rows={2}
         placeholder="Context for the next operator — anything not captured by the per-item state."
-        className="w-full px-2 py-1.5 text-base border border-slate-200 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+        className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
       />
       {dirty && (
         <button
           onClick={save}
           disabled={busy}
-          className="mt-1 h-7 px-2 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+          className="mt-1 h-7 px-2 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
         >
           <Save size={11} /> Save
         </button>
@@ -1874,24 +1874,24 @@ function ReturnItemCard({
   // R3.2 — disposition badge tone (display-only here; mobile inspect
   // page is where the operator picks).
   const DISPOSITION_TONE: Record<string, string> = {
-    SELLABLE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    SECOND_QUALITY: 'bg-blue-50 text-blue-700 border-blue-200',
-    REFURBISH: 'bg-violet-50 text-violet-700 border-violet-200',
-    QUARANTINE: 'bg-amber-50 text-amber-700 border-amber-200',
-    SCRAP: 'bg-rose-50 text-rose-700 border-rose-200',
+    SELLABLE: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+    SECOND_QUALITY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+    REFURBISH: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
+    QUARANTINE: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+    SCRAP: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
   }
 
   return (
-    <div className="border border-slate-200 rounded p-3 space-y-2.5 text-base">
+    <div className="border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2.5 text-base">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-slate-900">{item.sku}</div>
-          <div className="text-sm text-slate-500 tabular-nums">Qty {item.quantity}</div>
+          <div className="font-mono text-slate-900 dark:text-slate-100">{item.sku}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">Qty {item.quantity}</div>
         </div>
         <div className="flex items-center gap-1.5">
           {item.disposition && (
             <span
-              className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${DISPOSITION_TONE[item.disposition] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}
+              className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${DISPOSITION_TONE[item.disposition] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
               title={item.scrapReason ? `Scrap reason: ${item.scrapReason}` : undefined}
             >
               {item.disposition.replace(/_/g, ' ')}
@@ -1901,7 +1901,7 @@ function ReturnItemCard({
             <select
               value={stagedGrade ?? item.conditionGrade ?? ''}
               onChange={(e) => onStageGrade(e.target.value)}
-              className="h-7 px-2 text-sm border border-slate-200 rounded"
+              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded"
               aria-label={`Condition grade for ${item.sku}`}
             >
               <option value="">Grade…</option>
@@ -1912,12 +1912,12 @@ function ReturnItemCard({
               <option value="UNUSABLE">Unusable</option>
             </select>
           ) : (
-            <span className="text-sm text-slate-600">{item.conditionGrade ?? '—'}</span>
+            <span className="text-sm text-slate-600 dark:text-slate-400">{item.conditionGrade ?? '—'}</span>
           )}
         </div>
       </div>
       {item.disposition === 'SCRAP' && item.scrapReason && (
-        <div className="text-xs text-rose-700 italic">Scrap reason: {item.scrapReason}</div>
+        <div className="text-xs text-rose-700 dark:text-rose-300 italic">Scrap reason: {item.scrapReason}</div>
       )}
 
       {isInspecting && !isFba && (
@@ -1959,7 +1959,7 @@ function ReturnItemCard({
             Functional test passed
           </label>
           <div className="col-span-2 inline-flex items-center gap-2">
-            <span className="text-slate-500">Signs of use:</span>
+            <span className="text-slate-500 dark:text-slate-400">Signs of use:</span>
             {(['NONE', 'LIGHT', 'HEAVY'] as const).map((s) => (
               <button
                 key={s}
@@ -1967,8 +1967,8 @@ function ReturnItemCard({
                 onClick={() => setChk({ signsOfUse: s })}
                 className={`h-6 px-2 text-sm rounded border ${
                   checklist.signsOfUse === s
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 {s}
@@ -1980,20 +1980,20 @@ function ReturnItemCard({
 
       {!isFba && (
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Notes</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Notes</div>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Per-item observations, defect location, etc."
-            className="w-full px-2 py-1 text-base border border-slate-200 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="w-full px-2 py-1 text-base border border-slate-200 dark:border-slate-700 rounded resize-y focus:outline-none focus:ring-1 focus:ring-slate-400"
           />
         </div>
       )}
 
       {!isFba && (
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 inline-flex items-center gap-1.5">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1 inline-flex items-center gap-1.5">
             <ImageIcon size={11} /> Photos ({item.photoUrls.length}/10)
           </div>
           {item.photoUrls.length > 0 && (
@@ -2002,11 +2002,11 @@ function ReturnItemCard({
                 <div key={u} className="relative group">
                   <a href={u} target="_blank" rel="noopener noreferrer">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={u} alt="Item condition" className="w-full h-16 object-cover rounded border border-slate-200" />
+                    <img src={u} alt="Item condition" className="w-full h-16 object-cover rounded border border-slate-200 dark:border-slate-700" />
                   </a>
                   <button
                     onClick={() => removePhoto(u)}
-                    className="absolute top-0.5 right-0.5 h-5 w-5 inline-flex items-center justify-center rounded bg-white/80 hover:bg-rose-50 text-slate-600 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-0.5 right-0.5 h-5 w-5 inline-flex items-center justify-center rounded bg-white/80 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-300 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Remove photo"
                   >
                     <X size={11} />
@@ -2030,7 +2030,7 @@ function ReturnItemCard({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={busy || item.photoUrls.length >= 10}
-            className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1"
+            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Camera size={11} /> Add photo
           </button>
@@ -2038,15 +2038,15 @@ function ReturnItemCard({
       )}
 
       {dirty && !isFba && (
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+        <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={saveItem}
             disabled={busy}
-            className="h-7 px-2.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
+            className="h-7 px-2.5 text-sm bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1"
           >
             <Save size={11} /> Save item
           </button>
-          <span className="text-xs text-amber-600">Unsaved per-item changes</span>
+          <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved per-item changes</span>
         </div>
       )}
     </div>
@@ -2117,12 +2117,12 @@ function RefundRetryBanner({
   }
 
   return (
-    <div className="bg-rose-50 border border-rose-200 rounded p-3 space-y-1.5 text-base">
+    <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded p-3 space-y-1.5 text-base">
       <div className="flex items-start gap-2">
-        <AlertTriangle size={14} className="text-rose-600 shrink-0 mt-0.5" />
+        <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0 space-y-0.5">
           <div className="font-medium text-rose-900">Channel refund failed</div>
-          <div className="text-sm text-rose-700">
+          <div className="text-sm text-rose-700 dark:text-rose-300">
             {status?.priorAttempts ?? 0} / 5 attempts
             {status?.reason === 'max_attempts' && ' — gave up after 5 retries'}
             {status?.reason === 'backoff' && status?.nextEligibleAt && ` — next auto retry ${fmtRel(status.nextEligibleAt)}`}
@@ -2130,7 +2130,7 @@ function RefundRetryBanner({
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 pt-1 border-t border-rose-200">
+      <div className="flex items-center gap-2 pt-1 border-t border-rose-200 dark:border-rose-900">
         <button
           onClick={retry}
           disabled={busy || status?.reason === 'max_attempts'}
@@ -2139,7 +2139,7 @@ function RefundRetryBanner({
         >
           <RotateCw size={11} className={busy ? 'animate-spin' : ''} /> {busy ? 'Retrying…' : 'Retry now'}
         </button>
-        <span className="text-xs text-rose-600">
+        <span className="text-xs text-rose-600 dark:text-rose-400">
           Auto-retry runs hourly via cron (when enabled)
         </span>
       </div>
@@ -2193,8 +2193,8 @@ function RefundDeadlineBadge({
   // word, not from rose/amber alone (WCAG 1.4.1).
   const isOverdue = data.status === 'overdue'
   const tone = isOverdue
-    ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
-    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900'
+    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+    : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900'
   const severityWord = isOverdue ? 'Critical' : 'Warning'
   const detail = isOverdue
     ? `Overdue ${Math.abs(data.daysUntilDeadline ?? 0)}d`
@@ -2348,8 +2348,8 @@ function ReturnLabelPanel({
   }
 
   return (
-    <div className="pt-3 border-t border-slate-100">
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2 inline-flex items-center gap-1.5">
+    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2 inline-flex items-center gap-1.5">
         <Tag size={11} /> Return label
         {hasLabel && !isEmailed && (
           <Badge variant="warning" size="sm">Not emailed yet</Badge>
@@ -2360,22 +2360,22 @@ function ReturnLabelPanel({
       </div>
 
       {!hasLabel && !editing && (
-        <div className="bg-slate-50 border border-slate-200 rounded p-3">
-          <p className="text-base text-slate-600 mb-2">
+        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3">
+          <p className="text-base text-slate-600 dark:text-slate-400 mb-2">
             No label attached. Generate a Sendcloud return label in one click, or attach one you've already created in another portal.
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={handleGenerate}
               disabled={busy}
-              className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
               title="Calls Sendcloud's parcels API with is_return=true. dryRun-default — mock label until NEXUS_ENABLE_SENDCLOUD_REAL=true."
             >
               <CheckCircle2 size={12} /> {busy ? 'Generating…' : 'Generate Sendcloud label'}
             </button>
             <button
               onClick={() => setEditing(true)}
-              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1.5"
             >
               <Plus size={12} /> Attach existing
             </button>
@@ -2384,9 +2384,9 @@ function ReturnLabelPanel({
       )}
 
       {editing && (
-        <div className="bg-white border border-slate-200 rounded p-3 space-y-2">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
           <div>
-            <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Label URL <span className="text-red-600">*</span>
             </label>
             <input
@@ -2394,18 +2394,18 @@ function ReturnLabelPanel({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://app.sendcloud.com/labels/..."
-              className="mt-1 w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+              className="mt-1 w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                 Carrier
               </label>
               <select
                 value={carrier}
                 onChange={(e) => setCarrier(e.target.value)}
-                className="mt-1 w-full h-8 px-2 text-base border border-slate-200 rounded bg-white"
+                className="mt-1 w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
               >
                 {CARRIER_OPTIONS.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -2415,7 +2415,7 @@ function ReturnLabelPanel({
               </select>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+              <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                 Tracking number
               </label>
               <input
@@ -2423,7 +2423,7 @@ function ReturnLabelPanel({
                 value={tracking}
                 onChange={(e) => setTracking(e.target.value)}
                 placeholder="Optional"
-                className="mt-1 w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+                className="mt-1 w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
               />
             </div>
           </div>
@@ -2431,7 +2431,7 @@ function ReturnLabelPanel({
             <button
               onClick={handleAttach}
               disabled={busy}
-              className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <CheckCircle2 size={12} /> {busy ? 'Saving…' : 'Save'}
             </button>
@@ -2442,7 +2442,7 @@ function ReturnLabelPanel({
                 setCarrier(returnRow.returnLabelCarrier ?? 'SENDCLOUD')
                 setTracking(returnRow.returnTrackingNumber ?? '')
               }}
-              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               Cancel
             </button>
@@ -2451,15 +2451,15 @@ function ReturnLabelPanel({
       )}
 
       {hasLabel && !editing && (
-        <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2">
+        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-base">
             <div className="md:col-span-2">
-              <div className="text-xs text-slate-500 mb-0.5">URL</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">URL</div>
               <a
                 href={returnRow.returnLabelUrl!}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-blue-700 hover:text-blue-900 break-all text-sm"
+                className="font-mono text-blue-700 dark:text-blue-300 hover:text-blue-900 break-all text-sm"
               >
                 {returnRow.returnLabelUrl}
               </a>
@@ -2467,16 +2467,16 @@ function ReturnLabelPanel({
             <div className="space-y-1">
               {returnRow.returnLabelCarrier && (
                 <div>
-                  <div className="text-xs text-slate-500">Carrier</div>
-                  <div className="text-base text-slate-900 inline-flex items-center gap-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Carrier</div>
+                  <div className="text-base text-slate-900 dark:text-slate-100 inline-flex items-center gap-1">
                     <Truck size={11} /> {returnRow.returnLabelCarrier}
                   </div>
                 </div>
               )}
               {returnRow.returnTrackingNumber && (
                 <div>
-                  <div className="text-xs text-slate-500">Tracking</div>
-                  <div className="text-base font-mono text-slate-900">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Tracking</div>
+                  <div className="text-base font-mono text-slate-900 dark:text-slate-100">
                     {returnRow.returnTrackingNumber}
                   </div>
                 </div>
@@ -2484,17 +2484,17 @@ function ReturnLabelPanel({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-200">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-200 dark:border-slate-700">
             <button
               onClick={() => handleCopy(returnRow.returnLabelUrl!, 'URL')}
-              className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1"
+              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1"
             >
               <Copy size={11} /> Copy URL
             </button>
             {returnRow.returnTrackingNumber && (
               <button
                 onClick={() => handleCopy(returnRow.returnTrackingNumber!, 'Tracking number')}
-                className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-white inline-flex items-center gap-1"
+                className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white inline-flex items-center gap-1"
               >
                 <Copy size={11} /> Copy tracking
               </button>
@@ -2503,7 +2503,7 @@ function ReturnLabelPanel({
               <button
                 onClick={handleMarkEmailed}
                 disabled={busy}
-                className="h-7 px-2 text-sm bg-emerald-600 text-white border border-emerald-600 rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1"
+                className="h-7 px-2 text-sm bg-emerald-600 dark:bg-emerald-700 text-white border border-emerald-600 rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1"
                 title="Stamp the timestamp after you've emailed the URL to the customer"
               >
                 <Mail size={11} /> Mark emailed
@@ -2511,7 +2511,7 @@ function ReturnLabelPanel({
             )}
             <button
               onClick={() => setEditing(true)}
-              className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-white"
+              className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-white"
             >
               Edit
             </button>
@@ -2524,7 +2524,7 @@ function ReturnLabelPanel({
             </button>
           </div>
 
-          <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-3 flex-wrap">
             {returnRow.returnLabelGeneratedAt && (
               <span>Generated {new Date(returnRow.returnLabelGeneratedAt).toLocaleString()}</span>
             )}
