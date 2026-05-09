@@ -174,6 +174,14 @@ export type BulkActionStatus =
   | 'COMPLETED'
   | 'FAILED'
   | 'PARTIALLY_COMPLETED'
+  /**
+   * W1.1 — transient state set by `cancelJob` when the operator cancels
+   * an IN_PROGRESS job. The per-item loop in `processJob` re-reads the
+   * status column between items; observing CANCELLING (or CANCELLED)
+   * causes a clean exit that finalises the job as CANCELLED with the
+   * partial counts already recorded.
+   */
+  | 'CANCELLING'
   | 'CANCELLED';
 
 export interface CreateJobInput {
@@ -423,6 +431,7 @@ export class BulkActionService {
       let processedItems = 0;
       let failedItems = 0;
       let skippedItems = 0;
+      let cancelled = false;
       const errors: Array<{ itemId: string; error: string; timestamp: Date }> = [];
 
       // Process each item. For each: insert a BulkActionItem row in
@@ -430,9 +439,33 @@ export class BulkActionService {
       // update the row with terminal status + afterState (or
       // errorMessage on throw). The errorLog JSON on BulkActionJob
       // is still populated for backwards compat.
+      //
+      // W1.1 — between items, re-read the job's `status` column. If
+      // it has flipped to CANCELLING (operator clicked cancel mid-
+      // flight) we break out of the loop and let the post-loop block
+      // finalize the job as CANCELLED. The DB read costs ~1ms per
+      // item; for a 1000-item job that's ~1s overhead — acceptable
+      // for the cancel-responsiveness this buys.
       const actionType = job.actionType as BulkActionType;
       const jobPayload = (job.actionPayload ?? {}) as Record<string, any>;
       for (const item of items) {
+        const liveStatus = await this.prisma.bulkActionJob.findUnique({
+          where: { id: jobId },
+          select: { status: true },
+        });
+        if (
+          liveStatus?.status === 'CANCELLING' ||
+          liveStatus?.status === 'CANCELLED'
+        ) {
+          logger.info(`Job cancellation observed — exiting per-item loop`, {
+            jobId,
+            processedSoFar: processedItems,
+            failedSoFar: failedItems,
+            skippedSoFar: skippedItems,
+          });
+          cancelled = true;
+          break;
+        }
         const beforeState = this.extractItemState(
           item,
           actionType,
@@ -514,9 +547,13 @@ export class BulkActionService {
         errors: errors.length > 0 ? errors : undefined
       });
 
-      // Determine final status
+      // Determine final status. W1.1 — if the loop exited because the
+      // operator cancelled mid-flight, finalize as CANCELLED. Partial
+      // results stay on BulkActionItem for audit + downstream reporting.
       let finalStatus: BulkActionStatus;
-      if (failedItems === 0) {
+      if (cancelled) {
+        finalStatus = 'CANCELLED';
+      } else if (failedItems === 0) {
         finalStatus = 'COMPLETED';
       } else if (processedItems > 0 || skippedItems > 0) {
         finalStatus = 'PARTIALLY_COMPLETED';
@@ -1052,8 +1089,15 @@ export class BulkActionService {
     const where: Prisma.BulkActionJobWhereInput = {};
     if (filters.status) {
       // Convenience aliases: 'active' = pre-terminal; 'terminal' = post.
+      // W1.1 — CANCELLING is a transient pre-terminal state set when an
+      // operator cancels an IN_PROGRESS job; the worker observes the
+      // flag between items and finalizes as CANCELLED. Include it in
+      // 'active' so the strip keeps the spinner up while the cancel
+      // flushes through the loop.
       if (filters.status === 'active') {
-        where.status = { in: ['PENDING', 'QUEUED', 'IN_PROGRESS'] };
+        where.status = {
+          in: ['PENDING', 'QUEUED', 'IN_PROGRESS', 'CANCELLING'],
+        };
       } else if (filters.status === 'terminal') {
         where.status = {
           in: [
@@ -1278,7 +1322,21 @@ export class BulkActionService {
   }
 
   /**
-   * Cancel a pending job
+   * Cancel a job. Supported transitions:
+   *   PENDING / QUEUED  → CANCELLED   (terminal, immediate)
+   *   IN_PROGRESS       → CANCELLING  (cooperative — the per-item loop
+   *                                    in `processJob` re-reads status
+   *                                    every progress flush and exits
+   *                                    cleanly, finalising the job as
+   *                                    CANCELLED with whatever partial
+   *                                    results have already been
+   *                                    written to BulkActionItem)
+   *   anything else     → error
+   *
+   * W1.1 (2026-05-09) — operator could not cancel a hung IN_PROGRESS
+   * job; only PENDING / QUEUED were cancellable. The cooperative
+   * CANCELLING transition lets the worker checkpoint mid-loop without
+   * losing the partial audit trail.
    */
   async cancelJob(jobId: string): Promise<BulkActionJob> {
     try {
@@ -1290,19 +1348,33 @@ export class BulkActionService {
         throw new Error(`Job not found: ${jobId}`);
       }
 
-      if (job.status !== 'PENDING' && job.status !== 'QUEUED') {
+      const cancellableNow = job.status === 'PENDING' || job.status === 'QUEUED';
+      const cancellableInFlight = job.status === 'IN_PROGRESS';
+
+      if (!cancellableNow && !cancellableInFlight) {
         throw new Error(`Cannot cancel job with status: ${job.status}`);
       }
 
-      logger.info(`Cancelling job`, { jobId });
+      if (cancellableNow) {
+        logger.info(`Cancelling job (terminal)`, { jobId, fromStatus: job.status });
+        return await this.prisma.bulkActionJob.update({
+          where: { id: jobId },
+          data: {
+            status: 'CANCELLED',
+            completedAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+      }
 
+      // IN_PROGRESS — flag CANCELLING; processJob loop will finalize.
+      logger.info(`Cancelling job (cooperative)`, { jobId, fromStatus: job.status });
       return await this.prisma.bulkActionJob.update({
         where: { id: jobId },
         data: {
-          status: 'CANCELLED',
-          completedAt: new Date(),
-          updatedAt: new Date()
-        }
+          status: 'CANCELLING',
+          updatedAt: new Date(),
+        },
       });
     } catch (error) {
       logger.error('Failed to cancel job', {

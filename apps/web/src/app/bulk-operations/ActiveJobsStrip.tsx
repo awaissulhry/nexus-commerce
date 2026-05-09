@@ -34,6 +34,8 @@ function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'IN_PROGRESS':
       return <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+    case 'CANCELLING':
+      return <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin" />
     case 'PENDING':
     case 'QUEUED':
     default:
@@ -119,8 +121,15 @@ export default function ActiveJobsStrip() {
         </div>
         <div className="divide-y divide-blue-100">
           {jobs.map((job) => {
+            // W1.1 — IN_PROGRESS jobs are now cooperatively cancellable;
+            // the backend flips status → CANCELLING and the per-item
+            // loop in BulkActionService.processJob exits between items.
+            // CANCELLING shows the in-flight cancel without re-enabling
+            // the button (avoids double-cancel races).
             const cancellable =
-              job.status === 'PENDING' || job.status === 'QUEUED'
+              job.status === 'PENDING' ||
+              job.status === 'QUEUED' ||
+              job.status === 'IN_PROGRESS'
             const pct = Math.min(100, Math.max(0, job.progressPercent))
             return (
               <div
