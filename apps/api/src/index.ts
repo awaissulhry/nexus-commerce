@@ -489,6 +489,20 @@ async function start() {
     // via BulkActionService.createJob.
     startScheduledBulkActionCron();
 
+    // W7.1 — register bulk-ops action handlers into the existing
+    // AutomationRule registry. Idempotent — safe to call before /
+    // after the W4 replenishment evaluator boots.
+    try {
+      const { registerBulkOpsActions } = await import(
+        './services/automation/bulk-ops-actions.js'
+      );
+      registerBulkOpsActions();
+    } catch (err) {
+      logger.warn(
+        `[boot] bulk-ops automation actions skipped: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     // W5.4 — seed built-in BulkActionTemplate rows. Idempotent —
     // keyed by (userId='__builtin', name) so re-running on every
     // boot picks up seed list changes without duplicating rows.
