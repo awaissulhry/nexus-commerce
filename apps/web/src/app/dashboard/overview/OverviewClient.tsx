@@ -226,7 +226,7 @@ export default function OverviewClient() {
                 />
                 <CatalogSnapshot t={t} catalog={data.catalog} />
                 <ActivityFeed t={t} items={data.recentActivity} />
-                <QuickActions t={t} />
+                <QuickActions t={t} alerts={data.alerts} />
               </div>
             </div>
           </>
