@@ -251,6 +251,123 @@ const PAGE_COMMANDS: Command[] = [
     contextPath: /^\/fulfillment\/returns(\?|$)/,
     keywords: 'filter pending awaiting',
   },
+  // W14.1 — jump-to-tab commands for /products/[id]/edit. Page listens
+  // for `nexus:products-edit:goto-tab` events and routes to the tab.
+  // Surfaced only when the operator is on the edit page itself; the
+  // 8 tabs share one event name with a `tab` detail so adding a new
+  // tab in a future wave needs zero CommandPalette changes.
+  {
+    id: 'page-products-edit-goto-master',
+    label: 'Jump to Master Data',
+    icon: FileText,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'master' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'identity sku name brand description bullets keywords',
+  },
+  {
+    id: 'page-products-edit-goto-pricing',
+    label: 'Jump to Pricing',
+    icon: Tag,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'pricing' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'price tier customer group scheduled change history',
+  },
+  {
+    id: 'page-products-edit-goto-inventory',
+    label: 'Jump to Inventory',
+    icon: Warehouse,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'inventory' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'stock atp reservation movement location',
+  },
+  {
+    id: 'page-products-edit-goto-locales',
+    label: 'Jump to Locales (translations)',
+    icon: Globe,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'locales' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'translation language italian german french spanish lingue traduzioni akeneo',
+  },
+  {
+    id: 'page-products-edit-goto-workflow',
+    label: 'Jump to Workflow',
+    icon: ClipboardList,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'workflow' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'stage gate approval review draft published transition',
+  },
+  {
+    id: 'page-products-edit-goto-relations',
+    label: 'Jump to Relations',
+    icon: Boxes,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'relations' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'cross-sell upsell accessory recommended bundle related',
+  },
+  {
+    id: 'page-products-edit-goto-activity',
+    label: 'Jump to Activity (audit log)',
+    icon: History,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'activity' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'history audit log diff rollback before after',
+  },
+  {
+    id: 'page-products-edit-goto-variations',
+    label: 'Jump to Variations',
+    icon: Boxes,
+    run: () =>
+      window.dispatchEvent(
+        new CustomEvent('nexus:products-edit:goto-tab', {
+          detail: { tab: 'variations' },
+        }),
+      ),
+    group: 'On this page',
+    contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
+    keywords: 'variant child sku size color matrix',
+  },
 ]
 
 /**

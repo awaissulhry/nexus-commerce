@@ -142,10 +142,60 @@ export default function ProductEditClient({
   // U.30 — read initial tab from `?tab=<x>`. HierarchyLens deep-links
   // to /products/${id}/edit?tab=variations; pre-fix the link silently
   // landed on master.
+  // W14.1 — also drives Cmd+K "Jump to <tab>" actions: those router
+  // .push(?tab=X), and the effect below picks the change up so the
+  // URL is the canonical tab cursor for both initial load and intra-
+  // page navigation.
   const [topTab, setTopTab] = useState<TopTab>(() => {
     const initial = searchParams?.get('tab')
     return (initial as TopTab) || 'master'
   })
+  // W14.1 — sync state ← URL on every navigation. useState's function
+  // initializer runs once, so without this effect a router.push to
+  // the same path with a different ?tab would silently no-op. Also
+  // handles Cmd+K "Jump to Pricing" → router.replace(?tab=pricing).
+  useEffect(() => {
+    const next = searchParams?.get('tab')
+    if (next && next !== topTab) {
+      setTopTab(next as TopTab)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // W14.1 — wrap setTopTab so every tab click updates the URL too.
+  // router.replace (not push) so the back button doesn't have to
+  // step through 12 history entries to leave the page. scroll:
+  // false because the tab strip is sticky; jumping to top would be
+  // visually disorienting. master → drop the param entirely so the
+  // canonical URL stays clean.
+  const goToTab = useCallback(
+    (tab: TopTab) => {
+      setTopTab(tab)
+      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      if (tab === 'master') params.delete('tab')
+      else params.set('tab', tab)
+      const qs = params.toString()
+      const target = qs ? `?${qs}` : window.location.pathname
+      router.replace(target, { scroll: false })
+    },
+    [router, searchParams],
+  )
+
+  // W14.1 — Cmd+K's "Jump to <tab>" actions dispatch the same event
+  // name with a `tab` detail. Listening here keeps CommandPalette
+  // free of page internals.
+  useEffect(() => {
+    function onGotoTab(e: Event) {
+      const ce = e as CustomEvent<{ tab?: string }>
+      const target = ce.detail?.tab
+      if (typeof target === 'string' && target.length > 0) {
+        goToTab(target as TopTab)
+      }
+    }
+    window.addEventListener('nexus:products-edit:goto-tab', onGotoTab)
+    return () =>
+      window.removeEventListener('nexus:products-edit:goto-tab', onGotoTab)
+  }, [goToTab])
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
 
@@ -305,50 +355,50 @@ export default function ProductEditClient({
           >
             <TopTabButton
               active={topTab === 'master'}
-              onClick={() => setTopTab('master')}
+              onClick={() => goToTab('master')}
             >
               {t('products.edit.tab.master')}
             </TopTabButton>
             <TopTabButton
               active={topTab === 'pricing'}
-              onClick={() => setTopTab('pricing')}
+              onClick={() => goToTab('pricing')}
             >
               {t('products.edit.tab.pricing')}
             </TopTabButton>
             <TopTabButton
               active={topTab === 'inventory'}
-              onClick={() => setTopTab('inventory')}
+              onClick={() => goToTab('inventory')}
             >
               {t('products.edit.tab.inventory')}
             </TopTabButton>
             <TopTabButton
               active={topTab === 'locales'}
-              onClick={() => setTopTab('locales')}
+              onClick={() => goToTab('locales')}
             >
               {t('products.edit.tab.locales')}
             </TopTabButton>
             <TopTabButton
               active={topTab === 'workflow'}
-              onClick={() => setTopTab('workflow')}
+              onClick={() => goToTab('workflow')}
             >
               {t('products.edit.tab.workflow')}
             </TopTabButton>
             <TopTabButton
               active={topTab === 'relations'}
-              onClick={() => setTopTab('relations')}
+              onClick={() => goToTab('relations')}
             >
               {t('products.edit.tab.relations')}
             </TopTabButton>
             <TopTabButton
               active={topTab === 'activity'}
-              onClick={() => setTopTab('activity')}
+              onClick={() => goToTab('activity')}
             >
               {t('products.edit.tab.activity')}
             </TopTabButton>
             {product.isParent && (
               <TopTabButton
                 active={topTab === 'variations'}
-                onClick={() => setTopTab('variations')}
+                onClick={() => goToTab('variations')}
                 count={childrenList.length}
               >
                 {t('products.edit.tab.variations')}
@@ -368,7 +418,7 @@ export default function ProductEditClient({
                     } else {
                       ensureMarketSelected(channel)
                     }
-                    setTopTab(channel)
+                    goToTab(channel)
                   }}
                   count={channelListings.length || undefined}
                   readiness={readiness}
