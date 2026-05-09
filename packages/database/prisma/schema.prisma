@@ -3689,6 +3689,173 @@ model BulkAutomationApproval {
   @@index([ruleId, createdAt(sort: Desc)])
 }
 
+// ── W8 / Wave-8: Import wizard depth ──────────────────────────────
+//
+// Replaces the legacy BulkOperation CSV-upload flow (53% production
+// failure rate) with a per-row tracked import job. Per-row state +
+// rollback + retry-failed are first-class so a partial import never
+// leaves the operator guessing what landed.
+//
+// Lifecycle:
+//   PENDING_PREVIEW   parse + validate finished, awaiting confirm
+//   APPLYING          rows are landing on the catalog
+//   COMPLETED         every row SUCCESS or SKIPPED
+//   PARTIAL           some rows FAILED, some SUCCESS
+//   FAILED            zero rows committed (parser / validator
+//                     blew the whole file)
+//   CANCELLED         operator dropped before apply, or scheduled
+//                     pull retired the job
+//
+// Source paths today:
+//   upload    operator picked a file in the browser
+//   url       scheduled pull from a URL (W8.4)
+//   ftp       scheduled pull from FTP (W8.4)
+model ImportJob {
+  id String @id @default(cuid())
+
+  jobName     String
+  description String?
+
+  /**
+   * Where the file came from. 'upload' is the operator-driven
+   * path; 'url' / 'ftp' are scheduled pulls.
+   */
+  source     String @default("upload")
+  /** For url / ftp sources, the location pulled. Null for uploads. */
+  sourceUrl  String?
+  /** Original filename when known (uploads carry it). */
+  filename   String?
+  /** Detected file kind: 'csv' | 'xlsx' | 'json'. */
+  fileKind   String
+
+  /**
+   * What entity these rows write to:
+   *   'product'         — base catalog rows
+   *   'channelListing'  — per-marketplace overrides
+   *   'inventory'       — stock-only updates
+   * Drives validator + write path selection.
+   */
+  targetEntity String
+
+  /**
+   * Operator-supplied or auto-detected column → field mapping. Shape:
+   *   { sku: 'SKU', name: 'Title', basePrice: 'Price (EUR)' }
+   * Fields the operator left unmapped fall through (no write).
+   */
+  columnMapping Json @default("{}")
+
+  /**
+   * Behaviour when a row hits a validation failure:
+   *   'abort'   — first failure aborts the whole apply (legacy)
+   *   'skip'    — failed rows skipped, successful rows commit
+   *               (default — partial-import is the expected case)
+   */
+  onError String @default("skip")
+
+  status String @default("PENDING_PREVIEW")
+
+  /** Aggregate counters — kept on the parent for cheap UI. */
+  totalRows     Int @default(0)
+  successRows   Int @default(0)
+  failedRows    Int @default(0)
+  skippedRows   Int @default(0)
+
+  errorSummary String?
+
+  /** Optional schedule that triggered this import (W8.4). */
+  scheduleId String?
+  /** A rerun-of-failed-rows points back at its parent. */
+  parentJobId String?
+
+  rows ImportJobRow[]
+
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([scheduleId])
+  @@index([parentJobId])
+}
+
+model ImportJobRow {
+  id String @id @default(cuid())
+
+  jobId String
+  job   ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  /** Row index in the source file (1-based, header-skipped). Used to
+   *  link back to the original spreadsheet for triage. */
+  rowIndex Int
+
+  /** Resolved target id when the row matched an existing entity (sku
+   *  match, etc.); null when the row was rejected before lookup. */
+  targetId String?
+
+  /** Pre-validation snapshot of the row's parsed values. Frozen so
+   *  rollback can read what was about to be written. */
+  parsedValues Json
+
+  status String @default("PENDING") // PENDING | SUCCESS | FAILED | SKIPPED
+
+  errorMessage String?
+
+  /** Snapshot of the entity's fields BEFORE the import wrote (only
+   *  populated when status=SUCCESS) — drives rollback. */
+  beforeState Json?
+  afterState  Json?
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([jobId, status])
+  @@index([targetId])
+}
+
+// ── W8.4: Scheduled imports ───────────────────────────────────────
+//
+// Recurring URL / FTP pulls. Mirrors ScheduledBulkAction's shape but
+// for imports. The W8.4 worker fetches the file, hands it to the
+// import service, and the resulting ImportJob row links back via
+// scheduleId.
+model ScheduledImport {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  /** Where to pull from. 'url' for HTTP(S), 'ftp' for FTP/SFTP. */
+  source   String
+  sourceUrl String
+
+  /** Same shape as ImportJob.targetEntity / columnMapping / onError —
+   *  the worker copies these onto the ImportJob it creates. */
+  targetEntity   String
+  columnMapping  Json    @default("{}")
+  onError        String  @default("skip")
+
+  cronExpression String?
+  scheduledFor   DateTime?
+  timezone       String  @default("Europe/Rome")
+
+  nextRunAt DateTime?
+  enabled   Boolean @default(true)
+
+  lastRunAt    DateTime?
+  lastJobId    String?
+  lastStatus   String?
+  lastError    String?
+  runCount     Int @default(0)
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, nextRunAt])
+}
+
 // ── Phase D.3f: Live category schema sync ────────────────────────────
 // Cached snapshots of Amazon `getDefinitionsProductType` (and eventually
 // eBay equivalents). One row per (channel, marketplace, productType,
