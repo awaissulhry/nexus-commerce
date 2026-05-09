@@ -45,8 +45,6 @@ import UploadModal from './UploadModal'
 import BulkOperationModal from './BulkOperationModal'
 import FilterDropdown from './components/FilterDropdown'
 import PastePreviewModal, {
-  type PasteCell,
-  type PasteError,
   type PastePreview,
 } from './PastePreviewModal'
 import CascadeChoiceModal from './components/CascadeChoiceModal'
@@ -125,12 +123,7 @@ import {
   computeFillExtension,
   computeFillValue,
 } from './lib/fill-helpers'
-import {
-  toTsvCell,
-  parseTsv,
-  coercePasteValue,
-  looselyEqual,
-} from './lib/tsv-helpers'
+import { looselyEqual } from './lib/tsv-helpers'
 import {
   TableRow,
   SelectionOverlays,
@@ -143,6 +136,11 @@ import {
 } from './components/DisplayControls'
 import { useBulkUndoRedo } from './lib/use-bulk-undo-redo'
 import { startDragFillTracker } from './lib/drag-fill-tracker'
+import {
+  selectionToTsv,
+  buildPastePlan,
+  shouldInterceptClipboard,
+} from './lib/clipboard-helpers'
 
 // Re-export BulkProduct so any sibling file (modals, cells, etc.) that
 // used to import it from this file still finds it here.
@@ -2453,42 +2451,8 @@ export default function BulkOperationsClient() {
       if (!bounds) return
       // Don't intercept native copy when the user is editing or
       // selected text inside a regular input/textarea.
-      const ae = document.activeElement as HTMLElement | null
-      if (ae) {
-        const tag = ae.tagName
-        if (
-          tag === 'INPUT' ||
-          tag === 'TEXTAREA' ||
-          ae.isContentEditable
-        ) {
-          return
-        }
-      }
-      const tbl = copyCtxRef.current.table
-      const tableRows = tbl.getRowModel().rows
-      const cols = tbl.getVisibleLeafColumns()
-      const tsvRows: string[] = []
-      for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-        const row = tableRows[r]
-        if (!row) continue
-        const cells: string[] = []
-        for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-          const col = cols[c]
-          if (!col) {
-            cells.push('')
-            continue
-          }
-          let v: unknown
-          try {
-            v = row.getValue(col.id)
-          } catch {
-            v = undefined
-          }
-          cells.push(toTsvCell(v))
-        }
-        tsvRows.push(cells.join('\t'))
-      }
-      const tsv = tsvRows.join('\n')
+      if (!shouldInterceptClipboard()) return
+      const tsv = selectionToTsv(copyCtxRef.current.table, bounds)
       e.clipboardData?.setData('text/plain', tsv)
       e.preventDefault()
       const count =
@@ -2517,107 +2481,19 @@ export default function BulkOperationsClient() {
     const onPaste = (e: ClipboardEvent) => {
       const sel = selectionRef.current
       if (!sel.active) return
-      const ae = document.activeElement as HTMLElement | null
-      if (
-        ae &&
-        (ae.tagName === 'INPUT' ||
-          ae.tagName === 'TEXTAREA' ||
-          ae.isContentEditable)
-      ) {
-        return
-      }
+      if (!shouldInterceptClipboard()) return
       const text = e.clipboardData?.getData('text/plain') ?? ''
       if (!text) return
 
-      const sourceGrid = parseTsv(text)
-      if (sourceGrid.length === 0) return
-      e.preventDefault()
-
-      const tbl = tableRef.current
-      const tableRows = tbl.getRowModel().rows
-      const visibleCols = tbl.getVisibleLeafColumns()
-      const startRow = sel.active.rowIdx
-      const startCol = sel.active.colIdx
-
-      // 1×1 source + multi-cell selection → fill the entire range
-      // with the single value (Excel behaviour).
-      const isSingleSource =
-        sourceGrid.length === 1 && sourceGrid[0].length === 1
-      const rangeRows = rangeBounds
-        ? rangeBounds.maxRow - rangeBounds.minRow + 1
-        : 1
-      const rangeCols = rangeBounds
-        ? rangeBounds.maxCol - rangeBounds.minCol + 1
-        : 1
-      const fillRange =
-        isSingleSource && rangeBounds && (rangeRows > 1 || rangeCols > 1)
-      const sourceRows = fillRange ? rangeRows : sourceGrid.length
-      const sourceCols = fillRange
-        ? rangeCols
-        : Math.max(...sourceGrid.map((r) => r.length))
-      const anchorRow = fillRange ? rangeBounds!.minRow : startRow
-      const anchorCol = fillRange ? rangeBounds!.minCol : startCol
-
-      const plan: PasteCell[] = []
-      const errors: PasteError[] = []
-      for (let dr = 0; dr < sourceRows; dr++) {
-        const targetRow = anchorRow + dr
-        if (targetRow >= tableRows.length) break
-        const row = tableRows[targetRow]
-        if (!row) continue
-        for (let dc = 0; dc < sourceCols; dc++) {
-          const targetCol = anchorCol + dc
-          if (targetCol >= visibleCols.length) break
-          const col = visibleCols[targetCol]
-          if (!col) continue
-          const fieldDef = allFieldsRef.current.find((f) => f.id === col.id)
-          const sku = row.original.sku ?? ''
-          const fieldLabel = fieldDef?.label ?? col.id
-          if (!fieldDef?.editable) {
-            errors.push({
-              rowIdx: targetRow,
-              colIdx: targetCol,
-              sku,
-              fieldLabel,
-              reason: 'Read-only',
-            })
-            continue
-          }
-          const sourceR = fillRange ? 0 : dr
-          const sourceC = fillRange ? 0 : dc
-          const raw = sourceGrid[sourceR]?.[sourceC] ?? ''
-          const coerced = coercePasteValue(raw, fieldDef)
-          if (coerced.error) {
-            errors.push({
-              rowIdx: targetRow,
-              colIdx: targetCol,
-              sku,
-              fieldLabel,
-              reason: coerced.error,
-            })
-            continue
-          }
-          let oldValue: unknown
-          try {
-            oldValue = row.getValue(col.id)
-          } catch {
-            oldValue = undefined
-          }
-          // Skip no-op cells from the changes plan but still flow
-          // through so applying expands the selection over them.
-          plan.push({
-            rowIdx: targetRow,
-            colIdx: targetCol,
-            rowId: row.original.id,
-            columnId: col.id,
-            oldValue,
-            newValue: coerced.value,
-            sku,
-            fieldLabel,
-          })
-        }
-      }
+      const { plan, errors } = buildPastePlan({
+        table: tableRef.current,
+        allFields: allFieldsRef.current,
+        active: sel.active,
+        rangeBounds,
+        text,
+      })
       if (plan.length === 0 && errors.length === 0) return
+      e.preventDefault()
       setPastePreview({ plan, errors })
     }
     document.addEventListener('paste', onPaste)
