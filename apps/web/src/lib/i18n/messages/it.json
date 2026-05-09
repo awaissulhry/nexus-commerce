@@ -3457,6 +3457,8 @@
   "products.edit.activity.title": "Attività",
   "products.edit.activity.description": "Log di audit append-only di questo prodotto. Ogni modifica master, cambio inserzione di canale, cascata di prezzo/stato, generazione AI, upload immagine e scrittura bulk arriva qui.",
   "products.edit.activity.refresh": "Aggiorna",
+  "products.edit.activity.export": "Esporta CSV",
+  "products.edit.activity.exportTooltip": "Scarica le righe filtrate come CSV (timestamp, azione, autore, JSON prima/dopo). Uso per audit di conformità / commercialista.",
   "products.edit.activity.loading": "Caricamento attività…",
   "products.edit.activity.empty": "Nessuna attività in questa finestra. Prova un intervallo più lungo o azzera il filtro azione.",
   "products.edit.activity.searchPlaceholder": "Cerca azione / autore…",
@@ -4051,5 +4053,15 @@
   "listWizard.aiComplete.close": "Chiudi",
   "listWizard.aiComplete.toastSuccess": "IA completata — {cost} spesi in {calls} chiamate",
   "listWizard.aiComplete.toastFailed": "Esecuzione IA con errori",
-  "listWizard.aiComplete.toastReviewHint": "Apri il Passaggio 5 (Attributi) per rivedere e applicare"
+  "listWizard.aiComplete.toastReviewHint": "Apri il Passaggio 5 (Attributi) per rivedere e applicare",
+  "listWizard.aiComplete.applyAll": "Applica tutto alla guida",
+  "listWizard.aiComplete.applying": "Applicazione…",
+  "listWizard.aiComplete.applied": "Applicato — ricarico la guida…",
+  "listWizard.aiComplete.applyError": "Applicazione fallita",
+  "listWizard.aiComplete.previewLabel": "IA ha generato contenuto per {n} grupp{plural}",
+  "listWizard.aiComplete.previewGroup": "{platform} · {language} · {channels}",
+  "listWizard.aiComplete.fieldTitle": "Titolo",
+  "listWizard.aiComplete.fieldBullets": "Elenco puntato",
+  "listWizard.aiComplete.fieldDescription": "Descrizione",
+  "listWizard.aiComplete.fieldKeywords": "Parole chiave"
 }

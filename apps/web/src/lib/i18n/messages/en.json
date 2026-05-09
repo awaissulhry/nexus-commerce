@@ -3453,6 +3453,8 @@
   "products.edit.activity.title": "Activity",
   "products.edit.activity.description": "Append-only audit log scoped to this product. Every master edit, channel listing change, master price/status cascade, AI generation, image upload and bulk-op write lands here.",
   "products.edit.activity.refresh": "Refresh",
+  "products.edit.activity.export": "Export CSV",
+  "products.edit.activity.exportTooltip": "Download the currently-filtered rows as CSV (timestamp, action, actor, before/after JSON). Compliance / accountant audit use.",
   "products.edit.activity.loading": "Loading activity…",
   "products.edit.activity.empty": "No activity in this window. Try a longer time range or clear the action filter.",
   "products.edit.activity.searchPlaceholder": "Search action / actor…",
@@ -4000,5 +4002,15 @@
   "listWizard.aiComplete.close": "Close",
   "listWizard.aiComplete.toastSuccess": "AI completed — {cost} spent across {calls} calls",
   "listWizard.aiComplete.toastFailed": "AI run hit an error",
-  "listWizard.aiComplete.toastReviewHint": "Open Step 5 (Attributes) to review and apply"
+  "listWizard.aiComplete.toastReviewHint": "Open Step 5 (Attributes) to review and apply",
+  "listWizard.aiComplete.applyAll": "Apply all to wizard",
+  "listWizard.aiComplete.applying": "Applying…",
+  "listWizard.aiComplete.applied": "Applied — reloading wizard…",
+  "listWizard.aiComplete.applyError": "Apply failed",
+  "listWizard.aiComplete.previewLabel": "AI generated content for {n} channel group{plural}",
+  "listWizard.aiComplete.previewGroup": "{platform} · {language} · {channels}",
+  "listWizard.aiComplete.fieldTitle": "Title",
+  "listWizard.aiComplete.fieldBullets": "Bullets",
+  "listWizard.aiComplete.fieldDescription": "Description",
+  "listWizard.aiComplete.fieldKeywords": "Keywords"
 }

@@ -25,6 +25,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  Download,
   Loader2,
   RefreshCw,
   Undo2,
@@ -285,15 +286,27 @@ export default function ActivityTab({
         title={t('products.edit.activity.title')}
         description={t('products.edit.activity.description')}
         action={
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={refreshing}
-            icon={<RefreshCw className="w-3.5 h-3.5" />}
-            onClick={() => void refresh()}
-          >
-            {t('products.edit.activity.refresh')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Download className="w-3.5 h-3.5" />}
+              onClick={() => exportCsv(rows ?? [], product)}
+              disabled={!rows || rows.length === 0}
+              title={t('products.edit.activity.exportTooltip')}
+            >
+              {t('products.edit.activity.export')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={refreshing}
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
+              onClick={() => void refresh()}
+            >
+              {t('products.edit.activity.refresh')}
+            </Button>
+          </div>
         }
       >
         {/* ── Filter row ───────────────────────────────────── */}
@@ -722,6 +735,65 @@ function pickSource(metadata: Record<string, unknown> | null): string | null {
   if (typeof metadata.source === 'string') return metadata.source
   if (typeof metadata.reason === 'string') return metadata.reason
   return null
+}
+
+// W14.8 — CSV export of the current filtered audit feed.
+//
+// One row per audit entry. Fields chosen for accountant / compliance
+// audit use cases: timestamp, action, actor, source, before/after
+// JSON, IP, metadata. Values are CSV-escaped (double-quote wrap +
+// quote-doubling) so embedded commas and newlines don't break parse
+// in Excel or Numbers. Filename includes SKU + ISO date so multiple
+// exports don't collide.
+function exportCsv(rows: AuditRow[], product: { sku?: string; id: string }) {
+  if (rows.length === 0) return
+  const headers = [
+    'createdAt',
+    'action',
+    'userId',
+    'ip',
+    'source',
+    'before',
+    'after',
+    'metadata',
+  ]
+  const escape = (v: unknown): string => {
+    if (v === null || v === undefined) return ''
+    const s = typeof v === 'string' ? v : JSON.stringify(v)
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  const lines = [headers.join(',')]
+  for (const row of rows) {
+    const source =
+      row.metadata && typeof row.metadata.source === 'string'
+        ? row.metadata.source
+        : ''
+    lines.push(
+      [
+        escape(row.createdAt),
+        escape(row.action),
+        escape(row.userId),
+        escape(row.ip),
+        escape(source),
+        escape(row.before),
+        escape(row.after),
+        escape(row.metadata),
+      ].join(','),
+    )
+  }
+  const blob = new Blob([lines.join('\n')], {
+    type: 'text/csv;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const date = new Date().toISOString().slice(0, 10)
+  const sku = product.sku ?? product.id
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `audit_${sku}_${date}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 function formatRelative(iso: string): string {
