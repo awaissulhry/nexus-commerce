@@ -88,6 +88,7 @@ import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
+import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
@@ -469,6 +470,12 @@ async function start() {
     // don't grow unbounded. Default-ON; opt out with
     // NEXUS_DISABLE_OBSERVABILITY_RETENTION=1 (e.g. during forensics).
     startObservabilityRetentionCron();
+
+    // W1.3 — orphan bulk-job cleanup (hourly). Auto-cancels PENDING /
+    // QUEUED BulkActionJob rows that never got POST /:id/process'd
+    // within an hour. Default-ON; the audit found a 3-day-old PENDING
+    // job sitting on the active-jobs strip and confusing operators.
+    startOrphanBulkJobCleanupCron();
 
     // L.16.0 — alert evaluator. Polls every minute against AlertRule
     // and fires AlertEvent + dispatches notifications when conditions
