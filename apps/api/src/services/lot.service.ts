@@ -342,6 +342,145 @@ export async function listRecalls(args: {
   })
 }
 
+/**
+ * L.9 — Auto-FEFO consume wrapper. Picks lots in expiresAt-ASC order
+ * and fans out one applyStockMovement per lot so each consume row
+ * carries its own lotId. Existing callers stay on plain
+ * applyStockMovement — adopt this wrapper when the call site needs
+ * lot-aware allocation (order ship, FBM consume, transfer-out).
+ *
+ * Behavior:
+ *   - No lots exist for the product → falls back to single
+ *     applyStockMovement (lotId omitted). Net behavior unchanged.
+ *   - Lots cover the full quantity → returns N movements, one per
+ *     picked lot. Sum of |change| equals requested quantity.
+ *   - Lots short of full quantity → throws unless allowShortfall is
+ *     set. Default is throw — caller decides whether to allow non-lot
+ *     stock to make up the difference. allowShortfall=true emits the
+ *     remaining qty as a single non-lot movement.
+ *
+ * Returns the list of per-lot StockMovement ids in pick order.
+ *
+ * Note: this wrapper opens its own prisma.$transaction so all per-lot
+ * decrements + the StockLevel/Product cascade roll back atomically.
+ * Callers that need to nest in their own outer tx should fan out
+ * applyStockMovement calls manually instead.
+ */
+export async function consumeWithFefo(args: {
+  productId: string
+  variationId?: string | null
+  /** Positive number; consume amount. The wrapper translates to
+   *  negative applyStockMovement.change values. */
+  quantity: number
+  reason: import('./stock-movement.service.js').StockMovementInput['reason']
+  locationId?: string
+  warehouseId?: string
+  referenceType?: string
+  referenceId?: string
+  notes?: string
+  actor?: string
+  orderId?: string
+  shipmentId?: string
+  returnId?: string
+  reservationId?: string
+  allowShortfall?: boolean
+}): Promise<{ movementIds: string[]; lotsAllocated: number; nonLotShortfall: number }> {
+  if (args.quantity <= 0) {
+    throw new Error('consumeWithFefo: quantity must be > 0')
+  }
+  const { applyStockMovement } = await import('./stock-movement.service.js')
+
+  const plan = await pickLotsForConsume({
+    productId: args.productId,
+    variationId: args.variationId,
+    quantity: args.quantity,
+  })
+
+  // No lots configured for this product — degrade to a single non-lot
+  // consume so existing untracked SKUs continue to work.
+  if (plan.entries.length === 0 && plan.shortfall === args.quantity) {
+    const m = await applyStockMovement({
+      productId: args.productId,
+      variationId: args.variationId ?? undefined,
+      change: -args.quantity,
+      reason: args.reason,
+      locationId: args.locationId,
+      warehouseId: args.warehouseId,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      notes: args.notes,
+      actor: args.actor,
+      orderId: args.orderId,
+      shipmentId: args.shipmentId,
+      returnId: args.returnId,
+      reservationId: args.reservationId,
+    })
+    return { movementIds: [m.id], lotsAllocated: 0, nonLotShortfall: args.quantity }
+  }
+
+  if (plan.shortfall > 0 && !args.allowShortfall) {
+    throw new Error(
+      `consumeWithFefo: requested ${args.quantity} but only ${plan.totalAllocated} ` +
+      `units available across non-recalled lots. Set allowShortfall=true to consume ` +
+      `the remaining ${plan.shortfall} as non-lot stock.`,
+    )
+  }
+
+  // One movement per picked lot, in FEFO order. applyStockMovement
+  // honors lotId on consumes via decrementLotInTx (L.2 wiring).
+  const movementIds: string[] = []
+  for (const entry of plan.entries) {
+    const m = await applyStockMovement({
+      productId: args.productId,
+      variationId: args.variationId ?? undefined,
+      change: -entry.qty,
+      reason: args.reason,
+      locationId: args.locationId,
+      warehouseId: args.warehouseId,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      notes: args.notes,
+      actor: args.actor,
+      orderId: args.orderId,
+      shipmentId: args.shipmentId,
+      returnId: args.returnId,
+      reservationId: args.reservationId,
+      lotId: entry.lotId,
+    })
+    movementIds.push(m.id)
+  }
+
+  // Shortfall consumed as non-lot movement (only reachable when
+  // allowShortfall=true).
+  if (plan.shortfall > 0) {
+    const m = await applyStockMovement({
+      productId: args.productId,
+      variationId: args.variationId ?? undefined,
+      change: -plan.shortfall,
+      reason: args.reason,
+      locationId: args.locationId,
+      warehouseId: args.warehouseId,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      notes: args.notes
+        ? `${args.notes} [non-lot shortfall +${plan.shortfall}]`
+        : `[non-lot shortfall +${plan.shortfall}]`,
+      actor: args.actor,
+      orderId: args.orderId,
+      shipmentId: args.shipmentId,
+      returnId: args.returnId,
+      reservationId: args.reservationId,
+    })
+    movementIds.push(m.id)
+  }
+
+  return {
+    movementIds,
+    lotsAllocated: plan.entries.length,
+    nonLotShortfall: plan.shortfall,
+  }
+}
+
 export async function decrementLotInTx(tx: Tx, lotId: string, qty: number) {
   if (qty <= 0) throw new Error('decrementLot: qty must be > 0')
   const lot = await tx.lot.findUnique({
