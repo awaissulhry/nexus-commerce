@@ -32,6 +32,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
 import { applyStockMovement } from './stock-movement.service.js'
+import { recordApiCall } from './outbound-api-call-log.service.js'
 
 interface EbayOrder {
   orderId: string
@@ -120,25 +121,39 @@ export class EbayOrdersService {
       since.setDate(since.getDate() - days)
       const fromDate = since.toISOString()
 
-      const response = await fetch(
-        `https://api.ebay.com/sell/fulfillment/v1/order?filter=creationdate:[${fromDate}]&limit=200`,
+      const url = `https://api.ebay.com/sell/fulfillment/v1/order?filter=creationdate:[${fromDate}]&limit=200`
+      // L.3.3 — wrap in recordApiCall so every cron tick writes an
+      // OutboundApiCallLog row (latency, status, error bucket). The
+      // SP-API library handles this automatically via instrumentSellingPartner;
+      // eBay uses raw fetch so each callsite needs explicit wrapping.
+      const data = await recordApiCall<{ orders?: EbayOrder[] }>(
         {
+          channel: 'EBAY',
+          operation: 'getOrders',
+          endpoint: '/sell/fulfillment/v1/order',
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          triggeredBy: 'cron',
+        },
+        async () => {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => '')
+            const err = new Error(
+              `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string }
+            err.statusCode = response.status
+            err.body = errorBody
+            throw err
+          }
+          return (await response.json()) as { orders?: EbayOrder[] }
         },
       )
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '')
-        throw new Error(
-          `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
-        )
-      }
-
-      const data = (await response.json()) as { orders?: EbayOrder[] }
       return data.orders ?? []
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
