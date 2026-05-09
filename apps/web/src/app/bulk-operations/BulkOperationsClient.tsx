@@ -3017,6 +3017,15 @@ export default function BulkOperationsClient() {
       if (view.collapsedGroups) {
         setCollapsedGroups(new Set(view.collapsedGroups))
       }
+      // W4.4 — restore Wave 4 state captured under view.extras: multi-
+      // key sort, conditional-format rules, and the active group-by
+      // column. Each falls back to the empty / default value when the
+      // view doesn't carry it (older views, default views).
+      const extras = view.extras
+      setSortKeys(extras?.sortKeys ?? [])
+      setConditionalRules(extras?.conditionalRules ?? [])
+      setGroupByColumnId(extras?.groupByColumnId ?? '')
+      setCollapsedGroupKeys(new Set())
       // KK.2 — explicit-view-load wins over channel auto-load.
       // Mark every (channel, marketplace) pair as already auto-loaded
       // so the EE.1 effect won't reorder the view-supplied columns
@@ -3042,6 +3051,15 @@ export default function BulkOperationsClient() {
         channels: enabledChannels,
         productTypes: enabledProductTypes,
         collapsedGroups: Array.from(collapsedGroups),
+        // W4.4 — capture Wave 4 view state in `extras`. Empty values
+        // are still serialised explicitly so a saved-then-reloaded
+        // view restores the empty list rather than inheriting the
+        // operator's current state.
+        extras: {
+          sortKeys,
+          conditionalRules,
+          groupByColumnId: groupByColumnId || undefined,
+        },
       })
       setSavedViews(loadAllViews())
       setActiveViewIdState(view.id)
@@ -3052,6 +3070,9 @@ export default function BulkOperationsClient() {
       enabledChannels,
       enabledProductTypes,
       filterState,
+      sortKeys,
+      conditionalRules,
+      groupByColumnId,
       collapsedGroups,
     ],
   )
@@ -3091,6 +3112,14 @@ export default function BulkOperationsClient() {
       channels: enabledChannels,
       productTypes: enabledProductTypes,
       collapsedGroups: Array.from(collapsedGroups),
+      // W4.4 — pin the Wave 4 view state onto the update too so the
+      // overwrite captures the operator's current sort + rules +
+      // group-by, not just the original snapshot.
+      extras: {
+        sortKeys,
+        conditionalRules,
+        groupByColumnId: groupByColumnId || undefined,
+      },
     })
     setSavedViews(loadAllViews())
     setUpdateFlash('saved')
@@ -3103,6 +3132,9 @@ export default function BulkOperationsClient() {
     enabledChannels,
     enabledProductTypes,
     collapsedGroups,
+    sortKeys,
+    conditionalRules,
+    groupByColumnId,
   ])
 
   return (

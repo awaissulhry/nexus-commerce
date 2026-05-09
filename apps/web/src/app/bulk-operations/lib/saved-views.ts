@@ -12,8 +12,31 @@
 
 import { getBackendUrl } from '@/lib/backend-url'
 import type { FilterState } from './types'
+import type { SortKey } from './multi-sort'
+import type { ConditionalRule } from './conditional-format'
 
 const ACTIVE_VIEW_KEY = 'nexus_bulkops_active_view'
+
+/**
+ * W4.4 — view extras stored INSIDE filterState's jsonb under a
+ * reserved `_viewExtras` key so we can persist Wave 4 state without
+ * a Prisma migration. Migration to a dedicated column lands in a
+ * follow-up; this keeps the change risk-controlled while concurrent
+ * agents are committing migrations daily.
+ *
+ * The server's filterState jsonb is opaque, so packing the extras
+ * here is a no-op as far as the route layer is concerned. When this
+ * commit is in front of operators the new state survives a refresh;
+ * when the migration lands later, a one-shot migration walks every
+ * row and lifts the extras out into the dedicated column.
+ */
+export interface ViewExtras {
+  sortKeys?: SortKey[]
+  conditionalRules?: ConditionalRule[]
+  groupByColumnId?: string
+}
+
+export const VIEW_EXTRAS_KEY = '_viewExtras' as const
 
 export interface SavedView {
   id: string
@@ -27,10 +50,55 @@ export interface SavedView {
   /** W.10 — group keys collapsed in the band when the view was saved.
    *  Restored on selectView so the user's preferred density survives. */
   collapsedGroups?: string[]
+  /** W4.4 — Wave 4 view state (sort / rules / group). Round-tripped
+   *  through filterState's jsonb — see ViewExtras above. */
+  extras?: ViewExtras
   isDefault?: boolean
   createdAt: number
   /** Set once the view is server-backed; absent on hardcoded defaults. */
   serverBacked?: boolean
+}
+
+/**
+ * Lift the W4.4 extras out of a filterState payload. Returns the
+ * cleaned filterState (without the reserved key) AND the extras.
+ * Both parts are optional: when no extras are present, returns the
+ * original filterState as-is.
+ */
+export function unpackViewExtras(filterState: FilterState | null | undefined): {
+  filterState: FilterState | undefined
+  extras: ViewExtras | undefined
+} {
+  if (!filterState || typeof filterState !== 'object') {
+    return { filterState: filterState ?? undefined, extras: undefined }
+  }
+  const raw = filterState as unknown as Record<string, unknown>
+  const extrasField = raw[VIEW_EXTRAS_KEY]
+  if (!extrasField || typeof extrasField !== 'object') {
+    return { filterState, extras: undefined }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { [VIEW_EXTRAS_KEY]: _drop, ...cleanedRaw } = raw
+  return {
+    filterState: cleanedRaw as unknown as FilterState,
+    extras: extrasField as ViewExtras,
+  }
+}
+
+/** Inverse of unpackViewExtras — pack extras back into filterState
+ *  before sending to the server. */
+export function packViewExtras(
+  filterState: FilterState | null | undefined,
+  extras: ViewExtras | undefined,
+): FilterState | null {
+  if (!extras || Object.keys(extras).length === 0) {
+    return filterState ?? null
+  }
+  const base = (filterState ?? {}) as Record<string, unknown>
+  return {
+    ...base,
+    [VIEW_EXTRAS_KEY]: extras,
+  } as unknown as FilterState
 }
 
 export const DEFAULT_VIEWS: ReadonlyArray<SavedView> = [
@@ -101,14 +169,18 @@ interface ServerTemplate {
 }
 
 function fromServer(t: ServerTemplate): SavedView {
+  // W4.4 — split out the Wave 4 view extras packed into filterState
+  // before handing the cleaned filterState to the rest of the app.
+  const { filterState, extras } = unpackViewExtras(t.filterState)
   return {
     id: t.id,
     name: t.name,
     columnIds: t.columnIds,
-    filterState: t.filterState ?? undefined,
+    filterState,
     channels: t.enabledChannels,
     productTypes: t.enabledProductTypes,
     collapsedGroups: t.collapsedGroups ?? [],
+    extras,
     createdAt: new Date(t.createdAt).getTime(),
     serverBacked: true,
   }
@@ -225,10 +297,14 @@ export function loadAllViews(): SavedView[] {
 export async function saveUserView(
   view: Omit<SavedView, 'createdAt' | 'serverBacked'>,
 ): Promise<SavedView> {
+  // W4.4 — pack Wave 4 view extras into the filterState jsonb so we
+  // can round-trip them without a schema change. The server treats
+  // filterState as opaque so this is transparent at the route layer.
+  const filterStateForServer = packViewExtras(view.filterState, view.extras)
   const body: Record<string, unknown> = {
     name: view.name,
     columnIds: view.columnIds,
-    filterState: view.filterState ?? null,
+    filterState: filterStateForServer,
     enabledChannels: view.channels ?? [],
     enabledProductTypes: view.productTypes ?? [],
     collapsedGroups: view.collapsedGroups ?? [],
