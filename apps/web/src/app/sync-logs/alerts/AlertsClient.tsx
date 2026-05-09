@@ -361,7 +361,7 @@ export default function AlertsClient() {
                 {t('syncLogs.alerts.rules.minLabel')}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-col sm:flex-row gap-1.5 sm:items-center">
               <input
                 type="text"
                 value={newChannel}
@@ -583,7 +583,7 @@ export default function AlertsClient() {
                         type="button"
                         onClick={() => void eventAction(e.id, 'acknowledge')}
                         disabled={busyId === e.id}
-                        className="h-6 px-2 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50"
+                        className="h-6 px-2 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50"
                       >
                         {t('syncLogs.alerts.events.ack')}
                       </button>

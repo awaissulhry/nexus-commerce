@@ -359,7 +359,7 @@ export default function ApiCallsClient() {
     <div className="space-y-3">
       {/* Filter bar */}
       <div className="space-y-2">
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-x-1 gap-y-1.5 flex-wrap">
           <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1 inline-flex items-center gap-1">
             <Filter className="w-3 h-3" /> {t('syncLogs.apiCalls.filter.window')}
           </span>

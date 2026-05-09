@@ -164,7 +164,7 @@ export default function WebhooksClient() {
   return (
     <div className="space-y-3">
       {/* Filter bar */}
-      <div className="flex items-center gap-1 flex-wrap">
+      <div className="flex items-center gap-x-1 gap-y-1.5 flex-wrap">
         <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
           {t('syncLogs.webhooks.filter.channel')}
         </span>
