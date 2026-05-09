@@ -136,6 +136,7 @@ import {
 } from './components/DisplayControls'
 import { useBulkUndoRedo } from './lib/use-bulk-undo-redo'
 import { startDragFillTracker } from './lib/drag-fill-tracker'
+import { cycleSortKey, sortRows, type SortKey } from './lib/multi-sort'
 import {
   selectionToTsv,
   buildPastePlan,
@@ -591,6 +592,11 @@ export default function BulkOperationsClient() {
     return () => window.clearTimeout(t)
   }, [searchQuery])
   const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE)
+  // W4.1 — multi-key sort. Empty list → grid preserves the order
+  // produced by filter / hierarchy. Click on a header cycles asc /
+  // desc / off; Shift+click adds (or cycles within) the multi-key
+  // list so operators can sort by Status, then Stock desc, then SKU.
+  const [sortKeys, setSortKeys] = useState<SortKey[]>([])
   const activeFilterCount =
     filterState.status.length +
     filterState.channels.length +
@@ -2195,11 +2201,18 @@ export default function BulkOperationsClient() {
     return pool
   }, [products, debouncedSearch, filterState, requiredFieldIds])
 
-  // Build display rows based on mode
+  // Build display rows based on mode. W4.1 — multi-key sort runs
+  // BEFORE buildHierarchy so parent rows are sorted by the chosen
+  // criteria; children stay nested under the new parent order.
+  // Empty sortKeys list → no-op (sortRows returns the input array).
   const displayRows = useMemo(() => {
-    if (displayMode !== 'hierarchy') return filteredProducts
-    return buildHierarchy(filteredProducts, expandedParents)
-  }, [filteredProducts, displayMode, expandedParents])
+    const sorted = sortRows(
+      filteredProducts as unknown as Array<Record<string, unknown>>,
+      sortKeys,
+    ) as typeof filteredProducts
+    if (displayMode !== 'hierarchy') return sorted
+    return buildHierarchy(sorted, expandedParents)
+  }, [filteredProducts, displayMode, expandedParents, sortKeys])
 
   const table = useReactTable({
     data: displayRows as BulkProduct[],
@@ -3830,8 +3843,22 @@ export default function BulkOperationsClient() {
                   isDraggable
                     ? `${fieldDef?.helpText ?? ''}${
                         fieldDef?.helpText ? ' · ' : ''
-                      }Drag to reorder`
+                      }Click to sort · Shift+click for multi-key · Drag to reorder`
                     : fieldDef?.helpText
+                }
+                onClick={
+                  // W4.1 — click cycles sort (asc → desc → off);
+                  // shift+click adds / cycles within the multi-key
+                  // list. System columns + the resize handle stop
+                  // propagation so they don't accidentally sort.
+                  isSystemCol
+                    ? undefined
+                    : (e) => {
+                        if (e.defaultPrevented) return
+                        setSortKeys((prev) =>
+                          cycleSortKey(prev, header.column.id, e.shiftKey),
+                        )
+                      }
                 }
               >
                 {/* W.7 — vertical drop-line indicator on the side the
@@ -3861,6 +3888,30 @@ export default function BulkOperationsClient() {
                     header.getContext()
                   )}
                 </span>
+                {/* W4.1 — sort indicator. Renders ↑ / ↓ for direction
+                    plus the 1-based index when more than one column
+                    is being sorted on. */}
+                {(() => {
+                  const sortIdx = sortKeys.findIndex(
+                    (k) => k.columnId === header.column.id,
+                  )
+                  if (sortIdx < 0) return null
+                  const k = sortKeys[sortIdx]
+                  return (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-blue-600 font-mono text-[10px] flex-shrink-0"
+                      aria-label={`Sorted ${k.direction} (${sortIdx + 1} of ${sortKeys.length})`}
+                      title={`Sorted ${k.direction}${sortKeys.length > 1 ? ` · key ${sortIdx + 1} of ${sortKeys.length}` : ''}`}
+                    >
+                      {k.direction === 'asc' ? '↑' : '↓'}
+                      {sortKeys.length > 1 && (
+                        <span className="tabular-nums">
+                          {sortIdx + 1}
+                        </span>
+                      )}
+                    </span>
+                  )
+                })()}
                 {isReadOnly && (
                   <Lock
                     className="w-2.5 h-2.5 text-slate-400 flex-shrink-0"
