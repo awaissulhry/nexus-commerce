@@ -1,4 +1,4 @@
-// @ts-nocheck — U.55 BISECT 6: StatusBar + PreviewChanges + PastePreview only
+// @ts-nocheck — U.56 BISECT 7: only UploadModal mounted
 'use client'
 
 import {
@@ -3474,31 +3474,18 @@ export default function BulkOperationsClient() {
           </div>
         </div>
       </div>
-      {/* U.55 (BISECT 6) — StatusBar + PreviewChangesModal + PastePreviewModal only. */}
+      {/* U.56 (BISECT 7) — UploadModal alone. */}
       <div className="p-4 text-base text-slate-500">
-        BISECT 6 — UploadModal + BulkOperationModal disabled.
+        BISECT 7 — only UploadModal mounted (BulkOperationModal disabled).
       </div>
-      <StatusBar
-        status={saveStatus}
-        pendingCount={pendingCount}
-        fetchMs={fetchMs}
-        loading={loading}
-        selectedCellCount={selectedCellCount}
-        selectionMetrics={selectionMetrics}
-        copyFlashCount={copyFlash?.count ?? null}
-      />
-
-      <PreviewChangesModal
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        changes={changes}
-        products={products}
-      />
-
-      <PastePreviewModal
-        preview={pastePreview}
-        onCancel={cancelPaste}
-        onApply={applyPaste}
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onApplied={() => {
+          // Refetch products so the grid reflects the saved changes.
+          // Selection + pending edits are local state and unaffected.
+          reloadProducts()
+        }}
       />
 
     </div>
