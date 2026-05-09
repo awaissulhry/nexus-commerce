@@ -8367,6 +8367,94 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // W6.3 — Confirm write-off. Hard-action endpoint that actually
+  // zeros the stock via applyStockMovement (canonical path — keeps
+  // StockLevel ledger + totalStock cache + ChannelListing cascade
+  // + audit row consistent). This is the second-step confirmation
+  // after flag-write-off; the operator must explicitly call it.
+  //
+  // Defense-in-depth:
+  //   - units defaults to product.totalStock; can be overridden but
+  //     never exceed it (400 if it would)
+  //   - WRITE_OFF MovementReason — distinct from MANUAL_ADJUSTMENT
+  //     so audit grep can find disposal events
+  //   - actor string includes the userId if provided so the audit
+  //     trail names the confirming operator
+  //   - Returns the new totalStock so the UI can render the change
+  //     without a follow-up GET
+  fastify.post(
+    '/fulfillment/replenishment/slow-movers/:productId/confirm-write-off',
+    async (request, reply) => {
+      const { productId } = request.params as { productId: string }
+      const body = (request.body ?? {}) as {
+        units?: number
+        reason?: string
+        userId?: string
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          totalStock: true,
+          abcClass: true,
+        },
+      })
+      if (!product) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+
+      const units = body.units ?? product.totalStock
+      if (!Number.isFinite(units) || units <= 0) {
+        return reply.code(400).send({ error: 'units must be a positive integer' })
+      }
+      if (units > product.totalStock) {
+        return reply.code(400).send({
+          error: `units (${units}) exceeds totalStock (${product.totalStock})`,
+        })
+      }
+
+      const result = await applyStockMovement({
+        productId: product.id,
+        change: -units,
+        reason: 'WRITE_OFF',
+        referenceType: 'WRITE_OFF',
+        notes:
+          body.reason ??
+          `Write-off via /fulfillment/replenishment slow-mover dashboard (${product.abcClass ?? 'D'}-class)`,
+        actor: body.userId ? `slow-mover-write-off:${body.userId}` : 'slow-mover-write-off',
+      })
+
+      const refreshed = await prisma.product.findUnique({
+        where: { id: product.id },
+        select: { totalStock: true },
+      })
+
+      fastify.log.warn(
+        {
+          productId,
+          sku: product.sku,
+          units,
+          userId: body.userId,
+          movementId: result?.movement?.id ?? null,
+        },
+        '[replenishment/slow-movers] write-off CONFIRMED',
+      )
+
+      return {
+        ok: true,
+        productId: product.id,
+        sku: product.sku,
+        unitsWrittenOff: units,
+        priorTotalStock: product.totalStock,
+        newTotalStock: refreshed?.totalStock ?? null,
+        movementId: result?.movement?.id ?? null,
+      }
+    },
+  )
+
   fastify.post(
     '/fulfillment/replenishment/slow-movers/:productId/flag-write-off',
     async (request, reply) => {
