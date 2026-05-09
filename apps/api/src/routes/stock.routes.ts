@@ -1455,6 +1455,171 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── GET /api/stock/year-end-valuation ────────────────────────────
+  // T.8 — Italian "rimanenze finali" closing-stock valuation.
+  //
+  // Returns the inventory value at a point in time, broken down by:
+  //   - location (Riccione / FBA / others)
+  //   - costing method (FIFO / LIFO / WAC) per Codice Civile Art. 2426
+  //   - currency mix (T.6: EUR-equivalent vs original currency)
+  //   - VAT treatment (T.7: net vs gross capitalised)
+  //
+  // Source: open StockCostLayer rows (unitsRemaining > 0) joined to
+  // their products. Each layer's contribution is unitsRemaining ×
+  // unitCost, converted to EUR-net at exchangeRateOnReceive.
+  //
+  // Limitations (documented for the accountant):
+  //   - asOf=now is the only supported point-in-time today; historical
+  //     reconstruction requires replaying StockMovement consumes back
+  //     from `now` to `asOf`. Tracked as a follow-up: a
+  //     YearEndSnapshot table materialised by a Dec-31 cron will give
+  //     true year-end fixity.
+  //   - Layers without exchangeRateOnReceive (legacy EUR-only rows)
+  //     are reported in EUR at face value — same behaviour as before
+  //     T.6, no regression.
+  //   - vatRate when null is treated as "unknown VAT" and reported
+  //     in the `unknownVat` bucket so the accountant can reconcile.
+  //
+  // Query params:
+  //   year (optional, defaults to current year — informational label)
+  //   locationId (optional, filter to one location)
+  fastify.get('/stock/year-end-valuation', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const year = Math.floor(safeNum(q.year, new Date().getUTCFullYear()) ?? new Date().getUTCFullYear())
+      const locationFilter = typeof q.locationId === 'string' && q.locationId.length > 0
+        ? q.locationId
+        : null
+
+      const layers = await prisma.stockCostLayer.findMany({
+        where: {
+          unitsRemaining: { gt: 0 },
+          ...(locationFilter ? { locationId: locationFilter } : {}),
+        },
+        select: {
+          id: true, productId: true, locationId: true,
+          unitsRemaining: true, unitCost: true,
+          costCurrency: true, exchangeRateOnReceive: true,
+          unitCostVatExcluded: true, vatRate: true,
+          freightCents: true, dutyCents: true,
+          insuranceCents: true, brokerCents: true,
+          product: {
+            select: {
+              id: true, sku: true, name: true,
+              costingMethod: true,
+            },
+          },
+          location: { select: { id: true, code: true, name: true, type: true } },
+        },
+      })
+
+      let totalValueEurCents = 0
+      let totalUnits = 0
+      const byLocation = new Map<string, {
+        locationId: string | null
+        locationCode: string
+        locationName: string
+        units: number
+        valueEurCents: number
+      }>()
+      const byMethod: Record<string, { units: number; valueEurCents: number }> = {
+        FIFO: { units: 0, valueEurCents: 0 },
+        LIFO: { units: 0, valueEurCents: 0 },
+        WAC: { units: 0, valueEurCents: 0 },
+      }
+      const byCurrency = new Map<string, { units: number; originalValueCents: number; valueEurCents: number }>()
+      const vatBuckets = {
+        netCapitalised: { units: 0, valueEurCents: 0 },
+        grossCapitalised: { units: 0, valueEurCents: 0 },
+        unknownVat: { units: 0, valueEurCents: 0 },
+      }
+
+      for (const layer of layers) {
+        const unitCostNum = Number(layer.unitCost)
+        // unitCost is already EUR for default (EUR/no rate) layers.
+        // When currency != EUR with a rate, unitCost was stored
+        // EUR-converted at receive time (per receiveLayerInTx).
+        const valueEurNum = unitCostNum * layer.unitsRemaining
+        const valueEurCents = Math.round(valueEurNum * 100)
+
+        totalUnits += layer.unitsRemaining
+        totalValueEurCents += valueEurCents
+
+        // by location
+        const locId = layer.locationId ?? '__unassigned__'
+        const cur = byLocation.get(locId) ?? {
+          locationId: layer.locationId,
+          locationCode: layer.location?.code ?? '(unassigned)',
+          locationName: layer.location?.name ?? 'Unassigned',
+          units: 0,
+          valueEurCents: 0,
+        }
+        cur.units += layer.unitsRemaining
+        cur.valueEurCents += valueEurCents
+        byLocation.set(locId, cur)
+
+        // by method
+        const method = (layer.product?.costingMethod ?? 'WAC') as 'FIFO' | 'LIFO' | 'WAC'
+        const m = byMethod[method] ?? byMethod.WAC
+        m.units += layer.unitsRemaining
+        m.valueEurCents += valueEurCents
+
+        // by currency
+        const ccy = layer.costCurrency ?? 'EUR'
+        const c = byCurrency.get(ccy) ?? { units: 0, originalValueCents: 0, valueEurCents: 0 }
+        c.units += layer.unitsRemaining
+        // Original currency value: if rate is present, back-out to original
+        const rate = layer.exchangeRateOnReceive ? Number(layer.exchangeRateOnReceive) : null
+        const originalCents = rate && rate > 0
+          ? Math.round((unitCostNum / rate) * layer.unitsRemaining * 100)
+          : valueEurCents
+        c.originalValueCents += originalCents
+        c.valueEurCents += valueEurCents
+        byCurrency.set(ccy, c)
+
+        // VAT bucket
+        if (layer.vatRate == null) {
+          vatBuckets.unknownVat.units += layer.unitsRemaining
+          vatBuckets.unknownVat.valueEurCents += valueEurCents
+        } else if (layer.unitCostVatExcluded) {
+          vatBuckets.netCapitalised.units += layer.unitsRemaining
+          vatBuckets.netCapitalised.valueEurCents += valueEurCents
+        } else {
+          vatBuckets.grossCapitalised.units += layer.unitsRemaining
+          vatBuckets.grossCapitalised.valueEurCents += valueEurCents
+        }
+      }
+
+      return {
+        year,
+        asOf: new Date().toISOString(),
+        scope: locationFilter ? { locationId: locationFilter } : { all: true },
+        total: {
+          units: totalUnits,
+          valueEurCents: totalValueEurCents,
+        },
+        byLocation: Array.from(byLocation.values()).sort(
+          (a, b) => b.valueEurCents - a.valueEurCents,
+        ),
+        byMethod,
+        byCurrency: Array.from(byCurrency.entries()).map(([currency, v]) => ({
+          currency, ...v,
+        })),
+        vatTreatment: vatBuckets,
+        layerCount: layers.length,
+        // Disclosure for the accountant: this is current state, not
+        // historical. Historical asOf requires a YearEndSnapshot job.
+        notes: {
+          asOfPolicy: 'current-state',
+          futureWork: 'YearEndSnapshot cron on Dec 31 will give fixed historical valuation',
+        },
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/year-end-valuation] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock/fba-pan-eu ────────────────────────────────────
   // S.25 — single-shot dashboard read. Returns per-FC totals + top
   // aged sellable + top unfulfillable so the page renders with one
