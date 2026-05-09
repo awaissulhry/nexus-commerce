@@ -7786,6 +7786,96 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // W1.4 — pipeline health summary for the workspace's "Pipeline
+  // health" card. One round trip surfaces:
+  //   * row counts + recency of each foundation table
+  //   * latest cron-run status for each foundation step
+  //   * the env-flag gates so the operator knows when a cron is
+  //     opt-in-disabled vs failing
+  // Cheap reads (count + max + last CronRun row); 30s cache header.
+  fastify.get('/fulfillment/replenishment/pipeline/health', async (_request, reply) => {
+    const [
+      dsaAgg,
+      forecastAgg,
+      accuracyAgg,
+      forecastCron,
+      accuracyCron,
+      abcCron,
+    ] = await Promise.all([
+      prisma.$queryRaw<Array<{ rows: bigint; oldest: Date | null; newest: Date | null; updated: Date | null }>>`
+        SELECT count(*)::bigint AS rows,
+               MIN(day) AS oldest,
+               MAX(day) AS newest,
+               MAX("updatedAt") AS updated
+        FROM "DailySalesAggregate"`,
+      prisma.$queryRaw<Array<{ rows: bigint; latest: Date | null; generated: Date | null }>>`
+        SELECT count(*)::bigint AS rows,
+               MAX("horizonDay") AS latest,
+               MAX("generatedAt") AS generated
+        FROM "ReplenishmentForecast"`,
+      prisma.$queryRaw<Array<{ rows: bigint; latest: Date | null; avg_pct: number | null; within_band: bigint }>>`
+        SELECT count(*)::bigint AS rows,
+               MAX(day) AS latest,
+               AVG("percentError")::float AS avg_pct,
+               count(*) FILTER (WHERE "withinBand" = true)::bigint AS within_band
+        FROM "ForecastAccuracy"`,
+      prisma.cronRun.findFirst({
+        where: { jobName: 'forecast' },
+        orderBy: { startedAt: 'desc' },
+        select: { startedAt: true, finishedAt: true, status: true, outputSummary: true, triggeredBy: true },
+      }),
+      prisma.cronRun.findFirst({
+        where: { jobName: 'forecast-accuracy' },
+        orderBy: { startedAt: 'desc' },
+        select: { startedAt: true, finishedAt: true, status: true, outputSummary: true, triggeredBy: true },
+      }),
+      prisma.cronRun.findFirst({
+        where: { jobName: 'abc-classification' },
+        orderBy: { startedAt: 'desc' },
+        select: { startedAt: true, finishedAt: true, status: true, outputSummary: true, triggeredBy: true },
+      }),
+    ])
+    const dsa = dsaAgg[0]
+    const fc = forecastAgg[0]
+    const fa = accuracyAgg[0]
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      tables: {
+        dailySalesAggregate: {
+          rows: Number(dsa?.rows ?? 0),
+          oldest: dsa?.oldest ?? null,
+          newest: dsa?.newest ?? null,
+          updatedAt: dsa?.updated ?? null,
+        },
+        replenishmentForecast: {
+          rows: Number(fc?.rows ?? 0),
+          latestHorizon: fc?.latest ?? null,
+          lastGeneratedAt: fc?.generated ?? null,
+        },
+        forecastAccuracy: {
+          rows: Number(fa?.rows ?? 0),
+          latestDay: fa?.latest ?? null,
+          avgPercentError: fa?.avg_pct ?? null,
+          withinBandCount: Number(fa?.within_band ?? 0),
+        },
+      },
+      crons: {
+        forecast: {
+          lastRun: forecastCron,
+          enabledFlag: process.env.NEXUS_ENABLE_FORECAST_CRON === '1',
+        },
+        'forecast-accuracy': {
+          lastRun: accuracyCron,
+          enabledFlag: process.env.NEXUS_ENABLE_FORECAST_ACCURACY_CRON !== '0',
+        },
+        'abc-classification': {
+          lastRun: abcCron,
+          enabledFlag: process.env.NEXUS_ENABLE_ABC_CRON !== '0',
+        },
+      },
+    }
+  })
+
   // R.11 — manual lead-time stats recompute. Useful at deploy time
   // before the 06:00 UTC cron fires, or when debugging "why is σ_LT
   // null for supplier X?".
