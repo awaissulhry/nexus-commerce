@@ -1481,6 +1481,14 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       }
 
+      // ── DO.32 — per-user layout (hidden widgets) ──────────────────
+      const layout = await prisma.dashboardLayout
+        .findUnique({
+          where: { userId: 'default-user' },
+          select: { hiddenWidgets: true },
+        })
+        .catch(() => null)
+
       // ── DO.20 — recent unread notifications ───────────────────────
       //
       // Surface up to 8 most recent unread Notification rows in the
@@ -1611,6 +1619,11 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // DO.30 — operator-set goals + computed progress against
         // each goal's period bounds.
         goals: goalProgress,
+        // DO.32 — per-user layout deny-list (widget IDs to hide).
+        // Empty array when no row exists yet (default = show all).
+        layout: {
+          hiddenWidgets: layout?.hiddenWidgets ?? [],
+        },
         catalog: {
           totalProducts,
           totalParents,
@@ -2296,6 +2309,39 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: message })
     }
   })
+
+  // DO.32 — dashboard layout PUT.
+  //
+  // Persist the operator's hidden-widgets deny-list. Body shape:
+  //   { hiddenWidgets: string[] }
+  //
+  // Upsert keyed on userId so a fresh row materialises on first
+  // save. The endpoint is intentionally simple — no per-role view,
+  // no order field, no validation against a known widget id list
+  // (operator can stash unknown ids and they're ignored by the
+  // renderer until a matching widget exists).
+  fastify.put<{ Body: { hiddenWidgets?: unknown } }>(
+    '/dashboard/layout',
+    async (request, reply) => {
+      const raw = request.body?.hiddenWidgets
+      const list = Array.isArray(raw)
+        ? raw.filter((v): v is string => typeof v === 'string').slice(0, 50)
+        : []
+      try {
+        const row = await prisma.dashboardLayout.upsert({
+          where: { userId: 'default-user' },
+          create: { userId: 'default-user', hiddenWidgets: list },
+          update: { hiddenWidgets: list },
+          select: { hiddenWidgets: true },
+        })
+        return { ok: true, hiddenWidgets: row.hiddenWidgets }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[dashboard/layout] upsert failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
 }
 
 export default dashboardRoutes

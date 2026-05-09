@@ -5585,6 +5585,26 @@ model Goal {
   @@index([period])
 }
 
+// DO.32 — per-user dashboard customisation. Tableau-tier dashboards
+// let operators show / hide / reorder panels. First cut: just
+// show/hide via a deny-list. Reordering is a follow-up — orders +
+// drag handles need careful UX work that out-scopes a single commit.
+//
+// `hiddenWidgets` is a String[] of widget IDs the operator wants
+// NOT to render. Allow-list semantics would require updating every
+// row when a new widget ships; deny-list defaults unknown widgets
+// to visible, which is the right onboarding behaviour.
+//
+// Single-row-per-user pattern (userId is unique). When real auth
+// lands the existing 'default-user' row scopes cleanly.
+model DashboardLayout {
+  id            String   @id @default(cuid())
+  userId        String   @unique @default("default-user")
+  hiddenWidgets String[] @default([])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 // Generic per-user notification inbox. Saved-view alerts write here
 // today; future surfaces (sync failures, low-stock, AI-job-complete)
 // will write through the same shape so the topnav bell renders one

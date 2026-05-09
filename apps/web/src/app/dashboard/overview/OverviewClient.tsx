@@ -27,6 +27,7 @@ import FinancialPanel from './_components/FinancialPanel'
 import GoalsPanel from './_components/GoalsPanel'
 import PredictivePanel from './_components/PredictivePanel'
 import OverviewSkeleton from './_components/OverviewSkeleton'
+import CustomizeSheet from './_components/CustomizeSheet'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
@@ -61,6 +62,12 @@ export default function OverviewClient() {
   // operator's daily landing page; stale numbers there are worse
   // than a few extra fetches.
   const [liveMode, setLiveMode] = useState(true)
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+  // DO.32 — local mirror of hiddenWidgets so a successful save
+  // updates the UI immediately, before the next dashboard refetch
+  // round-trips. Initialised from the server payload on first
+  // render and on every fresh fetch.
+  const [hiddenWidgets, setHiddenWidgets] = useState<string[]>([])
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -91,6 +98,10 @@ export default function OverviewClient() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = (await res.json()) as OverviewPayload
         setData(json)
+        // Server is source of truth for layout; local mirror
+        // resyncs each refetch so a parallel session's changes
+        // propagate.
+        setHiddenWidgets(json.layout?.hiddenWidgets ?? [])
         setLastRefreshed(Date.now())
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -203,6 +214,14 @@ export default function OverviewClient() {
         lastRefreshed={lastRefreshed}
         refreshing={refreshing}
         onRefresh={() => void fetchPayload({ silent: true })}
+        onCustomize={() => setCustomizeOpen(true)}
+      />
+      <CustomizeSheet
+        t={t}
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        hiddenWidgets={hiddenWidgets}
+        onSaved={(next) => setHiddenWidgets(next)}
       />
 
       <div className="space-y-6">
@@ -224,77 +243,102 @@ export default function OverviewClient() {
           </div>
         )}
 
-        {data && (
-          <>
-            <KpiGrid t={t} totals={data.totals} currency={data.currency} />
-            {/* DO.36 — mobile glanceable order. On a phone the alerts
-                panel + customer / catalog / activity tiles ship in
-                the right column (order-1) right after the KPIs;
-                the wider charts + lists come second (order-2).
-                Operator sees what needs attention first when
-                glancing, then scrolls into the detail. The
-                lg:order-1 / lg:order-2 pair restores desktop
-                left-on-left, right-on-right. */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="order-2 lg:order-1 lg:col-span-2 space-y-4">
-                <Sparkline
-                  t={t}
-                  points={data.sparkline}
-                  currency={data.currency.primary}
-                  windowKey={data.window.key as WindowKey}
-                />
-                <ChannelTrendChart
-                  t={t}
-                  points={data.sparkline}
-                  channels={data.sparklineChannels}
-                  currency={data.currency.primary}
-                  windowKey={data.window.key as WindowKey}
-                />
-                <ChannelGrid
-                  t={t}
-                  byChannel={data.byChannel}
-                  currency={data.currency.primary}
-                />
-                <MarketplaceMatrix
-                  t={t}
-                  matrix={data.byMarketplace}
-                  currency={data.currency.primary}
-                />
-                <FinancialPanel
-                  t={t}
-                  financial={data.financial}
-                  currency={data.currency.primary}
-                />
-                <PredictivePanel t={t} predictive={data.predictive} />
-                <TopProducts
-                  t={t}
-                  items={data.topProducts}
-                  currency={data.currency.primary}
-                />
-              </div>
-              <div className="order-1 lg:order-2 space-y-4">
-                <AlertsPanel
-                  t={t}
-                  alerts={data.alerts}
-                  catalog={data.catalog}
-                />
-                <GoalsPanel t={t} goals={data.goals} />
-                <CustomerPanel
-                  t={t}
-                  customers={data.customers}
-                  currency={data.currency.primary}
-                />
-                <CatalogSnapshot
-                  t={t}
-                  catalog={data.catalog}
-                  currency={data.currency.primary}
-                />
-                <ActivityFeed t={t} items={data.recentActivity} />
-                <QuickActions t={t} alerts={data.alerts} />
-              </div>
-            </div>
-          </>
-        )}
+        {data &&
+          (() => {
+            const hidden = new Set(hiddenWidgets)
+            const show = (id: string) => !hidden.has(id)
+            return (
+              <>
+                <KpiGrid t={t} totals={data.totals} currency={data.currency} />
+                {/* DO.36 — mobile glanceable order. On a phone the
+                    alerts panel + customer / catalog / activity
+                    tiles ship in the right column (order-1) right
+                    after the KPIs; the wider charts + lists come
+                    second (order-2). The lg:order-1 / lg:order-2
+                    pair restores desktop layout. */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="order-2 lg:order-1 lg:col-span-2 space-y-4">
+                    {show('sparkline') && (
+                      <Sparkline
+                        t={t}
+                        points={data.sparkline}
+                        currency={data.currency.primary}
+                        windowKey={data.window.key as WindowKey}
+                      />
+                    )}
+                    {show('channelTrend') && (
+                      <ChannelTrendChart
+                        t={t}
+                        points={data.sparkline}
+                        channels={data.sparklineChannels}
+                        currency={data.currency.primary}
+                        windowKey={data.window.key as WindowKey}
+                      />
+                    )}
+                    {show('channelGrid') && (
+                      <ChannelGrid
+                        t={t}
+                        byChannel={data.byChannel}
+                        currency={data.currency.primary}
+                      />
+                    )}
+                    {show('marketplaceMatrix') && (
+                      <MarketplaceMatrix
+                        t={t}
+                        matrix={data.byMarketplace}
+                        currency={data.currency.primary}
+                      />
+                    )}
+                    {show('financial') && (
+                      <FinancialPanel
+                        t={t}
+                        financial={data.financial}
+                        currency={data.currency.primary}
+                      />
+                    )}
+                    {show('predictive') && (
+                      <PredictivePanel t={t} predictive={data.predictive} />
+                    )}
+                    {show('topProducts') && (
+                      <TopProducts
+                        t={t}
+                        items={data.topProducts}
+                        currency={data.currency.primary}
+                      />
+                    )}
+                  </div>
+                  <div className="order-1 lg:order-2 space-y-4">
+                    <AlertsPanel
+                      t={t}
+                      alerts={data.alerts}
+                      catalog={data.catalog}
+                    />
+                    {show('goals') && <GoalsPanel t={t} goals={data.goals} />}
+                    {show('customer') && (
+                      <CustomerPanel
+                        t={t}
+                        customers={data.customers}
+                        currency={data.currency.primary}
+                      />
+                    )}
+                    {show('catalog') && (
+                      <CatalogSnapshot
+                        t={t}
+                        catalog={data.catalog}
+                        currency={data.currency.primary}
+                      />
+                    )}
+                    {show('activity') && (
+                      <ActivityFeed t={t} items={data.recentActivity} />
+                    )}
+                    {show('quickActions') && (
+                      <QuickActions t={t} alerts={data.alerts} />
+                    )}
+                  </div>
+                </div>
+              </>
+            )
+          })()}
       </div>
     </div>
   )

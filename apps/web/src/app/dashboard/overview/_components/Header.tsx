@@ -1,6 +1,6 @@
 'use client'
 
-import { CircleDot, RefreshCw } from 'lucide-react'
+import { CircleDot, RefreshCw, Settings2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -37,6 +37,7 @@ export default function Header({
   lastRefreshed,
   refreshing,
   onRefresh,
+  onCustomize,
 }: {
   t: T
   currentWindow: WindowKey
@@ -50,6 +51,7 @@ export default function Header({
   lastRefreshed: number
   refreshing: boolean
   onRefresh: () => void
+  onCustomize: () => void
 }) {
   return (
     <PageHeader
@@ -184,6 +186,24 @@ export default function Header({
           >
             {t('overview.refresh')}
           </Button>
+          {/* DO.32 — customise (icon-only on narrow viewports). */}
+          <button
+            type="button"
+            onClick={onCustomize}
+            title={t('overview.customize.title')}
+            aria-label={t('overview.customize.title')}
+            className={cn(
+              'inline-flex items-center justify-center h-7 w-7 rounded-md border',
+              'border-slate-200 dark:border-slate-700',
+              'bg-white dark:bg-slate-900',
+              'text-slate-500 dark:text-slate-400',
+              'hover:bg-slate-50 dark:hover:bg-slate-800',
+              'hover:text-slate-700 dark:hover:text-slate-200',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+            )}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+          </button>
           <RelativeTimestamp t={t} at={lastRefreshed} />
         </>
       }

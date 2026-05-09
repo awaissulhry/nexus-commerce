@@ -109,6 +109,10 @@ export interface OverviewPayload {
   >
   sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
+  // DO.32 — per-user layout. `hiddenWidgets` is a deny-list of
+  // widget IDs the operator chose not to render. Empty array =
+  // show every widget (default).
+  layout: { hiddenWidgets: string[] }
   // DO.30 — operator-set Goal rows with current progress. Empty
   // until the operator (or a future admin UI) inserts a Goal
   // record. The UI hides the panel when no goals exist.
