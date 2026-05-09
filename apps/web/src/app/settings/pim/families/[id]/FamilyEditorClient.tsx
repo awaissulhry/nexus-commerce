@@ -18,14 +18,32 @@
  * dropdown picker driven by ChannelConnection.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowUpRight,
+  GripVertical,
   Plus,
   Trash2,
 } from 'lucide-react'
 import Link from 'next/link'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
@@ -190,6 +208,35 @@ export default function FamilyEditorClient({
     [refresh, toast],
   )
 
+  // W5.2 — drag-drop reorder handler. Receives the new ordered list
+  // of FamilyAttribute ids, fires N parallel PATCH calls with new
+  // sortOrder values (0, 10, 20, ...). The 10-step gap leaves room
+  // for future inserts without immediate re-renumbering. Refresh
+  // pulls the canonical order back from the server.
+  const onReorder = useCallback(
+    async (orderedIds: string[]) => {
+      try {
+        await Promise.all(
+          orderedIds.map((id, idx) =>
+            fetch(`${getBackendUrl()}/api/family-attributes/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sortOrder: idx * 10 }),
+            }).then((r) => {
+              if (!r.ok) throw new Error(`reorder HTTP ${r.status}`)
+            }),
+          ),
+        )
+        refresh()
+      } catch (e: any) {
+        toast.error(`Reorder failed: ${e?.message ?? String(e)}`)
+        // Refresh to revert the optimistic UI to server truth.
+        refresh()
+      }
+    },
+    [refresh, toast],
+  )
+
   // attributeIds already attached or inherited — exclude from picker.
   const usedAttrIds = new Set([
     ...family.familyAttributes.map((fa) => fa.attributeId),
@@ -270,66 +317,13 @@ export default function FamilyEditorClient({
               ` ${inheritedOnly.length} inherited from ancestors.`}
           </div>
         ) : (
-          <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-              <tr className="text-left">
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Code</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Label</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Type</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Required</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Channels</th>
-                <th className="px-3 py-2 w-8" aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {family.familyAttributes
-                .slice()
-                .sort((a, b) => a.sortOrder - b.sortOrder || a.attribute.label.localeCompare(b.attribute.label))
-                .map((fa) => (
-                  <tr
-                    key={fa.id}
-                    className="border-t border-slate-100 dark:border-slate-800"
-                  >
-                    <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
-                      {fa.attribute.code}
-                    </td>
-                    <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
-                      {fa.attribute.label}
-                    </td>
-                    <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">
-                      {fa.attribute.type}
-                    </td>
-                    <td className="px-3 py-2">
-                      <label className="inline-flex items-center gap-1.5 text-base text-slate-700 dark:text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={fa.required}
-                          onChange={() => onToggleRequired(fa.id, fa.required)}
-                        />
-                        {fa.required ? 'Required' : 'Optional'}
-                      </label>
-                    </td>
-                    <td className="px-3 py-2">
-                      <ChannelsTagInput
-                        value={fa.channels}
-                        disabled={!fa.required}
-                        onChange={(next) => onUpdateChannels(fa.id, next)}
-                      />
-                    </td>
-                    <td className="px-1 py-2">
-                      <IconButton
-                        aria-label={`Remove attribute ${fa.attribute.label}`}
-                        size="sm"
-                        tone="danger"
-                        onClick={() => onRemoveAttr(fa.id, fa.attribute.label)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </IconButton>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+          <SortableAttributesTable
+            familyAttributes={family.familyAttributes}
+            onToggleRequired={onToggleRequired}
+            onUpdateChannels={onUpdateChannels}
+            onRemoveAttr={onRemoveAttr}
+            onReorder={onReorder}
+          />
         )}
       </div>
 
@@ -627,5 +621,193 @@ function ChannelsTagInput({
       autoFocus
       className="w-full h-7 px-1.5 text-sm font-mono border border-slate-300 dark:border-slate-700 rounded dark:bg-slate-900 dark:text-slate-100"
     />
+  )
+}
+
+// ── W5.2 — drag-drop reorder ────────────────────────────────────
+
+function SortableAttributesTable({
+  familyAttributes,
+  onToggleRequired,
+  onUpdateChannels,
+  onRemoveAttr,
+  onReorder,
+}: {
+  familyAttributes: FamilyDetail['familyAttributes']
+  onToggleRequired: (faId: string, current: boolean) => void
+  onUpdateChannels: (faId: string, channels: string[]) => void
+  onRemoveAttr: (faId: string, label: string) => void
+  onReorder: (orderedIds: string[]) => void
+}) {
+  // Optimistic local order — DnD updates this immediately on drop;
+  // the server PATCHes happen in the background and refresh fixes
+  // any drift.
+  const [localOrder, setLocalOrder] = useState<string[]>(() =>
+    familyAttributes
+      .slice()
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder ||
+          a.attribute.label.localeCompare(b.attribute.label),
+      )
+      .map((fa) => fa.id),
+  )
+
+  // When the parent refreshes (server truth changes), reset the
+  // local order. Sync via a stable string key so we don't reset
+  // mid-drag — the effect only fires when the server's key
+  // actually differs from what we're currently displaying.
+  const serverKey = familyAttributes
+    .slice()
+    .sort(
+      (a, b) =>
+        a.sortOrder - b.sortOrder ||
+        a.attribute.label.localeCompare(b.attribute.label),
+    )
+    .map((fa) => fa.id)
+    .join(',')
+  useEffect(() => {
+    setLocalOrder(serverKey.split(','))
+  }, [serverKey])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIdx = localOrder.indexOf(String(active.id))
+    const newIdx = localOrder.indexOf(String(over.id))
+    if (oldIdx < 0 || newIdx < 0) return
+    const next = arrayMove(localOrder, oldIdx, newIdx)
+    setLocalOrder(next)
+    onReorder(next)
+  }
+
+  // Resolve ids back to FA records, preserving local order.
+  const byId = new Map(familyAttributes.map((fa) => [fa.id, fa]))
+  const ordered = localOrder
+    .map((id) => byId.get(id))
+    .filter((fa): fa is (typeof familyAttributes)[number] => !!fa)
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={onDragEnd}
+    >
+      <table className="w-full text-base">
+        <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <tr className="text-left">
+            <th className="px-1 w-7" aria-label="Drag handle" />
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Code</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Label</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Type</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Required</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Channels</th>
+            <th className="px-3 py-2 w-8" aria-label="Actions" />
+          </tr>
+        </thead>
+        <SortableContext
+          items={localOrder}
+          strategy={verticalListSortingStrategy}
+        >
+          <tbody>
+            {ordered.map((fa) => (
+              <SortableAttributeRow
+                key={fa.id}
+                fa={fa}
+                onToggleRequired={onToggleRequired}
+                onUpdateChannels={onUpdateChannels}
+                onRemoveAttr={onRemoveAttr}
+              />
+            ))}
+          </tbody>
+        </SortableContext>
+      </table>
+    </DndContext>
+  )
+}
+
+function SortableAttributeRow({
+  fa,
+  onToggleRequired,
+  onUpdateChannels,
+  onRemoveAttr,
+}: {
+  fa: FamilyDetail['familyAttributes'][number]
+  onToggleRequired: (faId: string, current: boolean) => void
+  onUpdateChannels: (faId: string, channels: string[]) => void
+  onRemoveAttr: (faId: string, label: string) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: fa.id })
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className="border-t border-slate-100 dark:border-slate-800"
+    >
+      <td className="px-1 py-2 text-center align-middle">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Drag to reorder ${fa.attribute.label}`}
+          className="inline-flex items-center justify-center h-7 w-5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </button>
+      </td>
+      <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
+        {fa.attribute.code}
+      </td>
+      <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
+        {fa.attribute.label}
+      </td>
+      <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">
+        {fa.attribute.type}
+      </td>
+      <td className="px-3 py-2">
+        <label className="inline-flex items-center gap-1.5 text-base text-slate-700 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={fa.required}
+            onChange={() => onToggleRequired(fa.id, fa.required)}
+          />
+          {fa.required ? 'Required' : 'Optional'}
+        </label>
+      </td>
+      <td className="px-3 py-2">
+        <ChannelsTagInput
+          value={fa.channels}
+          disabled={!fa.required}
+          onChange={(next) => onUpdateChannels(fa.id, next)}
+        />
+      </td>
+      <td className="px-1 py-2">
+        <IconButton
+          aria-label={`Remove attribute ${fa.attribute.label}`}
+          size="sm"
+          tone="danger"
+          onClick={() => onRemoveAttr(fa.id, fa.attribute.label)}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </IconButton>
+      </td>
+    </tr>
   )
 }
