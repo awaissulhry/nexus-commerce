@@ -144,7 +144,7 @@ export default function LotsClient() {
                     <tr key={lot.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
                       <td className="px-3 py-2 font-mono text-slate-900 dark:text-slate-100 whitespace-nowrap">{lot.lotNumber}</td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300 truncate max-w-md">
-                        <Link href={`/products/${lot.product.id}`} className="hover:underline">
+                        <Link href={`/products/${lot.product.id}/edit`} className="hover:underline">
                           <span className="font-mono text-xs text-slate-500">{lot.product.sku}</span> · {lot.product.name}
                         </Link>
                       </td>

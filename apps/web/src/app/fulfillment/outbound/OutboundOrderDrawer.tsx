@@ -908,7 +908,7 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                         </div>
                         {it.productId && (
                           <Link
-                            href={`/products/${it.productId}`}
+                            href={`/products/${it.productId}/edit`}
                             className="text-slate-400 dark:text-slate-500 hover:text-blue-600"
                             title="Open product"
                           >

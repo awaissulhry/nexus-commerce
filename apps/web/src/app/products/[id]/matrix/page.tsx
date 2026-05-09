@@ -53,7 +53,7 @@ export default async function ProductMatrixPage({ params }: PageProps) {
           is a standalone — open it directly to edit master fields.
         </p>
         <a
-          href={`/products/${id}`}
+          href={`/products/${id}/edit`}
           className="inline-block h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
         >
           Open product

@@ -173,7 +173,7 @@ export default function ChannelStockEventPanel() {
                     <td className="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300">{e.channel}</td>
                     <td className="px-3 py-2">
                       {e.product ? (
-                        <Link href={`/products/${e.product.id}`} className="hover:underline">
+                        <Link href={`/products/${e.product.id}/edit`} className="hover:underline">
                           <div className="text-md text-slate-900 dark:text-slate-100 truncate max-w-xs">{e.product.name}</div>
                           <div className="font-mono text-xs text-slate-500 dark:text-slate-400">{e.product.sku}</div>
                         </Link>

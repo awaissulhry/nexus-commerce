@@ -312,7 +312,7 @@ export function SlowMoversCard() {
                       <Trash2 className="h-3 w-3" aria-hidden="true" />
                     </button>
                     <Link
-                      href={`/products/${r.id}`}
+                      href={`/products/${r.id}/edit`}
                       className="h-6 w-6 inline-flex items-center justify-center rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
                       title={t('replenishment.slowMovers.openProduct')}
                     >

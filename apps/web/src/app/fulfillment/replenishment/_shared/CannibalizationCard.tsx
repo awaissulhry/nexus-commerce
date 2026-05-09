@@ -141,7 +141,7 @@ export function CannibalizationCard() {
                 </div>
                 {f.newProductId && (
                   <Link
-                    href={`/products/${f.newProductId}`}
+                    href={`/products/${f.newProductId}/edit`}
                     onClick={(e) => e.stopPropagation()}
                     className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
                     title={t('replenishment.cannibalization.openProduct')}

@@ -216,7 +216,7 @@ export function PanEuDistributionCard() {
                 <td className="px-3 py-1.5 text-right">
                   {rec.productId && (
                     <Link
-                      href={`/products/${rec.productId}`}
+                      href={`/products/${rec.productId}/edit`}
                       className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline"
                       title={t('replenishment.panEu.openProduct')}
                     >

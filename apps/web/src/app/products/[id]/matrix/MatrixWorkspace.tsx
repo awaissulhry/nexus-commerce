@@ -325,7 +325,7 @@ export default function MatrixWorkspace({
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link
-            href={`/products/${product.id}`}
+            href={`/products/${product.id}/edit`}
             className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 inline-flex items-center gap-1"
           >
             <ChevronLeft className="w-3 h-3" />
