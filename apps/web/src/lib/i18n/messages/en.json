@@ -1639,6 +1639,17 @@
   "overview.relTime.seconds": "{n}s ago",
   "overview.relTime.minutes": "{n}m ago",
   "overview.relTime.hours": "{n}h ago",
+  "overview.relTime.days": "{n}d ago",
+
+  "overview.channels.openAria": "Open {channel} listings",
+  "overview.channels.health.ok": "Healthy",
+  "overview.channels.health.warn": "Warning",
+  "overview.channels.health.fail": "Failing",
+  "overview.channels.health.inactive": "Inactive",
+  "overview.channels.suppressed": "{n} suppressed",
+  "overview.channels.buyBox": "Buy Box {rate}",
+  "overview.channels.lastSync": "synced {ago}",
+  "overview.channels.errors24h": "{n} errors 24h",
 
   "overview.live.on": "Live",
   "overview.live.off": "Live off",

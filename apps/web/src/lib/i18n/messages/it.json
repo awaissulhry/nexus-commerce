@@ -1627,6 +1627,17 @@
   "overview.relTime.seconds": "{n}s fa",
   "overview.relTime.minutes": "{n}m fa",
   "overview.relTime.hours": "{n}h fa",
+  "overview.relTime.days": "{n}g fa",
+
+  "overview.channels.openAria": "Apri annunci {channel}",
+  "overview.channels.health.ok": "Sano",
+  "overview.channels.health.warn": "Attenzione",
+  "overview.channels.health.fail": "In errore",
+  "overview.channels.health.inactive": "Inattivo",
+  "overview.channels.suppressed": "{n} soppressi",
+  "overview.channels.buyBox": "Buy Box {rate}",
+  "overview.channels.lastSync": "sync {ago}",
+  "overview.channels.errors24h": "{n} errori 24h",
 
   "overview.live.on": "Live",
   "overview.live.off": "Live off",
