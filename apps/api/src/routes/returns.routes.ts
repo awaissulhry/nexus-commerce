@@ -565,9 +565,29 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       // Resolve the Return so we know channel + currency.
       const ret = await prisma.return.findUnique({
         where: { id },
-        select: { id: true, channel: true, currencyCode: true, refundCents: true },
+        select: { id: true, channel: true, currencyCode: true, refundCents: true, refundedAt: true },
       })
       if (!ret) return reply.code(404).send({ error: 'Return not found' })
+
+      // F1.1 — race guard. Concurrent /refund calls on the same Return
+      // would each create a Refund row and overwrite refundedAt. Fail
+      // fast when a non-failed Refund already exists. The DB-level
+      // partial unique index "Refund_oneActivePerReturn" is the
+      // bedrock; this returns a clearer 409 to the second caller.
+      const existingActive = await prisma.refund.findFirst({
+        where: {
+          returnId: id,
+          channelStatus: { in: ['PENDING', 'POSTED', 'MANUAL_REQUIRED'] },
+        },
+        select: { id: true, channelStatus: true },
+      })
+      if (existingActive) {
+        return reply.code(409).send({
+          error: 'A refund is already in progress or completed for this return',
+          existingRefundId: existingActive.id,
+          existingRefundStatus: existingActive.channelStatus,
+        })
+      }
 
       // Determine the amount: prefer body, fall back to staged
       // Return.refundCents (legacy callers + the inspect-then-
@@ -590,18 +610,32 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // 1) Always create the Refund row (PENDING). This is the
       //    canonical record; channel attempts decorate it.
-      const refund = await prisma.refund.create({
-        data: {
-          returnId: id,
-          amountCents,
-          currencyCode: ret.currencyCode || 'EUR',
-          kind: (body.kind ?? 'CASH') as any,
-          reason: body.reason ?? null,
-          channel: ret.channel,
-          channelStatus: 'PENDING',
-          actor: (request.headers['x-user-id'] as string | undefined) ?? null,
-        },
-      })
+      //    F1.1 — race fallback: if two callers slipped past the
+      //    upfront guard at the same moment, the partial unique index
+      //    Refund_oneActivePerReturn rejects the second insert with
+      //    P2002. Surface as 409 instead of 500.
+      let refund
+      try {
+        refund = await prisma.refund.create({
+          data: {
+            returnId: id,
+            amountCents,
+            currencyCode: ret.currencyCode || 'EUR',
+            kind: (body.kind ?? 'CASH') as any,
+            reason: body.reason ?? null,
+            channel: ret.channel,
+            channelStatus: 'PENDING',
+            actor: (request.headers['x-user-id'] as string | undefined) ?? null,
+          },
+        })
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          return reply.code(409).send({
+            error: 'A refund is already in progress for this return (concurrent attempt)',
+          })
+        }
+        throw err
+      }
 
       // 2) Skip-channel path: operator already refunded externally.
       //    Mark Refund POSTED with no channelRefundId, project
