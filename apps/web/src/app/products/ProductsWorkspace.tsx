@@ -1260,7 +1260,12 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'coverage', label: 'Coverage', icon: Network },
     { key: 'pricing', label: 'Pricing', icon: DollarSign },
     { key: 'health', label: 'Health', icon: AlertTriangle },
-    { key: 'drafts', label: 'Drafts', icon: Sparkles },
+    // DR-C.1 — was 'Drafts', renamed to disambiguate from
+    // /products/drafts (the wizard-resume surface). This lens
+    // shows per-channel publish readiness: draft listings ready
+    // to push + uncovered products on the selected channel. The
+    // URL key stays `lens=drafts` for bookmark stability.
+    { key: 'drafts', label: 'Channel coverage', icon: Sparkles },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
