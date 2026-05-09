@@ -1629,13 +1629,13 @@
   "overview.alerts.dismiss": "Chiudi",
 
   "overview.alerts.impact.outOfStock": "Vendite perse finché non riassortito",
-  "overview.alerts.impact.lowStock": "Esaurirà presto al ritmo attuale",
+  "overview.alerts.impact.lowStock": "Si esauriranno presto al ritmo attuale",
   "overview.alerts.impact.failedListings": "Annunci non visibili ai clienti",
-  "overview.alerts.impact.draftListings": "Lavoro catalogo in corso",
+  "overview.alerts.impact.draftListings": "Bozze in attesa di pubblicazione",
   "overview.alerts.impact.pendingOrders": "In attesa di evasione",
   "overview.alerts.impact.lateShipments": "Oltre ship-by — rischio ODR su Amazon",
   "overview.alerts.impact.suppressions": "Perdita diretta di fatturato finché non risolti",
-  "overview.alerts.impact.returnsBacklog": "Tempo per il rimborso in corso",
+  "overview.alerts.impact.returnsBacklog": "Scadenza rimborso in avvicinamento",
   "overview.alerts.impact.syncFailures": "Canali fuori sync",
   "overview.alerts.impact.rateLimitHits": "Throttling API — rallenta il cron",
 
@@ -1687,7 +1687,7 @@
   "overview.views.saveAs": "Salva vista",
 
   "overview.customize.title": "Personalizza dashboard",
-  "overview.customize.description": "Mostra, nascondi o riordina le sezioni. KPI e Avvisi sono sempre visibili. Trascina la maniglia per riordinare entro la colonna.",
+  "overview.customize.description": "Mostra, nascondi o riordina le sezioni. KPI e Avvisi restano sempre visibili. Trascina la maniglia per riordinare all'interno della colonna.",
   "overview.customize.column.left": "Colonna principale",
   "overview.customize.column.right": "Colonna laterale",
   "overview.customize.dragHandle": "Trascina per riordinare",
