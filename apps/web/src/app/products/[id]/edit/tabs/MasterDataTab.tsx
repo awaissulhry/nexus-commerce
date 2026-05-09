@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCw,
+  Sparkles,
   X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -14,6 +15,7 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
@@ -114,10 +116,15 @@ export default function MasterDataTab({
   discardSignal,
 }: Props) {
   const { t } = useTranslations()
+  const { toast } = useToast()
   const router = useRouter()
   const [data, setData] = useState<Record<MasterField, string>>(() =>
     seedFromProduct(product),
   )
+  // W13.1 — per-field AI suggest busy flag. Keys are MasterField names
+  // ('name' | 'description' | 'bulletPoints' | 'keywords'); only the
+  // four content fields support AI today.
+  const [aiBusy, setAiBusy] = useState<Set<MasterField>>(new Set())
   // W1.2 — local copy of Product.version. Sent as If-Match on every
   // PATCH and bumped from the response so two consecutive saves with
   // no intervening reload still pass the CAS check on the server.
@@ -156,6 +163,93 @@ export default function MasterDataTab({
     saveTimer.current = window.setTimeout(() => {
       void flush()
     }, SAVE_DEBOUNCE_MS)
+  }
+
+  // W13.1 — AI suggest a value for one master content field. Hits the
+  // existing /products/ai/bulk-generate endpoint with dryRun=true so
+  // the suggestion lands inline first; the operator can edit before
+  // the debounced auto-save commits. Marketplace='IT' (primary) is
+  // hard-coded because this writes to Product master columns; non-
+  // primary languages flow through the Locales tab (W4.x) instead.
+  const aiSuggest = async (field: MasterField) => {
+    const fieldMap: Partial<Record<MasterField, 'title' | 'description' | 'bullets' | 'keywords'>> = {
+      name: 'title',
+      description: 'description',
+      bulletPoints: 'bullets',
+      keywords: 'keywords',
+    }
+    const aiField = fieldMap[field]
+    if (!aiField) return
+    setAiBusy((prev) => {
+      const next = new Set(prev)
+      next.add(field)
+      return next
+    })
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/ai/bulk-generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productIds: [product.id],
+            fields: [aiField],
+            marketplace: 'IT',
+            dryRun: true,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const json = await res.json()
+      const result = json?.results?.[0]
+      if (!result?.ok) {
+        throw new Error(result?.error ?? t('products.edit.master.aiNoSuggestion'))
+      }
+      const generated = result.generated
+      let next: string | undefined
+      if (aiField === 'title') next = generated?.title?.content
+      else if (aiField === 'description') next = generated?.description?.content
+      else if (aiField === 'bullets') {
+        const c = generated?.bullets?.content
+        if (Array.isArray(c)) {
+          next = c
+            .filter((b: unknown) => typeof b === 'string' && b.trim().length > 0)
+            .join('\n')
+        }
+      } else if (aiField === 'keywords') {
+        const c = generated?.keywords?.content
+        if (typeof c === 'string') {
+          next = c
+            .split(/[,\n]/)
+            .map((k) => k.trim())
+            .filter(Boolean)
+            .join('\n')
+        } else if (Array.isArray(c)) {
+          next = c.filter((k: unknown) => typeof k === 'string').join('\n')
+        }
+      }
+      if (typeof next === 'string' && next.length > 0) {
+        update(field, next)
+        toast.success(t('products.edit.master.aiSuggested'))
+      } else {
+        toast.error(t('products.edit.master.aiNoSuggestion'))
+      }
+    } catch (e: any) {
+      toast.error(
+        t('products.edit.master.aiFailed', {
+          error: e?.message ?? String(e),
+        }),
+      )
+    } finally {
+      setAiBusy((prev) => {
+        const next = new Set(prev)
+        next.delete(field)
+        return next
+      })
+    }
   }
 
   const flush = async () => {
@@ -316,11 +410,18 @@ export default function MasterDataTab({
             mono
             onChange={(e) => update('sku', e.target.value)}
           />
-          <Input
-            label={t('products.edit.master.nameLabel')}
-            value={data.name}
-            onChange={(e) => update('name', e.target.value)}
-          />
+          <div className="relative">
+            <Input
+              label={t('products.edit.master.nameLabel')}
+              value={data.name}
+              onChange={(e) => update('name', e.target.value)}
+            />
+            <AiSuggestOverlay
+              busy={aiBusy.has('name')}
+              onClick={() => void aiSuggest('name')}
+              tooltip={t('products.edit.master.aiSuggestTitle')}
+            />
+          </div>
           <Input
             label={t('products.edit.master.brandLabel')}
             value={data.brand}
@@ -369,12 +470,20 @@ export default function MasterDataTab({
         description={t('products.edit.master.contentDesc')}
       >
         <div className="space-y-1">
-          <label
-            htmlFor="master-description"
-            className="text-base font-medium text-slate-700 dark:text-slate-300"
-          >
-            {t('products.edit.master.descriptionLabel')}
-          </label>
+          <div className="flex items-baseline justify-between">
+            <label
+              htmlFor="master-description"
+              className="text-base font-medium text-slate-700 dark:text-slate-300"
+            >
+              {t('products.edit.master.descriptionLabel')}
+            </label>
+            <AiSuggestInline
+              busy={aiBusy.has('description')}
+              onClick={() => void aiSuggest('description')}
+              label={t('products.edit.master.aiSuggest')}
+              tooltip={t('products.edit.master.aiSuggestDescription')}
+            />
+          </div>
           <textarea
             id="master-description"
             value={data.description}
@@ -392,18 +501,26 @@ export default function MasterDataTab({
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
           <div className="space-y-1">
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-baseline justify-between gap-2">
               <label
                 htmlFor="master-bullets"
                 className="text-base font-medium text-slate-700 dark:text-slate-300"
               >
                 {t('products.edit.master.bulletsLabel')}
               </label>
-              <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                {t('products.edit.master.bulletsCount', {
-                  count: bulletCount(data.bulletPoints),
-                })}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  {t('products.edit.master.bulletsCount', {
+                    count: bulletCount(data.bulletPoints),
+                  })}
+                </span>
+                <AiSuggestInline
+                  busy={aiBusy.has('bulletPoints')}
+                  onClick={() => void aiSuggest('bulletPoints')}
+                  label={t('products.edit.master.aiSuggest')}
+                  tooltip={t('products.edit.master.aiSuggestBullets')}
+                />
+              </div>
             </div>
             <textarea
               id="master-bullets"
@@ -418,12 +535,20 @@ export default function MasterDataTab({
             </p>
           </div>
           <div className="space-y-1">
-            <label
-              htmlFor="master-keywords"
-              className="text-base font-medium text-slate-700 dark:text-slate-300"
-            >
-              {t('products.edit.master.keywordsLabel')}
-            </label>
+            <div className="flex items-baseline justify-between gap-2">
+              <label
+                htmlFor="master-keywords"
+                className="text-base font-medium text-slate-700 dark:text-slate-300"
+              >
+                {t('products.edit.master.keywordsLabel')}
+              </label>
+              <AiSuggestInline
+                busy={aiBusy.has('keywords')}
+                onClick={() => void aiSuggest('keywords')}
+                label={t('products.edit.master.aiSuggest')}
+                tooltip={t('products.edit.master.aiSuggestKeywords')}
+              />
+            </div>
             <textarea
               id="master-keywords"
               value={data.keywords}
@@ -570,6 +695,73 @@ export default function MasterDataTab({
         </div>
       </Card>
     </div>
+  )
+}
+
+// W13.1 — AI suggest helpers. Two flavours:
+//   - AiSuggestOverlay sits as an absolute-positioned button on top
+//     of an Input row (used for the single-line title field).
+//   - AiSuggestInline is a label-row affordance for textarea fields
+//     where there's already a header row to dock onto.
+function AiSuggestOverlay({
+  busy,
+  onClick,
+  tooltip,
+}: {
+  busy: boolean
+  onClick: () => void
+  tooltip: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={tooltip}
+      aria-label={tooltip}
+      disabled={busy}
+      className={cn(
+        'absolute right-1.5 bottom-1.5 inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 transition-colors',
+        busy && 'opacity-50 cursor-wait',
+      )}
+    >
+      {busy ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Sparkles className="w-3.5 h-3.5" />
+      )}
+    </button>
+  )
+}
+
+function AiSuggestInline({
+  busy,
+  onClick,
+  label,
+  tooltip,
+}: {
+  busy: boolean
+  onClick: () => void
+  label: string
+  tooltip: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={tooltip}
+      disabled={busy}
+      className={cn(
+        'inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 transition-colors',
+        busy && 'opacity-50 cursor-wait',
+      )}
+    >
+      {busy ? (
+        <Loader2 className="w-3 h-3 animate-spin" />
+      ) : (
+        <Sparkles className="w-3 h-3" />
+      )}
+      {label}
+    </button>
   )
 }
 
