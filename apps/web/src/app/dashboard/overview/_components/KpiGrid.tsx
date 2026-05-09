@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,7 @@ export default function KpiGrid({
           prevValue={formatCurrency(totals.revenue.previous, primary)}
           series={totals.revenue.series}
           sparkColor="emerald"
+          href="/dashboard/analytics/revenue"
         />
         <KpiCard
           t={t}
@@ -57,6 +59,7 @@ export default function KpiGrid({
           prevValue={NUM_FMT.format(totals.orders.previous)}
           series={totals.orders.series}
           sparkColor="blue"
+          href="/orders"
         />
         <KpiCard
           t={t}
@@ -66,6 +69,7 @@ export default function KpiGrid({
           prevValue={formatCurrency(totals.aov.previous, primary)}
           series={totals.aov.series}
           sparkColor="violet"
+          href="/dashboard/analytics/revenue"
         />
         <KpiCard
           t={t}
@@ -75,6 +79,7 @@ export default function KpiGrid({
           prevValue={NUM_FMT.format(totals.units.previous)}
           series={totals.units.series}
           sparkColor="amber"
+          href="/dashboard/analytics/inventory"
         />
       </div>
       {/* DO.12 — second row: operational KPIs.
@@ -91,6 +96,7 @@ export default function KpiGrid({
           delta={formatDelta(totals.pendingShipments.deltaPct, t)}
           prevValue=""
           sparkColor="blue"
+          href="/fulfillment/outbound"
         />
         <KpiCard
           t={t}
@@ -100,6 +106,7 @@ export default function KpiGrid({
           prevValue=""
           sparkColor="amber"
           tone={totals.lateShipments.current > 0 ? 'rose' : 'slate'}
+          href="/fulfillment/outbound"
         />
         <KpiCard
           t={t}
@@ -108,6 +115,7 @@ export default function KpiGrid({
           delta={formatDelta(totals.returnsRate.deltaPct, t)}
           prevValue={formatPct(totals.returnsRate.previous)}
           sparkColor="violet"
+          href="/fulfillment/returns"
         />
         <KpiCard
           t={t}
@@ -116,6 +124,7 @@ export default function KpiGrid({
           delta={formatDelta(totals.refundValue.deltaPct, t)}
           prevValue={formatCurrency(totals.refundValue.previous, primary)}
           sparkColor="amber"
+          href="/fulfillment/returns"
         />
       </div>
       {secondaries.length > 0 && (
@@ -154,6 +163,7 @@ function KpiCard({
   series,
   sparkColor,
   tone = 'slate',
+  href,
 }: {
   t: T
   label: string
@@ -167,13 +177,19 @@ function KpiCard({
   /** Override the headline value color — used by lateShipments to
    * flush rose when non-zero. */
   tone?: 'slate' | 'rose'
+  /** When set, the card becomes a drill-down link. */
+  href?: string
 }) {
   const valueClass =
     tone === 'rose'
       ? 'text-rose-700 dark:text-rose-400'
       : 'text-slate-900 dark:text-slate-100'
-  return (
-    <Card noPadding className="px-4 py-3">
+  // DO.13 — clickable card. The whole tile is the hit target so the
+  // operator can fingerprint a metric and tap-through, not aim at a
+  // 12px chevron. Hover lifts the border tone for affordance; the
+  // visited / focus rings come from focus-visible.
+  const body = (
+    <>
       <div className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">
         {label}
       </div>
@@ -197,6 +213,27 @@ function KpiCard({
           <span className="tabular-nums">{prevValue}</span>
         </div>
       )}
+    </>
+  )
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cn(
+          'block rounded-lg border bg-white dark:bg-slate-900 px-4 py-3 transition-colors',
+          'border-slate-200 dark:border-slate-800',
+          'hover:border-slate-300 dark:hover:border-slate-700',
+          'hover:bg-slate-50/40 dark:hover:bg-slate-800/40',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+        )}
+      >
+        {body}
+      </Link>
+    )
+  }
+  return (
+    <Card noPadding className="px-4 py-3">
+      {body}
     </Card>
   )
 }
