@@ -63,6 +63,7 @@ import {
 } from '@/lib/sync/invalidation-channel'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -174,6 +175,7 @@ export default function ProductDrawer({
   onClose,
   onChanged,
 }: ProductDrawerProps) {
+  const { t } = useTranslations()
   // P.6 — tab persisted in the URL (?drawerTab=<name>) so a refresh
   // keeps the user on the tab they were reading. Falls back to
   // 'details' for any unknown / missing value. Writes are scroll: false
@@ -345,7 +347,7 @@ export default function ProductDrawer({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Product details"
+      aria-label={t('products.drawer.aria')}
     >
       <div
         ref={containerRef}
@@ -369,15 +371,20 @@ export default function ProductDrawer({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
-                {data?.name ?? (loading ? 'Loading…' : 'Product')}
+                {data?.name ?? (loading ? t('products.drawer.loading') : t('products.drawer.fallback'))}
               </h2>
               {data?.isParent && (
                 <a
                   href={`/products/${data.id}/matrix`}
                   className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                  title="Open the variant matrix editor"
+                  title={t('products.drawer.parentBadgeTitle')}
                 >
-                  Parent · {data._count?.variations ?? 0} variants
+                  {t(
+                    (data._count?.variations ?? 0) === 1
+                      ? 'products.drawer.parentBadge.one'
+                      : 'products.drawer.parentBadge.other',
+                    { count: data._count?.variations ?? 0 },
+                  )}
                 </a>
               )}
               {data?.status && (
@@ -406,16 +413,16 @@ export default function ProductDrawer({
                 <a
                   href={`/sync-logs/api-calls?productId=${encodeURIComponent(data.id)}`}
                   className="inline-flex items-center gap-0.5 hover:text-blue-600 dark:hover:text-blue-400"
-                  title="View every Amazon SP-API / eBay / Shopify call recorded for this product"
+                  title={t('products.drawer.syncActivityTitle')}
                 >
-                  Sync activity <ExternalLink className="w-3 h-3" />
+                  {t('products.drawer.syncActivity')} <ExternalLink className="w-3 h-3" />
                 </a>
               )}
             </div>
           </div>
           <IconButton
             onClick={onClose}
-            aria-label="Close drawer"
+            aria-label={t('products.drawer.close')}
             size="md"
             className="-mr-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
           >
@@ -430,7 +437,7 @@ export default function ProductDrawer({
         <div className="relative">
           <div
             role="tablist"
-            aria-label="Product sections"
+            aria-label={t('products.drawer.tablistAria')}
             onKeyDown={(e) => {
               // W5.17 — WAI-ARIA tablist keyboard pattern: arrows move
               // focus between tabs (left/right wrap), Home/End jump to
@@ -464,14 +471,14 @@ export default function ProductDrawer({
             className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]"
           >
           <DrawerTab active={tab === 'details'} onClick={() => setTab('details')}>
-            <Edit3 className="w-3 h-3" /> Details
+            <Edit3 className="w-3 h-3" /> {t('products.drawer.tabs.details')}
           </DrawerTab>
           <DrawerTab
             active={tab === 'listings'}
             onClick={() => setTab('listings')}
             count={data?._count?.channelListings}
           >
-            <Boxes className="w-3 h-3" /> Listings
+            <Boxes className="w-3 h-3" /> {t('products.drawer.tabs.listings')}
           </DrawerTab>
           {/* P.8 — Variations tab only renders for parent products.
               Children render under their parent's drawer; standalone
@@ -482,7 +489,7 @@ export default function ProductDrawer({
               onClick={() => setTab('variations')}
               count={data?._count?.children}
             >
-              <Layers className="w-3 h-3" /> Variations
+              <Layers className="w-3 h-3" /> {t('products.drawer.tabs.variations')}
             </DrawerTab>
           )}
           {/* U.32 — Images tab. Shows thumbnails of the product's
@@ -496,14 +503,14 @@ export default function ProductDrawer({
             onClick={() => setTab('images')}
             count={data?._count?.images}
           >
-            <ImageIcon className="w-3 h-3" /> Images
+            <ImageIcon className="w-3 h-3" /> {t('products.drawer.tabs.images')}
           </DrawerTab>
           <DrawerTab
             active={tab === 'translations'}
             onClick={() => setTab('translations')}
             count={data?._count?.translations}
           >
-            <Globe className="w-3 h-3" /> Translations
+            <Globe className="w-3 h-3" /> {t('products.drawer.tabs.translations')}
           </DrawerTab>
           {/* U.32 — Pricing tab. Per-marketplace price summary +
               deep-link to /pricing?search=<sku>. The drawer is the
@@ -513,14 +520,14 @@ export default function ProductDrawer({
             active={tab === 'pricing'}
             onClick={() => setTab('pricing')}
           >
-            <DollarSign className="w-3 h-3" /> Pricing
+            <DollarSign className="w-3 h-3" /> {t('products.drawer.tabs.pricing')}
           </DrawerTab>
           <DrawerTab
             active={tab === 'related'}
             onClick={() => setTab('related')}
             count={data?._count?.relationsFrom}
           >
-            <Network className="w-3 h-3" /> Related
+            <Network className="w-3 h-3" /> {t('products.drawer.tabs.related')}
           </DrawerTab>
           {/* U.30 — Activity is higher-traffic ("what changed?"); the
               Schedule tab is rare, only used after a bulk-schedule
@@ -530,14 +537,14 @@ export default function ProductDrawer({
             active={tab === 'activity'}
             onClick={() => setTab('activity')}
           >
-            <Activity className="w-3 h-3" /> Activity
+            <Activity className="w-3 h-3" /> {t('products.drawer.tabs.activity')}
           </DrawerTab>
           {/* F.3.c — pending scheduled changes for this product. */}
           <DrawerTab
             active={tab === 'schedule'}
             onClick={() => setTab('schedule')}
           >
-            <Calendar className="w-3 h-3" /> Schedule
+            <Calendar className="w-3 h-3" /> {t('products.drawer.tabs.schedule')}
           </DrawerTab>
           {/* W3.6 — Wave 3 workflow tab. Current stage + transition
               controls + comment thread + transition history. Only
@@ -547,7 +554,7 @@ export default function ProductDrawer({
             active={tab === 'workflow'}
             onClick={() => setTab('workflow')}
           >
-            <GitBranch className="w-3 h-3" /> Workflow
+            <GitBranch className="w-3 h-3" /> {t('products.drawer.tabs.workflow')}
           </DrawerTab>
           </div>
           {/* Right-edge fade hints at scrollable overflow without
