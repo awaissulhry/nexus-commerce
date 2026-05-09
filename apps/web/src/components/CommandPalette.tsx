@@ -68,7 +68,11 @@ const COMMANDS: Command[] = [
   { id: 'goto-cycle-count', label: 'Go to Cycle Counts (physical inventory)', icon: ClipboardList, href: '/fulfillment/stock/cycle-count', group: 'Navigation' },
   { id: 'goto-returns', label: 'Go to Returns (RMA + refund workflow)', icon: RefreshCw, href: '/fulfillment/returns', group: 'Navigation', chord: 'g t' },
   { id: 'goto-returns-analytics', label: 'Go to Returns Analytics (rates, top SKUs, processing time)', icon: Activity, href: '/fulfillment/returns/analytics', group: 'Navigation', keywords: 'returns rate sku processing analytics' },
-  { id: 'goto-activity', label: 'Go to Activity Log', icon: Activity, href: '/sync-logs', group: 'Navigation' },
+  { id: 'goto-activity', label: 'Go to Sync Logs (observability hub)', icon: Activity, href: '/sync-logs', group: 'Navigation', keywords: 'monitoring observability hub kpi cron channel' },
+  { id: 'goto-api-calls', label: 'Go to API Calls (latency, errors, live tail)', icon: Activity, href: '/sync-logs/api-calls', group: 'Navigation', keywords: 'amazon ebay sp-api requests latency p95 p99 csv export live tail' },
+  { id: 'goto-error-groups', label: 'Go to Error Groups (Sentry-tier rolled-up errors)', icon: Activity, href: '/sync-logs/errors', group: 'Navigation', keywords: 'errors fingerprint resolve mute ignore sentry' },
+  { id: 'goto-webhooks', label: 'Go to Inbound Webhooks (replay, payload)', icon: Activity, href: '/sync-logs/webhooks', group: 'Navigation', keywords: 'shopify woocommerce etsy replay payload signature' },
+  { id: 'goto-alerts', label: 'Go to Alerts (rules + events)', icon: Activity, href: '/sync-logs/alerts', group: 'Navigation', keywords: 'alert rule pagerduty error rate latency notify slack email' },
   { id: 'goto-audit-log', label: 'Go to Audit Log (every mutation)', icon: History, href: '/audit-log', group: 'Navigation', chord: 'g a' },
   { id: 'goto-health', label: 'Go to Sync Health', icon: HeartPulse, href: '/dashboard/health', group: 'Navigation', chord: 'g h' },
   // Catalog actions

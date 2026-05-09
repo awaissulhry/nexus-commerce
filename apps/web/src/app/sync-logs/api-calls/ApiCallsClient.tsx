@@ -123,6 +123,7 @@ export default function ApiCallsClient() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ApiCallRow | null>(null)
+  const [highlightIndex, setHighlightIndex] = useState<number>(-1)
   const [live, setLive] = useState(false)
   const [liveStatus, setLiveStatus] = useState<
     'connecting' | 'open' | 'error' | 'closed'
@@ -299,6 +300,55 @@ export default function ApiCallsClient() {
     }
   }, [live, urlChannel, urlErrorType, urlSuccess])
 
+  // L.20.0 — keyboard shortcuts (Linear-style):
+  //   j        next row
+  //   k        previous row
+  //   Enter    open selected row's detail
+  //   Esc      close detail panel
+  //   /        focus the URL bar's filter (we don't have a search
+  //            box yet so this is a no-op until L.x)
+  // Skipped while typing into an input/textarea or while the detail
+  // slide-over is already open (Esc closes it; nothing else applies).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const tag = target?.tagName?.toLowerCase()
+      const isTyping =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        target?.isContentEditable
+      if (selected) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setSelected(null)
+        }
+        return
+      }
+      if (isTyping) return
+      if (e.key === 'j') {
+        e.preventDefault()
+        setHighlightIndex((i) => Math.min(recent.length - 1, i + 1))
+      } else if (e.key === 'k') {
+        e.preventDefault()
+        setHighlightIndex((i) => Math.max(0, i - 1))
+      } else if (e.key === 'Enter' && highlightIndex >= 0) {
+        const row = recent[highlightIndex]
+        if (row) {
+          e.preventDefault()
+          setSelected(row)
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [recent, highlightIndex, selected])
+
+  // Reset highlight when filters change so we don't hold a stale index.
+  useEffect(() => {
+    setHighlightIndex(-1)
+  }, [urlChannel, urlErrorType, urlSuccess, urlSinceKey, urlOperation, urlRequestId])
+
   return (
     <div className="space-y-3">
       {/* Filter bar */}
@@ -420,11 +470,25 @@ export default function ApiCallsClient() {
             </button>
           )}
 
+          <span
+            className="ml-auto hidden md:inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"
+            aria-hidden
+            title="Use j/k to navigate rows, Enter to open, Esc to close"
+          >
+            <kbd className="px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[10px]">
+              j
+            </kbd>
+            <kbd className="px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-[10px]">
+              k
+            </kbd>
+            navigate
+          </span>
+
           <button
             type="button"
             onClick={() => setLive((v) => !v)}
             className={cn(
-              'ml-auto h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
+              'h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
               live
                 ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
@@ -617,13 +681,18 @@ export default function ApiCallsClient() {
               </tr>
             </thead>
             <tbody>
-              {recent.map((r) => (
+              {recent.map((r, idx) => (
                 <tr
                   key={r.id}
-                  onClick={() => setSelected(r)}
+                  onClick={() => {
+                    setHighlightIndex(idx)
+                    setSelected(r)
+                  }}
                   className={cn(
                     'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
                     !r.success && 'bg-rose-50/30 dark:bg-rose-950/30',
+                    idx === highlightIndex &&
+                      'bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-50 dark:hover:bg-blue-950/40',
                   )}
                 >
                   <td className="px-3 py-1.5">
