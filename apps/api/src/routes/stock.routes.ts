@@ -800,6 +800,25 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
         }),
+        // SR.4 — serial-tracked units for this product. Surfaced in
+        // the drawer when present; empty for products without serials.
+        // Capped at 50 + summary counts so the drawer doesn't
+        // serialize 1000s of rows for high-volume products.
+        serials: await prisma.serialNumber.findMany({
+          where: { productId },
+          orderBy: [{ status: 'asc' }, { receivedAt: 'desc' }],
+          take: 50,
+          select: {
+            id: true, serialNumber: true, status: true, receivedAt: true,
+            currentOrderId: true, manufacturerRef: true,
+            lot: { select: { id: true, lotNumber: true } },
+          },
+        }),
+        serialCounts: await prisma.serialNumber.groupBy({
+          by: ['status'],
+          where: { productId },
+          _count: { _all: true },
+        }).then((rows: Array<{ status: string; _count: { _all: number } }>) => Object.fromEntries(rows.map((r) => [r.status, r._count._all]))),
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/product/:id] failed')

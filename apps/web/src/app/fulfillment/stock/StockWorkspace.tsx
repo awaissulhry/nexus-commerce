@@ -1771,6 +1771,17 @@ type DrawerBundle = {
     supplierLotRef: string | null
     recalls: Array<{ id: string; reason: string; openedAt: string }>
   }>
+  // SR.4 — serial-tracked units. Empty for products without serials.
+  serials?: Array<{
+    id: string
+    serialNumber: string
+    status: 'AVAILABLE' | 'RESERVED' | 'SHIPPED' | 'RETURNED' | 'DISPOSED'
+    receivedAt: string
+    currentOrderId: string | null
+    manufacturerRef: string | null
+    lot: { id: string; lotNumber: string } | null
+  }>
+  serialCounts?: Record<string, number>
 }
 
 type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: string } | { kind: 'transfer' } | { kind: 'reserve' }
@@ -2311,6 +2322,46 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                         </li>
                       )
                     })}
+                  </ul>
+                </Section>
+              )}
+
+              {/* SR.4 — Serials: only when product has tracked serials.
+                  Shows top 50 + status counts summary. */}
+              {bundle.serials && bundle.serials.length > 0 && (
+                <Section
+                  title={t('stock.serials.section', {
+                    available: bundle.serialCounts?.AVAILABLE ?? 0,
+                    total: Object.values(bundle.serialCounts ?? {}).reduce((s, n) => s + n, 0),
+                  })}
+                  icon={Package}
+                >
+                  <ul className="space-y-1">
+                    {bundle.serials.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex items-center justify-between gap-3 py-1 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-sm text-slate-700 dark:text-slate-300 truncate">{s.serialNumber}</div>
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 inline-flex items-center gap-2">
+                            {s.lot && <span className="font-mono">lot {s.lot.lotNumber}</span>}
+                            {s.currentOrderId && <span>· {t('stock.serials.onOrder', { id: s.currentOrderId.slice(0, 8) })}</span>}
+                            {s.manufacturerRef && <span>· {s.manufacturerRef}</span>}
+                          </div>
+                        </div>
+                        <span className={
+                          'text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded ' +
+                          (s.status === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
+                           s.status === 'RESERVED' ? 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' :
+                           s.status === 'SHIPPED' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' :
+                           s.status === 'RETURNED' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' :
+                           'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400')
+                        }>
+                          {s.status}
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 </Section>
               )}
