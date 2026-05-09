@@ -56,18 +56,23 @@ export const TEMPLATES: AutomationRuleTemplate[] = [
     maxValueCentsEur: 100000, // €1,000/day cap as a safety net
   },
   {
-    name: 'Auto-generate PO from approved recommendations',
+    name: 'Auto-generate PO from auto-approved recommendations',
     description:
-      'When a recommendation is APPROVED and the supplier has autoTriggerEnabled, fire the auto-PO service. Replaces the R.6 nightly cron with on-demand event-driven dispatch.',
+      'After a recommendation has been auto-approved (status=ACTED via rule 1) and the supplier has autoTriggerEnabled, create a one-line DRAFT PO. Lands in /fulfillment/purchase-orders for R.7 review/approve/submit. Standalone PO per rule firing — no batch grouping with other recs.',
     domain: 'replenishment',
-    trigger: 'recommendation_approved',
+    trigger: 'recommendation_generated',
     conditions: [
-      { field: 'recommendation.status', op: 'eq', value: 'APPROVED' },
+      { field: 'recommendation.totalCents', op: 'lt', value: 50000 },
       { field: 'supplier.autoTriggerEnabled', op: 'eq', value: true },
+      { field: 'product.abcClass', op: 'in', value: ['A', 'B'] },
     ],
     actions: [
-      { type: 'create_po' },
-      { type: 'notify', target: 'operator', message: 'Auto-generated PO from approved recommendation' },
+      { type: 'create_po_from_recommendation' },
+      {
+        type: 'notify',
+        target: 'operator',
+        message: 'Auto-generated DRAFT PO from rule trigger',
+      },
     ],
     maxExecutionsPerDay: 100,
     maxValueCentsEur: 2000000, // €20K/day matches R.6 default ceiling

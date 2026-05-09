@@ -249,6 +249,152 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
       },
     }
   },
+
+  /**
+   * Create a DRAFT PurchaseOrder from a single recommendation +
+   * mark the rec as ACTED. Standalone — does NOT call into the
+   * R.6 sweep's grouping logic (which batches across suppliers).
+   * Each rule firing creates its own one-line PO so the audit
+   * trail shows "this rule created this PO" cleanly.
+   *
+   * Defense-in-depth (rule-level caps already validated by the
+   * engine before this handler runs):
+   *   - Refuses if rec already ACTED (idempotent)
+   *   - Refuses if no preferredSupplierId
+   *   - Refuses if isManufactured (work-order path, not PO)
+   *   - Reports estimatedValueCentsEur so the engine's
+   *     maxValueCentsEur cap can intercept on the next iteration
+   *
+   * The PO lands as DRAFT — R.7's approval workflow (REVIEW →
+   * APPROVED → SUBMITTED → ACKNOWLEDGED) still gates the actual
+   * supplier-bound state. Operator reviews in /fulfillment/purchase-orders.
+   */
+  create_po_from_recommendation: async (action, context, meta) => {
+    const recId =
+      (getFieldPath(context, 'recommendation.id') as string | undefined) ??
+      (action.recommendationId as string | undefined)
+    if (!recId) {
+      return { type: action.type, ok: false, error: 'No recommendation.id in context' }
+    }
+
+    const rec = await prisma.replenishmentRecommendation.findUnique({
+      where: { id: recId },
+      select: {
+        id: true,
+        productId: true,
+        sku: true,
+        status: true,
+        reorderQuantity: true,
+        unitCostCents: true,
+        landedCostPerUnitCents: true,
+      },
+    })
+    if (!rec) {
+      return { type: action.type, ok: false, error: 'Recommendation not found' }
+    }
+    if (rec.status !== 'ACTIVE') {
+      return {
+        type: action.type,
+        ok: false,
+        error: `Recommendation status=${rec.status} (need ACTIVE)`,
+      }
+    }
+
+    const rule = await prisma.replenishmentRule.findUnique({
+      where: { productId: rec.productId },
+      select: { preferredSupplierId: true, isManufactured: true },
+    })
+    if (rule?.isManufactured) {
+      return {
+        type: action.type,
+        ok: false,
+        error: 'Manufactured product — use work-order path',
+      }
+    }
+    const supplierId = rule?.preferredSupplierId ?? null
+    if (!supplierId) {
+      return {
+        type: action.type,
+        ok: false,
+        error: 'No preferredSupplierId on ReplenishmentRule',
+      }
+    }
+
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: supplierId },
+      select: { id: true, name: true, defaultCurrency: true },
+    })
+    const unitCostCents = rec.landedCostPerUnitCents ?? rec.unitCostCents ?? 0
+    const totalCents = unitCostCents * rec.reorderQuantity
+
+    if (meta.dryRun) {
+      return {
+        type: action.type,
+        ok: true,
+        estimatedValueCentsEur: totalCents,
+        output: {
+          dryRun: true,
+          recommendationId: recId,
+          wouldCreatePoForSupplier: supplier?.name ?? supplierId,
+          quantity: rec.reorderQuantity,
+          totalCents,
+        },
+      }
+    }
+
+    // Atomic: rec→ACTED + new PO + line item in one transaction so
+    // we never end up with an ACTED rec without a PO (or vice versa).
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.replenishmentRecommendation.updateMany({
+        where: { id: recId, status: 'ACTIVE' },
+        data: {
+          status: 'ACTED',
+          actedAt: new Date(),
+          actedByUserId: `automation:${meta.ruleId}`,
+        },
+      })
+      if (updated.count === 0) {
+        throw new Error('Recommendation transitioned out of ACTIVE during action')
+      }
+      const po = await tx.purchaseOrder.create({
+        data: {
+          poNumber: `AUTO-RULE-${Date.now()}-${recId.slice(-6)}`,
+          supplierId,
+          status: 'DRAFT',
+          totalCents,
+          currencyCode: supplier?.defaultCurrency ?? 'EUR',
+          createdBy: `automation:${meta.ruleId}`,
+          notes: `Created by automation rule ${meta.ruleId} from recommendation ${recId} at ${new Date().toISOString()}.`,
+          items: {
+            create: [
+              {
+                productId: rec.productId,
+                sku: rec.sku,
+                quantityOrdered: rec.reorderQuantity,
+                unitCostCents,
+              },
+            ],
+          },
+        },
+        select: { id: true, poNumber: true },
+      })
+      return po
+    })
+
+    return {
+      type: action.type,
+      ok: true,
+      estimatedValueCentsEur: totalCents,
+      output: {
+        recommendationId: recId,
+        purchaseOrderId: result.id,
+        purchaseOrderNumber: result.poNumber,
+        supplierId,
+        quantity: rec.reorderQuantity,
+        totalCents,
+      },
+    }
+  },
 }
 
 // ─── Engine ────────────────────────────────────────────────────────
