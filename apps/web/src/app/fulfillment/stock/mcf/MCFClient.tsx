@@ -27,6 +27,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
 
 type StatusFilter = 'all' | 'active' | 'COMPLETE' | 'CANCELLED'
@@ -60,17 +61,6 @@ function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'info
   if (status === 'PROCESSING' || status === 'PLANNING') return 'info'
   if (status === 'NEW' || status === 'RECEIVED') return 'warning'
   return 'default'
-}
-
-function formatRelative(iso: string | null): string {
-  if (!iso) return '—'
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'now'
-  const m = Math.floor(ms / 60000)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
 }
 
 export default function MCFClient() {
@@ -258,10 +248,10 @@ export default function MCFClient() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-right text-sm text-slate-500 dark:text-slate-400" title={new Date(s.requestedAt).toLocaleString()}>
-                      {formatRelative(s.requestedAt)}
+                      {formatRelative(s.requestedAt, t)}
                       {s.lastSyncedAt && (
                         <div className="text-xs text-slate-400 dark:text-slate-500">
-                          synced {formatRelative(s.lastSyncedAt)}
+                          {t('stock.mcf.syncedAt', { when: formatRelative(s.lastSyncedAt, t) })}
                         </div>
                       )}
                     </td>

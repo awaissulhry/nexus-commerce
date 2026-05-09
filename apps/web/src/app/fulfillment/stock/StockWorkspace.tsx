@@ -24,6 +24,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { AbcBadge } from '@/components/inventory/AbcBadge'
+import { formatRelative } from '@/components/inventory/formatRelative'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -1997,7 +1998,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                             <span><span className="font-semibold tabular-nums text-slate-700 dark:text-slate-300">{sl.quantity}</span> on hand</span>
                             <span><span className="tabular-nums">{sl.reserved}</span> reserved</span>
                             <span><span className="tabular-nums">{sl.available}</span> available</span>
-                            <span className="text-slate-400">· {formatRelative(sl.lastUpdatedAt)}</span>
+                            <span className="text-slate-400">· {formatRelative(sl.lastUpdatedAt, t)}</span>
                           </div>
                         </div>
                         <button
@@ -2039,7 +2040,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                               </span>
                             </div>
                             <div className="text-xs text-slate-400 mt-0.5">
-                              {cl.lastSyncedAt ? `Synced ${formatRelative(cl.lastSyncedAt)}` : 'Never synced'}
+                              {cl.lastSyncedAt ? `Synced ${formatRelative(cl.lastSyncedAt, t)}` : 'Never synced'}
                               {cl.lastSyncError && <span className="text-rose-600"> · {cl.lastSyncError.slice(0, 60)}</span>}
                             </div>
                             {/* S.26 — ATP breakdown: on-hand − reserved − buffer = available */}
@@ -2156,7 +2157,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                           </div>
                           <div className="text-xs text-slate-400">
                             {r.orderId && <span>order {r.orderId.slice(0, 8)} · </span>}
-                            expires {formatRelative(r.expiresAt)}
+                            expires {formatRelative(r.expiresAt, t)}
                           </div>
                         </div>
                         <button
@@ -2728,6 +2729,7 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
 // Sync engine status indicator (H.8)
 // ─────────────────────────────────────────────────────────────────────
 function SyncIndicator({ status }: { status: SyncStatus }) {
+  const { t } = useTranslations()
   const [open, setOpen] = useState(false)
 
   // Health rollup. Failed > silent-risk > stale > healthy.
@@ -2801,7 +2803,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
             </div>
             {status.amazonFbaCron.lastReconciliationAt && (
               <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                Last reconciliation {formatRelative(status.amazonFbaCron.lastReconciliationAt)}
+                Last reconciliation {formatRelative(status.amazonFbaCron.lastReconciliationAt, t)}
                 {status.amazonFbaCron.lastReconciliationDelta != null && (
                   <span className={status.amazonFbaCron.lastReconciliationDelta > 0 ? ' text-emerald-700' : status.amazonFbaCron.lastReconciliationDelta < 0 ? ' text-rose-700' : ''}>
                     {' '}({status.amazonFbaCron.lastReconciliationDelta > 0 ? '+' : ''}{status.amazonFbaCron.lastReconciliationDelta})
@@ -2835,7 +2837,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
             </div>
             {status.outboundQueue.oldestPendingAt && (
               <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Oldest pending {formatRelative(status.outboundQueue.oldestPendingAt)}
+                Oldest pending {formatRelative(status.outboundQueue.oldestPendingAt, t)}
               </div>
             )}
           </div>
@@ -2848,7 +2850,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
             </div>
             {status.reservationSweep.lastRunAt && (
               <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                Last run {formatRelative(status.reservationSweep.lastRunAt)}
+                Last run {formatRelative(status.reservationSweep.lastRunAt, t)}
                 {status.reservationSweep.lastReleasedCount > 0 && (
                   <span> · {status.reservationSweep.lastReleasedCount} released</span>
                 )}
@@ -2921,6 +2923,7 @@ function TableView({
   density: Density
   visibleColumns: ColumnKey[]
 }) {
+  const { t } = useTranslations()
   const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
   const someSelected = !allSelected && items.some((it) => selected.has(it.id))
   const padY = DENSITY_PADDING[density]
@@ -3033,7 +3036,7 @@ function TableView({
                   )}
                   {visible('updated') && (
                     <td className={`px-3 ${padY} text-right tabular-nums text-slate-400 text-sm`}>
-                      {formatRelative(it.lastUpdatedAt)}
+                      {formatRelative(it.lastUpdatedAt, t)}
                     </td>
                   )}
                   <td className={`px-3 ${padY} text-right`}>
@@ -3646,16 +3649,5 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 // ─────────────────────────────────────────────────────────────────────
 // helpers
 // ─────────────────────────────────────────────────────────────────────
-function formatRelative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'now'
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d}d ago`
-  return new Date(iso).toLocaleDateString()
-}
+// formatRelative now lives in @/components/inventory/formatRelative
+// for the whole stock tree — see that module for the i18n contract.

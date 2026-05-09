@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
 
 interface CountSummary {
@@ -41,17 +42,9 @@ interface Location {
   name: string
 }
 
-function relativeTime(iso: string | null): string {
+function relativeTime(iso: string | null, t: (k: string, vars?: Record<string, string | number>) => string): string {
   if (!iso) return '—'
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'just now'
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s ago`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h ago`
-  return `${Math.floor(hr / 24)}d ago`
+  return formatRelative(iso, t)
 }
 
 function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'info' | 'default' {
@@ -304,13 +297,13 @@ export default function CycleCountListClient() {
                       </span>
                       <span>·</span>
                       <span title={new Date(c.createdAt).toLocaleString()}>
-                        {t('cycleCount.list.row.created', { when: relativeTime(c.createdAt) })}
+                        {t('cycleCount.list.row.created', { when: relativeTime(c.createdAt, t) })}
                       </span>
                       {c.startedAt && (
-                        <span>· {t('cycleCount.list.row.started', { when: relativeTime(c.startedAt) })}</span>
+                        <span>· {t('cycleCount.list.row.started', { when: relativeTime(c.startedAt, t) })}</span>
                       )}
                       {c.completedAt && (
-                        <span>· {t('cycleCount.list.row.completed', { when: relativeTime(c.completedAt) })}</span>
+                        <span>· {t('cycleCount.list.row.completed', { when: relativeTime(c.completedAt, t) })}</span>
                       )}
                     </div>
                     {c.notes && (

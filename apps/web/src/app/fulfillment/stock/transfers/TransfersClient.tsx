@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { formatRelative } from '@/components/inventory/formatRelative'
 
 interface Transfer {
   id: string
@@ -40,20 +41,6 @@ interface Transfer {
     thumbnailUrl: string | null
   } | null
   status: 'COMPLETED' | 'IN_TRANSIT'
-}
-
-function formatRelative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'now'
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d}d ago`
-  return new Date(iso).toLocaleDateString()
 }
 
 export default function TransfersClient() {
@@ -193,7 +180,7 @@ export default function TransfersClient() {
                       </Badge>
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400 text-sm" title={new Date(tr.createdAt).toLocaleString()}>
-                      {formatRelative(tr.createdAt)}
+                      {formatRelative(tr.createdAt, t)}
                     </td>
                   </tr>
                 ))}

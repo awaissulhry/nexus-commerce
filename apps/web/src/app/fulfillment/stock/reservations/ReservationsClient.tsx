@@ -28,6 +28,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
 
 type ReservationStatus = 'active' | 'consumed' | 'released' | 'expired'
@@ -71,19 +72,6 @@ function formatTtl(ms: number, t: (k: string, v?: Record<string, string | number
   return `${days}d`
 }
 
-function formatRelative(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return 'now'
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  if (d < 30) return `${d}d ago`
-  return new Date(iso).toLocaleDateString()
-}
 
 export default function ReservationsClient() {
   const { t } = useTranslations()
@@ -271,8 +259,8 @@ export default function ReservationsClient() {
                       </Badge>
                     </td>
                     <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
-                      {r.consumedAt && <span title={new Date(r.consumedAt).toLocaleString()}>{formatRelative(r.consumedAt)}</span>}
-                      {!r.consumedAt && r.releasedAt && <span title={new Date(r.releasedAt).toLocaleString()}>{formatRelative(r.releasedAt)}</span>}
+                      {r.consumedAt && <span title={new Date(r.consumedAt).toLocaleString()}>{formatRelative(r.consumedAt, t)}</span>}
+                      {!r.consumedAt && r.releasedAt && <span title={new Date(r.releasedAt).toLocaleString()}>{formatRelative(r.releasedAt, t)}</span>}
                       {!r.consumedAt && !r.releasedAt && r.ttlMs != null && (
                         <span className={cn('inline-flex items-center gap-1', r.ttlMs <= 60 * 60 * 1000 && 'text-amber-700 font-semibold')}>
                           <Clock size={11} className="opacity-60" />
