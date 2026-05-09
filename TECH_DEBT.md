@@ -1397,3 +1397,56 @@ operational verification isn't something I can drive from here.
     output is ephemeral (copy → paste into wizard or product
     editor); persistent draft model would need a generic
     DraftListing schema replacing the eBay-specific one.
+
+---
+
+## 61. 🟢 Backend TODOs swept from the QA audit (2026-05-09)
+
+**Symptom:** The QA audit (U.61–U.66) catalogued 10 active TODO comments
+in `apps/api/src` after filtering false positives (XXX placeholders in
+URL examples, XS/XL size-string constants). All are deferred external-
+API integrations or future-work markers — none are production bugs and
+none have a behavioural impact on shipped surfaces today.
+
+**Inventory** (group by theme):
+
+  - **SP-API mock adapters** — three job/route handlers mock SP-API
+    responses today and have a TODO to wire the real client when the
+    SP-API enablement work lands:
+    * `jobs/fba-pan-eu-sync.job.ts:32` — FBA Pan-EU sync
+    * `jobs/amazon-mcf-status.job.ts:31` — MCF status poll
+    * `routes/stock.routes.ts:35` — MCF pre-flight commit
+    All three use the same mock shape the unit tests do, so the cutover
+    is "swap the import" once SP-API creds + scopes are provisioned.
+
+  - **Repricing competitor + Buy Box data** —
+    `routes/repricing.ts:260,261` returns `undefined` for
+    `competitorPrice` and `buyBoxPrice`. Real fetch is gated on the
+    Amazon SP-API GetCompetitivePricing endpoint. UI tolerates `undefined`
+    (renders "—").
+
+  - **Deferred allocations & catalog services**:
+    * `routes/inventory.ts:389` — velocity-based allocation. Falls back
+      to even split today.
+    * `services/amazon-catalog.service.ts:323` — SP-API product types
+      endpoint. Service uses cached/manual list.
+
+  - **Deferred maintenance**:
+    * `routes/products-catalog.routes.ts:1319` — soft-delete cleanup
+      cron for rows past 30-day retention. Rows accumulate; harmless.
+
+  - **Deferred alerting integrations**:
+    * `services/alert.service.ts:197` — production integration markers
+      (Slack/email/PagerDuty channels)
+    * `services/monitoring/alert.service.ts:281` — store alerts in DB
+      (currently in-memory only)
+
+**Workaround applied:** None — every TODO has a working fallback (mock
+adapter, undefined-tolerant UI, manual list, in-memory store). No
+end-user impact today.
+
+**Proper fix:** Each item is a follow-up gated on external work (SP-API
+creds, Slack workspace, etc.). Re-triage when the upstream unblocks.
+Leaving the TODO comments in place so `grep "TODO" apps/api` still
+surfaces them — the goal of this entry is to inventory + assert they're
+known + deferred, not to remove them.
