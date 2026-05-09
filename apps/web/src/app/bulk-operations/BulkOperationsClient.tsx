@@ -1,4 +1,3 @@
-// @ts-nocheck — U.58 BISECT 9: BulkOperationModal stubbed in its own file
 'use client'
 
 import {
@@ -3474,11 +3473,523 @@ export default function BulkOperationsClient() {
           </div>
         </div>
       </div>
-      {/* U.58 (BISECT 9) — only BulkOperationModal mounted (now stubbed
-          to `return null` in its own file). */}
-      <div className="p-4 text-base text-slate-500">
-        BISECT 9 — BulkOperationModal mounted, body is `return null`.
+
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0 overflow-auto bg-white border border-slate-200 rounded-lg select-none relative"
+        style={{ contain: 'strict' }}
+      >
+        {/* U.9 — empty-grid overlay. The virtualized table renders no
+            visible rows when products is empty post-load, leaving the
+            user with a blank canvas and no path forward. Two cases:
+            1) catalog has products but the active filter excluded
+               everything → offer a Clear filters CTA
+            2) catalog itself is empty → encourage upload/new product
+            Both are non-modal centred cards over the grid surface. */}
+        {!loading && !error && filteredProducts.length === 0 && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/95 pointer-events-none">
+            <div className="max-w-md w-full mx-6 text-center pointer-events-auto">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 border border-slate-200 mb-3">
+                <Search className="w-4 h-4 text-slate-500" />
+              </div>
+              {products.length > 0 ? (
+                <>
+                  <div className="text-md font-semibold text-slate-900 mb-1">
+                    No products match your filters
+                  </div>
+                  <div className="text-base text-slate-600 mb-3">
+                    {products.length.toLocaleString()} loaded · 0 visible
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="text-md font-semibold text-slate-900 mb-1">
+                    No products in your catalog
+                  </div>
+                  <div className="text-base text-slate-600 mb-3">
+                    Upload a CSV or create your first product to get going.
+                  </div>
+                  <div className="inline-flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUploadOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+                    >
+                      <Upload className="w-3 h-3" />
+                      Upload CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewProductOpen(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50"
+                    >
+                      New product
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* T.3 — group band: one chip per visible-field group, click
+            chevron to collapse. Sits above the column header row inside
+            the same scroll container so it scrolls horizontally with
+            the table. */}
+        {groupedFields.length > 0 && (
+          <div
+            className="sticky top-0 z-30 bg-white border-b border-slate-200 flex"
+            style={{ minWidth: tableMinWidth, height: 28 }}
+          >
+            {groupedFields.map((g) => {
+              const tone = GROUP_TONE[g.key] ?? NEUTRAL_TONE
+              const open = !collapsedGroups.has(g.key)
+              const width = open ? g.size : 80
+              const isGroupDropTarget =
+                dragOverGroupKey === g.key &&
+                draggedGroupKey !== null &&
+                draggedGroupKey !== g.key
+              const showDropBefore =
+                isGroupDropTarget && dragOverGroupSide === 'before'
+              const showDropAfter =
+                isGroupDropTarget && dragOverGroupSide === 'after'
+              return (
+                <div
+                  key={g.key}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/plain', `group:${g.key}`)
+                    // V.8 — small custom drag image so very wide group
+                    // chips don't generate a sluggish full-width ghost.
+                    if (e.dataTransfer.setDragImage) {
+                      const ghost = document.createElement('div')
+                      ghost.textContent = g.label
+                      ghost.style.position = 'absolute'
+                      ghost.style.top = '-1000px'
+                      ghost.style.left = '-1000px'
+                      ghost.style.padding = '2px 8px'
+                      ghost.style.background = '#3b82f6'
+                      ghost.style.color = 'white'
+                      ghost.style.fontSize = '11px'
+                      ghost.style.fontWeight = '600'
+                      ghost.style.borderRadius = '4px'
+                      ghost.style.fontFamily = 'system-ui, sans-serif'
+                      document.body.appendChild(ghost)
+                      e.dataTransfer.setDragImage(ghost, 10, 10)
+                      // Defer removal so the browser has captured the
+                      // image before we clean up.
+                      window.setTimeout(() => ghost.remove(), 0)
+                    }
+                    setDraggedGroupKey(g.key)
+                  }}
+                  onDragOver={(e) => {
+                    if (!draggedGroupKey || draggedGroupKey === g.key) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    // V.8 — pick before vs after based on cursor x
+                    // relative to chip mid. Gives wide chips two
+                    // distinct hit zones so users don't have to drag
+                    // past the centre to land on the next slot.
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    const side: 'before' | 'after' =
+                      e.clientX < rect.left + rect.width / 2
+                        ? 'before'
+                        : 'after'
+                    if (dragOverGroupKey !== g.key) {
+                      setDragOverGroupKey(g.key)
+                    }
+                    if (dragOverGroupSide !== side) {
+                      setDragOverGroupSide(side)
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const src = draggedGroupKey
+                    const side = dragOverGroupSide ?? 'before'
+                    if (src && src !== g.key) {
+                      reorderGroups(src, g.key, side, groupedFields)
+                    }
+                    setDraggedGroupKey(null)
+                    setDragOverGroupKey(null)
+                    setDragOverGroupSide(null)
+                  }}
+                  onDragEnd={() => {
+                    setDraggedGroupKey(null)
+                    setDragOverGroupKey(null)
+                    setDragOverGroupSide(null)
+                  }}
+                  style={{ width, flexShrink: 0, minWidth: 80 }}
+                  className={cn(
+                    'relative border-r border-slate-200/70 last:border-r-0',
+                    draggedGroupKey === g.key && 'opacity-40',
+                  )}
+                >
+                  {/* V.8 — vertical drop indicator. Sits inside the
+                      chip wrapper (relative parent); the side is
+                      driven by where the cursor entered the chip. */}
+                  {showDropBefore && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                  )}
+                  {showDropAfter && (
+                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupCollapse(g.key)}
+                    className={cn(
+                      'w-full h-full flex items-center gap-1 px-2 text-xs font-semibold uppercase tracking-wider transition-colors cursor-grab active:cursor-grabbing',
+                      tone.band,
+                      tone.text,
+                      'hover:brightness-95',
+                    )}
+                    title={`${open ? 'Collapse' : 'Expand'} ${g.label} · drag to reorder`}
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'w-3 h-3 transition-transform flex-shrink-0',
+                        open && 'rotate-90',
+                      )}
+                    />
+                    <span className="truncate">{g.label}</span>
+                    <span className="opacity-60 tabular-nums flex-shrink-0">
+                      {open ? g.fields.length : `${g.fields.length} hidden`}
+                    </span>
+                  </button>
+                </div>
+              )
+            })}
+            {/* Spacer matching the actions column so band aligns. W.3
+                bumped to 60 (defaultColumn.minSize). W.6 pins it
+                sticky-right so it stays aligned with the frozen
+                actions column on horizontal scroll. */}
+            <div
+              className="sticky right-0 z-[5] bg-white"
+              style={{ width: 60, flexShrink: 0 }}
+            />
+          </div>
+        )}
+        <div
+          className="sticky z-20 bg-slate-50 border-b border-slate-200 flex"
+          style={{
+            top: groupedFields.length > 0 ? 28 : 0,
+            height: HEADER_HEIGHT,
+            minWidth: tableMinWidth,
+          }}
+        >
+          {headerCells.map((header) => {
+            const fieldDef = (header.column.columnDef.meta as
+              | { fieldDef?: FieldDef }
+              | undefined)?.fieldDef
+            const isReadOnly = fieldDef && !fieldDef.editable
+            const isResizing = header.column.getIsResizing()
+            // V.3 — reserved system columns (`__group_*`, `__actions`)
+            // can't be reordered by drag. SKU stays in place too — it
+            // owns hierarchy chrome.
+            const isSystemCol = header.column.id.startsWith('__')
+            const isDraggable = !isSystemCol && header.column.id !== 'sku'
+            const isDropTarget =
+              dragOverColumnId === header.column.id &&
+              draggedColumnId !== null &&
+              draggedColumnId !== header.column.id
+            return (
+              <div
+                key={header.id}
+                draggable={isDraggable}
+                onDragStart={
+                  isDraggable
+                    ? (e) => {
+                        e.dataTransfer.effectAllowed = 'move'
+                        e.dataTransfer.setData('text/plain', header.column.id)
+                        // W.4 — small custom drag image so very wide
+                        // columns (300px+) don't drag a sluggish full-
+                        // width preview across the screen.
+                        if (e.dataTransfer.setDragImage) {
+                          const ghost = document.createElement('div')
+                          ghost.textContent = String(
+                            (header.column.columnDef.meta as any)?.fieldDef
+                              ?.label ?? header.column.id,
+                          )
+                          ghost.style.position = 'absolute'
+                          ghost.style.top = '-1000px'
+                          ghost.style.left = '-1000px'
+                          ghost.style.padding = '2px 8px'
+                          ghost.style.background = '#3b82f6'
+                          ghost.style.color = 'white'
+                          ghost.style.fontSize = '11px'
+                          ghost.style.fontWeight = '600'
+                          ghost.style.borderRadius = '4px'
+                          ghost.style.fontFamily = 'system-ui, sans-serif'
+                          document.body.appendChild(ghost)
+                          e.dataTransfer.setDragImage(ghost, 10, 10)
+                          window.setTimeout(() => ghost.remove(), 0)
+                        }
+                        setDraggedColumnId(header.column.id)
+                      }
+                    : undefined
+                }
+                onDragOver={
+                  isDraggable
+                    ? (e) => {
+                        if (draggedColumnId && draggedColumnId !== header.column.id) {
+                          e.preventDefault()
+                          e.dataTransfer.dropEffect = 'move'
+                          if (dragOverColumnId !== header.column.id) {
+                            setDragOverColumnId(header.column.id)
+                          }
+                          // W.7 — pick before/after based on cursor x
+                          // relative to the column's mid, mirroring the
+                          // group band's hit zones.
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          const side: 'before' | 'after' =
+                            e.clientX < rect.left + rect.width / 2
+                              ? 'before'
+                              : 'after'
+                          if (dragOverColumnSide !== side) {
+                            setDragOverColumnSide(side)
+                          }
+                        }
+                      }
+                    : undefined
+                }
+                onDrop={
+                  isDraggable
+                    ? (e) => {
+                        e.preventDefault()
+                        const src = draggedColumnId
+                        if (src && src !== header.column.id) {
+                          // W.7 — when dropped on the AFTER half, target
+                          // the next column id so the move lands AFTER
+                          // the hovered one. When BEFORE, target this
+                          // column directly.
+                          const dropTargetId =
+                            dragOverColumnSide === 'after'
+                              ? (() => {
+                                  const idx = visibleColumnIds.indexOf(
+                                    header.column.id,
+                                  )
+                                  return (
+                                    visibleColumnIds[idx + 1] ?? header.column.id
+                                  )
+                                })()
+                              : header.column.id
+                          reorderColumns(src, dropTargetId)
+                        }
+                        setDraggedColumnId(null)
+                        setDragOverColumnId(null)
+                        setDragOverColumnSide(null)
+                      }
+                    : undefined
+                }
+                onDragEnd={() => {
+                  setDraggedColumnId(null)
+                  setDragOverColumnId(null)
+                  setDragOverColumnSide(null)
+                }}
+                className={cn(
+                  'relative flex items-center gap-1 px-3 text-sm font-semibold uppercase tracking-wider transition-colors',
+                  // JJ — per-group tone classes mirror the per-product
+                  // bulk editor so users get a consistent colour
+                  // identity across both grids. System columns (sku,
+                  // __actions) keep the neutral slate header.
+                  (() => {
+                    const tone = columnTones.get(header.column.id)
+                    if (
+                      !tone ||
+                      header.column.id === 'sku' ||
+                      header.column.id === '__actions'
+                    ) {
+                      return 'border-r border-slate-200/70 last:border-r-0 text-slate-700'
+                    }
+                    return cn(
+                      tone.band,
+                      tone.text,
+                      tone.isGroupEdge
+                        ? 'border-r-2'
+                        : 'border-r border-slate-200/70',
+                    )
+                  })(),
+                  isDraggable && 'cursor-grab active:cursor-grabbing',
+                  draggedColumnId === header.column.id && 'opacity-40',
+                  // W.6 — pin SKU column to the left + actions to the
+                  // right so they stay visible when the grid scrolls
+                  // horizontally past the viewport. bg-slate-50 matches
+                  // the header row's background so the sticky cell
+                  // obscures non-pinned cells scrolling beneath.
+                  header.column.id === 'sku' &&
+                    'sticky left-0 z-[25] bg-slate-50',
+                  header.column.id === '__actions' &&
+                    'sticky right-0 z-[25] bg-slate-50',
+                )}
+                style={{ width: header.getSize(), flexShrink: 0 }}
+                title={
+                  isDraggable
+                    ? `${fieldDef?.helpText ?? ''}${
+                        fieldDef?.helpText ? ' · ' : ''
+                      }Drag to reorder`
+                    : fieldDef?.helpText
+                }
+              >
+                {/* W.7 — vertical drop-line indicator on the side the
+                    cursor is on, mirroring V.8's group band. */}
+                {isDropTarget && dragOverColumnSide === 'before' && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                )}
+                {isDropTarget && dragOverColumnSide === 'after' && (
+                  <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-500 z-10 pointer-events-none" />
+                )}
+                {/* W.8 — drag handle on the left so click-without-drag
+                    on the rest of the header stays a click (e.g. for
+                    sorting in a future iteration). Only renders when
+                    the column is draggable. */}
+                {isDraggable && (
+                  <span
+                    className="text-slate-400 flex-shrink-0"
+                    aria-hidden="true"
+                    title="Drag to reorder"
+                  >
+                    ⋮⋮
+                  </span>
+                )}
+                <span className="truncate">
+                  {flexRender(
+                    header.column.columnDef.header,
+                    header.getContext()
+                  )}
+                </span>
+                {isReadOnly && (
+                  <Lock
+                    className="w-2.5 h-2.5 text-slate-400 flex-shrink-0"
+                    aria-label="Read-only"
+                  />
+                )}
+                {/* Resize handle — sits on the right border. Calls
+                 *  TanStack's getResizeHandler to track mousedown and
+                 *  drive column.size via the columnSizing state. */}
+                <div
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    header.getResizeHandler()(e)
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation()
+                    header.getResizeHandler()(e)
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  // Drag handlers above would otherwise hijack the
+                  // resize gesture; suppress the drag here so a
+                  // mousedown on the handle stays a resize.
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  className={cn(
+                    'absolute top-0 bottom-0 w-1.5 cursor-col-resize select-none touch-none',
+                    'right-0 -mr-[3px] z-10',
+                    isResizing
+                      ? 'bg-blue-500'
+                      : 'bg-transparent hover:bg-blue-500/60',
+                  )}
+                />
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="relative" style={{ height: totalSize, minWidth: tableMinWidth }}>
+          {rowVirtualizer.getVirtualItems().map((vRow) => {
+            if (loading)
+              return (
+                <SkeletonRow
+                  key={vRow.key}
+                  top={vRow.start}
+                  colCount={dynamicColumns.length || 7}
+                />
+              )
+            const row = rows[vRow.index]
+            return (
+              <TableRow
+                key={row.id}
+                row={row}
+                rowIdx={vRow.index}
+                top={vRow.start}
+                columnsKey={columnsKey}
+              />
+            )
+          })}
+          <SelectionOverlays
+            rangeRect={rangeRect}
+            activeRect={activeRect}
+            fillRect={fillRect}
+            isFilling={fillState !== null}
+          />
+        </div>
+
+        {error && (
+          // U.9 — error overlay upgraded from a single-line red box to
+          // a centred card with an icon, the failure reason, and a
+          // Retry button so the user can recover without reloading
+          // the whole page.
+          <div className="absolute inset-0 flex items-center justify-center bg-white/90">
+            <div className="max-w-md w-full mx-6 border border-red-200 bg-white rounded-lg shadow-elevated p-4 text-center">
+              <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 border border-red-200 mb-3">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+              </div>
+              <div className="text-md font-semibold text-slate-900 mb-1">
+                Failed to load products
+              </div>
+              <div className="text-base text-slate-600 mb-3 break-words">{error}</div>
+              <button
+                type="button"
+                onClick={reloadProducts}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-slate-900 text-white text-sm font-medium hover:bg-slate-800"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      <StatusBar
+        status={saveStatus}
+        pendingCount={pendingCount}
+        fetchMs={fetchMs}
+        loading={loading}
+        selectedCellCount={selectedCellCount}
+        selectionMetrics={selectionMetrics}
+        copyFlashCount={copyFlash?.count ?? null}
+      />
+
+      <PreviewChangesModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        changes={changes}
+        products={products}
+      />
+
+      <PastePreviewModal
+        preview={pastePreview}
+        onCancel={cancelPaste}
+        onApply={applyPaste}
+      />
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onApplied={() => {
+          // Refetch products so the grid reflects the saved changes.
+          // Selection + pending edits are local state and unaffected.
+          reloadProducts()
+        }}
+      />
+
       <BulkOperationModal
         open={bulkOpModalOpen}
         onClose={() => {
@@ -3525,6 +4036,58 @@ export default function BulkOperationsClient() {
         })()}
       />
 
+      <CascadeChoiceModal
+        open={cascadeModal !== null}
+        fieldLabel={cascadeModal?.fieldLabel ?? ''}
+        oldValue={cascadeModal?.oldValue}
+        newValue={cascadeModal?.newValue}
+        parentSku={cascadeModal?.parentSku ?? ''}
+        children={cascadeModal?.children ?? []}
+        onApply={handleCascadeApply}
+        onCancel={handleCascadeCancel}
+      />
+
+      <NewProductModal
+        open={newProductOpen}
+        onClose={() => setNewProductOpen(false)}
+        onCreated={() => {
+          // Re-fetch so the new row appears with all the standard
+          // fields the bulk-fetch endpoint hydrates (channel listings,
+          // hierarchy, etc.) — simpler than building that shape locally.
+          void reloadProducts()
+        }}
+        parentCandidates={products
+          .filter((p) => !p.parentId)
+          .map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
+      />
+
+      <ReplicateModal
+        open={replicateOpen}
+        onClose={() => setReplicateOpen(false)}
+        productIds={(() => {
+          // Scope: prefer selected rows when the cell selection
+          // covers >1 row, else fall through to filtered (visible).
+          if (rangeBounds && rangeBounds.maxRow > rangeBounds.minRow) {
+            const ids: string[] = []
+            const rowModel = tableRef.current.getRowModel().rows
+            for (let r = rangeBounds.minRow; r <= rangeBounds.maxRow; r++) {
+              const row = rowModel[r]
+              if (row) ids.push(row.original.id)
+            }
+            return ids
+          }
+          return filteredProducts.map((p) => p.id)
+        })()}
+        scopeLabel={
+          rangeBounds && rangeBounds.maxRow > rangeBounds.minRow
+            ? 'selected rows'
+            : 'visible rows'
+        }
+        options={marketplaceOptions}
+        onReplicated={() => {
+          void reloadProducts()
+        }}
+      />
     </div>
   )
 }
