@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Filter, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface Tag {
   id: string
@@ -142,6 +143,7 @@ export function FilterBar(props: FilterBarProps) {
     tags,
     updateUrl,
   } = props
+  const { t } = useTranslations()
 
   // F2 — listen for the global "/" focus-search event dispatched by
   // CommandPalette and focus the search input here.
@@ -185,7 +187,7 @@ export function FilterBar(props: FilterBarProps) {
   if (statusFilters.length > 0) {
     activePills.push({
       key: 'status',
-      label: 'Status',
+      label: t('products.filter.label.status'),
       value: statusFilters
         .map((s) => s[0] + s.slice(1).toLowerCase())
         .join(', '),
@@ -195,7 +197,7 @@ export function FilterBar(props: FilterBarProps) {
   if (channelFilters.length > 0) {
     activePills.push({
       key: 'channels',
-      label: 'Channel',
+      label: t('products.filter.label.channel'),
       value: channelFilters
         .map((c) => c[0] + c.slice(1).toLowerCase())
         .join(', '),
@@ -205,7 +207,7 @@ export function FilterBar(props: FilterBarProps) {
   if (missingChannelFilters.length > 0) {
     activePills.push({
       key: 'missing',
-      label: 'Missing on',
+      label: t('products.filter.label.missingOn'),
       value: missingChannelFilters
         .map((c) => c[0] + c.slice(1).toLowerCase())
         .join(', '),
@@ -215,7 +217,7 @@ export function FilterBar(props: FilterBarProps) {
   if (marketplaceFilters.length > 0) {
     activePills.push({
       key: 'marketplaces',
-      label: 'Marketplace',
+      label: t('products.filter.label.marketplace'),
       value: marketplaceFilters.join(', '),
       clear: () => updateUrl({ marketplaces: undefined, page: undefined }),
     })
@@ -223,7 +225,7 @@ export function FilterBar(props: FilterBarProps) {
   if (fulfillmentFilters.length > 0) {
     activePills.push({
       key: 'fulfillment',
-      label: 'Fulfillment',
+      label: t('products.filter.label.fulfillment'),
       value: fulfillmentFilters.join(', '),
       clear: () => updateUrl({ fulfillment: undefined, page: undefined }),
     })
@@ -231,7 +233,7 @@ export function FilterBar(props: FilterBarProps) {
   if (productTypeFilters.length > 0) {
     activePills.push({
       key: 'type',
-      label: 'Type',
+      label: t('products.filter.label.type'),
       value: productTypeFilters.map((v) => IT_TERMS[v] ?? v).join(', '),
       clear: () => updateUrl({ productTypes: undefined, page: undefined }),
     })
@@ -239,7 +241,7 @@ export function FilterBar(props: FilterBarProps) {
   if (brandFilters.length > 0) {
     activePills.push({
       key: 'brand',
-      label: 'Brand',
+      label: t('products.filter.label.brand'),
       value: brandFilters.join(', '),
       clear: () => updateUrl({ brands: undefined, page: undefined }),
     })
@@ -252,7 +254,7 @@ export function FilterBar(props: FilterBarProps) {
     )
     activePills.push({
       key: 'family',
-      label: 'Family',
+      label: t('products.filter.label.family'),
       value: familyFilters
         .map((id) => familyLookup.get(id) ?? id)
         .join(', '),
@@ -266,7 +268,7 @@ export function FilterBar(props: FilterBarProps) {
     )
     activePills.push({
       key: 'stage',
-      label: 'Stage',
+      label: t('products.filter.label.stage'),
       value: workflowStageFilters
         .map((id) => stageLookup.get(id) ?? id)
         .join(', '),
@@ -277,7 +279,7 @@ export function FilterBar(props: FilterBarProps) {
   if (tagFilters.length > 0) {
     activePills.push({
       key: 'tags',
-      label: 'Tag',
+      label: t('products.filter.label.tag'),
       value: tagFilters.map((id) => tagsById.get(id) ?? id).join(', '),
       clear: () => updateUrl({ tags: undefined, page: undefined }),
     })
@@ -285,7 +287,7 @@ export function FilterBar(props: FilterBarProps) {
   if (stockLevel) {
     activePills.push({
       key: 'stock',
-      label: 'Stock',
+      label: t('products.filter.label.stock'),
       value: stockLevel,
       clear: () => updateUrl({ stockLevel: undefined, page: undefined }),
     })
@@ -293,33 +295,48 @@ export function FilterBar(props: FilterBarProps) {
   if (hasPhotos === 'true' || hasPhotos === 'false') {
     activePills.push({
       key: 'photos',
-      label: 'Photos',
-      value: hasPhotos === 'true' ? 'has photos' : 'no photos',
+      label: t('products.filter.label.photos'),
+      value: t(
+        hasPhotos === 'true'
+          ? 'products.filter.pillVal.hasPhotos'
+          : 'products.filter.pillVal.noPhotos',
+      ),
       clear: () => updateUrl({ hasPhotos: undefined, page: undefined }),
     })
   }
   if (hasDescription === 'true' || hasDescription === 'false') {
     activePills.push({
       key: 'description',
-      label: 'Description',
-      value:
-        hasDescription === 'true' ? 'has description' : 'no description',
+      label: t('products.filter.label.description'),
+      value: t(
+        hasDescription === 'true'
+          ? 'products.filter.pillVal.hasDescription'
+          : 'products.filter.pillVal.noDescription',
+      ),
       clear: () => updateUrl({ hasDescription: undefined, page: undefined }),
     })
   }
   if (hasBrand === 'true' || hasBrand === 'false') {
     activePills.push({
       key: 'brand-set',
-      label: 'Brand',
-      value: hasBrand === 'true' ? 'brand set' : 'no brand',
+      label: t('products.filter.label.brand'),
+      value: t(
+        hasBrand === 'true'
+          ? 'products.filter.pillVal.brandSet'
+          : 'products.filter.pillVal.noBrand',
+      ),
       clear: () => updateUrl({ hasBrand: undefined, page: undefined }),
     })
   }
   if (hasGtin === 'true' || hasGtin === 'false') {
     activePills.push({
       key: 'gtin',
-      label: 'GTIN',
-      value: hasGtin === 'true' ? 'has GTIN' : 'no GTIN',
+      label: t('products.filter.label.gtin'),
+      value: t(
+        hasGtin === 'true'
+          ? 'products.filter.pillVal.hasGtin'
+          : 'products.filter.pillVal.noGtin',
+      ),
       clear: () => updateUrl({ hasGtin: undefined, page: undefined }),
     })
   }
@@ -334,7 +351,7 @@ export function FilterBar(props: FilterBarProps) {
           />
           <Input
             ref={searchInputRef}
-            placeholder="Search SKU, name, brand, GTIN…"
+            placeholder={t('products.filter.search.placeholder')}
             value={searchInput}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setSearchInput(e.target.value)
@@ -348,7 +365,7 @@ export function FilterBar(props: FilterBarProps) {
           className={`h-8 min-h-11 sm:min-h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${filtersOpen ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900' : filterCount > 0 ? 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800'}`}
         >
           <Filter size={12} />
-          Filters
+          {t('products.filter.toggle')}
           {filterCount > 0 && (
             <span
               className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${filtersOpen ? 'bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100' : 'bg-slate-700 text-white dark:bg-slate-300 dark:text-slate-900'}`}
@@ -381,7 +398,7 @@ export function FilterBar(props: FilterBarProps) {
             className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
             icon={<X size={12} />}
           >
-            Clear all
+            {t('products.filter.clearAll')}
           </Button>
         )}
       </div>
@@ -404,7 +421,7 @@ export function FilterBar(props: FilterBarProps) {
               <button
                 type="button"
                 onClick={p.clear}
-                aria-label={`Remove ${p.label} filter`}
+                aria-label={t('products.filter.removeAria', { label: p.label })}
                 // U.22 — visible swatch stays w-5 h-5 via inner span;
                 // hit zone expands to 44×44 on mobile.
                 className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:w-5 sm:h-5 rounded-full hover:bg-blue-100 text-blue-700 dark:hover:bg-blue-900/40 dark:text-blue-300"
@@ -430,11 +447,11 @@ export function FilterBar(props: FilterBarProps) {
         <div className="pt-3 mt-1 border-t border-slate-200 dark:border-slate-800 space-y-5">
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
-              Catalog
+              {t('products.filter.section.catalog')}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
               <FilterGroup
-                label="Fulfillment"
+                label={t('products.filter.label.fulfillment')}
                 options={['FBA', 'FBM']}
                 selected={fulfillmentFilters}
                 counts={facets?.fulfillment.reduce<Record<string, number>>(
@@ -457,7 +474,7 @@ export function FilterBar(props: FilterBarProps) {
               />
               {facets && facets.productTypes.length > 0 && (
                 <FilterGroup
-                  label="Product type"
+                  label={t('products.filter.label.productType')}
                   options={facets.productTypes
                     .slice(0, 24)
                     .map((p) => p.value)}
@@ -488,7 +505,7 @@ export function FilterBar(props: FilterBarProps) {
               )}
               {facets && facets.brands.length > 0 && (
                 <FilterGroup
-                  label="Brand"
+                  label={t('products.filter.label.brand')}
                   options={facets.brands.slice(0, 24).map((p) => p.value)}
                   selected={brandFilters}
                   counts={facets.brands.reduce<Record<string, number>>(
@@ -513,8 +530,8 @@ export function FilterBar(props: FilterBarProps) {
               )}
               {tags.length > 0 && (
                 <FilterGroup
-                  label="Tags"
-                  options={tags.map((t) => t.id)}
+                  label={t('products.filter.label.tags')}
+                  options={tags.map((tag) => tag.id)}
                   selected={tagFilters}
                   renderLabel={(id) =>
                     tags.find((t) => t.id === id)?.name ?? id
@@ -536,7 +553,7 @@ export function FilterBar(props: FilterBarProps) {
                   operator can quickly find the unfamilied backlog. */}
               {facets && facets.families && facets.families.length > 0 && (
                 <FilterGroup
-                  label="Family"
+                  label={t('products.filter.label.family')}
                   options={facets.families.map((f) => f.value)}
                   selected={familyFilters}
                   counts={facets.families.reduce<Record<string, number>>(
@@ -568,7 +585,7 @@ export function FilterBar(props: FilterBarProps) {
                 facets.workflowStages &&
                 facets.workflowStages.length > 0 && (
                   <FilterGroup
-                    label="Workflow stage"
+                    label={t('products.filter.label.workflowStage')}
                     options={facets.workflowStages.map((s) => s.value)}
                     selected={workflowStageFilters}
                     counts={facets.workflowStages.reduce<Record<string, number>>(
@@ -601,11 +618,11 @@ export function FilterBar(props: FilterBarProps) {
 
           <div>
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
-              Distribution
+              {t('products.filter.section.distribution')}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-4">
               <FilterGroup
-                label="Missing on…"
+                label={t('products.filter.label.missingOnAccordion')}
                 options={ACTIVE_CHANNELS}
                 selected={missingChannelFilters}
                 onToggle={(v) =>
@@ -657,6 +674,7 @@ function FilterGroup({
   mode?: 'multi' | 'single'
   searchable?: boolean
 }) {
+  const { t } = useTranslations()
   const [query, setQuery] = useState('')
   const isActive = (opt: string) =>
     mode === 'single'
@@ -695,7 +713,7 @@ function FilterGroup({
             onClick={onClear}
             className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
           >
-            Clear
+            {t('products.filter.group.clear')}
           </button>
         )}
       </div>
@@ -704,7 +722,7 @@ function FilterGroup({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Filter ${label.toLowerCase()}…`}
+          placeholder={t('products.filter.group.searchPlaceholder', { label: label.toLowerCase() })}
           className="w-full h-7 px-2 mb-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
         />
       )}
@@ -730,7 +748,7 @@ function FilterGroup({
           )
         })}
         {showSearch && visibleOptions.length === 0 && (
-          <div className="text-sm text-slate-400 dark:text-slate-500">No matches</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">{t('products.filter.group.noMatches')}</div>
         )}
       </div>
     </div>
