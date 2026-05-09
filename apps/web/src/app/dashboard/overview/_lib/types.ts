@@ -234,12 +234,31 @@ export const COMPARES = [
 
 export type CompareKey = (typeof COMPARES)[number]['id']
 
+// DO.34 — channel tones now carry dark variants so the tinted
+// brand-recognition cards stay legible on a dark theme. Tints are
+// 950 / 900 (background / border) and 400 (text) — same color
+// family at darker/brighter ends to preserve channel identity.
 export const CHANNEL_TONES: Record<string, { bg: string; text: string }> = {
-  AMAZON: { bg: 'bg-orange-50 border-orange-200', text: 'text-orange-700' },
-  EBAY: { bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700' },
-  SHOPIFY: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700' },
-  WOOCOMMERCE: { bg: 'bg-violet-50 border-violet-200', text: 'text-violet-700' },
-  ETSY: { bg: 'bg-rose-50 border-rose-200', text: 'text-rose-700' },
+  AMAZON: {
+    bg: 'bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-900',
+    text: 'text-orange-700 dark:text-orange-400',
+  },
+  EBAY: {
+    bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/40 dark:border-blue-900',
+    text: 'text-blue-700 dark:text-blue-400',
+  },
+  SHOPIFY: {
+    bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900',
+    text: 'text-emerald-700 dark:text-emerald-400',
+  },
+  WOOCOMMERCE: {
+    bg: 'bg-violet-50 border-violet-200 dark:bg-violet-950/40 dark:border-violet-900',
+    text: 'text-violet-700 dark:text-violet-400',
+  },
+  ETSY: {
+    bg: 'bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900',
+    text: 'text-rose-700 dark:text-rose-400',
+  },
 }
 
 export const CHANNEL_LABELS: Record<string, string> = {

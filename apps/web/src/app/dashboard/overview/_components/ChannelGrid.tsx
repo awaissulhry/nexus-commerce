@@ -73,8 +73,8 @@ export default function ChannelGrid({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {visible.map((c) => {
           const tone = CHANNEL_TONES[c.channel] ?? {
-            bg: 'bg-slate-50 border-slate-200',
-            text: 'text-slate-700',
+            bg: 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700',
+            text: 'text-slate-700 dark:text-slate-300',
           }
           const lastSyncLabel = relativeAgo(t, c.health.lastSyncAt)
           const channelHref = `/listings/${c.channel.toLowerCase()}`
@@ -116,10 +116,10 @@ export default function ChannelGrid({
                 </span>
               </div>
               <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-                <div className="text-2xl font-semibold text-slate-900 tabular-nums">
+                <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
                   {formatCurrency(c.revenue, currency)}
                 </div>
-                <div className="text-sm text-slate-600 tabular-nums">
+                <div className="text-sm text-slate-600 dark:text-slate-400 tabular-nums">
                   {t(
                     c.orders === 1
                       ? 'overview.channels.order'
