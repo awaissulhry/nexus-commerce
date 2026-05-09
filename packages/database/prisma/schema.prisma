@@ -7019,3 +7019,93 @@ model AutomationRuleExecution {
   @@index([ruleId, startedAt(sort: Desc)])
   @@index([status, startedAt(sort: Desc)])
 }
+
+// W5.1 — Scenario + ScenarioRun for what-if planning.
+//
+// Scenario captures a hypothesis the operator wants to plan against:
+// "Black Friday +200% velocity for 7 days", "Supplier ABC lead-time
+// disrupted +14 days", "Switch to backup supplier for SKU class A".
+//
+// Each scenario can be re-run as inputs change (forecast updates,
+// new POs, FX moves). ScenarioRun captures one execution: the
+// recommendations it produced, the cash-flow impact, the service-
+// level achievement.
+//
+// Pure-data schema; the planner service (W5.2) interprets `kind` +
+// `params` JSON. Today's kinds: PROMOTIONAL_UPLIFT |
+// LEAD_TIME_DISRUPTION | SUPPLIER_SWAP. Adding a kind = one branch
+// in the planner + one entry in the routes whitelist. No migration.
+model Scenario {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // What kind of hypothesis does this scenario model? Drives which
+  // branch of the planner runs. Examples:
+  //   PROMOTIONAL_UPLIFT       multiplies forecasted demand for a
+  //                            window by params.upliftPct
+  //   LEAD_TIME_DISRUPTION     adds params.extraDays to every PO's
+  //                            ETA in the window; recompute reorder
+  //                            points
+  //   SUPPLIER_SWAP            for SKUs in params.skuFilter, swap
+  //                            preferredSupplierId to params.targetSupplierId
+  kind String
+
+  // Hypothesis params (kind-specific JSON). Shape examples:
+  //   PROMOTIONAL_UPLIFT  { upliftPct: 200, fromDate, toDate, skuFilter? }
+  //   LEAD_TIME_DISRUPTION { extraDays: 14, supplierId?, fromDate, toDate }
+  //   SUPPLIER_SWAP       { skuFilter, targetSupplierId, fromDate, toDate }
+  params Json @default("{}")
+
+  // Optional baseline horizon. Default 90 days from createdAt.
+  horizonDays Int @default(90)
+
+  // Saved presets vs ad-hoc one-shots. Saved scenarios appear in
+  // the "Compare scenarios" UI; ad-hoc don't.
+  isSaved Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  runs ScenarioRun[]
+
+  @@index([kind])
+  @@index([isSaved, updatedAt(sort: Desc)])
+}
+
+model ScenarioRun {
+  id         String   @id @default(cuid())
+  scenarioId String
+  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  // The full input bag the planner used: scenario.params merged
+  // with any per-run overrides (forecast snapshot, FX rates,
+  // current stock). Frozen at run time so the audit trail survives
+  // input drift.
+  inputs Json
+
+  // What the planner produced. Shape:
+  //   {
+  //     summary: { recsAffected, totalUnitsDelta, totalCostDelta },
+  //     timeline: [{ week, baselineCents, scenarioCents, deltaCents }],
+  //     recommendations: [{ sku, baselineQty, scenarioQty, deltaQty }],
+  //     warnings: [...]
+  //   }
+  output Json
+
+  // Surfaced counters so the UI doesn't parse output for the list.
+  recsAffected        Int @default(0)
+  totalUnitsDelta     Int @default(0)
+  totalCostDeltaCents Int @default(0)
+
+  status       String // RUNNING | SUCCESS | FAILED
+  errorMessage String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+
+  @@index([scenarioId, startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+}
