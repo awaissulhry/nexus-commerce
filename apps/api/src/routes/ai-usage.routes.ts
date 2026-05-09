@@ -25,7 +25,11 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
-import { listProviders } from '../services/ai/providers/index.js'
+import { readBudgetLimits } from '../services/ai/budget.service.js'
+import {
+  isAiKillSwitchOn,
+  listProviders,
+} from '../services/ai/providers/index.js'
 
 const MAX_DAYS = 90
 
@@ -95,6 +99,70 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // AI-1.7 — budget posture for the settings dashboard.
+  //
+  // Snapshot of every cost-safety lever in one round-trip:
+  //   - kill switch on/off (NEXUS_AI_KILL_SWITCH)
+  //   - configured limits across all four horizons
+  //   - current spend in the rolling 24h + 30d windows
+  //   - hitWarn signal for whichever horizon is in [90%, 100%) so the
+  //     UI can render an amber banner without a second call
+  //
+  // Per-wizard horizon is NOT surfaced here — it's per-entity, so it
+  // belongs in /usage/top-wizards (lands with AI-1.8 ROI). The card on
+  // the settings page is global posture only.
+  fastify.get('/ai/usage/budget-posture', async (_request, reply) => {
+    const limits = readBudgetLimits()
+    const now = new Date()
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+    const [dayRow, monthRow] = await Promise.all([
+      prisma.aiUsageLog.aggregate({
+        where: { createdAt: { gte: dayAgo } },
+        _sum: { costUSD: true },
+        _count: { _all: true },
+      }),
+      prisma.aiUsageLog.aggregate({
+        where: { createdAt: { gte: monthAgo } },
+        _sum: { costUSD: true },
+        _count: { _all: true },
+      }),
+    ])
+
+    const perDay = Number(dayRow._sum.costUSD ?? 0)
+    const perMonth = Number(monthRow._sum.costUSD ?? 0)
+
+    // Mirror AiBudgetService.checkBudget()'s warn ordering — per-day
+    // wins over per-month so the banner names the horizon that's
+    // closer to running out. Per-wizard is omitted (global posture
+    // only).
+    const WARN_RATIO = 0.9
+    let hitWarn: 'per_day' | 'per_month' | null = null
+    if (limits.perDayUSD > 0 && perDay >= limits.perDayUSD * WARN_RATIO) {
+      hitWarn = 'per_day'
+    } else if (
+      limits.perMonthUSD > 0 &&
+      perMonth >= limits.perMonthUSD * WARN_RATIO
+    ) {
+      hitWarn = 'per_month'
+    }
+
+    reply.header('Cache-Control', 'private, max-age=15')
+    return {
+      killSwitch: isAiKillSwitchOn(),
+      limits,
+      current: {
+        perDay,
+        perDayCalls: dayRow._count._all,
+        perMonth,
+        perMonthCalls: monthRow._count._all,
+      },
+      hitWarn,
+      asOf: now.toISOString(),
+    }
+  })
 
   fastify.get<{ Querystring: { limit?: string } }>(
     '/ai/usage/recent',
