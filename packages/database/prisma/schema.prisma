@@ -348,6 +348,103 @@ model ProductFamily {
   @@index([parentFamilyId])
 }
 
+/// W2.2 — AttributeGroup (Akeneo + Magento parity).
+///
+/// A group is a logical bucket of related attributes that show up
+/// together in the editor — e.g., "Sizing & Fit" (size, fit, length)
+/// or "Safety" (CE, armor, EN-13595). Pure organisational layer; no
+/// validation or inheritance happens at this level.
+///
+/// Wave 2 follow-up:
+///   W2.3: FamilyAttribute (declares which group attributes are
+///         required vs optional per family + per channel)
+///   W2.x: per-attribute reference entities (color swatches, etc.)
+model AttributeGroup {
+  id          String  @id @default(cuid())
+  code        String  @unique // 'sizing', 'materials', 'safety'
+  label       String
+  description String?
+  sortOrder   Int     @default(0)
+
+  attributes CustomAttribute[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// W2.2 — CustomAttribute (Magento EAV + Akeneo type system).
+///
+/// Each attribute is a typed field that can be attached to a
+/// ProductFamily via FamilyAttribute (W2.3). The `type` field
+/// drives editor + validation:
+///
+///   text        : single-line string
+///   textarea    : multi-line string
+///   number      : decimal/integer (validation.{min,max,step,unit})
+///   boolean     : yes/no toggle
+///   select      : single-choice from AttributeOption[]
+///   multiselect : multi-choice from AttributeOption[]
+///   date        : ISO date
+///   reference   : reference-entity FK (color swatch, material — W2.x)
+///   asset       : DAM image/file (W4.x)
+///
+/// `validation` is a JSON blob so we don't need type-specific columns.
+/// Resolved at write time per the type's expected shape.
+///
+/// `localizable` switches the storage path: when true, the value
+/// lives in ProductTranslation (per-locale); when false, on the
+/// Product row directly.
+///
+/// `scope` is 'global' (one value per Product) or 'per_variant' (one
+/// value per child Product). Mirrors Akeneo's variant-axis model.
+model CustomAttribute {
+  id          String  @id @default(cuid())
+  code        String  @unique // 'ce_certification', 'armor_level'
+  label       String
+  description String?
+
+  groupId String
+  group   AttributeGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  type         String  // text | textarea | number | boolean | select | multiselect | date | reference | asset
+  validation   Json?   // { minLength?, maxLength?, min?, max?, step?, unit?, pattern? }
+  defaultValue Json?
+  localizable  Boolean @default(false)
+  scope        String  @default("global") // 'global' | 'per_variant'
+  sortOrder    Int     @default(0)
+
+  options AttributeOption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+}
+
+/// W2.2 — AttributeOption for select / multiselect attributes.
+///
+/// Stable `code` (e.g., 'red') for storage; `label` ('Red') for
+/// display — separate so renaming the label doesn't break stored
+/// values. `metadata` carries swatch data (color hex, texture URL)
+/// until full reference-entity tables land in a later W2.x commit.
+model AttributeOption {
+  id          String @id @default(cuid())
+  attributeId String
+  attribute   CustomAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  code     String // 'red', 'leather'
+  label    String // 'Red', 'Leather'
+  metadata Json?  // { color: '#ff0000' } | { texturePath: '/...' }
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([attributeId, code])
+  @@index([attributeId])
+}
+
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
 /// (parent → children via Product.parentId). Writes were disabled in B.1
 /// (stock-mirror) and broadened in C.9. Production rows: 0 as of 2026-05-09.
