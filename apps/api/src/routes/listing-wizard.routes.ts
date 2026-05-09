@@ -586,6 +586,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         // equally; see scoreCompleteness().
         completenessPct: number
         missingFactors: string[]
+        // DR-DUP — sibling DRAFT wizard count for the same productId
+        // (excluding self for wizard rows). Operator-visible warning:
+        // multiple wizards for one product happens when a draft is
+        // restarted with a different channel-set (find-or-create
+        // keys on channelsHash), but it confuses everyone — surface
+        // the count so operators can prune.
+        siblingWizardCount: number
       }
       const wizardDrafts: DraftRow[] = wizardRows.map((r) => ({
         kind: 'wizard',
@@ -602,6 +609,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         // Filled in below after image-presence batch fetch.
         completenessPct: 0,
         missingFactors: [],
+        siblingWizardCount: 0,
       }))
 
       // Product DRAFT rows. Excludes products that already have a
@@ -685,6 +693,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           isStale: p.updatedAt < staleCutoff,
           completenessPct: 0,
           missingFactors: [],
+          siblingWizardCount: 0,
         }))
       }
 
@@ -776,6 +785,37 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         )
         p.completenessPct = score.pct
         p.missingFactors = score.missing
+      }
+
+      // DR-DUP — sibling-wizard counts. Single groupBy across all
+      // DRAFT wizards keyed on productId; subtract 1 for the
+      // wizard row itself when computing per-row count. Cheap
+      // because the candidate set is bounded by the page query.
+      if (allProductIds.length > 0) {
+        const siblingCounts = await prisma.listingWizard.groupBy({
+          by: ['productId'],
+          where: {
+            status: 'DRAFT',
+            productId: { in: allProductIds },
+          },
+          _count: { _all: true },
+        })
+        const countByProductId = new Map(
+          siblingCounts.map((r) => [r.productId, r._count._all] as const),
+        )
+        for (const w of wizardDrafts) {
+          // Wizard rows: total minus self.
+          const total = countByProductId.get(w.productId) ?? 1
+          w.siblingWizardCount = Math.max(0, total - 1)
+        }
+        for (const p of productDrafts) {
+          // Product DRAFT rows: any wizard for the same product
+          // counts as a sibling (unusual but possible — operator
+          // started a wizard then archived its product, or vice
+          // versa). Don't subtract self because product-DRAFTs
+          // aren't in the wizard table.
+          p.siblingWizardCount = countByProductId.get(p.productId) ?? 0
+        }
       }
 
       // Merge + sort + paginate. For wizard-only the rows already

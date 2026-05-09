@@ -60,6 +60,10 @@ interface Draft {
    *  step progress. Same 7 factors used by the audit script. */
   completenessPct: number
   missingFactors: string[]
+  /** DR-DUP — count of OTHER DRAFT wizards for the same productId.
+   *  Wizards split on different channelsHash values can co-exist;
+   *  surface that so the operator can prune duplicates. */
+  siblingWizardCount: number
 }
 
 interface DraftsResponse {
@@ -483,6 +487,21 @@ const DraftRow = memo(function DraftRow({
                 <CheckCircle2 className="w-2.5 h-2.5" />
                 READY
               </span>
+            )}
+            {/* DR-DUP — surface other DRAFT wizards for the same
+                product. Operator usually wants to keep one and
+                discard the rest. Tooltip explains why. */}
+            {d.siblingWizardCount > 0 && (
+              <Tooltip
+                content={t('drafts.duplicateTooltip', {
+                  n: d.siblingWizardCount,
+                })}
+                placement="top"
+              >
+                <span className="inline-flex items-center gap-0.5 h-4 px-1 rounded text-xs font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  +{d.siblingWizardCount} {t('drafts.duplicateLabel')}
+                </span>
+              </Tooltip>
             )}
           </div>
         </Link>
