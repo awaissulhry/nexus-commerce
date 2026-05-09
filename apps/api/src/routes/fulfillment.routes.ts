@@ -5670,6 +5670,15 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/purchase-orders/:id/factory.pdf', async (request, reply) => {
     try {
       const { id } = request.params as { id: string }
+      // W9.7 — locale resolution: explicit ?locale= wins, then supplier
+      // country (IT → it), then 'en'. Italian suppliers default to it
+      // because Xavia's factories all read Italian and getting the PO
+      // language wrong adds a round-trip every time.
+      const localeQuery = (request.query as { locale?: string } | undefined)
+        ?.locale
+      const explicitLocale: 'en' | 'it' | null =
+        localeQuery === 'it' || localeQuery === 'en' ? localeQuery : null
+
       const po = await prisma.purchaseOrder.findUnique({
         where: { id },
         include: {
@@ -5858,12 +5867,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       let brand = await prisma.brandSettings.findFirst()
       if (!brand) brand = await prisma.brandSettings.create({ data: {} })
 
+      const resolvedLocale: 'en' | 'it' =
+        explicitLocale ?? (po.supplier?.country === 'IT' ? 'it' : 'en')
+
       const input: FactoryPoInput = {
         poNumber: po.poNumber,
         status: po.status,
         expectedDeliveryDate: po.expectedDeliveryDate,
         notes: po.notes,
         createdAt: po.createdAt,
+        locale: resolvedLocale,
         brand: {
           companyName: brand.companyName,
           addressLines: brand.addressLines,
