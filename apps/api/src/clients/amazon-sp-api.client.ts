@@ -72,6 +72,13 @@ interface GetListingsItemOptions {
   includedData?: Array<'summaries' | 'attributes' | 'issues' | 'offers'>
 }
 
+/** W5.49 — DELETE /listings/2021-08-01/items/{sellerId}/{sku}. */
+interface DeleteListingsItemOptions {
+  sellerId: string
+  sku: string
+  marketplaceId: string
+}
+
 export class AmazonSpApiClient {
   private accessToken: string | null = null
   private tokenExpiresAt: number = 0
@@ -746,6 +753,96 @@ export class AmazonSpApiClient {
       const errorMessage =
         error instanceof Error ? error.message : String(error)
       logger.error('Failed putListingsItem', { sku, error: errorMessage })
+      return { success: false, sku, error: errorMessage }
+    }
+  }
+
+  /**
+   * W5.49 — deleteListingsItem.
+   *
+   * Listings Items v2021-08-01 DELETE endpoint. Removes the seller's offer
+   * for the SKU on the named marketplace. Amazon side effects:
+   *
+   *   - The seller's offer is removed; the catalog item (ASIN) survives.
+   *   - The SKU enters a ~30-day cooldown — re-creating with the SAME SKU
+   *     during that window may fail or be silently held. Recovery flows
+   *     that need same-SKU should pre-warn the operator.
+   *   - Reviews stay on the ASIN. Recreating under the same ASIN with a
+   *     new SKU preserves them; new-ASIN paths lose them.
+   *
+   * The recovery service (listing-recovery.service.ts) is the only
+   * caller in the W5.49 MVP — wizard / bulk publish paths never delete.
+   *
+   * Dry-run respects AMAZON_PUBLISH_MODE for parity with putListingsItem;
+   * a synthetic submissionId is minted so audit logs cross-reference.
+   */
+  async deleteListingsItem(options: DeleteListingsItemOptions): Promise<{
+    success: boolean
+    sku: string
+    submissionId?: string
+    error?: string
+    dryRun?: boolean
+    rawResponse?: SPAPIResponse
+  }> {
+    const { sellerId, sku, marketplaceId } = options
+
+    const mode = (process.env.AMAZON_PUBLISH_MODE ?? 'dry-run').toLowerCase()
+    if (mode === 'dry-run' || mode === 'dryrun') {
+      logger.info('SP-API deleteListingsItem (dry-run, no HTTP)', {
+        sku,
+        marketplaceId,
+      })
+      return {
+        success: true,
+        sku,
+        submissionId: `dryrun-${Date.now()}`,
+        dryRun: true,
+      }
+    }
+
+    try {
+      const response = await this.request<SPAPIResponse>(
+        'DELETE',
+        `/listings/2021-08-01/items/${encodeURIComponent(sellerId)}/${encodeURIComponent(sku)}`,
+        {
+          query: { marketplaceIds: marketplaceId },
+          label: `deleteListingsItem(${sku})`,
+        },
+      )
+
+      // SP-API returns the same envelope as putListingsItem — submissionId +
+      // status. Status of ACCEPTED means Amazon queued the delete; the SKU
+      // is gone from operator's perspective immediately, but the catalog
+      // entry may take minutes to propagate.
+      const submissionId =
+        (response as { submissionId?: string })?.submissionId ?? undefined
+      const status = (response as { status?: string })?.status
+
+      if (status && status !== 'ACCEPTED' && status !== 'VALID') {
+        logger.warn('SP-API deleteListingsItem returned unexpected status', {
+          sku,
+          status,
+          submissionId,
+        })
+        return {
+          success: false,
+          sku,
+          submissionId,
+          error: `Unexpected status: ${status}`,
+          rawResponse: response,
+        }
+      }
+
+      logger.info('SP-API deleteListingsItem succeeded', {
+        sku,
+        marketplaceId,
+        submissionId,
+      })
+      return { success: true, sku, submissionId, rawResponse: response }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      logger.error('Failed deleteListingsItem', { sku, error: errorMessage })
       return { success: false, sku, error: errorMessage }
     }
   }

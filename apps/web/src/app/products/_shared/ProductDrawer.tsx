@@ -603,6 +603,7 @@ export default function ProductDrawer({
           {data && tab === 'listings' && (
             <div role="tabpanel" id="panel-listings" aria-labelledby="tab-listings">
               <ListingsTab
+                productId={data.id}
                 listings={data.channelListings ?? []}
                 onChanged={() => {
                   fetchDetail()
@@ -1407,9 +1408,11 @@ function QuickField({
 }
 
 function ListingsTab({
+  productId,
   listings,
   onChanged,
 }: {
+  productId: string
   listings: NonNullable<ProductDetail['channelListings']>
   /** Called after a successful resync so the parent refetches and
    *  the row's status pill flips to PENDING. */
@@ -1523,6 +1526,14 @@ function ListingsTab({
 
   return (
     <div className="p-5 space-y-4">
+      <div className="flex justify-end">
+        <a
+          href={`/products/${productId}/recover`}
+          className="inline-flex items-center gap-1 h-7 px-2.5 text-base font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors"
+        >
+          {t('products.drawer.listings.recover')}
+        </a>
+      </div>
       {grouped.map(([channel, rows]) => (
         <section key={channel}>
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
