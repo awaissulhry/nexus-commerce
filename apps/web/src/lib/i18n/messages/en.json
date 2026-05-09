@@ -2860,5 +2860,10 @@
   "stock.lots.expires": "expires {date}",
   "stock.lots.received": "received {when}",
   "cycleCount.session.lot.recalledTitle": "This lot has an OPEN recall",
-  "cycleCount.session.lot.moreLots": "+{n} more"
+  "cycleCount.session.lot.moreLots": "+{n} more",
+  "stock.recallDetail.releaseReservations": "Release product reservations",
+  "stock.recallDetail.releaseConfirm": "Release every open reservation on this product? Reservations don't track lot, so all open reservations on the product release — better to over-release than over-ship potentially-recalled units.",
+  "stock.recallDetail.releaseHint": "Releases all open reservations on the product (not just this lot).",
+  "stock.recallDetail.releasing": "Releasing…",
+  "stock.recallDetail.releasedToast": "Released {n} reservations"
 }

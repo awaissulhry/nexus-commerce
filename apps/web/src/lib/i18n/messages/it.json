@@ -2848,5 +2848,10 @@
   "stock.lots.expires": "scade {date}",
   "stock.lots.received": "ricevuto {when}",
   "cycleCount.session.lot.recalledTitle": "Questo lotto ha un richiamo APERTO",
-  "cycleCount.session.lot.moreLots": "+{n} altri"
+  "cycleCount.session.lot.moreLots": "+{n} altri",
+  "stock.recallDetail.releaseReservations": "Rilascia prenotazioni prodotto",
+  "stock.recallDetail.releaseConfirm": "Rilasciare ogni prenotazione aperta su questo prodotto? Le prenotazioni non tracciano il lotto, quindi tutte le prenotazioni aperte sul prodotto vengono rilasciate — meglio rilasciare in eccesso che spedire unità potenzialmente richiamate.",
+  "stock.recallDetail.releaseHint": "Rilascia tutte le prenotazioni aperte sul prodotto (non solo questo lotto).",
+  "stock.recallDetail.releasing": "Rilascio…",
+  "stock.recallDetail.releasedToast": "Rilasciate {n} prenotazioni"
 }
