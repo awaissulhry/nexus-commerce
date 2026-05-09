@@ -136,12 +136,17 @@ export default function QcQueueClient() {
     [fetchData, toast],
   )
 
-  const handleScrap = useCallback(
-    async (item: QcItem) => {
-      const reason = window.prompt(
-        `Scrap ${item.sku} (${item.quantityExpected} units expected)?\nReason for write-off / supplier claim:`,
-      )
-      if (reason == null) return
+  // F1.2 — modal-based scrap flow. Replaces window.prompt() which
+  // blocked the main thread, had no a11y, and gave the operator no
+  // way to type a multi-line reason or cancel without losing the
+  // already-typed text.
+  const [scrapTarget, setScrapTarget] = useState<QcItem | null>(null)
+  const [scrapReason, setScrapReason] = useState('')
+  const [scrapping, setScrapping] = useState(false)
+
+  const performScrap = useCallback(
+    async (item: QcItem, reason: string) => {
+      setScrapping(true)
       setActingId(item.itemId)
       try {
         const res = await fetch(
@@ -155,6 +160,8 @@ export default function QcQueueClient() {
         const body = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
         toast.success(`Scrapped ${item.sku}`)
+        setScrapTarget(null)
+        setScrapReason('')
         await fetchData()
       } catch (err) {
         toast.error(
@@ -162,10 +169,16 @@ export default function QcQueueClient() {
         )
       } finally {
         setActingId(null)
+        setScrapping(false)
       }
     },
     [fetchData, toast],
   )
+
+  const handleScrap = useCallback((item: QcItem) => {
+    setScrapTarget(item)
+    setScrapReason('')
+  }, [])
 
   return (
     <div className="space-y-3">
@@ -384,6 +397,75 @@ export default function QcQueueClient() {
                   />
                 </a>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* F1.2 — Scrap reason modal. Replaces window.prompt() which had
+          no a11y, blocked the main thread, and lost typed text on
+          accidental cancel. */}
+      {scrapTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Scrap ${scrapTarget.sku}`}
+          onClick={() => !scrapping && setScrapTarget(null)}
+        >
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto"
+          >
+            <header className="px-5 py-3 border-b border-slate-200 dark:border-slate-700">
+              <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Scrap {scrapTarget.sku}
+              </div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                {scrapTarget.quantityExpected} units expected · {scrapTarget.shipment.reference ?? scrapTarget.shipment.id.slice(0, 8)}
+              </div>
+            </header>
+            <div className="p-5 space-y-3">
+              <div>
+                <label
+                  htmlFor="scrap-reason"
+                  className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1"
+                >
+                  Reason for write-off / supplier claim
+                </label>
+                <textarea
+                  id="scrap-reason"
+                  value={scrapReason}
+                  onChange={(e) => setScrapReason(e.target.value)}
+                  rows={4}
+                  autoFocus
+                  placeholder="e.g. damaged in transit — supplier file PR-2025-04 opened"
+                  className="w-full px-3 py-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                />
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Captured on the StockMovement audit row and the inbound discrepancy log. Empty reason allowed but discouraged.
+                </div>
+              </div>
+              <div className="text-xs text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded p-2">
+                Scrapping is irreversible. Stock will not be received; the supplier-claim audit trail starts here.
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  onClick={() => !scrapping && setScrapTarget(null)}
+                  disabled={scrapping}
+                  className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => performScrap(scrapTarget, scrapReason)}
+                  disabled={scrapping}
+                  className="h-11 sm:h-8 px-3 text-base bg-rose-700 text-white rounded hover:bg-rose-800 disabled:opacity-50"
+                >
+                  {scrapping ? 'Scrapping…' : `Scrap ${scrapTarget.sku}`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
