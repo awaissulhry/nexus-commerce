@@ -13,9 +13,13 @@ import {
   FileText,
   Loader2,
   PackageCheck,
+  Plus,
   RefreshCw,
+  Search,
   Send,
   ShoppingCart,
+  Trash2,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -586,6 +590,11 @@ export default function PurchaseOrdersClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // F2.8 — search across poNumber + supplier name + line SKU. Local
+  // filter (no server round-trip) since lists are small (<200 active).
+  const [search, setSearch] = useState('')
+  // F2.8 — Create PO modal toggle.
+  const [createOpen, setCreateOpen] = useState(false)
 
   const fetchPos = useCallback(async () => {
     setLoading(true)
@@ -627,6 +636,20 @@ export default function PurchaseOrdersClient() {
     }
     return c
   }, [pos])
+
+  // F2.8 — local search filter. Match poNumber, supplier name, or
+  // any line-item SKU (case-insensitive substring).
+  const filteredPos = useMemo(() => {
+    if (!pos) return null
+    const q = search.trim().toLowerCase()
+    if (!q) return pos
+    return pos.filter((p) => {
+      if (p.poNumber.toLowerCase().includes(q)) return true
+      if (p.supplier?.name?.toLowerCase().includes(q)) return true
+      if (p.items.some((it) => it.sku.toLowerCase().includes(q))) return true
+      return false
+    })
+  }, [pos, search])
 
   const handleTransition = useCallback(
     async (poId: string, transition: string, reason?: string) => {
@@ -679,10 +702,27 @@ export default function PurchaseOrdersClient() {
             )
           })}
         </div>
-        <Button variant="secondary" size="sm" onClick={fetchPos} disabled={loading}>
-          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-          {t('common.refresh')}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* F2.8 — local search across poNumber + supplier + SKU. */}
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('po.search.placeholder')}
+              className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 w-56"
+            />
+          </div>
+          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="w-3.5 h-3.5" />
+            {t('po.newPo')}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={fetchPos} disabled={loading}>
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+            {t('common.refresh')}
+          </Button>
+        </div>
       </div>
 
       {/* Error toasts */}
@@ -733,14 +773,321 @@ export default function PurchaseOrdersClient() {
         />
       )}
 
+      {/* F2.8 — search-empty state when filter eliminates all rows
+          but the underlying list isn't empty. */}
+      {pos && pos.length > 0 && filteredPos && filteredPos.length === 0 && (
+        <div className="text-md text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-6 text-center">
+          {t('po.search.noMatches', { q: search })}
+        </div>
+      )}
+
       {/* PO list */}
-      {pos && pos.length > 0 && (
+      {filteredPos && filteredPos.length > 0 && (
         <div className="space-y-2">
-          {pos.map((po) => (
+          {filteredPos.map((po) => (
             <PoCard key={po.id} po={po} onTransition={handleTransition} />
           ))}
         </div>
       )}
+
+      {/* F2.8 — Create PO modal. Renders only when open; mounts the
+          form inline so each open is a fresh state. */}
+      {createOpen && (
+        <CreatePoModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={async () => {
+            setCreateOpen(false)
+            await fetchPos()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Create PO modal ────────────────────────────────────────────────
+//
+// Minimal manual-create flow. Most POs land here via replenishment
+// auto-create; this is the escape hatch for the operator who wants
+// to draft a PO themselves (one-off supplier order, partial top-up,
+// emergency restock).
+//
+// Required fields per the API: items[] (≥1 row with SKU + qty).
+// supplier + warehouse are optional at the schema layer (warehouse
+// defaults server-side); we still surface them so the operator
+// makes the explicit choice when it matters.
+
+interface SupplierOption {
+  id: string
+  name: string
+  isActive: boolean
+}
+
+interface DraftLine {
+  // local-only id for keying
+  uid: string
+  sku: string
+  quantityOrdered: string
+  unitCostCents: string
+}
+
+let lineSeq = 0
+const newLine = (): DraftLine => ({
+  uid: `l${++lineSeq}`,
+  sku: '',
+  quantityOrdered: '',
+  unitCostCents: '',
+})
+
+function CreatePoModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void
+  onCreated: () => void | Promise<void>
+}) {
+  const { t } = useTranslations()
+  const [suppliers, setSuppliers] = useState<SupplierOption[] | null>(null)
+  const [supplierId, setSupplierId] = useState<string>('')
+  const [expectedDate, setExpectedDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [lines, setLines] = useState<DraftLine[]>([newLine()])
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/fulfillment/suppliers?activeOnly=true`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((data) => {
+        if (!cancelled) setSuppliers(data.items ?? [])
+      })
+      .catch(() => { if (!cancelled) setSuppliers([]) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Esc closes the modal — mirrors routing-rules + qc-queue patterns.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [submitting, onClose])
+
+  const updateLine = (uid: string, patch: Partial<DraftLine>) => {
+    setLines((prev) => prev.map((l) => (l.uid === uid ? { ...l, ...patch } : l)))
+  }
+  const removeLine = (uid: string) => {
+    setLines((prev) => (prev.length === 1 ? prev : prev.filter((l) => l.uid !== uid)))
+  }
+
+  const totalCents = lines.reduce((s, l) => {
+    const qty = parseInt(l.quantityOrdered, 10) || 0
+    const cost = Math.round(parseFloat(l.unitCostCents || '0') * 100) || 0
+    return s + qty * cost
+  }, 0)
+
+  const submit = async () => {
+    setError(null)
+    const validLines = lines.filter((l) => l.sku.trim() && parseInt(l.quantityOrdered, 10) > 0)
+    if (validLines.length === 0) {
+      setError(t('po.create.error.noLines'))
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/purchase-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supplierId: supplierId || undefined,
+          expectedDeliveryDate: expectedDate || undefined,
+          notes: notes.trim() || undefined,
+          items: validLines.map((l) => ({
+            sku: l.sku.trim(),
+            quantityOrdered: parseInt(l.quantityOrdered, 10),
+            unitCostCents: Math.round(parseFloat(l.unitCostCents || '0') * 100) || 0,
+          })),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      await onCreated()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose() }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-po-title"
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-900">
+          <h2 id="create-po-title" className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('po.create.title')}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label={t('po.create.close')}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                {t('po.create.supplier')}
+              </label>
+              <select
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+                disabled={submitting}
+                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              >
+                <option value="">{t('po.create.supplierNone')}</option>
+                {suppliers?.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                {t('po.create.expectedDate')}
+              </label>
+              <input
+                type="date"
+                value={expectedDate}
+                onChange={(e) => setExpectedDate(e.target.value)}
+                disabled={submitting}
+                className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                {t('po.create.lines')}
+              </label>
+              <button
+                type="button"
+                onClick={() => setLines((prev) => [...prev, newLine()])}
+                disabled={submitting}
+                className="text-sm px-2 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+              >
+                <Plus size={11} /> {t('po.create.addLine')}
+              </button>
+            </div>
+            <div className="border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+              <table className="w-full text-base">
+                <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="text-left font-medium px-3 py-1.5">{t('po.col.sku')}</th>
+                    <th className="text-right font-medium px-3 py-1.5 w-24">{t('po.col.ordered')}</th>
+                    <th className="text-right font-medium px-3 py-1.5 w-28">{t('po.col.unitCost')}</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.uid} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                      <td className="px-2 py-1">
+                        <input
+                          type="text"
+                          value={l.sku}
+                          onChange={(e) => updateLine(l.uid, { sku: e.target.value })}
+                          placeholder="SKU"
+                          disabled={submitting}
+                          className="w-full h-8 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          type="number"
+                          min="1"
+                          value={l.quantityOrdered}
+                          onChange={(e) => updateLine(l.uid, { quantityOrdered: e.target.value })}
+                          disabled={submitting}
+                          className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={l.unitCostCents}
+                          onChange={(e) => updateLine(l.uid, { unitCostCents: e.target.value })}
+                          disabled={submitting}
+                          placeholder="0.00"
+                          className="w-full h-8 px-2 text-base text-right tabular-nums border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                        />
+                      </td>
+                      <td className="px-2 py-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeLine(l.uid)}
+                          disabled={submitting || lines.length === 1}
+                          className="h-8 w-8 inline-flex items-center justify-center rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-30"
+                          aria-label={t('po.create.removeLine')}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 text-right tabular-nums">
+              {t('po.create.total')}: <span className="font-semibold text-slate-900 dark:text-slate-100">€{(totalCents / 100).toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
+              {t('po.create.notes')}
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              disabled={submitting}
+              rows={3}
+              placeholder={t('po.create.notesPlaceholder')}
+              className="w-full px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+          </div>
+
+          {error && (
+            <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-900">
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
+            {t('po.create.cancel')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={submit} disabled={submitting}>
+            {submitting ? t('po.create.creating') : t('po.create.create')}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
