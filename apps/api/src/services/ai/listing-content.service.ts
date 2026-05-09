@@ -135,6 +135,41 @@ export interface KeywordsResult {
   insights: string[]
 }
 
+// AI-4.3 — channel suggestion result. Returned by suggestChannels()
+// for the Step 1 "AI: which channels should I publish to?" CTA.
+export interface ChannelSuggestion {
+  platform: string
+  marketplace: string
+  fit: 'high' | 'medium' | 'low'
+  rank: number
+  reason: string
+}
+
+export interface SuggestChannelsParams {
+  product: ProductContext
+  availableChannels: Array<{ platform: string; marketplace: string }>
+  /** AI-1.3 budget scope. Recommend always passing — channel
+   *  suggestion is cheap (one call) but the per-day / per-month
+   *  horizons still need the read so a bulk-suggest cron job (when
+   *  it lands) doesn't burn the budget unsupervised. */
+  budgetScope?: BudgetCheckScope
+  provider?: string | null
+}
+
+export interface SuggestChannelsResult {
+  recommendations: ChannelSuggestion[]
+  usage: ProviderUsage
+  redactions: RedactionCount[]
+  redactionTotal: number
+  metadata: {
+    productSku: string
+    model: string
+    provider: ProviderName
+    elapsedMs: number
+    generatedAt: string
+  }
+}
+
 export interface GenerationResult {
   title?: TitleResult
   bullets?: BulletsResult
@@ -403,6 +438,160 @@ export class ListingContentService {
       ;(result as any)[field] = value
     }
     return result
+  }
+
+  /**
+   * AI-4.3 — rank the operator's available channels by goodness-of-
+   * fit for this product. The Step 1 "AI: suggest channels" CTA
+   * calls this to pre-select the boxes for the operator before they
+   * land on the multi-channel grid.
+   *
+   * Single AI call. Sanitisation + budget gate flow through the same
+   * runOne path content generation uses, so kill-switch / fiscal
+   * redaction / per-call ceiling all apply transitively.
+   *
+   * Returns recommendations sorted high-fit first. The route surfaces
+   * the full list — including 'low' fit channels with an explanation
+   * — so operators have the option to override the AI's call when
+   * they have channel-specific knowledge it doesn't.
+   */
+  async suggestChannels(
+    params: SuggestChannelsParams,
+  ): Promise<SuggestChannelsResult> {
+    if (isAiKillSwitchOn()) {
+      throw new Error(
+        'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
+      )
+    }
+    const provider = getProvider(params.provider)
+    if (!provider) {
+      throw new Error(
+        'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
+      )
+    }
+
+    const prompt = this.suggestChannelsPrompt(params)
+
+    if (params.budgetScope) {
+      const estimateUSD = estimateCallCostUSD({
+        prompt,
+        maxOutputTokens: 4096,
+        provider: provider.name,
+        model: provider.defaultModel,
+      })
+      const verdict = await checkBudget(estimateUSD, params.budgetScope)
+      if (!verdict.allowed) {
+        throw new BudgetExceededError(
+          verdict.reason ?? 'per_call',
+          verdict.message ??
+            'Channel suggestion refused — budget ceiling reached.',
+        )
+      }
+    }
+
+    const start = Date.now()
+    const { text, usage, redactions } = await this.runOne(provider, prompt, 0)
+    const recommendations = this.parseChannelSuggestions(text, params.availableChannels)
+    const redactionTotal = totalRedactions(redactions)
+
+    return {
+      recommendations,
+      usage,
+      redactions,
+      redactionTotal,
+      metadata: {
+        productSku: params.product.sku,
+        model: usage.model,
+        provider: usage.provider,
+        elapsedMs: Date.now() - start,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  }
+
+  private suggestChannelsPrompt(params: SuggestChannelsParams): string {
+    const channelsList = params.availableChannels
+      .map((c) => `- ${c.platform.toUpperCase()}:${c.marketplace.toUpperCase()}`)
+      .join('\n')
+    return `You are an e-commerce strategist. Rank the operator's available channels by goodness-of-fit for this product. Consider the product category, brand strength in the destination marketplace, language overhead, and platform-specific strengths (Amazon for high-velocity searchable goods, eBay for niche / used / collector items, Shopify for D2C brand storytelling).
+
+Product:
+${this.contextBlock(params.product)}
+
+Available channels (operator already has credentials):
+${channelsList}
+
+Return JSON only — no markdown, no commentary, no surrounding text:
+{
+  "recommendations": [
+    {
+      "platform": "AMAZON",
+      "marketplace": "IT",
+      "fit": "high",
+      "rank": 1,
+      "reason": "1–2 sentence explanation tying this product's traits to this channel's strengths"
+    }
+  ]
+}
+
+Rules for the response:
+- Include EVERY channel from the available list, even low-fit ones (operators want to see the AI's call on every option, not just the top picks)
+- "fit" is "high" | "medium" | "low" — be honest about the floor; if a brand is unknown in a marketplace, low is correct
+- "rank" is 1..N starting at 1 for the best fit; ties allowed
+- "reason" is 1–2 sentences in English, specific to THIS product (not generic platform marketing)
+- DO NOT invent channels not in the available list`
+  }
+
+  private parseChannelSuggestions(
+    raw: string,
+    available: SuggestChannelsParams['availableChannels'],
+  ): ChannelSuggestion[] {
+    const j = this.parseJson<{ recommendations?: unknown }>(
+      raw,
+      'channel-suggestions',
+    )
+    const allowed = new Set(
+      available.map((c) => `${c.platform.toUpperCase()}:${c.marketplace.toUpperCase()}`),
+    )
+    const out: ChannelSuggestion[] = []
+    if (!Array.isArray(j.recommendations)) return out
+    for (const r of j.recommendations) {
+      if (!r || typeof r !== 'object') continue
+      const rec = r as Record<string, unknown>
+      const platform = typeof rec.platform === 'string'
+        ? rec.platform.toUpperCase()
+        : null
+      const marketplace = typeof rec.marketplace === 'string'
+        ? rec.marketplace.toUpperCase()
+        : null
+      if (!platform || !marketplace) continue
+      // Drop AI hallucinations that name channels not in the
+      // available list — operators shouldn't see suggestions they
+      // can't act on.
+      if (!allowed.has(`${platform}:${marketplace}`)) continue
+      const fit = rec.fit === 'high' || rec.fit === 'medium' || rec.fit === 'low'
+        ? rec.fit
+        : 'medium'
+      const rank = typeof rec.rank === 'number' && Number.isFinite(rec.rank)
+        ? Math.max(1, Math.floor(rec.rank))
+        : 99
+      const reason = typeof rec.reason === 'string'
+        ? rec.reason.trim().slice(0, 500)
+        : ''
+      out.push({ platform, marketplace, fit, rank, reason })
+    }
+    // Sort high-fit first, then by rank ascending for tie-breakers.
+    const fitWeight: Record<ChannelSuggestion['fit'], number> = {
+      high: 3,
+      medium: 2,
+      low: 1,
+    }
+    out.sort((a, b) => {
+      const w = fitWeight[b.fit] - fitWeight[a.fit]
+      if (w !== 0) return w
+      return a.rank - b.rank
+    })
+    return out
   }
 
   // ── Prompt builders ────────────────────────────────────────────

@@ -3846,6 +3846,169 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── AI-4.3 — Step 1 channel suggester ──────────────────────────
+  //
+  // POST /api/listing-wizard/:id/suggest-channels
+  // Body: { availableChannels: [{platform, marketplace}], provider? }
+  //
+  // Single AI call. Ranks the operator's available channels by
+  // goodness-of-fit for this product. Returns recommendations
+  // sorted high-fit first, including 'low' fit channels with a
+  // reason so operators can override the AI's call when they have
+  // marketplace-specific knowledge.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      availableChannels?: Array<{ platform?: string; marketplace?: string }>
+      provider?: string
+    }
+  }>(
+    '/listing-wizard/:id/suggest-channels',
+    {
+      // Same per-route cap as the orchestrator. One AI call per
+      // request but operators clicking Suggest repeatedly should
+      // still hit the cap before the budget service does.
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API server.',
+        })
+      }
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      // Available channels: caller passes them (the client knows
+      // them from /connection-status). Validate shape so an empty
+      // body / malformed entry doesn't blow up the AI call.
+      const availableChannels = Array.isArray(request.body?.availableChannels)
+        ? request.body!.availableChannels!
+            .filter(
+              (c): c is { platform: string; marketplace: string } =>
+                !!c &&
+                typeof c.platform === 'string' &&
+                typeof c.marketplace === 'string' &&
+                c.platform.length > 0 &&
+                c.marketplace.length > 0,
+            )
+            .map((c) => ({
+              platform: c.platform.toUpperCase(),
+              marketplace: c.marketplace.toUpperCase(),
+            }))
+        : []
+      if (availableChannels.length === 0) {
+        return reply.code(400).send({
+          error:
+            'availableChannels is required and must contain at least one {platform, marketplace} entry.',
+        })
+      }
+
+      try {
+        const result = await listingContentService.suggestChannels({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            bulletPoints: product.bulletPoints,
+            keywords: product.keywords,
+            weightValue: product.weightValue
+              ? Number(product.weightValue)
+              : null,
+            weightUnit: product.weightUnit,
+            dimLength: product.dimLength ? Number(product.dimLength) : null,
+            dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+            dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+            dimUnit: product.dimUnit,
+            productType: product.productType,
+            variantAttributes: product.variantAttributes,
+            categoryAttributes: product.categoryAttributes,
+          },
+          availableChannels,
+          provider: request.body?.provider ?? null,
+          budgetScope: {
+            feature: 'listing-wizard',
+            wizardId: wizard.id,
+          },
+        })
+
+        // Persist usage telemetry — same pattern as
+        // /generate-content. feature distinguishes Step 1 calls
+        // from Step 5 calls in the AI-1.7 dashboard rollups.
+        logUsage({
+          provider: result.usage.provider,
+          model: result.usage.model,
+          feature: 'listing-wizard.suggest-channels',
+          entityType: 'ListingWizard',
+          entityId: wizard.id,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          costUSD: result.usage.costUSD,
+          latencyMs: result.metadata.elapsedMs,
+          ok: true,
+          metadata: {
+            productId: product.id,
+            availableChannels,
+            redactionTotal: result.redactionTotal,
+            redactions: result.redactions,
+            recommendationCount: result.recommendations.length,
+          },
+        })
+
+        return {
+          wizard: { id: wizard.id, productId: wizard.productId },
+          recommendations: result.recommendations,
+          usage: result.usage,
+          redactionTotal: result.redactionTotal,
+          metadata: result.metadata,
+        }
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          fastify.log.warn(
+            { reason: err.reason },
+            '[suggest-channels] refused by budget',
+          )
+          return reply.code(402).send({
+            error: err.message,
+            budget: { reason: err.reason },
+          })
+        }
+        fastify.log.error({ err }, '[suggest-channels] failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // ── AI-4.2 — pre-flight estimate for the orchestrator ──────────
   //
   // POST /api/listing-wizard/:id/ai-complete-all/estimate
