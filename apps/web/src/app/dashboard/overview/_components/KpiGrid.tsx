@@ -7,8 +7,15 @@ import {
   formatCurrency,
   formatDelta,
   NUM_FMT,
+  PCT_FMT,
 } from '../_lib/format'
 import type { OverviewPayload, T } from '../_lib/types'
+
+function formatPct(value: number): string {
+  // returnsRate ships as 0–100 from the backend; PCT_FMT expects
+  // 0–1 because it uses style:percent. Divide once at the boundary.
+  return PCT_FMT.format(value / 100)
+}
 
 /**
  * The four-card headline strip: revenue, orders, AOV, units. Each
@@ -70,6 +77,47 @@ export default function KpiGrid({
           sparkColor="amber"
         />
       </div>
+      {/* DO.12 — second row: operational KPIs.
+          Pending / late shipments are point-in-time counts (delta
+          renders n/a). Returns rate is a percentage; refund value
+          flows in primary currency. Late shipment value flushes
+          rose when non-zero — that's an account-health risk on
+          Amazon if it persists. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          t={t}
+          label={t('overview.kpi.pendingShipments')}
+          value={NUM_FMT.format(totals.pendingShipments.current)}
+          delta={formatDelta(totals.pendingShipments.deltaPct, t)}
+          prevValue=""
+          sparkColor="blue"
+        />
+        <KpiCard
+          t={t}
+          label={t('overview.kpi.lateShipments')}
+          value={NUM_FMT.format(totals.lateShipments.current)}
+          delta={formatDelta(totals.lateShipments.deltaPct, t)}
+          prevValue=""
+          sparkColor="amber"
+          tone={totals.lateShipments.current > 0 ? 'rose' : 'slate'}
+        />
+        <KpiCard
+          t={t}
+          label={t('overview.kpi.returnsRate')}
+          value={formatPct(totals.returnsRate.current)}
+          delta={formatDelta(totals.returnsRate.deltaPct, t)}
+          prevValue={formatPct(totals.returnsRate.previous)}
+          sparkColor="violet"
+        />
+        <KpiCard
+          t={t}
+          label={t('overview.kpi.refundValue')}
+          value={formatCurrency(totals.refundValue.current, primary)}
+          delta={formatDelta(totals.refundValue.deltaPct, t)}
+          prevValue={formatCurrency(totals.refundValue.previous, primary)}
+          sparkColor="amber"
+        />
+      </div>
       {secondaries.length > 0 && (
         <div className="text-xs text-slate-500 dark:text-slate-400 pl-1">
           {t('overview.kpi.includes')}{' '}
@@ -105,25 +153,37 @@ function KpiCard({
   prevValue,
   series,
   sparkColor,
+  tone = 'slate',
 }: {
   t: T
   label: string
   value: string
   delta: { label: string; tone: 'pos' | 'neg' | 'flat' | 'na' }
+  /** Empty string hides the "prev:" footer entirely (operational KPIs
+   * with no period analog use this). */
   prevValue: string
   series?: number[]
   sparkColor: SparkColor
+  /** Override the headline value color — used by lateShipments to
+   * flush rose when non-zero. */
+  tone?: 'slate' | 'rose'
 }) {
-  // Use Card with custom className to tighten the default p-4 down
-  // to the px-4 py-3 the KPI strip wants. The dark-mode bg/border
-  // come from Card; we just override padding.
+  const valueClass =
+    tone === 'rose'
+      ? 'text-rose-700 dark:text-rose-400'
+      : 'text-slate-900 dark:text-slate-100'
   return (
     <Card noPadding className="px-4 py-3">
       <div className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">
         {label}
       </div>
       <div className="mt-1 flex items-baseline justify-between gap-2 flex-wrap">
-        <div className="text-[22px] font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+        <div
+          className={cn(
+            'text-[22px] font-semibold tabular-nums',
+            valueClass,
+          )}
+        >
           {value}
         </div>
         <DeltaPill delta={delta} />
@@ -131,10 +191,12 @@ function KpiCard({
       {series && series.length > 1 && (
         <MiniSpark series={series} color={sparkColor} />
       )}
-      <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-        {t('overview.kpi.prev')}{' '}
-        <span className="tabular-nums">{prevValue}</span>
-      </div>
+      {prevValue && (
+        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          {t('overview.kpi.prev')}{' '}
+          <span className="tabular-nums">{prevValue}</span>
+        </div>
+      )}
     </Card>
   )
 }

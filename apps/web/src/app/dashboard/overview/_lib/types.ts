@@ -44,6 +44,20 @@ export interface OverviewPayload {
     orders: TotalEntry
     aov: TotalEntry
     units: TotalEntry
+    // DO.12 — operational KPIs.
+    //
+    // pendingShipments / lateShipments are point-in-time counts: the
+    // backend returns previous=0 and deltaPct=null since "pending
+    // right now" has no natural previous-period analog without
+    // historical snapshots (W12).
+    //
+    // returnsRate is a percentage 0–100 (returns / orders × 100 in
+    // the active window). refundValue is in primary-currency major
+    // units (€ not cents).
+    pendingShipments: TotalEntry
+    lateShipments: TotalEntry
+    returnsRate: TotalEntry
+    refundValue: TotalEntry
   }
   byChannel: Array<{
     channel: string

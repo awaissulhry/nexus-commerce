@@ -299,6 +299,90 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             : 0,
       }
 
+      // ── DO.12 — operational KPIs ──────────────────────────────────
+      //
+      // Pending / late shipments are point-in-time counts, not period
+      // totals. They answer "what does the operator need to fix right
+      // now?" — comparable to the alerts panel but glanceable from the
+      // KPI strip. previous=0 + deltaPct=null leaves the delta pill
+      // showing n/a; W12 swaps in a snapshot-based comparison once
+      // KPI snapshots ship.
+      //
+      // Returns rate and refund value are period-bound and follow the
+      // same currency / window scope as the financial KPIs.
+      const [
+        pendingShipmentsCount,
+        lateShipmentsCount,
+        returnsCurrentCount,
+        returnsPreviousCount,
+        refundCurrentCents,
+        refundPreviousCents,
+      ] = await Promise.all([
+        prisma.order
+          .count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } })
+          .catch(() => 0),
+        prisma.order
+          .count({
+            where: {
+              status: { in: ['PENDING', 'PROCESSING'] },
+              shipByDate: { lt: to, not: null },
+            },
+          })
+          .catch(() => 0),
+        prisma.return
+          .count({
+            where: {
+              createdAt: { gte: from, lte: to },
+              order: { currencyCode: primaryCurrency },
+            },
+          })
+          .catch(() => 0),
+        prisma.return
+          .count({
+            where: {
+              createdAt: { gte: prevFrom, lt: prevTo },
+              order: { currencyCode: primaryCurrency },
+            },
+          })
+          .catch(() => 0),
+        prisma.refund
+          .aggregate({
+            _sum: { amountCents: true },
+            where: {
+              createdAt: { gte: from, lte: to },
+              currencyCode: primaryCurrency,
+            },
+          })
+          .then((r) => Number(r._sum.amountCents ?? 0))
+          .catch(() => 0),
+        prisma.refund
+          .aggregate({
+            _sum: { amountCents: true },
+            where: {
+              createdAt: { gte: prevFrom, lt: prevTo },
+              currencyCode: primaryCurrency,
+            },
+          })
+          .then((r) => Number(r._sum.amountCents ?? 0))
+          .catch(() => 0),
+      ])
+
+      // Returns rate as a percentage (0–100). Use `orderCounts` from
+      // the headline (already filtered to primary currency) so the
+      // ratio is apples-to-apples.
+      const returnsRateCurrent =
+        orderCounts.current > 0
+          ? (returnsCurrentCount / orderCounts.current) * 100
+          : 0
+      const returnsRatePrevious =
+        orderCounts.previous > 0
+          ? (returnsPreviousCount / orderCounts.previous) * 100
+          : 0
+
+      // Refund value in primary-currency major units (€ not cents).
+      const refundValueCurrent = refundCurrentCents / 100
+      const refundValuePrevious = refundPreviousCents / 100
+
       // ── Per-channel breakdown ────────────────────────────────────
       const channelMap = new Map<
         string,
@@ -694,6 +778,30 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             previous: units.previous,
             deltaPct: deltaPct(units.current, units.previous),
             series: seriesUnits,
+          },
+          // DO.12 — operational KPIs. pending/lateShipments are
+          // point-in-time counts (no period semantic), so previous=0
+          // and deltaPct=null. The frontend renders n/a for those.
+          // returnsRate is a percentage; refundValue is currency.
+          pendingShipments: {
+            current: pendingShipmentsCount,
+            previous: 0,
+            deltaPct: null,
+          },
+          lateShipments: {
+            current: lateShipmentsCount,
+            previous: 0,
+            deltaPct: null,
+          },
+          returnsRate: {
+            current: returnsRateCurrent,
+            previous: returnsRatePrevious,
+            deltaPct: deltaPct(returnsRateCurrent, returnsRatePrevious),
+          },
+          refundValue: {
+            current: refundValueCurrent,
+            previous: refundValuePrevious,
+            deltaPct: deltaPct(refundValueCurrent, refundValuePrevious),
           },
         },
         byChannel,
