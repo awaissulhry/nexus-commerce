@@ -471,18 +471,22 @@ const DraftRow = memo(function DraftRow({
             }
             placement="top"
           >
+            {/* DR-S.5 — touch-target sweep: bump destructive + primary
+                row actions to ≥44×44 on mobile, keep desktop density
+                via the sm: breakpoint so power-users on a mouse get
+                the same compact rows as before. */}
             <IconButton
               onClick={() => onDelete(d)}
               aria-label="Delete draft"
               size="md"
-              className="text-slate-400 hover:text-rose-700 hover:bg-rose-50"
+              className="h-11 w-11 sm:h-7 sm:w-7 text-slate-400 hover:text-rose-700 hover:bg-rose-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </IconButton>
           </Tooltip>
           <Link
             href={resumeHref}
-            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            className="inline-flex items-center gap-1 h-11 sm:h-7 px-3 sm:px-2.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
           >
             {d.kind === 'wizard' ? t('drafts.resume') : t('drafts.configure')}
             <ArrowRight className="w-3 h-3" />
@@ -906,7 +910,8 @@ export default function DraftsClient() {
             type="button"
             onClick={() => setStaleOnly((v) => !v)}
             className={cn(
-              'inline-flex items-center gap-1.5 h-8 px-2.5 text-base rounded-md border transition-colors',
+              // DR-S.5 — 44px on mobile, original 32px on desktop.
+              'inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 sm:px-2.5 text-base rounded-md border transition-colors',
               staleOnly
                 ? 'bg-amber-50 border-amber-300 text-amber-800'
                 : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300',
