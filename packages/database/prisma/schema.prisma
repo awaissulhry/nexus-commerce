@@ -3603,6 +3603,92 @@ model ScheduledBulkAction {
   @@index([templateId])
 }
 
+// ── W7.7 / Wave-7: Approval gates for bulk-ops automation ──────────
+//
+// When a rule's actions exceed an operator-defined blast radius,
+// the engine doesn't fire them — it parks the run in a queue with
+// state='PENDING' and the operator either Approves (engine resumes
+// the action) or Rejects (engine logs + drops). Distinct from
+// AutomationRuleExecution (the audit trail of completed runs)
+// because pending approvals need their own indexing + lifecycle.
+//
+// `threshold` captures WHY the gate fired — 'value' for the
+// maxValueCentsEur cap, 'manual' for rules explicitly flagged
+// requireApproval=true, 'safety' for hard-coded blast-radius
+// guards (e.g. pause_schedules_matching with confirmAll=true).
+//
+// `expiresAt` lets operators ignore stale pending approvals — if a
+// rule's threshold was breached six hours ago, firing the action
+// now is probably the wrong move. The W7.7 worker auto-expires
+// pending rows past their expiry.
+model BulkAutomationApproval {
+  id String @id @default(cuid())
+
+  /** The rule that requested approval. No FK so deleting a rule
+   *  doesn't lose the audit trail of past pending approvals. */
+  ruleId String
+  /** Snapshot of the rule's name at request time — survives a rule
+   *  rename or delete so the queue UI can still show what it was. */
+  ruleName String
+
+  /** Snapshot of the trigger payload + the action plan the engine
+   *  was about to execute. Approving replays this exactly. */
+  triggerPayload Json
+  actionPlan     Json
+
+  /**
+   * Why this approval was required:
+   *   'value'   exceeded rule.maxValueCentsEur
+   *   'manual'  rule explicitly carries requireApproval=true
+   *   'safety'  hard-coded blast-radius guard fired
+   */
+  threshold String
+
+  /** Estimated EUR-cents value of the actions being approved.
+   *  Drives the operator's read-the-room: "this would spend €1,200"
+   *  vs "this would publish 47 listings". Null when N/A. */
+  estimatedValueCentsEur Int?
+
+  /**
+   * State machine:
+   *   PENDING                         (created)
+   *   APPROVED  → action fired        (operator clicks Approve)
+   *   REJECTED  → action dropped      (operator clicks Reject)
+   *   EXPIRED   → action dropped      (auto-expired after expiresAt)
+   */
+  status String @default("PENDING")
+
+  /** Soft cutoff. Default 24h from createdAt; operators can extend
+   *  by editing the row from the queue UI in a follow-up. Stale
+   *  pending rows past this timestamp get auto-EXPIRED by the
+   *  approval-cleanup tick. */
+  expiresAt DateTime
+
+  /** Audit fields populated when the operator acts. */
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  rejectedReason String?
+
+  /** Outcome from the resumed action (when status='APPROVED' and
+   *  the action successfully fired). Same shape as
+   *  AutomationRuleExecution.actionResults. Null until resumed. */
+  resolvedActionResults Json?
+
+  /** Optional link to the AutomationRuleExecution row created when
+   *  the approved action fires — lets the queue UI link straight
+   *  through to the per-execution drill-down. */
+  resolvedExecutionId String?
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, expiresAt])
+  @@index([ruleId, createdAt(sort: Desc)])
+}
+
 // ── Phase D.3f: Live category schema sync ────────────────────────────
 // Cached snapshots of Amazon `getDefinitionsProductType` (and eventually
 // eBay equivalents). One row per (channel, marketplace, productType,
