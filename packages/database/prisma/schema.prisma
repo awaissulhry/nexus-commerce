@@ -342,6 +342,9 @@ model ProductFamily {
   // Product.family FK declared above).
   products Product[] @relation("ProductFamily")
 
+  // Attributes attached to this family (W2.3).
+  familyAttributes FamilyAttribute[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -413,7 +416,8 @@ model CustomAttribute {
   scope        String  @default("global") // 'global' | 'per_variant'
   sortOrder    Int     @default(0)
 
-  options AttributeOption[]
+  options          AttributeOption[]
+  familyAttributes FamilyAttribute[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -442,6 +446,56 @@ model AttributeOption {
   updatedAt DateTime @updatedAt
 
   @@unique([attributeId, code])
+  @@index([attributeId])
+}
+
+/// W2.3 — FamilyAttribute (Akeneo-flat join, user-confirmed shape).
+///
+/// Declares which CustomAttribute belongs to a ProductFamily, plus
+/// required-vs-optional + per-channel scoping.
+///
+/// Semantics:
+///   required = false              → optional on every channel
+///                                   (`channels` is informational —
+///                                   typically empty)
+///   required = true,  channels=[] → required on every channel
+///   required = true,  channels=['AMAZON','EBAY']
+///                                 → required only on listed channels;
+///                                   optional elsewhere. Channel codes
+///                                   match ChannelListing.channel
+///                                   (AMAZON | EBAY | SHOPIFY | ...).
+///
+/// Inheritance is Akeneo-strict additive (user-confirmed): a child
+/// family inherits ALL parent FamilyAttribute rows; it can ADD more
+/// but cannot remove or downgrade parent's. Resolution is computed
+/// at read time by the FamilyHierarchy resolver service (W2.4).
+///
+/// Per-channel validation rules beyond required/optional (e.g., a
+/// minLength that differs by marketplace) are deferred — the user
+/// chose flat now, EAV later. If/when a real product flow needs
+/// that, a follow-up commit adds FamilyAttributeChannelRule.
+model FamilyAttribute {
+  id          String @id @default(cuid())
+  familyId    String
+  family      ProductFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  attributeId String
+  attribute   CustomAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  required  Boolean @default(false)
+  // Channel codes where this attribute is required (when required=true).
+  // Empty array = required on every channel. Codes match
+  // ChannelListing.channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | ...
+  channels  String[]
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Each (family, attribute) pair is unique — can't declare the
+  // same attribute twice on the same family. Differing per-channel
+  // requirements live in the channels[] field, not as separate rows.
+  @@unique([familyId, attributeId])
+  @@index([familyId])
   @@index([attributeId])
 }
 
