@@ -3686,6 +3686,7 @@ model StockLocation {
   @@index([isActive])
   @@index([externalChannel, externalLocationId])
   serials      SerialNumber[]   @relation("StockLocationSerials")
+  bins         StockBin[]       @relation("StockLocationBins")
 }
 
 // Per-location, per-product (or per-variation) quantity ledger.
@@ -3728,6 +3729,7 @@ model StockLevel {
   @@index([locationId])
   @@index([quantity])
   @@index([syncStatus])
+  binQuantities StockBinQuantity[] @relation("StockLevelBinQuantities")
 }
 
 // Time-bounded holds against StockLevel.reserved. PENDING_ORDER
@@ -3803,12 +3805,17 @@ model StockMovement {
   // specific unit (premium helmet receive, outbound, RMA).
   serialNumberId String?
 
+  // BN.1 — bin reference. Set when a movement was posted into/out
+  // of a specific bin (vs the location-aggregate ledger).
+  binId          String?
+
   warehouse       Warehouse?     @relation(fields: [warehouseId], references: [id])
   location        StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
   fromLocation    StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
   toLocation      StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
   lot             Lot?           @relation("LotMovements", fields: [lotId], references: [id])
   serial          SerialNumber?  @relation("SerialMovements", fields: [serialNumberId], references: [id])
+  bin             StockBin?      @relation("BinMovements", fields: [binId], references: [id])
   // Back-relation for the Lot.originStockMovementId FK (one movement
   // can be the origin receive of one or more lots — split-receive case).
   lotsOriginated  Lot[]          @relation("LotOrigin")
@@ -3824,6 +3831,7 @@ model StockMovement {
   @@index([returnId])
   @@index([lotId])
   @@index([serialNumberId])
+  @@index([binId])
 }
 
 // S.20 — One row per stock receive event. FIFO/LIFO consume in
@@ -3965,6 +3973,44 @@ model SerialNumber {
   @@index([lotId])
   @@index([locationId])
   @@index([currentOrderId])
+}
+
+
+// BN.1 — Bin management within StockLocation. Bin = physical
+// subdivision (shelf, pallet slot, zone). Sum of StockBinQuantity.
+// quantity per StockLevel must equal StockLevel.quantity (invariant).
+model StockBin {
+  id           String   @id @default(cuid())
+  locationId   String
+  code         String
+  name         String?
+  zone         String?
+  binType      String?
+  capacity     Int?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  location     StockLocation      @relation("StockLocationBins", fields: [locationId], references: [id], onDelete: Cascade)
+  quantities   StockBinQuantity[]
+  movements    StockMovement[]    @relation("BinMovements")
+
+  @@unique([locationId, code])
+  @@index([locationId, zone])
+}
+
+model StockBinQuantity {
+  id            String   @id @default(cuid())
+  stockLevelId  String
+  binId         String
+  quantity      Int      @default(0)
+  lastUpdatedAt DateTime @default(now())
+
+  stockLevel    StockLevel @relation("StockLevelBinQuantities", fields: [stockLevelId], references: [id], onDelete: Cascade)
+  bin           StockBin   @relation(fields: [binId], references: [id], onDelete: Restrict)
+
+  @@unique([stockLevelId, binId])
+  @@index([binId])
 }
 
 // L.4 — Lot recall lifecycle. One row per recall instance; partial
