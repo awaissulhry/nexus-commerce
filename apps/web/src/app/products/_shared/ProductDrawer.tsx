@@ -2075,6 +2075,7 @@ function WorkflowTab({ productId }: { productId: string }) {
 }
 
 function ActivityTab({ productId }: { productId: string }) {
+  const { t } = useTranslations()
   const [items, setItems] = useState<ActivityEntry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -2109,8 +2110,8 @@ function ActivityTab({ productId }: { productId: string }) {
 
   if (loading && items.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-slate-400 text-base">
-        <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading activity…
+      <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-base">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t('products.drawer.activity.loading')}
       </div>
     )
   }
@@ -2118,7 +2119,7 @@ function ActivityTab({ productId }: { productId: string }) {
     return (
       <div className="m-5 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2">
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-        <span>Failed to load activity: {error}</span>
+        <span>{t('products.drawer.activity.failed', { error })}</span>
       </div>
     )
   }
@@ -2126,9 +2127,9 @@ function ActivityTab({ productId }: { productId: string }) {
     return (
       <div className="px-5 py-10 text-center text-base text-slate-500">
         <Activity className="w-6 h-6 mx-auto text-slate-300 mb-2" />
-        No activity recorded yet.
-        <div className="text-sm text-slate-400 mt-1">
-          Edits, bulk operations, and master-data changes show up here.
+        {t('products.drawer.activity.empty')}
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {t('products.drawer.activity.emptyHint')}
         </div>
       </div>
     )
@@ -2138,7 +2139,7 @@ function ActivityTab({ productId }: { productId: string }) {
     <div className="p-5 space-y-3">
       {total > items.length && (
         <div className="text-sm text-slate-500">
-          Showing {items.length} of {total} entries (most recent first)
+          {t('products.drawer.activity.showing', { shown: items.length, total })}
         </div>
       )}
       <ol className="space-y-2">
@@ -2151,6 +2152,7 @@ function ActivityTab({ productId }: { productId: string }) {
 }
 
 function ActivityRow({ entry }: { entry: ActivityEntry }) {
+  const { t } = useTranslations()
   const diff = useMemo(() => buildDiff(entry.before, entry.after), [entry.before, entry.after])
   const actor = entry.userId ?? 'system'
   const bulkOpId =
@@ -2198,8 +2200,8 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         </ul>
       )}
       {typeof bulkOpId === 'string' && (
-        <div className="mt-1.5 text-xs text-slate-400">
-          via bulk operation <span className="font-mono">{bulkOpId.slice(0, 12)}…</span>
+        <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {t('products.drawer.activity.viaBulk')} <span className="font-mono">{bulkOpId.slice(0, 12)}…</span>
         </div>
       )}
     </li>
@@ -2290,6 +2292,7 @@ interface ScheduledChange {
 
 function ScheduleTab({ productId }: { productId: string }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [rows, setRows] = useState<ScheduledChange[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -2328,11 +2331,11 @@ function ScheduleTab({ productId }: { productId: string }) {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Scheduled change cancelled')
+      toast.success(t('products.drawer.schedule.toast.cancelled'))
       refresh()
     } catch (e) {
       toast.error(
-        `Cancel failed: ${e instanceof Error ? e.message : String(e)}`,
+        t('products.drawer.schedule.toast.cancelFailed', { msg: e instanceof Error ? e.message : String(e) }),
       )
     } finally {
       setCancelling(null)
@@ -2347,8 +2350,7 @@ function ScheduleTab({ productId }: { productId: string }) {
         aria-atomic="true"
         className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-base"
       >
-        <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading
-        scheduled changes…
+        <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t('products.drawer.schedule.loading')}
       </div>
     )
   }
@@ -2359,7 +2361,7 @@ function ScheduleTab({ productId }: { productId: string }) {
         aria-atomic="true"
         className="m-5 border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300"
       >
-        Failed to load scheduled changes: {error}
+        {t('products.drawer.schedule.failed', { error })}
       </div>
     )
   }
@@ -2367,10 +2369,9 @@ function ScheduleTab({ productId }: { productId: string }) {
     return (
       <div className="px-5 py-12 text-center text-base text-slate-500 dark:text-slate-400">
         <Calendar className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-        No scheduled changes for this product.
-        <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-          Use the bulk Schedule action on the main grid to defer a
-          status flip or price change to a future time.
+        {t('products.drawer.schedule.empty')}
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {t('products.drawer.schedule.emptyHint')}
         </div>
       </div>
     )
@@ -2381,7 +2382,7 @@ function ScheduleTab({ productId }: { productId: string }) {
       const status = payload.status as string | undefined
       return (
         <span>
-          Set status →{' '}
+          {t('products.drawer.schedule.payload.setStatus')}{' '}
           <span className="font-mono font-semibold">{status ?? '—'}</span>
         </span>
       )
@@ -2390,7 +2391,7 @@ function ScheduleTab({ productId }: { productId: string }) {
       if (typeof payload.basePrice === 'number') {
         return (
           <span>
-            Set basePrice →{' '}
+            {t('products.drawer.schedule.payload.setBasePrice')}{' '}
             <span className="font-mono font-semibold tabular-nums">
               €{payload.basePrice.toFixed(2)}
             </span>
@@ -2401,7 +2402,7 @@ function ScheduleTab({ productId }: { productId: string }) {
         const v = payload.adjustPercent
         return (
           <span>
-            Adjust basePrice by{' '}
+            {t('products.drawer.schedule.payload.adjustBasePrice')}{' '}
             <span className="font-mono font-semibold tabular-nums">
               {v >= 0 ? '+' : ''}
               {v}%
@@ -2435,7 +2436,12 @@ function ScheduleTab({ productId }: { productId: string }) {
   return (
     <div className="px-5 py-4 space-y-2">
       <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-        {rows.length} scheduled change{rows.length === 1 ? '' : 's'}
+        {t(
+          rows.length === 1
+            ? 'products.drawer.schedule.count.one'
+            : 'products.drawer.schedule.count.other',
+          { count: rows.length },
+        )}
       </div>
       <ul className="space-y-1.5">
         {rows.map((r) => (
@@ -2462,23 +2468,31 @@ function ScheduleTab({ productId }: { productId: string }) {
                   icon={cancelling === r.id ? undefined : <X size={11} />}
                   className="ml-auto !h-7 !px-2 !text-sm !text-rose-600 hover:!bg-rose-50 dark:hover:!bg-rose-950/40"
                 >
-                  Cancel
+                  {t('products.drawer.schedule.cancel')}
                 </Button>
               )}
             </div>
             <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 inline-flex items-center gap-2 flex-wrap">
               <Clock size={11} />
               <span>
-                {r.status === 'PENDING' ? 'Scheduled for' : 'Was scheduled for'}{' '}
+                {t(
+                  r.status === 'PENDING'
+                    ? 'products.drawer.schedule.scheduledFor'
+                    : 'products.drawer.schedule.wasScheduledFor',
+                )}{' '}
                 <span className="text-slate-700 dark:text-slate-300 font-medium">
                   {new Date(r.scheduledFor).toLocaleString()}
                 </span>
               </span>
               {r.appliedAt && (
                 <>
-                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                  <span className="text-slate-400 dark:text-slate-500">·</span>
                   <span>
-                    {r.status === 'APPLIED' ? 'Applied at ' : 'Resolved at '}
+                    {t(
+                      r.status === 'APPLIED'
+                        ? 'products.drawer.schedule.appliedAt'
+                        : 'products.drawer.schedule.resolvedAt',
+                    )}{' '}
                     {new Date(r.appliedAt).toLocaleString()}
                   </span>
                 </>
