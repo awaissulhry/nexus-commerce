@@ -37,18 +37,27 @@ export default function AlertsPanel({
   alerts: OverviewPayload['alerts']
   catalog: OverviewPayload['catalog']
 }) {
-  const items: Array<{
+  // DO.22 — each alert carries label + count + impact line + action
+  // label. Tone tints the row; rose=P0, amber=P1. The action label
+  // is rendered as an inline pill that visually anchors the verb the
+  // operator should perform (Process / Resolve / Inspect / Review).
+  type AlertRow = {
     label: string
     count: number
     href: string
     tone: 'rose' | 'amber' | 'slate'
-  }> = []
+    impact: string
+    actionLabel: string
+  }
+  const items: AlertRow[] = []
   if (alerts.outOfStock > 0)
     items.push({
       label: t('overview.alerts.outOfStock'),
       count: alerts.outOfStock,
       href: '/products?stock=out',
       tone: 'rose',
+      impact: t('overview.alerts.impact.outOfStock'),
+      actionLabel: t('overview.alerts.action.replenish'),
     })
   if (alerts.lowStock > 0)
     items.push({
@@ -56,6 +65,8 @@ export default function AlertsPanel({
       count: alerts.lowStock,
       href: '/products?stock=low',
       tone: 'amber',
+      impact: t('overview.alerts.impact.lowStock'),
+      actionLabel: t('overview.alerts.action.review'),
     })
   if (alerts.failedListings > 0)
     items.push({
@@ -67,6 +78,8 @@ export default function AlertsPanel({
       // chips ready to drill down further.
       href: '/listings?listingStatus=ERROR',
       tone: 'rose',
+      impact: t('overview.alerts.impact.failedListings'),
+      actionLabel: t('overview.alerts.action.resolve'),
     })
   if (alerts.draftListings > 0)
     items.push({
@@ -74,6 +87,8 @@ export default function AlertsPanel({
       count: alerts.draftListings,
       href: '/listings?listingStatus=DRAFT',
       tone: 'amber',
+      impact: t('overview.alerts.impact.draftListings'),
+      actionLabel: t('overview.alerts.action.publish'),
     })
   if (alerts.pendingOrders > 0)
     items.push({
@@ -81,6 +96,8 @@ export default function AlertsPanel({
       count: alerts.pendingOrders,
       href: '/orders',
       tone: 'amber',
+      impact: t('overview.alerts.impact.pendingOrders'),
+      actionLabel: t('overview.alerts.action.process'),
     })
   // DO.21 — operational categories. Order matters: most-urgent first
   // (P0 risks at the top, P1/P2 below).
@@ -90,6 +107,8 @@ export default function AlertsPanel({
       count: alerts.lateShipments,
       href: '/fulfillment/outbound',
       tone: 'rose',
+      impact: t('overview.alerts.impact.lateShipments'),
+      actionLabel: t('overview.alerts.action.shipNow'),
     })
   if (alerts.suppressions > 0)
     items.push({
@@ -99,6 +118,8 @@ export default function AlertsPanel({
       // filtered to suppressed status is the right drill-down.
       href: '/listings/amazon?suppressed=true',
       tone: 'rose',
+      impact: t('overview.alerts.impact.suppressions'),
+      actionLabel: t('overview.alerts.action.resolve'),
     })
   if (alerts.returnsBacklog > 0)
     items.push({
@@ -106,6 +127,8 @@ export default function AlertsPanel({
       count: alerts.returnsBacklog,
       href: '/fulfillment/returns',
       tone: 'amber',
+      impact: t('overview.alerts.impact.returnsBacklog'),
+      actionLabel: t('overview.alerts.action.inspect'),
     })
   if (alerts.syncFailures24h > 0)
     items.push({
@@ -113,6 +136,8 @@ export default function AlertsPanel({
       count: alerts.syncFailures24h,
       href: '/sync-logs',
       tone: 'rose',
+      impact: t('overview.alerts.impact.syncFailures'),
+      actionLabel: t('overview.alerts.action.investigate'),
     })
   if (alerts.rateLimitHits1h > 0)
     items.push({
@@ -120,6 +145,8 @@ export default function AlertsPanel({
       count: alerts.rateLimitHits1h,
       href: '/sync-logs/api-calls',
       tone: 'amber',
+      impact: t('overview.alerts.impact.rateLimitHits'),
+      actionLabel: t('overview.alerts.action.investigate'),
     })
   // DO.20 — local dismissal: marking a notification read on the
   // server is a fire-and-forget action; we hide it from the UI
@@ -180,20 +207,41 @@ export default function AlertsPanel({
             key={it.label}
             href={it.href}
             className={cn(
-              'flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-md border text-base hover:bg-slate-50 dark:hover:bg-slate-800',
+              'group block rounded-md border text-base px-2.5 py-2 transition-colors',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
               it.tone === 'rose'
-                ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/30'
+                ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/30 hover:bg-rose-50/80 dark:hover:bg-rose-950/50'
                 : it.tone === 'amber'
-                ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/30'
-                : 'border-slate-200 dark:border-slate-700',
+                ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/30 hover:bg-amber-50/80 dark:hover:bg-amber-950/50'
+                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
             )}
           >
-            <span className="text-slate-800 dark:text-slate-200">
-              {it.label}
-            </span>
-            <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-              {NUM_FMT.format(it.count)}
-            </span>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium text-slate-800 dark:text-slate-200">
+                {it.label}
+              </span>
+              <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                {NUM_FMT.format(it.count)}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                {it.impact}
+              </span>
+              <span
+                className={cn(
+                  'inline-flex items-center gap-0.5 text-xs font-medium tabular-nums',
+                  'transition-colors',
+                  it.tone === 'rose'
+                    ? 'text-rose-700 dark:text-rose-400 group-hover:text-rose-900 dark:group-hover:text-rose-200'
+                    : it.tone === 'amber'
+                    ? 'text-amber-700 dark:text-amber-400 group-hover:text-amber-900 dark:group-hover:text-amber-200'
+                    : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-100',
+                )}
+              >
+                {it.actionLabel} →
+              </span>
+            </div>
           </Link>
         ))}
 
