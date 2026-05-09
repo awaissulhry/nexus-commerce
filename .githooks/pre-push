@@ -40,6 +40,16 @@ node scripts/check-i18n-catalog.mjs || {
   exit 1
 }
 
+# W5.47 — link-target regression check. Catches dead Link/breadcrumb
+# hrefs (after a route gets renamed or removed) before the operator
+# clicks into a 404. Hard-fail; tree is currently clean (310 link
+# targets resolve as of 2026-05-09).
+echo "→ Checking link targets..."
+node scripts/check-link-targets.mjs || {
+  echo "❌ Link-target check FAILED — see message above"
+  exit 1
+}
+
 echo "→ Building apps/web..."
 (cd apps/web && rm -rf .next && npx next build > /tmp/web-build.log 2>&1) || {
   echo "❌ apps/web build FAILED"
