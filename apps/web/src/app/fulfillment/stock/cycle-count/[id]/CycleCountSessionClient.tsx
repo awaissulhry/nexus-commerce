@@ -484,8 +484,8 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                       disabled={!allResolved || busyTopAction !== null}
                       title={
                         allResolved
-                          ? 'Close this count session'
-                          : 'Resolve every variance (reconcile or ignore) before completing'
+                          ? t('cycleCount.session.completeReadyTitle')
+                          : t('cycleCount.session.completeBlockedTitle')
                       }
                     >
                       {busyTopAction === 'complete' ? (
@@ -568,13 +568,13 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
           {isInProgress && (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
               <BarcodeScanInput
-                label="Scan SKU to count"
-                placeholder="Aim scanner here or type SKU…"
+                label={t('cycleCount.session.scanLabel')}
+                placeholder={t('cycleCount.session.scanPlaceholder')}
                 onScan={handleScan}
                 autoFocus={false}
               />
               <div className="text-sm text-slate-500 dark:text-slate-400 mt-1.5">
-                Scan or type a SKU to jump to its count input. Camera mode (📷) works on phones.
+                {t('cycleCount.session.scanHelp')}
               </div>
             </div>
           )}
@@ -805,16 +805,16 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                               className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-white bg-green-600 border border-green-600 rounded hover:bg-green-700 disabled:opacity-50"
                               title={
                                 isVarianceZero
-                                  ? 'Mark reconciled (no variance)'
-                                  : 'Apply variance via StockMovement'
+                                  ? t('cycleCount.session.actionMatchTitle')
+                                  : t('cycleCount.session.actionReconcileTitle')
                               }
                             >
                               {actingId === it.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
                               ) : (
-                                <Check className="w-3 h-3" />
+                                <Check className="w-3 h-3" aria-hidden="true" />
                               )}
-                              {isVarianceZero ? 'Match' : 'Reconcile'}
+                              {isVarianceZero ? t('cycleCount.session.actionMatch') : t('cycleCount.session.actionReconcile')}
                             </button>
                             {!isVarianceZero && (
                               <button
@@ -822,10 +822,10 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                                 onClick={() => handleIgnore(it)}
                                 disabled={actingId === it.id}
                                 className="inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-2 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                                title="Don't apply this variance"
+                                title={t('cycleCount.session.actionIgnoreTitle')}
                               >
-                                <SkipForward className="w-3 h-3" />
-                                Ignore
+                                <SkipForward className="w-3 h-3" aria-hidden="true" />
+                                {t('cycleCount.session.actionIgnore')}
                               </button>
                             )}
                           </div>
@@ -852,21 +852,21 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
         }}
         title={
           reasonPrompt?.kind === 'cancel'
-            ? 'Cancel this count?'
+            ? t('cycleCount.session.reasonModal.cancelTitle')
             : reasonPrompt?.kind === 'ignore'
-              ? `Ignore variance on ${reasonPrompt.sku}?`
+              ? t('cycleCount.session.reasonModal.ignoreTitle', { sku: reasonPrompt.sku })
               : ''
         }
         description={
           reasonPrompt?.kind === 'cancel'
-            ? 'The session will move to CANCELLED and stop accepting counts. Already-reconciled adjustments are kept.'
-            : 'The variance is left in the audit trail but is not applied to stock.'
+            ? t('cycleCount.session.reasonModal.cancelDescription')
+            : t('cycleCount.session.reasonModal.ignoreDescription')
         }
         size="md"
       >
         <ModalBody>
           <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
-            Reason <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
+            {t('cycleCount.session.reasonModal.label')} <span className="text-slate-400 dark:text-slate-500 font-normal">{t('cycleCount.session.reasonModal.optional')}</span>
           </label>
           <textarea
             value={reasonInput}
@@ -874,8 +874,8 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
             rows={3}
             placeholder={
               reasonPrompt?.kind === 'cancel'
-                ? 'e.g. recount tomorrow with new operator'
-                : 'e.g. damaged unit pulled separately'
+                ? t('cycleCount.session.reasonModal.cancelPlaceholder')
+                : t('cycleCount.session.reasonModal.ignorePlaceholder')
             }
             className="w-full px-3 py-2 text-base border border-slate-200 dark:border-slate-700 rounded focus:border-slate-400 focus:outline-none"
             disabled={reasonSubmitting}
