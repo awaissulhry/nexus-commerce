@@ -343,6 +343,17 @@ model Product {
   @@index([fulfillmentMethod])
   @@index([familyId])
   @@index([workflowStageId])
+  // W5.43 — bench-products-grid.mjs at 10k catalog showed default
+  // /products page-1 list (sort updatedAt DESC) at p95 131ms. The
+  // status_deletedAt composite above doesn't help when status isn't
+  // filtered. This composite covers the operator's most-common query
+  // shape: parentId IS NULL + deletedAt IS NULL + updatedAt DESC.
+  @@index([parentId, deletedAt, updatedAt(sort: Desc)])
+  // W5.43 — multi-sort brand ASC, basePrice DESC, sku ASC was at p95
+  // 164ms with the existing single-column indexes (Postgres can't
+  // merge them for ordering, only filtering). Composite supports the
+  // exact column order operators chain via the U.x sort UI.
+  @@index([brand, basePrice(sort: Desc), sku])
 }
 
 /// W2.1 — Product family (Akeneo cornerstone PIM template).
