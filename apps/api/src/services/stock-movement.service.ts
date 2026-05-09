@@ -86,6 +86,9 @@ type MovementReason =
   | 'TRANSFER_IN'
   | 'PARENT_PRODUCT_CLEANUP'
   | 'STOCKLEVEL_BACKFILL'
+  // CS.1 — channel pushed authoritative stock back; operator
+  // (or auto-apply threshold) confirms → snap local to channel.
+  | 'CHANNEL_STOCK_RECONCILIATION'
 
 export type StockMovementInput = {
   productId: string

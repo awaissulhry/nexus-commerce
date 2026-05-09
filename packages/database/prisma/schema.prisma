@@ -282,6 +282,7 @@ model Product {
   fbaInventoryDetails       FbaInventoryDetail[] // S.25: per-FC FBA snapshot
   lots                      Lot[] // L.1: lot tracking for recall traceability
   serials                   SerialNumber[] // SR.1: per-unit serial tracking
+  channelStockEvents        ChannelStockEvent[] // CS.1: channel→us stock reconciliation
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -2047,6 +2048,94 @@ model WebhookEvent {
   @@index([channel])
 }
 
+// ── CS.1: Channel → us inbound stock event ───────────────────────────
+//
+// We push outbound stock to channels (OutboundSyncQueue), but channels
+// can adjust on their side too: Shopify admin manual edits, eBay
+// merchant stock corrections, FBA inbound losses, etc. Without an
+// inbound path our local StockLevel drifts and overselling becomes
+// possible.
+//
+// Each row captures one channel-reported stock observation:
+//   - channelReportedQty: what the channel says we have
+//   - localQtyAtObservation: what our StockLevel said at ingest time
+//   - drift: channelReportedQty - localQtyAtObservation
+//
+// Status lifecycle:
+//   PENDING        — fresh ingest, awaits triage
+//   AUTO_APPLIED   — small drift (≤ AUTO_APPLY_THRESHOLD), self-applied
+//   REVIEW_NEEDED  — drift exceeded threshold, operator must review
+//   APPLIED        — operator confirmed, applyStockMovement fired with
+//                    reason=CHANNEL_STOCK_RECONCILIATION
+//   IGNORED        — operator decided channel is wrong, no DB change
+//
+// Idempotency: (channel, channelEventId) unique — webhooks fire
+// duplicates on retries; we accept the same event-id at most once.
+model ChannelStockEvent {
+  id String @id @default(cuid())
+
+  // SHOPIFY | EBAY | AMAZON | WOOCOMMERCE — narrowed at the route layer
+  channel        String
+  // Channel-side identifier for this stock observation (Shopify
+  // inventory_level_id + updated_at, eBay variation key + timestamp,
+  // SP-API report id). Null when the channel doesn't expose one
+  // (legacy paths) — falls back to externalId.
+  channelEventId String
+
+  // Our product (resolved from channel SKU at ingest time).
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId String?
+  variationId String?
+  sku         String
+
+  // Optional location pin. Channels with multi-warehouse mapping
+  // (Shopify locations, FBA fulfillment centers) carry this; null
+  // for single-location channels.
+  locationId String?
+
+  channelReportedQty       Int
+  localQtyAtObservation    Int
+  // Computed at ingest: channelReportedQty - localQtyAtObservation.
+  // Persisted so list views don't recompute on every render.
+  drift                    Int
+
+  status     ChannelStockEventStatus @default(PENDING)
+  // Free-form reason recorded when an operator picks IGNORED or
+  // when AUTO_APPLY_THRESHOLD self-resolves a small drift.
+  resolution String?
+  // Audit pointers — populated when status flips to APPLIED so the
+  // operator can trace the resulting StockMovement back to its
+  // origin event.
+  resultingMovementId String?
+  resolvedByUserId    String?
+  resolvedAt          DateTime?
+
+  // Raw channel payload — kept for forensic debug. JSONB so a
+  // schema bump on the channel side doesn't require a migration.
+  rawPayload Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([channel, channelEventId])
+  @@index([status])
+  @@index([channel])
+  @@index([productId])
+  @@index([sku])
+  @@index([createdAt])
+  // Composite for the operator triage list:
+  // "show me PENDING + REVIEW_NEEDED, newest first per channel".
+  @@index([status, channel, createdAt(sort: Desc)])
+}
+
+enum ChannelStockEventStatus {
+  PENDING
+  AUTO_APPLIED
+  REVIEW_NEEDED
+  APPLIED
+  IGNORED
+}
+
 // (model MarketplaceCredential removed in 20260506_h2_unify_channel_connection.
 //  Designed for SHOPIFY/WOOCOMMERCE/ETSY but never wired up — their service
 //  code reads process.env directly. All connection credentials now live on
@@ -3589,6 +3678,11 @@ enum StockMovementReason {
   TRANSFER_IN
   PARENT_PRODUCT_CLEANUP
   STOCKLEVEL_BACKFILL
+  // CS.1 — channel pushed an authoritative stock count back to us
+  // (Shopify inventory webhook, eBay GetSellerList, FBA inbound
+  // adjustment). Operator confirmed → local StockLevel snaps to
+  // channel value via this reason; drift is auditable.
+  CHANNEL_STOCK_RECONCILIATION
 }
 
 enum ShipmentStatusFBM {

@@ -2618,6 +2618,112 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ── CS.1: Channel-stock-event triage REST ────────────────────────
+  //
+  // GET    /api/stock/channel-events            list (default OPEN)
+  // POST   /api/stock/channel-events            ingest (test/manual)
+  // POST   /api/stock/channel-events/:id/apply  operator confirms
+  // POST   /api/stock/channel-events/:id/ignore operator dismisses
+  //
+  // The webhook ingester (CS.2) calls recordChannelStockEvent
+  // directly from inside its handler — POST .../channel-events is
+  // primarily a manual / test path so an operator can replay an
+  // event from a CSV import without needing to fake a webhook.
+
+  fastify.get('/stock/channel-events', async (request, reply) => {
+    try {
+      const q = request.query as { status?: string; channel?: string; limit?: string }
+      const { listChannelStockEvents } = await import(
+        '../services/channel-stock-event.service.js'
+      )
+      const items = await listChannelStockEvents({
+        status: (q.status as any) ?? 'OPEN',
+        channel: q.channel,
+        limit: q.limit ? Number.parseInt(q.limit, 10) : undefined,
+      })
+      return { items }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/channel-events GET] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/stock/channel-events', async (request, reply) => {
+    try {
+      const body = request.body as {
+        channel?: 'SHOPIFY' | 'EBAY' | 'AMAZON' | 'WOOCOMMERCE'
+        channelEventId?: string
+        sku?: string
+        channelReportedQty?: number
+        locationId?: string | null
+        rawPayload?: unknown
+      }
+      if (!body.channel || !body.channelEventId || !body.sku || body.channelReportedQty == null) {
+        return reply.code(400).send({
+          error: 'channel, channelEventId, sku, channelReportedQty all required',
+        })
+      }
+      const { recordChannelStockEvent } = await import(
+        '../services/channel-stock-event.service.js'
+      )
+      const result = await recordChannelStockEvent({
+        channel: body.channel,
+        channelEventId: body.channelEventId,
+        sku: body.sku,
+        channelReportedQty: body.channelReportedQty,
+        locationId: body.locationId ?? null,
+        rawPayload: body.rawPayload,
+      })
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/channel-events POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post<{ Params: { id: string } }>(
+    '/stock/channel-events/:id/apply',
+    async (request, reply) => {
+      try {
+        const { applyChannelStockEvent } = await import(
+          '../services/channel-stock-event.service.js'
+        )
+        const userId = (request.headers['x-user-id'] as string | undefined) ?? null
+        const result = await applyChannelStockEvent(request.params.id, userId)
+        return result
+      } catch (error: any) {
+        const msg = error?.message ?? String(error)
+        const status = msg.includes('not found') ? 404 : msg.includes('no resolved productId') ? 409 : 500
+        fastify.log.error({ err: error }, '[stock/channel-events/:id/apply] failed')
+        return reply.code(status).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string } }>(
+    '/stock/channel-events/:id/ignore',
+    async (request, reply) => {
+      try {
+        const body = request.body as { reason?: string }
+        const reason = body.reason?.trim()
+        if (!reason) {
+          return reply.code(400).send({ error: 'reason required' })
+        }
+        const { ignoreChannelStockEvent } = await import(
+          '../services/channel-stock-event.service.js'
+        )
+        const userId = (request.headers['x-user-id'] as string | undefined) ?? null
+        const result = await ignoreChannelStockEvent(request.params.id, userId, reason)
+        return result
+      } catch (error: any) {
+        const msg = error?.message ?? String(error)
+        const status = msg.includes('not found') ? 404 : 500
+        fastify.log.error({ err: error }, '[stock/channel-events/:id/ignore] failed')
+        return reply.code(status).send({ error: msg })
+      }
+    },
+  )
 }
 
 export default stockRoutes
