@@ -24,6 +24,7 @@ import AlertsPanel from './_components/AlertsPanel'
 import CatalogSnapshot from './_components/CatalogSnapshot'
 import CustomerPanel from './_components/CustomerPanel'
 import FinancialPanel from './_components/FinancialPanel'
+import PredictivePanel from './_components/PredictivePanel'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
@@ -252,6 +253,7 @@ export default function OverviewClient() {
                   financial={data.financial}
                   currency={data.currency.primary}
                 />
+                <PredictivePanel t={t} predictive={data.predictive} />
                 <TopProducts
                   t={t}
                   items={data.topProducts}

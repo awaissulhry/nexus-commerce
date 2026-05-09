@@ -1079,6 +1079,74 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       // we already computed those, just sum them up. Done after
       // byChannel is built.
 
+      // ── DO.31 — predictive insights ───────────────────────────────
+      //
+      // Surface the daily forecast cron's ReplenishmentForecast
+      // output:
+      //   - aggregate units forecast for the next 7d / 30d
+      //   - count of SKUs whose 7-day forecast exceeds current
+      //     totalStock — the operator's "what's about to run out"
+      //     list
+      //
+      // The forecast is per-SKU per-day; we sum across all rows
+      // for the horizon counts and join to Product for the
+      // stock-out check. Wraps in .catch() because forecast may
+      // not have run yet on a fresh deploy.
+      const today = zonedStartOfDay(new Date(), OPERATOR_TIMEZONE)
+      const next7d = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+      const next30d = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+      const [
+        forecast7dRow,
+        forecast30dRow,
+        stockoutRiskRow,
+      ] = await Promise.all([
+        prisma.$queryRawUnsafe(
+          `SELECT COALESCE(SUM("forecastUnits"), 0)::float AS units
+           FROM "ReplenishmentForecast"
+           WHERE "horizonDay" >= $1 AND "horizonDay" < $2`,
+          today,
+          next7d,
+        )
+          .then((r) => (r as Array<{ units: number }>)[0]?.units ?? 0)
+          .catch(() => 0),
+        prisma.$queryRawUnsafe(
+          `SELECT COALESCE(SUM("forecastUnits"), 0)::float AS units
+           FROM "ReplenishmentForecast"
+           WHERE "horizonDay" >= $1 AND "horizonDay" < $2`,
+          today,
+          next30d,
+        )
+          .then((r) => (r as Array<{ units: number }>)[0]?.units ?? 0)
+          .catch(() => 0),
+        prisma.$queryRawUnsafe(
+          `SELECT COUNT(DISTINCT rf.sku)::bigint AS n
+           FROM "ReplenishmentForecast" rf
+           JOIN "Product" p ON p.sku = rf.sku
+           WHERE rf."horizonDay" >= $1 AND rf."horizonDay" < $2
+           GROUP BY rf.sku
+           HAVING SUM(rf."forecastUnits") > MAX(p."totalStock")`,
+          today,
+          next7d,
+        )
+          .then((r) => (r as Array<{ n: bigint }>).length)
+          .catch(() => 0),
+      ])
+
+      const predictive = {
+        forecastUnits7d: forecast7dRow,
+        forecastUnits30d: forecast30dRow,
+        stockoutRisk7d: stockoutRiskRow,
+        // generatedAt = the freshest forecast row's generatedAt;
+        // null when the table is empty (forecast cron hasn't run).
+        generatedAt: await prisma.replenishmentForecast
+          .findFirst({
+            orderBy: { generatedAt: 'desc' },
+            select: { generatedAt: true },
+          })
+          .then((r) => (r ? r.generatedAt.toISOString() : null))
+          .catch(() => null),
+      }
+
       // ── DO.29 — financial overview ─────────────────────────────────
       //
       // Three signals beyond the KPI strip:
@@ -1380,6 +1448,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // tells the operator how much of the underlying data is on
         // file.
         financial,
+        // DO.31 — forecast cron output: 7d / 30d unit forecasts +
+        // stock-out-at-risk SKU count.
+        predictive,
         catalog: {
           totalProducts,
           totalParents,

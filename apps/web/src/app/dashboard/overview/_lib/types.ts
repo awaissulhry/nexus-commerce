@@ -109,6 +109,15 @@ export interface OverviewPayload {
   >
   sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
+  // DO.31 — predictive insights from the forecast cron. Empty
+  // when no ReplenishmentForecast rows exist; UI hides the panel
+  // until the cron has produced data.
+  predictive: {
+    forecastUnits7d: number
+    forecastUnits30d: number
+    stockoutRisk7d: number
+    generatedAt: string | null
+  }
   // DO.29 — financial overview: gross margin estimate, refund
   // count, tax collected. Margin lives or dies on costPrice
   // coverage; costCoveragePct lets the UI flag low-coverage
