@@ -2499,5 +2499,9 @@
   "time.secondsAgo": "{n}s ago",
   "time.minutesAgo": "{n}m ago",
   "time.hoursAgo": "{n}h ago",
-  "time.daysAgo": "{n}d ago"
+  "time.daysAgo": "{n}d ago",
+  "stock.analytics.onHand": "{n} on hand",
+  "stock.analytics.dailyVelocity": "{v}/day",
+  "stock.reservations.orderRef": "order {id}",
+  "stock.stockouts.durationOpen": "{days}d (open)"
 }

@@ -2487,5 +2487,9 @@
   "time.secondsAgo": "{n}s fa",
   "time.minutesAgo": "{n}m fa",
   "time.hoursAgo": "{n}h fa",
-  "time.daysAgo": "{n}g fa"
+  "time.daysAgo": "{n}g fa",
+  "stock.analytics.onHand": "{n} disponibili",
+  "stock.analytics.dailyVelocity": "{v}/giorno",
+  "stock.reservations.orderRef": "ordine {id}",
+  "stock.stockouts.durationOpen": "{days}g (aperto)"
 }

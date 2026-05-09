@@ -230,7 +230,7 @@ export default function ReservationsClient() {
                           <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md">{r.product?.name ?? '—'}</div>
                           <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                             {r.product?.sku ?? ''}
-                            {r.orderId && <span className="ml-1.5 text-slate-400 dark:text-slate-500">· order {r.orderId.slice(0, 8)}</span>}
+                            {r.orderId && <span className="ml-1.5 text-slate-400 dark:text-slate-500">· {t('stock.reservations.orderRef', { id: r.orderId.slice(0, 8) })}</span>}
                           </div>
                         </div>
                       </div>

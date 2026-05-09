@@ -687,7 +687,7 @@ export default function AnalyticsClient() {
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-                              {p.sku} · {p.totalStock} on hand
+                              {p.sku} · {t('stock.analytics.onHand', { n: p.totalStock })}
                               {p.daysSinceLastMovement != null && (
                                 <span className="text-rose-600"> · {p.daysSinceLastMovement}d ago</span>
                               )}
@@ -738,7 +738,7 @@ export default function AnalyticsClient() {
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-                              {p.sku} · {p.totalStock} on hand · {p.dailyVelocity}/day
+                              {p.sku} · {t('stock.analytics.onHand', { n: p.totalStock })} · {t('stock.analytics.dailyVelocity', { v: p.dailyVelocity })}
                             </div>
                           </div>
                           <div className="text-right text-sm tabular-nums flex-shrink-0">
@@ -828,7 +828,7 @@ export default function AnalyticsClient() {
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                           {p.unitsSold.toLocaleString()}
-                          <div className="text-xs text-slate-400">{p.totalStock} on hand</div>
+                          <div className="text-xs text-slate-400">{t('stock.analytics.onHand', { n: p.totalStock })}</div>
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
                           {p.costPriceCents === 0 ? <span className="text-slate-300">—</span> : formatCents(p.currentInventoryValueCents)}

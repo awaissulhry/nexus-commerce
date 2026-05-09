@@ -82,14 +82,19 @@ function formatDate(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10)
 }
 
-function formatDuration(days: number | string | null, endedAt: string | null, startedAt: string): string {
+function formatDuration(
+  days: number | string | null,
+  endedAt: string | null,
+  startedAt: string,
+  t: (k: string, vars?: Record<string, string | number>) => string,
+): string {
   if (days != null) {
     const n = typeof days === 'string' ? parseFloat(days) : days
     if (Number.isFinite(n)) return `${n.toFixed(1)}d`
   }
   if (!endedAt) {
     const ms = Date.now() - new Date(startedAt).getTime()
-    return `${(ms / 86400_000).toFixed(1)}d (open)`
+    return t('stock.stockouts.durationOpen', { days: (ms / 86400_000).toFixed(1) })
   }
   return '—'
 }
@@ -380,7 +385,7 @@ export default function StockoutsClient() {
                           isOpen ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-slate-700 dark:text-slate-300',
                         )}>
                           <Clock size={11} aria-hidden="true" />
-                          {formatDuration(e.durationDays, e.endedAt, e.startedAt)}
+                          {formatDuration(e.durationDays, e.endedAt, e.startedAt, t)}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
