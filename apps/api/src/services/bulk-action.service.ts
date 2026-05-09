@@ -25,13 +25,55 @@ import { applyStockMovement } from './stock-movement.service.js';
 // `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
 // rewrites the pricing handler with plain JS arithmetic.)
 
+/**
+ * W1.2 (2026-05-09) — actionType drift fix.
+ *
+ * Three independent code paths historically wrote BulkActionJob rows
+ * with incompatible `actionType` strings:
+ *
+ *   1. BulkActionService (this file) — accepts the canonical six.
+ *   2. listings-syndication.routes.ts:2870 — writes the literal
+ *      'LISTING_BULK_ACTION' direct via `prisma.bulkActionJob.create`,
+ *      bypassing this service.
+ *   3. BulkOperationModal.tsx — surfaces 'SCHEMA_FIELD_UPDATE' but
+ *      posts to /api/products/bulk-schema-update (NOT BulkActionJob).
+ *
+ * This union is now the single source of truth for *every* row in
+ * BulkActionJob, including the listing-syndication path. The Zod
+ * schema (validation.ts) and the syndication router both validate
+ * against KNOWN_BULK_ACTION_TYPES below before insert.
+ *
+ * SCHEMA_FIELD_UPDATE is intentionally NOT in the union — it never
+ * persists a BulkActionJob row. If that ever changes, add it here.
+ */
 export type BulkActionType =
   | 'PRICING_UPDATE'
   | 'INVENTORY_UPDATE'
   | 'STATUS_UPDATE'
   | 'ATTRIBUTE_UPDATE'
   | 'LISTING_SYNC'
-  | 'MARKETPLACE_OVERRIDE_UPDATE';
+  | 'MARKETPLACE_OVERRIDE_UPDATE'
+  | 'LISTING_BULK_ACTION';
+
+/**
+ * Runtime allowlist mirroring `BulkActionType`. Used by the Zod
+ * schema in validation.ts and by listings-syndication.routes.ts to
+ * reject typo'd / drifted action types at the boundary, before they
+ * land in the BulkActionJob table.
+ */
+export const KNOWN_BULK_ACTION_TYPES: ReadonlySet<BulkActionType> = new Set([
+  'PRICING_UPDATE',
+  'INVENTORY_UPDATE',
+  'STATUS_UPDATE',
+  'ATTRIBUTE_UPDATE',
+  'LISTING_SYNC',
+  'MARKETPLACE_OVERRIDE_UPDATE',
+  'LISTING_BULK_ACTION',
+]);
+
+export function isKnownBulkActionType(t: string): t is BulkActionType {
+  return KNOWN_BULK_ACTION_TYPES.has(t as BulkActionType);
+}
 
 /**
  * C.9 — strict allowlist for ATTRIBUTE_UPDATE scalar Product columns.
@@ -145,6 +187,14 @@ const ACTION_ENTITY = {
   ATTRIBUTE_UPDATE: 'product',
   LISTING_SYNC: 'product',
   MARKETPLACE_OVERRIDE_UPDATE: 'channelListing',
+  // W1.2 — LISTING_BULK_ACTION jobs (listings-syndication.routes.ts)
+  // store ChannelListing IDs in BulkActionJob.targetProductIds (the
+  // column is reused across surfaces — see comment on that route).
+  // Mark the entity 'channelListing' to keep ACTION_ENTITY honest;
+  // BulkActionService itself never processes these (that route runs
+  // its own per-listing worker), so this entry is documentation +
+  // rollback-eligibility wiring rather than execution dispatch.
+  LISTING_BULK_ACTION: 'channelListing',
 } as const satisfies Record<
   BulkActionType,
   'product' | 'variation' | 'channelListing'

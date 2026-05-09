@@ -4,6 +4,10 @@ import { computeHealth, aggregateIssuesByCategory } from '../services/listings/h
 import { publishListingEvent, subscribeListingEvents } from '../services/listing-events.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { getProvider } from '../services/ai/providers/index.js'
+import {
+  KNOWN_BULK_ACTION_TYPES,
+  type BulkActionType,
+} from '../services/bulk-action.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -35,7 +39,20 @@ const ALLOWED_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
 // distinguishable from /bulk-operations rows in the same table (which
 // use PRICING_UPDATE / STATUS_UPDATE / etc.). Saves writing a separate
 // table while keeping query partitioning easy.
-const LISTING_BULK_ACTION_TYPE = 'LISTING_BULK_ACTION'
+//
+// W1.2 (2026-05-09) — sourced from the canonical BulkActionType union
+// + KNOWN_BULK_ACTION_TYPES allowlist so this route can't drift to a
+// type the rest of the codebase doesn't recognise.
+const LISTING_BULK_ACTION_TYPE: BulkActionType = 'LISTING_BULK_ACTION'
+if (!KNOWN_BULK_ACTION_TYPES.has(LISTING_BULK_ACTION_TYPE)) {
+  // Defensive: caught at module load if anyone removes
+  // 'LISTING_BULK_ACTION' from the canonical union. Keeps this and the
+  // service in lockstep.
+  throw new Error(
+    `[listings-syndication] LISTING_BULK_ACTION not in KNOWN_BULK_ACTION_TYPES — ` +
+      `bulk-action.service.ts and this route have drifted.`,
+  )
+}
 
 interface ListingBulkActionPayload {
   action: string

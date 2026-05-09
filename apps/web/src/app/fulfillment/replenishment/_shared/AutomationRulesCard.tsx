@@ -20,7 +20,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sparkles, Play, Pause, Loader2, Trash2, AlertOctagon, Zap } from 'lucide-react'
+import { Sparkles, Play, Pause, Loader2, Trash2, AlertOctagon, Zap, Settings } from 'lucide-react'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -94,6 +96,7 @@ export function AutomationRulesCard() {
   const [running, setRunning] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
+  const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
 
   const fetchRules = useCallback(async () => {
     setLoading(true)
@@ -401,6 +404,15 @@ export function AutomationRulesCard() {
         </div>
       </div>
 
+      <RuleEditModal
+        rule={editingRule}
+        onClose={() => setEditingRule(null)}
+        onSaved={() => {
+          setEditingRule(null)
+          void fetchRules()
+        }}
+      />
+
       <ul className="divide-y divide-slate-200 dark:divide-slate-800">
         {rules.map((rule) => {
           const expanded = expandedId === rule.id
@@ -501,6 +513,16 @@ export function AutomationRulesCard() {
                     </>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingRule(rule)}
+                  className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded"
+                  title={t('replenishment.automation.editTooltip')}
+                  aria-label={t('replenishment.automation.editAriaLabel', { name: rule.name })}
+                >
+                  <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
 
                 <button
                   type="button"
@@ -641,5 +663,210 @@ function RecentExecutions({ ruleId }: { ruleId: string }) {
         </ul>
       )}
     </div>
+  )
+}
+
+/**
+ * W4.13 — Rule basics editor. Field-by-field form for the high-impact
+ * tunables: name, description, dryRun toggle, maxExecutionsPerDay,
+ * maxValueCentsEur. Conditions + actions JSON stay in the expand
+ * view (read-only); a future commit lands drag-drop visual editing.
+ *
+ * Why these fields specifically: per the prompt's "operator can
+ * tune thresholds without a code change", the most-frequently-edited
+ * params are the spend caps + dry-run flag. Name + description help
+ * operators clarify what a customised rule does once it diverges
+ * from the seeded template.
+ */
+function RuleEditModal({
+  rule,
+  onClose,
+  onSaved,
+}: {
+  rule: AutomationRule | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useTranslations()
+  const { toast } = useToast()
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [dryRun, setDryRun] = useState(true)
+  const [maxExecutionsPerDay, setMaxExecutionsPerDay] = useState<string>('')
+  const [maxValueEur, setMaxValueEur] = useState<string>('') // EUR (not cents) for friendlier input
+  const [submitting, setSubmitting] = useState(false)
+
+  // Re-seed form whenever a different rule opens.
+  useEffect(() => {
+    if (!rule) return
+    setName(rule.name)
+    setDescription(rule.description ?? '')
+    setDryRun(rule.dryRun)
+    setMaxExecutionsPerDay(
+      rule.maxExecutionsPerDay != null ? String(rule.maxExecutionsPerDay) : '',
+    )
+    setMaxValueEur(
+      rule.maxValueCentsEur != null
+        ? String(Math.round(rule.maxValueCentsEur / 100))
+        : '',
+    )
+  }, [rule])
+
+  if (!rule) return null
+
+  const submit = async () => {
+    if (!name.trim()) {
+      toast.error(t('replenishment.automation.edit.nameRequired'))
+      return
+    }
+    const data: Record<string, unknown> = {
+      name: name.trim(),
+      description: description.trim() || null,
+      dryRun,
+    }
+    // Empty string => null (unlimited). Non-empty must parse to int.
+    if (maxExecutionsPerDay.trim() === '') {
+      data.maxExecutionsPerDay = null
+    } else {
+      const n = parseInt(maxExecutionsPerDay, 10)
+      if (!Number.isFinite(n) || n < 0) {
+        toast.error(t('replenishment.automation.edit.invalidExecCap'))
+        return
+      }
+      data.maxExecutionsPerDay = n
+    }
+    if (maxValueEur.trim() === '') {
+      data.maxValueCentsEur = null
+    } else {
+      const eur = parseFloat(maxValueEur)
+      if (!Number.isFinite(eur) || eur < 0) {
+        toast.error(t('replenishment.automation.edit.invalidValueCap'))
+        return
+      }
+      data.maxValueCentsEur = Math.round(eur * 100)
+    }
+    setSubmitting(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/automation/rules/${rule.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+          cache: 'no-store',
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(t('replenishment.automation.edit.success', { name: name.trim() }))
+      onSaved()
+    } catch (err) {
+      toast.error(
+        t('replenishment.automation.edit.error', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={rule !== null}
+      onClose={onClose}
+      title={t('replenishment.automation.edit.title')}
+      size="md"
+    >
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">
+            {t('replenishment.automation.edit.nameLabel')}
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">
+            {t('replenishment.automation.edit.descriptionLabel')}
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">
+              {t('replenishment.automation.edit.execCapLabel')}
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={maxExecutionsPerDay}
+              onChange={(e) => setMaxExecutionsPerDay(e.target.value)}
+              placeholder={t('replenishment.automation.edit.unlimitedPlaceholder')}
+              className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+              {t('replenishment.automation.edit.execCapHint')}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-1">
+              {t('replenishment.automation.edit.valueCapLabel')}
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={maxValueEur}
+              onChange={(e) => setMaxValueEur(e.target.value)}
+              placeholder={t('replenishment.automation.edit.unlimitedPlaceholder')}
+              className="w-full text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+              {t('replenishment.automation.edit.valueCapHint')}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-1">
+          <input
+            id="rule-dryrun"
+            type="checkbox"
+            checked={dryRun}
+            onChange={(e) => setDryRun(e.target.checked)}
+            className="rounded"
+          />
+          <label
+            htmlFor="rule-dryrun"
+            className="text-sm text-slate-700 dark:text-slate-300"
+          >
+            {t('replenishment.automation.edit.dryRunLabel')}
+          </label>
+        </div>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+          {t('replenishment.automation.edit.dryRunHint')}
+        </div>
+      </div>
+      <ModalFooter>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button
+          variant="primary"
+          onClick={() => void submit()}
+          loading={submitting}
+        >
+          {t('replenishment.automation.edit.submit')}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
