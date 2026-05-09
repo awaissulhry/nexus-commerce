@@ -22,6 +22,7 @@ import MarketplaceMatrix from './_components/MarketplaceMatrix'
 import TopProducts from './_components/TopProducts'
 import AlertsPanel from './_components/AlertsPanel'
 import CatalogSnapshot from './_components/CatalogSnapshot'
+import CustomerPanel from './_components/CustomerPanel'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
@@ -256,6 +257,11 @@ export default function OverviewClient() {
                   t={t}
                   alerts={data.alerts}
                   catalog={data.catalog}
+                />
+                <CustomerPanel
+                  t={t}
+                  customers={data.customers}
+                  currency={data.currency.primary}
                 />
                 <CatalogSnapshot t={t} catalog={data.catalog} />
                 <ActivityFeed t={t} items={data.recentActivity} />

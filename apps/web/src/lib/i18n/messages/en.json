@@ -1659,6 +1659,13 @@
   "overview.alerts.disconnected": "disconnected",
   "overview.alerts.liveListings": "Live listings",
   "overview.alerts.variants": "Variants",
+  "overview.customers.heading": "Customers",
+  "overview.customers.openAll": "All customers",
+  "overview.customers.new": "New",
+  "overview.customers.returning": "Returning",
+  "overview.customers.topLtv": "Top by lifetime value",
+  "overview.customers.byCountry": "Top countries",
+
   "overview.catalog.heading": "Catalog snapshot",
   "overview.catalog.products": "Products",
   "overview.catalog.parents": "Parents",

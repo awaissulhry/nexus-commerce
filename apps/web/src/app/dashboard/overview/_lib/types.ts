@@ -109,6 +109,27 @@ export interface OverviewPayload {
   >
   sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
+  // DO.27 — customer intelligence. New vs returning in the active
+  // window plus the lifetime top-5 by LTV and the top countries
+  // by order volume in the window. Empty when the Customer table
+  // is sparse — UI hides the section then.
+  customers: {
+    newInWindow: number
+    returningInWindow: number
+    topByLtv: Array<{
+      id: string
+      email: string
+      name: string | null
+      orders: number
+      spentCents: number
+      lastOrderAt: string | null
+    }>
+    byCountry: Array<{
+      country: string
+      orders: number
+      revenue: number
+    }>
+  }
   catalog: {
     totalProducts: number
     totalParents: number

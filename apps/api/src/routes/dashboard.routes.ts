@@ -1047,6 +1047,95 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       // we already computed those, just sum them up. Done after
       // byChannel is built.
 
+      // ── DO.27 — customer intelligence ─────────────────────────────
+      //
+      // Three signals operators ask for daily:
+      //   - new vs returning split in the active window
+      //   - top customers by lifetime value (LTV)
+      //   - geographic distribution (top 5 ship-to countries)
+      //
+      // The Customer table carries firstOrderAt + lastOrderAt + totalSpentCents,
+      // so new/returning is a single filter on firstOrderAt vs the
+      // window. LTV reads totalSpentCents directly. Geo comes from
+      // Order.shippingAddress.country — there's no normalised
+      // address table yet, so we extract via raw SQL on the JSONB.
+      const [
+        customersNew,
+        customersReturning,
+        topCustomers,
+        countryRows,
+      ] = await Promise.all([
+        prisma.customer
+          .count({
+            where: { firstOrderAt: { gte: from, lte: to } },
+          })
+          .catch(() => 0),
+        prisma.customer
+          .count({
+            where: {
+              firstOrderAt: { lt: from },
+              lastOrderAt: { gte: from, lte: to },
+            },
+          })
+          .catch(() => 0),
+        prisma.customer
+          .findMany({
+            orderBy: { totalSpentCents: 'desc' },
+            take: 5,
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              totalOrders: true,
+              totalSpentCents: true,
+              lastOrderAt: true,
+            },
+          })
+          .catch(() => [] as Array<{
+            id: string
+            email: string
+            name: string | null
+            totalOrders: number
+            totalSpentCents: bigint
+            lastOrderAt: Date | null
+          }>),
+        prisma.$queryRawUnsafe(
+          `SELECT
+             COALESCE("shippingAddress"->>'country', 'Unknown') AS country,
+             COUNT(*)::bigint AS orders,
+             COALESCE(SUM("totalPrice"), 0)::float AS revenue
+           FROM "Order"
+           WHERE "createdAt" >= $1 AND "createdAt" <= $2
+             AND COALESCE("currencyCode", 'EUR') = $3
+           GROUP BY 1
+           ORDER BY orders DESC
+           LIMIT 8`,
+          from,
+          to,
+          primaryCurrency,
+        )
+          .then((r) => r as Array<{ country: string; orders: bigint; revenue: number }>)
+          .catch(() => [] as Array<{ country: string; orders: bigint; revenue: number }>),
+      ])
+
+      const customers = {
+        newInWindow: customersNew,
+        returningInWindow: customersReturning,
+        topByLtv: topCustomers.map((c) => ({
+          id: c.id,
+          email: c.email,
+          name: c.name,
+          orders: c.totalOrders,
+          spentCents: Number(c.totalSpentCents),
+          lastOrderAt: c.lastOrderAt ? c.lastOrderAt.toISOString() : null,
+        })),
+        byCountry: countryRows.map((r) => ({
+          country: r.country,
+          orders: Number(r.orders),
+          revenue: r.revenue,
+        })),
+      }
+
       // ── DO.20 — recent unread notifications ───────────────────────
       //
       // Surface up to 8 most recent unread Notification rows in the
@@ -1164,6 +1253,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // sniffing every bucket.
         sparklineChannels: channelKeys,
         recentActivity,
+        // DO.27 — customer intelligence block.
+        customers,
         catalog: {
           totalProducts,
           totalParents,
