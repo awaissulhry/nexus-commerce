@@ -39,6 +39,11 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
+
+// DO.5 — translator type alias so leaf components don't have to
+// import `useTranslations` themselves; the parent threads `t` down.
+type T = ReturnType<typeof useTranslations>['t']
 
 interface OverviewPayload {
   window: { from: string; to: string; label: string; key: string }
@@ -165,12 +170,16 @@ function formatCurrency(n: number, code: string): string {
   return currencyFormatter(code).format(Math.round(n))
 }
 
-function formatDelta(pct: number | null): {
+function formatDelta(
+  pct: number | null,
+  t: T,
+): {
   label: string
   tone: 'pos' | 'neg' | 'flat' | 'na'
 } {
-  if (pct === null) return { label: 'n/a', tone: 'na' }
-  if (Math.abs(pct) < 0.5) return { label: 'flat', tone: 'flat' }
+  if (pct === null) return { label: t('overview.delta.na'), tone: 'na' }
+  if (Math.abs(pct) < 0.5)
+    return { label: t('overview.delta.flat'), tone: 'flat' }
   return {
     label: PCT_FMT.format(pct / 100),
     tone: pct > 0 ? 'pos' : 'neg',
@@ -178,6 +187,7 @@ function formatDelta(pct: number | null): {
 }
 
 export default function OverviewClient() {
+  const { t } = useTranslations()
   const [window, setWindow] = useState<WindowKey>('30d')
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -239,6 +249,7 @@ export default function OverviewClient() {
   return (
     <div className="space-y-6">
       <Header
+        t={t}
         currentWindow={window}
         onWindowChange={setWindow}
         lastRefreshed={lastRefreshed}
@@ -249,7 +260,7 @@ export default function OverviewClient() {
       {loading && !data && (
         <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 inline-flex items-center justify-center gap-2 w-full">
           <Loader2 className="w-4 h-4 animate-spin" />
-          Loading overview…
+          {t('overview.loading')}
         </div>
       )}
 
@@ -257,7 +268,7 @@ export default function OverviewClient() {
         <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
-            <div className="font-semibold">Couldn't load overview</div>
+            <div className="font-semibold">{t('overview.error.title')}</div>
             <div className="text-sm text-rose-600">{error}</div>
           </div>
         </div>
@@ -265,29 +276,36 @@ export default function OverviewClient() {
 
       {data && (
         <>
-          <KpiGrid totals={data.totals} currency={data.currency} />
+          <KpiGrid t={t} totals={data.totals} currency={data.currency} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
               <Sparkline
+                t={t}
                 points={data.sparkline}
                 currency={data.currency.primary}
-                windowLabel={data.window.label}
+                windowKey={data.window.key as WindowKey}
               />
               <ChannelGrid
+                t={t}
                 byChannel={data.byChannel}
                 currency={data.currency.primary}
               />
-              <MarketplaceMatrix matrix={data.byMarketplace} />
+              <MarketplaceMatrix t={t} matrix={data.byMarketplace} />
               <TopProducts
+                t={t}
                 items={data.topProducts}
                 currency={data.currency.primary}
               />
             </div>
             <div className="space-y-4">
-              <AlertsPanel alerts={data.alerts} catalog={data.catalog} />
-              <CatalogSnapshot catalog={data.catalog} />
-              <ActivityFeed items={data.recentActivity} />
-              <QuickActions />
+              <AlertsPanel
+                t={t}
+                alerts={data.alerts}
+                catalog={data.catalog}
+              />
+              <CatalogSnapshot t={t} catalog={data.catalog} />
+              <ActivityFeed t={t} items={data.recentActivity} />
+              <QuickActions t={t} />
             </div>
           </div>
         </>
@@ -299,12 +317,14 @@ export default function OverviewClient() {
 // ── Header ───────────────────────────────────────────────────────────
 
 function Header({
+  t,
   currentWindow,
   onWindowChange,
   lastRefreshed,
   refreshing,
   onRefresh,
 }: {
+  t: T
   currentWindow: WindowKey
   onWindowChange: (w: WindowKey) => void
   lastRefreshed: number
@@ -315,10 +335,10 @@ function Header({
     <div className="flex items-end justify-between gap-3 flex-wrap">
       <div>
         <h1 className="text-[24px] font-semibold text-slate-900">
-          Command Center
+          {t('overview.title')}
         </h1>
         <p className="text-md text-slate-600 mt-0.5">
-          Real-time operations across every channel and marketplace.
+          {t('overview.subtitle')}
         </p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -335,7 +355,7 @@ function Header({
                   : 'text-slate-600 hover:text-slate-900',
               )}
             >
-              {w.label}
+              {t(`overview.window.${w.id}`)}
             </button>
           ))}
         </div>
@@ -350,9 +370,9 @@ function Header({
           ) : (
             <RefreshCw className="w-3 h-3" />
           )}
-          Refresh
+          {t('overview.refresh')}
         </button>
-        <RelativeTimestamp at={lastRefreshed} />
+        <RelativeTimestamp t={t} at={lastRefreshed} />
       </div>
     </div>
   )
@@ -361,9 +381,11 @@ function Header({
 // ── KPI grid ─────────────────────────────────────────────────────────
 
 function KpiGrid({
+  t,
   totals,
   currency,
 }: {
+  t: T
   totals: OverviewPayload['totals']
   currency: OverviewPayload['currency']
 }) {
@@ -380,33 +402,37 @@ function KpiGrid({
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="Revenue"
+          t={t}
+          label={t('overview.kpi.revenue')}
           value={formatCurrency(totals.revenue.current, primary)}
-          delta={formatDelta(totals.revenue.deltaPct)}
+          delta={formatDelta(totals.revenue.deltaPct, t)}
           prevValue={formatCurrency(totals.revenue.previous, primary)}
         />
         <KpiCard
-          label="Orders"
+          t={t}
+          label={t('overview.kpi.orders')}
           value={NUM_FMT.format(totals.orders.current)}
-          delta={formatDelta(totals.orders.deltaPct)}
+          delta={formatDelta(totals.orders.deltaPct, t)}
           prevValue={NUM_FMT.format(totals.orders.previous)}
         />
         <KpiCard
-          label="AOV"
+          t={t}
+          label={t('overview.kpi.aov')}
           value={formatCurrency(totals.aov.current, primary)}
-          delta={formatDelta(totals.aov.deltaPct)}
+          delta={formatDelta(totals.aov.deltaPct, t)}
           prevValue={formatCurrency(totals.aov.previous, primary)}
         />
         <KpiCard
-          label="Units sold"
+          t={t}
+          label={t('overview.kpi.units')}
           value={NUM_FMT.format(totals.units.current)}
-          delta={formatDelta(totals.units.deltaPct)}
+          delta={formatDelta(totals.units.deltaPct, t)}
           prevValue={NUM_FMT.format(totals.units.previous)}
         />
       </div>
       {secondaries.length > 0 && (
         <div className="text-xs text-slate-500 pl-1">
-          incl.{' '}
+          {t('overview.kpi.includes')}{' '}
           {secondaries.map((s, i) => (
             <span key={s.code}>
               {i > 0 && ' · '}
@@ -423,11 +449,13 @@ function KpiGrid({
 }
 
 function KpiCard({
+  t,
   label,
   value,
   delta,
   prevValue,
 }: {
+  t: T
   label: string
   value: string
   delta: { label: string; tone: 'pos' | 'neg' | 'flat' | 'na' }
@@ -445,7 +473,8 @@ function KpiCard({
         <DeltaPill delta={delta} />
       </div>
       <div className="mt-1 text-xs text-slate-400">
-        prev: <span className="tabular-nums">{prevValue}</span>
+        {t('overview.kpi.prev')}{' '}
+        <span className="tabular-nums">{prevValue}</span>
       </div>
     </div>
   )
@@ -484,33 +513,50 @@ function DeltaPill({
 // ── Sparkline ────────────────────────────────────────────────────────
 
 function Sparkline({
+  t,
   points,
   currency,
-  windowLabel,
+  windowKey,
 }: {
+  t: T
   points: OverviewPayload['sparkline']
   currency: string
-  windowLabel: string
+  windowKey: WindowKey
 }) {
   const totalRev = points.reduce((s, p) => s + p.revenue, 0)
   const totalOrders = points.reduce((s, p) => s + p.orders, 0)
+  // Translate the window label client-side off the window key. The
+  // backend still sends an English `window.label` for analytics
+  // logging, but the UI shouldn't lean on it.
+  const label = t(`overview.windowLabel.${windowKey}`)
   return (
     <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-md font-semibold text-slate-900">
-          {windowLabel} trend
+          {t('overview.trend.heading', { label })}
         </h2>
         <div className="text-sm text-slate-500 tabular-nums">
           {formatCurrency(totalRev, currency)} ·{' '}
-          {NUM_FMT.format(totalOrders)} orders
+          {t(
+            totalOrders === 1
+              ? 'overview.channels.order'
+              : 'overview.channels.orderPlural',
+            { n: NUM_FMT.format(totalOrders) },
+          )}
         </div>
       </div>
-      <SvgLineChart points={points} />
+      <SvgLineChart t={t} points={points} />
     </div>
   )
 }
 
-function SvgLineChart({ points }: { points: OverviewPayload['sparkline'] }) {
+function SvgLineChart({
+  t,
+  points,
+}: {
+  t: T
+  points: OverviewPayload['sparkline']
+}) {
   const w = 600
   const h = 100
   const pad = 4
@@ -559,11 +605,11 @@ function SvgLineChart({ points }: { points: OverviewPayload['sparkline'] }) {
       <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2 h-0.5 bg-emerald-500" />
-          Revenue
+          {t('overview.trend.legend.revenue')}
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2 h-0.5 bg-blue-500 opacity-60" />
-          Orders
+          {t('overview.trend.legend.orders')}
         </span>
       </div>
     </div>
@@ -573,9 +619,11 @@ function SvgLineChart({ points }: { points: OverviewPayload['sparkline'] }) {
 // ── Channel grid ─────────────────────────────────────────────────────
 
 function ChannelGrid({
+  t,
   byChannel,
   currency,
 }: {
+  t: T
   byChannel: OverviewPayload['byChannel']
   currency: string
 }) {
@@ -586,10 +634,10 @@ function ChannelGrid({
     return (
       <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
         <h2 className="text-md font-semibold text-slate-900 mb-2">
-          Channels
+          {t('overview.channels.heading')}
         </h2>
         <div className="text-base text-slate-500 italic">
-          No channel activity in this window.
+          {t('overview.channels.empty')}
         </div>
       </div>
     )
@@ -597,7 +645,7 @@ function ChannelGrid({
   return (
     <div>
       <h2 className="text-md font-semibold text-slate-900 mb-2">
-        Channels
+        {t('overview.channels.heading')}
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {visible.map((c) => {
@@ -618,8 +666,12 @@ function ChannelGrid({
                   {CHANNEL_LABELS[c.channel] ?? c.channel}
                 </span>
                 <span className="text-xs text-slate-500 tabular-nums">
-                  {NUM_FMT.format(c.listings.total)} listing
-                  {c.listings.total === 1 ? '' : 's'}
+                  {t(
+                    c.listings.total === 1
+                      ? 'overview.channels.listing'
+                      : 'overview.channels.listingPlural',
+                    { n: NUM_FMT.format(c.listings.total) },
+                  )}
                 </span>
               </div>
               <div className="mt-1 flex items-baseline gap-3 flex-wrap">
@@ -627,16 +679,29 @@ function ChannelGrid({
                   {formatCurrency(c.revenue, currency)}
                 </div>
                 <div className="text-sm text-slate-600 tabular-nums">
-                  {NUM_FMT.format(c.orders)} order
-                  {c.orders === 1 ? '' : 's'} · AOV{' '}
-                  {formatCurrency(c.aov, currency)}
+                  {t(
+                    c.orders === 1
+                      ? 'overview.channels.order'
+                      : 'overview.channels.orderPlural',
+                    { n: NUM_FMT.format(c.orders) },
+                  )}{' '}
+                  ·{' '}
+                  {t('overview.channels.aov', {
+                    amount: formatCurrency(c.aov, currency),
+                  })}
                 </div>
               </div>
               <div className="mt-1.5 flex items-center gap-2 text-xs">
-                <Pill tone="emerald">{c.listings.live} live</Pill>
-                <Pill tone="amber">{c.listings.draft} draft</Pill>
+                <Pill tone="emerald">
+                  {t('overview.channels.live', { n: c.listings.live })}
+                </Pill>
+                <Pill tone="amber">
+                  {t('overview.channels.draft', { n: c.listings.draft })}
+                </Pill>
                 {c.listings.failed > 0 && (
-                  <Pill tone="rose">{c.listings.failed} failed</Pill>
+                  <Pill tone="rose">
+                    {t('overview.channels.failed', { n: c.listings.failed })}
+                  </Pill>
                 )}
               </div>
             </div>
@@ -650,8 +715,10 @@ function ChannelGrid({
 // ── Marketplace matrix ───────────────────────────────────────────────
 
 function MarketplaceMatrix({
+  t,
   matrix,
 }: {
+  t: T
   matrix: OverviewPayload['byMarketplace']
 }) {
   const channels = Array.from(new Set(matrix.map((m) => m.channel))).sort()
@@ -665,13 +732,13 @@ function MarketplaceMatrix({
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <h2 className="text-md font-semibold text-slate-900">
-          Listings by channel × marketplace
+          {t('overview.matrix.heading')}
         </h2>
         <Link
           href="/bulk-operations"
           className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
         >
-          Open <ChevronRight className="w-3 h-3" />
+          {t('overview.matrix.open')} <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
       <div className="overflow-x-auto">
@@ -679,7 +746,7 @@ function MarketplaceMatrix({
           <thead className="bg-slate-50">
             <tr>
               <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
-                Channel
+                {t('overview.matrix.colChannel')}
               </th>
               {marketplaces.map((m) => (
                 <th
@@ -690,7 +757,7 @@ function MarketplaceMatrix({
                 </th>
               ))}
               <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
-                Total
+                {t('overview.matrix.colTotal')}
               </th>
             </tr>
           </thead>
@@ -743,9 +810,11 @@ function MarketplaceMatrix({
 // ── Top products ─────────────────────────────────────────────────────
 
 function TopProducts({
+  t,
   items,
   currency,
 }: {
+  t: T
   items: OverviewPayload['topProducts']
   currency: string
 }) {
@@ -755,7 +824,7 @@ function TopProducts({
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
         <h2 className="text-md font-semibold text-slate-900">
-          Top SKUs by revenue
+          {t('overview.top.heading')}
         </h2>
       </div>
       <ul>
@@ -781,7 +850,7 @@ function TopProducts({
                 )}
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="text-sm text-slate-500 tabular-nums">
-                    {NUM_FMT.format(it.units)} units
+                    {t('overview.top.units', { n: NUM_FMT.format(it.units) })}
                   </span>
                   <span className="text-base font-semibold text-slate-900 tabular-nums">
                     {formatCurrency(it.revenue, currency)}
@@ -805,9 +874,11 @@ function TopProducts({
 // ── Alerts ───────────────────────────────────────────────────────────
 
 function AlertsPanel({
+  t,
   alerts,
   catalog,
 }: {
+  t: T
   alerts: OverviewPayload['alerts']
   catalog: OverviewPayload['catalog']
 }) {
@@ -819,21 +890,21 @@ function AlertsPanel({
   }> = []
   if (alerts.outOfStock > 0)
     items.push({
-      label: 'Out of stock',
+      label: t('overview.alerts.outOfStock'),
       count: alerts.outOfStock,
       href: '/products?stock=out',
       tone: 'rose',
     })
   if (alerts.lowStock > 0)
     items.push({
-      label: 'Low stock (≤10)',
+      label: t('overview.alerts.lowStock'),
       count: alerts.lowStock,
       href: '/products?stock=low',
       tone: 'amber',
     })
   if (alerts.failedListings > 0)
     items.push({
-      label: 'Failed listings',
+      label: t('overview.alerts.failedListings'),
       count: alerts.failedListings,
       // C.4 — link to the master /listings filtered by status, not a
       // hardcoded /listings/amazon. Failures can be on any channel and
@@ -844,14 +915,14 @@ function AlertsPanel({
     })
   if (alerts.draftListings > 0)
     items.push({
-      label: 'Draft listings',
+      label: t('overview.alerts.draftListings'),
       count: alerts.draftListings,
       href: '/listings?listingStatus=DRAFT',
       tone: 'amber',
     })
   if (alerts.pendingOrders > 0)
     items.push({
-      label: 'Pending orders',
+      label: t('overview.alerts.pendingOrders'),
       count: alerts.pendingOrders,
       href: '/orders',
       tone: 'amber',
@@ -859,15 +930,19 @@ function AlertsPanel({
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h2 className="text-md font-semibold text-slate-900">Alerts</h2>
+        <h2 className="text-md font-semibold text-slate-900">
+          {t('overview.alerts.heading')}
+        </h2>
         <span className="text-xs text-slate-500">
-          {items.length === 0 ? 'all clear' : `${items.length} active`}
+          {items.length === 0
+            ? t('overview.alerts.allClear')
+            : t('overview.alerts.activeCount', { n: items.length })}
         </span>
       </div>
       <div className="px-4 py-3 space-y-2">
         {items.length === 0 && (
           <div className="text-sm text-slate-500 italic">
-            Nothing requires attention right now.
+            {t('overview.alerts.empty')}
           </div>
         )}
         {items.map((it) => (
@@ -894,7 +969,7 @@ function AlertsPanel({
         {alerts.channelConnections.length > 0 && (
           <div className="border-t border-slate-100 pt-2 mt-2">
             <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1">
-              Channel connections
+              {t('overview.alerts.connectionsHeading')}
             </div>
             <ul className="space-y-1">
               {alerts.channelConnections.map((c, idx) => (
@@ -918,7 +993,9 @@ function AlertsPanel({
                     ) : (
                       <WifiOff className="w-2.5 h-2.5" />
                     )}
-                    {c.isActive ? 'connected' : 'disconnected'}
+                    {c.isActive
+                      ? t('overview.alerts.connected')
+                      : t('overview.alerts.disconnected')}
                   </span>
                 </li>
               ))}
@@ -928,13 +1005,17 @@ function AlertsPanel({
         {/* Catalog touchpoints */}
         <div className="border-t border-slate-100 pt-2 mt-2 grid grid-cols-2 gap-2 text-sm text-slate-700">
           <div>
-            <div className="text-slate-500 text-xs">Live listings</div>
+            <div className="text-slate-500 text-xs">
+              {t('overview.alerts.liveListings')}
+            </div>
             <div className="font-semibold tabular-nums">
               {NUM_FMT.format(catalog.liveListings)}
             </div>
           </div>
           <div>
-            <div className="text-slate-500 text-xs">Variants</div>
+            <div className="text-slate-500 text-xs">
+              {t('overview.alerts.variants')}
+            </div>
             <div className="font-semibold tabular-nums">
               {NUM_FMT.format(catalog.totalVariants)}
             </div>
@@ -948,40 +1029,42 @@ function AlertsPanel({
 // ── Catalog snapshot ────────────────────────────────────────────────
 
 function CatalogSnapshot({
+  t,
   catalog,
 }: {
+  t: T
   catalog: OverviewPayload['catalog']
 }) {
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
         <h2 className="text-md font-semibold text-slate-900">
-          Catalog snapshot
+          {t('overview.catalog.heading')}
         </h2>
       </div>
       <div className="px-4 py-3 grid grid-cols-2 gap-3 text-base">
         <SnapshotCell
-          label="Products"
+          label={t('overview.catalog.products')}
           value={NUM_FMT.format(catalog.totalProducts)}
         />
         <SnapshotCell
-          label="Parents"
+          label={t('overview.catalog.parents')}
           value={NUM_FMT.format(catalog.totalParents)}
         />
         <SnapshotCell
-          label="Variants"
+          label={t('overview.catalog.variants')}
           value={NUM_FMT.format(catalog.totalVariants)}
         />
         <SnapshotCell
-          label="Live listings"
+          label={t('overview.catalog.live')}
           value={NUM_FMT.format(catalog.liveListings)}
         />
         <SnapshotCell
-          label="Draft listings"
+          label={t('overview.catalog.draft')}
           value={NUM_FMT.format(catalog.draftListings)}
         />
         <SnapshotCell
-          label="Failed listings"
+          label={t('overview.catalog.failed')}
           value={NUM_FMT.format(catalog.failedListings)}
           tone={catalog.failedListings > 0 ? 'rose' : 'slate'}
         />
@@ -1020,8 +1103,10 @@ function SnapshotCell({
 // ── Activity feed ────────────────────────────────────────────────────
 
 function ActivityFeed({
+  t,
   items,
 }: {
+  t: T
   items: OverviewPayload['recentActivity']
 }) {
   if (items.length === 0) return null
@@ -1029,7 +1114,7 @@ function ActivityFeed({
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
         <h2 className="text-md font-semibold text-slate-900">
-          Recent activity
+          {t('overview.activity.heading')}
         </h2>
       </div>
       <ul className="max-h-[260px] overflow-y-auto">
@@ -1041,7 +1126,7 @@ function ActivityFeed({
             <div className="text-sm text-slate-700 break-words flex-1">
               {a.summary}
             </div>
-            <RelativeTimestamp at={Date.parse(a.ts)} compact />
+            <RelativeTimestamp t={t} at={Date.parse(a.ts)} compact />
           </li>
         ))}
       </ul>
@@ -1051,18 +1136,34 @@ function ActivityFeed({
 
 // ── Quick actions ────────────────────────────────────────────────────
 
-function QuickActions() {
+function QuickActions({ t }: { t: T }) {
   const actions = [
-    { label: 'Add product', href: '/products/new', icon: PackagePlus },
-    { label: 'Bulk operations', href: '/bulk-operations', icon: TableProperties },
-    { label: 'Generate AI content', href: '/products', icon: Sparkles },
-    { label: 'Channel settings', href: '/settings/channels', icon: Wifi },
+    {
+      label: t('overview.quickActions.addProduct'),
+      href: '/products/new',
+      icon: PackagePlus,
+    },
+    {
+      label: t('overview.quickActions.bulk'),
+      href: '/bulk-operations',
+      icon: TableProperties,
+    },
+    {
+      label: t('overview.quickActions.ai'),
+      href: '/products',
+      icon: Sparkles,
+    },
+    {
+      label: t('overview.quickActions.channels'),
+      href: '/settings/channels',
+      icon: Wifi,
+    },
   ]
   return (
     <div className="border border-slate-200 rounded-lg bg-white">
       <div className="px-4 py-3 border-b border-slate-100">
         <h2 className="text-md font-semibold text-slate-900">
-          Quick actions
+          {t('overview.quickActions.heading')}
         </h2>
       </div>
       <div className="px-2 py-2">
@@ -1113,27 +1214,29 @@ function Pill({
 }
 
 function RelativeTimestamp({
+  t,
   at,
   compact = false,
 }: {
+  t: T
   at: number
   compact?: boolean
 }) {
   const [, force] = useState(0)
   useEffect(() => {
-    const t = globalThis.setInterval(() => force((n) => n + 1), 5_000)
-    return () => globalThis.clearInterval(t)
+    const id = globalThis.setInterval(() => force((n) => n + 1), 5_000)
+    return () => globalThis.clearInterval(id)
   }, [])
   if (!Number.isFinite(at)) return null
   const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000))
   const label =
     seconds < 5
-      ? 'just now'
+      ? t('overview.relTime.justNow')
       : seconds < 60
-      ? `${seconds}s ago`
+      ? t('overview.relTime.seconds', { n: seconds })
       : seconds < 3600
-      ? `${Math.floor(seconds / 60)}m ago`
-      : `${Math.floor(seconds / 3600)}h ago`
+      ? t('overview.relTime.minutes', { n: Math.floor(seconds / 60) })
+      : t('overview.relTime.hours', { n: Math.floor(seconds / 3600) })
   return (
     <span
       className={cn(
