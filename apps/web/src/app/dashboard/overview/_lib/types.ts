@@ -96,7 +96,18 @@ export interface OverviewPayload {
     units: number
     revenue: number
   }>
-  sparkline: Array<{ date: string; revenue: number; orders: number }>
+  // DO.26 — sparkline rows additionally carry `channel_<CHANNEL>`
+  // keys (one per active channel in the window) so the comparison
+  // chart can render a line per channel from the same dataset.
+  // Listed in `sparklineChannels` for the client.
+  sparkline: Array<
+    {
+      date: string
+      revenue: number
+      orders: number
+    } & Record<string, number | string>
+  >
+  sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
   catalog: {
     totalProducts: number

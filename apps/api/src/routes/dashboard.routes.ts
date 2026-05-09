@@ -861,11 +861,56 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       for (const r of unitsRows) {
         unitsMap.set(r.d, Number(r.units))
       }
-      const sparkline: Array<{ date: string; revenue: number; orders: number }> = []
+
+      // DO.26 — per-channel revenue per bucket. One additional grouped
+      // query rather than re-bucketing currentOrders in JS — SQL is
+      // strictly faster at this scale and we already have the right
+      // index on (createdAt, channel) implicit in postgres's btree.
+      const channelGroupExpr = sparkBucketIsHour
+        ? `to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24')`
+        : `to_char(date_trunc('day',  "createdAt"), 'YYYY-MM-DD')`
+      let channelSparkRows: Array<{
+        d: string
+        channel: string
+        revenue: number
+      }> = []
+      try {
+        channelSparkRows = (await prisma.$queryRawUnsafe(
+          `SELECT ${channelGroupExpr} AS d,
+                  channel::text AS channel,
+                  COALESCE(SUM("totalPrice"), 0)::float AS revenue
+           FROM "Order"
+           WHERE "createdAt" >= $1 AND "createdAt" <= $2
+             AND COALESCE("currencyCode", 'EUR') = $3
+           GROUP BY 1, 2
+           ORDER BY 1 ASC`,
+          sparkFrom,
+          to,
+          primaryCurrency,
+        )) as Array<{ d: string; channel: string; revenue: number }>
+      } catch (err) {
+        request.log.warn(
+          { err },
+          '[dashboard] per-channel sparkline raw query failed',
+        )
+      }
+      const channelSparkMap = new Map<string, Map<string, number>>()
+      for (const r of channelSparkRows) {
+        const slot =
+          channelSparkMap.get(r.channel) ?? new Map<string, number>()
+        slot.set(r.d, r.revenue)
+        channelSparkMap.set(r.channel, slot)
+      }
+      const sparkline: Array<{
+        date: string
+        revenue: number
+        orders: number
+      } & Record<string, number | string>> = []
       const seriesRevenue: number[] = []
       const seriesOrders: number[] = []
       const seriesUnits: number[] = []
       const seriesAov: number[] = []
+      const channelKeys = Array.from(channelSparkMap.keys())
       for (let i = 0; i < sparkBuckets; i++) {
         const d = new Date(sparkFrom)
         if (sparkBucketIsHour) d.setHours(d.getHours() + i)
@@ -875,7 +920,19 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           : d.toISOString().slice(0, 10)
         const slot = sparkMap.get(key) ?? { revenue: 0, orders: 0 }
         const units = unitsMap.get(key) ?? 0
-        sparkline.push({ date: key, revenue: slot.revenue, orders: slot.orders })
+        // DO.26 — fold per-channel revenue into the same row so
+        // recharts can render multiple lines from one dataset.
+        const row: Record<string, number | string> = {
+          date: key,
+          revenue: slot.revenue,
+          orders: slot.orders,
+        }
+        for (const ch of channelKeys) {
+          row[`channel_${ch}`] = channelSparkMap.get(ch)?.get(key) ?? 0
+        }
+        sparkline.push(
+          row as { date: string; revenue: number; orders: number },
+        )
         seriesRevenue.push(slot.revenue)
         seriesOrders.push(slot.orders)
         seriesUnits.push(units)
@@ -1102,6 +1159,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         byMarketplace,
         topProducts,
         sparkline,
+        // DO.26 — channel keys present in the sparkline rows so the
+        // client knows which `channel_<X>` columns exist without
+        // sniffing every bucket.
+        sparklineChannels: channelKeys,
         recentActivity,
         catalog: {
           totalProducts,

@@ -1582,6 +1582,7 @@
   "overview.delta.flat": "stabile",
   "overview.delta.na": "n/d",
   "overview.trend.heading": "Andamento {label}",
+  "overview.channelTrend.heading": "Fatturato per canale",
   "overview.trend.legend.revenue": "Fatturato",
   "overview.trend.legend.orders": "Ordini",
   "overview.channels.heading": "Canali",

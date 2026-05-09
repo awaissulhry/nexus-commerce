@@ -1594,6 +1594,7 @@
   "overview.delta.flat": "flat",
   "overview.delta.na": "n/a",
   "overview.trend.heading": "{label} trend",
+  "overview.channelTrend.heading": "Revenue by channel",
   "overview.trend.legend.revenue": "Revenue",
   "overview.trend.legend.orders": "Orders",
   "overview.channels.heading": "Channels",

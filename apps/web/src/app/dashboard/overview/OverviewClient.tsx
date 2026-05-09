@@ -16,6 +16,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import Header from './_components/Header'
 import KpiGrid from './_components/KpiGrid'
 import Sparkline from './_components/Sparkline'
+import ChannelTrendChart from './_components/ChannelTrendChart'
 import ChannelGrid from './_components/ChannelGrid'
 import MarketplaceMatrix from './_components/MarketplaceMatrix'
 import TopProducts from './_components/TopProducts'
@@ -224,6 +225,13 @@ export default function OverviewClient() {
                 <Sparkline
                   t={t}
                   points={data.sparkline}
+                  currency={data.currency.primary}
+                  windowKey={data.window.key as WindowKey}
+                />
+                <ChannelTrendChart
+                  t={t}
+                  points={data.sparkline}
+                  channels={data.sparklineChannels}
                   currency={data.currency.primary}
                   windowKey={data.window.key as WindowKey}
                 />
