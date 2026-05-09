@@ -3328,6 +3328,102 @@ model BulkOpsTemplate {
   @@index([updatedAt])
 }
 
+// ── W5 / Wave-5: Reusable bulk-action templates ─────────────────────
+//
+// Distinct from BulkOpsTemplate (which captures a grid VIEW: columns,
+// filters, sort). BulkActionTemplate captures a bulk OPERATION the
+// operator wants to re-run with one click — "+5% pricing on Amazon
+// IT", "translate to Italian", "end-of-life clearance status flip".
+//
+// Parameters give a single template multi-use legs: instead of saving
+// one row per discount tier, the template carries `{value: number,
+// channel: string}` placeholders the apply UI fills in at run time.
+//
+// `isBuiltin=true` flags seeded templates that ship with the product
+// (W5.4 seeds 10–20 of these). Operators can't delete builtins, but
+// they CAN duplicate one and edit the copy.
+//
+// usageCount + lastUsedAt let the library sort by "most used" so
+// operator's go-to templates float to the top of the list. Updated
+// transactionally when the apply path fires.
+model BulkActionTemplate {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  /**
+   * One of BulkActionType (PRICING_UPDATE / INVENTORY_UPDATE / …)
+   * — see KNOWN_BULK_ACTION_TYPES in bulk-action.service.ts. Stored
+   * as String for the same reason BulkActionJob.actionType is — keeps
+   * the union extensible without a migration.
+   */
+  actionType String
+
+  /** ISO channel code ('AMAZON' / 'EBAY' / null = all). */
+  channel String?
+
+  /**
+   * The default actionPayload (what BulkActionService.createJob
+   * receives). Parameter placeholders use the form `${name}` inside
+   * string values — the apply path interpolates them via parameters[].
+   * Example for PRICING_UPDATE:
+   *   { adjustmentType: 'PERCENT', value: '${pct}' }
+   */
+  actionPayload Json @default("{}")
+
+  /**
+   * Default scope filters (matches CreateBulkJobSchema.filters).
+   * Operators override these per-apply via the modal scope picker.
+   */
+  defaultFilters Json?
+
+  /**
+   * Parameter declarations. Shape:
+   *   [{ name: 'pct', label: 'Discount %', type: 'number',
+   *      defaultValue: 5, required: true, min: 0, max: 50 }]
+   * The apply UI renders one input per declaration and substitutes
+   * the typed value into actionPayload before POSTing.
+   */
+  parameters Json @default("[]")
+
+  /**
+   * Free-form category ('pricing' / 'inventory' / 'translation' /
+   * 'cleanup' / …). Drives the library grouping. Empty = uncategorized.
+   */
+  category String?
+
+  /**
+   * Operator who owns the template. Null = workspace-shared (same
+   * convention as BulkOpsTemplate.userId). Builtin templates carry
+   * userId='__builtin' so the unique index isn't violated by multiple
+   * seed entries.
+   */
+  userId String?
+
+  /**
+   * Built-in flag. Operators can't delete or edit these directly —
+   * the UI offers "Duplicate" instead. W5.4 seeds 10-20 templates
+   * for common Xavia / Amazon / eBay flows.
+   */
+  isBuiltin Boolean @default(false)
+
+  /** Telemetry — incremented in a transaction when the apply path
+   *  fires. Used to surface most-used templates at the top of the
+   *  library and to spot dead seeds in production. */
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([category])
+  @@index([actionType])
+  @@index([usageCount(sort: Desc)])
+}
+
 // ── Phase D.3f: Live category schema sync ────────────────────────────
 // Cached snapshots of Amazon `getDefinitionsProductType` (and eventually
 // eBay equivalents). One row per (channel, marketplace, productType,
