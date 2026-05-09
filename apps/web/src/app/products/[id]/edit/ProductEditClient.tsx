@@ -67,6 +67,60 @@ interface Props {
 const SINGLE_STORE_CHANNELS = new Set(['SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 const CHANNEL_ORDER = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
 
+/** W5.1 — channel readiness scoring (Salsify cornerstone).
+ *
+ *  Five top-level dimensions per listing, 20% each:
+ *    - title (non-empty string)
+ *    - description (non-empty string)
+ *    - bullets (≥3 entries)
+ *    - price (positive number)
+ *    - quantity (≥0 integer; 0 is acceptable for sold-out / pre-order)
+ *
+ *  Schema-driven attributes (platformAttributes.attributes) aren't
+ *  scored here yet — that's a W5.2 concern that needs the per-channel
+ *  required-fields schema. This baseline already separates "blank"
+ *  from "ready to publish" cleanly enough for the tab badge.
+ */
+function listingReadiness(listing: Listing | undefined): number {
+  if (!listing) return 0
+  let score = 0
+  if (typeof listing.title === 'string' && listing.title.trim().length > 0) {
+    score += 20
+  }
+  if (
+    typeof listing.description === 'string' &&
+    listing.description.trim().length > 0
+  ) {
+    score += 20
+  }
+  if (
+    Array.isArray(listing.bulletPointsOverride) &&
+    listing.bulletPointsOverride.length >= 3
+  ) {
+    score += 20
+  }
+  const price =
+    typeof listing.price === 'number'
+      ? listing.price
+      : listing.price != null
+        ? Number(listing.price)
+        : NaN
+  if (Number.isFinite(price) && price > 0) score += 20
+  if (typeof listing.quantity === 'number' && listing.quantity >= 0) {
+    score += 20
+  }
+  return score
+}
+
+function channelReadiness(channelListings: Listing[]): number | null {
+  if (!channelListings || channelListings.length === 0) return null
+  const total = channelListings.reduce(
+    (acc, l) => acc + listingReadiness(l),
+    0,
+  )
+  return Math.round(total / channelListings.length)
+}
+
 const LABEL_CASE: Record<string, string> = {
   AMAZON: 'Amazon',
   EBAY: 'eBay',
@@ -303,6 +357,7 @@ export default function ProductEditClient({
             {orderedChannels.map((channel) => {
               const isActive = topTab === channel
               const channelListings = listings[channel] ?? []
+              const readiness = channelReadiness(channelListings)
               return (
                 <TopTabButton
                   key={channel}
@@ -316,6 +371,7 @@ export default function ProductEditClient({
                     setTopTab(channel)
                   }}
                   count={channelListings.length || undefined}
+                  readiness={readiness}
                 >
                   {LABEL_CASE[channel] ?? channel}
                 </TopTabButton>
@@ -468,12 +524,25 @@ function TopTabButton({
   onClick,
   children,
   count,
+  readiness,
 }: {
   active: boolean
   onClick: () => void
   children: React.ReactNode
   count?: number
+  readiness?: number | null
 }) {
+  // W5.1 — readiness pill colour-codes the channel: rose for empty,
+  // amber while the operator is still filling fields, emerald once
+  // every required dimension has a value.
+  const readinessTone =
+    readiness == null
+      ? null
+      : readiness >= 100
+        ? 'success'
+        : readiness >= 60
+          ? 'warning'
+          : 'danger'
   return (
     <button
       type="button"
@@ -499,6 +568,22 @@ function TopTabButton({
           )}
         >
           {count}
+        </span>
+      )}
+      {readinessTone && (
+        <span
+          className={cn(
+            'inline-flex items-center justify-center rounded text-[10px] tabular-nums px-1 py-px font-mono',
+            readinessTone === 'success' &&
+              'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+            readinessTone === 'warning' &&
+              'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+            readinessTone === 'danger' &&
+              'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+          )}
+          title={`Readiness: ${readiness}%`}
+        >
+          {readiness}%
         </span>
       )}
     </button>

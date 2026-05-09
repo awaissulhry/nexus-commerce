@@ -346,6 +346,9 @@ export default function ChannelListingTab({
         )}
       </Card>
 
+      {/* ── Readiness checklist (W5.1) ────────────────────────── */}
+      <ReadinessChecklist listing={listing} t={t} />
+
       {/* ── Schema-driven editor (Q.2 + Q.3) ──────────────────── */}
       <ChannelFieldEditor
         productId={product.id}
@@ -361,5 +364,138 @@ export default function ChannelListingTab({
         }}
       />
     </div>
+  )
+}
+
+// ── W5.1 Readiness checklist (Salsify cornerstone) ────────────
+//
+// Five top-level dimensions, 20% each. ReadinessChecklist mirrors
+// the same scoring as channelReadiness() in ProductEditClient so
+// the per-tab badge and the per-listing hero can never diverge.
+// Per-listing schema-required attributes (platformAttributes) aren't
+// surfaced here — those land in the schema-driven editor below this
+// card and contribute to the per-tab "Unsaved" counter when dirty.
+function ReadinessChecklist({
+  listing,
+  t,
+}: {
+  listing: Listing | undefined
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const items = [
+    {
+      key: 'title',
+      label: t('products.edit.readiness.title'),
+      done:
+        !!listing &&
+        typeof listing.title === 'string' &&
+        listing.title.trim().length > 0,
+    },
+    {
+      key: 'description',
+      label: t('products.edit.readiness.description'),
+      done:
+        !!listing &&
+        typeof listing.description === 'string' &&
+        listing.description.trim().length > 0,
+    },
+    {
+      key: 'bullets',
+      label: t('products.edit.readiness.bullets'),
+      done:
+        !!listing &&
+        Array.isArray(listing.bulletPointsOverride) &&
+        listing.bulletPointsOverride.length >= 3,
+      hint: t('products.edit.readiness.bulletsHint'),
+    },
+    {
+      key: 'price',
+      label: t('products.edit.readiness.price'),
+      done:
+        !!listing &&
+        listing.price != null &&
+        Number.isFinite(Number(listing.price)) &&
+        Number(listing.price) > 0,
+    },
+    {
+      key: 'quantity',
+      label: t('products.edit.readiness.quantity'),
+      done:
+        !!listing &&
+        typeof listing.quantity === 'number' &&
+        listing.quantity >= 0,
+      hint: t('products.edit.readiness.quantityHint'),
+    },
+  ]
+  const score = items.filter((i) => i.done).length * 20
+  const tone =
+    score >= 100 ? 'success' : score >= 60 ? 'warning' : 'danger'
+
+  return (
+    <Card noPadding>
+      <div className="px-4 py-3 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            {t('products.edit.readiness.label')}
+          </div>
+          <div className="text-md font-medium text-slate-900 dark:text-slate-100 mt-0.5">
+            {t('products.edit.readiness.summary', {
+              done: items.filter((i) => i.done).length,
+              total: items.length,
+            })}
+          </div>
+        </div>
+        <div className="flex-shrink-0">
+          <span
+            className={cn(
+              'inline-flex items-center justify-center px-2.5 py-1 rounded font-mono text-md tabular-nums',
+              tone === 'success' &&
+                'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+              tone === 'warning' &&
+                'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+              tone === 'danger' &&
+                'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+            )}
+          >
+            {score}%
+          </span>
+        </div>
+      </div>
+      <ul className="px-4 py-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
+        {items.map((item) => (
+          <li
+            key={item.key}
+            className="flex items-start gap-2 text-md"
+          >
+            <span
+              className={cn(
+                'inline-flex items-center justify-center w-4 h-4 rounded-full flex-shrink-0 mt-0.5 text-xs font-mono',
+                item.done
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
+              )}
+            >
+              {item.done ? '✓' : ' '}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div
+                className={cn(
+                  item.done
+                    ? 'text-slate-700 dark:text-slate-300'
+                    : 'text-slate-500 dark:text-slate-400',
+                )}
+              >
+                {item.label}
+              </div>
+              {item.hint && !item.done && (
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {item.hint}
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }
