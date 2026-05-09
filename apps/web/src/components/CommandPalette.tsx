@@ -27,6 +27,10 @@ import {
   ShieldAlert,
   ArrowRightLeft,
   AlertTriangle,
+  Sparkles,
+  Beaker,
+  Snowflake,
+  Globe,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -41,7 +45,7 @@ interface Command {
   /** Comma-separated extra keywords for fuzzy matching, e.g. for
    *  "Refresh page" we want "reload" / "fetch" to also match. */
   keywords?: string
-  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments' | 'Pending orders'
+  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments' | 'Pending orders' | 'Replenishment'
   /** Either href (navigate) or run (callback). One must be set. */
   href?: string
   run?: (router: AppRouter) => void
@@ -74,6 +78,13 @@ const COMMANDS: Command[] = [
   { id: 'goto-stock-reservations', label: 'Go to Stock Reservations (active holds)', icon: Boxes, href: '/fulfillment/stock/reservations', group: 'Navigation', keywords: 'reservations prenotazioni hold cart pending order' },
   { id: 'goto-stockouts', label: 'Go to Stockouts (loss tracking)', icon: AlertTriangle, href: '/fulfillment/stock/stockouts', group: 'Navigation', keywords: 'stockout esauriti out of stock loss revenue margin' },
   { id: 'goto-stock-analytics', label: 'Go to Stock Analytics (turnover, DoH, ABC, year-end)', icon: Activity, href: '/fulfillment/stock/analytics', group: 'Navigation', keywords: 'turnover rotazione doh abc rimanenze fiscal year-end valutazione' },
+  { id: 'goto-replenishment', label: 'Go to Replenishment (forecast, recommendations, automation)', icon: RefreshCw, href: '/fulfillment/replenishment', group: 'Navigation', chord: 'g r r', keywords: 'replenishment riassortimento riordino reorder forecast previsione recommendation raccomandazione automation automazione' },
+  { id: 'goto-replen-critical', label: 'Replenishment — Critical only', icon: AlertTriangle, href: '/fulfillment/replenishment?filter=CRITICAL', group: 'Replenishment', keywords: 'critical critico urgent emergenza stockout' },
+  { id: 'goto-replen-needs-reorder', label: 'Replenishment — Awaiting review', icon: ClipboardList, href: '/fulfillment/replenishment?filter=NEEDS_REORDER', group: 'Replenishment', keywords: 'awaiting review revisione reorder riordino pending in attesa' },
+  { id: 'goto-replen-automation', label: 'Replenishment — Automation rules (8 templates)', icon: Sparkles, href: '/fulfillment/replenishment#automation', group: 'Replenishment', keywords: 'automation regole rules templates auto-approve auto-PO emergency stockout overstock spike' },
+  { id: 'goto-replen-scenarios', label: 'Replenishment — What-if scenarios', icon: Beaker, href: '/fulfillment/replenishment#scenarios', group: 'Replenishment', keywords: 'scenario what-if simulazione promo black friday lead time disruption supplier swap' },
+  { id: 'goto-replen-slow-movers', label: 'Replenishment — Slow-movers / dead-stock', icon: Snowflake, href: '/fulfillment/replenishment#slow-movers', group: 'Replenishment', keywords: 'slow mover dead stock dormant ferma capitale immobilizzato write-off markdown' },
+  { id: 'goto-replen-pan-eu', label: 'Replenishment — Pan-EU rebalance (FBA)', icon: Globe, href: '/fulfillment/replenishment#pan-eu', group: 'Replenishment', keywords: 'pan-eu fba distribution rebalance riequilibrio marketplace IT DE FR ES NL transfer' },
   { id: 'goto-returns', label: 'Go to Returns (RMA + refund workflow)', icon: RefreshCw, href: '/fulfillment/returns', group: 'Navigation', chord: 'g t' },
   { id: 'goto-returns-analytics', label: 'Go to Returns Analytics (rates, top SKUs, processing time)', icon: Activity, href: '/fulfillment/returns/analytics', group: 'Navigation', keywords: 'returns rate sku processing analytics' },
   { id: 'goto-activity', label: 'Go to Sync Logs (observability hub)', icon: Activity, href: '/sync-logs', group: 'Navigation', keywords: 'monitoring observability hub kpi cron channel' },

@@ -790,22 +790,30 @@ export default function ReplenishmentWorkspace() {
       {/* W4.5 — automation rules card. Empty by default; once seeded
           shows the 8 templates with enable/disable toggles + dry-run
           badges + per-rule counters. */}
-      <AutomationRulesCard />
+      <div id="automation" className="scroll-mt-4">
+        <AutomationRulesCard />
+      </div>
 
       {/* W5.4 — scenarios card. Empty by default; once an operator
           creates a what-if scenario it lists with last-run summary
           and a Run button. Pure analysis — never modifies real recs. */}
-      <ScenariosCard />
+      <div id="scenarios" className="scroll-mt-4">
+        <ScenariosCard />
+      </div>
 
       {/* W6.1 — slow-mover / dead-stock dashboard. Hides itself when
           no DORMANT inventory exists; otherwise lists top 50 by
           capital tied up with bucket switcher. */}
-      <SlowMoversCard />
+      <div id="slow-movers" className="scroll-mt-4">
+        <SlowMoversCard />
+      </div>
 
       {/* W7.2 — Pan-EU FBA distribution recommender. Hides itself
           when inventory is balanced; otherwise lists surplus →
           shortage transfer suggestions across IT/DE/FR/ES/NL. */}
-      <PanEuDistributionCard />
+      <div id="pan-eu" className="scroll-mt-4">
+        <PanEuDistributionCard />
+      </div>
 
       {/* W3.2 — command-center KPI strip. Five tiles answering
           "what should I do today?" — open POs / awaiting review /
