@@ -23,12 +23,26 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertCircle, Globe } from 'lucide-react'
+import { AlertCircle, Globe, Sparkles } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { type ProductRow } from '../_types'
+
+// Marketplace code per locale — bulk-generate endpoint takes
+// marketplace, internally resolves to language via the
+// translation-resolver service. Map matches the API's
+// LANGUAGE_FOR_MARKETPLACE table (IT→it, DE→de, etc.).
+const MARKETPLACE_FOR_LOCALE: Record<string, string> = {
+  it: 'IT',
+  en: 'UK',
+  de: 'DE',
+  fr: 'FR',
+  es: 'ES',
+}
 
 // Active locale set. Move to BrandSettings when configurability
 // matters.
@@ -73,6 +87,9 @@ export function TranslationsLens({
   >({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [translateLocale, setTranslateLocale] = useState<string>('de')
+  const [translating, setTranslating] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     if (products.length === 0) {
@@ -101,6 +118,81 @@ export function TranslationsLens({
       cancelled = true
     }
   }, [products])
+
+  // W5.8 — Bulk AI translate. Pulls the productIds visible in the
+  // matrix that are MISSING content in the target locale, POSTs to
+  // /products/ai/bulk-generate (capped at 50 per call by the
+  // endpoint). Refresh on success so the matrix reflects new
+  // coverage.
+  const runBulkTranslate = async () => {
+    if (translating) return
+    setTranslating(true)
+    try {
+      const candidates = products
+        .filter((p) => {
+          const c = byProduct[p.id]?.[translateLocale]
+          return !c || c.fieldCount === 0
+        })
+        .map((p) => p.id)
+        .slice(0, 50) // endpoint cap
+
+      if (candidates.length === 0) {
+        toast.success(
+          `Every visible product already has content in ${translateLocale.toUpperCase()}.`,
+        )
+        return
+      }
+
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/ai/bulk-generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productIds: candidates,
+            fields: ['title', 'description', 'bullets', 'keywords'],
+            marketplace: MARKETPLACE_FOR_LOCALE[translateLocale] ?? 'IT',
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const data = (await res.json()) as {
+        results?: Array<{ productId: string; ok: boolean; error?: string }>
+      }
+      const succeeded = (data.results ?? []).filter((r) => r.ok).length
+      const failed = (data.results ?? []).filter((r) => !r.ok).length
+      if (failed === 0) {
+        toast.success(
+          `Translated ${succeeded} product${succeeded === 1 ? '' : 's'} to ${translateLocale.toUpperCase()}`,
+        )
+      } else {
+        toast.error(
+          `${succeeded} translated · ${failed} failed in ${translateLocale.toUpperCase()}. Inspect the drawer for per-product errors.`,
+        )
+      }
+
+      // Re-fetch coverage to reflect new translations.
+      const cov = await fetch(
+        `${getBackendUrl()}/api/products/translation-coverage/bulk`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: products.map((p) => p.id) }),
+        },
+      )
+      if (cov.ok) {
+        const covData = (await cov.json()) as BulkResponse
+        setByProduct(covData.results ?? {})
+      }
+    } catch (e: any) {
+      toast.error(`Translate failed: ${e?.message ?? String(e)}`)
+    } finally {
+      setTranslating(false)
+    }
+  }
 
   // Per-locale aggregate: how many products have ANY content in
   // each locale. Powers the column header counts.
@@ -148,6 +240,39 @@ export function TranslationsLens({
           <span>{error}</span>
         </div>
       )}
+
+      {/* W5.8 — Bulk AI translate toolbar */}
+      <div className="flex items-center gap-2 flex-wrap text-sm border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-slate-50/50 dark:bg-slate-900/40">
+        <span className="text-slate-600 dark:text-slate-400 inline-flex items-center gap-1">
+          <Sparkles className="w-3.5 h-3.5" />
+          AI bulk translate visible products to
+        </span>
+        <select
+          value={translateLocale}
+          onChange={(e) => setTranslateLocale(e.target.value)}
+          className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          disabled={translating}
+        >
+          {LOCALES.filter((l) => !l.primary).map((loc) => (
+            <option key={loc.code} value={loc.code}>
+              {loc.label}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={runBulkTranslate}
+          loading={translating}
+          icon={<Sparkles className="w-3 h-3" />}
+        >
+          Translate missing
+        </Button>
+        <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
+          Skips products that already have content in the target locale.
+          Cap 50/call.
+        </span>
+      </div>
 
       {/* Per-locale aggregate cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
