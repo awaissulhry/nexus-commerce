@@ -837,6 +837,94 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * DO.14 — Command Center event stream (SSE).
+   *
+   * `GET /api/dashboard/events` — long-lived text/event-stream that
+   * fans in every operationally-relevant in-process event bus and
+   * republishes them under a unified envelope. Drives the live
+   * activity feed on /dashboard/overview.
+   *
+   * Sources subscribed:
+   *   - order-events     (order.created / updated / cancelled,
+   *                       return.created)
+   *   - outbound-events  (shipment.created / updated / deleted,
+   *                       order.shipped, tracking.event)
+   *   - listing-events   (listing.synced / syncing / updated /
+   *                       created / deleted, wizard.submitted)
+   *   - inbound-events   (inbound.created / updated / received /
+   *                       discrepancy / cancelled)
+   *   - sync-logs-events (api-call.recorded)
+   *
+   * Pattern matches /api/orders/events (O.6) and
+   * /api/fulfillment/outbound/events (O.32): heartbeat every 25s
+   * keeps the connection alive past most reverse-proxy idle
+   * timeouts; client EventSource auto-reconnects on transient drops.
+   * Event payloads stay light — subscribers re-fetch on receipt
+   * rather than apply deltas.
+   */
+  fastify.get('/dashboard/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    reply.raw.write(
+      `event: ping\ndata: ${JSON.stringify({ ts: Date.now(), connected: true })}\n\n`,
+    )
+
+    const send = (event: { type: string; ts?: number } & Record<string, unknown>) => {
+      try {
+        reply.raw.write(
+          `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+        )
+      } catch {
+        // Connection dead — cleanup runs in the close handler.
+      }
+    }
+
+    // Lazy-load subscribers to avoid a startup cycle through every
+    // event service when this route is never hit.
+    const [
+      { subscribeOrderEvents },
+      { subscribeOutboundEvents },
+      { subscribeListingEvents },
+      { subscribeInboundEvents },
+      { subscribeSyncLogEvents },
+    ] = await Promise.all([
+      import('../services/order-events.service.js'),
+      import('../services/outbound-events.service.js'),
+      import('../services/listing-events.service.js'),
+      import('../services/inbound-events.service.js'),
+      import('../services/sync-logs-events.service.js'),
+    ])
+
+    const unsubscribers = [
+      subscribeOrderEvents(send),
+      subscribeOutboundEvents(send),
+      subscribeListingEvents(send),
+      subscribeInboundEvents(send),
+      subscribeSyncLogEvents(send),
+    ]
+
+    const heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(`: heartbeat ${Date.now()}\n\n`)
+      } catch {
+        // ignore
+      }
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      for (const unsub of unsubscribers) unsub()
+    })
+
+    // Hold the connection open. Resolves when `close` fires.
+    await new Promise(() => {})
+  })
+
+  /**
    * H.13 — sync health dashboard data.
    *
    *   GET /api/dashboard/health
