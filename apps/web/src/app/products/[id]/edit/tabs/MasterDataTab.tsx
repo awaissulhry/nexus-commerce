@@ -492,6 +492,7 @@ export default function MasterDataTab({
             rows={6}
             className="w-full rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-sans"
           />
+          <DescriptionCounter value={data.description} t={t} />
         </div>
       </Card>
 
@@ -762,6 +763,67 @@ function AiSuggestInline({
       )}
       {label}
     </button>
+  )
+}
+
+// W3.1 — character counter for the master description.
+//
+// Per-channel limits we surface as guidance (not enforcement; the
+// master row is locale-agnostic and can hold longer copy than any
+// single channel accepts; the operator decides whether to truncate
+// per-channel via overrides). Surfacing the most-restrictive limit
+// (Amazon's 2000) as the headline keeps the operator inside the
+// safe envelope by default.
+const CHANNEL_DESCRIPTION_LIMITS = [
+  { channel: 'Amazon', limit: 2000 },
+  { channel: 'eBay', limit: 4000 },
+  { channel: 'Shopify', limit: 65000 },
+] as const
+
+function DescriptionCounter({
+  value,
+  t,
+}: {
+  value: string
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  const len = value.length
+  const amazonLimit = CHANNEL_DESCRIPTION_LIMITS[0].limit
+  const tone =
+    len === 0
+      ? 'idle'
+      : len > amazonLimit
+        ? 'over'
+        : len > amazonLimit * 0.9
+          ? 'near'
+          : 'ok'
+  return (
+    <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
+      <div className="text-slate-500 dark:text-slate-400">
+        {t('products.edit.master.descriptionLimitsHint')}
+      </div>
+      <div
+        className={cn(
+          'tabular-nums font-mono px-1.5 py-0.5 rounded',
+          tone === 'over' &&
+            'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40',
+          tone === 'near' &&
+            'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40',
+          tone === 'ok' &&
+            'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
+          tone === 'idle' &&
+            'text-slate-500 dark:text-slate-400',
+        )}
+        title={CHANNEL_DESCRIPTION_LIMITS.map(
+          (c) => `${c.channel}: ${c.limit}`,
+        ).join(' · ')}
+      >
+        {t('products.edit.master.descriptionCount', {
+          len,
+          amazonLimit,
+        })}
+      </div>
+    </div>
   )
 }
 

@@ -3328,6 +3328,8 @@
   "products.edit.master.contentDesc": "Descrizione master lunga. Le inserzioni per canale possono sovrascrivere; altrimenti è ciò che vedono i marketplace.",
   "products.edit.master.descriptionLabel": "Descrizione",
   "products.edit.master.descriptionPlaceholder": "Scrivi la descrizione master lunga. HTML consentito; i canali rimuovono ciò che non possono renderizzare.",
+  "products.edit.master.descriptionLimitsHint": "Limite del canale più restrittivo. Amazon: 2000 · eBay: 4000 · Shopify: 65k.",
+  "products.edit.master.descriptionCount": "{len} / {amazonLimit}",
   "products.edit.master.physicalTitle": "Attributi fisici",
   "products.edit.master.physicalDesc": "Valori predefiniti per commissioni di logistica e spedizione. Le varianti possono sovrascrivere.",
   "products.edit.master.pricingTitle": "Regole di prezzo",

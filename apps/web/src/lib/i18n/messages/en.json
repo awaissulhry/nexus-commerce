@@ -3324,6 +3324,8 @@
   "products.edit.master.contentDesc": "Master long description. Per-channel listings can override; otherwise this is what marketplaces see.",
   "products.edit.master.descriptionLabel": "Description",
   "products.edit.master.descriptionPlaceholder": "Write the master long description. HTML is allowed; channels strip what they can't render.",
+  "products.edit.master.descriptionLimitsHint": "Most-restrictive channel limit shown. Amazon: 2000 · eBay: 4000 · Shopify: 65k.",
+  "products.edit.master.descriptionCount": "{len} / {amazonLimit}",
   "products.edit.master.physicalTitle": "Physical Attributes",
   "products.edit.master.physicalDesc": "Defaults for fulfillment fees and shipping. Variants can override.",
   "products.edit.master.pricingTitle": "Pricing Rules",
