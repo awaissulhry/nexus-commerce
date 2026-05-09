@@ -139,6 +139,14 @@ export interface OverviewPayload {
     failedListings: number
     lowStockCount: number
     outOfStockCount: number
+    // DO.28 — inventory enrichment.
+    //   stockValue   total stock × basePrice for ACTIVE products,
+    //                a rough catalog valuation in primary currency
+    //   agedSkuCount products with totalStock > 0 but no orders in
+    //                the last 90 days — capital tied up that isn't
+    //                turning. Drives "what to discount" decisions.
+    stockValue: number
+    agedSkuCount: number
   }
   alerts: {
     lowStock: number

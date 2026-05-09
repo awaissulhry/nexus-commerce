@@ -263,7 +263,11 @@ export default function OverviewClient() {
                   customers={data.customers}
                   currency={data.currency.primary}
                 />
-                <CatalogSnapshot t={t} catalog={data.catalog} />
+                <CatalogSnapshot
+                  t={t}
+                  catalog={data.catalog}
+                  currency={data.currency.primary}
+                />
                 <ActivityFeed t={t} items={data.recentActivity} />
                 <QuickActions t={t} alerts={data.alerts} />
               </div>

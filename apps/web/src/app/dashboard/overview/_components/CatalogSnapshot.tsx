@@ -2,21 +2,25 @@
 
 import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
-import { NUM_FMT } from '../_lib/format'
+import { formatCurrency, NUM_FMT } from '../_lib/format'
 import type { OverviewPayload, T } from '../_lib/types'
 
 /**
- * Catalog snapshot tile — six counts in a 2-column grid:
- * products, parents, variants, live listings, draft listings,
- * failed listings. Failed-listings count flushes rose when non-zero
- * to draw the eye.
+ * Catalog + inventory snapshot.
+ *
+ * DO.28 expanded the panel from 6 counts to 8: added stock value
+ * (rough valuation) and aged-SKU count (capital tied up, no
+ * orders in 90d). The aged count flushes amber when non-zero —
+ * not red because it's not an emergency, just an attention signal.
  */
 export default function CatalogSnapshot({
   t,
   catalog,
+  currency,
 }: {
   t: T
   catalog: OverviewPayload['catalog']
+  currency: string
 }) {
   return (
     <Card title={t('overview.catalog.heading')}>
@@ -26,12 +30,17 @@ export default function CatalogSnapshot({
           value={NUM_FMT.format(catalog.totalProducts)}
         />
         <SnapshotCell
-          label={t('overview.catalog.parents')}
-          value={NUM_FMT.format(catalog.totalParents)}
-        />
-        <SnapshotCell
           label={t('overview.catalog.variants')}
           value={NUM_FMT.format(catalog.totalVariants)}
+        />
+        <SnapshotCell
+          label={t('overview.catalog.stockValue')}
+          value={formatCurrency(catalog.stockValue, currency)}
+        />
+        <SnapshotCell
+          label={t('overview.catalog.agedSkus')}
+          value={NUM_FMT.format(catalog.agedSkuCount)}
+          tone={catalog.agedSkuCount > 0 ? 'amber' : 'slate'}
         />
         <SnapshotCell
           label={t('overview.catalog.live')}
@@ -45,6 +54,10 @@ export default function CatalogSnapshot({
           label={t('overview.catalog.failed')}
           value={NUM_FMT.format(catalog.failedListings)}
           tone={catalog.failedListings > 0 ? 'rose' : 'slate'}
+        />
+        <SnapshotCell
+          label={t('overview.catalog.parents')}
+          value={NUM_FMT.format(catalog.totalParents)}
         />
       </div>
     </Card>

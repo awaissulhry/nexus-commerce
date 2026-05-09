@@ -1661,6 +1661,8 @@
   "overview.catalog.live": "Annunci attivi",
   "overview.catalog.draft": "Annunci in bozza",
   "overview.catalog.failed": "Annunci con errori",
+  "overview.catalog.stockValue": "Valore scorte",
+  "overview.catalog.agedSkus": "SKU fermi (90g)",
   "overview.activity.heading": "Attività recente",
   "overview.quickActions.heading": "Azioni rapide",
   "overview.quickActions.processShipments": "Evadi spedizioni in attesa",

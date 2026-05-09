@@ -731,6 +731,38 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         prisma.product.count({ where: { totalStock: { lte: 0 } } }),
       ])
 
+      // ── DO.28 — inventory enrichment ──────────────────────────────
+      //
+      // Three signals beyond raw counts:
+      //   - stock value at current basePrice (rough valuation)
+      //   - aged-SKU count: products with stock but no orders in 90d
+      //   - top SKUs by velocity (already covered by topProducts —
+      //     no additional query, just aliased in the response)
+      const since90d = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+      const [stockValueRow, agedSkuRow] = await Promise.all([
+        prisma.$queryRawUnsafe(
+          `SELECT COALESCE(SUM("totalStock" * "basePrice"), 0)::float AS value
+           FROM "Product"
+           WHERE status = 'ACTIVE' AND "totalStock" > 0`,
+        )
+          .then((r) => (r as Array<{ value: number }>)[0]?.value ?? 0)
+          .catch(() => 0),
+        prisma.$queryRawUnsafe(
+          `SELECT COUNT(*)::bigint AS n
+           FROM "Product" p
+           WHERE p.status = 'ACTIVE' AND p."totalStock" > 0
+             AND NOT EXISTS (
+               SELECT 1 FROM "OrderItem" oi
+               JOIN "Order" o ON o.id = oi."orderId"
+               WHERE oi."productId" = p.id
+                 AND o."createdAt" >= $1
+             )`,
+          since90d,
+        )
+          .then((r) => Number((r as Array<{ n: bigint }>)[0]?.n ?? 0))
+          .catch(() => 0),
+      ])
+
       // ── Channel connectivity (eBay) ──────────────────────────────
       const [ebayActive, channelConnections] = await Promise.all([
         prisma.channelConnection.count({
@@ -1264,6 +1296,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           failedListings,
           lowStockCount,
           outOfStockCount,
+          // DO.28 — inventory enrichment.
+          stockValue: stockValueRow,
+          agedSkuCount: agedSkuRow,
         },
         alerts: {
           lowStock: lowStockCount,

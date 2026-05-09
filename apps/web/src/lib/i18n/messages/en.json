@@ -1673,6 +1673,8 @@
   "overview.catalog.live": "Live listings",
   "overview.catalog.draft": "Draft listings",
   "overview.catalog.failed": "Failed listings",
+  "overview.catalog.stockValue": "Stock value",
+  "overview.catalog.agedSkus": "Aged SKUs (90d)",
   "overview.activity.heading": "Recent activity",
   "overview.quickActions.heading": "Quick actions",
   "overview.quickActions.processShipments": "Process pending shipments",
