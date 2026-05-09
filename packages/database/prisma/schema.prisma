@@ -292,6 +292,7 @@ model Product {
   substitutionsAsSubstitute ProductSubstitution[]         @relation("SubstitutionSubstitute") // R.17
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
   channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
+  listingRecoveryEvents     ListingRecoveryEvent[] // W5.49: delete+relist audit
   buyBoxHistory             BuyBoxHistory[] // Pricing F.1: Buy Box observation log
   scheduledChanges          ScheduledProductChange[] // F.3: deferred mutations
 
@@ -1556,6 +1557,75 @@ model Offer {
   @@index([channelListingId])
   @@index([fulfillmentMethod])
   @@index([isActive])
+}
+
+// ── W5.49: Listing Recovery Audit ──────────────────────────────────────────
+// Captures every operator-initiated recovery action against a channel
+// listing — the "delete + relist with same/new ASIN/SKU" flows that
+// clear stuck errors while preserving (or deliberately resetting)
+// reviews/ratings. Each event is a row; multi-step flows (delete →
+// wait → recreate) write progress to status + completedSteps so the
+// UI can stream progress + the operator can audit "why did SKU X get
+// recreated yesterday at 14:00?".
+model ListingRecoveryEvent {
+  id String @id @default(cuid())
+
+  // ── Target ──────────────────────────────────────────────────────
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  // The ChannelListing that was touched. Nullable because a "full
+  // reset" flow may end with a deleted ChannelListing row (the
+  // recreate makes a new one). The audit row outlives the listing.
+  channel     String // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY
+  marketplace String // IT | DE | FR | ES | UK | GLOBAL ...
+
+  // ── Action ──────────────────────────────────────────────────────
+  // One of the 5 scenarios documented in the recovery audit:
+  //   REPUBLISH_IN_PLACE — PATCH the listing, no delete, no change
+  //   DELETE_RELIST_SAME — same ASIN + same SKU (preserves reviews,
+  //                        risks Amazon's 30-day SKU cooldown)
+  //   SAME_ASIN_NEW_SKU  — keeps reviews; new SKU bypasses cooldown
+  //   NEW_ASIN_SAME_SKU  — fresh ASIN; loses reviews on old ASIN
+  //   FULL_RESET         — new ASIN + new SKU; loses reviews entirely
+  action String
+
+  // Old / new identifiers — null when not changed. Captures the
+  // before/after for "did the operator actually rename SKU X to Y?".
+  oldAsin String?
+  newAsin String?
+  oldSku  String?
+  newSku  String?
+
+  // ── Lifecycle ───────────────────────────────────────────────────
+  // PENDING: row created, no API call yet (UI confirmation pending)
+  // IN_FLIGHT: orchestrator running (delete sent, awaiting create or
+  //            polling for delete confirmation)
+  // SUCCEEDED: every step completed, listing live again
+  // FAILED: a step errored; error + completedSteps tell the operator
+  //         where it broke + whether to retry or fix manually
+  status String @default("PENDING")
+
+  // Free-form per-step progress array. Each element is a string like
+  // "deleted_old", "polled_amazon_5x", "created_new", "validated".
+  // The UI renders a checklist; the audit trail shows the order.
+  completedSteps String[] @default([])
+
+  // The error message from the last failure, if any. Cleared on
+  // retry. Plus the SP-API submission ID(s) for cross-reference.
+  error           String?
+  amazonSubmissionIds String[] @default([])
+
+  // ── Operator + timing ───────────────────────────────────────────
+  initiatedBy String? // User ID; null when triggered by automation
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  @@index([productId])
+  @@index([channel, marketplace])
+  @@index([status])
+  @@index([action])
+  @@index([startedAt])
 }
 
 // ── PHASE 9: Channel Listing Image (Platform-Specific Images) ──────────────
@@ -3422,6 +3492,115 @@ model BulkActionTemplate {
   @@index([category])
   @@index([actionType])
   @@index([usageCount(sort: Desc)])
+}
+
+// ── W6 / Wave-6: Scheduled bulk actions ───────────────────────────
+//
+// Operators want to fire bulk operations at a future time, or on a
+// recurring cadence (every Monday 02:00, daily at 06:30, end of every
+// month). The data shape mirrors a unix cron entry plus enough state
+// to make pause / resume + manual-run + audit cheap.
+//
+// One-time vs recurring:
+//   - cronExpression null + scheduledFor set → one-time, fires once
+//   - cronExpression set + scheduledFor null → recurring, scheduler
+//     computes the next nextRunAt after each fire
+//   - both set → recurring, but won't start firing until scheduledFor
+//
+// `nextRunAt` is the canonical "when do I run next" timestamp the
+// minute-tick cron scans against. Setting it to null pauses the
+// schedule; the resume path recomputes from cronExpression.
+//
+// Each fire creates a real BulkActionJob row via BulkActionService
+// .createJob; the link in `lastJobId` lets the schedule UI show what
+// the most recent run produced.
+model ScheduledBulkAction {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  /**
+   * BulkActionType — see KNOWN_BULK_ACTION_TYPES. Stored as String
+   * for the same extensibility reason as BulkActionJob.
+   */
+  actionType String
+
+  /** ISO channel code, null = all. Same shape as BulkActionJob. */
+  channel String?
+
+  /** Job payload. Same shape as BulkActionJob.actionPayload. May
+   *  carry parameter placeholders if the schedule was created from a
+   *  BulkActionTemplate — substitution happens once at create time,
+   *  not per-fire. */
+  actionPayload Json @default("{}")
+
+  /** Either explicit target IDs OR filters (mutually exclusive at
+   *  the API boundary, both fields here for shape compatibility
+   *  with BulkActionJob). */
+  targetProductIds   String[] @default([])
+  targetVariationIds String[] @default([])
+  filters            Json?
+
+  /**
+   * One-time scheduled time. Null when this schedule is purely
+   * recurring (cronExpression set). When both are set, the
+   * scheduler waits until scheduledFor before honoring the cron.
+   */
+  scheduledFor DateTime?
+
+  /**
+   * Standard 5-field cron expression ('0 2 * * *' = 02:00 daily).
+   * Null = one-time only. The scheduler uses cron-parser to compute
+   * nextRunAt; invalid expressions are rejected at create time.
+   */
+  cronExpression String?
+
+  /**
+   * IANA timezone for cron evaluation ('Europe/Rome' default since
+   * Awa is in CEST). Stored explicitly so a schedule survives a
+   * server timezone change.
+   */
+  timezone String @default("Europe/Rome")
+
+  /**
+   * The next time the scheduler should fire this entry. Null = paused
+   * (operator paused, or recurring schedule has no future runs left).
+   * Indexed alongside enabled so the minute-tick scan is just a range
+   * lookup, not a full table scan.
+   */
+  nextRunAt DateTime?
+
+  /**
+   * Toggle the operator flips to pause / resume. When false, the
+   * scheduler skips this row even if nextRunAt is in the past.
+   */
+  enabled Boolean @default(true)
+
+  /**
+   * Audit + UX: every fire bumps these.
+   */
+  lastRunAt   DateTime?
+  lastJobId   String?
+  /** Last-fire status: 'SUCCESS' | 'FAILED' | 'SKIPPED' */
+  lastStatus  String?
+  lastError   String?
+  runCount    Int       @default(0)
+
+  /**
+   * Optional link back to the BulkActionTemplate the operator
+   * scheduled. Lets the UI show "from template: Spring sale" and
+   * keeps the audit trail when a template gets duplicated.
+   */
+  templateId String?
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, nextRunAt])
+  @@index([actionType])
+  @@index([templateId])
 }
 
 // ── Phase D.3f: Live category schema sync ────────────────────────────
