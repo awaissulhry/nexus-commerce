@@ -25,6 +25,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { familyHierarchyService } from '../services/family-hierarchy.service.js'
+import { familyCompletenessService } from '../services/family-completeness.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
@@ -237,6 +238,27 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2025')
         return reply.code(404).send({ error: 'family not found' })
+      throw err
+    }
+  })
+
+  // ── W2.14 — Completeness ──────────────────────────────────────────
+  //
+  // GET /api/products/:id/family-completeness
+  //
+  // Lives in families.routes.ts (W2-scope) but uses /products/:id
+  // path so the /products grid can fetch it from the natural per-
+  // row URL. Returns the same shape as FamilyCompletenessService.compute.
+  fastify.get('/products/:id/family-completeness', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const result = await familyCompletenessService.compute(id)
+      return result
+    } catch (err: any) {
+      const msg = err?.message ?? String(err)
+      if (/not found/i.test(msg)) return reply.code(404).send({ error: msg })
+      if (/cycle|depth exceeded/i.test(msg))
+        return reply.code(409).send({ error: msg })
       throw err
     }
   })
