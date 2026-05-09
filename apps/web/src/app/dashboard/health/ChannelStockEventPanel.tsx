@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ArrowRight, CheckCircle2, Cable, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface ChannelStockEvent {
   id: string
@@ -46,6 +47,7 @@ function relativeTime(iso: string | null): string {
 }
 
 export default function ChannelStockEventPanel() {
+  const { t } = useTranslations()
   const [events, setEvents] = useState<ChannelStockEvent[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,11 +95,11 @@ export default function ChannelStockEventPanel() {
         <div className="flex items-center gap-2">
           <Cable size={14} className="text-slate-500 dark:text-slate-400" aria-hidden="true" />
           <h2 id="cs-panel-title" className="text-md font-semibold text-slate-900 dark:text-slate-100">
-            Channel stock drift
+            {t('channelDrift.pageTitle')}
           </h2>
           {totalOpen > 0 && (
             <span className="text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
-              {totalOpen} open
+              {t('channelDrift.dashboard.openCount', { n: totalOpen })}
             </span>
           )}
           {byChannel.size > 0 && (
@@ -115,7 +117,7 @@ export default function ChannelStockEventPanel() {
             onClick={fetchEvents}
             disabled={loading}
             className="h-7 w-7 inline-flex items-center justify-center rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
-            aria-label="Refresh"
+            aria-label={t('common.refresh')}
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
           </button>
@@ -123,7 +125,7 @@ export default function ChannelStockEventPanel() {
             href="/fulfillment/stock/channel-drift"
             className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-0.5"
           >
-            Open triage <ArrowRight size={11} aria-hidden="true" />
+            {t('channelDrift.dashboard.openTriage')} <ArrowRight size={11} aria-hidden="true" />
           </Link>
         </div>
       </header>
@@ -131,13 +133,13 @@ export default function ChannelStockEventPanel() {
       {loading && !events && (
         <div className="px-5 py-8 text-center text-md text-slate-500 dark:text-slate-400 inline-flex items-center justify-center gap-2 w-full">
           <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-          Loading drift events…
+          {t('channelDrift.dashboard.loading')}
         </div>
       )}
 
       {error && (
         <div className="px-5 py-3 text-md text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200 dark:border-rose-900 inline-flex items-center gap-2 w-full">
-          <AlertTriangle size={14} aria-hidden="true" /> Failed to load: {error}
+          <AlertTriangle size={14} aria-hidden="true" /> {t('channelDrift.dashboard.loadFailed', { error })}
         </div>
       )}
 
@@ -145,7 +147,7 @@ export default function ChannelStockEventPanel() {
         <div className="px-5 py-8 text-center">
           <CheckCircle2 size={20} className="text-emerald-500 dark:text-emerald-400 mx-auto mb-2" aria-hidden="true" />
           <p className="text-md text-slate-500 dark:text-slate-400">
-            Channels and local stock in sync. Nothing to triage.
+            {t('channelDrift.dashboard.allSynced')}
           </p>
         </div>
       )}
@@ -155,12 +157,12 @@ export default function ChannelStockEventPanel() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               <tr>
-                <th className="text-left font-semibold px-3 py-2">Channel</th>
-                <th className="text-left font-semibold px-3 py-2">Product</th>
-                <th className="text-right font-semibold px-3 py-2">Local</th>
-                <th className="text-right font-semibold px-3 py-2">Channel</th>
-                <th className="text-right font-semibold px-3 py-2">Drift</th>
-                <th className="text-left font-semibold px-3 py-2">Observed</th>
+                <th className="text-left font-semibold px-3 py-2">{t('channelDrift.col.channel')}</th>
+                <th className="text-left font-semibold px-3 py-2">{t('channelDrift.col.product')}</th>
+                <th className="text-right font-semibold px-3 py-2">{t('channelDrift.col.local')}</th>
+                <th className="text-right font-semibold px-3 py-2">{t('channelDrift.col.channelReported')}</th>
+                <th className="text-right font-semibold px-3 py-2">{t('channelDrift.col.drift')}</th>
+                <th className="text-left font-semibold px-3 py-2">{t('channelDrift.col.observed')}</th>
               </tr>
             </thead>
             <tbody>
@@ -194,9 +196,9 @@ export default function ChannelStockEventPanel() {
           </table>
           {totalOpen > topRows.length && (
             <div className="px-5 py-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center bg-slate-50 dark:bg-slate-800/50">
-              Showing top {topRows.length} of {totalOpen} drifting events (sorted by largest drift) ·{' '}
+              {t('channelDrift.dashboard.topOfTotal', { shown: topRows.length, total: totalOpen })} ·{' '}
               <Link href="/fulfillment/stock/channel-drift" className="text-blue-600 dark:text-blue-400 hover:underline">
-                see all
+                {t('channelDrift.dashboard.seeAll')}
               </Link>
             </div>
           )}

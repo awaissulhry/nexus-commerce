@@ -3708,6 +3708,13 @@
   "po.create.error.noLines": "Add at least one line with SKU + quantity > 0.",
   "po.pageTitle": "Purchase Orders",
   "po.pageDescription": "Approval workflow for supplier orders · Click any PO for transitions + audit trail",
+  "channelDrift.dashboard.openCount": "{n} open",
+  "channelDrift.dashboard.openTriage": "Open triage",
+  "channelDrift.dashboard.loading": "Loading drift…",
+  "channelDrift.dashboard.loadFailed": "Couldn't load drift: {error}",
+  "channelDrift.dashboard.allSynced": "Channels and local stock are in sync.",
+  "channelDrift.dashboard.topOfTotal": "Showing {shown} of {total}",
+  "channelDrift.dashboard.seeAll": "See all",
   "channelDrift.subnav": "Channel drift",
   "channelDrift.pageTitle": "Channel stock drift",
   "channelDrift.pageDescription": "Channel-side stock changes (Shopify admin edits, eBay corrections, FBA losses) waiting for review. Apply to snap local stock to the channel value, or ignore when the channel is wrong.",
@@ -3805,5 +3812,12 @@
   "recover.action.NEW_ASIN_SAME_SKU.title": "New ASIN, same SKU",
   "recover.action.NEW_ASIN_SAME_SKU.summary": "Lets Amazon mint a new ASIN against the same SKU. Reviews on the old ASIN are lost. Useful when the existing ASIN is permanently blocked.",
   "recover.action.FULL_RESET.title": "Full reset (new ASIN + new SKU)",
-  "recover.action.FULL_RESET.summary": "Cleanest break — new identifiers everywhere. All reviews lost. Use only when both ASIN and SKU are toxic."
+  "recover.action.FULL_RESET.summary": "Cleanest break — new identifiers everywhere. All reviews lost. Use only when both ASIN and SKU are toxic.",
+  "channelDrift.dashboard.openCount": "{n} open",
+  "channelDrift.dashboard.openTriage": "Open triage",
+  "channelDrift.dashboard.loading": "Loading drift events…",
+  "channelDrift.dashboard.loadFailed": "Failed to load: {error}",
+  "channelDrift.dashboard.allSynced": "Channels and local stock in sync. Nothing to triage.",
+  "channelDrift.dashboard.topOfTotal": "Showing top {shown} of {total} drifting events (sorted by largest drift)",
+  "channelDrift.dashboard.seeAll": "see all"
 }

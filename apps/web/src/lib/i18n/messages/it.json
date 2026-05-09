@@ -3712,6 +3712,13 @@
   "po.create.error.noLines": "Aggiungi almeno una riga con SKU + quantità > 0.",
   "po.pageTitle": "Ordini di acquisto",
   "po.pageDescription": "Workflow di approvazione per ordini fornitore · Clicca un PO per transizioni + storico",
+  "channelDrift.dashboard.openCount": "{n} aperti",
+  "channelDrift.dashboard.openTriage": "Apri triage",
+  "channelDrift.dashboard.loading": "Caricamento drift…",
+  "channelDrift.dashboard.loadFailed": "Impossibile caricare il drift: {error}",
+  "channelDrift.dashboard.allSynced": "Canali e stock locale sono allineati.",
+  "channelDrift.dashboard.topOfTotal": "Mostrati {shown} di {total}",
+  "channelDrift.dashboard.seeAll": "Vedi tutti",
   "channelDrift.subnav": "Drift canale",
   "channelDrift.pageTitle": "Drift stock dai canali",
   "channelDrift.pageDescription": "Modifiche di stock dal canale (Shopify, correzioni eBay, perdite FBA) in attesa di revisione. Applica per allineare lo stock locale al canale, o ignora quando il canale è sbagliato.",
@@ -3856,5 +3863,12 @@
   "recover.action.NEW_ASIN_SAME_SKU.title": "Nuovo ASIN, stesso SKU",
   "recover.action.NEW_ASIN_SAME_SKU.summary": "Permette ad Amazon di assegnare un nuovo ASIN allo stesso SKU. Le recensioni del vecchio ASIN sono perse. Utile se l'ASIN è bloccato in modo permanente.",
   "recover.action.FULL_RESET.title": "Reset completo (nuovo ASIN + nuovo SKU)",
-  "recover.action.FULL_RESET.summary": "Rottura più netta — identificatori nuovi ovunque. Tutte le recensioni perse. Da usare solo se ASIN e SKU sono entrambi tossici."
+  "recover.action.FULL_RESET.summary": "Rottura più netta — identificatori nuovi ovunque. Tutte le recensioni perse. Da usare solo se ASIN e SKU sono entrambi tossici.",
+  "channelDrift.dashboard.openCount": "{n} aperti",
+  "channelDrift.dashboard.openTriage": "Apri triage",
+  "channelDrift.dashboard.loading": "Caricamento eventi drift…",
+  "channelDrift.dashboard.loadFailed": "Caricamento fallito: {error}",
+  "channelDrift.dashboard.allSynced": "Canali e stock locale allineati. Nulla da gestire.",
+  "channelDrift.dashboard.topOfTotal": "Mostro i top {shown} di {total} eventi (ordinati per drift maggiore)",
+  "channelDrift.dashboard.seeAll": "vedi tutti"
 }
