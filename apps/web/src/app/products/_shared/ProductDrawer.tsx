@@ -4089,21 +4089,19 @@ interface TranslationRow {
   updatedAt: string
 }
 
-const KNOWN_LANGUAGES: Array<{ code: string; label: string }> = [
-  { code: 'it', label: 'Italian' },
-  { code: 'de', label: 'German' },
-  { code: 'fr', label: 'French' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'en', label: 'English' },
-  { code: 'nl', label: 'Dutch' },
-  { code: 'sv', label: 'Swedish' },
-  { code: 'pl', label: 'Polish' },
+// W5.36 — KNOWN_LANGUAGES is now code-only; the operator-facing
+// label resolves via t(`products.lens.translations.locale.${code}`)
+// at use-site through the catalog already populated by W5.19.
+const KNOWN_LANGUAGES: Array<{ code: string }> = [
+  { code: 'it' },
+  { code: 'de' },
+  { code: 'fr' },
+  { code: 'es' },
+  { code: 'en' },
+  { code: 'nl' },
+  { code: 'sv' },
+  { code: 'pl' },
 ]
-
-function languageLabel(code: string): string {
-  const m = KNOWN_LANGUAGES.find((l) => l.code === code)
-  return m ? `${m.label} (${code.toUpperCase()})` : code.toUpperCase()
-}
 
 function TranslationsTab({
   productId,
@@ -4121,6 +4119,13 @@ function TranslationsTab({
   onChanged: () => void
 }) {
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
+  const langLabel = (code: string): string => {
+    const known = KNOWN_LANGUAGES.find((l) => l.code === code)
+    return known
+      ? `${t(`products.lens.translations.locale.${code}`)} (${code.toUpperCase()})`
+      : code.toUpperCase()
+  }
   const [primaryLanguage, setPrimaryLanguage] = useState<string>('it')
   const [rows, setRows] = useState<TranslationRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -4167,7 +4172,7 @@ function TranslationsTab({
     if (!code) return
     if (code === primaryLanguage) {
       setError(
-        `${code} is the primary language — edit the master fields directly`,
+        t('products.drawer.translations.error.primaryLang', { code }),
       )
       return
     }
@@ -4239,7 +4244,7 @@ function TranslationsTab({
   }
 
   const remove = async (language: string) => {
-    if (!(await askConfirm({ title: `Delete the ${languageLabel(language)} translation?`, description: 'The translation row will be removed; the master content stays intact.', confirmLabel: 'Delete', tone: 'danger' }))) return
+    if (!(await askConfirm({ title: t('products.drawer.translations.delete.title', { language: langLabel(language) }), description: t('products.drawer.translations.delete.body'), confirmLabel: t('products.drawer.translations.delete.label'), tone: 'danger' }))) return
     setBusy(true)
     try {
       await fetch(
@@ -4254,8 +4259,8 @@ function TranslationsTab({
 
   if (loading) {
     return (
-      <div className="px-5 py-8 text-center text-base text-slate-400 italic">
-        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
+      <div className="px-5 py-8 text-center text-base text-slate-500 dark:text-slate-400 italic">
+        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t('products.drawer.translations.loading')}
       </div>
     )
   }
@@ -4273,14 +4278,14 @@ function TranslationsTab({
         <div className="flex items-center justify-between gap-2 mb-1">
           <div className="inline-flex items-center gap-2">
             <span className="text-xs uppercase tracking-wider font-semibold text-blue-700 bg-blue-100 rounded px-1.5 py-0.5">
-              Master
+              {t('products.drawer.translations.master')}
             </span>
             <span className="text-base font-medium text-slate-900">
-              {languageLabel(primaryLanguage)}
+              {langLabel(primaryLanguage)}
             </span>
           </div>
           <span className="text-xs text-blue-600 italic">
-            Edit on the Details tab
+            {t('products.drawer.translations.editOnDetails')}
           </span>
         </div>
         <div className="text-base text-slate-700 truncate">
@@ -4296,7 +4301,7 @@ function TranslationsTab({
       {rows.length === 0 && !adding && (
         <div className="text-center py-6 text-base text-slate-500 space-y-2">
           <Globe className="w-5 h-5 mx-auto text-slate-300" />
-          <div>No translations yet.</div>
+          <div>{t('products.drawer.translations.empty')}</div>
         </div>
       )}
 
@@ -4328,7 +4333,7 @@ function TranslationsTab({
       {adding ? (
         <div className="border border-purple-200 bg-purple-50/40 rounded-md p-3 space-y-2">
           <div className="text-sm font-semibold text-purple-700 uppercase tracking-wider">
-            Add translation
+            {t('products.drawer.translations.addSection')}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <select
@@ -4342,7 +4347,7 @@ function TranslationsTab({
                   !rows.some((r) => r.language === l.code),
               ).map((l) => (
                 <option key={l.code} value={l.code}>
-                  {l.label}
+                  {t(`products.lens.translations.locale.${l.code}`)}
                 </option>
               ))}
             </select>
@@ -4350,7 +4355,7 @@ function TranslationsTab({
               type="text"
               value={newLangCustom}
               onChange={(e) => setNewLangCustom(e.target.value)}
-              placeholder="or type code"
+              placeholder={t('products.drawer.translations.codePlaceholder')}
               className="h-8 px-2 text-base border border-slate-200 rounded bg-white font-mono uppercase"
             />
           </div>
@@ -4361,7 +4366,7 @@ function TranslationsTab({
               onClick={() => setAdding(false)}
               className="text-slate-600"
             >
-              Cancel
+              {t('products.drawer.translations.cancel')}
             </Button>
             <Button
               size="sm"
@@ -4369,7 +4374,7 @@ function TranslationsTab({
               disabled={busy}
               className="bg-purple-600 text-white border-purple-600 hover:bg-purple-700"
             >
-              Create
+              {t('products.drawer.translations.create')}
             </Button>
           </div>
         </div>
@@ -4380,15 +4385,12 @@ function TranslationsTab({
           className="w-full border-dashed border-slate-300 text-slate-600"
           icon={<Plus className="w-3 h-3" />}
         >
-          Add translation
+          {t('products.drawer.translations.add')}
         </Button>
       )}
 
       <div className="text-xs text-slate-500 pt-2 border-t border-slate-100">
-        AI-generated translations stay marked &ldquo;unreviewed&rdquo; until
-        you confirm them. Generation happens via /products bulk AI fill —
-        pick a non-{primaryLanguage.toUpperCase()} marketplace and the
-        result lands here.
+        {t('products.drawer.translations.aiNote', { primary: primaryLanguage.toUpperCase() })}
       </div>
     </div>
   )
@@ -4420,6 +4422,7 @@ function TranslationRowCard({
   onReview: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslations()
   const [name, setName] = useState(row.name ?? '')
   const [description, setDescription] = useState(row.description ?? '')
   const [bullets, setBullets] = useState((row.bulletPoints ?? []).join('\n'))
@@ -4487,7 +4490,7 @@ function TranslationRowCard({
         <div className="flex items-center gap-1 flex-shrink-0">
           {needsReview && (
             <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-              <Sparkles className="w-2.5 h-2.5" /> AI · review
+              <Sparkles className="w-2.5 h-2.5" /> {t('products.drawer.translations.row.aiReview')}
             </span>
           )}
           <ChevronRight
@@ -4500,7 +4503,7 @@ function TranslationRowCard({
         <div className="border-t border-slate-100 p-3 space-y-2">
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
-              Name
+              {t('products.drawer.translations.row.name')}
             </label>
             <input
               type="text"
@@ -4512,7 +4515,7 @@ function TranslationRowCard({
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
-              Description
+              {t('products.drawer.translations.row.description')}
             </label>
             <textarea
               rows={4}
@@ -4524,7 +4527,7 @@ function TranslationRowCard({
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
-              Bullets · one per line
+              {t('products.drawer.translations.row.bullets')}
             </label>
             <textarea
               rows={5}
@@ -4535,7 +4538,7 @@ function TranslationRowCard({
           </div>
           <div>
             <label className="text-xs uppercase tracking-wider font-semibold text-slate-500 block mb-0.5">
-              Keywords · comma-separated
+              {t('products.drawer.translations.row.keywords')}
             </label>
             <input
               type="text"
@@ -4547,12 +4550,11 @@ function TranslationRowCard({
 
           {row.source && (
             <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
-              Source: <span className="font-mono">{row.source}</span>
+              {t('products.drawer.translations.row.source')}<span className="font-mono">{row.source}</span>
               {row.sourceModel && <> · {row.sourceModel}</>}
               {row.reviewedAt && (
                 <>
-                  {' · reviewed '}
-                  {new Date(row.reviewedAt).toLocaleDateString()}
+                  {t('products.drawer.translations.row.reviewedOn', { date: new Date(row.reviewedAt).toLocaleDateString() })}
                 </>
               )}
             </div>
@@ -4567,7 +4569,7 @@ function TranslationRowCard({
                 icon={<Check className="w-3 h-3" />}
                 className="!h-7 !px-2 !text-sm !bg-amber-50 !text-amber-800 !border-amber-200 hover:!bg-amber-100"
               >
-                Mark reviewed
+                {t('products.drawer.translations.row.markReviewed')}
               </Button>
             )}
             <Button
@@ -4578,7 +4580,7 @@ function TranslationRowCard({
               icon={<Trash2 className="w-3 h-3" />}
               className="!h-7 !px-2 !text-sm !text-rose-700 hover:!bg-rose-50"
             >
-              Delete
+              {t('products.drawer.translations.row.delete')}
             </Button>
             <Button
               variant="primary"
@@ -4587,7 +4589,7 @@ function TranslationRowCard({
               disabled={busy || !dirty}
               className="ml-auto !h-7 !px-3 !text-sm !bg-slate-900 hover:!bg-slate-800 !border-slate-900"
             >
-              Save
+              {t('products.drawer.translations.row.save')}
             </Button>
           </div>
         </div>
