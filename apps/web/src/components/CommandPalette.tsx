@@ -31,6 +31,7 @@ import {
   Beaker,
   Snowflake,
   Globe,
+  Cable,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -78,6 +79,10 @@ const COMMANDS: Command[] = [
   { id: 'goto-stock-reservations', label: 'Go to Stock Reservations (active holds)', icon: Boxes, href: '/fulfillment/stock/reservations', group: 'Navigation', keywords: 'reservations prenotazioni hold cart pending order' },
   { id: 'goto-stockouts', label: 'Go to Stockouts (loss tracking)', icon: AlertTriangle, href: '/fulfillment/stock/stockouts', group: 'Navigation', keywords: 'stockout esauriti out of stock loss revenue margin' },
   { id: 'goto-stock-analytics', label: 'Go to Stock Analytics (turnover, DoH, ABC, year-end)', icon: Activity, href: '/fulfillment/stock/analytics', group: 'Navigation', keywords: 'turnover rotazione doh abc rimanenze fiscal year-end valutazione' },
+  // CS.3 — channel→us inbound drift triage queue.
+  { id: 'goto-channel-drift', label: 'Go to Channel Stock Drift (inbound triage queue)', icon: Cable, href: '/fulfillment/stock/channel-drift', group: 'Navigation', keywords: 'channel drift shopify ebay amazon inbound reconcile pending review apply ignore drift canale shopify ebay riallineamento stock divergenza' },
+  // LP.1 — lots dashboard (FEFO + expiry filters).
+  { id: 'goto-stock-lots', label: 'Go to Lots (FEFO, expiry, supplier ref)', icon: Package, href: '/fulfillment/stock/lots', group: 'Navigation', keywords: 'lots lot batch fefo expiry scadenza supplier ref recall traceability' },
   { id: 'goto-replenishment', label: 'Go to Replenishment (forecast, recommendations, automation)', icon: RefreshCw, href: '/fulfillment/replenishment', group: 'Navigation', chord: 'g r r', keywords: 'replenishment riassortimento riordino reorder forecast previsione recommendation raccomandazione automation automazione' },
   { id: 'goto-replen-critical', label: 'Replenishment — Critical only', icon: AlertTriangle, href: '/fulfillment/replenishment?filter=CRITICAL', group: 'Replenishment', keywords: 'critical critico urgent emergenza stockout' },
   { id: 'goto-replen-needs-reorder', label: 'Replenishment — Awaiting review', icon: ClipboardList, href: '/fulfillment/replenishment?filter=NEEDS_REORDER', group: 'Replenishment', keywords: 'awaiting review revisione reorder riordino pending in attesa' },

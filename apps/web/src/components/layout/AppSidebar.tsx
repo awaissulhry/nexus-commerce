@@ -34,6 +34,8 @@ import {
   Image as ImageIcon,
   Star,
   FileEdit,
+  ShoppingCart,
+  Cable,
   Sun,
   Moon,
   Monitor,
@@ -482,6 +484,26 @@ export default function AppSidebar() {
             label="Smart Replenishment"
             active={pathname === '/fulfillment/replenishment'}
           />
+          {/* F2.7+ — Purchase Orders surface (R.7 approval workflow,
+              Create-PO modal, line-items + audit trail per PO). */}
+          <NavItem
+            href="/fulfillment/purchase-orders"
+            icon={ShoppingCart}
+            label="Purchase Orders"
+            active={pathname.startsWith('/fulfillment/purchase-orders')}
+          />
+          {/* CS.3 — channel drift triage. Shown only when the operator
+              is somewhere in /fulfillment/stock to mirror the analytics
+              sub-link pattern; the StockSubNav already badges it from
+              every stock surface. */}
+          {pathname.startsWith('/fulfillment/stock') && (
+            <NavItem
+              href="/fulfillment/stock/channel-drift"
+              icon={Cable}
+              label="↳ Channel Drift"
+              active={pathname === '/fulfillment/stock/channel-drift'}
+            />
+          )}
           <NavItem
             href="/fulfillment/carriers"
             icon={Truck}
