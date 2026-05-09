@@ -846,8 +846,185 @@ export default function AnalyticsClient() {
               </div>
             </Card>
           )}
+
+          {/* T.8 — Italian closing-stock report card. Pulled from
+              /api/stock/year-end-valuation; keeps current-state asof
+              (server-disclosed) until a YearEndSnapshot cron lands. */}
+          <YearEndValuationCard t={t} />
         </>
       )}
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// T.8 — Year-end valuation (rimanenze finali) card
+// ─────────────────────────────────────────────────────────────────────
+type YearEndValuation = {
+  year: number
+  asOf: string
+  total: { units: number; valueEurCents: number }
+  byLocation: Array<{ locationCode: string; locationName: string; units: number; valueEurCents: number }>
+  byMethod: Record<'FIFO' | 'LIFO' | 'WAC', { units: number; valueEurCents: number }>
+  byCurrency: Array<{ currency: string; units: number; originalValueCents: number; valueEurCents: number }>
+  vatTreatment: {
+    netCapitalised: { units: number; valueEurCents: number }
+    grossCapitalised: { units: number; valueEurCents: number }
+    unknownVat: { units: number; valueEurCents: number }
+  }
+  layerCount: number
+}
+
+function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string | number>) => string }) {
+  const [data, setData] = useState<YearEndValuation | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const currentYear = new Date().getUTCFullYear()
+  const [year, setYear] = useState<number>(currentYear)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setErr(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/year-end-valuation?year=${year}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData(await res.json())
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [year])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
+            {t('stock.analytics.yearEnd.title')}
+          </div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">
+            {t('stock.analytics.yearEnd.subtitle')}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300"
+            aria-label={t('stock.analytics.yearEnd.yearSelect')}
+          >
+            {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          </Button>
+        </div>
+      </div>
+      {err && (
+        <div className="text-sm text-rose-600 mb-2">{err}</div>
+      )}
+      {data && (
+        <div className="space-y-3">
+          {/* Total banner */}
+          <div className="flex items-baseline gap-3 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div className="text-3xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+              {formatCents(data.total.valueEurCents)}
+            </div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {t('stock.analytics.yearEnd.totalUnits', { units: data.total.units.toLocaleString(), layers: data.layerCount })}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* By location */}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                {t('stock.analytics.yearEnd.byLocation')}
+              </div>
+              <ul className="space-y-1">
+                {data.byLocation.map((l) => (
+                  <li key={l.locationCode} className="flex justify-between gap-2 text-sm">
+                    <span className="text-slate-700 dark:text-slate-300 truncate">{l.locationCode}</span>
+                    <span className="tabular-nums text-slate-900 dark:text-slate-100 font-medium">{formatCents(l.valueEurCents)}</span>
+                  </li>
+                ))}
+                {data.byLocation.length === 0 && (
+                  <li className="text-sm text-slate-400">—</li>
+                )}
+              </ul>
+            </div>
+            {/* By method */}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                {t('stock.analytics.yearEnd.byMethod')}
+              </div>
+              <ul className="space-y-1">
+                {(['FIFO', 'LIFO', 'WAC'] as const).map((m) => {
+                  const v = data.byMethod[m]
+                  return (
+                    <li key={m} className="flex justify-between gap-2 text-sm">
+                      <span className="text-slate-700 dark:text-slate-300">{m}</span>
+                      <span className="tabular-nums text-slate-900 dark:text-slate-100 font-medium">
+                        {v.units > 0 ? formatCents(v.valueEurCents) : <span className="text-slate-400">—</span>}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+            {/* VAT treatment */}
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                {t('stock.analytics.yearEnd.vat')}
+              </div>
+              <ul className="space-y-1 text-sm">
+                <li className="flex justify-between gap-2">
+                  <span className="text-emerald-700">{t('stock.analytics.yearEnd.netCapitalised')}</span>
+                  <span className="tabular-nums">{formatCents(data.vatTreatment.netCapitalised.valueEurCents)}</span>
+                </li>
+                {data.vatTreatment.grossCapitalised.units > 0 && (
+                  <li className="flex justify-between gap-2">
+                    <span className="text-rose-700">{t('stock.analytics.yearEnd.grossCapitalised')}</span>
+                    <span className="tabular-nums">{formatCents(data.vatTreatment.grossCapitalised.valueEurCents)}</span>
+                  </li>
+                )}
+                {data.vatTreatment.unknownVat.units > 0 && (
+                  <li className="flex justify-between gap-2">
+                    <span className="text-amber-700">{t('stock.analytics.yearEnd.unknownVat')}</span>
+                    <span className="tabular-nums">{formatCents(data.vatTreatment.unknownVat.valueEurCents)}</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+          {data.byCurrency.length > 1 && (
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                {t('stock.analytics.yearEnd.byCurrency')}
+              </div>
+              <ul className="flex flex-wrap gap-3 text-sm">
+                {data.byCurrency.map((c) => (
+                  <li key={c.currency}>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{c.currency}</span>
+                    {' '}
+                    <span className="tabular-nums text-slate-500 dark:text-slate-400">{c.units.toLocaleString()}u</span>
+                    {c.currency !== 'EUR' && (
+                      <span className="text-slate-400"> · {formatCents(c.valueEurCents)} EUR</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="text-xs text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+            {t('stock.analytics.yearEnd.asOfDisclosure', { date: new Date(data.asOf).toLocaleDateString() })}
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }
