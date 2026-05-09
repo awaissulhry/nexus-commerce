@@ -196,6 +196,33 @@ export default function ProductEditClient({
     return () =>
       window.removeEventListener('nexus:products-edit:goto-tab', onGotoTab)
   }, [goToTab])
+
+  // W14.2 — Cmd+K's cross-surface "Open <route>" actions. Page listens
+  // and routes with its own productId so the palette doesn't need to
+  // know which product is open.
+  useEffect(() => {
+    function onGotoRoute(e: Event) {
+      const ce = e as CustomEvent<{ route?: string }>
+      const route = ce.detail?.route
+      if (route === 'datasheet') {
+        router.push(`/products/${product.id}/datasheet`)
+      } else if (route === 'matrix' && product.isParent) {
+        router.push(`/products/${product.id}/matrix`)
+      } else if (route === 'list-wizard') {
+        router.push(`/products/${product.id}/list-wizard`)
+      } else if (route === 'images') {
+        router.push(`/products/${product.id}/images`)
+      } else if (route === 'bulk') {
+        router.push(`/products/${product.id}/edit/bulk`)
+      }
+    }
+    window.addEventListener('nexus:products-edit:goto-route', onGotoRoute)
+    return () =>
+      window.removeEventListener(
+        'nexus:products-edit:goto-route',
+        onGotoRoute,
+      )
+  }, [router, product.id, product.isParent])
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
 
@@ -321,6 +348,28 @@ export default function ProductEditClient({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {product.isParent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/products/${product.id}/matrix`)}
+                title={t('products.edit.matrixTooltip')}
+              >
+                <Grid3x3 className="w-3.5 h-3.5 mr-1.5" />
+                {t('products.edit.matrix')}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                router.push(`/products/${product.id}/datasheet`)
+              }
+              title={t('products.edit.datasheetTooltip')}
+            >
+              <FileText className="w-3.5 h-3.5 mr-1.5" />
+              {t('products.edit.datasheet')}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
