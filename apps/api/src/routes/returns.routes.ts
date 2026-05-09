@@ -728,6 +728,23 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
             channelOutcome: 'SKIPPED',
           },
         })
+        // F1.4 — auto-assign Italian nota di credito number on POSTED.
+        // Fiscal sequence is allocated lazily so a fresh number is
+        // burned only when value actually moves. Errors don't block
+        // the refund response; operator can retry via assign endpoint.
+        void (async () => {
+          try {
+            const { assignCreditNoteNumber } = await import(
+              '../services/credit-note.service.js'
+            )
+            await assignCreditNoteNumber(refund.id)
+          } catch (e: any) {
+            request.log.error(
+              { refundId: refund.id, err: e?.message },
+              'credit-note auto-assign failed (skipChannelPush path)',
+            )
+          }
+        })()
         return { ...updated, refundId: refund.id, channelOutcome: 'SKIPPED' }
       }
 
@@ -836,6 +853,26 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           channelRefundId: publish.channelRefundId,
         },
       })
+      // F1.4 — auto-assign Italian nota di credito number when channel
+      // refund landed cleanly. OK_MANUAL_REQUIRED / NOT_IMPLEMENTED are
+      // intentionally excluded — those are not yet "posted value
+      // movements" from a fiscal standpoint; operator must promote them
+      // via skip-channel-push or the assign endpoint.
+      if (publish.outcome === 'OK') {
+        void (async () => {
+          try {
+            const { assignCreditNoteNumber } = await import(
+              '../services/credit-note.service.js'
+            )
+            await assignCreditNoteNumber(refund.id)
+          } catch (e: any) {
+            request.log.error(
+              { refundId: refund.id, err: e?.message },
+              'credit-note auto-assign failed (channel-publish path)',
+            )
+          }
+        })()
+      }
       return {
         ...updated,
         refundId: refund.id,
@@ -1920,7 +1957,12 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params as { id: string }
       const refunds = await prisma.refund.findMany({
         where: { returnId: id },
-        include: { attempts: { orderBy: { attemptedAt: 'desc' } } },
+        include: {
+          attempts: { orderBy: { attemptedAt: 'desc' } },
+          // F1.4 — surface nota di credito so the UI doesn't have to
+          // make N extra round-trips per refund row.
+          creditNote: true,
+        },
         orderBy: { createdAt: 'desc' },
       })
       return { items: refunds }
@@ -1976,6 +2018,132 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true, ...out })
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── F1.4 — Italian nota di credito (credit note) routes ─────────────
+  //
+  // GET /api/fulfillment/refunds/:id/credit-note
+  //   Lookup-only. 200 with the assignment if one exists, 404 otherwise.
+  //
+  // POST /api/fulfillment/refunds/:id/credit-note/assign
+  //   Idempotent: assigns a new gap-free fiscal-year-scoped sequence
+  //   on first call, returns the existing assignment thereafter.
+  //   Body: { causale?: string } — overrides default "Resa merce — RMA"
+  //
+  // GET /api/fulfillment/refunds/:id/credit-note/xml
+  //   Generate FatturaPA TD04 XML (B2B only). Lazy-assigns the number
+  //   if not yet allocated. Returns 400 when the order is not B2B
+  //   or the original invoice doesn't exist.
+
+  fastify.get('/fulfillment/refunds/:id/credit-note', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const { getCreditNoteForRefund } = await import(
+        '../services/credit-note.service.js'
+      )
+      const cn = await getCreditNoteForRefund(id)
+      if (!cn) return reply.code(404).send({ error: 'No credit note issued for this refund' })
+      return reply.send(cn)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post('/fulfillment/refunds/:id/credit-note/assign', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = (request.body ?? {}) as { causale?: string }
+    try {
+      const refund = await prisma.refund.findUnique({
+        where: { id },
+        select: { id: true, channelStatus: true },
+      })
+      if (!refund) return reply.code(404).send({ error: 'Refund not found' })
+      // Only credit POSTED refunds — pending/failed don't represent
+      // realised value movements and would burn a fiscal sequence
+      // number for nothing.
+      if (refund.channelStatus !== 'POSTED') {
+        return reply.code(409).send({
+          error: `Refund is ${refund.channelStatus}; credit note can only be issued after POSTED. Issue or skip-channel-publish the refund first.`,
+        })
+      }
+      const { assignCreditNoteNumber } = await import(
+        '../services/credit-note.service.js'
+      )
+      const cn = await assignCreditNoteNumber(id, { causale: body.causale })
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Refund',
+        entityId: id,
+        action: 'credit-note-assign',
+        after: {
+          creditNoteNumber: cn.creditNoteNumber,
+          fiscalYear: cn.fiscalYear,
+          sequenceNumber: cn.sequenceNumber,
+          newlyAssigned: cn.newlyAssigned,
+        },
+      })
+      return reply.send(cn)
+    } catch (error: any) {
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.get('/fulfillment/refunds/:id/credit-note/xml', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const { generateCreditNoteXml } = await import(
+        '../services/fattura-pa.service.js'
+      )
+      const result = await generateCreditNoteXml(id)
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Refund',
+        entityId: id,
+        action: 'credit-note-xml-download',
+        after: { creditNoteNumber: result.creditNoteNumber },
+      })
+      return reply
+        .header('Content-Type', 'application/xml; charset=utf-8')
+        .header(
+          'Content-Disposition',
+          `attachment; filename="${result.filename}"`,
+        )
+        .send(result.xml)
+    } catch (error: any) {
+      const msg = error?.message ?? String(error)
+      // B2B-only / missing-invoice errors are 400 (bad request) so
+      // the UI can show a meaningful message without surfacing 500s.
+      const status =
+        msg.includes('not B2B') || msg.includes('missing partitaIva') || msg.includes('no FiscalInvoice')
+          ? 400
+          : 500
+      return reply.code(status).send({ error: msg })
+    }
+  })
+
+  fastify.post('/fulfillment/refunds/:id/credit-note/dispatch', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const { dispatchCreditNoteToSdi } = await import(
+        '../services/fattura-pa.service.js'
+      )
+      const result = await dispatchCreditNoteToSdi(id)
+      void auditLogService.write({
+        ...auditCtx(request),
+        entityType: 'Refund',
+        entityId: id,
+        action: 'credit-note-dispatch',
+        after: { status: result.status, creditNoteNumber: result.creditNoteNumber },
+      })
+      return reply.send(result)
+    } catch (error: any) {
+      const msg = error?.message ?? String(error)
+      const status =
+        msg.includes('not B2B') || msg.includes('missing partitaIva') || msg.includes('no FiscalInvoice')
+          ? 400
+          : 500
+      return reply.code(status).send({ error: msg })
     }
   })
 

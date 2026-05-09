@@ -82,6 +82,19 @@ type RefundAttempt = {
   errorMessage: string | null
   durationMs: number | null
 }
+// F1.4 — Italian nota di credito (one per Refund, lazy-assigned).
+type CreditNoteRow = {
+  id: string
+  creditNoteNumber: string
+  fiscalYear: number
+  sequenceNumber: number
+  amountCents: number
+  currencyCode: string
+  causale: string | null
+  originalInvoiceId: string | null
+  sdiStatus: string | null
+  issuedAt: string
+}
 type RefundRow = {
   id: string
   amountCents: number
@@ -96,6 +109,7 @@ type RefundRow = {
   actor: string | null
   createdAt: string
   attempts: RefundAttempt[]
+  creditNote?: CreditNoteRow | null
 }
 
 type ReturnRow = {
@@ -1312,7 +1326,7 @@ function ReturnDrawer({ id, onClose, onChanged }: { id: string; onClose: () => v
               )}
 
               {/* R5.1 — refund history (multi-attempt + per-channel-status) */}
-              {refunds.length > 0 && <RefundHistory refunds={refunds} />}
+              {refunds.length > 0 && <RefundHistory refunds={refunds} onAfterCreditNote={fetchOne} />}
 
               {/* R2.1 — activity log timeline */}
               {audit.length > 0 && <ActivityTimeline entries={audit} />}
@@ -1533,7 +1547,7 @@ function ActivityTimeline({ entries }: { entries: AuditEntry[] }) {
 }
 
 // R5.1 — refund history block (multi-refund + multi-attempt audit).
-function RefundHistory({ refunds }: { refunds: RefundRow[] }) {
+function RefundHistory({ refunds, onAfterCreditNote }: { refunds: RefundRow[]; onAfterCreditNote?: () => void }) {
   const STATUS_TONE: Record<string, string> = {
     POSTED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     PENDING: 'bg-slate-50 text-slate-600 border-slate-200',
@@ -1582,8 +1596,119 @@ function RefundHistory({ refunds }: { refunds: RefundRow[] }) {
                 </span>
               </div>
             )}
+            <CreditNotePanel refund={r} onAfter={onAfterCreditNote} />
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// F1.4 — Italian nota di credito panel inside RefundHistory.
+//
+// States:
+//   - Refund not yet POSTED → muted hint ("Issued after refund posts")
+//   - POSTED + creditNote present → number badge + download button
+//   - POSTED + no creditNote → assign-now button (auto-assign hook
+//     should have already done this; manual button is a safety net)
+function CreditNotePanel({ refund, onAfter }: { refund: RefundRow; onAfter?: () => void }) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState<'assign' | 'download' | null>(null)
+  const cn = refund.creditNote ?? null
+
+  if (refund.channelStatus !== 'POSTED') {
+    return (
+      <div className="text-xs text-slate-400 italic pt-1 border-t border-slate-100">
+        Nota di credito issued after refund posts
+      </div>
+    )
+  }
+
+  const assign = async () => {
+    setBusy('assign')
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/refunds/${refund.id}/credit-note/assign`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
+      toast.success(`Nota di credito ${data.creditNoteNumber} assigned`)
+      await onAfter?.()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Assign failed')
+    } finally { setBusy(null) }
+  }
+
+  const download = async () => {
+    setBusy('download')
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/refunds/${refund.id}/credit-note/xml`,
+      )
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.error ?? `HTTP ${res.status}`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `nota-credito-${cn?.creditNoteNumber ?? refund.id}.xml`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success('FatturaPA TD04 XML downloaded')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Download failed')
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div className="pt-1.5 mt-1 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+      <div className="inline-flex items-center gap-2 flex-wrap">
+        <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Nota di credito</span>
+        {cn ? (
+          <>
+            <span className="font-mono text-xs px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
+              {cn.creditNoteNumber}
+            </span>
+            {cn.sdiStatus && (
+              <span className="text-xs uppercase tracking-wider px-1 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 rounded">
+                SDI: {cn.sdiStatus}
+              </span>
+            )}
+            {cn.causale && (
+              <span className="text-xs text-slate-500 italic">{cn.causale}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-xs text-slate-400 italic">Not yet assigned</span>
+        )}
+      </div>
+      <div className="inline-flex items-center gap-1.5">
+        {!cn && (
+          <button
+            type="button"
+            onClick={assign}
+            disabled={busy !== null}
+            className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50"
+          >
+            {busy === 'assign' ? 'Assigning…' : 'Assign number'}
+          </button>
+        )}
+        {cn && (
+          <button
+            type="button"
+            onClick={download}
+            disabled={busy !== null}
+            title="FatturaPA TD04 XML (B2B only)"
+            className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50"
+          >
+            {busy === 'download' ? 'Generating…' : 'Download XML'}
+          </button>
+        )}
       </div>
     </div>
   )

@@ -2364,10 +2364,78 @@ model FiscalInvoice {
 
   issuedAt DateTime @default(now())
 
+  // F1.4 — credit notes (note di credito) tied to this invoice.
+  creditNotes CreditNote[]
+
   @@unique([issuer, fiscalYear, sequenceNumber])
   @@index([invoiceNumber])
   @@index([issuedAt])
   @@index([sdiStatus])
+}
+
+// ── F1.4: Italian nota di credito (credit note) ──────────────────────
+// DPR 633/72 Art. 26: when a sale is refunded (full or partial), the
+// seller MUST issue a credit note that references the original
+// invoice and submit it to SDI as TipoDocumento TD04. Without this
+// the VAT remains owed to the state — the refund is fiscally invisible.
+//
+// Per-fiscal-year sequence is gap-free + monotonic, separate from the
+// invoice counter (operator audit clarity). NC- prefix on the
+// materialised number distinguishes credit notes from invoices in
+// list views.
+//
+// Active for B2B orders (FatturaPA dispatch). B2C corrispettivi
+// (telematic receipts) have a separate void/correction flow on the
+// hardware register; we still track the credit note locally for
+// fiscal audit even when SDI dispatch is not applicable.
+model CreditNoteCounter {
+  fiscalYear Int
+  issuer     String   @default("XAVIA")
+  current    Int      @default(0)
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@id([fiscalYear, issuer])
+}
+
+model CreditNote {
+  id String @id @default(cuid())
+
+  // One credit note per refund.
+  refund   Refund @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  refundId String @unique
+
+  // Reference to the original FiscalInvoice when one was issued.
+  // NULL when the underlying order is B2C without an explicit invoice
+  // (most common Xavia case — Amazon IT B2C corrispettivi-only).
+  originalInvoice   FiscalInvoice? @relation(fields: [originalInvoiceId], references: [id], onDelete: SetNull)
+  originalInvoiceId String?
+
+  issuer         String @default("XAVIA")
+  fiscalYear     Int
+  sequenceNumber Int
+  // "NC-NNNNN/YYYY"
+  creditNoteNumber String
+
+  // Snapshot at issue time. Italian fiscal records are immutable
+  // post-issue — never recompute from the live Refund.
+  amountCents  Int
+  currencyCode String @default("EUR")
+
+  // Italian "Causale" shown on the PDF and submitted via SDI TD04.
+  // e.g. "Resa merce — RMA-2026-0001"
+  causale String?
+
+  sdiTransmissionId String?
+  sdiStatus         String? // 'PENDING' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'NOT_APPLICABLE'
+
+  issuedAt DateTime @default(now())
+
+  @@unique([issuer, fiscalYear, sequenceNumber])
+  @@index([refundId])
+  @@index([creditNoteNumber])
+  @@index([issuedAt])
+  @@index([sdiStatus])
+  @@index([originalInvoiceId])
 }
 
 // ── AU.5: Per-order operator notes ───────────────────────────────────
@@ -5156,6 +5224,9 @@ model Refund {
   notes String?
 
   attempts RefundAttempt[]
+
+  // F1.4 — Italian nota di credito (one per refund, lazy assignment).
+  creditNote CreditNote?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

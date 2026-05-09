@@ -37,6 +37,10 @@
 
 import prisma from '../db.js'
 import { assignInvoiceNumber, getInvoiceForOrder } from './fiscal-invoice.service.js'
+import {
+  assignCreditNoteNumber,
+  getCreditNoteForRefund,
+} from './credit-note.service.js'
 import { logger } from '../utils/logger.js'
 
 const ENABLED = process.env.NEXUS_ENABLE_SDI_DISPATCH === 'true'
@@ -313,5 +317,286 @@ export async function dispatchToSdi(orderId: string): Promise<{
     status: 'NOT_IMPLEMENTED',
     message:
       'Real SDI dispatch not implemented in this commit. Follow-up: pick a commercial provider (Aruba / Fatture in Cloud / TeamSystem), wire their REST API + auth, handle the ricevuta callback (NS / RC / MC / NE).',
+  }
+}
+
+// ── F1.4 — Italian nota di credito (TD04) ────────────────────────────
+//
+// DPR 633/72 Art. 26: every refund of a sale invoice MUST be matched
+// by a credit note, otherwise the VAT remains owed to the state.
+//
+// FatturaPA differences vs TD01 invoice:
+//   - <TipoDocumento>TD04</TipoDocumento>  (resa merce / sconti / abbuoni)
+//   - <DatiFattureCollegate> block under <DatiGenerali> referencing
+//     the original invoice (IdDocumento + Data)
+//   - Amounts kept POSITIVE on TD04 (not negative); the TD04 type
+//     itself signals the inverse direction. SDI rejects negative
+//     amounts on TD04.
+//
+// The credit note can be partial (refundCents < invoice total) — the
+// only rule is amounts must reconcile against the original.
+//
+// Active for B2B FatturaPA orders. B2C corrispettivi (telematic
+// receipts) use a different correction flow on the cassa fiscale
+// hardware; we still allocate a local credit-note number for fiscal
+// audit but skip SDI dispatch (sdiStatus='NOT_APPLICABLE').
+
+export interface CreditNoteXmlResult {
+  xml: string
+  filename: string
+  creditNoteNumber: string
+  fiscalYear: number
+  sequenceNumber: number
+  amountCents: number
+  currencyCode: string
+}
+
+/**
+ * Generate a FatturaPA TD04 credit note XML for a refund. Lazy-
+ * assigns the F1.4 credit note number when none has been issued yet.
+ * Throws when the underlying order is not B2B (no FatturaPA invoice
+ * to credit against — operator should use the B2C corrispettivi
+ * void flow instead).
+ */
+export async function generateCreditNoteXml(
+  refundId: string,
+): Promise<CreditNoteXmlResult> {
+  const refund = await prisma.refund.findUnique({
+    where: { id: refundId },
+    include: {
+      return: {
+        include: {
+          order: { include: { items: true } },
+        },
+      },
+    },
+  })
+  if (!refund) throw new Error(`Refund ${refundId} not found`)
+  const order = refund.return?.order
+  if (!order) throw new Error(`Refund ${refundId} has no underlying order`)
+
+  if (order.fiscalKind !== 'B2B') {
+    throw new Error(
+      `Order ${order.id} is not B2B (fiscalKind=${order.fiscalKind ?? 'NULL'}); FatturaPA TD04 dispatch applies only to B2B sales. B2C uses corrispettivi void on the cassa fiscale.`,
+    )
+  }
+  if (!order.partitaIva) {
+    throw new Error(
+      `Order ${order.id} missing partitaIva — required for B2B FatturaPA credit note.`,
+    )
+  }
+
+  // Lookup the original invoice — TD04 MUST reference it via
+  // DatiFattureCollegate. Without an invoice there is nothing to
+  // credit; refuse rather than fabricate a reference.
+  const originalInvoice = await getInvoiceForOrder(order.id)
+  if (!originalInvoice) {
+    throw new Error(
+      `Order ${order.id} has no FiscalInvoice — credit note cannot reference a non-existent invoice. Issue the invoice first (POST /api/orders/${order.id}/fiscal-invoice).`,
+    )
+  }
+
+  const cn =
+    (await getCreditNoteForRefund(refundId)) ??
+    (await assignCreditNoteNumber(refundId))
+
+  // Filename per SDI convention. We reuse the (year, seq) of the
+  // credit-note counter — base36 progressive max-5 chars, prefixed
+  // with "C" so credit-note filenames don't collide with invoices
+  // when uploaded to the same provider.
+  const progressive =
+    'C' +
+    cn.sequenceNumber
+      .toString(36)
+      .toUpperCase()
+      .padStart(4, '0')
+      .slice(-4)
+  const filename = `${ISSUER.countryCode}${vatBare(ISSUER.vatNumber)}_${progressive}.xml`
+
+  const ship = (order.shippingAddress ?? {}) as any
+  const shipLine1 = ship.line1 ?? ship.AddressLine1 ?? ship.address1 ?? ship.street ?? ''
+  const shipCity = ship.city ?? ship.City ?? ''
+  const shipPostal = ship.postalCode ?? ship.PostalCode ?? ship.postal_code ?? ''
+  const shipProvince = ship.state ?? ship.stateOrProvince ?? ship.StateOrRegion ?? 'XX'
+  const shipCountry = ship.countryCode ?? ship.CountryCode ?? ship.country_code ?? 'IT'
+
+  // The credit note represents the refunded amount. Decompose into
+  // net + VAT using the order's blended rate. When the refund is
+  // partial we prorate against the order total.
+  const refundAmountEur = cn.amountCents / 100
+  const orderItems = order.items
+  const orderGross = orderItems.reduce((s, it) => s + Number(it.price) * it.quantity, 0)
+  const proRataFactor = orderGross > 0 ? refundAmountEur / orderGross : 1
+
+  const lines = orderItems.map((it, i) => {
+    const unitPrice = Number(it.price)
+    const qty = it.quantity
+    const vatRatePct = it.itVatRatePct != null ? Number(it.itVatRatePct) : 22
+    const grossLine = unitPrice * qty * proRataFactor
+    const netLine = grossLine / (1 + vatRatePct / 100)
+    const netUnit = qty > 0 ? netLine / qty : netLine
+    return { i: i + 1, sku: it.sku, qty, netUnit, netLine, vatRatePct }
+  })
+
+  const vatByRate = new Map<number, number>()
+  let netTotal = 0
+  for (const l of lines) {
+    netTotal += l.netLine
+    vatByRate.set(l.vatRatePct, (vatByRate.get(l.vatRatePct) ?? 0) + l.netLine)
+  }
+  const vatTotal = [...vatByRate.entries()].reduce(
+    (a, [rate, base]) => a + (base * rate) / 100,
+    0,
+  )
+  const grandTotal = netTotal + vatTotal
+
+  const issuedAt = cn.issuedAt
+  // For credit notes the <Numero> field carries the materialised
+  // number WITHOUT the "NC-" UI prefix (which we add purely for
+  // operator clarity). SDI expects the bare year-scoped sequence.
+  const sdiNumero = `${cn.sequenceNumber.toString().padStart(5, '0')}/${cn.fiscalYear}`
+
+  const codDest =
+    order.codiceDestinatario && order.codiceDestinatario.length === 7
+      ? order.codiceDestinatario
+      : '0000000'
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente>
+        <IdPaese>${escapeXml(ISSUER.countryCode)}</IdPaese>
+        <IdCodice>${escapeXml(vatBare(ISSUER.vatNumber))}</IdCodice>
+      </IdTrasmittente>
+      <ProgressivoInvio>${escapeXml(progressive)}</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>${escapeXml(codDest)}</CodiceDestinatario>
+${order.pecEmail ? `      <PECDestinatario>${escapeXml(order.pecEmail)}</PECDestinatario>\n` : ''}    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>${escapeXml(ISSUER.countryCode)}</IdPaese>
+          <IdCodice>${escapeXml(vatBare(ISSUER.vatNumber))}</IdCodice>
+        </IdFiscaleIVA>
+        <CodiceFiscale>${escapeXml(ISSUER.fiscalCode)}</CodiceFiscale>
+        <Anagrafica>
+          <Denominazione>${escapeXml(ISSUER.name)}</Denominazione>
+        </Anagrafica>
+        <RegimeFiscale>${escapeXml(ISSUER.regime)}</RegimeFiscale>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${escapeXml(ISSUER.address)}</Indirizzo>
+        <CAP>${escapeXml(ISSUER.postalCode)}</CAP>
+        <Comune>${escapeXml(ISSUER.city)}</Comune>
+        <Provincia>${escapeXml(ISSUER.province)}</Provincia>
+        <Nazione>${escapeXml(ISSUER.country)}</Nazione>
+      </Sede>
+    </CedentePrestatore>
+    <CessionarioCommittente>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>IT</IdPaese>
+          <IdCodice>${escapeXml(vatBare(order.partitaIva))}</IdCodice>
+        </IdFiscaleIVA>
+${order.codiceFiscale ? `        <CodiceFiscale>${escapeXml(order.codiceFiscale)}</CodiceFiscale>\n` : ''}        <Anagrafica>
+          <Denominazione>${escapeXml(order.customerName)}</Denominazione>
+        </Anagrafica>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${escapeXml(shipLine1 || 'N/A')}</Indirizzo>
+        <CAP>${escapeXml(shipPostal || '00000')}</CAP>
+        <Comune>${escapeXml(shipCity || 'N/A')}</Comune>
+        <Provincia>${escapeXml(shipProvince)}</Provincia>
+        <Nazione>${escapeXml(shipCountry)}</Nazione>
+      </Sede>
+    </CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>TD04</TipoDocumento>
+        <Divisa>EUR</Divisa>
+        <Data>${escapeXml(fmtDate(issuedAt))}</Data>
+        <Numero>${escapeXml(sdiNumero)}</Numero>
+        <ImportoTotaleDocumento>${fmtDecimal(grandTotal)}</ImportoTotaleDocumento>
+${cn.causale ? `        <Causale>${escapeXml(cn.causale)}</Causale>\n` : ''}      </DatiGeneraliDocumento>
+      <DatiFattureCollegate>
+        <IdDocumento>${escapeXml(originalInvoice.invoiceNumber)}</IdDocumento>
+        <Data>${escapeXml(fmtDate(originalInvoice.issuedAt))}</Data>
+      </DatiFattureCollegate>
+    </DatiGenerali>
+    <DatiBeniServizi>
+${lines
+  .map(
+    (l) => `      <DettaglioLinee>
+        <NumeroLinea>${l.i}</NumeroLinea>
+        <Descrizione>${escapeXml(l.sku)}</Descrizione>
+        <Quantita>${fmtDecimal(l.qty)}</Quantita>
+        <PrezzoUnitario>${fmtDecimal(l.netUnit)}</PrezzoUnitario>
+        <PrezzoTotale>${fmtDecimal(l.netLine)}</PrezzoTotale>
+        <AliquotaIVA>${fmtDecimal(l.vatRatePct)}</AliquotaIVA>
+      </DettaglioLinee>`,
+  )
+  .join('\n')}
+${[...vatByRate.entries()]
+  .map(
+    ([rate, base]) => `      <DatiRiepilogo>
+        <AliquotaIVA>${fmtDecimal(rate)}</AliquotaIVA>
+        <ImponibileImporto>${fmtDecimal(base)}</ImponibileImporto>
+        <Imposta>${fmtDecimal((base * rate) / 100)}</Imposta>
+        <EsigibilitaIVA>I</EsigibilitaIVA>
+      </DatiRiepilogo>`,
+  )
+  .join('\n')}
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>
+`
+
+  return {
+    xml,
+    filename,
+    creditNoteNumber: cn.creditNoteNumber,
+    fiscalYear: cn.fiscalYear,
+    sequenceNumber: cn.sequenceNumber,
+    amountCents: cn.amountCents,
+    currencyCode: cn.currencyCode,
+  }
+}
+
+/**
+ * Stub for credit-note SDI dispatch. Mirrors dispatchToSdi() — the
+ * commercial-provider integration is the same call shape; only the
+ * XML payload differs (TD04 vs TD01).
+ */
+export async function dispatchCreditNoteToSdi(refundId: string): Promise<{
+  status: 'PENDING' | 'SENT' | 'NOT_IMPLEMENTED'
+  message: string
+  creditNoteNumber?: string
+}> {
+  const result = await generateCreditNoteXml(refundId)
+
+  if (!ENABLED) {
+    await prisma.creditNote.update({
+      where: { refundId },
+      data: { sdiStatus: 'PENDING' },
+    })
+    logger.info('credit-note: dryRun marked PENDING', {
+      refundId,
+      creditNoteNumber: result.creditNoteNumber,
+    })
+    return {
+      status: 'PENDING',
+      message:
+        'dryRun: credit note queued locally with sdiStatus=PENDING. Set NEXUS_ENABLE_SDI_DISPATCH=true and ship the commercial-provider integration to actually submit to SDI.',
+      creditNoteNumber: result.creditNoteNumber,
+    }
+  }
+
+  return {
+    status: 'NOT_IMPLEMENTED',
+    message:
+      'Real SDI TD04 dispatch not implemented in this commit. Follow-up: pick a commercial provider, wire REST API + auth, handle the ricevuta callback (NS / RC / MC / NE).',
   }
 }
