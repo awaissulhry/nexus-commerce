@@ -69,6 +69,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import { AutomationRulesCard } from './_shared/AutomationRulesCard'
+import { CommandCenterKpis } from './_shared/CommandCenterKpis'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -785,6 +786,13 @@ export default function ReplenishmentWorkspace() {
           shows the 8 templates with enable/disable toggles + dry-run
           badges + per-rule counters. */}
       <AutomationRulesCard />
+
+      {/* W3.2 — command-center KPI strip. Five tiles answering
+          "what should I do today?" — open POs / awaiting review /
+          stockout risk / working capital / forecast accuracy.
+          Distinct from the W1.5 pipeline-health strip which answers
+          "is the system working?". */}
+      <CommandCenterKpis onFilterCritical={() => setFilter('CRITICAL')} />
 
       {/* Upcoming-events banner — surfaces the next ≤3 events with prep deadlines */}
       {events && events.length > 0 && (
