@@ -359,6 +359,129 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * L.9.0 — Webhook event browser.
+   *
+   * GET /api/sync-logs/webhooks
+   *
+   * Query:
+   *   ?channel=SHOPIFY|WOOCOMMERCE|ETSY|...
+   *   ?processed=true|false        (default: undefined, return both)
+   *   ?eventType=product/update    (optional)
+   *   ?since=ISO                   (default: last 24h)
+   *   ?limit=50&cursor=<id>
+   *
+   * Returns slim list rows + per-(channel, processed) totals for the
+   * filter chip badges. Heavier `payload` field is excluded from the
+   * list response — fetch /webhooks/:id for the full row.
+   */
+  fastify.get<{
+    Querystring: {
+      channel?: string
+      processed?: string
+      eventType?: string
+      since?: string
+      limit?: string
+      cursor?: string
+    }
+  }>('/sync-logs/webhooks', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=15')
+      const q = request.query
+      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
+      const since = q.since
+        ? new Date(q.since)
+        : new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+      const where: Prisma.WebhookEventWhereInput = {
+        createdAt: { gte: since },
+      }
+      if (q.channel) where.channel = q.channel
+      if (q.eventType) where.eventType = q.eventType
+      if (q.processed === 'true') where.isProcessed = true
+      else if (q.processed === 'false') where.isProcessed = false
+
+      const [rows, byChannel, byProcessed] = await Promise.all([
+        prisma.webhookEvent.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit + 1,
+          ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
+          select: {
+            id: true,
+            channel: true,
+            eventType: true,
+            externalId: true,
+            isProcessed: true,
+            processedAt: true,
+            error: true,
+            createdAt: true,
+            updatedAt: true,
+            // Skip the heavy payload + signature fields on the list.
+          },
+        }),
+        prisma.webhookEvent.groupBy({
+          by: ['channel'],
+          where: { createdAt: { gte: since } },
+          _count: { _all: true },
+        }),
+        prisma.webhookEvent.groupBy({
+          by: ['isProcessed'],
+          where: { createdAt: { gte: since } },
+          _count: { _all: true },
+        }),
+      ])
+      const hasNext = rows.length > limit
+      const items = hasNext ? rows.slice(0, limit) : rows
+      const nextCursor = hasNext ? items[items.length - 1].id : null
+
+      return reply.send({
+        items,
+        nextCursor,
+        totals: {
+          byChannel: byChannel.map((g) => ({
+            channel: g.channel,
+            count: g._count._all,
+          })),
+          processed:
+            byProcessed.find((g) => g.isProcessed === true)?._count._all ?? 0,
+          unprocessed:
+            byProcessed.find((g) => g.isProcessed === false)?._count._all ?? 0,
+        },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/webhooks] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  /**
+   * Single webhook detail. Returns the full row INCLUDING payload +
+   * signature so the operator can inspect what came in. Heavy by
+   * design — only fetched on click.
+   *
+   * GET /api/sync-logs/webhooks/:id
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/sync-logs/webhooks/:id',
+    async (request, reply) => {
+      try {
+        const row = await prisma.webhookEvent.findUnique({
+          where: { id: request.params.id },
+        })
+        if (!row) {
+          return reply.code(404).send({ error: 'Webhook event not found' })
+        }
+        return reply.send(row)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[sync-logs/webhooks/:id] failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
+
+  /**
    * Paginated recent calls list with filters. Used by the hub's
    * dedicated /sync-logs/api-calls sub-route (Phase L2).
    */

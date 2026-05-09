@@ -299,6 +299,12 @@ export default function SyncLogsHubClient({
               Error groups
             </Button>
           </Link>
+          <Link href="/sync-logs/webhooks">
+            <Button variant="secondary" size="sm">
+              <History className="w-3.5 h-3.5" />
+              Webhooks
+            </Button>
+          </Link>
           <Link href="/dashboard/health">
             <Button variant="secondary" size="sm">
               <Activity className="w-3.5 h-3.5" />
