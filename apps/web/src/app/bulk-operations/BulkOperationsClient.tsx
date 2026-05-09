@@ -141,6 +141,7 @@ import {
   buildPastePlan,
   shouldInterceptClipboard,
 } from './lib/clipboard-helpers'
+import { FindReplaceBar } from './components/FindReplaceBar'
 
 // Re-export BulkProduct so any sibling file (modals, cells, etc.) that
 // used to import it from this file still finds it here.
@@ -1188,6 +1189,15 @@ export default function BulkOperationsClient() {
     commitNavigateRef.current(dRow, dCol)
   }, [])
 
+  // ── W3.2 — Find & Replace state (declared early so editCtxRef can
+  // reference findMatchKeys; the rest of the find-replace wiring —
+  // Cmd+F handler, cells memo, render — lives further down, near
+  // the table). ──
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false)
+  const [findMatchKeys, setFindMatchKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
+
   editCtxRef.current = {
     onCommit: handleCommit,
     cellErrors,
@@ -1195,6 +1205,9 @@ export default function BulkOperationsClient() {
     cascadeKeys,
     pendingValues,
     onCommitNavigate,
+    // W3.2 — published into the cell-render context so GridRow's
+    // overlay layer can highlight matches without taking a new prop.
+    findMatchKeys,
   }
   allFieldsRef.current = allFields
 
@@ -1402,6 +1415,39 @@ export default function BulkOperationsClient() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [handleSave])
+
+  // ── W3.2 — Find & Replace (state declared earlier so editCtxRef
+  // can publish findMatchKeys to cell renderers; this block carries
+  // the Cmd+F shortcut and the bar's match-set callback). ──
+  // Stable callback identity for the bar's onMatchSetChange — avoids
+  // re-firing the bar's effect every render of the parent.
+  const handleMatchSetChange = useCallback((s: Set<string>) => {
+    setFindMatchKeys(s)
+  }, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        // Don't hijack the browser find when the user is editing a
+        // real input — let them search inside their typed text.
+        const ae = document.activeElement as HTMLElement | null
+        if (
+          ae &&
+          (ae.tagName === 'INPUT' ||
+            ae.tagName === 'TEXTAREA' ||
+            ae.isContentEditable)
+        ) {
+          // Exception: inputs that live INSIDE the find bar should
+          // still close-and-reopen normally; we keep the simple rule
+          // here and rely on the bar's own focus management.
+          return
+        }
+        e.preventDefault()
+        setFindReplaceOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // ── Step 3: copy flash state ────────────────────────────────────
   // The copy listener itself is registered further down (after the
@@ -2587,6 +2633,75 @@ export default function BulkOperationsClient() {
         (rangeBounds.maxRow - rangeBounds.minRow + 1) * ROW_HEIGHT,
     }
   })()
+
+  // ── W3.2 — find/replace cell tape ──────────────────────────────
+  // Flatten the visible grid into a {rowIdx, colIdx, rowId, columnId,
+  // value} list the find-replace bar can scan against. Only built
+  // when the bar is open, so a closed Find UI doesn't pay the
+  // O(rows × cols) cost. visibleColumnsList is the ColumnSelector-
+  // style {id, label} pairs the bar's column-scope dropdown needs.
+  const findCells = useMemo(() => {
+    if (!findReplaceOpen) return []
+    const out: Array<{
+      rowIdx: number
+      colIdx: number
+      rowId: string
+      columnId: string
+      value: unknown
+    }> = []
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r]
+      for (let c = 0; c < visibleLeafCols.length; c++) {
+        const col = visibleLeafCols[c]
+        let v: unknown
+        try {
+          v = row.getValue(col.id)
+        } catch {
+          v = undefined
+        }
+        out.push({
+          rowIdx: r,
+          colIdx: c,
+          rowId: row.original.id,
+          columnId: col.id,
+          value: v,
+        })
+      }
+    }
+    return out
+  }, [findReplaceOpen, rows, visibleLeafCols])
+
+  const visibleColumnsList = useMemo(
+    () =>
+      visibleLeafCols.map((c) => ({
+        id: c.id,
+        label: fieldsById.get(c.id)?.label ?? c.id,
+      })),
+    [visibleLeafCols, fieldsById],
+  )
+
+  // W3.2 — onActivate: when the operator clicks Next/Prev, jump the
+  // selection there. The grid's existing virtualizer handles the
+  // scroll-into-view side of things via the selection effect.
+  const handleFindActivate = useCallback(
+    (m: { rowIdx: number; colIdx: number }) => {
+      setSelection({
+        anchor: { rowIdx: m.rowIdx, colIdx: m.colIdx },
+        active: { rowIdx: m.rowIdx, colIdx: m.colIdx },
+      })
+    },
+    [],
+  )
+
+  // W3.2 — replace-cell stub. W3.4 will swap this for a real
+  // writeChange + history-batch integration; for now the bar's
+  // Replace buttons no-op so we can ship the find UI standalone.
+  const handleFindReplaceCell = useCallback(
+    (_rowId: string, _columnId: string, _newValue: unknown) => {
+      // Intentionally empty — wired up in W3.4.
+    },
+    [],
+  )
   const activeRect = (() => {
     if (!selection.active) return null
     const a = selection.active
@@ -2833,9 +2948,21 @@ export default function BulkOperationsClient() {
     // PageHeader + ActiveJobsStrip + the layout's p-3/md:p-6 padding
     // + the mobile top bar; close-enough on every breakpoint.
     <div
-      className="flex flex-col"
+      className="flex flex-col relative"
       style={{ height: 'calc(100dvh - 12rem)' }}
     >
+      {/* W3.2 — Find & Replace bar. Absolute-positioned so it floats
+          over the toolbar+grid; opens via Cmd/Ctrl+F. */}
+      <FindReplaceBar
+        open={findReplaceOpen}
+        onClose={() => setFindReplaceOpen(false)}
+        cells={findCells}
+        rangeBounds={rangeBounds}
+        visibleColumns={visibleColumnsList}
+        onActivate={handleFindActivate}
+        onMatchSetChange={handleMatchSetChange}
+        onReplaceCell={handleFindReplaceCell}
+      />
       {!online && (
         <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />

@@ -21,6 +21,14 @@ export interface EditCtx {
   /** Step 3.5: Enter / Tab inside the input commits then moves the
    *  selection by this delta (Excel semantics). */
   onCommitNavigate: (dRow: number, dCol: number) => void
+  /**
+   * W3.2 — Set of `${rowIdx}:${colIdx}` keys for cells that currently
+   * match the Find / Replace bar's query. Empty when the bar is
+   * closed. GridRow looks each cell up here to paint the highlight
+   * overlay (W3.3 wires the visual side; the data flow lands here so
+   * future cell renderers don't need a new prop).
+   */
+  findMatchKeys: Set<string>
 }
 
 export const editCtxRef: { current: EditCtx } = {
@@ -31,6 +39,7 @@ export const editCtxRef: { current: EditCtx } = {
     cascadeKeys: new Set(),
     pendingValues: new Map(),
     onCommitNavigate: () => {},
+    findMatchKeys: new Set(),
   },
 }
 
