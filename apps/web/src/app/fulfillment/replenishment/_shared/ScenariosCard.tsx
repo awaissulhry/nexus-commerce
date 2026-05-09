@@ -74,22 +74,11 @@ const KIND_ICONS: Record<ScenarioKind, typeof TrendingUp> = {
   SUPPLIER_SWAP: Repeat,
 }
 
-function formatEur(cents: number): string {
-  if (!Number.isFinite(cents)) return '—'
-  const abs = Math.abs(cents)
-  const sign = cents < 0 ? '-' : cents > 0 ? '+' : ''
-  if (abs >= 100_000_00) return `${sign}€${(abs / 100_000_00).toFixed(1)}M`
-  if (abs >= 1_000_00) return `${sign}€${(abs / 100_000).toFixed(1)}K`
-  return `${sign}€${(abs / 100).toFixed(0)}`
-}
+import { formatEur as formatEurBase, relativeTime } from './format'
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s ago`
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`
-  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`
-  return `${Math.round(ms / 86_400_000)}d ago`
-}
+// ScenariosCard always renders cost deltas (positive + negative) so
+// uses the signed variant. Local alias keeps call-sites short.
+const formatEur = (c: number) => formatEurBase(c, { sign: true })
 
 export function ScenariosCard() {
   const { toast } = useToast()

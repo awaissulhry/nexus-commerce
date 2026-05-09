@@ -49,12 +49,7 @@ interface SlowMoverResponse {
   rows: SlowMoverRow[]
 }
 
-function formatEur(cents: number): string {
-  if (!Number.isFinite(cents)) return '—'
-  if (cents >= 100_000_00) return `€${(cents / 100_000_00).toFixed(1)}M`
-  if (cents >= 1_000_00) return `€${(cents / 100_000).toFixed(1)}K`
-  return `€${(cents / 100).toFixed(0)}`
-}
+import { formatEur } from './format'
 
 const BUCKET_TONES: Record<SlowMoverRow['bucket'], string> = {
   DORMANT:

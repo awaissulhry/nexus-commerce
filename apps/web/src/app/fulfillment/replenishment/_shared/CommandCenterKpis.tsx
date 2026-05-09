@@ -58,12 +58,7 @@ interface KpiResponse {
   }
 }
 
-function formatEur(cents: number): string {
-  if (cents == null || !Number.isFinite(cents)) return '—'
-  if (cents >= 1_000_000_00) return `€${(cents / 100_000_000).toFixed(1)}M`
-  if (cents >= 1_000_00) return `€${(cents / 100_000).toFixed(1)}K`
-  return `€${(cents / 100).toFixed(0)}`
-}
+import { formatEur } from './format'
 
 export function CommandCenterKpis({ onFilterCritical }: { onFilterCritical?: () => void }) {
   const { t } = useTranslations()

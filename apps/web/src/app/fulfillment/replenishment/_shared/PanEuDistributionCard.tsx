@@ -51,12 +51,7 @@ interface PanEuResponse {
   recommendations: PanEuRec[]
 }
 
-function fmtCover(d: number | null): string {
-  if (d == null) return '∞'
-  if (d < 1) return '<1d'
-  if (d < 100) return `${Math.round(d)}d`
-  return `${Math.round(d / 7)}w`
-}
+import { formatCoverDays as fmtCover } from './format'
 
 const COVER_TONE = (d: number | null): string => {
   if (d == null) return 'text-slate-500 dark:text-slate-500'

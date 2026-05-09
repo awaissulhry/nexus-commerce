@@ -78,13 +78,7 @@ const EXEC_STATUS_TONES: Record<string, string> = {
     'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900',
 }
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s ago`
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`
-  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`
-  return `${Math.round(ms / 86_400_000)}d ago`
-}
+import { relativeTime } from './format'
 
 export function AutomationRulesCard() {
   const { toast } = useToast()

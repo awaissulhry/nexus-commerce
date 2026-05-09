@@ -46,12 +46,7 @@ interface SupplierSpendResponse {
   suppliers: SupplierSpend[]
 }
 
-function formatEur(cents: number): string {
-  if (!Number.isFinite(cents) || cents === 0) return '€0'
-  if (cents >= 100_000_00) return `€${(cents / 100_000_00).toFixed(1)}M`
-  if (cents >= 1_000_00) return `€${(cents / 100_000).toFixed(1)}K`
-  return `€${(cents / 100).toFixed(0)}`
-}
+import { formatEur } from './format'
 
 export function SupplierSpendCard() {
   const { t } = useTranslations()
