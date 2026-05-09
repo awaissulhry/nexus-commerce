@@ -117,6 +117,7 @@ import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
+import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
@@ -462,6 +463,13 @@ async function start() {
     // and fires AlertEvent + dispatches notifications when conditions
     // cross thresholds. Default-ON.
     startAlertEvaluatorCron();
+
+    // W4.10 — Repricing evaluator cron (every 5 min). Walks every
+    // enabled RepricingRule, builds market context from the latest
+    // BuyBoxHistory + matching ChannelListing, calls
+    // repricingEngineService.evaluate (applyToProduct=false on this
+    // path — pushes are W4.10b once channel-override flow lands).
+    startRepricingEvaluatorCron();
 
     // F.3 — Nightly Amazon Sales & Traffic ingest. Gated behind an env
     // flag so dev/test environments without SP-API credentials don't
