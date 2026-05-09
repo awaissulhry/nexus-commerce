@@ -18,6 +18,7 @@ import {
   BarChart3,
   Activity,
   HeartPulse,
+  History,
   Plug,
   Settings,
   Search,
@@ -563,20 +564,42 @@ export default function AppSidebar() {
         </NavGroup>
 
         <NavGroup label="Monitoring">
+          {/* L.2.1 — /sync-logs is the unified observability hub.
+              The two siblings below open dedicated detail surfaces
+              the hub deep-links to. /dashboard/health is sync-health
+              detail (cron status + stock drift); /audit-log is the
+              full mutation browser; /outbound is the cascade-queue
+              dashboard. */}
           <NavItem
             href="/sync-logs"
             icon={Activity}
-            label="Activity Log"
-            active={pathname === '/sync-logs' || pathname === '/logs'}
+            label="Sync Logs"
+            indicator={
+              (counts.monitoring?.syncIssues ?? 0) > 0 ? 'warning' : undefined
+            }
+            active={
+              pathname === '/sync-logs' ||
+              pathname === '/logs' ||
+              pathname.startsWith('/sync-logs/')
+            }
           />
           <NavItem
             href="/dashboard/health"
             icon={HeartPulse}
             label="Sync Health"
-            indicator={
-              (counts.monitoring?.syncIssues ?? 0) > 0 ? 'warning' : undefined
-            }
             active={pathname === '/dashboard/health'}
+          />
+          <NavItem
+            href="/audit-log"
+            icon={History}
+            label="Audit Log"
+            active={pathname === '/audit-log'}
+          />
+          <NavItem
+            href="/outbound"
+            icon={Boxes}
+            label="Outbound Queue"
+            active={pathname === '/outbound'}
           />
         </NavGroup>
 
