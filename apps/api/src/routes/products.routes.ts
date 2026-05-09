@@ -128,6 +128,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       channels?: string
       stockLevel?: string
       sort?: string
+      // W5.4 — multi-column sort. Comma-separated `field:dir` pairs:
+      //   ?sorts=brand:asc,basePrice:desc,sku:asc
+      // When set, takes priority over legacy `sort=`. Each pair is
+      // validated against the same field allowlist; unknown fields
+      // are silently dropped (no operator wants a 400 because they
+      // pasted a stale URL).
+      sorts?: string
       // C.2 — new filters
       productTypes?: string
       brands?: string
@@ -360,6 +367,39 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })()
 
+      // W5.4 — Multi-column sort. When `sorts=` is present + parses
+      // to at least one valid pair, it overrides the single-sort
+      // orderBy above. Field mapping mirrors the single-sort switch
+      // for consistency.
+      const sortsRaw = (q.sorts ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      type Dir = 'asc' | 'desc'
+      const SORT_FIELD_MAP: Record<string, (dir: Dir) => any> = {
+        sku:         (dir) => ({ sku: dir }),
+        name:        (dir) => ({ name: dir }),
+        basePrice:   (dir) => ({ basePrice: dir }),
+        price:       (dir) => ({ basePrice: dir }), // alias
+        totalStock:  (dir) => ({ totalStock: dir }),
+        stock:       (dir) => ({ totalStock: dir }), // alias
+        status:      (dir) => ({ status: dir }),
+        brand:       (dir) => ({ brand: dir }),
+        productType: (dir) => ({ productType: dir }),
+        updated:     (dir) => ({ updatedAt: dir }),
+        updatedAt:   (dir) => ({ updatedAt: dir }),
+        created:     (dir) => ({ createdAt: dir }),
+        createdAt:   (dir) => ({ createdAt: dir }),
+        photos:      (dir) => ({ images: { _count: dir } }),
+        channels:    (dir) => ({ channelListings: { _count: dir } }),
+        variants:    (dir) => ({ variations: { _count: dir } }),
+      }
+      const multiOrderBy: any[] = []
+      for (const pair of sortsRaw) {
+        const [field, dirRaw] = pair.split(':')
+        const dir: Dir = dirRaw === 'desc' ? 'desc' : 'asc'
+        const mapper = SORT_FIELD_MAP[field?.trim()]
+        if (!mapper) continue // unknown field — silently drop
+        multiOrderBy.push(mapper(dir))
+      }
+
       // U.29 — completeness sort prefetch. Score = number of
       // "passes" across 6 hygiene checks; lower score = more
       // missing. Sorting ascending surfaces "what needs work";
@@ -444,7 +484,15 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         : where
       const effectiveTake = completenessActive ? undefined : limit
       const effectiveSkip = completenessActive ? undefined : (page - 1) * limit
-      const effectiveOrderBy = completenessActive ? undefined : orderBy
+      // W5.4 — multi-sort overrides legacy single-sort when present.
+      // Completeness-sort path (which prefetches + post-sorts) ignores
+      // both because it's IN-list-driven; multi-sort here is the
+      // preferred Prisma-native path for everything else.
+      const effectiveOrderBy = completenessActive
+        ? undefined
+        : multiOrderBy.length > 0
+          ? multiOrderBy
+          : orderBy
       const [rawProducts, total, statsRows] = await Promise.all([
         prisma.product.findMany({
           where: effectiveWhere,
