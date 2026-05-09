@@ -1551,28 +1551,59 @@ export default function DraftsClient() {
     }
   }, [drafts, selectedKeys, toast, refetch, fetchSummary, t])
 
-  const onBulkDelete = useCallback(async () => {
-    const selectedRows = drafts.filter((d) =>
-      selectedKeys.has(selectionKey(d)),
+  // DR-B.1 — split the bulk action by kind. Wizards soft-archive
+  // (status='DISCARDED', WizardStepEvent trail preserved); products
+  // hard-delete. Single button labelled "Delete N drafts" was lying
+  // to the operator about wizards. Now: separate button per kind so
+  // verbs match what the backend actually does.
+  const wizardSelectionCount = useMemo(
+    () =>
+      drafts.filter(
+        (d) => selectedKeys.has(selectionKey(d)) && d.kind === 'wizard',
+      ).length,
+    [drafts, selectedKeys],
+  )
+  const productSelectionCount = useMemo(
+    () =>
+      drafts.filter(
+        (d) => selectedKeys.has(selectionKey(d)) && d.kind === 'product',
+      ).length,
+    [drafts, selectedKeys],
+  )
+
+  const onBulkArchiveWizards = useCallback(async () => {
+    const selectedWizards = drafts.filter(
+      (d) => selectedKeys.has(selectionKey(d)) && d.kind === 'wizard',
     )
-    if (selectedRows.length === 0) return
-    const wizardCount = selectedRows.filter((d) => d.kind === 'wizard').length
-    const productCount = selectedRows.length - wizardCount
-    const summary = [
-      wizardCount > 0 ? `${wizardCount} wizard draft${wizardCount === 1 ? '' : 's'}` : null,
-      productCount > 0 ? `${productCount} DRAFT product${productCount === 1 ? '' : 's'}` : null,
-    ]
-      .filter(Boolean)
-      .join(' and ')
+    if (selectedWizards.length === 0) return
     const ok = await confirm({
-      title: `Delete ${selectedRows.length} draft${selectedRows.length === 1 ? '' : 's'}?`,
-      description: `${summary} will be removed. Wizard progress can't be recovered; product DRAFTs will be hard-deleted.`,
-      confirmLabel: 'Delete drafts',
+      title: t('drafts.archiveTitle', { n: selectedWizards.length }),
+      description: t('drafts.archiveDescription', {
+        n: selectedWizards.length,
+      }),
+      confirmLabel: t('drafts.archiveConfirm'),
       tone: 'danger',
     })
     if (!ok) return
-    await performBulkDelete(selectedRows)
-  }, [drafts, selectedKeys, confirm, performBulkDelete])
+    await performBulkDelete(selectedWizards)
+  }, [drafts, selectedKeys, confirm, performBulkDelete, t])
+
+  const onBulkDeleteProducts = useCallback(async () => {
+    const selectedProducts = drafts.filter(
+      (d) => selectedKeys.has(selectionKey(d)) && d.kind === 'product',
+    )
+    if (selectedProducts.length === 0) return
+    const ok = await confirm({
+      title: t('drafts.deleteProductsTitle', { n: selectedProducts.length }),
+      description: t('drafts.deleteProductsDescription', {
+        n: selectedProducts.length,
+      }),
+      confirmLabel: t('drafts.deleteProductsConfirm'),
+      tone: 'danger',
+    })
+    if (!ok) return
+    await performBulkDelete(selectedProducts)
+  }, [drafts, selectedKeys, confirm, performBulkDelete, t])
 
   return (
     <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-5">
@@ -1744,15 +1775,34 @@ export default function DraftsClient() {
                 {t('drafts.aiFillN', { n: eligibleAiCount })}
               </Button>
             )}
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={onBulkDelete}
-              disabled={busyDelete}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              {t('drafts.deleteN', { n: selectedKeys.size })}
-            </Button>
+            {/* DR-B.1 — split bulk action by kind. Archive (wizard
+                soft-delete to DISCARDED) and Delete (product hard
+                delete) get distinct buttons so the verb matches the
+                actual backend behaviour. Each button only appears
+                when there's something of that kind to act on. */}
+            {wizardSelectionCount > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onBulkArchiveWizards}
+                disabled={busyDelete}
+                className="!bg-amber-600 !text-white hover:!bg-amber-700 disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {t('drafts.archiveN', { n: wizardSelectionCount })}
+              </Button>
+            )}
+            {productSelectionCount > 0 && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={onBulkDeleteProducts}
+                disabled={busyDelete}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {t('drafts.deleteProductsN', { n: productSelectionCount })}
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
