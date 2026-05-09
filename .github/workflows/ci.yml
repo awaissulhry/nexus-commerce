@@ -1,0 +1,74 @@
+# Closes TECH_DEBT.md #0 — schema-migration drift CI gate.
+#
+# The pre-push hook (.githooks/pre-push) already runs these checks
+# locally, but it's local-only by design — fresh clones, teammates
+# who haven't run `git config core.hooksPath .githooks`, and any
+# squash-merge from a branch that bypassed the hook don't catch
+# drift before it lands on main.
+#
+# This workflow is the "CI is the long-term answer" referenced in
+# the pre-push hook header comment. Mirrors the local checks so the
+# enforcement edge moves from "did each developer install the hook?"
+# to "did this commit pass GitHub Actions?".
+#
+# What runs here:
+#   1. Table-level drift  — Prisma model with no CREATE TABLE
+#   2. Column-level drift — Prisma field with no ADD COLUMN
+#   3. i18n catalog parity — en.json ↔ it.json keys + t() refs
+#   4. prisma validate — schema syntactic / semantic validity
+#   5. apps/api typecheck + build (cheap, no DB needed)
+#
+# What does NOT run yet (deferred):
+#   - apps/web full next build — needs env vars (GROWTHBOOK_*,
+#     SENTRY_DSN, etc.); add when the secrets are configured.
+#   - Real Postgres shadow-DB drift via `prisma migrate diff
+#     --exit-code` — needs a service container; the table+column
+#     scripts catch the same class of bug without a DB.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit is pushed to the same
+# branch — saves CI minutes on rapid pushes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-and-build:
+    name: Schema drift + i18n parity + API build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Schema-migration drift (table-level)
+        run: node packages/database/scripts/check-schema-drift.mjs
+
+      - name: Schema-migration drift (column-level)
+        run: node packages/database/scripts/check-column-drift.mjs
+
+      - name: i18n catalog parity + t() refs
+        run: node scripts/check-i18n-catalog.mjs
+
+      - name: Prisma schema validate
+        run: npx prisma validate --schema=packages/database/prisma/schema.prisma
+
+      - name: apps/api build (tsc)
+        run: npm run build --workspace=@nexus/api
