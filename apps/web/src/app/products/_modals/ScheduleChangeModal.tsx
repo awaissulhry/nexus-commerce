@@ -17,9 +17,10 @@
  * datetime-picker chunk only ships when the operator opens it.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Calendar, Loader2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Calendar, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -75,16 +76,6 @@ export default function ScheduleChangeModal({
 
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<SubmitError[]>([])
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  // Esc to close + click-outside.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, submitting])
 
   const submit = async () => {
     setErrors([])
@@ -176,46 +167,20 @@ export default function ScheduleChangeModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="schedule-modal-title"
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-      onClick={() => {
-        if (!submitting) onClose()
-      }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      size="lg"
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          <Calendar size={14} /> Schedule change for {productIds.length}{' '}
+          product{productIds.length === 1 ? '' : 's'}
+        </span>
+      }
+      description="Applied automatically at the chosen time. The same cascades fire as a live edit (channel listings, audit log, invalidations)."
     >
-      <div
-        ref={dialogRef}
-        className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
-          <div>
-            <div
-              id="schedule-modal-title"
-              className="text-lg font-semibold text-slate-900 inline-flex items-center gap-1.5"
-            >
-              <Calendar size={14} /> Schedule change for {productIds.length}{' '}
-              product{productIds.length === 1 ? '' : 's'}
-            </div>
-            <div className="text-sm text-slate-500">
-              Applied automatically at the chosen time. The same
-              cascades fire as a live edit (channel listings, audit
-              log, invalidations).
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            aria-label="Close"
-            className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-50"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
         <div className="p-5 space-y-4 overflow-y-auto">
           {/* Kind tabs */}
           <div className="inline-flex border border-slate-200 rounded overflow-hidden">
@@ -364,7 +329,7 @@ export default function ScheduleChangeModal({
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+        <ModalFooter className="!justify-between">
           <Button
             variant="secondary"
             onClick={onClose}
@@ -388,8 +353,7 @@ export default function ScheduleChangeModal({
               ? 'Scheduling…'
               : `Schedule ${productIds.length} product${productIds.length === 1 ? '' : 's'}`}
           </Button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+    </Modal>
   )
 }
