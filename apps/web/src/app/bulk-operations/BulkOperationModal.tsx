@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   Globe,
   Loader2,
@@ -122,6 +123,20 @@ export default function BulkOperationModal({
   const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(
     null,
   )
+
+  // W6.3 — Schedule picker state. When `mode === 'schedule'` the
+  // footer's primary button POSTs to /api/scheduled-bulk-actions
+  // with the modal's current operation + scope, instead of running
+  // it now via /api/bulk-operations. Cron expression is optional —
+  // when blank, the schedule fires once at scheduledFor.
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now')
+  const [scheduleAt, setScheduleAt] = useState<string>('') // datetime-local
+  const [scheduleCron, setScheduleCron] = useState<string>('')
+  const [scheduleName, setScheduleName] = useState<string>('')
+  const [scheduling, setScheduling] = useState(false)
+  const [scheduleResult, setScheduleResult] = useState<
+    { id: string; nextRunAt: string | null } | null
+  >(null)
 
   const [payload, setPayload] = useState<Record<string, unknown>>(
     op?.initialPayload ?? {},
@@ -1098,6 +1113,74 @@ export default function BulkOperationModal({
               <div>{executeError}</div>
             </div>
           )}
+
+          {/* W6.3 — Schedule inputs. Visible only when the operator
+              has flipped to "Schedule" mode in the footer. The save
+              path lives on the footer's primary button (above). */}
+          {!isSchemaOp && scheduleMode === 'schedule' && !scheduleResult && (
+            <div className="border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/20 rounded p-3 space-y-2">
+              <div className="text-sm font-semibold text-purple-700 dark:text-purple-300 inline-flex items-center gap-1.5">
+                <CalendarClock className="w-3.5 h-3.5" />
+                Schedule this operation
+              </div>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
+                  Schedule name
+                </span>
+                <input
+                  type="text"
+                  value={scheduleName}
+                  onChange={(e) => setScheduleName(e.target.value)}
+                  placeholder={op?.label ? `${op.label} (scheduled)` : 'Schedule name'}
+                  className={inputCls}
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
+                    Run at (optional if cron set)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(e) => setScheduleAt(e.target.value)}
+                    className={inputCls}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
+                    Cron (optional, e.g. 0 2 * * *)
+                  </span>
+                  <input
+                    type="text"
+                    value={scheduleCron}
+                    onChange={(e) => setScheduleCron(e.target.value)}
+                    placeholder="m h dom mon dow"
+                    className={`${inputCls} font-mono text-xs`}
+                  />
+                </label>
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Set just the date/time for a one-shot. Set just the cron
+                for a pure recurring schedule. Set both to start a
+                recurring schedule on a specific date. Times use{' '}
+                <strong>Europe/Rome</strong>.
+              </div>
+            </div>
+          )}
+
+          {/* W6.3 — Saved-schedule confirmation. */}
+          {scheduleResult && (
+            <div className="text-base text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded px-3 py-2 inline-flex items-start gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <div>
+                Schedule saved.{' '}
+                {scheduleResult.nextRunAt
+                  ? `Next run: ${new Date(scheduleResult.nextRunAt).toLocaleString()}.`
+                  : 'No next run scheduled.'}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1110,7 +1193,31 @@ export default function BulkOperationModal({
           >
             {jobTerminal ? 'Close' : 'Cancel'}
           </Button>
+          {/* W6.3 — schedule mode toggle. Flipping to "schedule"
+              swaps the primary button from "Apply now" to "Save
+              schedule" and reveals the datetime + cron inputs. */}
           {!jobTerminal && !isSchemaOp && (
+            <button
+              type="button"
+              onClick={() =>
+                setScheduleMode((m) => (m === 'now' ? 'schedule' : 'now'))
+              }
+              disabled={executing || scheduling}
+              title="Schedule this operation for later or on a recurring cadence"
+              className={cn(
+                'h-7 px-2 inline-flex items-center gap-1 rounded border text-xs font-medium transition-colors',
+                scheduleMode === 'schedule'
+                  ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300'
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                'disabled:opacity-50',
+              )}
+              aria-pressed={scheduleMode === 'schedule'}
+            >
+              <CalendarClock className="w-3 h-3" />
+              {scheduleMode === 'schedule' ? 'Run now' : 'Schedule…'}
+            </button>
+          )}
+          {!jobTerminal && !isSchemaOp && scheduleMode === 'now' && (
             <Button
               variant="primary"
               size="sm"
@@ -1129,6 +1236,67 @@ export default function BulkOperationModal({
                 : conflicts.length > 0 && conflictsAck
                   ? `Run anyway on ${preview?.affectedCount.toLocaleString() ?? 0}`
                   : `Apply to ${preview?.affectedCount.toLocaleString() ?? 0}`}
+            </Button>
+          )}
+          {!jobTerminal && !isSchemaOp && scheduleMode === 'schedule' && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={async () => {
+                if (!scheduleName.trim() && !op?.label) return
+                if (!scheduleAt && !scheduleCron) return
+                setScheduling(true)
+                setExecuteError(null)
+                try {
+                  const res = await fetch(
+                    `${getBackendUrl()}/api/scheduled-bulk-actions`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name:
+                          scheduleName.trim() ||
+                          `${op?.label ?? 'Bulk action'} (scheduled)`,
+                        actionType: opType,
+                        actionPayload: payload,
+                        filters: scopePayload.filters ?? null,
+                        targetProductIds: scopePayload.targetProductIds,
+                        scheduledFor: scheduleAt
+                          ? new Date(scheduleAt).toISOString()
+                          : null,
+                        cronExpression: scheduleCron.trim() || null,
+                        timezone: 'Europe/Rome',
+                      }),
+                    },
+                  )
+                  const json = await res.json()
+                  if (!res.ok) {
+                    throw new Error(json.error ?? `HTTP ${res.status}`)
+                  }
+                  setScheduleResult({
+                    id: json.schedule.id,
+                    nextRunAt: json.schedule.nextRunAt,
+                  })
+                } catch (err) {
+                  setExecuteError(
+                    err instanceof Error ? err.message : String(err),
+                  )
+                } finally {
+                  setScheduling(false)
+                }
+              }}
+              disabled={
+                !payloadValid ||
+                scheduling ||
+                (!scheduleAt && !scheduleCron)
+              }
+              loading={scheduling}
+            >
+              {scheduling
+                ? 'Scheduling…'
+                : scheduleResult
+                  ? 'Scheduled ✓'
+                  : 'Save schedule'}
             </Button>
           )}
           {isSchemaOp && (
