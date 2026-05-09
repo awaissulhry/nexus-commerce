@@ -108,6 +108,15 @@ model Product {
   // Structure: { "voltage": "110V", "apparel_size": "M", "material": "Cotton" }
   categoryAttributes Json?
 
+  // ── W2.1 — ProductFamily (Akeneo cornerstone) ────────────────────
+  // Optional FK to a Family template that declares which attribute
+  // groups + per-channel rules apply to this product. Wave 2 builds
+  // on this with FamilyAttribute (W2.2) + AttributeSet (W2.3+).
+  // SetNull on family delete so detaching a family doesn't cascade-
+  // wipe products; they revert to the loose categoryAttributes JSON.
+  familyId String?
+  family   ProductFamily? @relation("ProductFamily", fields: [familyId], references: [id], onDelete: SetNull)
+
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
   minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
@@ -292,6 +301,51 @@ model Product {
   @@index([parentId])
   @@index([isParent])
   @@index([fulfillmentMethod])
+  @@index([familyId])
+}
+
+/// W2.1 — Product family (Akeneo cornerstone PIM template).
+///
+/// A Family is the template for a product type — e.g., "Motorcycle
+/// Jacket" — that declares which attribute groups + attributes
+/// apply, which are required vs optional, and (in W2.2) per-channel
+/// syndication rules. Each Product *optionally* belongs to one
+/// Family. Until a Product has a Family, the loose categoryAttributes
+/// JSON path is used (legacy / catch-all).
+///
+/// Hierarchy: a Family can have a parent (e.g., "Motorcycle Apparel"
+/// → "Motorcycle Jacket") with attribute inheritance — a child
+/// family inherits all parent required + optional attributes plus
+/// any it adds itself. SetNull on parent delete so the child
+/// becomes a top-level family instead of disappearing.
+///
+/// Wave 2 follow-up (each its own commit per H.1):
+///   W2.2: FamilyAttribute join + required/optional + per-channel
+///   W2.3: AttributeSet / AttributeGroup / CustomAttribute
+///   W2.4+: services, family-attach UI, completeness recompute
+model ProductFamily {
+  id          String  @id @default(cuid())
+  // Human-readable identifier. Lower-case-snake convention to match
+  // Akeneo: 'motorcycle_jacket', 'motorcycle_helmet'.
+  code        String  @unique
+  // Display label for UI. Locale-resolved at read time once W2.2
+  // adds FamilyTranslation; for now the operator-facing label only.
+  label       String
+  description String?
+
+  // Hierarchy — children inherit attributes from parent.
+  parentFamilyId String?
+  parentFamily   ProductFamily?  @relation("FamilyHierarchy", fields: [parentFamilyId], references: [id], onDelete: SetNull)
+  childFamilies  ProductFamily[] @relation("FamilyHierarchy")
+
+  // Products that belong to this family (back-relation for the
+  // Product.family FK declared above).
+  products Product[] @relation("ProductFamily")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentFamilyId])
 }
 
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
