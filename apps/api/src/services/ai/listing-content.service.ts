@@ -13,7 +13,7 @@
  * call so the route can persist AiUsageLog rows.
  */
 
-import { getProvider } from './providers/index.js'
+import { getProvider, isAiKillSwitchOn } from './providers/index.js'
 import type {
   LLMProvider,
   ProviderName,
@@ -128,6 +128,16 @@ export class ListingContentService {
     const language =
       LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
 
+    // AI-1.2 — distinguish kill-switch ON from no-credentials so the
+    // wizard surfaces the right error to the operator. Both cases
+    // result in `getProvider()` returning null, but the remediation
+    // is opposite: kill switch is intentional, no-credentials means
+    // someone forgot to set GEMINI_API_KEY / ANTHROPIC_API_KEY.
+    if (isAiKillSwitchOn()) {
+      throw new Error(
+        'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
+      )
+    }
     const provider = getProvider(params.provider)
     if (!provider) {
       throw new Error(

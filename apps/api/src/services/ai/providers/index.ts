@@ -2,9 +2,13 @@
  * Provider selector + registry.
  *
  * Resolution order for `getProvider(requested?)`:
- *   1. requested (validated against the registry)
- *   2. AI_PROVIDER env var
- *   3. 'gemini' default
+ *   1. NEXUS_AI_KILL_SWITCH env — when on, ALL providers refused (fail
+ *      closed). Returns null and the caller surfaces a "AI temporarily
+ *      disabled" message. Single chokepoint for kill-switching every
+ *      AI feature simultaneously without redeploying or rotating keys.
+ *   2. requested (validated against the registry)
+ *   3. AI_PROVIDER env var
+ *   4. 'gemini' default
  *
  * Falls back to a configured provider if the requested one isn't —
  * e.g. a route asks for 'anthropic' but ANTHROPIC_API_KEY isn't set,
@@ -31,16 +35,42 @@ export function isValidProviderName(s: string): s is ProviderName {
   return s === 'gemini' || s === 'anthropic'
 }
 
-export function listProviders(): Array<{
-  name: ProviderName
-  configured: boolean
-  defaultModel: string
-}> {
-  return Object.values(REGISTRY).map((p) => ({
-    name: p.name,
-    configured: p.isConfigured(),
-    defaultModel: p.defaultModel,
-  }))
+/**
+ * AI-1.2 — emergency disable for every AI call across the app.
+ *
+ * Truthy values that flip it on: '1', 'true', 'yes', 'on' (case
+ * insensitive, trimmed). Anything else is off — including 'false', '0',
+ * empty string, and unset. Stays env-driven (no DB hit per call) so
+ * the check is microsecond-cheap and survives DB outages.
+ *
+ * Operationally: set NEXUS_AI_KILL_SWITCH=1 in the runtime config to
+ * stop all AI spend immediately. No process restart required for
+ * Node-managed envs that hot-reload (Railway/Vercel rotate envs); for
+ * cold envs, a redeploy is needed.
+ */
+const KILL_SWITCH_VALUES = new Set(['1', 'true', 'yes', 'on'])
+
+export function isAiKillSwitchOn(): boolean {
+  const raw = (process.env.NEXUS_AI_KILL_SWITCH ?? '').trim().toLowerCase()
+  return KILL_SWITCH_VALUES.has(raw)
+}
+
+export function listProviders(): {
+  killSwitch: boolean
+  providers: Array<{
+    name: ProviderName
+    configured: boolean
+    defaultModel: string
+  }>
+} {
+  return {
+    killSwitch: isAiKillSwitchOn(),
+    providers: Object.values(REGISTRY).map((p) => ({
+      name: p.name,
+      configured: p.isConfigured(),
+      defaultModel: p.defaultModel,
+    })),
+  }
 }
 
 /**
@@ -48,10 +78,13 @@ export function listProviders(): Array<{
  *
  * The fallback rule: if the requested provider isn't configured, we
  * try the env-default, then any configured provider in the registry.
- * Returns null only when no provider has credentials, so callers can
- * 503 cleanly.
+ * Returns null only when no provider has credentials OR when the
+ * kill switch is on, so callers can 503 cleanly with a kill-switch
+ * specific message via `isAiKillSwitchOn()`.
  */
 export function getProvider(requested?: string | null): LLMProvider | null {
+  // 0. Kill switch — fail closed before any vendor lookup.
+  if (isAiKillSwitchOn()) return null
   // 1. Honour an explicit request when valid + configured.
   if (requested) {
     const trimmed = requested.trim().toLowerCase()

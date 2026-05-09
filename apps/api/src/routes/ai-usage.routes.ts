@@ -31,7 +31,12 @@ const MAX_DAYS = 90
 
 const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/ai/providers', async () => {
-    return { providers: listProviders() }
+    // AI-1.2: response shape is { killSwitch, providers: [...] } so the
+    // UI can render a banner when NEXUS_AI_KILL_SWITCH is on instead of
+    // reaching every consumer that calls /ai/providers. Existing
+    // consumers (Step4Attributes provider picker) only read
+    // `j.providers` as an array so the change is backward-compatible.
+    return listProviders()
   })
 
   fastify.get<{ Querystring: { days?: string } }>(
