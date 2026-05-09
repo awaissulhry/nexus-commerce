@@ -1195,6 +1195,45 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── DR-S.4b — GET /api/listing-wizard/:id/activity ───────────
+  // Broader event feed for the /products/drafts expanded-row
+  // timeline. Distinct from /history (which is the Step 9 review's
+  // submit-only audit) — this returns the funnel-level events
+  // (step transitions, validation outcomes, wizard lifecycle) the
+  // operator actually wants to see when triaging "what happened
+  // on this draft?". Default limit 5 (matches inline UI density);
+  // cap 25 to keep payloads bounded.
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { limit?: string }
+  }>('/listing-wizard/:id/activity', async (request, reply) => {
+    const wizard = await prisma.listingWizard.findUnique({
+      where: { id: request.params.id },
+      select: { id: true },
+    })
+    if (!wizard) {
+      return reply.code(404).send({ error: 'Wizard not found' })
+    }
+    const limit = Math.min(
+      Math.max(parseInt(request.query.limit ?? '5', 10) || 5, 1),
+      25,
+    )
+    const events = await prisma.wizardStepEvent.findMany({
+      where: { wizardId: wizard.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        step: true,
+        durationMs: true,
+        errorCode: true,
+        createdAt: true,
+      },
+    })
+    return { events }
+  })
+
   // ── C.3 — POST /api/listing-wizard/drafts/bulk-delete ─────────
   // Bulk-deletes a mixed batch of drafts. Wizards are soft-deleted
   // (status='DISCARDED' + wizard_discarded telemetry) so the event

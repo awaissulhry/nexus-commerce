@@ -417,6 +417,55 @@ function marketplaceForAi(d: Draft): string {
   return d.channels[0]?.marketplace?.toUpperCase() || 'IT'
 }
 
+// DR-S.4b — last-N WizardStepEvents for the expanded-row activity
+// timeline. Mirrors the /api/listing-wizard/:id/activity response.
+interface ActivityEvent {
+  id: string
+  type: string
+  step: number
+  durationMs: number | null
+  errorCode: string | null
+  createdAt: string
+}
+
+// DR-S.4b — keys for the WIZARD_EVENT_TYPES enum so labels stay
+// localisable. Unmapped types fall back to the raw key — keeps
+// the timeline rendering even if the server adds a new event
+// type before the i18n bundle catches up.
+const ACTIVITY_TYPE_LABEL_KEYS: Record<string, string> = {
+  step_entered: 'drafts.activity.stepEntered',
+  step_exited: 'drafts.activity.stepExited',
+  validation_failed: 'drafts.activity.validationFailed',
+  validation_passed: 'drafts.activity.validationPassed',
+  error_shown: 'drafts.activity.errorShown',
+  jumped_to_step: 'drafts.activity.jumpedToStep',
+  submit_completed: 'drafts.activity.submitCompleted',
+  submit_failed: 'drafts.activity.submitFailed',
+  wizard_started: 'drafts.activity.wizardStarted',
+  wizard_resumed: 'drafts.activity.wizardResumed',
+  wizard_discarded: 'drafts.activity.wizardDiscarded',
+  wizard_abandoned: 'drafts.activity.wizardAbandoned',
+}
+
+// Tone the timeline glyph by event class so the operator can scan
+// red for failures vs. green for completions vs. slate for routine
+// transitions.
+function activityTone(type: string): string {
+  if (type === 'submit_completed' || type === 'validation_passed')
+    return 'text-emerald-600 dark:text-emerald-400'
+  if (
+    type === 'submit_failed' ||
+    type === 'validation_failed' ||
+    type === 'error_shown' ||
+    type === 'wizard_abandoned' ||
+    type === 'wizard_discarded'
+  )
+    return 'text-rose-600 dark:text-rose-400'
+  if (type === 'wizard_started' || type === 'wizard_resumed')
+    return 'text-blue-600 dark:text-blue-400'
+  return 'text-slate-500 dark:text-slate-400'
+}
+
 // DR-S.4 — expanded-row detail. Click the chevron in the row to
 // open this in-place underneath the row (colSpan'd <tr>). Lighter
 // than a separate drawer overlay because the operator stays in
@@ -434,12 +483,41 @@ function DraftExpandedDetail({
   const passing = ALL_FACTORS.filter(
     (f) => !d.missingFactors.includes(f),
   )
+
+  // DR-S.4b — lazy-fetch recent activity. Wizard rows only — a
+  // standalone Product DRAFT has no WizardStepEvent rows by
+  // definition. Fetch fires once per expand; aborted on collapse
+  // via the AbortController.
+  const [events, setEvents] = useState<ActivityEvent[] | null>(null)
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityError, setActivityError] = useState<string | null>(null)
+  useEffect(() => {
+    if (d.kind !== 'wizard') return
+    const ctrl = new AbortController()
+    setActivityLoading(true)
+    setActivityError(null)
+    fetch(
+      `${getBackendUrl()}/api/listing-wizard/${d.id}/activity?limit=5`,
+      { signal: ctrl.signal, cache: 'no-store' },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return (await r.json()) as { events: ActivityEvent[] }
+      })
+      .then((json) => setEvents(json.events ?? []))
+      .catch((err) => {
+        if (err.name === 'AbortError') return
+        setActivityError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => setActivityLoading(false))
+    return () => ctrl.abort()
+  }, [d.id, d.kind])
   return (
     <td
       colSpan={7}
       className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800"
     >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Completeness checklist — every factor with its
             pass/fail glyph. Cheaper to render statically from
             d.missingFactors than to round-trip a per-row endpoint. */}
@@ -514,6 +592,63 @@ function DraftExpandedDetail({
                   </span>
                 </li>
               ))}
+            </ul>
+          )}
+        </div>
+
+        {/* DR-S.4b — recent activity timeline. Wizard rows only;
+            product-DRAFTs show a "no wizard activity" hint. Lazy-
+            loaded on expand via useEffect (above). */}
+        <div>
+          <div className="text-xs uppercase tracking-wide font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+            {t('drafts.detail.activityHeader')}
+          </div>
+          {d.kind !== 'wizard' ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {t('drafts.detail.noWizardActivity')}
+            </div>
+          ) : activityLoading ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              <Loader2 className="w-3 h-3 inline-block mr-1 animate-spin" />
+              {t('common.loading')}
+            </div>
+          ) : activityError ? (
+            <div className="text-sm text-rose-700 dark:text-rose-300">
+              {activityError}
+            </div>
+          ) : !events || events.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {t('drafts.detail.noActivity')}
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {events.map((e) => {
+                const labelKey =
+                  ACTIVITY_TYPE_LABEL_KEYS[e.type] ?? `drafts.activity.${e.type}`
+                return (
+                  <li
+                    key={e.id}
+                    className="flex items-start gap-1.5 text-sm"
+                  >
+                    <span
+                      className={cn(
+                        'mt-1 inline-block w-1.5 h-1.5 rounded-full flex-shrink-0',
+                        activityTone(e.type).replace('text-', 'bg-'),
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className={cn('truncate', activityTone(e.type))}>
+                        {t(labelKey)}
+                        {e.step ? ` · step ${e.step}` : ''}
+                      </div>
+                      <div className="text-xs text-slate-400 dark:text-slate-500">
+                        {formatRelative(e.createdAt)}
+                        {e.errorCode ? ` · ${e.errorCode}` : ''}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
