@@ -3220,5 +3220,7 @@
   "routingRules.field.activeLabel": "Active (rule will be evaluated)",
   "routingRules.create": "Create rule",
   "replenishment.automation.editTooltip": "Edit rule",
-  "replenishment.automation.editAriaLabel": "Edit {name}"
+  "replenishment.automation.editAriaLabel": "Edit {name}",
+  "products.grid.action.matrix": "Matrix",
+  "products.grid.action.matrixTitle": "Open the variant matrix editor"
 }

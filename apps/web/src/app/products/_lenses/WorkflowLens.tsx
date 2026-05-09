@@ -151,7 +151,11 @@ export function WorkflowLens() {
             ))}
           </select>
           <Link
-            href={`/settings/pim/workflows/${selectedId}`}
+            // W5.45 — /settings/pim/workflows/[id] page doesn't exist;
+            // the workflow editor lives on the list page (operator
+            // clicks the row to expand inline). Rerouting prevents a
+            // 404 on the "edit definition" CTA.
+            href={`/settings/pim/workflows`}
             className="text-sm text-blue-700 dark:text-blue-300 hover:underline"
           >
             {t('products.lens.workflow.editDefinition')}

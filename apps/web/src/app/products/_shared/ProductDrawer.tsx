@@ -1709,7 +1709,12 @@ function ListingsTab({
                           </button>
                         )}
                         <Link
-                          href={`/listings/${l.id}`}
+                          // W5.45 — was /listings/${l.id} which 404s (no
+                          // /listings/[id] route ever existed). Send the
+                          // operator to the channel's listing index instead;
+                          // they can find this listing there. Better than a
+                          // dead-end click.
+                          href={`/listings/${l.channel.toLowerCase()}`}
                           className="text-sm text-blue-700 hover:underline inline-flex items-center gap-0.5"
                         >
                           {t('products.drawer.listings.open')} <ChevronRight className="w-3 h-3" />

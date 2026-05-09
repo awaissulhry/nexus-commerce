@@ -21,13 +21,11 @@
 import { useCallback, useState } from 'react'
 import {
   AlertCircle,
-  ChevronRight,
   GitBranch,
   Plus,
   Trash2,
   X,
 } from 'lucide-react'
-import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
@@ -179,13 +177,13 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
                   className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40"
                 >
                   <td className="px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
-                    <Link
-                      href={`/settings/pim/workflows/${w.id}`}
-                      className="hover:underline inline-flex items-center gap-1"
-                    >
+                    {/* W5.45 — was Link to /settings/pim/workflows/[id]
+                        which doesn't exist. Per-workflow editor lives
+                        inline on this page; the row label can stay
+                        non-clickable until a dedicated [id] route lands. */}
+                    <span className="inline-flex items-center gap-1">
                       {w.code}
-                      <ChevronRight className="w-3 h-3 text-slate-400" />
-                    </Link>
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
                     {w.label}

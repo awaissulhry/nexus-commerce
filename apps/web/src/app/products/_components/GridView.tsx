@@ -1902,6 +1902,20 @@ const ProductCell = memo(function ProductCell({
           >
             {t('products.grid.action.list')}
           </Link>
+          {/* W5.45 — Matrix view shortcut for parent products. Was
+              only reachable via drawer parent badge (3 clicks deep)
+              + variations tab footer link. Hot operator path for
+              variant editing — promote to inline grid action so a
+              single click on any parent row opens the matrix. */}
+          {p.isParent && (
+            <Link
+              href={`/products/${p.id}/matrix`}
+              className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded inline-flex items-center justify-center transition-colors"
+              title={t('products.grid.action.matrixTitle')}
+            >
+              {t('products.grid.action.matrix')}
+            </Link>
+          )}
         </div>
       )
     default:
