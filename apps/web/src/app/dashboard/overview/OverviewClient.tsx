@@ -207,7 +207,11 @@ export default function OverviewClient() {
                   byChannel={data.byChannel}
                   currency={data.currency.primary}
                 />
-                <MarketplaceMatrix t={t} matrix={data.byMarketplace} />
+                <MarketplaceMatrix
+                  t={t}
+                  matrix={data.byMarketplace}
+                  currency={data.currency.primary}
+                />
                 <TopProducts
                   t={t}
                   items={data.topProducts}

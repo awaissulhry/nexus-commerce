@@ -84,6 +84,11 @@ export interface OverviewPayload {
     channel: string
     marketplace: string
     listings: number
+    // DO.19 — orders + revenue per (channel, marketplace) within
+    // the active window, filtered to primary currency. A market
+    // with no orders but live listings still appears.
+    orders: number
+    revenue: number
   }>
   topProducts: Array<{
     sku: string

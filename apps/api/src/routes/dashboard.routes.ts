@@ -601,16 +601,62 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })
 
-      // ── Per-(channel, marketplace) matrix from listings ─────────
+      // ── Per-(channel, marketplace) matrix ───────────────────────
+      //
+      // DO.19 — cells now carry (orders, revenue, listings) instead
+      // of listing-only counts. Operationally, "Amazon DE has 47
+      // listings" is far less useful than "Amazon DE turned €2.3k on
+      // 31 orders" — the listing count alone can't tell you whether
+      // a market is producing revenue.
+      //
+      // Orders are bucketed in JS off the in-memory currentOrders
+      // (already filtered to primary currency for the headline) so
+      // we don't run a second SQL query just for this slice.
       const listingMatrix = await prisma.channelListing.groupBy({
         by: ['channel', 'marketplace'],
         _count: { _all: true },
       })
-      const byMarketplace = listingMatrix.map((r) => ({
-        channel: r.channel,
-        marketplace: r.marketplace,
-        listings: r._count._all,
-      }))
+      const orderMatrix = new Map<
+        string,
+        { orders: number; revenue: number }
+      >()
+      for (const o of currentOrders) {
+        const code = (o.currencyCode ?? 'EUR') || 'EUR'
+        if (code !== primaryCurrency) continue
+        const ch = String(o.channel)
+        // o.marketplace is a TEXT column on Order; stringify with a
+        // sentinel for null so the lookup key is stable.
+        const mp =
+          (o as unknown as { marketplace: string | null }).marketplace ??
+          '∅'
+        const key = `${ch}:${mp}`
+        const slot = orderMatrix.get(key) ?? { orders: 0, revenue: 0 }
+        slot.orders += 1
+        slot.revenue += Number((o.totalPrice as unknown as number) || 0)
+        orderMatrix.set(key, slot)
+      }
+      // Union of (channel, marketplace) keys from both sources so
+      // marketplaces with orders but no listings (and vice versa)
+      // both surface.
+      const matrixKeys = new Set<string>()
+      for (const r of listingMatrix)
+        matrixKeys.add(`${r.channel}:${r.marketplace}`)
+      for (const k of orderMatrix.keys()) matrixKeys.add(k)
+      const byMarketplace = Array.from(matrixKeys).map((key) => {
+        const [channel, marketplace] = key.split(':') as [string, string]
+        const listings =
+          listingMatrix.find(
+            (r) => r.channel === channel && r.marketplace === marketplace,
+          )?._count._all ?? 0
+        const slot = orderMatrix.get(key) ?? { orders: 0, revenue: 0 }
+        return {
+          channel,
+          marketplace,
+          listings,
+          orders: slot.orders,
+          revenue: slot.revenue,
+        }
+      })
 
       // ── Catalog snapshot ─────────────────────────────────────────
       const [
