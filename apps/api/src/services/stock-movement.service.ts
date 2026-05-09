@@ -306,11 +306,16 @@ export async function applyStockMovement(input: StockMovementInput) {
       }
     }
 
+    // T.5 part 1 — stop writing the legacy warehouseId column on new
+    // movements. The argument is still accepted (and used above to
+    // resolve a StockLocation), but the on-row column is set to NULL
+    // so the field can eventually be dropped without a backfill.
+    // Historical rows preserve their warehouseId for audit continuity.
     const movement = await tx.stockMovement.create({
       data: {
         productId,
         variationId: variationId ?? null,
-        warehouseId: warehouseId ?? null,
+        warehouseId: null,
         locationId: resolvedLocationId,
         change,
         balanceAfter,
@@ -617,6 +622,9 @@ export async function applyStockMovementBatch(inputs: StockMovementInput[]) {
 export async function listStockMovements(opts: {
   productId?: string
   variationId?: string
+  /** Legacy filter — still supported via StockLocation.warehouseId
+   *  join so historical + new rows are both visible. T.5 will drop
+   *  the column eventually. */
   warehouseId?: string
   limit?: number
   before?: Date
@@ -624,7 +632,15 @@ export async function listStockMovements(opts: {
   const where: any = {}
   if (opts.productId) where.productId = opts.productId
   if (opts.variationId) where.variationId = opts.variationId
-  if (opts.warehouseId) where.warehouseId = opts.warehouseId
+  if (opts.warehouseId) {
+    // T.5 part 1 — match either the legacy column (old rows) OR a
+    // current location whose StockLocation.warehouseId matches (new
+    // rows that no longer write the column directly).
+    where.OR = [
+      { warehouseId: opts.warehouseId },
+      { location: { warehouseId: opts.warehouseId } },
+    ]
+  }
   if (opts.before) where.createdAt = { lt: opts.before }
 
   return prisma.stockMovement.findMany({
