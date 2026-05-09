@@ -373,6 +373,12 @@ export default function SyncLogsHubClient({
               Webhooks
             </Button>
           </Link>
+          <Link href="/sync-logs/alerts">
+            <Button variant="secondary" size="sm">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Alerts
+            </Button>
+          </Link>
           <Link href="/dashboard/health">
             <Button variant="secondary" size="sm">
               <Activity className="w-3.5 h-3.5" />
