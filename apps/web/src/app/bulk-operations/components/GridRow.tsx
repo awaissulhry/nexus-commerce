@@ -16,6 +16,10 @@ import {
   type BulkProduct,
   type Rect,
 } from '../lib/types'
+import {
+  TONE_CLASSES,
+  type RuleTone,
+} from '../lib/conditional-format'
 
 // Selection is rendered as TWO absolutely-positioned overlays in the
 // virtualized body (see SelectionOverlays below): one thin border for
@@ -29,6 +33,8 @@ export const TableRow = memo(
     rowIdx,
     top,
     findMatchSig,
+    conditionalToneSig,
+    conditionalToneMap,
   }: {
     row: Row<BulkProduct>
     rowIdx: number
@@ -46,6 +52,15 @@ export const TableRow = memo(
      * matches.
      */
     findMatchSig?: string
+    /**
+     * W4.2 — pipe-separated `columnId:tone` chunks for cells in this
+     * row that have an active conditional-format rule firing.
+     * Memo-bust signature only — the cell renderer reads the actual
+     * tone from `conditionalToneMap` (passed by reference; the
+     * sig is what re-renders this row when rules change).
+     */
+    conditionalToneSig?: string
+    conditionalToneMap?: Map<string, RuleTone>
   }) {
     const hier = (row.original as Partial<HierarchyRow>)._hier
     const isAggregateRow =
@@ -103,6 +118,13 @@ export const TableRow = memo(
           // for this row; bound to the row's memo so the highlight
           // repaints as the operator types into the find bar.
           const isFindMatch = matchCols?.has(colIdx) ?? false
+          // W4.2 — conditional-format tone for this cell. Lookup
+          // bypasses Map.get when the per-row sig is empty, which is
+          // the common case (most rows have no rules firing).
+          const condTone =
+            conditionalToneSig && conditionalToneMap
+              ? conditionalToneMap.get(`${rowIdx}:${cell.column.id}`) ?? null
+              : null
           return (
             <div
               key={cell.id}
@@ -140,6 +162,12 @@ export const TableRow = memo(
                   : 'border-r border-slate-100/60 last:border-r-0',
                 isReadOnlyCell && 'bg-slate-50/40',
                 selectable && 'hover:bg-slate-50',
+                // W4.2 — Conditional-format tint. Sits BELOW the
+                // find-match overlay so a search hit on a tinted
+                // cell still reads as a match. Tones come from the
+                // shared TONE_CLASSES map so dark-mode / theming
+                // edits stay in one place.
+                condTone && TONE_CLASSES[condTone],
                 // W3.3 — Find / Replace match tint. Inset amber ring +
                 // soft fill so the cell stands out without blocking
                 // the dirty (yellow) / cascade (orange) / error (red)
@@ -170,7 +198,11 @@ export const TableRow = memo(
     // W3.3 — bust the memo when the find-match signature for THIS
     // row changes; otherwise the highlight overlay would only repaint
     // when some other prop changed (selection, value, …).
-    prev.findMatchSig === next.findMatchSig,
+    prev.findMatchSig === next.findMatchSig &&
+    // W4.2 — same pattern for conditional-format tones. The map
+    // identity itself doesn't have to match; the per-row sig captures
+    // when the painted columns or tones for this row changed.
+    prev.conditionalToneSig === next.conditionalToneSig,
 )
 
 // Three absolutely-positioned overlays that draw the selection on

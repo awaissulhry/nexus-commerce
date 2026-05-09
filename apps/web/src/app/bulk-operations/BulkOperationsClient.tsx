@@ -138,11 +138,16 @@ import { useBulkUndoRedo } from './lib/use-bulk-undo-redo'
 import { startDragFillTracker } from './lib/drag-fill-tracker'
 import { cycleSortKey, sortRows, type SortKey } from './lib/multi-sort'
 import {
+  buildToneMap,
+  type ConditionalRule,
+} from './lib/conditional-format'
+import {
   selectionToTsv,
   buildPastePlan,
   shouldInterceptClipboard,
 } from './lib/clipboard-helpers'
 import { FindReplaceBar } from './components/FindReplaceBar'
+import { ConditionalFormatBar } from './components/ConditionalFormatBar'
 
 // Re-export BulkProduct so any sibling file (modals, cells, etc.) that
 // used to import it from this file still finds it here.
@@ -597,6 +602,11 @@ export default function BulkOperationsClient() {
   // desc / off; Shift+click adds (or cycles within) the multi-key
   // list so operators can sort by Status, then Stock desc, then SKU.
   const [sortKeys, setSortKeys] = useState<SortKey[]>([])
+  // W4.2 — conditional formatting rules. Per-column predicates that
+  // tint matching cells (low-stock red, premium-tier blue, etc.).
+  // First-match-wins per cell. Empty array = no painting (default).
+  const [conditionalRules, setConditionalRules] = useState<ConditionalRule[]>([])
+  const [conditionalEditorOpen, setConditionalEditorOpen] = useState(false)
   const activeFilterCount =
     filterState.status.length +
     filterState.channels.length +
@@ -2644,6 +2654,46 @@ export default function BulkOperationsClient() {
     }
   })()
 
+  // ── W4.2 — conditional-format tone map ─────────────────────────
+  // Walks the active ruleset across the displayed rows once and
+  // returns a Map keyed by `${rowIdx}:${columnId}` → tone token.
+  // Empty rule list short-circuits inside buildToneMap so the
+  // useMemo cost is ~0 when the operator hasn't configured any rule.
+  const conditionalToneMap = useMemo(() => {
+    return buildToneMap(
+      conditionalRules,
+      displayRows as unknown as Array<Record<string, unknown>>,
+    )
+  }, [conditionalRules, displayRows])
+
+  // Per-row signature used by TableRow's memo so a tone-only change
+  // (no row data change) still re-renders that row. Bucket entries
+  // by rowIdx with `columnId:tone` chunks; '' when the row has no
+  // tones so most rows see prop identity stable.
+  const conditionalToneSigByRow = useMemo(() => {
+    if (conditionalToneMap.size === 0) return new Map<number, string>()
+    const buckets = new Map<number, string[]>()
+    for (const [k, tone] of conditionalToneMap) {
+      const idx = k.indexOf(':')
+      if (idx <= 0) continue
+      const r = parseInt(k.slice(0, idx), 10)
+      const colId = k.slice(idx + 1)
+      if (Number.isNaN(r)) continue
+      let arr = buckets.get(r)
+      if (!arr) {
+        arr = []
+        buckets.set(r, arr)
+      }
+      arr.push(`${colId}:${tone}`)
+    }
+    const out = new Map<number, string>()
+    for (const [r, arr] of buckets) {
+      arr.sort()
+      out.set(r, arr.join('|'))
+    }
+    return out
+  }, [conditionalToneMap])
+
   // ── W3.3 — per-row find-match signature ────────────────────────
   // findMatchKeys is a flat 'rowIdx:colIdx' Set; bucket it into
   // per-row strings so each TableRow's memo only busts when ITS row's
@@ -3043,6 +3093,16 @@ export default function BulkOperationsClient() {
         onReplaceCell={handleFindReplaceCell}
         onCommitReplaceBatch={handleFindReplaceCommitBatch}
       />
+      {/* W4.2 — Conditional formatting editor. Mirrors find/replace
+          bar's positioning + open contract; toolbar trigger lives
+          near the existing toolbar buttons. */}
+      <ConditionalFormatBar
+        open={conditionalEditorOpen}
+        onClose={() => setConditionalEditorOpen(false)}
+        rules={conditionalRules}
+        onChange={setConditionalRules}
+        visibleColumns={visibleColumnsList}
+      />
       {!online && (
         <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
           <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
@@ -3318,6 +3378,29 @@ export default function BulkOperationsClient() {
                 )}
               </button>
             </div>
+            {/* W4.2 — Conditional-formatting trigger. Compact pill
+                that shows the active-rule count when there's at
+                least one rule firing. */}
+            <button
+              type="button"
+              onClick={() => setConditionalEditorOpen((v) => !v)}
+              aria-pressed={conditionalEditorOpen}
+              title="Conditional formatting rules"
+              className={cn(
+                'h-7 px-2 inline-flex items-center gap-1 rounded border text-xs font-medium transition-colors',
+                conditionalRules.some((r) => r.enabled)
+                  ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              <Wand2 className="w-3 h-3" />
+              Rules
+              {conditionalRules.filter((r) => r.enabled).length > 0 && (
+                <span className="tabular-nums">
+                  {conditionalRules.filter((r) => r.enabled).length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Middle: status, fills available space.
@@ -3968,6 +4051,8 @@ export default function BulkOperationsClient() {
                 top={vRow.start}
                 columnsKey={columnsKey}
                 findMatchSig={findMatchSigByRow.get(vRow.index)}
+                conditionalToneSig={conditionalToneSigByRow.get(vRow.index)}
+                conditionalToneMap={conditionalToneMap}
               />
             )
           })}
