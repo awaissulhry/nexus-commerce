@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -248,6 +249,13 @@ function KpiCard({
  * — no axis, no tooltip — its job is to give the operator's eye a
  * shape for "is this trend up, down, or flat?" before they commit
  * to reading the headline number.
+ *
+ * DO.44 — when the series shifts (Live mode SSE-driven refetch
+ * lands a new tick), a transient pulse highlights the most-recent
+ * data point so the operator's eye catches the change. The
+ * SVG path itself can't smoothly tween its `d` attribute via CSS
+ * (SVG path data isn't an animatable property), so the visual cue
+ * lives in a brief endpoint dot + opacity pulse on the line.
  */
 function MiniSpark({
   series,
@@ -268,6 +276,37 @@ function MiniSpark({
         `${i === 0 ? 'M' : 'L'} ${(pad + i * xStep).toFixed(2)},${yScale(v).toFixed(2)}`,
     )
     .join(' ')
+
+  // DO.44 — track changes. When the last value shifts (or the
+  // series length grows), flash a "tick" highlight for 700ms.
+  // useRef instead of useState for the previous-value cache so
+  // changing it doesn't re-trigger the effect.
+  const prevSignature = useRef<string>('')
+  const [ticked, setTicked] = useState(false)
+  useEffect(() => {
+    const sig =
+      series.length === 0
+        ? ''
+        : `${series.length}:${series[series.length - 1]}:${series.reduce(
+            (s, v) => s + v,
+            0,
+          )}`
+    if (prevSignature.current !== '' && prevSignature.current !== sig) {
+      setTicked(true)
+      const id = window.setTimeout(() => setTicked(false), 700)
+      prevSignature.current = sig
+      return () => window.clearTimeout(id)
+    }
+    prevSignature.current = sig
+  }, [series])
+
+  const lastPoint = series.length > 0
+    ? {
+        x: pad + (series.length - 1) * xStep,
+        y: yScale(series[series.length - 1]),
+      }
+    : null
+
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
@@ -282,7 +321,23 @@ function MiniSpark({
         stroke={SPARK_STROKE[color]}
         strokeWidth="1.25"
         vectorEffect="non-scaling-stroke"
+        style={{
+          transition: 'opacity 0.4s ease-out',
+          opacity: ticked ? 1 : 0.85,
+        }}
       />
+      {lastPoint && ticked && (
+        <circle
+          cx={lastPoint.x}
+          cy={lastPoint.y}
+          r={2.5}
+          fill={SPARK_STROKE[color]}
+          style={{
+            transformOrigin: `${lastPoint.x}px ${lastPoint.y}px`,
+            animation: 'overview-spark-tick 0.7s ease-out',
+          }}
+        />
+      )}
     </svg>
   )
 }
