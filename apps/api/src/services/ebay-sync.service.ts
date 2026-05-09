@@ -1,6 +1,7 @@
 import prisma from "../db.js";
 import { ebayAuthService } from "./ebay-auth.service.js";
 import { logger } from "../utils/logger.js";
+import { recordApiCall } from "./outbound-api-call-log.service.js";
 
 /**
  * eBay Listing from API
@@ -84,32 +85,49 @@ export class EbaySyncService {
   /**
    * Fetch all active eBay listings for a seller
    */
-  async fetchEbayListings(accessToken: string): Promise<EbayListing[]> {
+  async fetchEbayListings(accessToken: string, connectionId?: string): Promise<EbayListing[]> {
     try {
       logger.info("Fetching eBay listings from Inventory API");
 
       // Using eBay Inventory API to get active listings
-      const response = await fetch(
-        "https://api.ebay.com/sell/inventory/v1/inventory",
+      const data = await recordApiCall<any>(
         {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
+          channel: 'EBAY',
+          operation: 'listInventoryItems',
+          endpoint: '/sell/inventory/v1/inventory',
+          method: 'GET',
+          connectionId,
+          triggeredBy: 'cron',
+        },
+        async () => {
+          const response = await fetch(
+            "https://api.ebay.com/sell/inventory/v1/inventory",
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            logger.error("Failed to fetch eBay listings", {
+              status: response.status,
+              error: errorBody,
+            });
+            const err = new Error(
+              `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
+
+          return (await response.json()) as any;
+        },
       );
-
-      if (!response.ok) {
-        const error = await response.text();
-        logger.error("Failed to fetch eBay listings", {
-          status: response.status,
-          error,
-        });
-        throw new Error(`eBay API error: ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as any;
       const listings: EbayListing[] = [];
 
       // Parse inventory items
@@ -416,7 +434,7 @@ export class EbaySyncService {
       const accessToken = await ebayAuthService.getValidToken(connectionId);
 
       // Fetch eBay listings
-      const listings = await this.fetchEbayListings(accessToken);
+      const listings = await this.fetchEbayListings(accessToken, connectionId);
       this.stats.listingsFetched = listings.length;
 
       logger.info("Processing eBay listings", {

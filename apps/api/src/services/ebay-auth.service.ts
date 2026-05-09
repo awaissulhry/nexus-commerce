@@ -1,5 +1,6 @@
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
+import { recordApiCall } from "./outbound-api-call-log.service.js";
 
 /**
  * eBay OAuth2 Token Response
@@ -89,26 +90,42 @@ export class EbayAuthService {
    */
   async exchangeCodeForToken(code: string, _redirectUriIgnored?: string): Promise<EbayTokenResponse> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+      const data = await recordApiCall<EbayTokenResponse>(
+        {
+          channel: 'EBAY',
+          operation: 'exchangeToken',
+          endpoint: '/identity/v1/oauth2/token',
+          method: 'POST',
+          triggeredBy: 'api',
         },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: this.ruName,
-        }).toString(),
-      });
+        async () => {
+          const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+            },
+            body: new URLSearchParams({
+              grant_type: "authorization_code",
+              code,
+              redirect_uri: this.ruName,
+            }).toString(),
+          });
 
-      if (!response.ok) {
-        const error = await response.text();
-        logger.error("eBay token exchange failed", { status: response.status, error });
-        throw new Error(`Token exchange failed: ${response.statusText}`);
-      }
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            logger.error("eBay token exchange failed", { status: response.status, error: errorBody });
+            const err = new Error(
+              `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
 
-      const data = (await response.json()) as EbayTokenResponse;
+          return (await response.json()) as EbayTokenResponse;
+        },
+      );
       logger.info("eBay token exchange successful");
       return data;
     } catch (error) {
@@ -123,25 +140,41 @@ export class EbayAuthService {
    */
   async refreshAccessToken(refreshToken: string): Promise<EbayTokenResponse> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+      const data = await recordApiCall<EbayTokenResponse>(
+        {
+          channel: 'EBAY',
+          operation: 'refreshToken',
+          endpoint: '/identity/v1/oauth2/token',
+          method: 'POST',
+          triggeredBy: 'api',
         },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: refreshToken,
-        }).toString(),
-      });
+        async () => {
+          const response = await fetch(`${this.apiBaseUrl}/identity/v1/oauth2/token`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+            },
+            body: new URLSearchParams({
+              grant_type: "refresh_token",
+              refresh_token: refreshToken,
+            }).toString(),
+          });
 
-      if (!response.ok) {
-        const error = await response.text();
-        logger.error("eBay token refresh failed", { status: response.status, error });
-        throw new Error(`Token refresh failed: ${response.statusText}`);
-      }
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            logger.error("eBay token refresh failed", { status: response.status, error: errorBody });
+            const err = new Error(
+              `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
 
-      const data = (await response.json()) as EbayTokenResponse;
+          return (await response.json()) as EbayTokenResponse;
+        },
+      );
       logger.info("eBay token refreshed successfully");
       return data;
     } catch (error) {

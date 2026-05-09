@@ -17,6 +17,7 @@
  */
 
 import { ebayAuthService } from './ebay-auth.service.js'
+import { recordApiCall } from './outbound-api-call-log.service.js'
 
 export interface EbayPolicySummary {
   /** eBay-assigned id, used as fulfillmentPolicyId / paymentPolicyId
@@ -81,18 +82,34 @@ export class EbayAccountService {
         `${apiBase}/sell/account/v1/fulfillment_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`,
         headers,
         'fulfillmentPolicies',
+        '/sell/account/v1/fulfillment_policy',
+        'getFulfillmentPolicies',
+        marketplaceId,
+        connectionId,
       ),
       fetchPolicy(
         `${apiBase}/sell/account/v1/payment_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`,
         headers,
         'paymentPolicies',
+        '/sell/account/v1/payment_policy',
+        'getPaymentPolicies',
+        marketplaceId,
+        connectionId,
       ),
       fetchPolicy(
         `${apiBase}/sell/account/v1/return_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`,
         headers,
         'returnPolicies',
+        '/sell/account/v1/return_policy',
+        'getReturnPolicies',
+        marketplaceId,
+        connectionId,
       ),
-      fetchLocations(`${apiBase}/sell/inventory/v1/location`, headers),
+      fetchLocations(
+        `${apiBase}/sell/inventory/v1/location`,
+        headers,
+        connectionId,
+      ),
     ])
     const snapshot: EbayAccountSnapshot = {
       fulfillmentPolicies: fulfillment,
@@ -116,29 +133,49 @@ async function fetchPolicy(
   url: string,
   headers: Record<string, string>,
   arrayKey: 'fulfillmentPolicies' | 'paymentPolicies' | 'returnPolicies',
+  endpoint: string,
+  operation: string,
+  marketplaceId: string,
+  connectionId: string,
 ): Promise<EbayPolicySummary[]> {
-  let res: Response
+  let json:
+    | (Record<string, unknown> | null)
   try {
-    res = await fetch(url, { headers })
+    json = await recordApiCall<Record<string, unknown> | null>(
+      {
+        channel: 'EBAY',
+        operation,
+        endpoint,
+        method: 'GET',
+        marketplace: marketplaceId,
+        connectionId,
+        triggeredBy: 'api',
+      },
+      async () => {
+        const res = await fetch(url, { headers })
+        if (!res.ok) {
+          const errorBody = await res.text().catch(() => '')
+          const err = new Error(
+            `eBay API error ${res.status}: ${errorBody.slice(0, 500)}`,
+          ) as Error & { statusCode: number; body: string }
+          err.statusCode = res.status
+          err.body = errorBody
+          throw err
+        }
+        return (await res.json().catch(() => null)) as Record<
+          string,
+          unknown
+        > | null
+      },
+    )
   } catch (err) {
     console.warn(
-      `[EbayAccountService] ${arrayKey} network error: ${
+      `[EbayAccountService] ${arrayKey} error: ${
         err instanceof Error ? err.message : String(err)
       }`,
     )
     return []
   }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    console.warn(
-      `[EbayAccountService] ${arrayKey} ${res.status}: ${body.slice(0, 300)}`,
-    )
-    return []
-  }
-  const json = (await res.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null
   const list = json && Array.isArray(json[arrayKey]) ? (json[arrayKey] as Array<{
     fulfillmentPolicyId?: string
     paymentPolicyId?: string
@@ -160,32 +197,61 @@ async function fetchPolicy(
 async function fetchLocations(
   url: string,
   headers: Record<string, string>,
+  connectionId: string,
 ): Promise<EbayMerchantLocation[]> {
-  let res: Response
+  let json:
+    | {
+        locations?: Array<{
+          merchantLocationKey?: string
+          name?: string
+          location?: { address?: { country?: string } }
+        }>
+      }
+    | null
   try {
-    res = await fetch(url, { headers })
+    json = await recordApiCall<{
+      locations?: Array<{
+        merchantLocationKey?: string
+        name?: string
+        location?: { address?: { country?: string } }
+      }>
+    } | null>(
+      {
+        channel: 'EBAY',
+        operation: 'getInventoryLocations',
+        endpoint: '/sell/inventory/v1/location',
+        method: 'GET',
+        connectionId,
+        triggeredBy: 'api',
+      },
+      async () => {
+        const res = await fetch(url, { headers })
+        if (!res.ok) {
+          const errorBody = await res.text().catch(() => '')
+          const err = new Error(
+            `eBay API error ${res.status}: ${errorBody.slice(0, 500)}`,
+          ) as Error & { statusCode: number; body: string }
+          err.statusCode = res.status
+          err.body = errorBody
+          throw err
+        }
+        return (await res.json().catch(() => null)) as {
+          locations?: Array<{
+            merchantLocationKey?: string
+            name?: string
+            location?: { address?: { country?: string } }
+          }>
+        } | null
+      },
+    )
   } catch (err) {
     console.warn(
-      `[EbayAccountService] locations network error: ${
+      `[EbayAccountService] locations error: ${
         err instanceof Error ? err.message : String(err)
       }`,
     )
     return []
   }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    console.warn(
-      `[EbayAccountService] locations ${res.status}: ${body.slice(0, 300)}`,
-    )
-    return []
-  }
-  const json = (await res.json().catch(() => null)) as {
-    locations?: Array<{
-      merchantLocationKey?: string
-      name?: string
-      location?: { address?: { country?: string } }
-    }>
-  } | null
   return (json?.locations ?? [])
     .map((l) => ({
       key: l.merchantLocationKey ?? '',

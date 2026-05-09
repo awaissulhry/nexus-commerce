@@ -4,6 +4,8 @@
  * Includes in-memory caching by marketplace and category ID
  */
 
+import { recordApiCall } from './outbound-api-call-log.service.js'
+
 interface CategoryAspect {
   name: string;
   required: boolean;
@@ -161,41 +163,73 @@ export class EbayCategoryService {
     const url = `${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(
       trimmed,
     )}`
-    let res: Response
-    try {
-      res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : String(err)
-      console.warn(
-        `[EbayCategoryService] searchCategories network error: ${msg}`,
-      )
-      if (options?.throwOnError) throw new Error(`network: ${msg}`)
-      return []
-    }
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      console.warn(
-        `[EbayCategoryService] searchCategories ${res.status}: ${body.slice(0, 300)}`,
-      )
-      if (options?.throwOnError) {
-        throw new Error(`eBay ${res.status}: ${body.slice(0, 200)}`)
-      }
-      return []
-    }
-    const json = (await res.json().catch(() => null)) as {
+    let json: {
       categorySuggestions?: Array<{
         category?: { categoryId?: string; categoryName?: string }
         categoryTreeNodeAncestors?: Array<{ categoryName?: string }>
         matchPercentage?: number | string
       }>
     } | null
+    try {
+      json = await recordApiCall<{
+        categorySuggestions?: Array<{
+          category?: { categoryId?: string; categoryName?: string }
+          categoryTreeNodeAncestors?: Array<{ categoryName?: string }>
+          matchPercentage?: number | string
+        }>
+      } | null>(
+        {
+          channel: 'EBAY',
+          operation: 'getCategorySuggestions',
+          endpoint: `/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
+          method: 'GET',
+          marketplace: marketplaceId,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          if (!res.ok) {
+            const errorBody = await res.text().catch(() => '')
+            const err = new Error(
+              `eBay API error ${res.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string }
+            err.statusCode = res.status
+            err.body = errorBody
+            throw err
+          }
+          return (await res.json().catch(() => null)) as {
+            categorySuggestions?: Array<{
+              category?: { categoryId?: string; categoryName?: string }
+              categoryTreeNodeAncestors?: Array<{ categoryName?: string }>
+              matchPercentage?: number | string
+            }>
+          } | null
+        },
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const status = (err as { statusCode?: number })?.statusCode
+      if (status != null) {
+        console.warn(
+          `[EbayCategoryService] searchCategories ${status}: ${msg.slice(0, 300)}`,
+        )
+        if (options?.throwOnError) {
+          throw new Error(`eBay ${status}: ${msg.slice(0, 200)}`)
+        }
+      } else {
+        console.warn(
+          `[EbayCategoryService] searchCategories network error: ${msg}`,
+        )
+        if (options?.throwOnError) throw new Error(`network: ${msg}`)
+      }
+      return []
+    }
     const suggestions = json?.categorySuggestions ?? []
     const items: EbayCategoryListItem[] = []
     for (const s of suggestions) {
@@ -296,29 +330,46 @@ export class EbayCategoryService {
     const authUrl = process.env.EBAY_AUTH_URL ?? "https://api.ebay.com/identity/v1/oauth2/token";
 
     try {
-      const response = await fetch(authUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${credentials}`,
-        },
-        body: new URLSearchParams({
-          grant_type: "client_credentials",
-          scope: "https://api.ebay.com/oauth/api_scope",
-        }).toString(),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `eBay OAuth token request failed (${response.status}): ${errorBody.slice(0, 300)}`
-        );
-      }
-
-      const data = (await response.json()) as {
+      const data = await recordApiCall<{
         access_token: string;
         expires_in: number;
-      };
+      }>(
+        {
+          channel: 'EBAY',
+          operation: 'clientCredentialsToken',
+          endpoint: '/identity/v1/oauth2/token',
+          method: 'POST',
+          triggeredBy: 'api',
+        },
+        async () => {
+          const response = await fetch(authUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Authorization: `Basic ${credentials}`,
+            },
+            body: new URLSearchParams({
+              grant_type: "client_credentials",
+              scope: "https://api.ebay.com/oauth/api_scope",
+            }).toString(),
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            const err = new Error(
+              `eBay OAuth token request failed (${response.status}): ${errorBody.slice(0, 300)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
+
+          return (await response.json()) as {
+            access_token: string;
+            expires_in: number;
+          };
+        },
+      );
       this.accessToken = data.access_token;
       this.tokenExpiresAt = Date.now() + data.expires_in * 1000;
 
@@ -364,24 +415,7 @@ export class EbayCategoryService {
       const apiBase = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
       const url = `${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}/suggest_category?q=${encodeURIComponent(title)}`;
 
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.warn(
-          `[EbayCategoryService] Category suggestion failed for "${title}" (${response.status}): ${errorBody}`
-        );
-        // Return a fallback category ID if suggestion fails
-        return "0"; // General category
-      }
-
-      const data = (await response.json()) as {
+      let data: {
         categorySuggestions?: Array<{
           category: {
             categoryId: string;
@@ -390,6 +424,62 @@ export class EbayCategoryService {
           matchPercentage: string;
         }>;
       };
+      try {
+        data = await recordApiCall<{
+          categorySuggestions?: Array<{
+            category: {
+              categoryId: string;
+              categoryName: string;
+            };
+            matchPercentage: string;
+          }>;
+        }>(
+          {
+            channel: 'EBAY',
+            operation: 'suggestCategory',
+            endpoint: `/commerce/taxonomy/v1/category_tree/${treeId}/suggest_category`,
+            method: 'GET',
+            marketplace: marketplaceId,
+            triggeredBy: 'api',
+          },
+          async () => {
+            const response = await fetch(url, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.text().catch(() => "");
+              const err = new Error(
+                `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+              ) as Error & { statusCode: number; body: string };
+              err.statusCode = response.status;
+              err.body = errorBody;
+              throw err;
+            }
+
+            return (await response.json()) as {
+              categorySuggestions?: Array<{
+                category: {
+                  categoryId: string;
+                  categoryName: string;
+                };
+                matchPercentage: string;
+              }>;
+            };
+          },
+        );
+      } catch (err) {
+        console.warn(
+          `[EbayCategoryService] Category suggestion failed for "${title}": ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return "0";
+      }
 
       // Return the best match (first suggestion)
       if (
@@ -452,29 +542,62 @@ export class EbayCategoryService {
       const apiBase = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
       const url = `${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}/get_required_and_recommended_aspects?category_id=${encodeURIComponent(categoryId)}`;
 
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.warn(
-          `[EbayCategoryService] Failed to fetch aspects for category ${categoryId} (${response.status}): ${errorBody}`
-        );
-        // Return empty array if fetch fails
-        return [];
-      }
-
-      const data = (await response.json()) as {
+      let data: {
         categoryId?: string;
         categoryName?: string;
         requiredAspects?: Array<{ aspectName: string }>;
         recommendedAspects?: Array<{ aspectName: string }>;
       };
+      try {
+        data = await recordApiCall<{
+          categoryId?: string;
+          categoryName?: string;
+          requiredAspects?: Array<{ aspectName: string }>;
+          recommendedAspects?: Array<{ aspectName: string }>;
+        }>(
+          {
+            channel: 'EBAY',
+            operation: 'getRequiredAndRecommendedAspects',
+            endpoint: `/commerce/taxonomy/v1/category_tree/${treeId}/get_required_and_recommended_aspects`,
+            method: 'GET',
+            marketplace: marketplaceId,
+            triggeredBy: 'api',
+          },
+          async () => {
+            const response = await fetch(url, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.text().catch(() => "");
+              const err = new Error(
+                `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+              ) as Error & { statusCode: number; body: string };
+              err.statusCode = response.status;
+              err.body = errorBody;
+              throw err;
+            }
+
+            return (await response.json()) as {
+              categoryId?: string;
+              categoryName?: string;
+              requiredAspects?: Array<{ aspectName: string }>;
+              recommendedAspects?: Array<{ aspectName: string }>;
+            };
+          },
+        );
+      } catch (err) {
+        console.warn(
+          `[EbayCategoryService] Failed to fetch aspects for category ${categoryId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return [];
+      }
 
       // Transform API response to our format
       const aspects: CategoryAspect[] = [];
@@ -585,34 +708,7 @@ export class EbayCategoryService {
     const url = `${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category?category_id=${encodeURIComponent(
       categoryId,
     )}`;
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(
-        `[EbayCategoryService] getCategoryAspectsRich network error: ${msg}`,
-      );
-      if (options?.throwOnError) throw new Error(`network: ${msg}`);
-      return [];
-    }
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.warn(
-        `[EbayCategoryService] getCategoryAspectsRich ${res.status}: ${body.slice(0, 300)}`,
-      );
-      if (options?.throwOnError) {
-        throw new Error(`eBay ${res.status}: ${body.slice(0, 200)}`);
-      }
-      return [];
-    }
-    const json = (await res.json().catch(() => null)) as {
+    let json: {
       aspects?: Array<{
         localizedAspectName?: string;
         aspectConstraint?: {
@@ -627,6 +723,82 @@ export class EbayCategoryService {
         aspectValues?: Array<{ localizedValue?: string }>;
       }>;
     } | null;
+    try {
+      json = await recordApiCall<{
+        aspects?: Array<{
+          localizedAspectName?: string;
+          aspectConstraint?: {
+            aspectDataType?: string;
+            aspectMode?: string;
+            aspectRequired?: boolean;
+            aspectUsage?: string;
+            aspectMaxLength?: number;
+            itemToAspectCardinality?: string;
+            aspectEnabledForVariations?: boolean;
+          };
+          aspectValues?: Array<{ localizedValue?: string }>;
+        }>;
+      } | null>(
+        {
+          channel: 'EBAY',
+          operation: 'getItemAspectsForCategory',
+          endpoint: `/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category`,
+          method: 'GET',
+          marketplace: marketplaceId,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const res = await fetch(url, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+          if (!res.ok) {
+            const errorBody = await res.text().catch(() => "");
+            const err = new Error(
+              `eBay API error ${res.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = res.status;
+            err.body = errorBody;
+            throw err;
+          }
+          return (await res.json().catch(() => null)) as {
+            aspects?: Array<{
+              localizedAspectName?: string;
+              aspectConstraint?: {
+                aspectDataType?: string;
+                aspectMode?: string;
+                aspectRequired?: boolean;
+                aspectUsage?: string;
+                aspectMaxLength?: number;
+                itemToAspectCardinality?: string;
+                aspectEnabledForVariations?: boolean;
+              };
+              aspectValues?: Array<{ localizedValue?: string }>;
+            }>;
+          } | null;
+        },
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const status = (err as { statusCode?: number })?.statusCode;
+      if (status != null) {
+        console.warn(
+          `[EbayCategoryService] getCategoryAspectsRich ${status}: ${msg.slice(0, 300)}`,
+        );
+        if (options?.throwOnError) {
+          throw new Error(`eBay ${status}: ${msg.slice(0, 200)}`);
+        }
+      } else {
+        console.warn(
+          `[EbayCategoryService] getCategoryAspectsRich network error: ${msg}`,
+        );
+        if (options?.throwOnError) throw new Error(`network: ${msg}`);
+      }
+      return [];
+    }
     const rows = json?.aspects ?? [];
     const aspects: EbayAspectRich[] = [];
     for (const a of rows) {
@@ -689,30 +861,7 @@ export class EbayCategoryService {
     const url = `${apiBase}/sell/metadata/v1/marketplace/${marketplaceId}/get_item_condition_policies?filter=${encodeURIComponent(
       `categoryIds:{${categoryId}}`,
     )}`;
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Accept-Language": "en-US",
-        },
-      });
-    } catch (err) {
-      console.warn(
-        `[EbayCategoryService] getItemConditionPolicies network error: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return [];
-    }
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.warn(
-        `[EbayCategoryService] getItemConditionPolicies ${res.status}: ${body.slice(0, 300)}`,
-      );
-      return [];
-    }
-    const json = (await res.json().catch(() => null)) as {
+    let json: {
       itemConditionPolicies?: Array<{
         categoryId?: string;
         itemConditions?: Array<{
@@ -721,6 +870,59 @@ export class EbayCategoryService {
         }>;
       }>;
     } | null;
+    try {
+      json = await recordApiCall<{
+        itemConditionPolicies?: Array<{
+          categoryId?: string;
+          itemConditions?: Array<{
+            conditionId?: string;
+            conditionDescription?: string;
+          }>;
+        }>;
+      } | null>(
+        {
+          channel: 'EBAY',
+          operation: 'getItemConditionPolicies',
+          endpoint: `/sell/metadata/v1/marketplace/${marketplaceId}/get_item_condition_policies`,
+          method: 'GET',
+          marketplace: marketplaceId,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const res = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Accept-Language": "en-US",
+            },
+          });
+          if (!res.ok) {
+            const errorBody = await res.text().catch(() => "");
+            const err = new Error(
+              `eBay API error ${res.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = res.status;
+            err.body = errorBody;
+            throw err;
+          }
+          return (await res.json().catch(() => null)) as {
+            itemConditionPolicies?: Array<{
+              categoryId?: string;
+              itemConditions?: Array<{
+                conditionId?: string;
+                conditionDescription?: string;
+              }>;
+            }>;
+          } | null;
+        },
+      );
+    } catch (err) {
+      console.warn(
+        `[EbayCategoryService] getItemConditionPolicies error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
     const row = (json?.itemConditionPolicies ?? []).find(
       (r) => r.categoryId === categoryId,
     );

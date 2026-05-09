@@ -1,4 +1,5 @@
 import type { EbayListingData } from "../ai/gemini.service.js";
+import { recordApiCall } from "../outbound-api-call-log.service.js";
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? "https://api.ebay.com";
 const EBAY_AUTH_URL = process.env.EBAY_AUTH_URL ?? "https://api.ebay.com/identity/v1/oauth2/token";
@@ -60,26 +61,40 @@ export class EbayService {
     const credentials = Buffer.from(`${appId}:${certId}`).toString("base64");
 
     try {
-      const response = await fetch(EBAY_AUTH_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${credentials}`,
+      const data = await recordApiCall<EbayTokenResponse>(
+        {
+          channel: 'EBAY',
+          operation: 'clientCredentialsToken',
+          endpoint: '/identity/v1/oauth2/token',
+          method: 'POST',
+          triggeredBy: 'api',
         },
-        body: new URLSearchParams({
-          grant_type: "client_credentials",
-          scope: "https://api.ebay.com/oauth/api_scope",
-        }).toString(),
-      });
+        async () => {
+          const response = await fetch(EBAY_AUTH_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Authorization: `Basic ${credentials}`,
+            },
+            body: new URLSearchParams({
+              grant_type: "client_credentials",
+              scope: "https://api.ebay.com/oauth/api_scope",
+            }).toString(),
+          });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `eBay OAuth token request failed (${response.status}): ${errorBody}`
-        );
-      }
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            const err = new Error(
+              `eBay OAuth token request failed (${response.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
 
-      const data = (await response.json()) as EbayTokenResponse;
+          return (await response.json()) as EbayTokenResponse;
+        },
+      );
       this.cachedToken = data.access_token;
       this.tokenExpiresAt = Date.now() + data.expires_in * 1000;
 
@@ -98,18 +113,44 @@ export class EbayService {
     const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
 
     try {
-      // First, GET the current inventory item to preserve existing data
-      const getResponse = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
+      // First, GET the current inventory item to preserve existing data.
+      // Use a separate try so a missing item (404) doesn't bubble — we
+      // still want to PUT the new payload below. recordApiCall logs the
+      // failure separately.
       let existingItem: Record<string, unknown> = {};
-      if (getResponse.ok) {
-        existingItem = (await getResponse.json()) as Record<string, unknown>;
+      try {
+        existingItem = await recordApiCall<Record<string, unknown>>(
+          {
+            channel: 'EBAY',
+            operation: 'getInventoryItem',
+            endpoint: '/sell/inventory/v1/inventory_item',
+            method: 'GET',
+            marketplace: EBAY_MARKETPLACE_ID,
+            triggeredBy: 'api',
+          },
+          async () => {
+            const getResponse = await fetch(url, {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            });
+            if (!getResponse.ok) {
+              const errorBody = await getResponse.text().catch(() => "");
+              const err = new Error(
+                `eBay API error ${getResponse.status}: ${errorBody.slice(0, 500)}`,
+              ) as Error & { statusCode: number; body: string };
+              err.statusCode = getResponse.status;
+              err.body = errorBody;
+              throw err;
+            }
+            return (await getResponse.json()) as Record<string, unknown>;
+          },
+        );
+      } catch {
+        // Missing inventory item is fine — we'll create on the PUT below.
+        existingItem = {};
       }
 
       // Update the availability with the new quantity
@@ -122,22 +163,37 @@ export class EbayService {
         },
       };
 
-      const putResponse = await fetch(url, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Content-Language": "en-US",
+      await recordApiCall<void>(
+        {
+          channel: 'EBAY',
+          operation: 'createOrReplaceInventoryItem',
+          endpoint: '/sell/inventory/v1/inventory_item',
+          method: 'PUT',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-        body: JSON.stringify(payload),
-      });
+        async () => {
+          const putResponse = await fetch(url, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "Content-Language": "en-US",
+            },
+            body: JSON.stringify(payload),
+          });
 
-      if (!putResponse.ok) {
-        const errorBody = await putResponse.text();
-        throw new Error(
-          `eBay inventory update failed for SKU "${sku}" (${putResponse.status}): ${errorBody}`
-        );
-      }
+          if (!putResponse.ok) {
+            const errorBody = await putResponse.text().catch(() => "");
+            const err = new Error(
+              `eBay inventory update failed for SKU "${sku}" (${putResponse.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = putResponse.status;
+            err.body = errorBody;
+            throw err;
+          }
+        },
+      );
 
       console.log(
         `[EbayService] Inventory updated: SKU=${sku}, quantity=${quantity}`
@@ -162,22 +218,37 @@ export class EbayService {
       // Step 1: Find the offer for this SKU
       const offersUrl = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`;
 
-      const offersResponse = await fetch(offersUrl, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      const offersData = await recordApiCall<EbayGetOffersResponse>(
+        {
+          channel: 'EBAY',
+          operation: 'getOffers',
+          endpoint: '/sell/inventory/v1/offer',
+          method: 'GET',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-      });
+        async () => {
+          const offersResponse = await fetch(offersUrl, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
 
-      if (!offersResponse.ok) {
-        const errorBody = await offersResponse.text();
-        throw new Error(
-          `eBay get offers failed for SKU "${sku}" (${offersResponse.status}): ${errorBody}`
-        );
-      }
+          if (!offersResponse.ok) {
+            const errorBody = await offersResponse.text().catch(() => "");
+            const err = new Error(
+              `eBay get offers failed for SKU "${sku}" (${offersResponse.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = offersResponse.status;
+            err.body = errorBody;
+            throw err;
+          }
 
-      const offersData = (await offersResponse.json()) as EbayGetOffersResponse;
+          return (await offersResponse.json()) as EbayGetOffersResponse;
+        },
+      );
 
       if (!offersData.offers || offersData.offers.length === 0) {
         throw new Error(`No eBay offers found for SKU "${sku}"`);
@@ -201,22 +272,37 @@ export class EbayService {
         },
       };
 
-      const updateResponse = await fetch(updateUrl, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Content-Language": "en-US",
+      await recordApiCall<void>(
+        {
+          channel: 'EBAY',
+          operation: 'updateOffer',
+          endpoint: '/sell/inventory/v1/offer',
+          method: 'PUT',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-        body: JSON.stringify(updatePayload),
-      });
+        async () => {
+          const updateResponse = await fetch(updateUrl, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "Content-Language": "en-US",
+            },
+            body: JSON.stringify(updatePayload),
+          });
 
-      if (!updateResponse.ok) {
-        const errorBody = await updateResponse.text();
-        throw new Error(
-          `eBay update offer price failed for SKU "${sku}" offerId "${offerId}" (${updateResponse.status}): ${errorBody}`
-        );
-      }
+          if (!updateResponse.ok) {
+            const errorBody = await updateResponse.text().catch(() => "");
+            const err = new Error(
+              `eBay update offer price failed for SKU "${sku}" offerId "${offerId}" (${updateResponse.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = updateResponse.status;
+            err.body = errorBody;
+            throw err;
+          }
+        },
+      );
 
       console.log(
         `[EbayService] Price updated: SKU=${sku}, offerId=${offerId}, newPrice=${newPrice.toFixed(2)} ${EBAY_CURRENCY}`
@@ -297,22 +383,37 @@ export class EbayService {
     };
 
     try {
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Content-Language": "en-US",
+      await recordApiCall<void>(
+        {
+          channel: 'EBAY',
+          operation: 'createInventoryItem',
+          endpoint: '/sell/inventory/v1/inventory_item',
+          method: 'PUT',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-        body: JSON.stringify(payload),
-      });
+        async () => {
+          const response = await fetch(url, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "Content-Language": "en-US",
+            },
+            body: JSON.stringify(payload),
+          });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `eBay create inventory item failed for SKU "${sku}" (${response.status}): ${errorBody}`
-        );
-      }
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            const err = new Error(
+              `eBay create inventory item failed for SKU "${sku}" (${response.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
+        },
+      );
 
       console.log(`[EbayService] Inventory item created/updated: SKU=${sku}`);
     } catch (error) {
@@ -359,24 +460,39 @@ export class EbayService {
     };
 
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Content-Language": "en-US",
+      const data = await recordApiCall<EbayOfferResponse>(
+        {
+          channel: 'EBAY',
+          operation: 'createOffer',
+          endpoint: '/sell/inventory/v1/offer',
+          method: 'POST',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-        body: JSON.stringify(payload),
-      });
+        async () => {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "Content-Language": "en-US",
+            },
+            body: JSON.stringify(payload),
+          });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `eBay create offer failed for SKU "${sku}" (${response.status}): ${errorBody}`
-        );
-      }
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            const err = new Error(
+              `eBay create offer failed for SKU "${sku}" (${response.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
 
-      const data = (await response.json()) as EbayOfferResponse;
+          return (await response.json()) as EbayOfferResponse;
+        },
+      );
 
       console.log(
         `[EbayService] Offer created: SKU=${sku}, offerId=${data.offerId}`
@@ -415,27 +531,42 @@ export class EbayService {
     };
 
     try {
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Content-Language": "en-US",
+      await recordApiCall<void>(
+        {
+          channel: 'EBAY',
+          operation: 'createInventoryLocation',
+          endpoint: '/sell/inventory/v1/location',
+          method: 'PUT',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-        body: JSON.stringify(payload),
-      });
+        async () => {
+          const response = await fetch(url, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "Content-Language": "en-US",
+            },
+            body: JSON.stringify(payload),
+          });
 
-      // 204 No Content (already exists) or 200 OK (created/updated) are both fine
-      if (response.status === 204 || response.status === 200) {
-        console.log(
-          `[EbayService] Merchant location ensured: ${EBAY_MERCHANT_LOCATION_KEY}`
-        );
-        return;
-      }
+          // 204 No Content (already exists) or 200 OK (created/updated) are both fine
+          if (response.status === 204 || response.status === 200) {
+            return;
+          }
 
-      const errorBody = await response.text();
-      throw new Error(
-        `eBay ensure merchant location failed (${response.status}): ${errorBody}`
+          const errorBody = await response.text().catch(() => "");
+          const err = new Error(
+            `eBay ensure merchant location failed (${response.status}): ${errorBody.slice(0, 500)}`,
+          ) as Error & { statusCode: number; body: string };
+          err.statusCode = response.status;
+          err.body = errorBody;
+          throw err;
+        },
+      );
+      console.log(
+        `[EbayService] Merchant location ensured: ${EBAY_MERCHANT_LOCATION_KEY}`
       );
     } catch (error) {
       console.error(
@@ -460,22 +591,40 @@ export class EbayService {
       const accessToken = await this.getAccessToken();
 
       // Find the inventory item by SKU
-      const inventoryResponse = await fetch(
-        `${EBAY_API_BASE}/sell/inventory/v1/inventory`,
+      const inventoryData = await recordApiCall<any>(
         {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
+          channel: 'EBAY',
+          operation: 'listInventoryItems',
+          endpoint: '/sell/inventory/v1/inventory',
+          method: 'GET',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const inventoryResponse = await fetch(
+            `${EBAY_API_BASE}/sell/inventory/v1/inventory`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!inventoryResponse.ok) {
+            const errorBody = await inventoryResponse.text().catch(() => "");
+            const err = new Error(
+              `Failed to fetch inventory items: ${inventoryResponse.statusText}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = inventoryResponse.status;
+            err.body = errorBody;
+            throw err;
+          }
+
+          return (await inventoryResponse.json()) as any;
+        },
       );
-
-      if (!inventoryResponse.ok) {
-        throw new Error(`Failed to fetch inventory items: ${inventoryResponse.statusText}`);
-      }
-
-      const inventoryData = (await inventoryResponse.json()) as any;
       const inventoryItem = inventoryData.inventoryItems?.find(
         (item: any) => item.sku === variantSku
       );
@@ -485,22 +634,40 @@ export class EbayService {
       }
 
       // Find the offer for this inventory item
-      const offersResponse = await fetch(
-        `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${variantSku}`,
+      const offersData = await recordApiCall<any>(
         {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
+          channel: 'EBAY',
+          operation: 'getOffers',
+          endpoint: '/sell/inventory/v1/offer',
+          method: 'GET',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const offersResponse = await fetch(
+            `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${variantSku}`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!offersResponse.ok) {
+            const errorBody = await offersResponse.text().catch(() => "");
+            const err = new Error(
+              `Failed to fetch offers: ${offersResponse.statusText}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = offersResponse.status;
+            err.body = errorBody;
+            throw err;
+          }
+
+          return (await offersResponse.json()) as any;
+        },
       );
-
-      if (!offersResponse.ok) {
-        throw new Error(`Failed to fetch offers: ${offersResponse.statusText}`);
-      }
-
-      const offersData = (await offersResponse.json()) as any;
       const offer = (offersData as any).offers?.[0];
 
       if (!offer) {
@@ -508,29 +675,50 @@ export class EbayService {
       }
 
       // Update the offer price
-      const updateResponse = await fetch(
-        `${EBAY_API_BASE}/sell/inventory/v1/offer/${offer.offerId}`,
+      await recordApiCall<void>(
         {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            pricingSummary: {
-              price: {
-                currency: EBAY_CURRENCY,
-                value: newPrice.toFixed(2),
+          channel: 'EBAY',
+          operation: 'updateOffer',
+          endpoint: '/sell/inventory/v1/offer',
+          method: 'PATCH',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
+        },
+        async () => {
+          const updateResponse = await fetch(
+            `${EBAY_API_BASE}/sell/inventory/v1/offer/${offer.offerId}`,
+            {
+              method: "PATCH",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
               },
-            },
-          }),
-        }
-      );
+              body: JSON.stringify({
+                pricingSummary: {
+                  price: {
+                    currency: EBAY_CURRENCY,
+                    value: newPrice.toFixed(2),
+                  },
+                },
+              }),
+            }
+          );
 
-      if (!updateResponse.ok) {
-        const error = (await updateResponse.json()) as any;
-        throw new Error(`Failed to update eBay price: ${(error as any).message || updateResponse.statusText}`);
-      }
+          if (!updateResponse.ok) {
+            const errorBody = await updateResponse.text().catch(() => "");
+            let parsed: any = null;
+            try { parsed = JSON.parse(errorBody); } catch { /* keep raw */ }
+            const message =
+              parsed?.message ?? updateResponse.statusText;
+            const err = new Error(
+              `Failed to update eBay price: ${message}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = updateResponse.status;
+            err.body = errorBody;
+            throw err;
+          }
+        },
+      );
 
       console.log(`[EbayService] ✓ Updated price for SKU ${variantSku} to ${newPrice.toFixed(2)} ${EBAY_CURRENCY}`);
     } catch (error) {
@@ -547,22 +735,37 @@ export class EbayService {
     const url = `${EBAY_API_BASE}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`;
 
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      const data = await recordApiCall<EbayPublishResponse>(
+        {
+          channel: 'EBAY',
+          operation: 'publishOffer',
+          endpoint: '/sell/inventory/v1/offer/{offerId}/publish',
+          method: 'POST',
+          marketplace: EBAY_MARKETPLACE_ID,
+          triggeredBy: 'api',
         },
-      });
+        async () => {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `eBay publish offer failed for offerId "${offerId}" (${response.status}): ${errorBody}`
-        );
-      }
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            const err = new Error(
+              `eBay publish offer failed for offerId "${offerId}" (${response.status}): ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = response.status;
+            err.body = errorBody;
+            throw err;
+          }
 
-      const data = (await response.json()) as EbayPublishResponse;
+          return (await response.json()) as EbayPublishResponse;
+        },
+      );
 
       console.log(
         `[EbayService] Offer published: offerId=${offerId}, listingId=${data.listingId}`

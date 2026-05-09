@@ -50,6 +50,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { recordApiCall } from '../outbound-api-call-log.service.js'
 
 export type RefundOutcome =
   | 'OK'
@@ -346,52 +347,79 @@ async function publishEbayRefund(
   }
 
   const url = `https://api.ebay.com/sell/fulfillment/v1/order/${encodeURIComponent(order.channelOrderId)}/issue_refund`
-  let response: Response
+  const ebayMarketplace = `EBAY_${ret.marketplace ?? 'GB'}`
+  let json: { refundId?: string }
   try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept-Language': 'en-US',
-        'X-EBAY-C-MARKETPLACE-ID': `EBAY_${ret.marketplace ?? 'GB'}`,
+    json = await recordApiCall<{ refundId?: string }>(
+      {
+        channel: 'EBAY',
+        operation: 'issueRefund',
+        endpoint: '/sell/fulfillment/v1/order/{orderId}/issue_refund',
+        method: 'POST',
+        marketplace: ebayMarketplace,
+        connectionId: connection.id,
+        orderId: ret.order?.id,
+        triggeredBy: 'manual',
       },
-      body: JSON.stringify(body),
-    })
+      async () => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Accept-Language': 'en-US',
+            'X-EBAY-C-MARKETPLACE-ID': ebayMarketplace,
+          },
+          body: JSON.stringify(body),
+        })
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => '')
+          let parsed: any = null
+          try {
+            parsed = JSON.parse(text)
+          } catch {
+            /* keep raw text */
+          }
+          const message =
+            parsed?.errors?.[0]?.message ??
+            parsed?.errors?.[0]?.longMessage ??
+            text.slice(0, 500) ??
+            `HTTP ${response.status}`
+          logger.warn('eBay issue_refund failed', {
+            returnId: ret.id,
+            status: response.status,
+            message,
+          })
+          const err = new Error(
+            `eBay rejected refund: ${message}`,
+          ) as Error & { statusCode: number; body: unknown }
+          err.statusCode = response.status
+          err.body = parsed ?? text
+          throw err
+        }
+
+        return (await response.json().catch(() => ({}))) as {
+          refundId?: string
+        }
+      },
+    )
   } catch (err) {
+    const status = (err as { statusCode?: number })?.statusCode
+    if (status != null) {
+      // recordApiCall has already logged the failure to the DB via
+      // parseError; surface as outcome=FAILED with the channel message.
+      return {
+        outcome: 'FAILED',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
     return {
       outcome: 'FAILED',
       error: `eBay HTTP error: ${err instanceof Error ? err.message : String(err)}`,
     }
   }
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    let parsed: any = null
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      /* keep raw text */
-    }
-    const message =
-      parsed?.errors?.[0]?.message ??
-      parsed?.errors?.[0]?.longMessage ??
-      text.slice(0, 500) ??
-      `HTTP ${response.status}`
-    logger.warn('eBay issue_refund failed', {
-      returnId: ret.id,
-      status: response.status,
-      message,
-    })
-    return {
-      outcome: 'FAILED',
-      error: `eBay rejected refund: ${message}`,
-    }
-  }
-
-  const json = (await response.json().catch(() => ({}))) as {
-    refundId?: string
-  }
   const channelRefundId = json.refundId
   logger.info('eBay refund issued', {
     returnId: ret.id,

@@ -172,40 +172,51 @@ export async function cancelOnEbay(
   }
   try {
     const { EbayAuthService } = await import('../ebay-auth.service.js')
+    const { recordApiCall } = await import('../outbound-api-call-log.service.js')
     const auth = new EbayAuthService()
     const token = await auth.getValidToken(connectionId)
     const url = `https://api.ebay.com/sell/fulfillment/v1/order/${encodeURIComponent(ebayOrderId)}/cancellation_request`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'Content-Language': 'en-US',
-      },
-      body: JSON.stringify({ cancellationReason: mapReasonToEbay(reason) }),
-    })
-    if (res.status === 201) {
-      const loc = res.headers.get('location') ?? ''
-      return {
-        ok: true,
+    return await recordApiCall<ChannelCancelResult>(
+      {
         channel: 'EBAY',
-        channelOrderId: ebayOrderId,
-        ackRef: loc.split('/').pop() ?? `unknown-${Date.now()}`,
-        dryRun: false,
-      }
-    }
-    const text = await res.text()
-    let body: any = null
-    try { body = text ? JSON.parse(text) : null } catch { /* */ }
-    const firstErr = body?.errors?.[0]
-    return {
-      ok: false,
-      channel: 'EBAY',
-      channelOrderId: ebayOrderId,
-      ackRef: null,
-      dryRun: false,
-      error: firstErr?.message ?? `HTTP ${res.status}`,
-    }
+        operation: 'cancelOrder',
+        endpoint: '/sell/fulfillment/v1/order/{orderId}/cancellation_request',
+        method: 'POST',
+        connectionId,
+        triggeredBy: 'manual',
+      },
+      async () => {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Content-Language': 'en-US',
+          },
+          body: JSON.stringify({ cancellationReason: mapReasonToEbay(reason) }),
+        })
+        if (res.status === 201) {
+          const loc = res.headers.get('location') ?? ''
+          return {
+            ok: true,
+            channel: 'EBAY' as const,
+            channelOrderId: ebayOrderId,
+            ackRef: loc.split('/').pop() ?? `unknown-${Date.now()}`,
+            dryRun: false,
+          }
+        }
+        const text = await res.text()
+        let body: any = null
+        try { body = text ? JSON.parse(text) : null } catch { /* */ }
+        const firstErr = body?.errors?.[0]
+        const err = new Error(
+          firstErr?.message ?? `eBay API error ${res.status}: ${text.slice(0, 500)}`,
+        ) as Error & { statusCode: number; body: unknown }
+        err.statusCode = res.status
+        err.body = body ?? text
+        throw err
+      },
+    )
   } catch (err: any) {
     return {
       ok: false,

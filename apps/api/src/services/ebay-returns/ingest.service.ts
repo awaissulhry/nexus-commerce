@@ -31,6 +31,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { ebayAuthService } from '../ebay-auth.service.js'
+import { recordApiCall } from '../outbound-api-call-log.service.js'
 
 // Subset of fields we read from eBay's Post Order Return payload.
 // Documented at developer.ebay.com/devzone/post-order/post-order_v2_return-search.html.
@@ -281,35 +282,56 @@ export async function pollEbayReturns(opts?: {
     }
 
     const url = `https://api.ebay.com/post-order/v2/return/search?return_state=OPEN&limit=${limit}&offset=0`
-    let resp: Response
+    let json: { members?: EbayReturnPayload[] }
     try {
-      resp = await fetchImpl(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
+      json = await recordApiCall<{ members?: EbayReturnPayload[] }>(
+        {
+          channel: 'EBAY',
+          operation: 'searchReturns',
+          endpoint: '/post-order/v2/return/search',
+          method: 'GET',
+          connectionId: conn.id,
+          triggeredBy: 'cron',
         },
-      })
+        async () => {
+          const resp = await fetchImpl(url, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          })
+          if (!resp.ok) {
+            const errorBody = await resp.text().catch(() => '')
+            const e = new Error(
+              `eBay API error ${resp.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string }
+            e.statusCode = resp.status
+            e.body = errorBody
+            throw e
+          }
+          return (await resp.json().catch(() => ({}))) as {
+            members?: EbayReturnPayload[]
+          }
+        },
+      )
     } catch (err) {
       counters.failed++
-      logger.warn('ebay-returns-poll: HTTP error', {
-        connectionId: conn.id,
-        error: err instanceof Error ? err.message : String(err),
-      })
+      const status = (err as { statusCode?: number })?.statusCode
+      if (status != null) {
+        logger.warn('ebay-returns-poll: non-200 from eBay', {
+          connectionId: conn.id,
+          status,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      } else {
+        logger.warn('ebay-returns-poll: HTTP error', {
+          connectionId: conn.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
       continue
     }
 
-    if (!resp.ok) {
-      counters.failed++
-      const text = await resp.text().catch(() => '')
-      logger.warn('ebay-returns-poll: non-200 from eBay', {
-        connectionId: conn.id,
-        status: resp.status,
-        body: text.slice(0, 300),
-      })
-      continue
-    }
-
-    const json = (await resp.json().catch(() => ({}))) as { members?: EbayReturnPayload[] }
     const members = Array.isArray(json.members) ? json.members : []
 
     for (const member of members) {

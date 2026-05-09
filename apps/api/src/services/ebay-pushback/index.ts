@@ -20,6 +20,7 @@
  */
 
 import prisma from '../../db.js'
+import { recordApiCall } from '../outbound-api-call-log.service.js'
 
 // ── Public types ──────────────────────────────────────────────────────
 export interface ShippingFulfillmentInput {
@@ -125,43 +126,59 @@ export async function submitShippingFulfillment(
   }
 
   const url = `https://api.ebay.com/sell/fulfillment/v1/order/${encodeURIComponent(input.ebayOrderId)}/shipping_fulfillment`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Content-Language': 'en-US',
+  return await recordApiCall<FulfillmentResult>(
+    {
+      channel: 'EBAY',
+      operation: 'createShippingFulfillment',
+      endpoint: '/sell/fulfillment/v1/order/{orderId}/shipping_fulfillment',
+      method: 'POST',
+      connectionId,
+      triggeredBy: 'api',
     },
-    body: JSON.stringify(body),
-  })
+    async () => {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US',
+        },
+        body: JSON.stringify(body),
+      })
 
-  // eBay returns 201 Created with Location: header containing the
-  // fulfillment ID. The body is empty on success; errors come through
-  // as a JSON envelope { errors: [{ errorId, message, ... }] }.
-  if (res.status === 201) {
-    const loc = res.headers.get('location') ?? res.headers.get('content-location') ?? ''
-    const fulfillmentId = loc.split('/').pop() ?? `unknown-${Date.now()}`
-    return {
-      fulfillmentId,
-      ebayOrderId: input.ebayOrderId,
-      status: 'CREATED',
-      dryRun: false,
-    }
-  }
+      // eBay returns 201 Created with Location: header containing the
+      // fulfillment ID. The body is empty on success; errors come through
+      // as a JSON envelope { errors: [{ errorId, message, ... }] }.
+      if (res.status === 201) {
+        const loc = res.headers.get('location') ?? res.headers.get('content-location') ?? ''
+        const fulfillmentId = loc.split('/').pop() ?? `unknown-${Date.now()}`
+        return {
+          fulfillmentId,
+          ebayOrderId: input.ebayOrderId,
+          status: 'CREATED' as const,
+          dryRun: false,
+        }
+      }
 
-  const text = await res.text()
-  let errBody: any = null
-  try {
-    errBody = text ? JSON.parse(text) : null
-  } catch {
-    /* */
-  }
-  const firstErr = errBody?.errors?.[0]
-  throw new EbayPushbackError(
-    firstErr?.message ?? `HTTP ${res.status}`,
-    res.status,
-    firstErr?.errorId != null ? String(firstErr.errorId) : null,
-    errBody,
+      const text = await res.text()
+      let errBody: any = null
+      try {
+        errBody = text ? JSON.parse(text) : null
+      } catch {
+        /* */
+      }
+      const firstErr = errBody?.errors?.[0]
+      const err = new EbayPushbackError(
+        firstErr?.message ?? `HTTP ${res.status}`,
+        res.status,
+        firstErr?.errorId != null ? String(firstErr.errorId) : null,
+        errBody,
+      ) as EbayPushbackError & { statusCode: number; body: unknown }
+      // Augment for parseError() bucket detection.
+      err.statusCode = res.status
+      err.body = errBody ?? text
+      throw err
+    },
   )
 }
 
