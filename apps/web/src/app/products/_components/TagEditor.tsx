@@ -12,7 +12,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Tag as TagIcon, X } from 'lucide-react'
+import { CheckCircle2, Tag as TagIcon } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -120,47 +121,18 @@ export function TagEditor({
     }
   }
 
-  // U.30 — escape closes the drawer; outside-click already does via
-  // the wrapper onClick. Modal a11y attributes added below.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="tag-editor-title"
-      className="fixed inset-0 z-30 flex justify-end"
-      onClick={onClose}
+    <Modal
+      open={true}
+      onClose={onClose}
+      placement="drawer-right"
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          <TagIcon size={14} /> Tags
+        </span>
+      }
     >
-      <div className="absolute inset-0 bg-slate-900/30 dark:bg-slate-950/60" />
-      <aside
-        onClick={(e) => e.stopPropagation()}
-        className="relative h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto dark:bg-slate-900"
-      >
-        {/* U.25 — sticky header gains z-10 so the body content
-            doesn't bleed through during scroll. */}
-        <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10 bg-white dark:border-slate-800 dark:bg-slate-900">
-          <div
-            id="tag-editor-title"
-            className="text-md font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
-          >
-            <TagIcon size={14} /> Tags
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="h-7 w-7 min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            <X size={16} />
-          </button>
-        </header>
-        <div className="p-5 space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto">
           <div>
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
               Available tags
@@ -236,7 +208,6 @@ export function TagEditor({
             </div>
           </div>
         </div>
-      </aside>
-    </div>
+    </Modal>
   )
 }
