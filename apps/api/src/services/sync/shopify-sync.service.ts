@@ -12,6 +12,7 @@ import {
   consumeOpenOrder,
   resolveLocationByCode,
 } from "../stock-level.service.js";
+import { recordOrderItem } from "../sales-aggregate.service.js";
 
 export interface ShopifySyncResult {
   success: boolean;
@@ -567,7 +568,7 @@ export class ShopifySyncService {
         const product = item.sku
           ? await prisma.product.findUnique({ where: { sku: item.sku }, select: { id: true } })
           : null;
-        await prisma.orderItem.create({
+        const created = await prisma.orderItem.create({
           data: {
             orderId: order.id,
             sku: item.sku,
@@ -576,6 +577,15 @@ export class ShopifySyncService {
             ...(product?.id ? { productId: product.id } : {}),
           },
         });
+        // F.1 — keep DailySalesAggregate current for the forecasting
+        // layer. Best-effort: refresh failure must never block sync.
+        try {
+          await recordOrderItem(created.id);
+        } catch (err) {
+          console.warn(
+            `[ShopifySyncService] sales-aggregate refresh failed for OrderItem ${created.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
         createdItems.push({ productId: product?.id ?? null, quantity: item.quantity, sku: item.sku });
       }
 

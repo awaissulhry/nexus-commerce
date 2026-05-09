@@ -30,6 +30,7 @@ import {
   AmazonOrderItemRaw,
 } from './marketplaces/amazon.service.js'
 import { logger } from '../utils/logger.js'
+import { recordOrderItem } from './sales-aggregate.service.js'
 import {
   reserveOpenOrder,
   consumeOpenOrder,
@@ -582,7 +583,7 @@ export class AmazonOrdersService {
       productId = prod?.id ?? null
     }
 
-    await prisma.orderItem.upsert({
+    const upserted = await prisma.orderItem.upsert({
       where: {
         orderId_externalLineItemId: { orderId, externalLineItemId },
       },
@@ -603,6 +604,17 @@ export class AmazonOrdersService {
         ...(productId ? { productId } : {}),
       },
     })
+
+    // F.1 — keep DailySalesAggregate current for the forecasting layer.
+    // Best-effort: a refresh failure must never block order ingestion.
+    try {
+      await recordOrderItem(upserted.id)
+    } catch (err) {
+      logger.warn('sales-aggregate refresh failed for OrderItem', {
+        orderItemId: upserted.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
 
     return { productId, quantity: item.QuantityOrdered, sku }
   }

@@ -7,6 +7,7 @@ import prisma from "../../db.js";
 import { WooCommerceService, type WooCommerceProductSync, type WooCommerceOrderSync } from "../marketplaces/woocommerce.service.js";
 import { MarketplaceSyncError } from "../../utils/error-handler.js";
 import type { WooCommerceConfig } from "../../types/marketplace.js";
+import { recordOrderItem } from "../sales-aggregate.service.js";
 
 export interface WooCommerceSyncResult {
   success: boolean;
@@ -460,7 +461,7 @@ export class WooCommerceSyncService {
         });
 
         for (const item of wooOrder.lineItems) {
-          await (prisma as any).orderItem.create({
+          const created = await (prisma as any).orderItem.create({
             data: {
               orderId: existingOrder.id,
               sku: item.sku,
@@ -468,6 +469,14 @@ export class WooCommerceSyncService {
               price: item.price,
             },
           });
+          // F.1 — keep DailySalesAggregate current for the forecasting layer.
+          try {
+            await recordOrderItem(created.id);
+          } catch (err) {
+            console.warn(
+              `[WooCommerceSyncService] sales-aggregate refresh failed for OrderItem ${created.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
 
         return { created: false, updated: true };
@@ -478,7 +487,7 @@ export class WooCommerceSyncService {
 
         // Create order items
         for (const item of wooOrder.lineItems) {
-          await (prisma as any).orderItem.create({
+          const created = await (prisma as any).orderItem.create({
             data: {
               orderId: order.id,
               sku: item.sku,
@@ -486,6 +495,14 @@ export class WooCommerceSyncService {
               price: item.price,
             },
           });
+          // F.1 — keep DailySalesAggregate current for the forecasting layer.
+          try {
+            await recordOrderItem(created.id);
+          } catch (err) {
+            console.warn(
+              `[WooCommerceSyncService] sales-aggregate refresh failed for OrderItem ${created.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
 
         return { created: true, updated: false };

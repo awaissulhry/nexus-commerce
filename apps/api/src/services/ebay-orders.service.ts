@@ -33,6 +33,7 @@ import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
 import { applyStockMovement } from './stock-movement.service.js'
 import { recordApiCall } from './outbound-api-call-log.service.js'
+import { recordOrderItem } from './sales-aggregate.service.js'
 
 interface EbayOrder {
   orderId: string
@@ -432,7 +433,7 @@ export class EbayOrdersService {
       // level, not just via this service's in-memory `seenLineItemIds`
       // Set. Belt-and-braces: the Set short-circuits the work + the
       // constraint backstops re-runs from a different process.
-      await prisma.orderItem.create({
+      const created = await prisma.orderItem.create({
         data: {
           orderId: dbOrder.id,
           productId: product?.id ?? null,
@@ -448,6 +449,17 @@ export class EbayOrdersService {
           },
         },
       })
+
+      // F.1 — keep DailySalesAggregate current for the forecasting layer.
+      // Best-effort: refresh failure must never block order ingestion.
+      try {
+        await recordOrderItem(created.id)
+      } catch (err) {
+        logger.warn('sales-aggregate refresh failed for OrderItem', {
+          orderItemId: created.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
 
       if (!product) {
         logger.warn('Could not link eBay line item to a Nexus product', {

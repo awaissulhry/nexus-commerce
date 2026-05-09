@@ -6,6 +6,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { applyStockMovement } from './stock-movement.service.js'
+import { recordOrderItem } from './sales-aggregate.service.js'
 import { Prisma } from '@prisma/client'
 
 /**
@@ -215,7 +216,7 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
       // Create order items
       for (const item of orderItems) {
         try {
-          await prisma.orderItem.create({
+          const created = await prisma.orderItem.create({
             data: {
               orderId: order.id,
               sku: item.sku,
@@ -226,6 +227,17 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
 
           stats.itemsCreated++
           logger.info(`[ORDER INGESTION] Created order item for SKU: ${item.sku}`)
+
+          // F.1 — keep DailySalesAggregate current for the forecasting
+          // layer. Best-effort: refresh failure must never block ingest.
+          try {
+            await recordOrderItem(created.id)
+          } catch (err) {
+            logger.warn('[ORDER INGESTION] sales-aggregate refresh failed', {
+              orderItemId: created.id,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
         } catch (error: any) {
           logger.warn(`[ORDER INGESTION] Failed to create order item for ${item.sku}:`, error.message)
         }
