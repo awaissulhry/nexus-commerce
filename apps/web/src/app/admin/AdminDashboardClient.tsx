@@ -75,11 +75,11 @@ export default function AdminDashboardClient({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'healthy':
-        return 'bg-green-50 border-green-200'
+        return 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900'
       case 'warning':
         return 'bg-yellow-50 border-yellow-200'
       case 'unhealthy':
-        return 'bg-red-50 border-red-200'
+        return 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900'
       default:
         return 'bg-gray-50 border-gray-200'
     }
@@ -103,8 +103,8 @@ export default function AdminDashboardClient({
         )
       case 'unhealthy':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm font-medium">
-            <span className="w-2 h-2 bg-red-600 rounded-full"></span>
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/60 text-red-800 text-sm font-medium">
+            <span className="w-2 h-2 bg-red-600 dark:bg-red-700 rounded-full"></span>
             Unhealthy
           </span>
         )
@@ -114,7 +114,7 @@ export default function AdminDashboardClient({
   }
 
   const getSeverityColor = (severity: string) => {
-    return severity === 'ERROR' ? 'text-red-600' : 'text-yellow-600'
+    return severity === 'ERROR' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600'
   }
 
   return (
@@ -128,19 +128,19 @@ export default function AdminDashboardClient({
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Orphaned Variants</div>
-              <div className="text-2xl font-bold text-red-600">{health.issues.orphanedVariants}</div>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">{health.issues.orphanedVariants}</div>
             </div>
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Inconsistent Themes</div>
-              <div className="text-2xl font-bold text-orange-600">{health.issues.inconsistentThemes}</div>
+              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{health.issues.inconsistentThemes}</div>
             </div>
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Missing Attributes</div>
               <div className="text-2xl font-bold text-yellow-600">{health.issues.missingAttributes}</div>
             </div>
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Invalid Listings</div>
               <div className="text-2xl font-bold text-purple-600">{health.issues.invalidChannelListings}</div>
             </div>
@@ -153,7 +153,7 @@ export default function AdminDashboardClient({
             <button
               onClick={handleRefreshHealth}
               disabled={isLoading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 text-sm font-medium"
             >
               {isLoading ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -163,13 +163,13 @@ export default function AdminDashboardClient({
 
       {/* Validation Report */}
       {validation && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Validation Report</h2>
             <button
               onClick={handleRefreshValidation}
               disabled={isLoading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 text-sm font-medium"
             >
               {isLoading ? 'Validating...' : 'Validate'}
             </button>
@@ -207,14 +207,14 @@ export default function AdminDashboardClient({
       )}
 
       {/* Repair Operations */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 rounded-lg p-6">
         <h2 className="text-xl font-semibold mb-4">Repair Operations</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
           <button
             onClick={handleRunAllRepairs}
             disabled={isLoading}
-            className="px-4 py-3 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-medium flex items-center justify-center gap-2"
+            className="px-4 py-3 bg-red-600 dark:bg-red-700 text-white rounded hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50 font-medium flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
@@ -235,7 +235,7 @@ export default function AdminDashboardClient({
           <button
             onClick={handleRefreshValidation}
             disabled={isLoading}
-            className="px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 font-medium"
+            className="px-4 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 font-medium"
           >
             {isLoading ? 'Validating...' : '✓ Validate Only'}
           </button>
@@ -266,27 +266,27 @@ export default function AdminDashboardClient({
 
       {/* Repair Results */}
       {repairResult && (
-        <div className="bg-white border border-green-200 rounded-lg p-6 bg-green-50">
+        <div className="bg-white dark:bg-slate-900 border border-green-200 dark:border-green-900 rounded-lg p-6 bg-green-50 dark:bg-green-950/40">
           <h2 className="text-xl font-semibold mb-4 text-green-900">Repair Results</h2>
 
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Total Affected</div>
-              <div className="text-2xl font-bold text-blue-600">{repairResult.summary.totalAffected}</div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{repairResult.summary.totalAffected}</div>
             </div>
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Fixed</div>
-              <div className="text-2xl font-bold text-green-600">{repairResult.summary.totalFixed}</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{repairResult.summary.totalFixed}</div>
             </div>
-            <div className="bg-white rounded p-3">
+            <div className="bg-white dark:bg-slate-900 rounded p-3">
               <div className="text-sm text-gray-600">Failed</div>
-              <div className="text-2xl font-bold text-red-600">{repairResult.summary.totalFailed}</div>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">{repairResult.summary.totalFailed}</div>
             </div>
           </div>
 
           <div className="space-y-3">
             {repairResult.operations.map((op, idx) => (
-              <div key={idx} className="border border-gray-200 rounded p-3 bg-white">
+              <div key={idx} className="border border-gray-200 rounded p-3 bg-white dark:bg-slate-900">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-medium text-gray-900">{op.name}</h3>
                   <span className="text-xs text-gray-500">{op.duration}ms</span>
@@ -296,17 +296,17 @@ export default function AdminDashboardClient({
                   <span className="text-gray-600">
                     Affected: <span className="font-semibold">{op.affectedCount}</span>
                   </span>
-                  <span className="text-green-600">
+                  <span className="text-green-600 dark:text-green-400">
                     Fixed: <span className="font-semibold">{op.fixedCount}</span>
                   </span>
                   {op.failedCount > 0 && (
-                    <span className="text-red-600">
+                    <span className="text-red-600 dark:text-red-400">
                       Failed: <span className="font-semibold">{op.failedCount}</span>
                     </span>
                   )}
                 </div>
                 {op.errors.length > 0 && (
-                  <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                  <div className="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 p-2 rounded">
                     {op.errors[0]}
                   </div>
                 )}

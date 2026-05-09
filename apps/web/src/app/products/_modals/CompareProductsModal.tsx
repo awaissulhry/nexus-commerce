@@ -119,15 +119,15 @@ export default function CompareProductsModal({
       header={null}
       className="overflow-hidden"
     >
-        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
-          <div className="text-lg font-semibold text-slate-900">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Compare {products.length} products
           </div>
           <IconButton
             onClick={onClose}
             aria-label="Close"
             size="md"
-            className="text-slate-400 hover:text-slate-600"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-600"
           >
             <X className="w-4 h-4" />
           </IconButton>
@@ -135,25 +135,25 @@ export default function CompareProductsModal({
 
         <div className="flex-1 overflow-auto">
           <table className="w-full text-base border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 w-32">
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-32">
                   Field
                 </th>
                 {products.map((p) => (
                   <th
                     key={p.id}
-                    className="px-3 py-2 text-left align-top border-l border-slate-200"
+                    className="px-3 py-2 text-left align-top border-l border-slate-200 dark:border-slate-700"
                   >
                     <div className="flex items-start gap-2">
                       {p.imageUrl ? (
                         <img
                           src={p.imageUrl}
                           alt=""
-                          className="w-10 h-10 rounded object-cover bg-slate-100 flex-shrink-0"
+                          className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded bg-slate-100 flex-shrink-0" />
+                        <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
                       )}
                       <div className="min-w-0">
                         <button
@@ -169,12 +169,12 @@ export default function CompareProductsModal({
                             )
                             onClose()
                           }}
-                          className="text-left text-base font-semibold text-slate-900 hover:text-blue-700 truncate block max-w-[220px]"
+                          className="text-left text-base font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300 truncate block max-w-[220px]"
                           title={p.name}
                         >
                           {p.name}
                         </button>
-                        <div className="text-xs text-slate-500 font-mono truncate max-w-[220px]">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate max-w-[220px]">
                           {p.sku}
                         </div>
                       </div>
@@ -189,25 +189,25 @@ export default function CompareProductsModal({
                   key={row.label}
                   className={
                     row.differs
-                      ? 'border-b border-slate-100 bg-amber-50/40'
-                      : 'border-b border-slate-100'
+                      ? 'border-b border-slate-100 dark:border-slate-800 bg-amber-50/40'
+                      : 'border-b border-slate-100 dark:border-slate-800'
                   }
                   title={row.differs ? 'Values differ across products' : undefined}
                 >
-                  <td className="px-3 py-1.5 text-sm text-slate-500 uppercase tracking-wider font-semibold align-top">
+                  <td className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold align-top">
                     {row.label}
                   </td>
                   {row.values.map((v, i) => (
                     <td
                       key={i}
                       className={
-                        'px-3 py-1.5 align-top border-l border-slate-200 ' +
+                        'px-3 py-1.5 align-top border-l border-slate-200 dark:border-slate-700 ' +
                         (row.tone === 'numeric'
                           ? 'text-right tabular-nums'
                           : row.tone === 'mono'
                           ? 'font-mono text-sm'
                           : '') +
-                        (row.differs ? ' text-amber-900' : ' text-slate-800')
+                        (row.differs ? ' text-amber-900' : ' text-slate-800 dark:text-slate-200')
                       }
                     >
                       {v}
@@ -229,17 +229,17 @@ export default function CompareProductsModal({
                   <tr
                     className={
                       differs
-                        ? 'border-b border-slate-100 bg-amber-50/40'
-                        : 'border-b border-slate-100'
+                        ? 'border-b border-slate-100 dark:border-slate-800 bg-amber-50/40'
+                        : 'border-b border-slate-100 dark:border-slate-800'
                     }
                   >
-                    <td className="px-3 py-1.5 text-sm text-slate-500 uppercase tracking-wider font-semibold align-top">
+                    <td className="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold align-top">
                       Channels
                     </td>
                     {products.map((p) => (
                       <td
                         key={p.id}
-                        className="px-3 py-1.5 align-top border-l border-slate-200"
+                        className="px-3 py-1.5 align-top border-l border-slate-200 dark:border-slate-700"
                       >
                         <div className="flex flex-wrap gap-1">
                           {ALL_CHANNELS.map((ch) => {
@@ -248,7 +248,7 @@ export default function CompareProductsModal({
                               return (
                                 <span
                                   key={ch}
-                                  className="inline-flex items-center px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 bg-white text-slate-400 rounded"
+                                  className="inline-flex items-center px-1.5 h-5 text-xs font-mono border border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 rounded"
                                   title={`Not on ${ch}`}
                                 >
                                   {ch.slice(0, 3)}
@@ -276,8 +276,8 @@ export default function CompareProductsModal({
           </table>
         </div>
 
-        <footer className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex-shrink-0">
-          <span className="text-sm text-slate-500">
+        <footer className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex-shrink-0">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
             Amber rows differ across products. Click a header to open in drawer.
           </span>
           <div className="flex items-center gap-3">
@@ -285,7 +285,7 @@ export default function CompareProductsModal({
               <a
                 key={p.id}
                 href={`/products/${p.id}/edit`}
-                className="text-sm text-blue-700 hover:underline inline-flex items-center gap-0.5"
+                className="text-sm text-blue-700 dark:text-blue-300 hover:underline inline-flex items-center gap-0.5"
                 title={`Open ${p.sku} edit page`}
               >
                 <ExternalLink className="w-3 h-3" /> {p.sku.slice(0, 12)}

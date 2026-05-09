@@ -84,7 +84,7 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
       <Card>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Plans · {data?.count ?? '—'}
             </div>
             <NewPlanButton onCreated={(id) => { setSelectedPlanId(id); refetch() }} />
@@ -92,7 +92,7 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
           {loading && !data ? (
             <Skeleton variant="block" height={120} />
           ) : error ? (
-            <div className="text-sm text-rose-700">Failed to load: {error}</div>
+            <div className="text-sm text-rose-700 dark:text-rose-300">Failed to load: {error}</div>
           ) : data && data.plans.length === 0 ? (
             <EmptyText text='No plans yet. Click "New plan" to start a v2024-03-20 inbound flow.' />
           ) : (
@@ -101,7 +101,7 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
                 const isSelected = p.id === selectedPlanId
                 const tone = p.status === 'FAILED' ? 'border-rose-300 bg-rose-50/50'
                   : p.status === 'LABELS_READY' ? 'border-emerald-300 bg-emerald-50/50'
-                  : 'border-slate-200'
+                  : 'border-slate-200 dark:border-slate-700'
                 return (
                   <button
                     key={p.id}
@@ -110,16 +110,16 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        {p.status === 'LABELS_READY' && <CheckCircle2 size={12} className="text-emerald-700" />}
-                        {p.status === 'FAILED' && <XCircle size={12} className="text-rose-700" />}
-                        {p.status !== 'LABELS_READY' && p.status !== 'FAILED' && <Loader2 size={12} className="text-slate-500" />}
+                        {p.status === 'LABELS_READY' && <CheckCircle2 size={12} className="text-emerald-700 dark:text-emerald-300" />}
+                        {p.status === 'FAILED' && <XCircle size={12} className="text-rose-700 dark:text-rose-300" />}
+                        {p.status !== 'LABELS_READY' && p.status !== 'FAILED' && <Loader2 size={12} className="text-slate-500 dark:text-slate-400" />}
                         <span className="text-sm font-medium">{p.name ?? '(unnamed)'}</span>
-                        <span className="text-xs text-slate-500 font-mono">{p.planId ?? '(no planId)'}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{p.planId ?? '(no planId)'}</span>
                       </div>
-                      <span className="text-xs text-slate-500 tabular-nums">{p.status}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{p.status}</span>
                     </div>
                     {p.lastError && (
-                      <div className="text-xs text-rose-700 mt-1 line-clamp-2">⚠ {p.lastError}</div>
+                      <div className="text-xs text-rose-700 dark:text-rose-300 mt-1 line-clamp-2">⚠ {p.lastError}</div>
                     )}
                   </button>
                 )
@@ -133,7 +133,7 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
       {selected && (
         <Card>
           <div className="space-y-3">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Steps — {selected.name ?? selected.planId ?? selected.id}
             </div>
             <StepTracker plan={selected} />
@@ -194,7 +194,7 @@ function NewPlanButton({ onCreated }: { onCreated: (id: string) => void }) {
     <button
       onClick={handleClick}
       disabled={busy}
-      className="h-7 px-3 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+      className="h-7 px-3 text-xs bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1"
     >
       {busy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
       New plan
@@ -214,10 +214,10 @@ function StepTracker({ plan }: { plan: Plan }) {
           <div key={step.key} className="flex items-center gap-1">
             <span
               className={`text-xs px-2 py-0.5 rounded border ${
-                done ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                : failed ? 'bg-rose-50 border-rose-300 text-rose-700'
-                : active ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'bg-white border-slate-200 text-slate-500'
+                done ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 text-emerald-700 dark:text-emerald-300'
+                : failed ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 text-rose-700 dark:text-rose-300'
+                : active ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 text-blue-700 dark:text-blue-300'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
               }`}
             >
               {done ? <CheckCircle2 size={10} className="inline mr-1" /> : null}
@@ -225,7 +225,7 @@ function StepTracker({ plan }: { plan: Plan }) {
               {active ? <Loader2 size={10} className="inline mr-1 animate-spin" /> : null}
               {step.label}
             </span>
-            {i < STEPS.length - 1 && <ChevronRight size={11} className="text-slate-300" />}
+            {i < STEPS.length - 1 && <ChevronRight size={11} className="text-slate-300 dark:text-slate-600" />}
           </div>
         )
       })}
@@ -255,7 +255,7 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
 
   if (plan.status === 'FAILED') {
     return (
-      <div className="border border-rose-200 bg-rose-50 rounded p-3 text-sm text-rose-700">
+      <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded p-3 text-sm text-rose-700 dark:text-rose-300">
         <div className="inline-flex items-center gap-1.5 mb-1">
           <AlertCircle size={12} /> Plan failed at step {plan.currentStep}
         </div>
@@ -265,7 +265,7 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
   }
   if (plan.status === 'LABELS_READY') {
     return (
-      <div className="border border-emerald-200 bg-emerald-50 rounded p-3 text-sm text-emerald-700">
+      <div className="border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 rounded p-3 text-sm text-emerald-700 dark:text-emerald-300">
         Plan complete. Labels: {Object.keys(plan.labels ?? {}).length} shipment(s).
       </div>
     )
@@ -336,7 +336,7 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
     <button
       onClick={handleNext}
       disabled={busy}
-      className="h-9 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+      className="h-9 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
     >
       {busy && <Loader2 size={12} className="animate-spin" />}
       {nextLabel}
@@ -345,5 +345,5 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
 }
 
 function EmptyText({ text }: { text: string }) {
-  return <div className="text-sm text-slate-500 py-3">{text}</div>
+  return <div className="text-sm text-slate-500 dark:text-slate-400 py-3">{text}</div>
 }
