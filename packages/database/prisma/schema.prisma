@@ -276,6 +276,22 @@ model Product {
   @@index([gtin])
   @@index([abcClass])
   @@index([deletedAt])
+  // W1.10 — 10k SKU headroom indexes. Hot paths in /products grid:
+  //   - (status, deletedAt): "list active non-deleted" — almost every
+  //     list query. Composite so a single B-tree lookup covers both.
+  //   - brand: facet filter (FilterBar)
+  //   - productType: facet filter (FilterBar)
+  //   - parentId: hierarchy lookup (children of parent — not auto-
+  //     indexed by Prisma despite the relation declaration)
+  //   - isParent: cheap boolean filter for hierarchy lens
+  //   - fulfillmentMethod: facet filter
+  // At 280 rows none of these matter; at 10k+ they prevent seq-scans.
+  @@index([status, deletedAt])
+  @@index([brand])
+  @@index([productType])
+  @@index([parentId])
+  @@index([isParent])
+  @@index([fulfillmentMethod])
 }
 
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
@@ -4703,6 +4719,81 @@ model CronRun {
   @@index([jobName, startedAt])
   @@index([status])
   @@index([startedAt])
+}
+
+// ── L.3.0: Outbound API call observability ───────────────────────
+//
+// Every outbound HTTP call to a channel API (Amazon SP-API, eBay
+// REST, Shopify Admin, etc.) writes one row at completion. This is
+// the cornerstone of channel-level diagnostics:
+//
+//   - Did the call happen?
+//   - How long did it take? (p50/p95/p99 across operation × channel)
+//   - What status code came back?
+//   - If it failed, what was the error code + message?
+//   - Are we hitting throttle limits?
+//
+// Pre-this model, the in-scope revenue channels (Amazon + eBay) had
+// no per-call observability — diagnosing an Amazon outage meant
+// SSH-ing into Railway and tailing logger output. The model + the
+// outbound-api-call-log.service.ts wrapper lift that gap.
+//
+// Volume: at 2 channels × ~10 distinct operations × 15-min poll
+// cadence we expect ~200 calls/hour ≈ 1.7M/yr. Indexes cover the
+// hot query paths; retention cron (planned L.x) trims to a 30-day
+// rolling window before storage becomes a concern.
+
+model OutboundApiCallLog {
+  id String @id @default(cuid())
+
+  // What channel + which marketplace.
+  channel      String // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY | SENDCLOUD
+  marketplace  String? // 'IT', 'DE', 'A1F83G8C2ARO7P', etc.
+  connectionId String? // FK-ish to ChannelConnection where applicable
+
+  // What was called.
+  operation String // 'getOrders', 'getInventorySummaries', 'patchListingsItem'
+  endpoint  String? // URL path or library method-name
+  method    String? // GET | POST | PUT | PATCH | DELETE
+
+  // What happened.
+  statusCode Int? // null on network errors / pre-flight failures
+  success    Boolean
+  latencyMs  Int
+
+  // Error detail when success=false. errorType bucketises the failure
+  // (RATE_LIMIT | AUTHENTICATION | VALIDATION | NETWORK | SERVER) so
+  // dashboards can group without parsing free-form messages.
+  errorMessage String?
+  errorCode    String? // 'InvalidParameterValue', 'QuotaExceeded'…
+  errorType    String?
+
+  // Correlation. requestId is the Fastify request.id (or cron tick id)
+  // so a single user-facing operation can be reassembled across logs.
+  requestId   String?
+  triggeredBy String  @default("api") // 'cron' | 'manual' | 'api' | 'webhook'
+
+  // Optional payloads. Heavy by nature — writers should slim them
+  // down (omit binary, redact secrets, drop fields > N kB) or skip
+  // entirely on the success path. Always retain on error.
+  requestPayload  Json?
+  responsePayload Json?
+
+  // Optional entity correlation for drill-down from product / order
+  // pages.
+  productId String?
+  listingId String? // ChannelListing.id
+  orderId   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([channel, createdAt])
+  @@index([createdAt])
+  @@index([success, createdAt])
+  @@index([operation, createdAt])
+  @@index([statusCode, createdAt])
+  @@index([requestId])
+  @@index([productId])
 }
 
 // ── R.17: Substitution-aware demand ───────────────────────────────
