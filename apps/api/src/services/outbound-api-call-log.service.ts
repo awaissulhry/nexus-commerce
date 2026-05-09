@@ -63,6 +63,7 @@
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { publishSyncLogEvent } from './sync-logs-events.service.js'
+import { recordErrorOccurrence } from './error-grouping.service.js'
 
 type Channel =
   | 'AMAZON'
@@ -273,6 +274,20 @@ export async function recordApiCall<T>(
           ? errorMessage.slice(0, 200)
           : null,
       })
+
+      // L.8.0 — on failure, also upsert the SyncLogErrorGroup row
+      // so the hub can show "this same error happened N times".
+      // Best-effort: errors are logged inside the helper; success
+      // path skips this entirely.
+      if (!success) {
+        void recordErrorOccurrence({
+          channel: ctx.channel,
+          operation: ctx.operation,
+          errorType: errorType ?? null,
+          errorCode: errorCode ?? null,
+          message: errorMessage ?? null,
+        })
+      }
     } catch (writeErr) {
       // Never break the actual call because logging itself is degraded.
       logger.warn('outbound-api-call-log: write failed', {

@@ -5001,6 +5001,67 @@ model OutboundApiCallLog {
   @@index([productId])
 }
 
+// ── L.8.0: Sentry-tier error grouping ────────────────────────────
+//
+// Operators triaging an outage need "this same error happened N
+// times" not "scroll the 200-row failure list and notice they're
+// the same". SyncLogErrorGroup is the rolled-up view: each unique
+// (channel × operation × errorType × errorCode × normalised-message)
+// gets one row with a running count + first/last seen + a resolution
+// workflow.
+//
+// recordApiCall() upserts here on every failure write. Volume is
+// orders of magnitude smaller than OutboundApiCallLog (one group
+// per distinct error class, not per occurrence) so retention isn't
+// a near-term concern.
+//
+// Resolution states:
+//   ACTIVE     — fresh; surfaces in the hub's red panel
+//   RESOLVED   — operator marked fixed; hidden by default but the
+//                next occurrence flips it back to ACTIVE
+//   MUTED      — operator acknowledged but doesn't want alerts;
+//                stays MUTED across re-occurrences until unmuted
+//   IGNORED    — known noise; never surfaces or counts toward error
+//                rate. Typically used for expected-fail flows.
+
+model SyncLogErrorGroup {
+  id String @id @default(cuid())
+
+  // Deterministic hash of the group key. Used as the upsert key so
+  // a per-occurrence write either creates or increments. SHA-256
+  // hex (64 chars) — collisions are not a worry at our scale.
+  fingerprint String @unique
+
+  // Group dimensions (the components fed into the fingerprint).
+  channel   String
+  operation String
+  errorType String?
+  errorCode String?
+
+  // A representative message for display. Updated on each
+  // occurrence to the most recent example so operators see a real
+  // message rather than the normalised form used in the fingerprint.
+  sampleMessage String?
+
+  // Running counts + window.
+  count     Int      @default(1)
+  firstSeen DateTime @default(now())
+  lastSeen  DateTime @default(now())
+
+  // Resolution workflow.
+  resolutionStatus String    @default("ACTIVE") // ACTIVE | RESOLVED | MUTED | IGNORED
+  resolvedAt       DateTime?
+  resolvedBy       String?
+  notes            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([channel, lastSeen])
+  @@index([resolutionStatus, lastSeen])
+  @@index([lastSeen])
+}
+
 // ── R.17: Substitution-aware demand ───────────────────────────────
 // One-way link: when `primary` is out of stock, customers buy
 // `substitute`. substitutionFraction (0-1) is what portion of
