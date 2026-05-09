@@ -1,4 +1,4 @@
-// @ts-nocheck — U.56 BISECT 7: only UploadModal mounted
+// @ts-nocheck — U.57 BISECT 8: BulkOperationModal imported but not rendered
 'use client'
 
 import {
@@ -3474,20 +3474,13 @@ export default function BulkOperationsClient() {
           </div>
         </div>
       </div>
-      {/* U.56 (BISECT 7) — UploadModal alone. */}
+      {/* U.57 (BISECT 8) — BulkOperationModal IMPORTED but NOT mounted.
+          If clicks die, the bug is in the module-level code (imports
+          or top-level OPERATIONS const). If clicks work, the bug fires
+          when the component itself mounts. */}
       <div className="p-4 text-base text-slate-500">
-        BISECT 7 — only UploadModal mounted (BulkOperationModal disabled).
+        BISECT 8 — BulkOperationModal imported but NOT rendered.
       </div>
-      <UploadModal
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        onApplied={() => {
-          // Refetch products so the grid reflects the saved changes.
-          // Selection + pending edits are local state and unaffected.
-          reloadProducts()
-        }}
-      />
-
     </div>
   )
 }
