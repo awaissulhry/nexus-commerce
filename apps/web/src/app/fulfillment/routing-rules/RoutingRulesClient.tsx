@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/Input'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 interface Warehouse {
@@ -83,6 +84,7 @@ const blankForm = (defaults?: { warehouseId?: string }): RuleFormState => ({
 })
 
 export default function RoutingRulesClient() {
+  const { t } = useTranslations()
   const askConfirm = useConfirm()
   const [data, setData] = useState<RulesResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -242,27 +244,24 @@ export default function RoutingRulesClient() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-base text-slate-500">
-          {data?.rules.length ?? 0} rule{data?.rules.length === 1 ? '' : 's'}
-          {data?.warehouses.length
-            ? ` · ${data.warehouses.length} warehouse${data.warehouses.length === 1 ? '' : 's'}`
-            : ''}
+        <div className="text-base text-slate-500 dark:text-slate-400">
+          {t('routingRules.summary', { rules: data?.rules.length ?? 0, warehouses: data?.warehouses.length ?? 0 })}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-            Refresh
+          <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading} aria-label={t('common.refresh')}>
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} aria-hidden="true" />
+            {t('common.refresh')}
           </Button>
           <Button variant="primary" size="sm" onClick={startCreate}>
-            <Plus className="w-3.5 h-3.5" />
-            New rule
+            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+            {t('routingRules.newRule')}
           </Button>
         </div>
       </div>
 
       {error && (
-        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
-          <AlertCircle className="w-3.5 h-3.5" />
+        <div role="alert" className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
+          <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
           {error}
         </div>
       )}
@@ -270,7 +269,7 @@ export default function RoutingRulesClient() {
       {loading && !data && (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-14 bg-white border border-slate-200 rounded-lg animate-pulse" />
+            <div key={i} className="h-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse" />
           ))}
         </div>
       )}
@@ -279,32 +278,32 @@ export default function RoutingRulesClient() {
       {data && data.rules.length === 0 && !loading && (
         <EmptyState
           icon={Network}
-          title="No routing rules yet"
-          description="Create a rule to assign incoming orders to specific warehouses by channel, marketplace, or shipping country. Without rules, every order falls back to the default warehouse."
-          action={{ label: 'Create first rule', onClick: startCreate }}
+          title={t('routingRules.empty.title')}
+          description={t('routingRules.empty.description')}
+          action={{ label: t('routingRules.empty.create'), onClick: startCreate }}
         />
       )}
 
       {data && data.rules.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="text-left font-medium px-3 py-2 w-16">Priority</th>
-                <th className="text-left font-medium px-3 py-2">Name / criteria</th>
-                <th className="text-left font-medium px-3 py-2 w-48">→ Warehouse</th>
-                <th className="text-left font-medium px-3 py-2 w-20">Status</th>
+                <th className="text-left font-medium px-3 py-2 w-16">{t('routingRules.col.priority')}</th>
+                <th className="text-left font-medium px-3 py-2">{t('routingRules.col.nameCriteria')}</th>
+                <th className="text-left font-medium px-3 py-2 w-48">{t('routingRules.col.warehouse')}</th>
+                <th className="text-left font-medium px-3 py-2 w-20">{t('routingRules.col.status')}</th>
                 <th className="text-right font-medium px-3 py-2 w-24"></th>
               </tr>
             </thead>
             <tbody>
               {data.rules.map((rule) => (
-                <tr key={rule.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-3 py-2 font-mono tabular-nums text-slate-700">
+                <tr key={rule.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  <td className="px-3 py-2 font-mono tabular-nums text-slate-700 dark:text-slate-300">
                     {rule.priority}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900">{rule.name}</div>
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{rule.name}</div>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       {rule.channel ? (
                         <Badge variant="info" size="sm">{rule.channel}</Badge>
@@ -316,29 +315,26 @@ export default function RoutingRulesClient() {
                         <Badge variant="default" size="sm">→ {rule.shippingCountry}</Badge>
                       ) : null}
                       {!rule.channel && !rule.marketplace && !rule.shippingCountry && (
-                        <span className="text-xs text-slate-400 italic">
-                          matches all (use priority to control)
+                        <span className="text-xs text-slate-400 dark:text-slate-500 italic">
+                          {t('routingRules.matchesAll')}
                         </span>
                       )}
                     </div>
                     {rule.notes && (
-                      <div className="text-sm text-slate-500 mt-1 italic">
+                      <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 italic">
                         {rule.notes}
                       </div>
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="text-slate-900">{rule.warehouse.name}</div>
-                    <div className="text-sm text-slate-500 font-mono">
+                    <div className="text-slate-900 dark:text-slate-100">{rule.warehouse.name}</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
                       {rule.warehouse.code}
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <Badge
-                      variant={rule.isActive ? 'success' : 'default'}
-                      size="sm"
-                    >
-                      {rule.isActive ? 'Active' : 'Inactive'}
+                    <Badge variant={rule.isActive ? 'success' : 'default'} size="sm">
+                      {rule.isActive ? t('routingRules.active') : t('routingRules.inactive')}
                     </Badge>
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -346,22 +342,24 @@ export default function RoutingRulesClient() {
                       <button
                         type="button"
                         onClick={() => startEdit(rule)}
-                        className="p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
-                        title="Edit"
+                        className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 p-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                        aria-label={t('routingRules.editAria', { name: rule.name })}
+                        title={t('common.edit')}
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(rule)}
                         disabled={deletingId === rule.id}
-                        className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded disabled:opacity-50"
-                        title="Delete"
+                        className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 p-1 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 rounded disabled:opacity-50"
+                        aria-label={t('routingRules.deleteAria', { name: rule.name })}
+                        title={t('common.delete')}
                       >
                         {deletingId === rule.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                         ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                         )}
                       </button>
                     </div>
@@ -375,88 +373,71 @@ export default function RoutingRulesClient() {
 
       {/* Dry-run preview */}
       {data && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4 space-y-3">
           <div className="flex items-start gap-2">
-            <ChevronUp className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
+            <ChevronUp className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
-              <h3 className="text-md font-semibold text-slate-900">
-                Test routing
+              <h3 className="text-md font-semibold text-slate-900 dark:text-slate-100">
+                {t('routingRules.testRouting')}
               </h3>
-              <p className="text-sm text-slate-600 mt-0.5">
-                Type the order's channel / marketplace / shipping country to
-                see which rule will match (or which fallback fires).
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+                {t('routingRules.testHelp')}
               </p>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <Input
               type="text"
-              placeholder="Channel (e.g. AMAZON)"
+              placeholder={t('routingRules.channelPlaceholder')}
+              aria-label={t('routingRules.channelPlaceholder')}
               value={previewInput.channel}
-              onChange={(e) =>
-                setPreviewInput((s) => ({ ...s, channel: e.target.value }))
-              }
+              onChange={(e) => setPreviewInput((s) => ({ ...s, channel: e.target.value }))}
             />
             <Input
               type="text"
-              placeholder="Marketplace (e.g. IT)"
+              placeholder={t('routingRules.marketplacePlaceholder')}
+              aria-label={t('routingRules.marketplacePlaceholder')}
               value={previewInput.marketplace}
-              onChange={(e) =>
-                setPreviewInput((s) => ({ ...s, marketplace: e.target.value }))
-              }
+              onChange={(e) => setPreviewInput((s) => ({ ...s, marketplace: e.target.value }))}
             />
             <Input
               type="text"
-              placeholder="Country (e.g. DE)"
+              placeholder={t('routingRules.countryPlaceholder')}
+              aria-label={t('routingRules.countryPlaceholder')}
               value={previewInput.shippingCountry}
-              onChange={(e) =>
-                setPreviewInput((s) => ({ ...s, shippingCountry: e.target.value }))
-              }
+              onChange={(e) => setPreviewInput((s) => ({ ...s, shippingCountry: e.target.value }))}
             />
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handlePreview}
-              disabled={previewing}
-            >
-              {previewing ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <ArrowRight className="w-3.5 h-3.5" />
-              )}
-              Test
+            <Button variant="primary" size="sm" onClick={handlePreview} disabled={previewing}>
+              {previewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />}
+              {t('routingRules.test')}
             </Button>
             {previewResult && (
-              <div className="text-base text-slate-700 inline-flex items-center gap-2 flex-wrap">
-                <span>Result:</span>
+              <div className="text-base text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 flex-wrap" role="status" aria-live="polite">
+                <span>{t('routingRules.result')}</span>
                 {previewResult.warehouseId ? (
                   <span className="font-medium">
                     → {previewWarehouseName ?? previewResult.warehouseId}
                   </span>
                 ) : (
-                  <span className="text-red-700 font-medium">
-                    ❌ No warehouse resolved
+                  <span className="text-red-700 dark:text-red-400 font-medium">
+                    {t('routingRules.noResolve')}
                   </span>
                 )}
                 <Badge
                   variant={
-                    previewResult.source === 'RULE_MATCH'
-                      ? 'success'
-                      : previewResult.source === 'DEFAULT_WAREHOUSE'
-                        ? 'info'
-                        : previewResult.source === 'NONE'
-                          ? 'danger'
-                          : 'default'
+                    previewResult.source === 'RULE_MATCH' ? 'success' :
+                    previewResult.source === 'DEFAULT_WAREHOUSE' ? 'info' :
+                    previewResult.source === 'NONE' ? 'danger' : 'default'
                   }
                   size="sm"
                 >
                   {previewResult.source}
                 </Badge>
                 {previewResult.ruleName && (
-                  <span className="text-sm text-slate-500">
-                    via "{previewResult.ruleName}"
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    {t('routingRules.viaRule', { name: previewResult.ruleName })}
                   </span>
                 )}
               </div>
@@ -466,162 +447,178 @@ export default function RoutingRulesClient() {
       )}
 
       {/* Form modal */}
-      {form && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-start justify-center pt-[10vh] px-4"
-          onClick={() => !submitting && setForm(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl border border-slate-200 w-full max-w-xl max-h-[80vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
+      {form && <RuleFormModal
+        form={form}
+        setForm={setForm}
+        submitting={submitting}
+        warehouses={data?.warehouses ?? []}
+        onSubmit={handleSubmit}
+        t={t}
+      />}
+    </div>
+  )
+}
+
+function RuleFormModal({
+  form, setForm, submitting, warehouses, onSubmit, t,
+}: {
+  form: RuleFormState
+  setForm: (f: RuleFormState | null) => void
+  submitting: boolean
+  warehouses: Warehouse[]
+  onSubmit: (e: React.FormEvent) => void
+  t: (k: string, vars?: Record<string, string | number>) => string
+}) {
+  // F1.6 — Esc-key handler + focus trap baseline
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) setForm(null)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [submitting, setForm])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-start justify-center pt-[10vh] px-4"
+      onClick={() => !submitting && setForm(null)}
+      role="dialog"
+      aria-modal="true"
+      aria-label={form.id ? t('routingRules.editTitle') : t('routingRules.newTitle')}
+    >
+      <div
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-xl max-h-[80vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {form.id ? t('routingRules.editTitle') : t('routingRules.newTitle')}
+          </h2>
+          <button
+            type="button"
+            onClick={() => setForm(null)}
+            disabled={submitting}
+            className="min-h-[44px] sm:min-h-0 min-w-[44px] sm:min-w-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50"
+            aria-label={t('common.close')}
           >
-            <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">
-                {form.id ? 'Edit rule' : 'New routing rule'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setForm(null)}
-                disabled={submitting}
-                className="text-slate-400 hover:text-slate-700 disabled:opacity-50"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-3">
-              <div>
-                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                  Name
-                </label>
-                <Input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder='e.g. "Italy AMAZON → IT-MAIN"'
-                  required
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                    Priority
-                  </label>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Lower number wins
-                  </p>
-                  <Input
-                    type="number"
-                    value={form.priority}
-                    onChange={(e) =>
-                      setForm({ ...form, priority: Number(e.target.value) || 100 })
-                    }
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                    Warehouse
-                  </label>
-                  <select
-                    value={form.warehouseId}
-                    onChange={(e) =>
-                      setForm({ ...form, warehouseId: e.target.value })
-                    }
-                    className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    required
-                  >
-                    <option value="">Select…</option>
-                    {data?.warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.code} — {w.name}
-                        {w.isDefault ? ' (default)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded p-3 space-y-2">
-                <div className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                  Match criteria
-                </div>
-                <p className="text-xs text-slate-500">
-                  All filled criteria must match. Leave blank to wildcard.
-                </p>
-                <Input
-                  type="text"
-                  value={form.channel}
-                  onChange={(e) => setForm({ ...form, channel: e.target.value })}
-                  placeholder="Channel (e.g. AMAZON, EBAY)"
-                />
-                <Input
-                  type="text"
-                  value={form.marketplace}
-                  onChange={(e) =>
-                    setForm({ ...form, marketplace: e.target.value })
-                  }
-                  placeholder="Marketplace (e.g. IT, DE, FR)"
-                />
-                <Input
-                  type="text"
-                  value={form.shippingCountry}
-                  onChange={(e) =>
-                    setForm({ ...form, shippingCountry: e.target.value })
-                  }
-                  placeholder="Shipping country code (e.g. IT, DE)"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-slate-700 uppercase tracking-wide">
-                  Notes (optional)
-                </label>
-                <Input
-                  type="text"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Why this rule exists, edge cases, etc."
-                  className="mt-1"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 text-base text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                />
-                Active (rule will be evaluated)
-              </label>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
-                <Button type="submit" variant="primary" size="sm" disabled={submitting}>
-                  {submitting ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                  {form.id ? 'Save' : 'Create rule'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setForm(null)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </div>
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
-      )}
+        <form onSubmit={onSubmit} className="p-5 space-y-3">
+          <div>
+            <label htmlFor="rule-name" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              {t('routingRules.field.name')}
+            </label>
+            <Input
+              id="rule-name"
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder={t('routingRules.field.namePlaceholder')}
+              required
+              className="mt-1"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="rule-priority" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                {t('routingRules.field.priority')}
+              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('routingRules.field.priorityHelp')}</p>
+              <Input
+                id="rule-priority"
+                type="number"
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: Number(e.target.value) || 100 })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label htmlFor="rule-warehouse" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                {t('routingRules.field.warehouse')}
+              </label>
+              <select
+                id="rule-warehouse"
+                value={form.warehouseId}
+                onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}
+                className="mt-1 w-full px-3 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                required
+              >
+                <option value="">{t('routingRules.field.warehouseSelect')}</option>
+                {warehouses.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.code} — {w.name}{w.isDefault ? ` ${t('routingRules.field.defaultMarker')}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 space-y-2">
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              {t('routingRules.field.criteria')}
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('routingRules.field.criteriaHelp')}
+            </p>
+            <Input
+              type="text"
+              value={form.channel}
+              onChange={(e) => setForm({ ...form, channel: e.target.value })}
+              placeholder={t('routingRules.field.channel')}
+              aria-label={t('routingRules.field.channel')}
+            />
+            <Input
+              type="text"
+              value={form.marketplace}
+              onChange={(e) => setForm({ ...form, marketplace: e.target.value })}
+              placeholder={t('routingRules.field.marketplace')}
+              aria-label={t('routingRules.field.marketplace')}
+            />
+            <Input
+              type="text"
+              value={form.shippingCountry}
+              onChange={(e) => setForm({ ...form, shippingCountry: e.target.value })}
+              placeholder={t('routingRules.field.country')}
+              aria-label={t('routingRules.field.country')}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="rule-notes" className="text-sm font-medium text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              {t('routingRules.field.notes')}
+            </label>
+            <Input
+              id="rule-notes"
+              type="text"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder={t('routingRules.field.notesPlaceholder')}
+              className="mt-1"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-base text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+            />
+            {t('routingRules.field.activeLabel')}
+          </label>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <Button type="submit" variant="primary" size="sm" disabled={submitting}>
+              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+              {form.id ? t('common.save') : t('routingRules.create')}
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setForm(null)} disabled={submitting}>
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
