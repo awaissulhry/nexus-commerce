@@ -3474,6 +3474,376 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       return { needed: true, reason: 'needed' }
     },
   )
+
+  // ── AI-4 — bulk orchestrator: "AI: Complete entire wizard" ──────
+  //
+  // POST /api/listing-wizard/:id/ai-complete-all
+  //
+  // Body: { provider?: 'gemini' | 'anthropic', steps?: number[] }
+  //
+  // Single round-trip that fans AI out across multiple wizard steps
+  // and aggregates the report. Per-step blocks are added one
+  // commit at a time; AI-4.1 ships Step 5 (attributes content
+  // generation) only — subsequent commits add Step 2 productType,
+  // Step 4 variations theme, Step 7 competitive pricing, Step 8
+  // listing quality scoring.
+  //
+  // Each block runs through ListingContentService (or its peer for
+  // non-content steps) so AI-1.2 kill switch + AI-1.3 budget gate +
+  // AI-3.1 outbound sanitiser all apply transitively.
+  //
+  // Response shape is stable across the wave: an entry per step
+  // attempted, plus aggregate totals. Subsequent commits add new
+  // step entries without changing the schema.
+  fastify.post<{
+    Params: { id: string }
+    Body: { provider?: string; steps?: number[] }
+  }>(
+    '/listing-wizard/:id/ai-complete-all',
+    {
+      // Same rate-limit posture as /generate-content — AI calls are
+      // not free and a runaway client must not be able to burn the
+      // budget through this endpoint either.
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API server.',
+        })
+      }
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      const channels = normalizeChannels(wizard.channels)
+      if (channels.length === 0) {
+        return reply.code(409).send({
+          error: 'Pick channels in Step 1 first.',
+        })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const requestedSteps = Array.isArray(request.body?.steps)
+        ? request.body!.steps!.filter(
+            (n): n is number => Number.isInteger(n) && n >= 1 && n <= 9,
+          )
+        : [5]
+
+      const provider = request.body?.provider ?? null
+      const orchestrationStart = Date.now()
+
+      type StepEntry = {
+        stepId: number
+        action: string
+        status: 'success' | 'partial' | 'skipped' | 'failed'
+        durationMs: number
+        aiCalls: number
+        costUSD: number
+        redactionTotal: number
+        // Per-step bag for the surface-specific data (e.g. groupResults
+        // for step 5). Subsequent AI-4.X commits extend this.
+        details?: Record<string, unknown>
+        error?: string
+      }
+      const steps: StepEntry[] = []
+      let totalAiCalls = 0
+      let totalCostUSD = 0
+      let totalRedactions = 0
+      let topBudgetWarn: 'per_wizard' | 'per_day' | 'per_month' | undefined
+
+      // ── Step 5 — content generation fan-out ──────────────────
+      if (requestedSteps.includes(5)) {
+        const stepStart = Date.now()
+        const groups = new Map<
+          string,
+          { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
+        >()
+        for (const c of channels) {
+          const key = contentGroupKey(c.platform, c.marketplace)
+          const channelKey = `${c.platform}:${c.marketplace}`
+          if (!groups.has(key)) {
+            groups.set(key, {
+              language: languageForMarketplace(c.marketplace),
+              platform: c.platform,
+              marketplaces: [c.marketplace],
+              channelKeys: [channelKey],
+            })
+          } else {
+            const g = groups.get(key)!
+            if (!g.marketplaces.includes(c.marketplace)) {
+              g.marketplaces.push(c.marketplace)
+            }
+            g.channelKeys.push(channelKey)
+          }
+        }
+        for (const g of groups.values()) {
+          g.marketplaces.sort()
+          g.channelKeys.sort()
+        }
+
+        const allFields: ContentField[] = [
+          'title',
+          'bullets',
+          'description',
+          'keywords',
+        ]
+
+        const groupResults: Array<{
+          groupKey: string
+          platform: string
+          language: string
+          marketplaces: string[]
+          channelKeys: string[]
+          ok: boolean
+          costUSD?: number
+          aiCalls?: number
+          redactionTotal?: number
+          error?: string
+        }> = []
+        let stepAiCalls = 0
+        let stepCostUSD = 0
+        let stepRedactions = 0
+        let budgetExceeded: BudgetExceededError | null = null
+
+        for (const [groupKey, g] of groups) {
+          if (budgetExceeded) {
+            // Once we hit the budget gate for any group, the same
+            // gate would refuse every subsequent group. Break the
+            // loop so we don't burn DB reads on calls we'd refuse
+            // anyway.
+            groupResults.push({
+              groupKey,
+              platform: g.platform,
+              language: g.language,
+              marketplaces: g.marketplaces,
+              channelKeys: g.channelKeys,
+              ok: false,
+              error: 'Skipped — earlier group hit the budget ceiling.',
+            })
+            continue
+          }
+          const representativeMarketplace = g.marketplaces[0]!
+          try {
+            const terminology = await prisma.terminologyPreference.findMany({
+              where: {
+                marketplace: representativeMarketplace.toUpperCase(),
+                OR: [{ brand: product.brand }, { brand: null }],
+              },
+              select: { preferred: true, avoid: true, context: true },
+              orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+            })
+            const result = await listingContentService.generate({
+              product: {
+                id: product.id,
+                sku: product.sku,
+                name: product.name,
+                brand: product.brand,
+                description: product.description,
+                bulletPoints: product.bulletPoints,
+                keywords: product.keywords,
+                weightValue: product.weightValue
+                  ? Number(product.weightValue)
+                  : null,
+                weightUnit: product.weightUnit,
+                dimLength: product.dimLength
+                  ? Number(product.dimLength)
+                  : null,
+                dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+                dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+                dimUnit: product.dimUnit,
+                productType: product.productType,
+                variantAttributes: product.variantAttributes,
+                categoryAttributes: product.categoryAttributes,
+              },
+              marketplace: representativeMarketplace,
+              fields: allFields,
+              variant: 0,
+              terminology,
+              provider,
+              budgetScope: {
+                feature: 'listing-wizard',
+                wizardId: wizard.id,
+              },
+            })
+            // Persist per-call usage just like /generate-content.
+            for (const u of result.usage) {
+              logUsage({
+                provider: u.provider,
+                model: u.model,
+                feature: 'listing-wizard',
+                entityType: 'ListingWizard',
+                entityId: wizard.id,
+                inputTokens: u.inputTokens,
+                outputTokens: u.outputTokens,
+                costUSD: u.costUSD,
+                latencyMs: result.metadata.elapsedMs,
+                ok: true,
+                metadata: {
+                  productId: product.id,
+                  marketplace: representativeMarketplace,
+                  fields: allFields,
+                  groupKey,
+                  orchestrator: 'ai-complete-all',
+                  redactionTotal: result.redactionTotal,
+                  redactions: result.redactions,
+                },
+              })
+            }
+            const groupCost = result.usage.reduce(
+              (acc, u) => acc + Number(u.costUSD ?? 0),
+              0,
+            )
+            stepAiCalls += result.usage.length
+            stepCostUSD += groupCost
+            stepRedactions += result.redactionTotal
+            if (result.budgetWarn && !topBudgetWarn) {
+              topBudgetWarn = result.budgetWarn
+            }
+            groupResults.push({
+              groupKey,
+              platform: g.platform,
+              language: g.language,
+              marketplaces: g.marketplaces,
+              channelKeys: g.channelKeys,
+              ok: true,
+              aiCalls: result.usage.length,
+              costUSD: groupCost,
+              redactionTotal: result.redactionTotal,
+            })
+          } catch (err) {
+            if (err instanceof BudgetExceededError) {
+              budgetExceeded = err
+              groupResults.push({
+                groupKey,
+                platform: g.platform,
+                language: g.language,
+                marketplaces: g.marketplaces,
+                channelKeys: g.channelKeys,
+                ok: false,
+                error: err.message,
+              })
+              continue
+            }
+            fastify.log.error(
+              { err, groupKey },
+              '[ai-complete-all] step 5 group failed',
+            )
+            groupResults.push({
+              groupKey,
+              platform: g.platform,
+              language: g.language,
+              marketplaces: g.marketplaces,
+              channelKeys: g.channelKeys,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+
+        const stepStatus: StepEntry['status'] = budgetExceeded
+          ? 'failed'
+          : groupResults.every((g) => g.ok)
+            ? 'success'
+            : groupResults.some((g) => g.ok)
+              ? 'partial'
+              : 'failed'
+
+        steps.push({
+          stepId: 5,
+          action: 'generate-content',
+          status: stepStatus,
+          durationMs: Date.now() - stepStart,
+          aiCalls: stepAiCalls,
+          costUSD: stepCostUSD,
+          redactionTotal: stepRedactions,
+          details: { groups: groupResults },
+          error: budgetExceeded?.message,
+        })
+        totalAiCalls += stepAiCalls
+        totalCostUSD += stepCostUSD
+        totalRedactions += stepRedactions
+
+        // If the budget refused mid-fan-out, surface 402 at the top
+        // level so the UI can render a budget-specific message just
+        // like /generate-content does.
+        if (budgetExceeded) {
+          return reply.code(402).send({
+            error: budgetExceeded.message,
+            budget: { reason: budgetExceeded.reason },
+            // Partial-progress telemetry — the UI can show "we
+            // managed to fill 2 of 5 channel groups before the cap
+            // hit" so the operator knows what survived.
+            steps,
+            totals: {
+              aiCalls: totalAiCalls,
+              costUSD: totalCostUSD,
+              redactionTotal: totalRedactions,
+              durationMs: Date.now() - orchestrationStart,
+            },
+          })
+        }
+      }
+
+      // Steps 2 / 4 / 7 / 8 — placeholders for subsequent AI-4.X
+      // commits. Skipped entries surface in the report so the UI
+      // can render "this step has no AI yet" rather than silently
+      // omitting them.
+      for (const stepId of requestedSteps) {
+        if (stepId === 5) continue
+        steps.push({
+          stepId,
+          action: 'noop',
+          status: 'skipped',
+          durationMs: 0,
+          aiCalls: 0,
+          costUSD: 0,
+          redactionTotal: 0,
+          details: {
+            reason: 'AI for this step not yet wired (Wave AI-4 in progress).',
+          },
+        })
+      }
+
+      return {
+        wizard: {
+          id: wizard.id,
+          status: wizard.status,
+          currentStep: wizard.currentStep,
+        },
+        steps,
+        totals: {
+          aiCalls: totalAiCalls,
+          costUSD: totalCostUSD,
+          redactionTotal: totalRedactions,
+          durationMs: Date.now() - orchestrationStart,
+        },
+        budgetWarn: topBudgetWarn,
+      }
+    },
+  )
 }
 
 function computeOverallStatus(
