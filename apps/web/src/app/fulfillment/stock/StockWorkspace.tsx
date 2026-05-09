@@ -3572,45 +3572,50 @@ function BulkThresholdModal({
   onCancel: () => void
   onConfirm: (threshold: number | null) => void
 }) {
+  const { t } = useTranslations()
   const [threshold, setThreshold] = useState('')
   const [clearMode, setClearMode] = useState(false)
   const n = Number(threshold)
   const valid = clearMode || (Number.isFinite(n) && n >= 0)
 
   return (
-    <Modal title="Bulk update reorder threshold" onClose={onCancel}>
+    <Modal title={t('stock.bulkThreshold.title')} onClose={onCancel}>
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <input
+            id="bulk-threshold-value"
             type="number"
             min={0}
             value={threshold}
             disabled={clearMode}
             onChange={(e) => setThreshold(e.target.value)}
-            placeholder="threshold (≥ 0)"
+            placeholder={t('stock.bulkThreshold.placeholder')}
             autoFocus
+            aria-label={t('stock.bulkThreshold.valueAria')}
+            aria-describedby="bulk-threshold-help"
             className="flex-1 h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums disabled:bg-slate-100 disabled:text-slate-400"
           />
           <label className="text-base text-slate-600 inline-flex items-center gap-1.5">
             <input type="checkbox" checked={clearMode} onChange={(e) => setClearMode(e.target.checked)} />
-            Clear (use master)
+            {t('stock.bulkThreshold.clearMaster')}
           </label>
         </div>
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          The reorder threshold per StockLevel overrides Product.lowStockThreshold for that location only.
-          Clearing reverts to the product master.
+        <div id="bulk-threshold-help" className="text-sm text-slate-500 dark:text-slate-400">
+          {t('stock.bulkThreshold.help')}
         </div>
         <div className="text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
-          Will update <span className="font-semibold tabular-nums">{selectedItems.length}</span> row{selectedItems.length === 1 ? '' : 's'}.
+          {t('stock.bulkThreshold.willUpdate', { n: selectedItems.length })}
         </div>
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">
+            {t('stock.bulkAdjust.cancel')}
+          </button>
           <button
             onClick={() => valid && onConfirm(clearMode ? null : Math.floor(n))}
             disabled={!valid}
             className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            <Check size={12} /> Apply
+            <Check size={12} aria-hidden="true" /> {t('stock.bulkThreshold.apply')}
           </button>
         </div>
       </div>
