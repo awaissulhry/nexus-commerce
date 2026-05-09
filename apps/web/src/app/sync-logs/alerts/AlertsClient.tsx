@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 const METRICS = [
@@ -97,6 +98,7 @@ function fmtMetricValue(metric: string, v: number | null): string {
 
 export default function AlertsClient() {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [rules, setRules] = useState<AlertRule[]>([])
   const [events, setEvents] = useState<AlertEvent[]>([])
   const [statusFilter, setStatusFilter] =
@@ -149,12 +151,12 @@ export default function AlertsClient() {
 
   const createRule = useCallback(async () => {
     if (!newName.trim()) {
-      toast.error('Name is required')
+      toast.error(t('syncLogs.alerts.rules.nameRequired'))
       return
     }
     const threshold = Number(newThreshold)
     if (Number.isNaN(threshold)) {
-      toast.error('Threshold must be a number')
+      toast.error(t('syncLogs.alerts.rules.thresholdNumber'))
       return
     }
     setCreating(true)
@@ -181,7 +183,7 @@ export default function AlertsClient() {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error ?? `HTTP ${res.status}`)
       }
-      toast.success(`Created rule "${newName.trim()}"`)
+      toast.success(t('syncLogs.alerts.rules.created', { name: newName.trim() }))
       setNewName('')
       setNewThreshold('1')
       setNewChannel('')
@@ -191,7 +193,7 @@ export default function AlertsClient() {
     } finally {
       setCreating(false)
     }
-  }, [newName, newMetric, newOperator, newThreshold, newWindow, newChannel, newNotify, fetchAll, toast])
+  }, [newName, newMetric, newOperator, newThreshold, newWindow, newChannel, newNotify, fetchAll, toast, t])
 
   const toggleRule = useCallback(
     async (rule: AlertRule) => {
@@ -218,7 +220,7 @@ export default function AlertsClient() {
 
   const deleteRule = useCallback(
     async (rule: AlertRule) => {
-      if (!confirm(`Delete rule "${rule.name}"?`)) return
+      if (!confirm(t('syncLogs.alerts.rules.deleteConfirm', { name: rule.name }))) return
       setBusyId(rule.id)
       try {
         const res = await fetch(
@@ -226,7 +228,7 @@ export default function AlertsClient() {
           { method: 'DELETE' },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        toast.success('Deleted')
+        toast.success(t('syncLogs.alerts.rules.deleted'))
         void fetchAll()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : String(e))
@@ -234,7 +236,7 @@ export default function AlertsClient() {
         setBusyId(null)
       }
     },
-    [fetchAll, toast],
+    [fetchAll, toast, t],
   )
 
   const eventAction = useCallback(
@@ -250,7 +252,11 @@ export default function AlertsClient() {
           },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        toast.success(`Marked ${action}d`)
+        toast.success(
+          action === 'acknowledge'
+            ? t('syncLogs.alerts.events.markedAcknowledged')
+            : t('syncLogs.alerts.events.markedResolved'),
+        )
         void fetchAll()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : String(e))
@@ -258,7 +264,7 @@ export default function AlertsClient() {
         setBusyId(null)
       }
     },
-    [fetchAll, toast],
+    [fetchAll, toast, t],
   )
 
   return (
@@ -281,7 +287,7 @@ export default function AlertsClient() {
           ) : (
             <RefreshCw className="w-3.5 h-3.5" />
           )}
-          Refresh
+          {t('syncLogs.alerts.refresh')}
         </Button>
       </div>
 
@@ -290,10 +296,13 @@ export default function AlertsClient() {
         <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
           <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
-              <Bell className="w-3 h-3" /> Rules
+              <Bell className="w-3 h-3" /> {t('syncLogs.alerts.rules.heading')}
             </h2>
             <span className="text-xs text-slate-500 dark:text-slate-500">
-              {rules.length} total · {rules.filter((r) => r.enabled).length} enabled
+              {t('syncLogs.alerts.rules.summary', {
+                total: rules.length,
+                enabled: rules.filter((r) => r.enabled).length,
+              })}
             </span>
           </header>
 
@@ -303,7 +312,7 @@ export default function AlertsClient() {
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Rule name (e.g. Amazon throttle warning)"
+              placeholder={t('syncLogs.alerts.rules.namePlaceholder')}
               className="w-full px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
             />
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -314,7 +323,7 @@ export default function AlertsClient() {
               >
                 {METRICS.map((m) => (
                   <option key={m.value} value={m.value}>
-                    {m.label}
+                    {t(`syncLogs.metric.${m.value}`)}
                   </option>
                 ))}
               </select>
@@ -325,7 +334,7 @@ export default function AlertsClient() {
               >
                 {OPERATORS.map((o) => (
                   <option key={o.value} value={o.value}>
-                    {o.label}
+                    {t(`syncLogs.operator.${o.value}`)}
                   </option>
                 ))}
               </select>
@@ -333,14 +342,14 @@ export default function AlertsClient() {
                 type="text"
                 value={newThreshold}
                 onChange={(e) => setNewThreshold(e.target.value)}
-                placeholder="Threshold"
+                placeholder={t('syncLogs.alerts.rules.thresholdPlaceholder')}
                 className="w-24 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <span className="text-xs text-slate-500 dark:text-slate-500">
                 {METRICS.find((m) => m.value === newMetric)?.unit}
               </span>
               <span className="text-xs text-slate-500 dark:text-slate-500">
-                · over
+                {t('syncLogs.alerts.rules.over')}
               </span>
               <input
                 type="text"
@@ -349,7 +358,7 @@ export default function AlertsClient() {
                 className="w-14 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <span className="text-xs text-slate-500 dark:text-slate-500">
-                min
+                {t('syncLogs.alerts.rules.minLabel')}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -357,14 +366,14 @@ export default function AlertsClient() {
                 type="text"
                 value={newChannel}
                 onChange={(e) => setNewChannel(e.target.value)}
-                placeholder="Channel filter (optional, e.g. AMAZON)"
+                placeholder={t('syncLogs.alerts.rules.channelPlaceholder')}
                 className="flex-1 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
               <input
                 type="text"
                 value={newNotify}
                 onChange={(e) => setNewNotify(e.target.value)}
-                placeholder="Notify (log,webhook:url,...)"
+                placeholder={t('syncLogs.alerts.rules.notifyPlaceholder')}
                 className="flex-1 px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -380,7 +389,7 @@ export default function AlertsClient() {
                 ) : (
                   <Plus className="w-3.5 h-3.5" />
                 )}
-                Add rule
+                {t('syncLogs.alerts.rules.add')}
               </Button>
             </div>
           </div>
@@ -389,8 +398,8 @@ export default function AlertsClient() {
           {rules.length === 0 ? (
             <EmptyState
               icon={Bell}
-              title="No alert rules yet"
-              description="Add a rule above to start watching for error spikes, latency drift, or stuck crons."
+              title={t('syncLogs.alerts.rules.empty.title')}
+              description={t('syncLogs.alerts.rules.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -413,7 +422,7 @@ export default function AlertsClient() {
                           ? 'bg-emerald-500'
                           : 'bg-slate-300 dark:bg-slate-700',
                       )}
-                      title={r.enabled ? 'Disable' : 'Enable'}
+                      title={r.enabled ? t('syncLogs.alerts.rules.disable') : t('syncLogs.alerts.rules.enable')}
                     >
                       <span
                         className={cn(
@@ -429,24 +438,33 @@ export default function AlertsClient() {
                         </span>
                         {r.lastFired && (
                           <Badge variant="danger" size="sm">
-                            FIRING
+                            {t('syncLogs.alerts.rules.firing')}
                           </Badge>
                         )}
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 font-mono">
-                        {metric?.label ?? r.metric}{' '}
-                        {op?.label ?? r.operator} {thresholdDisplay}
+                        {metric ? t(`syncLogs.metric.${metric.value}`) : r.metric}{' '}
+                        {op ? t(`syncLogs.operator.${op.value}`) : r.operator}{' '}
+                        {thresholdDisplay}
                         {' · '}
-                        {r.windowMinutes}min window
+                        {t('syncLogs.alerts.rules.windowSummary', {
+                          window: r.windowMinutes,
+                        })}
                         {r.channel && ` · ${r.channel}`}
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
-                        Now: {fmtMetricValue(r.metric, r.lastValue)}
+                        {t('syncLogs.alerts.rules.now', {
+                          value: fmtMetricValue(r.metric, r.lastValue),
+                        })}
                         {r.lastEvaluatedAt &&
-                          ` · checked ${fmtRelative(r.lastEvaluatedAt)}`}
+                          ` · ${t('syncLogs.alerts.rules.checked', {
+                            when: fmtRelative(r.lastEvaluatedAt),
+                          })}`}
                       </div>
                       <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate">
-                        Notify: {r.notificationChannels.join(', ')}
+                        {t('syncLogs.alerts.rules.notify', {
+                          channels: r.notificationChannels.join(', '),
+                        })}
                       </div>
                     </div>
                     <button
@@ -454,7 +472,7 @@ export default function AlertsClient() {
                       onClick={() => void deleteRule(r)}
                       disabled={busyId === r.id}
                       className="flex-shrink-0 p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                      title="Delete"
+                      title={t('syncLogs.alerts.rules.deleteTooltip')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -469,7 +487,7 @@ export default function AlertsClient() {
         <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
           <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3" /> Events
+              <AlertCircle className="w-3 h-3" /> {t('syncLogs.alerts.events.heading')}
             </h2>
             <div className="flex items-center gap-1 ml-auto">
               {STATUS_OPTIONS.map((s) => (
@@ -484,7 +502,7 @@ export default function AlertsClient() {
                       : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                   )}
                 >
-                  {s}
+                  {t(`syncLogs.alertStatus.${s}`)}
                 </button>
               ))}
             </div>
@@ -495,13 +513,15 @@ export default function AlertsClient() {
               icon={CheckCircle2}
               title={
                 statusFilter === 'TRIGGERED'
-                  ? 'No active alerts'
-                  : `No ${statusFilter.toLowerCase()} events`
+                  ? t('syncLogs.alerts.events.empty.active.title')
+                  : t('syncLogs.alerts.events.empty.other.title', {
+                      status: t(`syncLogs.alertStatus.${statusFilter}`).toLowerCase(),
+                    })
               }
               description={
                 statusFilter === 'TRIGGERED'
-                  ? 'Either every condition is healthy or no rules are enabled.'
-                  : 'Try a different status filter.'
+                  ? t('syncLogs.alerts.events.empty.active.description')
+                  : t('syncLogs.alerts.events.empty.other.description')
               }
             />
           ) : (
@@ -531,23 +551,24 @@ export default function AlertsClient() {
                         }
                         size="sm"
                       >
-                        {e.status}
+                        {t(`syncLogs.alertStatus.${e.status}`)}
                       </Badge>
                       <span className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
                         {e.rule.name}
                       </span>
                     </div>
                     <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 font-mono">
-                      Value:{' '}
+                      {t('syncLogs.alerts.events.value')}{' '}
                       <span className="text-rose-700 dark:text-rose-400 font-semibold">
                         {fmtMetricValue(e.rule.metric, e.value)}
                       </span>{' '}
                       · {fmtRelative(e.triggeredAt)}
-                      {e.resolvedBy === 'auto' && ' · auto-resolved'}
+                      {e.resolvedBy === 'auto' &&
+                        ` · ${t('syncLogs.alerts.events.autoResolved')}`}
                     </div>
                     {e.notifications && e.notifications.length > 0 && (
                       <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono">
-                        Sent:{' '}
+                        {t('syncLogs.alerts.events.sent')}{' '}
                         {e.notifications
                           .map((n) =>
                             n.ok ? `✓ ${n.channel}` : `✗ ${n.channel}`,
@@ -564,7 +585,7 @@ export default function AlertsClient() {
                         disabled={busyId === e.id}
                         className="h-6 px-2 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50"
                       >
-                        Ack
+                        {t('syncLogs.alerts.events.ack')}
                       </button>
                       <button
                         type="button"
@@ -572,7 +593,7 @@ export default function AlertsClient() {
                         disabled={busyId === e.id}
                         className="h-6 px-2 text-xs font-medium rounded border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50"
                       >
-                        Resolve
+                        {t('syncLogs.alerts.events.resolve')}
                       </button>
                     </div>
                   )}
@@ -583,7 +604,7 @@ export default function AlertsClient() {
                       disabled={busyId === e.id}
                       className="flex-shrink-0 h-6 px-2 text-xs font-medium rounded border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50"
                     >
-                      Resolve
+                      {t('syncLogs.alerts.events.resolve')}
                     </button>
                   )}
                 </li>

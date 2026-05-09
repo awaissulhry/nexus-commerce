@@ -37,6 +37,7 @@ import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 const STATUS_OPTIONS = ['ACTIVE', 'RESOLVED', 'MUTED', 'IGNORED', 'ALL'] as const
@@ -89,6 +90,7 @@ export default function ErrorGroupsClient() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const urlStatus = (searchParams.get('status') ?? 'ACTIVE') as Status
   const urlChannel = searchParams.get('channel') ?? ''
@@ -170,7 +172,9 @@ export default function ErrorGroupsClient() {
           },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        toast.success(`Marked ${status.toLowerCase()}`)
+        toast.success(t('syncLogs.errors.action.markedStatus', {
+          status: t(`syncLogs.errorStatus.${status}`).toLowerCase(),
+        }))
         void fetchList(true)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : String(e))
@@ -178,7 +182,7 @@ export default function ErrorGroupsClient() {
         setBusyId(null)
       }
     },
-    [fetchList, toast],
+    [fetchList, toast, t],
   )
 
   const channels = useMemo(() => {
@@ -197,7 +201,7 @@ export default function ErrorGroupsClient() {
       {/* Filter bar */}
       <div className="flex items-center gap-1 flex-wrap">
         <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-          Status
+          {t('syncLogs.errors.filter.status')}
         </span>
         {STATUS_OPTIONS.map((s) => (
           <button
@@ -211,7 +215,7 @@ export default function ErrorGroupsClient() {
                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
           >
-            {s}
+            {t(`syncLogs.errorStatus.${s}`)}
             {s !== 'ALL' && totalsMap.has(s) && (
               <span className="ml-1 opacity-70">{totalsMap.get(s)}</span>
             )}
@@ -221,7 +225,7 @@ export default function ErrorGroupsClient() {
         {channels.length > 0 && (
           <>
             <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-              Channel
+              {t('syncLogs.errors.filter.channel')}
             </span>
             {channels.map((c) => (
               <button
@@ -259,7 +263,7 @@ export default function ErrorGroupsClient() {
           ) : (
             <RefreshCw className="w-3.5 h-3.5" />
           )}
-          Refresh
+          {t('syncLogs.errors.refresh')}
         </Button>
       </div>
 
@@ -283,13 +287,15 @@ export default function ErrorGroupsClient() {
           icon={CheckCircle2}
           title={
             urlStatus === 'ACTIVE'
-              ? 'No active errors'
-              : `No ${urlStatus.toLowerCase()} groups`
+              ? t('syncLogs.errors.empty.active.title')
+              : t('syncLogs.errors.empty.other.title', {
+                  status: t(`syncLogs.errorStatus.${urlStatus}`).toLowerCase(),
+                })
           }
           description={
             urlStatus === 'ACTIVE'
-              ? 'Either nothing is breaking right now, or no instrumented call has failed yet. Live tail at /sync-logs/api-calls shows incoming calls in real time.'
-              : 'Try a different status filter.'
+              ? t('syncLogs.errors.empty.active.description')
+              : t('syncLogs.errors.empty.other.description')
           }
         />
       ) : (
@@ -315,7 +321,7 @@ export default function ErrorGroupsClient() {
                       variant={STATUS_BADGE[g.resolutionStatus].variant}
                       size="sm"
                     >
-                      {g.resolutionStatus}
+                      {t(`syncLogs.errorStatus.${g.resolutionStatus}`)}
                     </Badge>
                     <Badge variant="default" size="sm">
                       {g.channel}
@@ -359,13 +365,13 @@ export default function ErrorGroupsClient() {
                   )}
 
                   <div className="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-2 flex-wrap">
-                    <span>first {fmtRelative(g.firstSeen)}</span>
+                    <span>{t('syncLogs.errors.meta.first', { when: fmtRelative(g.firstSeen) })}</span>
                     <span className="text-slate-300">·</span>
-                    <span>last {fmtRelative(g.lastSeen)}</span>
+                    <span>{t('syncLogs.errors.meta.last', { when: fmtRelative(g.lastSeen) })}</span>
                     {g.resolvedBy && (
                       <>
                         <span className="text-slate-300">·</span>
-                        <span>resolved by {g.resolvedBy}</span>
+                        <span>{t('syncLogs.errors.meta.resolvedBy', { who: g.resolvedBy })}</span>
                       </>
                     )}
                   </div>
@@ -381,7 +387,7 @@ export default function ErrorGroupsClient() {
                         disabled={busyId === g.id}
                         className="h-7 px-2 text-sm font-medium rounded border border-emerald-300 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 inline-flex items-center gap-1 disabled:opacity-50"
                       >
-                        <CheckCircle2 className="w-3 h-3" /> Resolve
+                        <CheckCircle2 className="w-3 h-3" /> {t('syncLogs.errors.action.resolve')}
                       </button>
                       <button
                         type="button"
@@ -389,7 +395,7 @@ export default function ErrorGroupsClient() {
                         disabled={busyId === g.id}
                         className="h-7 px-2 text-sm font-medium rounded border border-amber-300 bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 hover:bg-amber-50 inline-flex items-center gap-1 disabled:opacity-50"
                       >
-                        <VolumeX className="w-3 h-3" /> Mute
+                        <VolumeX className="w-3 h-3" /> {t('syncLogs.errors.action.mute')}
                       </button>
                       <button
                         type="button"
@@ -397,7 +403,7 @@ export default function ErrorGroupsClient() {
                         disabled={busyId === g.id}
                         className="h-7 px-2 text-sm font-medium rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 disabled:opacity-50"
                       >
-                        <EyeOff className="w-3 h-3" /> Ignore
+                        <EyeOff className="w-3 h-3" /> {t('syncLogs.errors.action.ignore')}
                       </button>
                     </>
                   )}
@@ -409,7 +415,7 @@ export default function ErrorGroupsClient() {
                       disabled={busyId === g.id}
                       className="h-7 px-2 text-sm font-medium rounded border border-rose-300 bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 hover:bg-rose-50 inline-flex items-center gap-1 disabled:opacity-50"
                     >
-                      <RotateCcw className="w-3 h-3" /> Reopen
+                      <RotateCcw className="w-3 h-3" /> {t('syncLogs.errors.action.reopen')}
                     </button>
                   )}
                   {g.resolutionStatus === 'MUTED' && (
@@ -420,7 +426,7 @@ export default function ErrorGroupsClient() {
                         disabled={busyId === g.id}
                         className="h-7 px-2 text-sm font-medium rounded border border-rose-300 bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 hover:bg-rose-50 inline-flex items-center gap-1 disabled:opacity-50"
                       >
-                        Unmute
+                        {t('syncLogs.errors.action.unmute')}
                       </button>
                       <button
                         type="button"
@@ -428,7 +434,7 @@ export default function ErrorGroupsClient() {
                         disabled={busyId === g.id}
                         className="h-7 px-2 text-sm font-medium rounded border border-emerald-300 bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 inline-flex items-center gap-1 disabled:opacity-50"
                       >
-                        <CheckCircle2 className="w-3 h-3" /> Resolve
+                        <CheckCircle2 className="w-3 h-3" /> {t('syncLogs.errors.action.resolve')}
                       </button>
                     </>
                   )}
@@ -448,7 +454,7 @@ export default function ErrorGroupsClient() {
                 {loadingMore ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : null}
-                Load more
+                {t('syncLogs.errors.loadMore')}
               </Button>
             </li>
           )}

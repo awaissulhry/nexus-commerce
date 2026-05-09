@@ -47,6 +47,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 const POLL_MS = 30_000
 
@@ -263,6 +264,7 @@ export default function SyncLogsHubClient({
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null)
   const [knownCrons, setKnownCrons] = useState<Set<string>>(new Set())
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -333,7 +335,7 @@ export default function SyncLogsHubClient({
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? `HTTP ${res.status}`)
         }
-        toast.success(`Triggered ${jobName}`)
+        toast.success(t('syncLogs.hub.cron.triggered', { jobName }))
         // Wait a tick then refresh so the operator sees status='RUNNING'.
         setTimeout(() => void refresh(), 500)
       } catch (e) {
@@ -342,7 +344,7 @@ export default function SyncLogsHubClient({
         setTriggeringJob(null)
       }
     },
-    [refresh, toast],
+    [refresh, toast, t],
   )
 
   useEffect(() => {
@@ -370,37 +372,37 @@ export default function SyncLogsHubClient({
           <Link href="/audit-log">
             <Button variant="secondary" size="sm">
               <History className="w-3.5 h-3.5" />
-              Audit log
+              {t('syncLogs.hub.deepLink.auditLog')}
             </Button>
           </Link>
           <Link href="/outbound">
             <Button variant="secondary" size="sm">
               <Boxes className="w-3.5 h-3.5" />
-              Outbound queue
+              {t('syncLogs.hub.deepLink.outboundQueue')}
             </Button>
           </Link>
           <Link href="/sync-logs/errors">
             <Button variant="secondary" size="sm">
               <AlertCircle className="w-3.5 h-3.5" />
-              Error groups
+              {t('syncLogs.hub.deepLink.errorGroups')}
             </Button>
           </Link>
           <Link href="/sync-logs/webhooks">
             <Button variant="secondary" size="sm">
               <History className="w-3.5 h-3.5" />
-              Webhooks
+              {t('syncLogs.hub.deepLink.webhooks')}
             </Button>
           </Link>
           <Link href="/sync-logs/alerts">
             <Button variant="secondary" size="sm">
               <AlertCircle className="w-3.5 h-3.5" />
-              Alerts
+              {t('syncLogs.hub.deepLink.alerts')}
             </Button>
           </Link>
           <Link href="/dashboard/health">
             <Button variant="secondary" size="sm">
               <Activity className="w-3.5 h-3.5" />
-              Sync health detail
+              {t('syncLogs.hub.deepLink.syncHealthDetail')}
             </Button>
           </Link>
         </div>
@@ -415,7 +417,7 @@ export default function SyncLogsHubClient({
           ) : (
             <RefreshCw className="w-3.5 h-3.5" />
           )}
-          Refresh
+          {t('syncLogs.hub.refresh')}
         </Button>
       </div>
 
@@ -429,8 +431,8 @@ export default function SyncLogsHubClient({
       {hasNoData ? (
         <EmptyState
           icon={Activity}
-          title="No observability data yet"
-          description="The hub aggregates channel sync status, cron runs, and the audit trail. Once any cron ticks or any mutation hits the platform, this view populates."
+          title={t('syncLogs.hub.empty.title')}
+          description={t('syncLogs.hub.empty.description')}
         />
       ) : (
         <>
@@ -448,12 +450,12 @@ export default function SyncLogsHubClient({
             }`}
           >
             <Kpi
-              label="24h API calls"
+              label={t('syncLogs.hub.kpi.apiCalls')}
               value={apiStats?.total ?? health?.logs24h.total ?? 0}
               tone="default"
             />
             <Kpi
-              label="24h errors"
+              label={t('syncLogs.hub.kpi.errors')}
               value={apiStats?.failed ?? health?.logs24h.failed ?? 0}
               tone={
                 (apiStats?.failed ?? health?.logs24h.failed ?? 0) === 0
@@ -462,7 +464,7 @@ export default function SyncLogsHubClient({
               }
             />
             <Kpi
-              label="Latency p95"
+              label={t('syncLogs.hub.kpi.latencyP95')}
               value={
                 apiStats?.latencyP95Ms !== null &&
                 apiStats?.latencyP95Ms !== undefined
@@ -472,7 +474,7 @@ export default function SyncLogsHubClient({
               hint={
                 apiStats?.latencyP99Ms !== null &&
                 apiStats?.latencyP99Ms !== undefined
-                  ? `p99 ${apiStats.latencyP99Ms}ms`
+                  ? t('syncLogs.hub.kpi.latency.p99', { n: apiStats.latencyP99Ms })
                   : undefined
               }
               tone={
@@ -486,13 +488,13 @@ export default function SyncLogsHubClient({
               }
             />
             <Kpi
-              label="Outbound queue"
+              label={t('syncLogs.hub.kpi.queueDepth')}
               value={health?.queue.total ?? 0}
               hint={
                 health?.queue.failed
-                  ? `${health.queue.failed} failed`
+                  ? t('syncLogs.hub.kpi.queue.failed', { n: health.queue.failed })
                   : health?.queue.pending
-                    ? `${health.queue.pending} pending`
+                    ? t('syncLogs.hub.kpi.queue.pending', { n: health.queue.pending })
                     : undefined
               }
               tone={
@@ -504,14 +506,14 @@ export default function SyncLogsHubClient({
               }
             />
             <Kpi
-              label="Cron jobs"
+              label={t('syncLogs.hub.kpi.cronJobs')}
               value={cronJobs.length}
               hint={
                 cronStale > 0
-                  ? `${cronStale} stuck`
+                  ? t('syncLogs.hub.kpi.cron.stuck', { n: cronStale })
                   : cronUnhealthy > 0
-                    ? `${cronUnhealthy} failed`
-                    : `${cronHealthy} healthy`
+                    ? t('syncLogs.hub.kpi.cron.failed', { n: cronUnhealthy })
+                    : t('syncLogs.hub.kpi.cron.healthy', { n: cronHealthy })
               }
               tone={
                 cronStale > 0 || cronUnhealthy > 0
@@ -539,15 +541,17 @@ export default function SyncLogsHubClient({
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-base font-semibold text-rose-900 dark:text-rose-100">
-                    {alerts.items.length} alert
-                    {alerts.items.length === 1 ? ' is' : 's are'} firing now
+                    {alerts.items.length === 1
+                      ? t('syncLogs.hub.alertsBanner.firing.singular', { n: alerts.items.length })
+                      : t('syncLogs.hub.alertsBanner.firing.plural', { n: alerts.items.length })}
                   </div>
                   <div className="text-xs text-rose-800 dark:text-rose-300 mt-0.5 truncate font-mono">
                     {alerts.items
                       .slice(0, 3)
                       .map((a) => a.rule.name)
                       .join(' · ')}
-                    {alerts.items.length > 3 && ` · +${alerts.items.length - 3} more`}
+                    {alerts.items.length > 3 &&
+                      t('syncLogs.hub.alertsBanner.more', { n: alerts.items.length - 3 })}
                   </div>
                 </div>
                 <ExternalLink className="w-3.5 h-3.5 text-rose-700 dark:text-rose-300 flex-shrink-0" />
@@ -573,11 +577,12 @@ export default function SyncLogsHubClient({
                     <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-base font-semibold text-rose-900 dark:text-rose-200">
-                        {activeCount} active error{' '}
-                        {activeCount === 1 ? 'group' : 'groups'} need attention
+                        {activeCount === 1
+                          ? t('syncLogs.hub.errorBanner.singular', { n: activeCount })
+                          : t('syncLogs.hub.errorBanner.plural', { n: activeCount })}
                       </div>
                       <div className="text-xs text-rose-700 dark:text-rose-400 mt-0.5">
-                        Open the error groups view to resolve, mute, or ignore.
+                        {t('syncLogs.hub.errorBanner.description')}
                       </div>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
@@ -591,18 +596,18 @@ export default function SyncLogsHubClient({
             <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
               <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
-                  <Activity className="w-3 h-3" /> Channels
+                  <Activity className="w-3 h-3" /> {t('syncLogs.hub.section.channels')}
                 </h2>
                 <Link
                   href="/dashboard/health"
                   className="text-xs text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
                 >
-                  Detail <ExternalLink className="w-3 h-3" />
+                  {t('syncLogs.hub.section.detail')} <ExternalLink className="w-3 h-3" />
                 </Link>
               </header>
               {!health || health.channels.length === 0 ? (
                 <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
-                  No channel connections configured.
+                  {t('syncLogs.hub.empty.channels')}
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -640,7 +645,7 @@ export default function SyncLogsHubClient({
                               <>
                                 <span className="text-slate-300">·</span>
                                 <span>
-                                  last sync {fmtRelative(c.lastSyncAt)}
+                                  {t('syncLogs.hub.row.lastSync', { when: fmtRelative(c.lastSyncAt) })}
                                 </span>
                               </>
                             )}
@@ -648,8 +653,9 @@ export default function SyncLogsHubClient({
                               <>
                                 <span className="text-slate-300">·</span>
                                 <span className="text-rose-700 dark:text-rose-400">
-                                  {c.errors24h} error
-                                  {c.errors24h === 1 ? '' : 's'} 24h
+                                  {c.errors24h === 1
+                                    ? t('syncLogs.hub.row.errors24hSingular', { n: c.errors24h })
+                                    : t('syncLogs.hub.row.errors24hPlural', { n: c.errors24h })}
                                 </span>
                               </>
                             )}
@@ -678,20 +684,20 @@ export default function SyncLogsHubClient({
             <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
               <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
-                  <Timer className="w-3 h-3" /> Cron jobs
+                  <Timer className="w-3 h-3" /> {t('syncLogs.hub.section.crons')}
                 </h2>
                 <span className="text-xs text-slate-500 dark:text-slate-500">
-                  {cronJobs.length} known
+                  {t('syncLogs.hub.section.cronCount', { n: cronJobs.length })}
                   {cronStale > 0 && (
                     <span className="ml-2 text-rose-700 dark:text-rose-400 font-medium">
-                      {cronStale} stuck
+                      {t('syncLogs.hub.section.cronStuck', { n: cronStale })}
                     </span>
                   )}
                 </span>
               </header>
               {cronJobs.length === 0 ? (
                 <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
-                  No cron runs recorded yet — wait for the next tick.
+                  {t('syncLogs.hub.empty.crons')}
                 </div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[420px] overflow-y-auto">
@@ -719,7 +725,7 @@ export default function SyncLogsHubClient({
                           </span>
                           {j.triggeredBy === 'manual' && (
                             <Badge variant="info" size="sm">
-                              manual
+                              {t('syncLogs.hub.cron.manual')}
                             </Badge>
                           )}
                         </div>
@@ -760,8 +766,8 @@ export default function SyncLogsHubClient({
                           }
                           title={
                             j.status === 'RUNNING'
-                              ? 'Already running'
-                              : 'Trigger this cron now'
+                              ? t('syncLogs.hub.cron.alreadyRunning')
+                              : t('syncLogs.hub.cron.triggerNow')
                           }
                           className="flex-shrink-0 h-6 px-2 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
@@ -770,7 +776,7 @@ export default function SyncLogsHubClient({
                           ) : (
                             <Play className="w-3 h-3" />
                           )}
-                          Run
+                          {t('syncLogs.hub.cron.run')}
                         </button>
                       )}
                     </li>
@@ -785,19 +791,21 @@ export default function SyncLogsHubClient({
             <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
               <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
-                  <Activity className="w-3 h-3" /> Outbound API calls (24h)
+                  <Activity className="w-3 h-3" /> {t('syncLogs.hub.section.apiCalls')}
                 </h2>
                 <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-500">
                   <span>
-                    {apiCalls.stats.total.toLocaleString()} total ·{' '}
-                    {apiCalls.stats.failed.toLocaleString()} failed ·{' '}
-                    {(apiCalls.stats.errorRate * 100).toFixed(2)}% error rate
+                    {t('syncLogs.hub.row.totalLine', {
+                      total: apiCalls.stats.total.toLocaleString(),
+                      failed: apiCalls.stats.failed.toLocaleString(),
+                      rate: (apiCalls.stats.errorRate * 100).toFixed(2),
+                    })}
                   </span>
                   <Link
                     href="/sync-logs/api-calls"
                     className="text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
                   >
-                    Drill down <ExternalLink className="w-3 h-3" />
+                    {t('syncLogs.hub.section.drillDown')} <ExternalLink className="w-3 h-3" />
                   </Link>
                 </div>
               </header>
@@ -806,10 +814,10 @@ export default function SyncLogsHubClient({
                 {/* By channel */}
                 <div className="px-3 py-2">
                   <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
-                    By channel
+                    {t('syncLogs.hub.section.byChannel')}
                   </div>
                   {apiCalls.byChannel.length === 0 ? (
-                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">none</div>
+                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">{t('syncLogs.hub.section.none')}</div>
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byChannel.map((c) => (
@@ -834,10 +842,10 @@ export default function SyncLogsHubClient({
                 {/* By operation (top 5) */}
                 <div className="px-3 py-2">
                   <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
-                    Top operations
+                    {t('syncLogs.hub.section.topOperations')}
                   </div>
                   {apiCalls.byOperation.length === 0 ? (
-                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">none</div>
+                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">{t('syncLogs.hub.section.none')}</div>
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byOperation.slice(0, 5).map((o) => (
@@ -862,12 +870,12 @@ export default function SyncLogsHubClient({
                 {/* Errors by type */}
                 <div className="px-3 py-2">
                   <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
-                    Errors by type
+                    {t('syncLogs.hub.section.errorsByType')}
                   </div>
                   {apiCalls.errorsByType.length === 0 ? (
                     <div className="text-sm text-slate-400 dark:text-slate-500 italic">
                       <CheckCircle2 className="inline w-3 h-3 text-emerald-500 mr-1" />
-                      no failures
+                      {t('syncLogs.hub.section.noFailures')}
                     </div>
                   ) : (
                     <ul className="space-y-1">
@@ -948,19 +956,19 @@ export default function SyncLogsHubClient({
           <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
             <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
-                <History className="w-3 h-3" /> Recent activity
+                <History className="w-3 h-3" /> {t('syncLogs.hub.section.recentActivity')}
               </h2>
               <Link
                 href="/audit-log"
                 className="text-xs text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
               >
-                Full audit log <ExternalLink className="w-3 h-3" />
+                {t('syncLogs.hub.section.fullAuditLog')} <ExternalLink className="w-3 h-3" />
               </Link>
             </header>
             {!audit || audit.items.length === 0 ? (
               <div className="p-6 text-center text-base text-slate-500 dark:text-slate-500">
                 <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500 mb-1.5" />
-                No mutations in the last 24 hours.
+                {t('syncLogs.hub.empty.audit')}
               </div>
             ) : (
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -996,10 +1004,10 @@ export default function SyncLogsHubClient({
             <section className="border border-rose-200 dark:border-rose-900 rounded-md bg-white dark:bg-slate-900">
               <header className="px-3 py-2 border-b border-rose-100 dark:border-rose-900 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider inline-flex items-center gap-1.5">
-                  <AlertCircle className="w-3 h-3" /> Recent sync errors
+                  <AlertCircle className="w-3 h-3" /> {t('syncLogs.hub.section.recentErrors')}
                 </h2>
                 <span className="text-xs text-slate-500 dark:text-slate-500">
-                  {health.recentErrors.length} shown
+                  {t('syncLogs.hub.section.shown', { n: health.recentErrors.length })}
                 </span>
               </header>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1030,11 +1038,11 @@ export default function SyncLogsHubClient({
           )}
 
           <div className="text-xs text-slate-500 dark:text-slate-500 text-center pt-2">
-            Generated{' '}
-            {health?.generatedAt
-              ? new Date(health.generatedAt).toLocaleTimeString()
-              : '—'}{' '}
-            · polls every 30 seconds
+            {t('syncLogs.hub.footer.generated', {
+              time: health?.generatedAt
+                ? new Date(health.generatedAt).toLocaleTimeString()
+                : '—',
+            })}
           </div>
         </>
       )}

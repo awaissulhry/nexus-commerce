@@ -32,6 +32,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import TimeSeriesChart from './TimeSeriesChart'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 const SINCE_PRESETS = [
@@ -104,6 +105,7 @@ export default function ApiCallsClient() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { t } = useTranslations()
 
   const urlSinceKey = (searchParams.get('since') ?? '24h') as
     | (typeof SINCE_PRESETS)[number]['key']
@@ -303,7 +305,7 @@ export default function ApiCallsClient() {
       <div className="space-y-2">
         <div className="flex items-center gap-1 flex-wrap">
           <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1 inline-flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Window
+            <Filter className="w-3 h-3" /> {t('syncLogs.apiCalls.filter.window')}
           </span>
           {SINCE_PRESETS.map((p) => (
             <button
@@ -322,7 +324,7 @@ export default function ApiCallsClient() {
           ))}
 
           <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-            Channel
+            {t('syncLogs.apiCalls.filter.channel')}
           </span>
           {(rollup?.byChannel ?? []).map((c) => (
             <button
@@ -346,7 +348,7 @@ export default function ApiCallsClient() {
           ))}
 
           <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-            Error
+            {t('syncLogs.apiCalls.filter.error')}
           </span>
           {ERROR_TYPES.map((t) => (
             <button
@@ -384,7 +386,7 @@ export default function ApiCallsClient() {
                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
           >
-            Failures only
+            {t('syncLogs.apiCalls.filter.failuresOnly')}
           </button>
 
           {/* L.14.1 — operation chip. Visible only when filtering by
@@ -395,9 +397,9 @@ export default function ApiCallsClient() {
               type="button"
               onClick={() => updateUrl({ operation: '' })}
               className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
-              title="Clear operation filter"
+              title={t('syncLogs.apiCalls.filter.clearOperation')}
             >
-              op: {urlOperation}
+              {t('syncLogs.apiCalls.filter.opPrefix', { value: urlOperation })}
               <X className="w-3 h-3" />
             </button>
           )}
@@ -409,10 +411,11 @@ export default function ApiCallsClient() {
               type="button"
               onClick={() => updateUrl({ requestId: '' })}
               className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
-              title="Clear request-id filter"
+              title={t('syncLogs.apiCalls.filter.clearRequestId')}
             >
-              req: {urlRequestId.slice(0, 12)}
-              {urlRequestId.length > 12 && '…'}
+              {t('syncLogs.apiCalls.filter.reqPrefix', {
+                value: urlRequestId.slice(0, 12) + (urlRequestId.length > 12 ? '…' : ''),
+              })}
               <X className="w-3 h-3" />
             </button>
           )}
@@ -426,14 +429,14 @@ export default function ApiCallsClient() {
                 ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
                 : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
-            title={live ? 'Pause live tail' : 'Start live tail'}
+            title={live ? t('syncLogs.apiCalls.live.pause') : t('syncLogs.apiCalls.live.start')}
           >
             {live ? (
               <Pause className="w-3 h-3" />
             ) : (
               <Play className="w-3 h-3" />
             )}
-            Live
+            {t('syncLogs.apiCalls.live')}
             {live && (
               <span
                 className={cn(
@@ -488,10 +491,10 @@ export default function ApiCallsClient() {
                 '_blank',
               )
             }}
-            title="Export filtered rows as CSV (50k row cap)"
+            title={t('syncLogs.apiCalls.csv.title')}
           >
             <Download className="w-3.5 h-3.5" />
-            CSV
+            {t('syncLogs.apiCalls.csv')}
           </Button>
           <Button
             variant="secondary"
@@ -504,7 +507,7 @@ export default function ApiCallsClient() {
             ) : (
               <RefreshCw className="w-3.5 h-3.5" />
             )}
-            Refresh
+            {t('syncLogs.apiCalls.refresh')}
           </Button>
         </div>
       </div>
@@ -512,14 +515,14 @@ export default function ApiCallsClient() {
       {/* KPI strip */}
       {rollup && (
         <section className="border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 bg-white dark:bg-slate-900">
-          <Kpi label="Total" value={rollup.stats.total} />
+          <Kpi label={t('syncLogs.apiCalls.kpi.total')} value={rollup.stats.total} />
           <Kpi
-            label="Failed"
+            label={t('syncLogs.apiCalls.kpi.failed')}
             value={rollup.stats.failed}
             tone={rollup.stats.failed === 0 ? 'good' : 'bad'}
           />
           <Kpi
-            label="Error rate"
+            label={t('syncLogs.apiCalls.kpi.errorRate')}
             value={`${(rollup.stats.errorRate * 100).toFixed(2)}%`}
             tone={
               rollup.stats.errorRate >= 0.05
@@ -530,7 +533,7 @@ export default function ApiCallsClient() {
             }
           />
           <Kpi
-            label="p95 latency"
+            label={t('syncLogs.apiCalls.kpi.p95')}
             value={
               rollup.stats.latencyP95Ms !== null
                 ? `${rollup.stats.latencyP95Ms}ms`
@@ -547,7 +550,7 @@ export default function ApiCallsClient() {
             }
           />
           <Kpi
-            label="p99 latency"
+            label={t('syncLogs.apiCalls.kpi.p99')}
             value={
               rollup.stats.latencyP99Ms !== null
                 ? `${rollup.stats.latencyP99Ms}ms`
@@ -584,8 +587,8 @@ export default function ApiCallsClient() {
       ) : recent.length === 0 ? (
         <EmptyState
           icon={Filter}
-          title="No API calls in this window"
-          description="Try widening the time range, removing filters, or wait for the next cron tick to populate the log."
+          title={t('syncLogs.apiCalls.empty.title')}
+          description={t('syncLogs.apiCalls.empty.description')}
         />
       ) : (
         <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
@@ -594,22 +597,22 @@ export default function ApiCallsClient() {
               <tr>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-2"></th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
-                  Time
+                  {t('syncLogs.apiCalls.col.time')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
-                  Channel
+                  {t('syncLogs.apiCalls.col.channel')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Operation
+                  {t('syncLogs.apiCalls.col.operation')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
-                  Status
+                  {t('syncLogs.apiCalls.col.status')}
                 </th>
                 <th className="px-3 py-1.5 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
-                  Latency
+                  {t('syncLogs.apiCalls.col.latency')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Error
+                  {t('syncLogs.apiCalls.col.error')}
                 </th>
               </tr>
             </thead>
@@ -688,7 +691,7 @@ export default function ApiCallsClient() {
                 {loadingMore ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : null}
-                Load more
+                {t('syncLogs.apiCalls.loadMore')}
               </Button>
             </div>
           )}
@@ -719,6 +722,7 @@ function DetailPanel({
   onClose: () => void
   onFilterByRequestId: (id: string) => void
 }) {
+  const { t } = useTranslations()
   return (
     <div
       className="fixed inset-0 z-40 flex justify-end"
@@ -733,7 +737,7 @@ function DetailPanel({
         className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="API call detail"
+        aria-label={t('syncLogs.apiCalls.detail.aria')}
       >
         <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
           <div className="min-w-0">
@@ -763,7 +767,7 @@ function DetailPanel({
             type="button"
             onClick={onClose}
             className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            aria-label="Close"
+            aria-label={t('syncLogs.apiCalls.detail.close')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -771,7 +775,7 @@ function DetailPanel({
 
         <div className="px-4 py-3 space-y-4">
           {row.endpoint && (
-            <Section label="Endpoint">
+            <Section label={t('syncLogs.apiCalls.detail.endpoint')}>
               <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all">
                 {row.endpoint}
               </pre>
@@ -779,7 +783,7 @@ function DetailPanel({
           )}
 
           {row.errorMessage && (
-            <Section label="Error">
+            <Section label={t('syncLogs.apiCalls.detail.error')}>
               <div className="space-y-1">
                 {row.errorType && (
                   <Badge variant="danger" size="md">
@@ -799,21 +803,21 @@ function DetailPanel({
           )}
 
           {row.requestId && (
-            <Section label="Request ID">
+            <Section label={t('syncLogs.apiCalls.detail.requestId')}>
               <button
                 type="button"
                 onClick={() => onFilterByRequestId(row.requestId!)}
-                title="Filter the list to show every call from this request"
+                title={t('syncLogs.apiCalls.detail.requestIdFilter')}
                 className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 rounded inline-flex items-center gap-1.5 transition-colors"
               >
                 {row.requestId}
-                <span className="text-slate-400">→ filter</span>
+                <span className="text-slate-400">{t('syncLogs.apiCalls.detail.requestIdFilterArrow')}</span>
               </button>
             </Section>
           )}
 
           {row.requestPayload != null && (
-            <Section label="Request payload">
+            <Section label={t('syncLogs.apiCalls.detail.requestPayload')}>
               <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
                 {JSON.stringify(row.requestPayload, null, 2)}
               </pre>
@@ -821,7 +825,7 @@ function DetailPanel({
           )}
 
           {row.responsePayload != null && (
-            <Section label="Response payload">
+            <Section label={t('syncLogs.apiCalls.detail.responsePayload')}>
               <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
                 {JSON.stringify(row.responsePayload, null, 2)}
               </pre>
@@ -829,14 +833,14 @@ function DetailPanel({
           )}
 
           {(row.productId || row.listingId || row.orderId) && (
-            <Section label="Related entities">
+            <Section label={t('syncLogs.apiCalls.detail.relatedEntities')}>
               <div className="flex flex-wrap gap-2">
                 {row.productId && (
                   <a
                     href={`/products?drawer=${row.productId}`}
                     className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
-                    Product {row.productId.slice(0, 12)}…
+                    {t('syncLogs.apiCalls.detail.product', { id: row.productId.slice(0, 12) })}
                   </a>
                 )}
                 {row.listingId && (
@@ -844,7 +848,7 @@ function DetailPanel({
                     href={`/listings?drawer=${row.listingId}`}
                     className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
-                    Listing {row.listingId.slice(0, 12)}…
+                    {t('syncLogs.apiCalls.detail.listing', { id: row.listingId.slice(0, 12) })}
                   </a>
                 )}
                 {row.orderId && (
@@ -852,7 +856,7 @@ function DetailPanel({
                     href={`/orders/${row.orderId}`}
                     className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
-                    Order {row.orderId.slice(0, 12)}…
+                    {t('syncLogs.apiCalls.detail.order', { id: row.orderId.slice(0, 12) })}
                   </a>
                 )}
               </div>

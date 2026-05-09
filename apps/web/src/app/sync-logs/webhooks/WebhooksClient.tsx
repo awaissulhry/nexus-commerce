@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/Button'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 interface WebhookListRow {
@@ -70,6 +71,7 @@ export default function WebhooksClient() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { t } = useTranslations()
 
   const urlChannel = searchParams.get('channel') ?? ''
   const urlProcessed = searchParams.get('processed') ?? ''
@@ -164,7 +166,7 @@ export default function WebhooksClient() {
       {/* Filter bar */}
       <div className="flex items-center gap-1 flex-wrap">
         <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-          Channel
+          {t('syncLogs.webhooks.filter.channel')}
         </span>
         <button
           type="button"
@@ -176,7 +178,7 @@ export default function WebhooksClient() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
           )}
         >
-          All
+          {t('syncLogs.webhooks.filter.all')}
         </button>
         {(totals?.byChannel ?? []).map((c) => (
           <button
@@ -198,7 +200,7 @@ export default function WebhooksClient() {
         ))}
 
         <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-          Status
+          {t('syncLogs.webhooks.filter.status')}
         </span>
         <button
           type="button"
@@ -214,7 +216,7 @@ export default function WebhooksClient() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
           )}
         >
-          Processed{totals && ` ${totals.processed}`}
+          {t('syncLogs.webhooks.filter.processed')}{totals && ` ${totals.processed}`}
         </button>
         <button
           type="button"
@@ -230,13 +232,13 @@ export default function WebhooksClient() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
           )}
         >
-          Unprocessed{totals && ` ${totals.unprocessed}`}
+          {t('syncLogs.webhooks.filter.unprocessed')}{totals && ` ${totals.unprocessed}`}
         </button>
 
         {eventTypeOptions.length > 0 && (
           <>
             <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-              Event
+              {t('syncLogs.webhooks.filter.event')}
             </span>
             {eventTypeOptions.slice(0, 8).map((et) => (
               <button
@@ -287,7 +289,7 @@ export default function WebhooksClient() {
           ) : (
             <RefreshCw className="w-3.5 h-3.5" />
           )}
-          Refresh
+          {t('syncLogs.webhooks.refresh')}
         </Button>
       </div>
 
@@ -309,8 +311,8 @@ export default function WebhooksClient() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={Webhook}
-          title="No webhooks in this window"
-          description="Once a Shopify / WooCommerce / Etsy webhook hits the platform, the row appears here. Try widening the time window or removing filters."
+          title={t('syncLogs.webhooks.empty.title')}
+          description={t('syncLogs.webhooks.empty.description')}
         />
       ) : (
         <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
@@ -319,19 +321,19 @@ export default function WebhooksClient() {
               <tr>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-2"></th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
-                  Time
+                  {t('syncLogs.webhooks.col.time')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-24">
-                  Channel
+                  {t('syncLogs.webhooks.col.channel')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Event
+                  {t('syncLogs.webhooks.col.event')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-48">
-                  External ID
+                  {t('syncLogs.webhooks.col.externalId')}
                 </th>
                 <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Error
+                  {t('syncLogs.webhooks.col.error')}
                 </th>
               </tr>
             </thead>
@@ -390,7 +392,7 @@ export default function WebhooksClient() {
                 {loadingMore ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : null}
-                Load more
+                {t('syncLogs.webhooks.loadMore')}
               </Button>
             </div>
           )}
@@ -425,10 +427,19 @@ function DetailPanel({
   onReplayed: () => void
 }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [replaying, setReplaying] = useState(false)
 
   const replay = async () => {
-    if (!confirm(`Replay this ${row.channel} ${row.eventType} webhook?`)) return
+    if (
+      !confirm(
+        t('syncLogs.webhooks.detail.replayConfirm', {
+          channel: row.channel,
+          event: row.eventType,
+        }),
+      )
+    )
+      return
     setReplaying(true)
     try {
       const res = await fetch(
@@ -439,7 +450,7 @@ function DetailPanel({
       if (!res.ok) {
         throw new Error(json.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Replayed successfully')
+      toast.success(t('syncLogs.webhooks.detail.replayed'))
       onReplayed()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -459,7 +470,7 @@ function DetailPanel({
         className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Webhook detail"
+        aria-label={t('syncLogs.webhooks.detail.aria')}
       >
         <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
           <div className="min-w-0">
@@ -478,12 +489,19 @@ function DetailPanel({
                 variant={row.isProcessed ? 'success' : 'danger'}
                 size="sm"
               >
-                {row.isProcessed ? 'PROCESSED' : 'UNPROCESSED'}
+                {row.isProcessed
+                  ? t('syncLogs.webhooks.detail.processed')
+                  : t('syncLogs.webhooks.detail.unprocessed')}
               </Badge>
               <span>{row.channel}</span>
               <span>· {fmtRelative(row.createdAt)}</span>
               {row.processedAt && (
-                <span>· processed {fmtRelative(row.processedAt)}</span>
+                <span>
+                  ·{' '}
+                  {t('syncLogs.webhooks.detail.processedAt', {
+                    when: fmtRelative(row.processedAt),
+                  })}
+                </span>
               )}
             </div>
           </div>
@@ -491,21 +509,21 @@ function DetailPanel({
             type="button"
             onClick={onClose}
             className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            aria-label="Close"
+            aria-label={t('syncLogs.webhooks.detail.close')}
           >
             <X className="w-4 h-4" />
           </button>
         </header>
 
         <div className="px-4 py-3 space-y-4">
-          <Section label="External ID">
+          <Section label={t('syncLogs.webhooks.detail.externalId')}>
             <code className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded">
               {row.externalId}
             </code>
           </Section>
 
           {row.signature && (
-            <Section label="Signature">
+            <Section label={t('syncLogs.webhooks.detail.signature')}>
               <code className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded break-all block">
                 {row.signature}
               </code>
@@ -513,14 +531,14 @@ function DetailPanel({
           )}
 
           {row.error && (
-            <Section label="Error">
+            <Section label={t('syncLogs.webhooks.detail.error')}>
               <pre className="text-xs font-mono bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all text-rose-900 dark:text-rose-200">
                 {row.error}
               </pre>
             </Section>
           )}
 
-          <Section label="Payload">
+          <Section label={t('syncLogs.webhooks.detail.payload')}>
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin text-slate-400 dark:text-slate-500" />
             ) : (
@@ -544,18 +562,16 @@ function DetailPanel({
                 ) : (
                   <RotateCw className="w-3.5 h-3.5" />
                 )}
-                Replay this webhook
+                {t('syncLogs.webhooks.detail.replay')}
               </button>
               <p className="text-xs text-slate-500 dark:text-slate-500 italic mt-1.5">
-                Re-dispatches the saved payload through the original handler.
-                Signature check is skipped (already authenticated at receipt).
-                The processed flag flips to true on success, error on failure.
+                {t('syncLogs.webhooks.detail.replayInfo')}
               </p>
             </div>
           )}
           {!replaySupported && (
             <p className="text-xs text-slate-500 dark:text-slate-500 italic pt-2 border-t border-slate-100 dark:border-slate-800">
-              Replay isn&apos;t supported for {row.channel} channel yet.
+              {t('syncLogs.webhooks.detail.replayUnsupported', { channel: row.channel })}
             </p>
           )}
         </div>

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 export type Surface = 'api-calls' | 'errors' | 'webhooks'
@@ -52,6 +53,7 @@ export default function SavedSearchPicker({
   onApply: (filters: Record<string, string>) => void
 }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [items, setItems] = useState<SavedSearch[]>([])
   const [open, setOpen] = useState(false)
   const [savePromptOpen, setSavePromptOpen] = useState(false)
@@ -113,7 +115,7 @@ export default function SavedSearchPicker({
         },
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      toast.success(`Saved "${name.trim()}"`)
+      toast.success(t('syncLogs.savedSearch.savedToast', { name: name.trim() }))
       setName('')
       setSavePromptOpen(false)
       void fetchList()
@@ -122,7 +124,7 @@ export default function SavedSearchPicker({
     } finally {
       setBusy(false)
     }
-  }, [name, surface, currentFilters, fetchList, toast])
+  }, [name, surface, currentFilters, fetchList, toast, t])
 
   const remove = useCallback(
     async (id: string, displayName: string) => {
@@ -132,13 +134,13 @@ export default function SavedSearchPicker({
           { method: 'DELETE' },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        toast.success(`Deleted "${displayName}"`)
+        toast.success(t('syncLogs.savedSearch.deletedToast', { name: displayName }))
         void fetchList()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : String(e))
       }
     },
-    [fetchList, toast],
+    [fetchList, toast, t],
   )
 
   return (
@@ -159,12 +161,13 @@ export default function SavedSearchPicker({
         )}
         title={
           items.length === 0
-            ? 'No saved searches yet'
-            : 'Apply a saved search'
+            ? t('syncLogs.savedSearch.tooltipNoSaved')
+            : t('syncLogs.savedSearch.tooltipApply')
         }
       >
         <Bookmark className="w-3 h-3" />
-        Saved {items.length > 0 && <span className="opacity-70">{items.length}</span>}
+        {t('syncLogs.savedSearch.saved')}{' '}
+        {items.length > 0 && <span className="opacity-70">{items.length}</span>}
         <ChevronDown className="w-3 h-3" />
       </button>
 
@@ -180,10 +183,10 @@ export default function SavedSearchPicker({
           'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800',
           'hover:border-slate-300 dark:hover:border-slate-700',
         )}
-        title="Save the current filter set"
+        title={t('syncLogs.savedSearch.tooltipSave')}
       >
         <BookmarkPlus className="w-3 h-3" />
-        Save
+        {t('syncLogs.savedSearch.save')}
       </button>
 
       {/* Saved-list popover */}
@@ -209,14 +212,14 @@ export default function SavedSearchPicker({
                   <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono">
                     {Object.entries(s.filters)
                       .map(([k, v]) => `${k}=${v}`)
-                      .join(' · ') || '(no filters)'}
+                      .join(' · ') || t('syncLogs.savedSearch.noFilters')}
                   </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => void remove(s.id, s.name)}
                   className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                  title="Delete"
+                  title={t('syncLogs.savedSearch.tooltipDelete')}
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
@@ -231,7 +234,7 @@ export default function SavedSearchPicker({
         <div className="absolute top-9 right-0 z-20 w-72 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Save current filters
+              {t('syncLogs.savedSearch.savePromptHeading')}
             </span>
             <button
               type="button"
@@ -249,7 +252,7 @@ export default function SavedSearchPicker({
               if (e.key === 'Enter') void save()
               if (e.key === 'Escape') setSavePromptOpen(false)
             }}
-            placeholder="e.g. Amazon throttling 24h"
+            placeholder={t('syncLogs.savedSearch.savePromptPlaceholder')}
             autoFocus
             className="w-full px-2 py-1 text-sm rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-slate-400 dark:focus:border-slate-500"
           />
@@ -257,7 +260,7 @@ export default function SavedSearchPicker({
             {Object.entries(currentFilters)
               .filter(([, v]) => v)
               .map(([k, v]) => `${k}=${v}`)
-              .join(' · ') || '(no filters set)'}
+              .join(' · ') || t('syncLogs.savedSearch.noFiltersSet')}
           </div>
           <div className="flex justify-end gap-1 mt-2">
             <button
@@ -265,7 +268,7 @@ export default function SavedSearchPicker({
               onClick={() => setSavePromptOpen(false)}
               className="h-7 px-2 text-sm font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600"
             >
-              Cancel
+              {t('syncLogs.savedSearch.savePromptCancel')}
             </button>
             <button
               type="button"
@@ -274,7 +277,7 @@ export default function SavedSearchPicker({
               className="h-7 px-2 text-sm font-medium rounded border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1"
             >
               {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-              Save
+              {t('syncLogs.savedSearch.savePromptSave')}
             </button>
           </div>
         </div>
