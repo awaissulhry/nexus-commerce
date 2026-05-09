@@ -1686,6 +1686,7 @@
   "overview.reports.activeAria": "Active",
   "overview.reports.testSend": "Test send now",
   "overview.reports.delete": "Delete report",
+  "overview.reports.edit": "Edit report",
   "overview.reports.add": "Add report",
   "overview.reports.frequency.daily": "Daily",
   "overview.reports.frequency.weekly": "Weekly",

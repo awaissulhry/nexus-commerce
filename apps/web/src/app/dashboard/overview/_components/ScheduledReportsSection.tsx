@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, Send, Trash2 } from 'lucide-react'
+import { Check, Mail, Pencil, Send, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -43,6 +43,16 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
   const [newFreq, setNewFreq] = useState<ScheduledReport['frequency']>('daily')
   const [newHour, setNewHour] = useState(8)
   const [adding, setAdding] = useState(false)
+
+  // DO.43 — per-row in-place edit. Operator can change frequency +
+  // hour without delete-and-recreate. Email changes too. `editing`
+  // holds the row id being edited; per-field draft state holds the
+  // pending values until Save / Cancel.
+  const [editing, setEditing] = useState<string | null>(null)
+  const [draftEmail, setDraftEmail] = useState('')
+  const [draftFreq, setDraftFreq] = useState<ScheduledReport['frequency']>('daily')
+  const [draftHour, setDraftHour] = useState(8)
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const refresh = async () => {
     setLoading(true)
@@ -114,6 +124,51 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
     }
   }
 
+  const beginEdit = (r: ScheduledReport) => {
+    setEditing(r.id)
+    setDraftEmail(r.email)
+    setDraftFreq(r.frequency)
+    setDraftHour(r.hourLocal)
+    setError(null)
+  }
+  const cancelEdit = () => {
+    setEditing(null)
+    setError(null)
+  }
+  const saveEdit = async () => {
+    if (!editing) return
+    if (!draftEmail.trim()) {
+      setError('email required')
+      return
+    }
+    setSavingEdit(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/dashboard/reports/${editing}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: draftEmail.trim(),
+            frequency: draftFreq,
+            hourLocal: draftHour,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error ?? `HTTP ${res.status}`)
+      }
+      setEditing(null)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   const testSend = async (r: ScheduledReport) => {
     try {
       const res = await fetch(`${getBackendUrl()}/api/dashboard/digest/preview`, {
@@ -168,33 +223,98 @@ export default function ScheduledReportsSection({ t }: { t: T }) {
                 checked={r.isActive}
                 onChange={(e) => void toggleActive(r.id, e.target.checked)}
                 aria-label={t('overview.reports.activeAria')}
+                disabled={editing === r.id}
                 className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500/40"
               />
-              <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1 min-w-0">
-                {r.email}
-              </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                {t(`overview.reports.frequency.${r.frequency}`)} ·{' '}
-                {String(r.hourLocal).padStart(2, '0')}:00
-              </span>
-              <button
-                type="button"
-                onClick={() => void testSend(r)}
-                title={t('overview.reports.testSend')}
-                aria-label={t('overview.reports.testSend')}
-                className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-              >
-                <Send className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove(r.id)}
-                title={t('overview.reports.delete')}
-                aria-label={t('overview.reports.delete')}
-                className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-700 dark:hover:text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              {editing === r.id ? (
+                <>
+                  <input
+                    type="email"
+                    value={draftEmail}
+                    onChange={(e) => setDraftEmail(e.target.value)}
+                    aria-label={t('overview.reports.emailLabel')}
+                    className={cn(inputClass, 'flex-1 min-w-0')}
+                  />
+                  <select
+                    value={draftFreq}
+                    onChange={(e) =>
+                      setDraftFreq(e.target.value as ScheduledReport['frequency'])
+                    }
+                    aria-label={t('overview.reports.frequencyAria')}
+                    className={inputClass}
+                  >
+                    <option value="daily">{t('overview.reports.frequency.daily')}</option>
+                    <option value="weekly">{t('overview.reports.frequency.weekly')}</option>
+                    <option value="monthly">{t('overview.reports.frequency.monthly')}</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={draftHour}
+                    onChange={(e) => setDraftHour(Number(e.target.value))}
+                    aria-label={t('overview.reports.hourAria')}
+                    className={cn(inputClass, 'w-14')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveEdit()}
+                    disabled={savingEdit}
+                    title={t('common.save')}
+                    aria-label={t('common.save')}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    disabled={savingEdit}
+                    title={t('common.cancel')}
+                    aria-label={t('common.cancel')}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1 min-w-0">
+                    {r.email}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                    {t(`overview.reports.frequency.${r.frequency}`)} ·{' '}
+                    {String(r.hourLocal).padStart(2, '0')}:00
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => beginEdit(r)}
+                    title={t('overview.reports.edit')}
+                    aria-label={t('overview.reports.edit')}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void testSend(r)}
+                    title={t('overview.reports.testSend')}
+                    aria-label={t('overview.reports.testSend')}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  >
+                    <Send className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void remove(r.id)}
+                    title={t('overview.reports.delete')}
+                    aria-label={t('overview.reports.delete')}
+                    className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-700 dark:hover:text-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>

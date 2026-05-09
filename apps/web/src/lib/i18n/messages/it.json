@@ -1674,6 +1674,7 @@
   "overview.reports.activeAria": "Attivo",
   "overview.reports.testSend": "Invia ora come test",
   "overview.reports.delete": "Elimina report",
+  "overview.reports.edit": "Modifica report",
   "overview.reports.add": "Aggiungi report",
   "overview.reports.frequency.daily": "Giornaliero",
   "overview.reports.frequency.weekly": "Settimanale",
