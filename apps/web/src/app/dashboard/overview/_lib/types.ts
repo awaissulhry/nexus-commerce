@@ -120,6 +120,18 @@ export interface OverviewPayload {
       isActive: boolean
       lastSyncStatus: string | null
     }>
+    // DO.20 — recent unread Notification rows (max 8). Severity drives
+    // the row tint; href is the click-through. The dismiss button on
+    // the row hits POST /api/notifications/:id/read.
+    notifications: Array<{
+      id: string
+      type: string
+      severity: string // 'info' | 'success' | 'warn' | 'danger'
+      title: string
+      body: string | null
+      href: string | null
+      createdAt: string
+    }>
   }
 }
 

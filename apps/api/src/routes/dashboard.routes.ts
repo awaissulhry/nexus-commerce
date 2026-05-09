@@ -899,6 +899,37 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         .count({ where: { status: 'PENDING' } })
         .catch(() => 0)
 
+      // ── DO.20 — recent unread notifications ───────────────────────
+      //
+      // Surface up to 8 most recent unread Notification rows in the
+      // alerts panel. Pre-auth scope: 'default-user' (matches the
+      // existing /api/notifications convention from H.8). When real
+      // auth lands, swap the userId resolver in both places.
+      const notifications = await prisma.notification
+        .findMany({
+          where: { userId: 'default-user', readAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+          select: {
+            id: true,
+            type: true,
+            severity: true,
+            title: true,
+            body: true,
+            href: true,
+            createdAt: true,
+          },
+        })
+        .catch(() => [] as Array<{
+          id: string
+          type: string
+          severity: string
+          title: string
+          body: string | null
+          href: string | null
+          createdAt: Date
+        }>)
+
       return {
         window: {
           from: from.toISOString(),
@@ -1002,6 +1033,18 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             channelType: c.channelType,
             isActive: c.isActive,
             lastSyncStatus: c.lastSyncStatus,
+          })),
+          // DO.20 — Notification rows surface as the top section in
+          // the alerts panel. Each entry carries severity / type so
+          // the renderer can colorize and icon them.
+          notifications: notifications.map((n) => ({
+            id: n.id,
+            type: n.type,
+            severity: n.severity,
+            title: n.title,
+            body: n.body,
+            href: n.href,
+            createdAt: n.createdAt.toISOString(),
           })),
         },
       }

@@ -1618,6 +1618,7 @@
   "overview.alerts.allClear": "all clear",
   "overview.alerts.activeCount": "{n} active",
   "overview.alerts.empty": "Nothing requires attention right now.",
+  "overview.alerts.dismiss": "Dismiss",
   "overview.alerts.outOfStock": "Out of stock",
   "overview.alerts.lowStock": "Low stock (≤10)",
   "overview.alerts.failedListings": "Failed listings",

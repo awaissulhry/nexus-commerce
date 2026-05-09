@@ -1606,6 +1606,7 @@
   "overview.alerts.allClear": "tutto ok",
   "overview.alerts.activeCount": "{n} attivi",
   "overview.alerts.empty": "Nessuna attenzione richiesta al momento.",
+  "overview.alerts.dismiss": "Chiudi",
   "overview.alerts.outOfStock": "Esauriti",
   "overview.alerts.lowStock": "Scorte basse (≤10)",
   "overview.alerts.failedListings": "Annunci con errori",
