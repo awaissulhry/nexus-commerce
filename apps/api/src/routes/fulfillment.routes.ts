@@ -2620,6 +2620,44 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F1.8 — UPU CN22 / CN23 customs declaration (printable HTML).
+  // Required for non-EU outbound parcels at Italian Post / non-
+  // Sendcloud carriers. Sendcloud auto-generates customs docs via
+  // parcel_items, but operators want a separate physical printout
+  // for manual carrier handover and customs broker requests.
+  //
+  // GET /api/fulfillment/shipments/:id/customs-declaration.html
+  //   ?category=COMMERCIAL|GIFT|SAMPLE|RETURNED_GOODS|DOCUMENT|OTHER
+  //   Returns text/html the operator opens in a new tab and prints.
+  fastify.get('/fulfillment/shipments/:id/customs-declaration.html', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const q = request.query as { category?: string }
+      const category = (q.category ?? 'COMMERCIAL') as any
+      const { customsDeclarationHtml } = await import(
+        '../services/customs-declaration.service.js'
+      )
+      const result = await customsDeclarationHtml(id, { category })
+      return reply
+        .header('Content-Type', 'text/html; charset=utf-8')
+        .header(
+          'X-Customs-Form-Type',
+          result.formType,
+        )
+        .send(result.html)
+    } catch (error: any) {
+      const msg = error?.message ?? String(error)
+      const status =
+        msg.includes('intra-EU') || msg.includes('Destination country missing')
+          ? 400
+          : msg.includes('not found')
+            ? 404
+            : 500
+      fastify.log.error({ err: error }, '[customs-declaration] failed')
+      return reply.code(status).send({ error: msg })
+    }
+  })
+
   // O.13: pack station — capture weight + dimensions + scan-verify
   // result and transition the shipment from PICKED/READY_TO_PICK/DRAFT
   // to PACKED. The pack-station page (apps/web/src/app/fulfillment/

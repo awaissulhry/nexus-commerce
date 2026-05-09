@@ -1106,6 +1106,32 @@ export default function OutboundOrderDrawer({ orderId, onClose }: Props) {
                                 {c.currency} {c.totalValue.toFixed(2)}
                               </span>
                             </div>
+                            {/* F1.8 — printable CN22 (small) / CN23 (large)
+                                customs declaration. Backend picks the
+                                right form based on weight + value. Opens
+                                in a new tab and auto-prints. */}
+                            {c.isInternational && (
+                              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                                <a
+                                  href={`${getBackendUrl()}/api/fulfillment/shipments/${c.shipmentId}/customs-declaration.html`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                                  title={t('outbound.drawer.customs.printCnHint')}
+                                >
+                                  <Globe size={11} />
+                                  {t('outbound.drawer.customs.printCn')}
+                                </a>
+                                <a
+                                  href={`${getBackendUrl()}/api/fulfillment/shipments/${c.shipmentId}/customs-declaration.html?category=RETURNED_GOODS`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                                >
+                                  {t('outbound.drawer.customs.printCnReturn')}
+                                </a>
+                              </div>
+                            )}
                             {errors.length > 0 && (
                               <ul className="space-y-1 text-xs">
                                 {errors.map((iss, idx) => (
