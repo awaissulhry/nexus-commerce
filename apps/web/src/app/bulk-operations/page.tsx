@@ -1,51 +1,57 @@
+// U.49 (DIAGNOSTIC) — minimum repro. /bulk-operations stripped to a
+// near-empty shell: only PageHeader + a Link. If sidebar Links AND the
+// in-page test Link both work after this deploy, the bug lives inside
+// BulkOperationsClient or its imports. If they still don't work, the
+// bug is in the layout/sidebar/providers (rendered above this page).
+//
+// The page.tsx file is the swap point because changing it does NOT
+// touch the layout-level chrome — so a positive result on this stub
+// definitively localizes the bug to the page subtree.
 import Link from 'next/link'
-import { History as HistoryIcon } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
-import ActiveJobsStrip from './ActiveJobsStrip'
-import BulkOperationsClient from './BulkOperationsClient'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Server shell only — does NOT fetch data on the server.
- *
- * At 10k+ rows, server-fetching means Next.js inlines the entire JSON
- * payload into the HTML response (~6 MB before gzip), which blows past
- * the <1s page-load target. Instead the client component fetches on
- * mount, gets a small (gzipped) JSON payload directly, and renders
- * progressively.
- */
-// U.38 — simplified the page wrapper. The earlier layout used
-// `-mx-6 -my-6` to escape the layout's p-6 padding plus a hardcoded
-// `h-[calc(100dvh-1.5rem)]` to anchor the grid to the viewport. That
-// combination caused weird side effects (scroll context confusion +
-// the sidebar's md:sticky context didn't compose cleanly with main's
-// own scroll) — the user reported they couldn't navigate to other
-// sidebar links from this page.
-//
-// Now: a normal `space-y-3` page that lives inside the layout's
-// padding like every other page. The grid scroll container sets its
-// own max-height in BulkOperationsClient, so it still anchors at the
-// bottom of the viewport on desktop, but the page itself doesn't
-// fight the layout for height.
 export default function BulkOperationsPage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Bulk Operations"
-        description="Click any cell to edit (Phase B) · Cmd+S to save"
-        actions={
-          <Link
-            href="/bulk-operations/history"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-          >
-            <HistoryIcon className="w-3.5 h-3.5" />
-            Job History
-          </Link>
-        }
+        title="Bulk Operations (DIAGNOSTIC STUB — U.49)"
+        description="Temporary minimum repro. Click any link to verify navigation."
       />
-      <ActiveJobsStrip />
-      <BulkOperationsClient />
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-6 dark:bg-amber-900/20 dark:border-amber-700">
+        <p className="text-base text-amber-900 dark:text-amber-200">
+          BulkOperationsClient + ActiveJobsStrip are temporarily disabled
+          to isolate a navigation deadlock. Test clicks below and on the
+          sidebar:
+        </p>
+        <ul className="mt-3 list-disc list-inside space-y-1 text-base">
+          <li>
+            <Link
+              href="/products"
+              className="text-blue-700 underline hover:text-blue-900 dark:text-blue-400"
+            >
+              In-page Link → /products
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/orders"
+              className="text-blue-700 underline hover:text-blue-900 dark:text-blue-400"
+            >
+              In-page Link → /orders
+            </Link>
+          </li>
+          <li>
+            <Link
+              href="/bulk-operations/history"
+              className="text-blue-700 underline hover:text-blue-900 dark:text-blue-400"
+            >
+              In-page Link → /bulk-operations/history
+            </Link>
+          </li>
+        </ul>
+      </div>
     </div>
   )
 }
