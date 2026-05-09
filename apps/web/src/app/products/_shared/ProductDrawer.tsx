@@ -2635,15 +2635,447 @@ function PricingTab({
         differs from this product's basePrice. Push / explain / clamp
         rules live in the full pricing matrix.
       </div>
+      {/* W4.13 — Tier / customer-group pricing for this product.
+          Sits between the master listings and the repricing rules
+          because it's a pure-pricing concern (volume + segment),
+          while repricing is a market-reactive concern. */}
+      <TierPricingSection productId={productId} basePrice={baseNum} />
+
       {/* W4.9 — Repricing rules per (channel, marketplace) for this
           product. Sub-section, not a separate drawer tab, because
-          repricing is part of the pricing story. Tier pricing
-          surfaces in W4.13 alongside this. */}
+          repricing is part of the pricing story. */}
       <RepricingRulesSection
         productId={productId}
         channelListings={channelListings}
       />
     </div>
+  )
+}
+
+/**
+ * W4.13 — Tier pricing section.
+ *
+ * Sub-component of PricingTab. Lists ProductTierPrice rows for this
+ * product (volume / customer-group discounts) + a compute-price
+ * preview ("what would a wholesale buyer pay for 50?").
+ *
+ * Add-tier flow uses an inline form (no modal) — tier rows are
+ * compact + the operator typically adds 2-5 rows in a row when
+ * setting up a B2B price ladder, so a modal would feel heavy.
+ */
+interface TierPriceRow {
+  id: string
+  minQty: number
+  price: string
+  customerGroupId: string | null
+  customerGroup: { id: string; code: string; label: string } | null
+}
+
+interface CustomerGroupOpt {
+  id: string
+  code: string
+  label: string
+}
+
+function TierPricingSection({
+  productId,
+  basePrice,
+}: {
+  productId: string
+  basePrice: number | null
+}) {
+  const [tiers, setTiers] = useState<TierPriceRow[] | null>(null)
+  const [groups, setGroups] = useState<CustomerGroupOpt[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [previewQty, setPreviewQty] = useState('')
+  const [previewGroupId, setPreviewGroupId] = useState<string>('')
+  const [previewResult, setPreviewResult] = useState<{
+    price: number
+    source: 'base' | 'tier'
+    appliedTier: { minQty: number; customerGroupId: string | null } | null
+  } | null>(null)
+  const { toast } = useToast()
+  const confirm = useConfirm()
+
+  const refresh = useCallback(async () => {
+    try {
+      const [t, g] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/products/${productId}/tier-prices`, {
+          cache: 'no-store',
+        }),
+        fetch(`${getBackendUrl()}/api/customer-groups`, { cache: 'no-store' }),
+      ])
+      if (!t.ok) throw new Error(`tiers HTTP ${t.status}`)
+      if (!g.ok) throw new Error(`groups HTTP ${g.status}`)
+      const tdata = (await t.json()) as { tierPrices?: TierPriceRow[] }
+      const gdata = (await g.json()) as { groups?: CustomerGroupOpt[] }
+      setTiers(tdata.tierPrices ?? [])
+      setGroups(gdata.groups ?? [])
+      setError(null)
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+    }
+  }, [productId])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const onDelete = async (t: TierPriceRow) => {
+    const ok = await confirm({
+      title: `Delete tier at qty=${t.minQty}${t.customerGroup ? ` (${t.customerGroup.label})` : ''}?`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/tier-prices/${t.id}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast.success('Tier deleted')
+      refresh()
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+    }
+  }
+
+  const computePreview = async () => {
+    const qty = Number(previewQty)
+    if (!(qty > 0)) {
+      setPreviewResult(null)
+      return
+    }
+    try {
+      const qs = new URLSearchParams()
+      qs.set('qty', String(qty))
+      if (previewGroupId) qs.set('customerGroup', previewGroupId)
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/resolve-price?${qs.toString()}`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setPreviewResult(await res.json())
+    } catch (e: any) {
+      toast.error(e?.message ?? String(e))
+    }
+  }
+
+  return (
+    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
+          Tier pricing
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Plus className="w-3 h-3" />}
+          onClick={() => setAdding(true)}
+        >
+          Add tier
+        </Button>
+      </div>
+
+      {error && (
+        <div className="text-sm text-rose-700 dark:text-rose-300">{error}</div>
+      )}
+
+      {tiers === null ? (
+        <div className="text-sm italic text-slate-500 dark:text-slate-400">
+          Loading…
+        </div>
+      ) : tiers.length === 0 ? (
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          No tier prices. Base price is €{basePrice?.toFixed(2) ?? '—'}{' '}
+          for everyone, every quantity.
+        </div>
+      ) : (
+        <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <thead className="bg-slate-50 dark:bg-slate-900">
+            <tr className="text-left">
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Min qty</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Customer group</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Price</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">vs base</th>
+              <th className="px-1 w-6" />
+            </tr>
+          </thead>
+          <tbody>
+            {tiers
+              .slice()
+              .sort((a, b) => a.minQty - b.minQty)
+              .map((t) => {
+                const priceNum = Number(t.price)
+                const delta =
+                  basePrice != null
+                    ? Math.round(((priceNum - basePrice) / basePrice) * 100)
+                    : null
+                return (
+                  <tr
+                    key={t.id}
+                    className="border-t border-slate-100 dark:border-slate-800"
+                  >
+                    <td className="px-2 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">
+                      ≥ {t.minQty}
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-700 dark:text-slate-300">
+                      {t.customerGroup?.label ?? (
+                        <span className="text-xs italic text-slate-500 dark:text-slate-400">
+                          everyone
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-900 dark:text-slate-100">
+                      €{priceNum.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-xs">
+                      {delta == null ? (
+                        <span className="text-slate-400 dark:text-slate-500">—</span>
+                      ) : delta < 0 ? (
+                        <span className="text-emerald-700 dark:text-emerald-300">
+                          {delta}%
+                        </span>
+                      ) : delta > 0 ? (
+                        <span className="text-rose-700 dark:text-rose-300">
+                          +{delta}%
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 dark:text-slate-400">
+                          0%
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-1 py-1.5">
+                      <IconButton
+                        aria-label="Delete tier"
+                        size="sm"
+                        tone="danger"
+                        onClick={() => onDelete(t)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </IconButton>
+                    </td>
+                  </tr>
+                )
+              })}
+          </tbody>
+        </table>
+      )}
+
+      {/* Compute-price preview. Useful for "what would a wholesale
+          buyer pay for 50?" ad-hoc checks. */}
+      <div className="border border-slate-200 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/40">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
+          Compute price preview
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="number"
+            min={1}
+            value={previewQty}
+            onChange={(e) => setPreviewQty(e.target.value)}
+            placeholder="qty"
+            className="w-20 h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+          />
+          <select
+            value={previewGroupId}
+            onChange={(e) => setPreviewGroupId(e.target.value)}
+            className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          >
+            <option value="">no group (anonymous)</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={computePreview}
+            disabled={!previewQty}
+          >
+            Compute
+          </Button>
+          {previewResult && (
+            <div className="text-sm tabular-nums text-slate-900 dark:text-slate-100">
+              <span className="font-semibold">€{previewResult.price.toFixed(2)}</span>
+              <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                {previewResult.source === 'tier'
+                  ? `tier (≥ ${previewResult.appliedTier?.minQty})`
+                  : 'base price'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {adding && (
+        <AddTierForm
+          productId={productId}
+          groups={groups}
+          existingTiers={tiers ?? []}
+          onClose={() => setAdding(false)}
+          onCreated={() => {
+            setAdding(false)
+            refresh()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddTierForm({
+  productId,
+  groups,
+  existingTiers,
+  onClose,
+  onCreated,
+}: {
+  productId: string
+  groups: CustomerGroupOpt[]
+  existingTiers: TierPriceRow[]
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const [minQty, setMinQty] = useState('1')
+  const [price, setPrice] = useState('')
+  const [groupId, setGroupId] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  // Help the operator avoid duplicates by surfacing existing tuples.
+  const conflict = existingTiers.find(
+    (t) =>
+      t.minQty === Number(minQty) &&
+      (t.customerGroupId ?? null) === (groupId || null),
+  )
+
+  const submit = async () => {
+    setErr(null)
+    setSubmitting(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/tier-prices`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            minQty: Number(minQty),
+            price: Number(price),
+            customerGroupId: groupId || null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      toast.success('Tier created')
+      onCreated()
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      size="md"
+      title="Add tier price"
+    >
+      <div className="p-5 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+              Min qty
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={minQty}
+              onChange={(e) => setMinQty(e.target.value)}
+              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+              Price (€)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+            Customer group
+          </label>
+          <select
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          >
+            <option value="">— everyone (no group) —</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Group-specific tiers beat generic at the same minQty.
+            Generic tiers (no group) apply to everyone.
+          </p>
+        </div>
+        {conflict && (
+          <div className="border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 rounded px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+            A tier already exists at this (min qty, group). The server
+            will reject the create with a 409 — change one of the
+            fields or delete the existing tier first.
+          </div>
+        )}
+        {err && (
+          <div className="border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300">
+            {err}
+          </div>
+        )}
+      </div>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={submit}
+          disabled={
+            submitting ||
+            !minQty ||
+            Number(minQty) < 1 ||
+            !price ||
+            Number(price) < 0
+          }
+          loading={submitting}
+        >
+          Create
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
