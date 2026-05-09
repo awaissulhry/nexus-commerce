@@ -29,6 +29,7 @@ import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import ComplianceTab from './tabs/ComplianceTab'
 import ImagesTab from './tabs/ImagesTab'
+import SeoTab from './tabs/SeoTab'
 import { cn } from '@/lib/utils'
 import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
 
@@ -307,6 +308,7 @@ export default function ProductEditClient({
       'pricing',
       'inventory',
       'locales',
+      'seo',
       'compliance',
       'workflow',
       'relations',
@@ -572,6 +574,13 @@ export default function ProductEditClient({
               {t('products.edit.tab.locales')}
             </TopTabButton>
             <TopTabButton
+              tabKey="seo"
+              active={topTab === 'seo'}
+              onClick={() => goToTab('seo')}
+            >
+              {t('products.edit.tab.seo')}
+            </TopTabButton>
+            <TopTabButton
               tabKey="compliance"
               active={topTab === 'compliance'}
               onClick={() => goToTab('compliance')}
@@ -721,6 +730,16 @@ export default function ProductEditClient({
               product={product}
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('locales', count)}
+            />
+          </div>
+        )}
+
+        {topTab === 'seo' && (
+          <div role="tabpanel" id="panel-seo" aria-labelledby="tab-seo">
+            <SeoTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('seo', count)}
             />
           </div>
         )}
