@@ -30,11 +30,11 @@ export default function WizardHeader({
   onClose,
 }: Props) {
   return (
-    <div className="px-6 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-4 flex-shrink-0">
+    <div className="px-6 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-4 flex-shrink-0 dark:border-slate-800 dark:bg-slate-950">
       <div className="flex items-center gap-3 min-w-0">
         <Link
           href={`/products/${productId}/edit`}
-          className="text-slate-400 hover:text-slate-700 flex-shrink-0"
+          className="text-slate-400 hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
           aria-label="Back to product"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -44,10 +44,10 @@ export default function WizardHeader({
               primary identifier; SKU drops to text-sm secondary. The
               header is the only place in the wizard that names what
               you're listing, so it earns the visual weight. */}
-          <div className="text-md font-semibold text-slate-900 truncate">
+          <div className="text-md font-semibold text-slate-900 truncate dark:text-slate-100">
             {productName}
           </div>
-          <div className="font-mono text-sm text-slate-500 truncate">
+          <div className="font-mono text-sm text-slate-500 truncate dark:text-slate-400">
             {productSku}
           </div>
         </div>
@@ -57,7 +57,7 @@ export default function WizardHeader({
         <button
           type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-700 rounded p-1 hover:bg-slate-100"
+          className="text-slate-400 hover:text-slate-700 rounded p-1 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800"
           aria-label="Close wizard"
         >
           <X className="w-4 h-4" />
@@ -70,7 +70,7 @@ export default function WizardHeader({
 function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
   if (channels.length === 0) {
     return (
-      <span className="text-base text-slate-400 italic">
+      <span className="text-base text-slate-400 italic dark:text-slate-500">
         No channels picked yet
       </span>
     )
@@ -101,12 +101,13 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap" title={summary}>
-      <span className="text-sm text-slate-500">
+      <span className="text-sm text-slate-500 dark:text-slate-400">
         {channels.length === 1 ? 'Listing on' : `${channels.length} channels:`}
       </span>
       {visibleChannels.map((c, i) => {
         const tone =
-          CHANNEL_TONE[c.platform] ?? 'bg-slate-100 text-slate-700 border-slate-200'
+          CHANNEL_TONE[c.platform] ??
+          'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
         const platformLabel = CHANNEL_LABEL[c.platform] ?? c.platform
         const marketLabel =
           c.marketplace === 'GLOBAL'
@@ -133,7 +134,7 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
       })}
       {overflow > 0 && (
         <span
-          className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600"
+          className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
           title={summary}
         >
           +{overflow} more
