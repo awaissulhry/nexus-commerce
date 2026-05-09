@@ -877,13 +877,40 @@ const ProductRow = memo(function ProductRow({
   // the J/K-focused row. inset-ring prevents the ring from offsetting
   // the row position; combined with bg, gives the Linear-style glow.
   const focusRing = isFocused ? 'ring-2 ring-inset ring-blue-500' : ''
+
+  // W5.3 — Conditional row formatting (Airtable parity). Subtle
+  // background tint by row state so the operator can scan a 50-row
+  // page and pick out the rows that need attention without hunting
+  // through chip columns.
+  //
+  // Priority order (selection always wins, focus + selection
+  // compose):
+  //   selected           → blue (handled below)
+  //   inactive status    → slate dim
+  //   draft status       → amber tint
+  //   active + 0 stock   → rose tint (out-of-stock-and-live = bad)
+  //   default            → no tint
+  //
+  // Tint intensity is /20 in light, /30 in dark — visible enough
+  // to scan but doesn't compete with selection or focus.
+  const stateTint = (() => {
+    if (isSelected) return ''
+    if (product.status === 'INACTIVE')
+      return 'bg-slate-100/50 dark:bg-slate-900/60'
+    if (product.status === 'DRAFT')
+      return 'bg-amber-50/40 dark:bg-amber-950/20'
+    if (product.status === 'ACTIVE' && product.totalStock === 0)
+      return 'bg-rose-50/40 dark:bg-rose-950/20'
+    return ''
+  })()
+
   const rowBg = isChild
     ? isSelected
       ? `bg-blue-50/40 ${focusRing}`
-      : `bg-slate-50/40 hover:bg-slate-100/60 ${focusRing}`
+      : `${stateTint || 'bg-slate-50/40'} hover:bg-slate-100/60 ${focusRing}`
     : isSelected
       ? `bg-blue-50/30 ${focusRing}`
-      : `hover:bg-slate-50 ${focusRing}`
+      : `${stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
   return (
     <>
       <div
