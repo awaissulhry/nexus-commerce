@@ -16,7 +16,7 @@ import Step5Variations from './steps/Step5Variations'
 import Step7Images from './steps/Step7Images'
 import Step8Pricing from './steps/Step8Pricing'
 import Step9Review from './steps/Step9Review'
-import Step10Submit from './steps/Step10Submit'
+import Step9Submit from './steps/Step9Submit'
 import Step1Channels from './steps/Step1Channels'
 import { STEPS, findStep } from './lib/steps'
 import { postWizardEvent } from './lib/telemetry'
@@ -663,7 +663,7 @@ export default function ListWizardClient({
           if (currentStep === 6) return <Step7Images {...stepProps} />
           if (currentStep === 7) return <Step8Pricing {...stepProps} />
           if (currentStep === 8) return <Step9Review {...stepProps} />
-          if (currentStep === 9) return <Step10Submit {...stepProps} />
+          if (currentStep === 9) return <Step9Submit {...stepProps} />
           return <PlaceholderStep step={step} />
         })()}
       </div>

@@ -50,16 +50,7 @@ const blockerBanner = read(`${wizardDir}/components/BlockerBanner.tsx`)
 const steps = read(`${wizardDir}/lib/steps.ts`)
 const telemetry = read(`${wizardDir}/lib/telemetry.ts`)
 const page = read(`${wizardDir}/page.tsx`)
-const submitStep = (() => {
-  // Submit step file is currently named Step10Submit.tsx (residual phase
-  // numbering) — accept either name so W1.2 rename doesn't break this
-  // verifier.
-  for (const name of ['Step9Submit.tsx', 'Step10Submit.tsx']) {
-    const p = path.join(repo, `${wizardDir}/steps/${name}`)
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8')
-  }
-  return ''
-})()
+const submitStep = read(`${wizardDir}/steps/Step9Submit.tsx`)
 
 console.log('Case 1: cross-tab events (Q.10) still emitted')
 check('wizard.created emit on fresh mount',

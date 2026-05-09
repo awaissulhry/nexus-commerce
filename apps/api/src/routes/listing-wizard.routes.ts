@@ -2541,7 +2541,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
-      // DR-C.3 — server-side wizard.submitted emit. Step10Submit
+      // DR-C.3 — server-side wizard.submitted emit. Step9Submit
       // already broadcasts this on its end so same-browser tabs
       // refresh in <200ms; the SSE path closes the closed-source-tab
       // gap (operator clicks Submit, closes the wizard tab before

@@ -81,7 +81,7 @@ const POLL_BACKOFF_MS = [
 ] as const
 const POLL_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
-export default function Step10Submit({
+export default function Step9Submit({
   wizardId,
   channels,
   product,
