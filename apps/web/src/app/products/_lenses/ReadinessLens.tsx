@@ -29,6 +29,7 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { type ProductRow } from '../_types'
 
 const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
@@ -72,6 +73,7 @@ export function ReadinessLens({
   products: ProductRow[]
   loading: boolean
 }) {
+  const { t } = useTranslations()
   const [byProduct, setByProduct] = useState<
     Record<string, ReadinessResult>
   >({})
@@ -139,7 +141,7 @@ export function ReadinessLens({
   if (parentLoading) {
     return (
       <div className="text-base text-slate-500 dark:text-slate-400">
-        Loading products…
+        {t('products.lens.readiness.loading')}
       </div>
     )
   }
@@ -147,9 +149,12 @@ export function ReadinessLens({
     return (
       <EmptyState
         icon={Sparkles}
-        title="No products to score"
-        description="The Readiness matrix scores each product against per-channel publishability rules. Adjust filters so at least one product matches and the matrix appears here."
-        action={{ label: 'Clear filters', href: '/products' }}
+        title={t('products.lens.readiness.empty.title')}
+        description={t('products.lens.readiness.empty.body')}
+        action={{
+          label: t('products.lens.readiness.empty.action'),
+          href: '/products',
+        }}
       />
     )
   }
@@ -177,7 +182,12 @@ export function ReadinessLens({
                 {c.average}%
               </span>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                avg across {products.length} product{products.length === 1 ? '' : 's'}
+                {t(
+                  products.length === 1
+                    ? 'products.lens.readiness.avgAcross.one'
+                    : 'products.lens.readiness.avgAcross.other',
+                  { count: products.length },
+                )}
               </span>
             </div>
           </Card>
@@ -190,7 +200,7 @@ export function ReadinessLens({
           <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
             <tr className="text-left">
               <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Product
+                {t('products.lens.readiness.col.product')}
               </th>
               {CHANNELS.map((ch) => (
                 <th
@@ -201,7 +211,7 @@ export function ReadinessLens({
                 </th>
               ))}
               <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 w-24 text-right">
-                Source
+                {t('products.lens.readiness.col.source')}
               </th>
             </tr>
           </thead>
@@ -260,8 +270,20 @@ export function ReadinessLens({
                           )}
                           title={
                             cr.missing.length === 0
-                              ? `Ready: ${cr.filled}/${cr.totalRequired} fields filled`
-                              : `${cr.score}% · missing: ${missingPreview}${moreCount > 0 ? ` (+${moreCount} more)` : ''}`
+                              ? t('products.lens.readiness.tooltip.ready', {
+                                  filled: cr.filled,
+                                  total: cr.totalRequired,
+                                })
+                              : moreCount > 0
+                                ? t('products.lens.readiness.tooltip.missingMore', {
+                                    score: cr.score,
+                                    fields: missingPreview,
+                                    more: moreCount,
+                                  })
+                                : t('products.lens.readiness.tooltip.missing', {
+                                    score: cr.score,
+                                    fields: missingPreview,
+                                  })
                           }
                         >
                           {cr.score}%
@@ -270,7 +292,11 @@ export function ReadinessLens({
                     )
                   })}
                   <td className="px-3 py-2 text-right text-xs text-slate-500 dark:text-slate-400">
-                    {r?.familyDriven ? 'family' : r ? 'min fields' : '—'}
+                    {r?.familyDriven
+                      ? t('products.lens.readiness.source.family')
+                      : r
+                        ? t('products.lens.readiness.source.minFields')
+                        : '—'}
                   </td>
                 </tr>
               )

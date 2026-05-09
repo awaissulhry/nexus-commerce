@@ -30,6 +30,7 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface WorkflowSummary {
   id: string
@@ -58,6 +59,7 @@ interface PipelineStage {
 }
 
 export function WorkflowLens() {
+  const { t } = useTranslations()
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null)
   const [selectedId, setSelectedId] = useState<string>('')
   const [pipeline, setPipeline] = useState<{
@@ -119,9 +121,12 @@ export function WorkflowLens() {
     return (
       <EmptyState
         icon={GitBranch}
-        title="No workflows yet"
-        description="Create a workflow under Settings → PIM → Workflows, attach it to a family, and products joining that family will land in the pipeline."
-        action={{ label: 'Create workflow', href: '/settings/pim/workflows' }}
+        title={t('products.lens.workflow.empty.title')}
+        description={t('products.lens.workflow.empty.body')}
+        action={{
+          label: t('products.lens.workflow.empty.action'),
+          href: '/settings/pim/workflows',
+        }}
       />
     )
   }
@@ -132,7 +137,7 @@ export function WorkflowLens() {
       {workflows && workflows.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-            Workflow
+            {t('products.lens.workflow.picker.label')}
           </span>
           <select
             value={selectedId}
@@ -149,7 +154,7 @@ export function WorkflowLens() {
             href={`/settings/pim/workflows/${selectedId}`}
             className="text-sm text-blue-700 dark:text-blue-300 hover:underline"
           >
-            edit definition
+            {t('products.lens.workflow.editDefinition')}
           </Link>
         </div>
       )}
@@ -163,14 +168,20 @@ export function WorkflowLens() {
 
       {loading && !pipeline ? (
         <div className="text-base text-slate-500 dark:text-slate-400">
-          Loading pipeline…
+          {t('products.lens.workflow.loading')}
         </div>
       ) : pipeline ? (
         <>
-          <div className="text-sm text-slate-500 dark:text-slate-400">
-            {pipeline.workflow.label} ·{' '}
-            <span className="tabular-nums">{totalProducts.toLocaleString()}</span>{' '}
-            product{totalProducts === 1 ? '' : 's'} in pipeline
+          <div className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
+            {t(
+              totalProducts === 1
+                ? 'products.lens.workflow.summary.one'
+                : 'products.lens.workflow.summary.other',
+              {
+                label: pipeline.workflow.label,
+                count: totalProducts.toLocaleString(),
+              },
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {pipeline.stages.map((s) => (
@@ -184,6 +195,7 @@ export function WorkflowLens() {
 }
 
 function StageColumn({ stage }: { stage: PipelineStage }) {
+  const { t } = useTranslations()
   return (
     <Card
       title={
@@ -210,7 +222,7 @@ function StageColumn({ stage }: { stage: PipelineStage }) {
           {stage.slaHours != null && (
             <span
               className="text-xs text-slate-500 dark:text-slate-400 tabular-nums flex-shrink-0"
-              title={`SLA: ${stage.slaHours}h per product at this stage`}
+              title={t('products.lens.workflow.slaTooltip', { hours: stage.slaHours })}
             >
               {stage.slaHours}h
             </span>
@@ -219,8 +231,8 @@ function StageColumn({ stage }: { stage: PipelineStage }) {
       }
     >
       {stage.count === 0 ? (
-        <div className="text-sm italic text-slate-400 dark:text-slate-500 py-2">
-          No products in this stage.
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 py-2">
+          {t('products.lens.workflow.stage.empty')}
         </div>
       ) : (
         <ul className="space-y-1 -my-1">
@@ -260,7 +272,9 @@ function StageColumn({ stage }: { stage: PipelineStage }) {
           ))}
           {stage.count > stage.sampleProducts.length && (
             <li className="text-xs text-slate-500 dark:text-slate-400 italic px-1.5 pt-1">
-              + {(stage.count - stage.sampleProducts.length).toLocaleString()} more…
+              {t('products.lens.workflow.stage.more', {
+                count: (stage.count - stage.sampleProducts.length).toLocaleString(),
+              })}
             </li>
           )}
         </ul>
