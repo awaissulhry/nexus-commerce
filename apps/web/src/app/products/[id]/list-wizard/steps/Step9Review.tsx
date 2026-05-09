@@ -7,13 +7,145 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Loader2,
   MinusCircle,
+  Sparkles,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useTranslations } from '@/lib/i18n/use-translations'
+
+// AI-6.4 — per-channel quality score returned by /score-quality.
+interface AiQualityDimension {
+  name: string
+  score: number
+  hint: string
+}
+interface AiChannelQuality {
+  platform: string
+  marketplace: string
+  overallScore: number
+  dimensions: AiQualityDimension[]
+}
+interface AiQualityResponse {
+  perChannel: AiChannelQuality[]
+  overallScore: number
+  topImprovements: string[]
+}
+
+// AI-6.4 — extract a trimmed snapshot from the prepared per-channel
+// payload. Each platform has a different shape; this helper walks
+// the known shapes (Amazon SP-API, eBay Inventory, Shopify Admin
+// REST) and returns the title / description / bullets / keywords /
+// images / price subset /score-quality wants. Unknown shapes return
+// the channel key with empty fields — the AI will score whatever it
+// can see and note "data missing" for the rest.
+function extractQualitySnapshot(entry: ChannelPayloadEntry): {
+  platform: string
+  marketplace: string
+  title?: string
+  description?: string
+  bullets?: string[]
+  keywords?: string
+  imageCount?: number
+  price?: number
+  currency?: string
+} {
+  const base = { platform: entry.platform, marketplace: entry.marketplace }
+  if (!entry.payload || entry.unsupported) return base
+  const platform = entry.platform.toUpperCase()
+  const p = entry.payload as Record<string, unknown>
+
+  if (platform === 'AMAZON') {
+    const attrs = (p.attributes ?? {}) as Record<string, unknown>
+    const itemName = pluckString(attrs.item_name)
+    const bullets = pluckStringArray(attrs.bullet_point)
+    const description = pluckString(attrs.product_description)
+    const keywords = pluckString(attrs.generic_keyword)
+    const images = Array.isArray(p.imageUrls) ? p.imageUrls.length : 0
+    return {
+      ...base,
+      title: itemName,
+      description,
+      bullets,
+      keywords,
+      imageCount: images,
+    }
+  }
+
+  if (platform === 'EBAY') {
+    const product = (p.product ?? {}) as Record<string, unknown>
+    const title = typeof product.title === 'string' ? product.title : undefined
+    const description =
+      typeof product.description === 'string' ? product.description : undefined
+    const imageUrls = Array.isArray(product.imageUrls) ? product.imageUrls : []
+    const price = (p.price ?? {}) as Record<string, unknown>
+    const priceVal =
+      typeof price.value === 'number' ? price.value : undefined
+    const currency =
+      typeof price.currency === 'string' ? price.currency : undefined
+    return {
+      ...base,
+      title,
+      description,
+      imageCount: imageUrls.length,
+      price: priceVal,
+      currency,
+    }
+  }
+
+  if (platform === 'SHOPIFY') {
+    const product = (p.product ?? {}) as Record<string, unknown>
+    const title = typeof product.title === 'string' ? product.title : undefined
+    const description =
+      typeof product.body_html === 'string' ? product.body_html : undefined
+    const tags = Array.isArray(product.tags) ? product.tags : []
+    const keywords = tags.filter((t) => typeof t === 'string').join(' ')
+    const images = Array.isArray(product.images) ? product.images.length : 0
+    const variants = Array.isArray(product.variants) ? product.variants : []
+    const firstVariant = variants[0] as Record<string, unknown> | undefined
+    const priceStr =
+      typeof firstVariant?.price === 'string' ? firstVariant.price : undefined
+    const priceVal =
+      priceStr !== undefined && Number.isFinite(Number(priceStr))
+        ? Number(priceStr)
+        : undefined
+    return {
+      ...base,
+      title,
+      description,
+      keywords,
+      imageCount: images,
+      price: priceVal,
+    }
+  }
+
+  return base
+}
+
+function pluckString(raw: unknown): string | undefined {
+  if (typeof raw === 'string') return raw
+  // SP-API attributes are arrays of {value, language_tag, ...}
+  if (Array.isArray(raw) && raw.length > 0) {
+    const first = raw[0] as Record<string, unknown>
+    if (typeof first?.value === 'string') return first.value
+  }
+  return undefined
+}
+function pluckStringArray(raw: unknown): string[] | undefined {
+  if (Array.isArray(raw)) {
+    const out: string[] = []
+    for (const item of raw) {
+      const s = pluckString(item)
+      if (s) out.push(s)
+    }
+    return out.length > 0 ? out : undefined
+  }
+  return undefined
+}
 
 type SliceStatus = 'complete' | 'incomplete' | 'skipped' | 'unknown'
 
@@ -154,6 +286,7 @@ export default function Step9Review({
   reportValidity,
   setJumpToBlocker,
 }: StepProps) {
+  const { t } = useTranslations()
   const [data, setData] = useState<ReviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -164,6 +297,61 @@ export default function Step9Review({
   const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(
     new Set(),
   )
+
+  // AI-6.4 — quality scorer state. Click "AI: score this listing" →
+  // POST /score-quality with per-channel snapshots extracted from
+  // data.payloads. Backend returns 0-100 scores + dimension
+  // breakdown + topImprovements list.
+  const [aiQualityBusy, setAiQualityBusy] = useState(false)
+  const [aiQualityError, setAiQualityError] = useState<string | null>(null)
+  const [aiQuality, setAiQuality] = useState<AiQualityResponse | null>(null)
+
+  const askAiToScore = useCallback(async () => {
+    if (!data) return
+    const channels = data.payloads
+      .map((p) => extractQualitySnapshot(p))
+      // Drop channels with literally nothing for AI to score (e.g.
+      // unsupported entries with no payload at all).
+      .filter(
+        (c) =>
+          (c.title && c.title.length > 0) ||
+          (c.description && c.description.length > 0) ||
+          (c.bullets && c.bullets.length > 0),
+      )
+    if (channels.length === 0) {
+      setAiQualityError(
+        'No content yet to score — fill in attributes / content for at least one channel first.',
+      )
+      setAiQuality(null)
+      return
+    }
+    setAiQualityBusy(true)
+    setAiQualityError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}/score-quality`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channels }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+      setAiQuality({
+        perChannel: Array.isArray(json?.perChannel) ? json.perChannel : [],
+        overallScore: typeof json?.overallScore === 'number' ? json.overallScore : 0,
+        topImprovements: Array.isArray(json?.topImprovements)
+          ? json.topImprovements
+          : [],
+      })
+    } catch (err) {
+      setAiQualityError(err instanceof Error ? err.message : String(err))
+      setAiQuality(null)
+    } finally {
+      setAiQualityBusy(false)
+    }
+  }, [data, wizardId])
 
   useEffect(() => {
     let cancelled = false
@@ -289,15 +477,158 @@ export default function Step9Review({
             full step-by-step status or the prepared channel payload.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setReloadKey((k) => k + 1)}
-          disabled={loading}
-          className="text-base text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* AI-6.4 — listing quality scorer trigger. Disabled until
+              data has loaded (no payloads to score) or while a call
+              is in flight. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={askAiToScore}
+            disabled={!data || aiQualityBusy}
+            className="inline-flex items-center gap-1.5"
+          >
+            {aiQualityBusy ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            )}
+            {t('listWizard.aiScoreQuality.button')}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            disabled={loading}
+            className="text-base text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* AI-6.4 — quality score panel. Renders below the header when
+          the operator has clicked the button. Shows overall score,
+          topImprovements, and a per-channel sub-score table. Purely
+          informational — operator goes back to the relevant step to
+          fix anything the scorer flagged. */}
+      {(aiQuality || aiQualityError || aiQualityBusy) && (
+        <div className="mb-5 border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-purple-100 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 flex items-center justify-between gap-3">
+            <div className="text-md font-semibold text-purple-900 dark:text-purple-100 inline-flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              {t('listWizard.aiScoreQuality.title')}
+            </div>
+            {aiQuality && (
+              <div
+                className={cn(
+                  'text-2xl font-semibold tabular-nums px-2 py-0.5 rounded',
+                  aiQuality.overallScore >= 80
+                    ? 'text-emerald-700 dark:text-emerald-300'
+                    : aiQuality.overallScore >= 60
+                      ? 'text-amber-700 dark:text-amber-300'
+                      : 'text-rose-700 dark:text-rose-300',
+                )}
+                title={t('listWizard.aiScoreQuality.overallTooltip')}
+              >
+                {aiQuality.overallScore}
+                <span className="text-base font-normal opacity-70">/100</span>
+              </div>
+            )}
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            {aiQualityBusy && (
+              <div className="flex items-center gap-2 text-base text-purple-700 dark:text-purple-300">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t('listWizard.aiScoreQuality.busy')}
+              </div>
+            )}
+            {aiQualityError && !aiQualityBusy && (
+              <div className="flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium">
+                    {t('listWizard.aiScoreQuality.error')}
+                  </div>
+                  <div className="text-sm opacity-90 mt-0.5">{aiQualityError}</div>
+                </div>
+              </div>
+            )}
+            {aiQuality && aiQuality.topImprovements.length > 0 && (
+              <div>
+                <div className="text-sm font-medium text-purple-900 dark:text-purple-100 uppercase tracking-wide">
+                  {t('listWizard.aiScoreQuality.topImprovementsLabel')}
+                </div>
+                <ul className="mt-1 space-y-1">
+                  {aiQuality.topImprovements.map((tip, i) => (
+                    <li
+                      key={i}
+                      className="text-sm text-slate-700 dark:text-slate-300 flex items-start gap-2"
+                    >
+                      <span className="mt-1 inline-block w-1 h-1 rounded-full bg-purple-500 flex-shrink-0" />
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {aiQuality && aiQuality.perChannel.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {aiQuality.perChannel.map((ch) => {
+                  const tone =
+                    ch.overallScore >= 80
+                      ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20'
+                      : ch.overallScore >= 60
+                        ? 'border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20'
+                        : 'border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20'
+                  return (
+                    <div
+                      key={`${ch.platform}:${ch.marketplace}`}
+                      className={cn('border rounded p-2', tone)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {ch.platform}:{ch.marketplace}
+                        </span>
+                        <span className="text-md font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                          {ch.overallScore}
+                          <span className="text-xs font-normal opacity-60">
+                            /100
+                          </span>
+                        </span>
+                      </div>
+                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs">
+                        {ch.dimensions.map((d) => (
+                          <div
+                            key={d.name}
+                            className="flex items-center justify-between"
+                            title={d.hint || undefined}
+                          >
+                            <span className="text-slate-600 dark:text-slate-400 truncate">
+                              {d.name}
+                            </span>
+                            <span
+                              className={cn(
+                                'tabular-nums font-medium',
+                                d.score >= 80
+                                  ? 'text-emerald-700 dark:text-emerald-300'
+                                  : d.score >= 60
+                                    ? 'text-amber-700 dark:text-amber-300'
+                                    : 'text-rose-700 dark:text-rose-300',
+                              )}
+                            >
+                              {d.score}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div
