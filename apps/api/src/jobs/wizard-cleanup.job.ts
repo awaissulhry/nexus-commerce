@@ -74,6 +74,34 @@ export async function markAbandonedWizards(): Promise<{ marked: number }> {
   return { marked: newlyAbandoned.length }
 }
 
+const WIZARD_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * DR.5 — backfill NULL expiresAt on DRAFT rows with createdAt + 30d.
+ * Pre-NN.14 wizards were created without expiresAt; without this,
+ * the regular `expiresAt < NOW()` sweep can never reach them and
+ * they live forever. Cheap idempotent guard run before each
+ * cleanup tick.
+ */
+export async function backfillMissingExpiresAt(): Promise<{
+  backfilled: number
+}> {
+  const candidates = await prisma.listingWizard.findMany({
+    where: { status: 'DRAFT', expiresAt: null },
+    select: { id: true, createdAt: true },
+  })
+  if (candidates.length === 0) return { backfilled: 0 }
+  await Promise.all(
+    candidates.map((c) =>
+      prisma.listingWizard.update({
+        where: { id: c.id },
+        data: { expiresAt: new Date(c.createdAt.getTime() + WIZARD_TTL_MS) },
+      }),
+    ),
+  )
+  return { backfilled: candidates.length }
+}
+
 /**
  * DR.4 — delete DRAFT wizards whose productId no longer resolves
  * to a Product row. There's no FK constraint enforcing this at
@@ -124,7 +152,12 @@ export async function cleanupAbandonedWizards(): Promise<{
   deleted: number
   marked: number
   orphansDeleted: number
+  expiresAtBackfilled: number
 }> {
+  // DR.5 — backfill NULL expiresAt before any sweep so the
+  // expiresAt-based delete path can actually reach legacy rows.
+  const { backfilled: expiresAtBackfilled } = await backfillMissingExpiresAt()
+
   // C.0 / B9 — emit wizard_abandoned for newly-inactive drafts
   // BEFORE the cleanup pass, so the analytics event is written
   // even if the same wizard happens to also be past expiresAt
@@ -148,7 +181,7 @@ export async function cleanupAbandonedWizards(): Promise<{
     select: { id: true, productId: true, createdAt: true },
   })
   if (candidates.length === 0)
-    return { deleted: 0, marked, orphansDeleted }
+    return { deleted: 0, marked, orphansDeleted, expiresAtBackfilled }
 
   await prisma.listingWizard.deleteMany({
     where: { id: { in: candidates.map((c) => c.id) } },
@@ -171,7 +204,12 @@ export async function cleanupAbandonedWizards(): Promise<{
     })),
   )
 
-  return { deleted: candidates.length, marked, orphansDeleted }
+  return {
+    deleted: candidates.length,
+    marked,
+    orphansDeleted,
+    expiresAtBackfilled,
+  }
 }
 
 let cleanupTimer: NodeJS.Timeout | null = null
