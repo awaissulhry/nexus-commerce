@@ -26,6 +26,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { familyHierarchyService } from '../services/family-hierarchy.service.js'
 import { familyCompletenessService } from '../services/family-completeness.service.js'
+import { channelReadinessService } from '../services/channel-readiness.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
@@ -259,6 +260,25 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
       if (/not found/i.test(msg)) return reply.code(404).send({ error: msg })
       if (/cycle|depth exceeded/i.test(msg))
         return reply.code(409).send({ error: msg })
+      throw err
+    }
+  })
+
+  // ── W3.10 — Channel readiness ─────────────────────────────────
+  //
+  // GET /api/products/:id/channel-readiness
+  //
+  // Per-channel "ready to publish?" score + missing-fields list.
+  // Uses the W2.14 family path when familyId is set; falls back to
+  // hard-coded per-channel minimum-fields list otherwise.
+  fastify.get('/products/:id/channel-readiness', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const result = await channelReadinessService.compute(id)
+      return result
+    } catch (err: any) {
+      const msg = err?.message ?? String(err)
+      if (/not found/i.test(msg)) return reply.code(404).send({ error: msg })
       throw err
     }
   })
