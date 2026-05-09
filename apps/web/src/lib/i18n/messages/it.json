@@ -3169,5 +3169,7 @@
   "routingRules.field.notes": "Note (opzionale)",
   "routingRules.field.notesPlaceholder": "Perché questa regola, casi limite, ecc.",
   "routingRules.field.activeLabel": "Attiva (la regola verrà valutata)",
-  "routingRules.create": "Crea regola"
+  "routingRules.create": "Crea regola",
+  "replenishment.automation.editTooltip": "Modifica regola",
+  "replenishment.automation.editAriaLabel": "Modifica {name}"
 }
