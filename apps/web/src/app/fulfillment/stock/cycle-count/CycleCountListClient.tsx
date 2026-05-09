@@ -270,7 +270,14 @@ export default function CycleCountListClient() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={statusVariant(c.status)} size="sm">
-                        {c.status.replace(/_/g, ' ')}
+                        {/* T.26 — map enum to localized label;
+                            fallback to humanized enum so any future
+                            status value still renders. */}
+                        {c.status === 'DRAFT' ? t('cycleCount.list.statusDraft')
+                          : c.status === 'IN_PROGRESS' ? t('cycleCount.list.statusInProgress')
+                          : c.status === 'COMPLETED' ? t('cycleCount.list.statusCompleted')
+                          : c.status === 'CANCELLED' ? t('cycleCount.list.statusCancelled')
+                          : c.status.replace(/_/g, ' ')}
                       </Badge>
                       <span className="font-medium text-slate-900 dark:text-slate-100 inline-flex items-center gap-1">
                         <WarehouseIcon className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
