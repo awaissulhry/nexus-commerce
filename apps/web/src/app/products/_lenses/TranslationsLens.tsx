@@ -30,6 +30,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { type ProductRow } from '../_types'
 
 // Marketplace code per locale — bulk-generate endpoint takes
@@ -90,6 +91,7 @@ export function TranslationsLens({
   const [translateLocale, setTranslateLocale] = useState<string>('de')
   const [translating, setTranslating] = useState(false)
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   useEffect(() => {
     if (products.length === 0) {
@@ -138,7 +140,9 @@ export function TranslationsLens({
 
       if (candidates.length === 0) {
         toast.success(
-          `Every visible product already has content in ${translateLocale.toUpperCase()}.`,
+          t('products.lens.translations.toast.allFilled', {
+            locale: translateLocale.toUpperCase(),
+          }),
         )
         return
       }
@@ -166,11 +170,20 @@ export function TranslationsLens({
       const failed = (data.results ?? []).filter((r) => !r.ok).length
       if (failed === 0) {
         toast.success(
-          `Translated ${succeeded} product${succeeded === 1 ? '' : 's'} to ${translateLocale.toUpperCase()}`,
+          t(
+            succeeded === 1
+              ? 'products.lens.translations.toast.success.one'
+              : 'products.lens.translations.toast.success.other',
+            { count: succeeded, locale: translateLocale.toUpperCase() },
+          ),
         )
       } else {
         toast.error(
-          `${succeeded} translated · ${failed} failed in ${translateLocale.toUpperCase()}. Inspect the drawer for per-product errors.`,
+          t('products.lens.translations.toast.partial', {
+            succeeded,
+            failed,
+            locale: translateLocale.toUpperCase(),
+          }),
         )
       }
 
@@ -188,7 +201,7 @@ export function TranslationsLens({
         setByProduct(covData.results ?? {})
       }
     } catch (e: any) {
-      toast.error(`Translate failed: ${e?.message ?? String(e)}`)
+      toast.error(t('products.lens.translations.toast.failed', { msg: e?.message ?? String(e) }))
     } finally {
       setTranslating(false)
     }
@@ -217,7 +230,7 @@ export function TranslationsLens({
   if (parentLoading) {
     return (
       <div className="text-base text-slate-500 dark:text-slate-400">
-        Loading products…
+        {t('products.lens.readiness.loading')}
       </div>
     )
   }
@@ -225,9 +238,12 @@ export function TranslationsLens({
     return (
       <EmptyState
         icon={Globe}
-        title="No products to translate"
-        description="Adjust filters so at least one product matches and the translation matrix appears here."
-        action={{ label: 'Clear filters', href: '/products' }}
+        title={t('products.lens.translations.empty.title')}
+        description={t('products.lens.translations.empty.body')}
+        action={{
+          label: t('products.lens.translations.empty.action'),
+          href: '/products',
+        }}
       />
     )
   }
@@ -245,7 +261,7 @@ export function TranslationsLens({
       <div className="flex items-center gap-2 flex-wrap text-sm border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-slate-50/50 dark:bg-slate-900/40">
         <span className="text-slate-600 dark:text-slate-400 inline-flex items-center gap-1">
           <Sparkles className="w-3.5 h-3.5" />
-          AI bulk translate visible products to
+          {t('products.lens.translations.toolbar.label')}
         </span>
         <select
           value={translateLocale}
@@ -255,7 +271,7 @@ export function TranslationsLens({
         >
           {LOCALES.filter((l) => !l.primary).map((loc) => (
             <option key={loc.code} value={loc.code}>
-              {loc.label}
+              {t(`products.lens.translations.locale.${loc.code}`)}
             </option>
           ))}
         </select>
@@ -266,11 +282,10 @@ export function TranslationsLens({
           loading={translating}
           icon={<Sparkles className="w-3 h-3" />}
         >
-          Translate missing
+          {t('products.lens.translations.toolbar.action')}
         </Button>
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
-          Skips products that already have content in the target locale.
-          Cap 50/call.
+          {t('products.lens.translations.toolbar.help')}
         </span>
       </div>
 
@@ -283,7 +298,7 @@ export function TranslationsLens({
               ? Math.round((covered / products.length) * 100)
               : 0
           return (
-            <Card key={loc.code} title={loc.label}>
+            <Card key={loc.code} title={t(`products.lens.translations.locale.${loc.code}`)}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   <span
@@ -300,7 +315,7 @@ export function TranslationsLens({
                   </span>
                   {loc.primary && (
                     <span className="text-xs italic text-slate-500 dark:text-slate-400">
-                      primary
+                      {t('products.lens.translations.primary')}
                     </span>
                   )}
                 </div>
@@ -319,7 +334,7 @@ export function TranslationsLens({
           <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
             <tr className="text-left">
               <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Product
+                {t('products.lens.translations.col.product')}
               </th>
               {LOCALES.map((loc) => (
                 <th
@@ -329,7 +344,7 @@ export function TranslationsLens({
                   {loc.code}
                   {loc.primary && (
                     <span className="ml-1 text-xs italic font-normal text-slate-400 dark:text-slate-500 normal-case tracking-normal">
-                      primary
+                      {t('products.lens.translations.primary')}
                     </span>
                   )}
                 </th>
@@ -380,8 +395,15 @@ export function TranslationsLens({
                           )}
                           title={
                             fieldCount === FIELD_TOTAL
-                              ? `Complete${c?.reviewed ? ' · reviewed' : ''}`
-                              : `${fieldCount} of ${FIELD_TOTAL} fields filled`
+                              ? t(
+                                  c?.reviewed
+                                    ? 'products.lens.translations.tooltip.completeReviewed'
+                                    : 'products.lens.translations.tooltip.complete',
+                                )
+                              : t('products.lens.translations.tooltip.partial', {
+                                  filled: fieldCount,
+                                  total: FIELD_TOTAL,
+                                })
                           }
                         >
                           {fieldCount}/{FIELD_TOTAL}
