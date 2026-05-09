@@ -56,6 +56,39 @@ export function languageForMarketplace(marketplace: string): string {
   return LANGUAGE_FOR_MARKETPLACE[upper] ?? PRIMARY_LANGUAGE
 }
 
+/** W4.2 — pick a representative marketplace for a target language.
+ *
+ *  Used by the per-locale AI translate endpoint, which needs to call
+ *  ListingContentService.generate() (which is keyed by marketplace,
+ *  not language). We pick the first marketplace whose language
+ *  matches; the underlying terminology lookup widens via
+ *  `OR: [{ brand }, { brand: null }]` so the fallback is graceful
+ *  even when the picked marketplace has no brand-specific glossary.
+ *
+ *  Falls back to 'US' for any language not in our marketplace map
+ *  (still produces a valid en-US prompt for the AI; the operator
+ *  can override per channel later).
+ */
+const MARKETPLACE_PREFERENCE: Record<string, string> = {
+  it: 'IT',
+  de: 'DE',
+  fr: 'FR',
+  es: 'ES',
+  en: 'UK',
+  nl: 'NL',
+  sv: 'SE',
+  pl: 'PL',
+}
+export function marketplaceForLanguage(language: string): string {
+  const lower = language.toLowerCase()
+  const preferred = MARKETPLACE_PREFERENCE[lower]
+  if (preferred) return preferred
+  for (const [mkt, lang] of Object.entries(LANGUAGE_FOR_MARKETPLACE)) {
+    if (lang === lower) return mkt
+  }
+  return 'US'
+}
+
 export function getPrimaryLanguage(): string {
   return PRIMARY_LANGUAGE
 }

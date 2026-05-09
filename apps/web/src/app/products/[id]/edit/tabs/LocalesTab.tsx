@@ -158,6 +158,10 @@ export default function LocalesTab({
   const [statusByLocale, setStatusByLocale] = useState<
     Record<string, 'idle' | 'saving' | 'saved' | 'error'>
   >({})
+  // W4.2 — per-locale AI translate busy flag.
+  const [translatingLocale, setTranslatingLocale] = useState<string | null>(
+    null,
+  )
 
   const reportDirty = useCallback(() => {
     let n = 0
@@ -372,6 +376,85 @@ export default function LocalesTab({
           error: e?.message ?? String(e),
         }),
       )
+    }
+  }
+
+  // W4.2 — AI translate the entire locale via Gemini. Writes back to
+  // ProductTranslation server-side; we just refetch + reseed the
+  // draft. Any in-flight dirty edits on this locale are cleared
+  // before the AI write to avoid a stale-overwrite race.
+  const onAiTranslate = async (language: string) => {
+    setTranslatingLocale(language)
+    try {
+      // Clear pending debounce + dirty for this locale so AI result
+      // wins cleanly and doesn't get clobbered by a delayed flush.
+      const tid = saveTimers.current[language]
+      if (tid) globalThis.clearTimeout(tid)
+      saveTimers.current[language] = null
+      delete dirtyMapRef.current[language]
+      reportDirty()
+
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/translations/${language}/ai-translate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: ['title', 'bullets', 'description', 'keywords'],
+          }),
+        },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error ?? `HTTP ${res.status}`)
+      }
+      const json = (await res.json()) as {
+        row: TranslationRow
+        fieldsTranslated: string[]
+        fieldsSkipped: string[]
+      }
+      const translated = json.fieldsTranslated.length
+      const skipped = json.fieldsSkipped.length
+      if (translated === 0) {
+        toast.error(
+          t('products.edit.locales.aiAllSkipped', { count: skipped }),
+        )
+      } else if (skipped === 0) {
+        toast.success(
+          t('products.edit.locales.aiSuccess', { count: translated }),
+        )
+      } else {
+        toast.success(
+          t('products.edit.locales.aiPartial', {
+            translated,
+            skipped,
+          }),
+        )
+      }
+      // Reseed the draft + row from server so the editor reflects AI
+      // output immediately.
+      setTranslations((prev) => {
+        const idx = prev.findIndex((r) => r.language === language)
+        if (idx === -1) return [...prev, json.row]
+        const next = prev.slice()
+        next[idx] = json.row
+        return next
+      })
+      setDrafts((prev) => ({ ...prev, [language]: rowToDraft(json.row) }))
+      // Auto-expand so the operator can review immediately.
+      setExpanded((p) => {
+        const n = new Set(p)
+        n.add(language)
+        return n
+      })
+    } catch (e: any) {
+      toast.error(
+        t('products.edit.locales.aiFailed', {
+          error: e?.message ?? String(e),
+        }),
+      )
+    } finally {
+      setTranslatingLocale(null)
     }
   }
 
@@ -654,11 +737,14 @@ export default function LocalesTab({
                           </Button>
                         )}
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           size="sm"
-                          disabled
+                          loading={translatingLocale === row.language}
                           icon={<Sparkles className="w-3.5 h-3.5" />}
-                          title={t('products.edit.locales.aiTranslateSoon')}
+                          onClick={() => void onAiTranslate(row.language)}
+                          title={t('products.edit.locales.aiTranslateTooltip', {
+                            locale: row.language.toUpperCase(),
+                          })}
                         >
                           {t('products.edit.locales.aiTranslate')}
                         </Button>
