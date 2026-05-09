@@ -115,6 +115,9 @@ export default function ApiCallsClient() {
   const urlSuccess = searchParams.get('success') ?? ''
   const urlRequestId = searchParams.get('requestId') ?? ''
   const urlOperation = searchParams.get('operation') ?? ''
+  const urlProductId = searchParams.get('productId') ?? ''
+  const urlListingId = searchParams.get('listingId') ?? ''
+  const urlOrderId = searchParams.get('orderId') ?? ''
 
   const [rollup, setRollup] = useState<RollupResponse | null>(null)
   const [recent, setRecent] = useState<ApiCallRow[]>([])
@@ -168,6 +171,9 @@ export default function ApiCallsClient() {
         if (urlSuccess) filters.success = urlSuccess
         if (urlRequestId) filters.requestId = urlRequestId
         if (urlOperation) filters.operation = urlOperation
+        if (urlProductId) filters.productId = urlProductId
+        if (urlListingId) filters.listingId = urlListingId
+        if (urlOrderId) filters.orderId = urlOrderId
 
         const qs = new URLSearchParams(filters)
         const recentParams = new URLSearchParams(qs)
@@ -213,7 +219,7 @@ export default function ApiCallsClient() {
         else setLoadingMore(false)
       }
     },
-    [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, urlOperation, nextCursor],
+    [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, urlOperation, urlProductId, urlListingId, urlOrderId, nextCursor],
   )
 
   useEffect(() => {
@@ -221,7 +227,7 @@ export default function ApiCallsClient() {
     // fetchAll changes when filters change; avoid loop by depending only
     // on filter inputs, not nextCursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, urlOperation])
+  }, [sinceMs, urlChannel, urlErrorType, urlSuccess, urlRequestId, urlOperation, urlProductId, urlListingId, urlOrderId])
 
   // L.7.0 — live tail. Opens an EventSource against the backend SSE
   // endpoint while `live` is true. Each api-call.recorded event is
@@ -450,6 +456,46 @@ export default function ApiCallsClient() {
               title={t('syncLogs.apiCalls.filter.clearOperation')}
             >
               {t('syncLogs.apiCalls.filter.opPrefix', { value: urlOperation })}
+              <X className="w-3 h-3" />
+            </button>
+          )}
+
+          {/* L.22.0 — entity-scope chips (productId / listingId /
+              orderId). Set when an operator deep-links from a
+              product / listing / order page; click X to clear. */}
+          {urlProductId && (
+            <button
+              type="button"
+              onClick={() => updateUrl({ productId: '' })}
+              className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
+              title="Clear product filter"
+            >
+              product: {urlProductId.slice(0, 12)}
+              {urlProductId.length > 12 && '…'}
+              <X className="w-3 h-3" />
+            </button>
+          )}
+          {urlListingId && (
+            <button
+              type="button"
+              onClick={() => updateUrl({ listingId: '' })}
+              className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
+              title="Clear listing filter"
+            >
+              listing: {urlListingId.slice(0, 12)}
+              {urlListingId.length > 12 && '…'}
+              <X className="w-3 h-3" />
+            </button>
+          )}
+          {urlOrderId && (
+            <button
+              type="button"
+              onClick={() => updateUrl({ orderId: '' })}
+              className="px-2 py-0.5 text-sm font-mono rounded border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors"
+              title="Clear order filter"
+            >
+              order: {urlOrderId.slice(0, 12)}
+              {urlOrderId.length > 12 && '…'}
               <X className="w-3 h-3" />
             </button>
           )}

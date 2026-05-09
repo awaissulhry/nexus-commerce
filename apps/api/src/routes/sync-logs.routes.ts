@@ -51,6 +51,9 @@ interface CallsQuery {
   success?: string
   errorType?: string
   requestId?: string
+  productId?: string
+  listingId?: string
+  orderId?: string
   limit?: string
   cursor?: string
 }
@@ -76,6 +79,9 @@ function buildWhere(
   else if (q.success === 'false') where.success = false
   if (q.errorType) where.errorType = q.errorType
   if (q.requestId) where.requestId = q.requestId
+  if (q.productId) where.productId = q.productId
+  if (q.listingId) where.listingId = q.listingId
+  if (q.orderId) where.orderId = q.orderId
   return where
 }
 
