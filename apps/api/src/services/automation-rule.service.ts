@@ -196,11 +196,18 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
   },
 
   /**
-   * Auto-approve a replenishment recommendation. Looks up the
-   * recommendation by id from the trigger context, and (when not
-   * dry-run) sets its status to APPROVED. R.7 PO approval workflow
-   * stays the source of truth; this just bypasses the human review
-   * step under explicit operator-defined rule conditions.
+   * Auto-approve a replenishment recommendation. Marks the
+   * ReplenishmentRecommendation as ACTED with audit metadata —
+   * ACTED is the canonical "operator acted on this rec" status per
+   * R.3's lifecycle (ACTIVE → SUPERSEDED | ACTED | DISMISSED |
+   * EXPIRED). The downstream PO creation is a separate action
+   * (create_po_from_recommendation, W4.10) so this handler stays
+   * focused on the approval intent.
+   *
+   * Audit trail: actedByUserId set to 'automation:<ruleId>' so the
+   * Recommendation history surface (R.3) can distinguish auto-acts
+   * from human-acts. Re-running on a non-ACTIVE rec is a no-op
+   * (idempotent — no double-acting).
    */
   auto_approve_recommendation: async (action, context, meta) => {
     const recId =
@@ -213,15 +220,34 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
       return {
         type: action.type,
         ok: true,
-        output: { dryRun: true, recommendationId: recId, wouldApprove: true },
+        output: {
+          dryRun: true,
+          recommendationId: recId,
+          wouldTransition: 'ACTIVE → ACTED',
+          wouldSetActedBy: `automation:${meta.ruleId}`,
+        },
       }
     }
-    const updated = await prisma.replenishmentRecommendation.update({
-      where: { id: recId },
-      data: { status: 'APPROVED' },
-      select: { id: true, status: true },
+    // Idempotent: only transition ACTIVE recs. Already-ACTED rows
+    // skip silently so re-evaluation across the same payload doesn't
+    // double-write actedAt.
+    const updated = await prisma.replenishmentRecommendation.updateMany({
+      where: { id: recId, status: 'ACTIVE' },
+      data: {
+        status: 'ACTED',
+        actedAt: new Date(),
+        actedByUserId: `automation:${meta.ruleId}`,
+      },
     })
-    return { type: action.type, ok: true, output: updated }
+    return {
+      type: action.type,
+      ok: true,
+      output: {
+        recommendationId: recId,
+        rowsAffected: updated.count,
+        skippedAlreadyActed: updated.count === 0,
+      },
+    }
   },
 }
 
