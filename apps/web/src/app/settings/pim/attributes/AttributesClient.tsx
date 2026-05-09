@@ -38,6 +38,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -125,6 +126,7 @@ export default function AttributesClient({
   )
   const confirm = useConfirm()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const refresh = useCallback(async () => {
     try {
@@ -227,10 +229,10 @@ export default function AttributesClient({
         <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Groups ({groups.length})
+              {t('pim.attributes.groupsRail.title', { count: groups.length })}
             </div>
             <IconButton
-              aria-label="New group"
+              aria-label={t('pim.attributes.groupsRail.newGroup')}
               size="sm"
               tone="info"
               onClick={() => setCreatingGroup(true)}
@@ -240,7 +242,7 @@ export default function AttributesClient({
           </div>
           {groups.length === 0 ? (
             <div className="px-3 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">
-              No groups yet.
+              {t('pim.attributes.groupsRail.empty')}
             </div>
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -255,7 +257,7 @@ export default function AttributesClient({
                   )}
                 >
                   <span className="text-slate-700 dark:text-slate-300 italic">
-                    All attributes
+                    {t('pim.attributes.groupsRail.allAttributes')}
                   </span>
                   <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                     {attributes.length}
@@ -279,12 +281,17 @@ export default function AttributesClient({
                       {g.label}
                     </div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                      {g.code} · {g._count?.attributes ?? 0} attr
-                      {g._count?.attributes === 1 ? '' : 's'}
+                      {g.code} ·{' '}
+                      {t(
+                        g._count?.attributes === 1
+                          ? 'pim.attributes.groupsRail.attrCount.one'
+                          : 'pim.attributes.groupsRail.attrCount.other',
+                        { count: g._count?.attributes ?? 0 },
+                      )}
                     </div>
                   </button>
                   <IconButton
-                    aria-label={`Delete group ${g.label}`}
+                    aria-label={t('pim.attributes.groupsRail.deleteAria', { label: g.label })}
                     size="sm"
                     tone="danger"
                     onClick={() => onDeleteGroup(g)}
@@ -303,8 +310,11 @@ export default function AttributesClient({
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {selectedGroupId === null
-                ? `All attributes (${attributes.length})`
-                : `${groups.find((g) => g.id === selectedGroupId)?.label ?? ''} attributes (${filteredAttrs.length})`}
+                ? t('pim.attributes.attrs.titleAll', { count: attributes.length })
+                : t('pim.attributes.attrs.titleGroup', {
+                    group: groups.find((g) => g.id === selectedGroupId)?.label ?? '',
+                    count: filteredAttrs.length,
+                  })}
             </div>
             <Button
               variant="primary"
@@ -314,11 +324,11 @@ export default function AttributesClient({
               disabled={groups.length === 0}
               title={
                 groups.length === 0
-                  ? 'Create a group first — every attribute belongs to one group.'
-                  : 'New attribute'
+                  ? t('pim.attributes.attrs.newDisabled')
+                  : t('pim.attributes.attrs.newEnabled')
               }
             >
-              New attribute
+              {t('pim.attributes.attrs.new')}
             </Button>
           </div>
           {filteredAttrs.length === 0 ? (
@@ -326,22 +336,22 @@ export default function AttributesClient({
               <Tag className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
               <div className="text-md text-slate-700 dark:text-slate-300">
                 {groups.length === 0
-                  ? 'Create a group first, then add attributes.'
-                  : 'No attributes in this group yet.'}
+                  ? t('pim.attributes.attrs.empty.noGroups')
+                  : t('pim.attributes.attrs.empty.noAttrs')}
               </div>
             </div>
           ) : (
             <table className="w-full text-base">
               <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
                 <tr className="text-left">
-                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Code</th>
-                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Label</th>
-                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Type</th>
+                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.attributes.attrs.col.code')}</th>
+                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.attributes.attrs.col.label')}</th>
+                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.attributes.attrs.col.type')}</th>
                   {selectedGroupId === null && (
-                    <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Group</th>
+                    <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.attributes.attrs.col.group')}</th>
                   )}
-                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Options</th>
-                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Used by</th>
+                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.attributes.attrs.col.options')}</th>
+                  <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.attributes.attrs.col.usedBy')}</th>
                   <th className="px-3 py-2 w-8" aria-label="Actions" />
                 </tr>
               </thead>
