@@ -71,6 +71,12 @@ export type InvalidationType =
   | 'shipment.updated'
   | 'shipment.deleted'
   | 'order.shipped'
+  // W6.2 — scheduled bulk-action events. Cross-tab sync for the
+  // schedules drawer so creating a schedule in one tab updates the
+  // list in another.
+  | 'schedule.created'
+  | 'schedule.updated'
+  | 'schedule.deleted'
 
 export interface InvalidationEvent {
   type: InvalidationType
