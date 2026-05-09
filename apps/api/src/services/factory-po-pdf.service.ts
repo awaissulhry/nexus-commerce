@@ -101,6 +101,50 @@ export interface FactoryPoInput {
   /** Pre-computed total units across every group's lines. Caller computes
    *  to keep this service stateless. */
   totalUnits: number
+  /** W9.7 — Localization. 'it' renders the Italian fiscal-compliant
+   *  label set ("Ordine d'acquisto" / "Fornitore" / "Data ordine" / etc).
+   *  Default 'en'. */
+  locale?: 'en' | 'it'
+}
+
+// W9.7 — Italian fiscal PO labels. Italian operations expect a PO
+// titled "Ordine d'acquisto" (or "Conferma d'ordine") with the
+// localized field captions an Italian supplier reads cleanly. The
+// existing letterhead already carries P.IVA from BrandSettings; this
+// table translates the static chrome.
+type PoLabelKey =
+  | 'title'
+  | 'supplier'
+  | 'supplierNotAssigned'
+  | 'orderDate'
+  | 'expectedDelivery'
+  | 'status'
+  | 'totalUnits'
+  | 'notes'
+const PO_LABELS: Record<'en' | 'it', Record<PoLabelKey, string>> = {
+  en: {
+    title: 'PURCHASE ORDER',
+    supplier: 'Supplier',
+    supplierNotAssigned: 'Supplier: not assigned',
+    orderDate: 'Order date',
+    expectedDelivery: 'Expected delivery',
+    status: 'Status',
+    totalUnits: 'Total units',
+    notes: 'Notes',
+  },
+  it: {
+    title: "Ordine d'acquisto",
+    supplier: 'Fornitore',
+    supplierNotAssigned: 'Fornitore: non assegnato',
+    orderDate: 'Data ordine',
+    expectedDelivery: 'Consegna prevista',
+    status: 'Stato',
+    totalUnits: 'Unità totali',
+    notes: 'Note',
+  },
+}
+function poLabel(input: FactoryPoInput, key: PoLabelKey): string {
+  return PO_LABELS[input.locale ?? 'en'][key]
 }
 
 const PAGE_MARGIN = 50
@@ -170,14 +214,14 @@ export async function renderFactoryPoPdf(input: FactoryPoInput): Promise<Buffer>
     .fontSize(11)
     .fillColor(HEADER_DARK)
     .font('Helvetica-Bold')
-    .text(`Total units: ${input.totalUnits}`)
+    .text(`${poLabel(input, 'totalUnits')}: ${input.totalUnits}`)
   if (input.notes && input.notes.trim().length > 0) {
     doc.moveDown(0.5)
     doc
       .fontSize(10)
       .font('Helvetica')
       .fillColor(TEXT_GREY)
-      .text(`Notes: ${input.notes.trim()}`)
+      .text(`${poLabel(input, 'notes')}: ${input.notes.trim()}`)
   }
   if (
     input.brand.defaultPoNotes &&
@@ -286,7 +330,7 @@ function renderPoMeta(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
     .fontSize(20)
     .font('Helvetica-Bold')
     .fillColor(HEADER_DARK)
-    .text('PURCHASE ORDER', PAGE_MARGIN, y)
+    .text(poLabel(input, 'title'), PAGE_MARGIN, y)
   doc
     .fontSize(11)
     .font('Helvetica-Bold')
@@ -309,7 +353,7 @@ function renderPoMeta(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
     doc
       .font('Helvetica-Bold')
       .fillColor(HEADER_DARK)
-      .text('Supplier', PAGE_MARGIN, lineY, { width: colWidth })
+      .text(poLabel(input, 'supplier'), PAGE_MARGIN, lineY, { width: colWidth })
       .font('Helvetica')
       .fillColor(TEXT_GREY)
       .text(input.supplier.name, PAGE_MARGIN, doc.y, { width: colWidth })
@@ -326,7 +370,7 @@ function renderPoMeta(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
     doc
       .font('Helvetica-Bold')
       .fillColor('#b45309') // amber
-      .text('Supplier: not assigned', PAGE_MARGIN, lineY, { width: colWidth })
+      .text(poLabel(input, 'supplierNotAssigned'), PAGE_MARGIN, lineY, { width: colWidth })
   }
   const leftEndY = doc.y
 
@@ -335,7 +379,7 @@ function renderPoMeta(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
   doc
     .font('Helvetica-Bold')
     .fillColor(HEADER_DARK)
-    .text('Order date', dateX, lineY, { width: colWidth })
+    .text(poLabel(input, 'orderDate'), dateX, lineY, { width: colWidth })
     .font('Helvetica')
     .fillColor(TEXT_GREY)
     .text(input.createdAt.toISOString().slice(0, 10), dateX, doc.y, {
@@ -347,7 +391,7 @@ function renderPoMeta(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
     doc
       .font('Helvetica-Bold')
       .fillColor(HEADER_DARK)
-      .text('Expected delivery', dateX, doc.y, { width: colWidth })
+      .text(poLabel(input, 'expectedDelivery'), dateX, doc.y, { width: colWidth })
       .font('Helvetica')
       .fillColor(TEXT_GREY)
       .text(input.expectedDeliveryDate.toISOString().slice(0, 10), dateX, doc.y, {
@@ -358,7 +402,7 @@ function renderPoMeta(doc: PDFKit.PDFDocument, input: FactoryPoInput): void {
   doc
     .font('Helvetica-Bold')
     .fillColor(HEADER_DARK)
-    .text('Status', dateX, doc.y, { width: colWidth })
+    .text(poLabel(input, 'status'), dateX, doc.y, { width: colWidth })
     .font('Helvetica')
     .fillColor(TEXT_GREY)
     .text(input.status, dateX, doc.y, { width: colWidth })
