@@ -1663,6 +1663,8 @@
   "overview.alerts.liveListings": "Annunci attivi",
   "overview.alerts.variants": "Varianti",
 
+  "overview.exportPdf": "Scarica snapshot PDF",
+
   "overview.reports.heading": "Report email programmati",
   "overview.reports.empty": "Nessun report programmato.",
   "overview.reports.emailPlaceholder": "tu@xavia.it",

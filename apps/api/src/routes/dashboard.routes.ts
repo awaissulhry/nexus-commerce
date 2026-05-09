@@ -2491,6 +2491,37 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // DO.41 — on-demand PDF export. Same digest data the email
+  // dispatch builds, rendered as a letter-page PDF via pdfkit so
+  // the operator can download / share / archive a snapshot
+  // without waiting for the next scheduled email tick.
+  fastify.get<{ Querystring: { frequency?: string } }>(
+    '/dashboard/export/pdf',
+    async (request, reply) => {
+      const f = request.query?.frequency
+      const frequency: 'daily' | 'weekly' | 'monthly' =
+        f === 'weekly' || f === 'monthly' ? f : 'daily'
+      try {
+        const { buildDashboardPdf } = await import(
+          '../services/dashboard-pdf.service.js'
+        )
+        const pdf = await buildDashboardPdf({ frequency })
+        const stamp = new Date().toISOString().slice(0, 10)
+        reply.header('Content-Type', 'application/pdf')
+        reply.header(
+          'Content-Disposition',
+          `attachment; filename="nexus-dashboard-${frequency}-${stamp}.pdf"`,
+        )
+        reply.header('Cache-Control', 'private, no-store')
+        return reply.send(pdf)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[dashboard/export/pdf] failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
+
   // Preview: build the digest for `frequency` and send a single
   // copy to `to`. Doesn't touch ScheduledReport rows. Operator's
   // "Test send" button calls this before saving a config.

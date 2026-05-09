@@ -1675,6 +1675,8 @@
   "overview.alerts.liveListings": "Live listings",
   "overview.alerts.variants": "Variants",
 
+  "overview.exportPdf": "Download PDF snapshot",
+
   "overview.reports.heading": "Scheduled email reports",
   "overview.reports.empty": "No scheduled reports yet.",
   "overview.reports.emailPlaceholder": "you@xavia.it",

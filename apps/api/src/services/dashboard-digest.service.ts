@@ -97,7 +97,7 @@ function digestRange(
   return { from, to: todayStart, label: 'Last 30 days' }
 }
 
-async function buildDigestData(
+export async function buildDigestData(
   frequency: DigestFrequency,
   now = new Date(),
 ): Promise<DigestData> {

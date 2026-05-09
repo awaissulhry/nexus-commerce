@@ -1,9 +1,10 @@
 'use client'
 
-import { CircleDot, RefreshCw, Settings2 } from 'lucide-react'
+import { CircleDot, Download, RefreshCw, Settings2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { getBackendUrl } from '@/lib/backend-url'
 import RelativeTimestamp from './RelativeTimestamp'
 import {
   COMPARES,
@@ -218,6 +219,26 @@ export default function Header({
           >
             {t('overview.refresh')}
           </Button>
+          {/* DO.41 — download current dashboard as PDF. Anchor with
+              download attribute so the browser saves directly
+              without a tab open. */}
+          <a
+            href={`${getBackendUrl()}/api/dashboard/export/pdf?frequency=daily`}
+            download
+            title={t('overview.exportPdf')}
+            aria-label={t('overview.exportPdf')}
+            className={cn(
+              'inline-flex items-center justify-center h-7 w-7 rounded-md border',
+              'border-slate-200 dark:border-slate-700',
+              'bg-white dark:bg-slate-900',
+              'text-slate-500 dark:text-slate-400',
+              'hover:bg-slate-50 dark:hover:bg-slate-800',
+              'hover:text-slate-700 dark:hover:text-slate-200',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+            )}
+          >
+            <Download className="w-3.5 h-3.5" />
+          </a>
           {/* DO.32 — customise (icon-only on narrow viewports). */}
           <button
             type="button"
