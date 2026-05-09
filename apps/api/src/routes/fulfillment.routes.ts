@@ -134,6 +134,7 @@ import {
 } from '../jobs/automation-rule-evaluator.job.js'
 import { executeScenarioRun } from '../services/scenario-planner.service.js'
 import { detectPanEuImbalances } from '../services/pan-eu-distribution.service.js'
+import { estimateNewListingDemand } from '../services/new-listing-demand.service.js'
 import {
   transitionPo,
   getPoAuditTrail,
@@ -8610,6 +8611,42 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           currencies: r.currencies ?? [],
         })),
       }
+    },
+  )
+
+  // W7.4 — New-listing demand estimator. Cold-start helper: a
+  // freshly-published SKU with zero sales history gets estimated
+  // demand by averaging the first-N-day velocity of comparables
+  // (same productType / brand, launched in the last year). Closes
+  // ~80% of the cold-start gap with one query and zero schema
+  // change.
+  //
+  // Returns null estimatedVelocityPerDay when no comparables
+  // qualify (operator sees the empty comparables list and falls
+  // back to manual judgement).
+  fastify.get(
+    '/fulfillment/replenishment/products/:productId/new-listing-demand',
+    async (request, reply) => {
+      const { productId } = request.params as { productId: string }
+      const q = (request.query ?? {}) as {
+        windowDays?: string
+        minComparableDays?: string
+        recentLaunchWindowDays?: string
+      }
+      const result = await estimateNewListingDemand(productId, {
+        windowDays: q.windowDays ? parseInt(q.windowDays, 10) : undefined,
+        minComparableDays: q.minComparableDays
+          ? parseInt(q.minComparableDays, 10)
+          : undefined,
+        recentLaunchWindowDays: q.recentLaunchWindowDays
+          ? parseInt(q.recentLaunchWindowDays, 10)
+          : undefined,
+      })
+      if (!result) {
+        return reply.code(404).send({ error: 'Product not found' })
+      }
+      reply.header('Cache-Control', 'private, max-age=30')
+      return result
     },
   )
 
