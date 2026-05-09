@@ -251,6 +251,12 @@ export default function PricingTab({
         </div>
       </Card>
 
+      {/* ── Price history (W6.1) ─────────────────────────────── */}
+      <PriceHistoryCard
+        productId={product.id}
+        currentBasePrice={basePrice}
+      />
+
       {/* ── Tier prices ──────────────────────────────────────── */}
       <Card
         title={t('products.edit.pricing.tierTitle')}
@@ -696,4 +702,370 @@ function ScheduledStatus({
       {t('products.edit.pricing.statusFailed')}
     </Badge>
   )
+}
+
+// ── W6.1 Price history card ───────────────────────────────────
+//
+// Pulls AuditLog rows for this product and reconstructs every base
+// price change. Two writers contribute to the trail:
+//   - master-price.service writes `before: { basePrice }` and
+//     `after: { basePrice }` directly on the audit row.
+//   - PATCH /api/products/bulk writes per-field rows with `after:
+//     { field: 'basePrice', value: <num> }` (no `before` because the
+//     bulk handler doesn't pre-fetch values).
+//
+// The card filters to rows where either shape parses to a number,
+// renders a min-max-current stat row + a sparkline, and lists the
+// last 8 changes for context.
+interface PriceHistoryEntry {
+  ts: number
+  price: number
+}
+
+function PriceHistoryCard({
+  productId,
+  currentBasePrice,
+}: {
+  productId: string
+  currentBasePrice: number | null
+}) {
+  const { t } = useTranslations()
+  const [entries, setEntries] = useState<PriceHistoryEntry[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const url = new URL(`${getBackendUrl()}/api/audit-log/search`)
+        url.searchParams.set('entityType', 'Product')
+        url.searchParams.set('entityId', productId)
+        url.searchParams.set('action', 'update')
+        url.searchParams.set('limit', '200')
+        const res = await fetch(url.toString(), { cache: 'no-store' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        if (cancelled) return
+        const rows = Array.isArray(json?.items) ? json.items : []
+        const out: PriceHistoryEntry[] = []
+        for (const row of rows) {
+          const price = priceFromAudit(row)
+          if (price == null) continue
+          const ts = new Date(row.createdAt).getTime()
+          if (Number.isNaN(ts)) continue
+          out.push({ ts, price })
+        }
+        // Sort oldest → newest for the chart.
+        out.sort((a, b) => a.ts - b.ts)
+        setEntries(out)
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message ?? String(e))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
+
+  if (error) {
+    return (
+      <Card title={t('products.edit.pricing.historyTitle')}>
+        <div className="text-sm text-rose-700 dark:text-rose-300 inline-flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" />
+          {error}
+        </div>
+      </Card>
+    )
+  }
+  if (entries === null) {
+    return (
+      <Card title={t('products.edit.pricing.historyTitle')}>
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          {t('products.edit.pricing.historyLoading')}
+        </div>
+      </Card>
+    )
+  }
+  if (entries.length === 0) {
+    return (
+      <Card
+        title={t('products.edit.pricing.historyTitle')}
+        description={t('products.edit.pricing.historyDesc')}
+      >
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          {t('products.edit.pricing.historyEmpty')}
+        </div>
+      </Card>
+    )
+  }
+
+  const prices = entries.map((e) => e.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  const first = entries[0].price
+  const last = entries[entries.length - 1].price
+  // Compare to the live product basePrice when available — captures
+  // the "since the last audited change, basePrice was edited via a
+  // path that didn't audit" case (rare, but the canonical view).
+  const current = currentBasePrice ?? last
+  const totalDelta =
+    first > 0 ? Math.round(((current - first) / first) * 1000) / 10 : null
+  const last30Cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const last30 = entries.filter((e) => e.ts >= last30Cutoff)
+  const last30First = last30[0]?.price ?? current
+  const last30Delta =
+    last30First > 0
+      ? Math.round(((current - last30First) / last30First) * 1000) / 10
+      : null
+
+  return (
+    <Card
+      title={t('products.edit.pricing.historyTitle')}
+      description={t('products.edit.pricing.historyDesc')}
+    >
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+        <PriceStat
+          label={t('products.edit.pricing.historyMin')}
+          value={`€${min.toFixed(2)}`}
+        />
+        <PriceStat
+          label={t('products.edit.pricing.historyMax')}
+          value={`€${max.toFixed(2)}`}
+        />
+        <PriceStat
+          label={t('products.edit.pricing.historyCurrent')}
+          value={`€${current.toFixed(2)}`}
+        />
+        <PriceStat
+          label={t('products.edit.pricing.historyDelta30')}
+          value={
+            last30Delta != null
+              ? `${last30Delta > 0 ? '+' : ''}${last30Delta.toFixed(1)}%`
+              : '—'
+          }
+          tone={
+            last30Delta != null && last30Delta < 0
+              ? 'positive'
+              : last30Delta != null && last30Delta > 0
+                ? 'negative'
+                : 'default'
+          }
+        />
+        <PriceStat
+          label={t('products.edit.pricing.historyDeltaTotal')}
+          value={
+            totalDelta != null
+              ? `${totalDelta > 0 ? '+' : ''}${totalDelta.toFixed(1)}%`
+              : '—'
+          }
+          tone={
+            totalDelta != null && totalDelta < 0
+              ? 'positive'
+              : totalDelta != null && totalDelta > 0
+                ? 'negative'
+                : 'default'
+          }
+        />
+      </div>
+
+      <Sparkline entries={entries} width={640} height={120} />
+
+      {entries.length > 1 && (
+        <div className="mt-3 border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900">
+              <tr className="text-left">
+                <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {t('products.edit.pricing.historyColWhen')}
+                </th>
+                <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">
+                  {t('products.edit.pricing.historyColPrice')}
+                </th>
+                <th className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">
+                  {t('products.edit.pricing.historyColDelta')}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries
+                .slice()
+                .reverse()
+                .slice(0, 8)
+                .map((e, idx, arr) => {
+                  const prev = arr[idx + 1]?.price ?? null
+                  const delta =
+                    prev != null && prev > 0
+                      ? Math.round(((e.price - prev) / prev) * 1000) / 10
+                      : null
+                  return (
+                    <tr
+                      key={e.ts}
+                      className="border-t border-slate-100 dark:border-slate-800"
+                    >
+                      <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 tabular-nums">
+                        {new Date(e.ts).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-medium">
+                        €{e.price.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {delta != null ? (
+                          <span
+                            className={cn(
+                              'text-xs px-1.5 py-0.5 rounded',
+                              delta < 0
+                                ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
+                                : delta > 0
+                                  ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40'
+                                  : 'text-slate-600 dark:text-slate-400',
+                            )}
+                          >
+                            {delta > 0 ? '+' : ''}
+                            {delta.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-600">
+                            —
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function PriceStat({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string
+  value: string
+  tone?: 'default' | 'positive' | 'negative'
+}) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {label}
+      </div>
+      <div
+        className={cn(
+          'text-lg font-semibold tabular-nums mt-0.5',
+          tone === 'default' && 'text-slate-900 dark:text-slate-100',
+          tone === 'positive' && 'text-emerald-700 dark:text-emerald-300',
+          tone === 'negative' && 'text-amber-700 dark:text-amber-300',
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function Sparkline({
+  entries,
+  width,
+  height,
+}: {
+  entries: PriceHistoryEntry[]
+  width: number
+  height: number
+}) {
+  if (entries.length === 0) return null
+  if (entries.length === 1) {
+    // Single point — show a flat line with the marker.
+    return (
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-32"
+        preserveAspectRatio="none"
+      >
+        <line
+          x1={0}
+          x2={width}
+          y1={height / 2}
+          y2={height / 2}
+          stroke="currentColor"
+          strokeWidth="2"
+          className="text-blue-500 dark:text-blue-400"
+        />
+        <circle
+          cx={width / 2}
+          cy={height / 2}
+          r="3"
+          className="fill-blue-500 dark:fill-blue-400"
+        />
+      </svg>
+    )
+  }
+  const minTs = entries[0].ts
+  const maxTs = entries[entries.length - 1].ts
+  const minPrice = Math.min(...entries.map((e) => e.price))
+  const maxPrice = Math.max(...entries.map((e) => e.price))
+  const padX = 6
+  const padY = 8
+  const innerW = width - padX * 2
+  const innerH = height - padY * 2
+  const xOf = (ts: number) =>
+    maxTs === minTs
+      ? width / 2
+      : padX + ((ts - minTs) / (maxTs - minTs)) * innerW
+  const yOf = (price: number) =>
+    maxPrice === minPrice
+      ? height / 2
+      : padY + (1 - (price - minPrice) / (maxPrice - minPrice)) * innerH
+  const path = entries
+    .map((e, idx) => `${idx === 0 ? 'M' : 'L'} ${xOf(e.ts)} ${yOf(e.price)}`)
+    .join(' ')
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-32"
+      preserveAspectRatio="none"
+    >
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-blue-500 dark:text-blue-400"
+      />
+      {entries.map((e) => (
+        <circle
+          key={e.ts}
+          cx={xOf(e.ts)}
+          cy={yOf(e.price)}
+          r="2.5"
+          className="fill-blue-500 dark:fill-blue-400"
+        />
+      ))}
+    </svg>
+  )
+}
+
+function priceFromAudit(row: any): number | null {
+  // master-price.service shape: { after: { basePrice } }
+  const direct = row?.after?.basePrice
+  if (typeof direct === 'number') return direct
+  if (typeof direct === 'string') {
+    const n = Number(direct)
+    return Number.isFinite(n) ? n : null
+  }
+  // /bulk PATCH shape: { after: { field: 'basePrice', value } }
+  if (
+    row?.after?.field === 'basePrice' &&
+    (typeof row.after.value === 'number' ||
+      typeof row.after.value === 'string')
+  ) {
+    const n = Number(row.after.value)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
 }
