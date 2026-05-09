@@ -862,7 +862,7 @@ export default function StockWorkspace() {
       <StockSubNav cycleCountActive={cycleCountActive} />
 
       {/* KPI strip */}
-      <KpiStrip kpis={kpis} t={t} />
+      <KpiStrip kpis={kpis} t={t} onFilterStatus={(s) => updateUrl({ status: s, page: undefined })} />
 
       {/* Insights panel — only renders when there's signal */}
       {insights && (
@@ -1170,7 +1170,11 @@ export default function StockWorkspace() {
 // ─────────────────────────────────────────────────────────────────────
 // KPI strip
 // ─────────────────────────────────────────────────────────────────────
-function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<string, string | number>) => string }) {
+function KpiStrip({ kpis, t, onFilterStatus }: {
+  kpis: Kpis | null
+  t: (k: string, v?: Record<string, string | number>) => string
+  onFilterStatus: (status: string) => void
+}) {
   if (!kpis) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1183,7 +1187,23 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
     )
   }
 
-  const cards = [
+  // T.31 — escalate when stockout ratio crosses 25% of buyables. At
+  // Xavia today that's 155/266 = 58%, well into critical territory.
+  // The escalated card uses a heavier tone + ring so the operator
+  // can't ignore it.
+  const stockoutRatio = kpis.totalSkus > 0 ? kpis.stockouts / kpis.totalSkus : 0
+  const stockoutSevere = stockoutRatio >= 0.25
+
+  const cards: Array<{
+    icon: typeof Boxes
+    label: string
+    value: string
+    detail: string
+    tone: string
+    onClick?: () => void
+    cardClass?: string
+    ariaLabel?: string
+  }> = [
     {
       icon: Boxes,
       label: t('stock.kpi.totalValue'),
@@ -1198,8 +1218,20 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
       icon: AlertTriangle,
       label: t('stock.kpi.stockouts'),
       value: kpis.stockouts.toLocaleString(),
-      detail: t('stock.kpi.stockoutsDetail', { n: kpis.totalSkus.toLocaleString() }),
-      tone: kpis.stockouts > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
+      detail: t(
+        stockoutSevere ? 'stock.kpi.stockoutsDetailSevere' : 'stock.kpi.stockoutsDetail',
+        { n: kpis.totalSkus.toLocaleString(), pct: Math.round(stockoutRatio * 100) },
+      ),
+      tone: stockoutSevere
+        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+        : kpis.stockouts > 0
+          ? 'bg-rose-50 text-rose-600'
+          : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
+      onClick: kpis.stockouts > 0 ? () => onFilterStatus('OUT_OF_STOCK') : undefined,
+      cardClass: stockoutSevere ? 'ring-2 ring-rose-300 dark:ring-rose-800' : undefined,
+      ariaLabel: kpis.stockouts > 0
+        ? t('stock.kpi.stockoutsAria', { n: kpis.stockouts.toLocaleString() })
+        : undefined,
     },
     {
       icon: TrendingDown,
@@ -1207,6 +1239,10 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
       value: kpis.critical.toLocaleString(),
       detail: t('stock.kpi.criticalDetail', { n: kpis.low.toLocaleString() }),
       tone: kpis.critical > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 dark:bg-slate-800 text-slate-600',
+      onClick: kpis.critical > 0 ? () => onFilterStatus('CRITICAL') : undefined,
+      ariaLabel: kpis.critical > 0
+        ? t('stock.kpi.criticalAria', { n: kpis.critical.toLocaleString() })
+        : undefined,
     },
     {
       icon: Layers,
@@ -1219,8 +1255,8 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-      {cards.map((c, i) => (
-        <Card key={i}>
+      {cards.map((c, i) => {
+        const inner = (
           <div className="flex items-start gap-3">
             <div className={`w-9 h-9 rounded-md inline-flex items-center justify-center flex-shrink-0 ${c.tone}`}>
               <c.icon size={16} />
@@ -1231,8 +1267,27 @@ function KpiStrip({ kpis, t }: { kpis: Kpis | null; t: (k: string, v?: Record<st
               <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 truncate">{c.detail}</div>
             </div>
           </div>
-        </Card>
-      ))}
+        )
+        if (c.onClick) {
+          return (
+            <Card key={i} className={c.cardClass}>
+              <button
+                type="button"
+                onClick={c.onClick}
+                aria-label={c.ariaLabel}
+                className="w-full text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {inner}
+              </button>
+            </Card>
+          )
+        }
+        return (
+          <Card key={i} className={c.cardClass}>
+            {inner}
+          </Card>
+        )
+      })}
     </div>
   )
 }
