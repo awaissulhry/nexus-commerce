@@ -1519,6 +1519,35 @@ const ProductCell = memo(function ProductCell({
         </Link>
       )
     }
+    // W3.9 — Workflow stage chip. Tone reflects stage role: amber
+    // for publishable, emerald for terminal, blue otherwise.
+    // Click opens the drawer at the workflow tab.
+    case 'workflowStage': {
+      if (!p.workflowStage) {
+        return (
+          <span
+            className="text-xs italic text-slate-400 dark:text-slate-500"
+            title="No workflow attached. Attach a family with a workflow, or use BulkActionBar → Move stage."
+          >
+            —
+          </span>
+        )
+      }
+      const tone = p.workflowStage.isPublishable
+        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+        : p.workflowStage.isTerminal
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+      return (
+        <Link
+          href={`/products?drawer=${p.id}&drawerTab=workflow`}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:opacity-80 max-w-full truncate ${tone}`}
+          title={`${p.workflowStage.label} · ${p.workflowStage.workflow.label}`}
+        >
+          <span className="truncate">{p.workflowStage.label}</span>
+        </Link>
+      )
+    }
     case 'coverage': {
       // F8 — surface ALL canonical channels per row, not just the ones
       // already listed. Missing channels render as a gray "+"

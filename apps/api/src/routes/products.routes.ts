@@ -136,6 +136,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // family ids (Prisma `in:`). Pass `families=null` to filter for
       // products with no family attached (the "unfamilied" backlog).
       families?: string
+      // W3.9 — filter by WorkflowStage.id (comma-separated). Same
+      // 'null' literal convention for the "no stage" bucket.
+      workflowStages?: string
       tags?: string
       fulfillment?: string
       marketplaces?: string
@@ -186,6 +189,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const familiesRaw = (q.families ?? '').split(',').map((s) => s.trim()).filter(Boolean)
       const familyFilterUnattached = familiesRaw.length === 1 && familiesRaw[0] === 'null'
       const familyIdList = familyFilterUnattached ? [] : familiesRaw
+      // W3.9 — workflow-stage filter. Same 'null' convention.
+      const wfStagesRaw = (q.workflowStages ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const wfStageFilterUnattached = wfStagesRaw.length === 1 && wfStagesRaw[0] === 'null'
+      const wfStageIdList = wfStageFilterUnattached ? [] : wfStagesRaw
       const tagIdList = (q.tags ?? '').split(',').map((s) => s.trim()).filter(Boolean)
       const fulfillmentList = (q.fulfillment ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
       const marketplaceList = (q.marketplaces ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
@@ -220,6 +227,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // otherwise filter by familyId in the list.
       if (familyFilterUnattached) where.familyId = null
       else if (familyIdList.length > 0) where.familyId = { in: familyIdList }
+      // W3.9 — workflow-stage filter, same shape.
+      if (wfStageFilterUnattached) where.workflowStageId = null
+      else if (wfStageIdList.length > 0) where.workflowStageId = { in: wfStageIdList }
       if (fulfillmentList.length > 0) where.fulfillmentMethod = { in: fulfillmentList }
       if (marketplaceList.length > 0) {
         where.channelListings = { some: { marketplace: { in: marketplaceList } } }
@@ -461,6 +471,19 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             // the grid can render the family chip + the FilterBar can
             // show the family label without a second round-trip.
             family: { select: { id: true, code: true, label: true } },
+            // W3.9 — Wave 3 workflow stage. Same cheap-join shape;
+            // adds workflow id+label so the grid chip can deep-link
+            // to the workflow editor.
+            workflowStage: {
+              select: {
+                id: true,
+                code: true,
+                label: true,
+                isPublishable: true,
+                isTerminal: true,
+                workflow: { select: { id: true, code: true, label: true } },
+              },
+            },
             // P.7 — version for inline-edit optimistic concurrency.
             // The grid sends it as If-Match on PATCH; on a 409 we
             // know another change landed first and can prompt.
@@ -573,6 +596,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           fulfillmentMethod: p.fulfillmentMethod,
           // W2.12 — family chip data; null when product has no family.
           family: p.family ?? null,
+          // W3.9 — workflow stage chip data. Null when product has
+          // no workflow attached.
+          workflowStage: p.workflowStage ?? null,
           // P.7 — version for inline-edit If-Match.
           version: p.version,
           imageUrl: p.images[0]?.url ?? null,

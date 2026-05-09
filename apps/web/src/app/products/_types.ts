@@ -28,6 +28,20 @@ export type ProductRow = {
    */
   family: { id: string; code: string; label: string } | null
   /**
+   * W3.9 — Workflow stage attached via Product.workflowStageId.
+   * Null when the product isn't on any workflow. Includes the parent
+   * workflow's id+label so the grid chip can deep-link to the
+   * workflow editor + distinguish same-named stages across workflows.
+   */
+  workflowStage: {
+    id: string
+    code: string
+    label: string
+    isPublishable: boolean
+    isTerminal: boolean
+    workflow: { id: string; code: string; label: string }
+  } | null
+  /**
    * P.7 — Product.version for optimistic-concurrency check on inline
    * edits. Sent as If-Match on PATCH /api/products/:id; server
    * returns 409 if the row changed since this list was fetched.

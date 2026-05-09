@@ -63,6 +63,14 @@ interface Facets {
     code: string | null
     count: number
   }>
+  // W3.9 — Workflow stage facet. Same shape: 'null' bucket first,
+  // then per-stage rows. Label includes the workflow name.
+  workflowStages?: Array<{
+    value: string
+    label: string
+    workflowLabel: string | null
+    count: number
+  }>
 }
 
 interface FilterBarProps {
@@ -78,6 +86,8 @@ interface FilterBarProps {
   // it with real ids is allowed (matches families IN list OR familyId
   // IS NULL semantically — see products.routes.ts where clause).
   familyFilters: string[]
+  // W3.9 — selected WorkflowStage ids. Same 'null' literal convention.
+  workflowStageFilters: string[]
   tagFilters: string[]
   fulfillmentFilters: string[]
   missingChannelFilters: string[]
@@ -118,6 +128,7 @@ export function FilterBar(props: FilterBarProps) {
     productTypeFilters,
     brandFilters,
     familyFilters,
+    workflowStageFilters,
     tagFilters,
     fulfillmentFilters,
     missingChannelFilters,
@@ -246,6 +257,21 @@ export function FilterBar(props: FilterBarProps) {
         .map((id) => familyLookup.get(id) ?? id)
         .join(', '),
       clear: () => updateUrl({ families: undefined, page: undefined }),
+    })
+  }
+  // W3.9 — Workflow stage pill. Same lookup pattern.
+  if (workflowStageFilters.length > 0) {
+    const stageLookup = new Map(
+      (facets?.workflowStages ?? []).map((s) => [s.value, s.label]),
+    )
+    activePills.push({
+      key: 'stage',
+      label: 'Stage',
+      value: workflowStageFilters
+        .map((id) => stageLookup.get(id) ?? id)
+        .join(', '),
+      clear: () =>
+        updateUrl({ workflowStages: undefined, page: undefined }),
     })
   }
   if (tagFilters.length > 0) {
@@ -536,6 +562,40 @@ export function FilterBar(props: FilterBarProps) {
                   searchable
                 />
               )}
+              {/* W3.9 — Workflow stage facet. 'null' bucket first
+                  ("products not on any workflow yet"). */}
+              {facets &&
+                facets.workflowStages &&
+                facets.workflowStages.length > 0 && (
+                  <FilterGroup
+                    label="Workflow stage"
+                    options={facets.workflowStages.map((s) => s.value)}
+                    selected={workflowStageFilters}
+                    counts={facets.workflowStages.reduce<Record<string, number>>(
+                      (m, s) => {
+                        m[s.value] = s.count
+                        return m
+                      },
+                      {},
+                    )}
+                    renderLabel={(id: string) =>
+                      facets.workflowStages!.find((s) => s.value === id)
+                        ?.label ?? id
+                    }
+                    onToggle={(v) =>
+                      updateUrl({
+                        workflowStages:
+                          toggleArr(workflowStageFilters, v).join(',') ||
+                          undefined,
+                        page: undefined,
+                      })
+                    }
+                    onClear={() =>
+                      updateUrl({ workflowStages: undefined, page: undefined })
+                    }
+                    searchable
+                  />
+                )}
             </div>
           </div>
 

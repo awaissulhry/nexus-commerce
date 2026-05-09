@@ -121,6 +121,13 @@ type Facets = {
     code: string | null
     count: number
   }>
+  // W3.9 — Workflow stage facet. Same shape as families.
+  workflowStages?: Array<{
+    value: string
+    label: string
+    workflowLabel: string | null
+    count: number
+  }>
 }
 type SavedView = {
   id: string
@@ -186,6 +193,8 @@ export default function ProductsWorkspace() {
   // W2.12 — PIM family filter. URL param `families` carries comma-separated
   // family ids; the literal 'null' represents "no family attached".
   const familyFilters = searchParams.get('families')?.split(',').filter(Boolean) ?? []
+  // W3.9 — Workflow stage filter. Same shape; param `workflowStages`.
+  const workflowStageFilters = searchParams.get('workflowStages')?.split(',').filter(Boolean) ?? []
   const tagFilters = searchParams.get('tags')?.split(',').filter(Boolean) ?? []
   const fulfillmentFilters = searchParams.get('fulfillment')?.split(',').filter(Boolean) ?? []
   const stockLevel = searchParams.get('stockLevel') ?? 'all'
@@ -351,6 +360,7 @@ export default function ProductsWorkspace() {
     if (productTypeFilters.length) qs.set('productTypes', productTypeFilters.join(','))
     if (brandFilters.length) qs.set('brands', brandFilters.join(','))
     if (familyFilters.length) qs.set('families', familyFilters.join(','))
+    if (workflowStageFilters.length) qs.set('workflowStages', workflowStageFilters.join(','))
     if (tagFilters.length) qs.set('tags', tagFilters.join(','))
     if (fulfillmentFilters.length) qs.set('fulfillment', fulfillmentFilters.join(','))
     if (missingChannelFilters.length) qs.set('missingChannels', missingChannelFilters.join(','))
@@ -364,7 +374,7 @@ export default function ProductsWorkspace() {
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, showDeleted, sortBy])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, showDeleted, sortBy])
 
   const {
     data: productsData,
@@ -554,6 +564,7 @@ export default function ProductsWorkspace() {
       productTypes: '',
       brands: '',
       families: '',
+      workflowStages: '',
       tags: '',
       fulfillment: '',
       missingChannels: '',
@@ -766,7 +777,7 @@ export default function ProductsWorkspace() {
   )
 
   // Reset selection when filters change
-  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), familyFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin])
+  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), familyFilters.join(','), workflowStageFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin])
 
   // P.15 — page-level keyboard shortcuts. Layered on top of the
   // global CommandPalette which owns Cmd+K / `?` / `/` / 'g <l>'
@@ -837,7 +848,7 @@ export default function ProductsWorkspace() {
 
   const filterCount =
     statusFilters.length + channelFilters.length + marketplaceFilters.length +
-    productTypeFilters.length + brandFilters.length + familyFilters.length + tagFilters.length +
+    productTypeFilters.length + brandFilters.length + familyFilters.length + workflowStageFilters.length + tagFilters.length +
     fulfillmentFilters.length + missingChannelFilters.length +
     (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0) +
     (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0)
@@ -1023,6 +1034,7 @@ export default function ProductsWorkspace() {
               if (productTypeFilters.length) filters.productTypes = productTypeFilters
               if (brandFilters.length) filters.brands = brandFilters
               if (familyFilters.length) filters.families = familyFilters
+              if (workflowStageFilters.length) filters.workflowStages = workflowStageFilters
               if (tagFilters.length) filters.tags = tagFilters
               if (fulfillmentFilters.length) filters.fulfillment = fulfillmentFilters
               if (stockLevel !== 'all') filters.stockLevel = stockLevel
@@ -1148,6 +1160,7 @@ export default function ProductsWorkspace() {
         productTypeFilters={productTypeFilters}
         brandFilters={brandFilters}
         familyFilters={familyFilters}
+        workflowStageFilters={workflowStageFilters}
         tagFilters={tagFilters}
         fulfillmentFilters={fulfillmentFilters}
         missingChannelFilters={missingChannelFilters}

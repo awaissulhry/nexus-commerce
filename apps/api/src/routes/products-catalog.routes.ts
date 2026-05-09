@@ -61,7 +61,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       }
       // F.1 — facets reflect only active (non-soft-deleted) products.
       // The recycle-bin lens shows its own row count separately.
-      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, channelCounts, hygieneCounts, families, unfamiliedCount] = await Promise.all([
+      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, channelCounts, hygieneCounts, families, unfamiliedCount, workflowStages, unstagedCount] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
           where: { parentId: null, productType: { not: null }, deletedAt: null },
@@ -139,6 +139,17 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         prisma.product.count({
           where: { parentId: null, deletedAt: null, familyId: null },
         }),
+        // W3.9 — Workflow stage facet. Same shape as families: the
+        // null bucket counted separately so "products not on any
+        // workflow yet (213)" surfaces alongside per-stage counts.
+        prisma.product.groupBy({
+          by: ['workflowStageId'],
+          where: { parentId: null, deletedAt: null, workflowStageId: { not: null } },
+          _count: true,
+        }),
+        prisma.product.count({
+          where: { parentId: null, deletedAt: null, workflowStageId: null },
+        }),
       ])
 
       // W2.12 — fetch labels for the families that actually appear in
@@ -154,6 +165,25 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           })
         : []
       const familyById = new Map(familyLookup.map((f) => [f.id, f]))
+
+      // W3.9 — resolve labels for the workflow stages that appear
+      // in the rollup. Joined with their workflow's label so the
+      // FilterBar can show "Approved (Standard PIM)".
+      const stageIds = workflowStages
+        .map((s) => s.workflowStageId)
+        .filter((id): id is string => id !== null)
+      const stageLookup = stageIds.length > 0
+        ? await prisma.workflowStage.findMany({
+            where: { id: { in: stageIds } },
+            select: {
+              id: true,
+              code: true,
+              label: true,
+              workflow: { select: { id: true, label: true } },
+            },
+          })
+        : []
+      const stageById = new Map(stageLookup.map((s) => [s.id, s]))
 
       const labelByKey = new Map(
         marketplaceLookup.map((m) => [`${m.channel}:${m.code}`, { name: m.name, region: m.region }]),
@@ -219,6 +249,33 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
                 label: meta?.label ?? f.familyId!,
                 code: meta?.code ?? null,
                 count: f._count,
+              }
+            })
+            .sort((a, b) => b.count - a.count),
+        ],
+        // W3.9 — Workflow stage facet. Same shape: 'null' bucket
+        // first ("products not on any workflow yet"), then per-stage
+        // rows sorted by descending count. Each row's label includes
+        // the workflow name in parentheses so the operator can
+        // distinguish "Approved (Standard PIM)" from "Approved (B2B)".
+        workflowStages: [
+          {
+            value: 'null',
+            label: 'No workflow',
+            workflowLabel: null,
+            count: unstagedCount,
+          } as const,
+          ...workflowStages
+            .filter((s) => s.workflowStageId !== null)
+            .map((s) => {
+              const meta = stageById.get(s.workflowStageId!)
+              return {
+                value: s.workflowStageId!,
+                label: meta
+                  ? `${meta.label} (${meta.workflow.label})`
+                  : s.workflowStageId!,
+                workflowLabel: meta?.workflow.label ?? null,
+                count: s._count,
               }
             })
             .sort((a, b) => b.count - a.count),
