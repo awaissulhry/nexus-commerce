@@ -21,7 +21,6 @@ import {
   ArrowDown,
   ArrowUp,
   Bookmark,
-  CalendarClock,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -29,7 +28,6 @@ import {
   Download,
   Factory,
   FileText,
-  FileWarning,
   Keyboard,
   Loader2,
   Mail,
@@ -197,30 +195,14 @@ interface ReplenishmentResponse {
   containerFill?: ContainerFillEntry[]
 }
 
-interface UpcomingEvent {
-  id: string
-  name: string
-  startDate: string
-  endDate: string
-  channel: string | null
-  marketplace: string | null
-  productType: string | null
-  expectedLift: number
-  prepLeadTimeDays: number
-  prepDeadline: string
-  daysUntilStart: number
-  daysUntilDeadline: number
-  description: string | null
-}
+// W9.6 — UpcomingEvent + UrgencyTile + UpcomingEventsBanner moved to
+// _shared/UrgencyTiles.tsx so the workspace shrinks below 4400 lines.
+import type { UpcomingEvent } from './_shared/UrgencyTiles'
+import { UrgencyTile, UpcomingEventsBanner } from './_shared/UrgencyTiles'
 
-const URGENCY_TONE: Record<string, string> = {
-  CRITICAL:
-    'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
-  HIGH: 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
-  MEDIUM:
-    'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
-  LOW: 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800',
-}
+// W9.6 — URGENCY_TONE re-export so legacy in-file references (cells,
+// drawer header) still resolve. Source-of-truth lives in _shared/UrgencyTiles.
+import { URGENCY_TONE } from './_shared/UrgencyTiles'
 
 // R.5 — sort keys for the table column headers. 'urgency' falls
 // through to backend ordering (CRITICAL → HIGH → MEDIUM → LOW with
@@ -1183,102 +1165,8 @@ function thRight() {
   return 'px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700'
 }
 
-function UrgencyTile({
-  label,
-  value,
-  tone,
-  onClick,
-}: {
-  label: string
-  value: number
-  tone: string
-  onClick: () => void
-}) {
-  return (
-    <button onClick={onClick} className="text-left">
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-              {value}
-            </div>
-            <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1">
-              {label}
-            </div>
-          </div>
-          <span
-            className={cn(
-              'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
-              URGENCY_TONE[tone],
-            )}
-          >
-            {tone}
-          </span>
-        </div>
-      </Card>
-    </button>
-  )
-}
-
-function UpcomingEventsBanner({ events }: { events: UpcomingEvent[] }) {
-  return (
-    <div className="border border-violet-200 bg-violet-50/60 dark:bg-violet-950/30 dark:border-violet-900 rounded-md p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <CalendarClock className="w-4 h-4 text-violet-700 dark:text-violet-400" />
-        <span className="text-base uppercase tracking-wider text-violet-800 dark:text-violet-300 font-semibold">
-          Upcoming retail events
-        </span>
-      </div>
-      <div className="space-y-1.5">
-        {events.map((e) => {
-          const isPastDeadline = e.daysUntilDeadline <= 0
-          return (
-            <div
-              key={e.id}
-              className="flex items-center justify-between gap-3 text-base"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                  {e.name}
-                </span>
-                <span className="text-slate-500 dark:text-slate-400">
-                  {e.daysUntilStart > 0
-                    ? `in ${e.daysUntilStart} day${e.daysUntilStart === 1 ? '' : 's'}`
-                    : `started ${Math.abs(e.daysUntilStart)} day${Math.abs(e.daysUntilStart) === 1 ? '' : 's'} ago`}
-                </span>
-                <span className="text-slate-400 dark:text-slate-500">·</span>
-                <span className="text-slate-600 dark:text-slate-300">
-                  expected lift {e.expectedLift.toFixed(1)}×
-                </span>
-                {(e.channel || e.marketplace) && (
-                  <span className="text-slate-400 dark:text-slate-500 font-mono text-xs">
-                    {[e.channel, e.marketplace].filter(Boolean).join(':')}
-                  </span>
-                )}
-              </div>
-              <span
-                className={cn(
-                  'text-sm font-medium tabular-nums',
-                  isPastDeadline
-                    ? 'text-rose-700 dark:text-rose-400'
-                    : 'text-amber-700 dark:text-amber-400',
-                )}
-              >
-                {isPastDeadline ? (
-                  <span className="inline-flex items-center gap-1">
-                    <FileWarning className="w-3 h-3" /> prep window passed
-                  </span>
-                ) : (
-                  <>last day to PO: {e.prepDeadline}</>
-                )}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+// W9.6 — UrgencyTile + UpcomingEventsBanner moved to
+// _shared/UrgencyTiles.tsx (imported at the top of this file).
 
 // R.5 — sortable column header. Click to set sort; click again to
 // flip direction. Renders a small chevron next to the active column.
