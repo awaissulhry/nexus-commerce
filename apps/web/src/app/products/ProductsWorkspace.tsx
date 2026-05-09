@@ -413,6 +413,57 @@ export default function ProductsWorkspace() {
       setTotalPages(productsData.totalPages ?? 0)
     }
   }, [productsData])
+
+  // W5.1 — Family-completeness bulk fetch. Only triggered when the
+  // familyCompleteness column is visible to keep grid loads cheap.
+  // Sequential per-product on the server (~30ms each); 50 ids ≈ 1.5s
+  // worst case, but rendered async with skeleton placeholders so the
+  // grid doesn't block on it.
+  useEffect(() => {
+    if (!visibleColumns.includes('familyCompleteness')) return
+    if (products.length === 0) return
+    let cancelled = false
+    const ids = products.map((p) => p.id)
+    fetch(`${getBackendUrl()}/api/products/family-completeness/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productIds: ids }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { results?: Record<string, unknown> }) => {
+        if (cancelled) return
+        const map = data.results ?? {}
+        setProducts((prev) =>
+          prev.map((p) => {
+            const r = map[p.id] as
+              | { score: number; filled: number; totalRequired: number; familyId: string | null }
+              | { error: string }
+              | undefined
+            if (!r || 'error' in r) return p
+            return {
+              ...p,
+              familyCompleteness: {
+                score: r.score,
+                filled: r.filled,
+                totalRequired: r.totalRequired,
+                familyId: r.familyId,
+              },
+            }
+          }),
+        )
+      })
+      .catch(() => {
+        // Silent — column shows skeletons forever rather than
+        // surfacing a banner. The legacy 'completeness' column keeps
+        // working regardless.
+      })
+    return () => {
+      cancelled = true
+    }
+    // Re-run when the visible product set changes — pagination,
+    // filter, or refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products.map((p) => p.id).join(','), visibleColumns.includes('familyCompleteness')])
   useEffect(() => { setLoading(productsLoading) }, [productsLoading])
   useEffect(() => { setError(productsError) }, [productsError])
 

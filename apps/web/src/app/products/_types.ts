@@ -42,6 +42,20 @@ export type ProductRow = {
     workflow: { id: string; code: string; label: string }
   } | null
   /**
+   * W5.1 — Family-driven completeness score (filled-required /
+   * totalRequired × 100). Async-fetched on grid mount via the
+   * /products/family-completeness/bulk endpoint, populated only when
+   * the column is enabled. Score = -1 when product has no family
+   * (the legitimate "not scoreable" signal); undefined while still
+   * loading.
+   */
+  familyCompleteness?: {
+    score: number
+    filled: number
+    totalRequired: number
+    familyId: string | null
+  }
+  /**
    * P.7 — Product.version for optimistic-concurrency check on inline
    * edits. Sent as If-Match on PATCH /api/products/:id; server
    * returns 409 if the row changed since this list was fetched.

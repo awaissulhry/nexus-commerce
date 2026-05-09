@@ -45,6 +45,12 @@ export const ALL_COLUMNS: ColumnDef[] = [
   // photos/channel-coverage/tags. Hidden by default; operators
   // who care about data quality enable it via the Cols picker.
   { key: 'completeness', label: 'Complete', width: 110 },
+  // W5.1 — Family-driven completeness (W2.14 score). Different
+  // semantics from the legacy 10-factor 'completeness' column:
+  // this one scores against the product's family's required
+  // attributes. Hidden by default; PIM operators enable via Cols.
+  // Empty for products without a family attached.
+  { key: 'familyCompleteness', label: 'Family ✓', width: 110 },
   { key: 'updated', label: 'Updated', width: 110 },
   { key: 'actions', label: '', width: 110, locked: true },
 ]

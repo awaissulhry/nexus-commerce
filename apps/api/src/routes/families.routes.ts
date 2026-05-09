@@ -311,6 +311,47 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     return { results }
   })
 
+  // POST /api/products/family-completeness/bulk { productIds: [...] }
+  //
+  // W5.1 — Bulk family-completeness for the /products grid column.
+  // Returns a slim shape (just score + filled/total) so the grid can
+  // render per-row chips without the full missing[] payload. Same
+  // 200-cap + sequential-per-product policy as the readiness bulk.
+  fastify.post(
+    '/products/family-completeness/bulk',
+    async (request, reply) => {
+      const body = request.body as { productIds?: string[] }
+      if (!Array.isArray(body.productIds) || body.productIds.length === 0)
+        return reply
+          .code(400)
+          .send({ error: 'productIds must be a non-empty array' })
+      if (body.productIds.length > 200)
+        return reply
+          .code(400)
+          .send({ error: 'productIds cannot exceed 200 per call' })
+
+      const results: Record<
+        string,
+        | { score: number; filled: number; totalRequired: number; familyId: string | null }
+        | { error: string }
+      > = {}
+      for (const id of body.productIds) {
+        try {
+          const r = await familyCompletenessService.compute(id)
+          results[id] = {
+            score: r.score,
+            filled: r.filled,
+            totalRequired: r.totalRequired,
+            familyId: r.familyId,
+          }
+        } catch (err: any) {
+          results[id] = { error: err?.message ?? String(err) }
+        }
+      }
+      return { results }
+    },
+  )
+
   // ── W2.7 — FamilyAttribute attach/detach ────────────────────────
   //
   // The cornerstone parent-wins write-time enforcement. POST refuses

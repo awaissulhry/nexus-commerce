@@ -1783,6 +1783,42 @@ const ProductCell = memo(function ProductCell({
         </div>
       )
     }
+    case 'familyCompleteness': {
+      // W5.1 — family-driven completeness (W2.14). Three states:
+      //   undefined → loading (workspace hasn't fetched yet)
+      //   score=-1  → product has no family ("not scoreable" signal)
+      //   0..100    → real score with tone-coded chip
+      const fc = p.familyCompleteness
+      if (fc === undefined) {
+        return (
+          <span className="inline-block w-12 h-3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+        )
+      }
+      if (fc.score === -1) {
+        return (
+          <span
+            className="text-xs italic text-slate-400 dark:text-slate-500"
+            title="No family attached → not family-scoreable. Use BulkActionBar → Attach family."
+          >
+            —
+          </span>
+        )
+      }
+      const fcTone =
+        fc.score >= 90
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : fc.score >= 70
+            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+            : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+      return (
+        <span
+          className={`inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded tabular-nums ${fcTone}`}
+          title={`${fc.filled} of ${fc.totalRequired} required attributes filled`}
+        >
+          {fc.score}%
+        </span>
+      )
+    }
     case 'updated':
       return (
         <span className="text-sm text-slate-500">
