@@ -192,6 +192,7 @@ model Product {
 
   // ── Parent/Child Hierarchy (Amazon Catalog Sync) ─────────────────
   isParent Boolean   @default(false) // TRUE if this is a master parent
+  isBundle Boolean   @default(false) // BD.1: bundle-product flag — components in BundleComponent
   parentId String? // Self-relation: parent product ID
   parent   Product?  @relation("ProductHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children Product[] @relation("ProductHierarchy") // Child variations
