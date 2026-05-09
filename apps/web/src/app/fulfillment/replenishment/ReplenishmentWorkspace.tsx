@@ -784,7 +784,7 @@ export default function ReplenishmentWorkspace() {
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
           {(['NEEDS_REORDER', 'CRITICAL', 'HIGH', 'MEDIUM', 'ALL'] as const).map(
             (t) => (
               <button
@@ -793,8 +793,8 @@ export default function ReplenishmentWorkspace() {
                 className={cn(
                   'h-7 px-3 text-base font-medium rounded transition-colors',
                   filter === t
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900',
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
                 )}
               >
                 {t === 'NEEDS_REORDER'
@@ -807,7 +807,7 @@ export default function ReplenishmentWorkspace() {
         <select
           value={channelFilter}
           onChange={(e) => setChannelFilter(e.target.value)}
-          className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
+          className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         >
           <option value="">All channels</option>
           <option value="AMAZON">Amazon</option>
@@ -818,7 +818,7 @@ export default function ReplenishmentWorkspace() {
         <select
           value={marketplaceFilter}
           onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="h-8 px-2 border border-slate-200 rounded-md text-base bg-white"
+          className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
         >
           <option value="">All marketplaces</option>
           {marketplaceOptions.map((m) => (
@@ -859,7 +859,7 @@ export default function ReplenishmentWorkspace() {
           <select
             value={autoRefreshMin}
             onChange={(e) => setAutoRefreshMin(Number(e.target.value) as 0 | 5 | 15)}
-            className="h-8 px-2 text-sm border border-slate-200 rounded-md bg-white"
+            className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             title="Auto-refresh interval (paused when tab hidden)"
           >
             <option value={0}>Auto-refresh: Off</option>
@@ -868,14 +868,14 @@ export default function ReplenishmentWorkspace() {
           </select>
           <button
             onClick={fetchData}
-            className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} /> Refresh
           </button>
           {/* R.5 — CSV export of currently filtered + sorted suggestions */}
           <button
             onClick={() => exportSuggestionsCsv(filtered)}
-            className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
             title="Export the currently filtered + sorted suggestions to CSV"
             disabled={filtered.length === 0}
           >
@@ -883,7 +883,7 @@ export default function ReplenishmentWorkspace() {
           </button>
           <button
             onClick={() => setHelpOpen(true)}
-            className="h-8 w-8 grid place-items-center text-base border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500"
+            className="h-8 w-8 grid place-items-center text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           >
@@ -894,8 +894,8 @@ export default function ReplenishmentWorkspace() {
 
       {/* Bulk action bar — visible only when rows are selected */}
       {selectedIds.size > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 flex items-center justify-between gap-3">
-          <div className="text-md text-slate-700">
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md px-3 py-2 flex items-center justify-between gap-3">
+          <div className="text-md text-slate-700 dark:text-slate-300">
             <span className="font-semibold">{selectedIds.size}</span>{' '}
             selected
           </div>
@@ -903,7 +903,7 @@ export default function ReplenishmentWorkspace() {
             <button
               type="button"
               onClick={clearSelection}
-              className="h-7 px-2 text-base border border-slate-200 rounded hover:bg-slate-50"
+              className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900"
             >
               Clear
             </button>
@@ -917,7 +917,7 @@ export default function ReplenishmentWorkspace() {
                   },
                 )
               }}
-              className="h-7 px-3 text-base bg-white text-red-700 border border-red-200 rounded hover:bg-red-50 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900 rounded hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5"
               title={t('replenishment.dismiss.bulkTooltip')}
             >
               <X size={12} /> {t('replenishment.dismiss.bulkButton')}
@@ -925,7 +925,7 @@ export default function ReplenishmentWorkspace() {
             <button
               type="button"
               onClick={() => setBulkOpen(true)}
-              className="h-7 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+              className="h-7 px-3 text-base bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
             >
               <ShoppingCart size={12} /> Bulk-create POs
             </button>
@@ -936,7 +936,7 @@ export default function ReplenishmentWorkspace() {
       {/* Table */}
       {loading && !data ? (
         <Card>
-          <div className="text-md text-slate-500 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
+          <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="w-4 h-4 animate-spin" />
             Reading forecast layer…
           </div>
@@ -976,7 +976,7 @@ export default function ReplenishmentWorkspace() {
         <Card noPadding className="hidden lg:block">
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
                 <tr>
                   <th className="px-3 py-2 text-left w-9">
                     <input
@@ -1064,10 +1064,10 @@ export default function ReplenishmentWorkspace() {
 }
 
 function th() {
-  return 'px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700'
+  return 'px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300'
 }
 function thRight() {
-  return 'px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700'
+  return 'px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300'
 }
 
 // W9.6 — UrgencyTile + UpcomingEventsBanner moved to
