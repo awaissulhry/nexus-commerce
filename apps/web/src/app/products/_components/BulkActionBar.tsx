@@ -43,6 +43,7 @@ import {
   Calendar,
   Pencil,
   Folder,
+  GitBranch,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -79,6 +80,12 @@ const SetFieldModal = dynamic(() => import('../_modals/SetFieldModal'), {
 // (most operators don't reach for it on every visit).
 const AttachFamilyModal = dynamic(
   () => import('../_modals/AttachFamilyModal'),
+  { ssr: false },
+)
+// W3.8 — bulk move-workflow-stage modal. Same lazy rationale as the
+// family modal; pulls workflow + stage list at modal-open time.
+const MoveWorkflowStageModal = dynamic(
+  () => import('../_modals/MoveWorkflowStageModal'),
   { ssr: false },
 )
 
@@ -130,6 +137,7 @@ export function BulkActionBar({
   // selection ≥ 1) in the active scope; hidden in the recycle bin.
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [attachFamilyModalOpen, setAttachFamilyModalOpen] = useState(false)
+  const [moveStageModalOpen, setMoveStageModalOpen] = useState(false)
   // U.28 — bulk-set-field modal state. Active scope only.
   const [setFieldModalOpen, setSetFieldModalOpen] = useState(false)
   const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
@@ -589,6 +597,21 @@ export function BulkActionBar({
             Family
           </Button>
 
+          {/* W3.8 — bulk move workflow stage. Opens a modal that lists
+              every stage across every workflow (grouped). Server
+              rejects cross-workflow moves per-product; the toast
+              surfaces partial-failure counts. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setMoveStageModalOpen(true)}
+            disabled={busy || !hasSelection}
+            title="Move selected products to a workflow stage"
+            icon={<GitBranch size={12} />}
+          >
+            Move stage
+          </Button>
+
           {hasSelection ? (
             <Link
               href={`/bulk-operations?productIds=${selectedIds.join(',')}`}
@@ -685,6 +708,16 @@ export function BulkActionBar({
           onClose={() => setAttachFamilyModalOpen(false)}
           onComplete={() => {
             setAttachFamilyModalOpen(false)
+            onComplete()
+          }}
+        />
+      )}
+      {moveStageModalOpen && (
+        <MoveWorkflowStageModal
+          productIds={selectedIds}
+          onClose={() => setMoveStageModalOpen(false)}
+          onComplete={() => {
+            setMoveStageModalOpen(false)
             onComplete()
           }}
         />
