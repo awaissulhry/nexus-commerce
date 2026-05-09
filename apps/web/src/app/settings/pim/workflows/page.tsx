@@ -1,10 +1,12 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import WorkflowsClient, { type WorkflowRow } from './WorkflowsClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function WorkflowsSettingsPage() {
+  const t = await getServerT()
   const backend = getBackendUrl()
   let initial: WorkflowRow[] = []
   let loadError: string | null = null
@@ -23,12 +25,12 @@ export default async function WorkflowsSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Workflows"
-        subtitle="Salesforce-parity content-quality pipelines. A workflow is a configurable sequence of stages (DRAFT → REVIEW → APPROVED → PUBLISHED) attached to a family. Products joining the family land on the workflow's initial stage and progress through transitions. Distinct from product status — status is what the marketplace sees; workflow is the internal gate before publishing."
+        title={t('pim.workflows.title')}
+        subtitle={t('pim.workflows.subtitle')}
         breadcrumbs={[
           { label: 'Settings', href: '/settings/account' },
           { label: 'PIM', href: '/settings/pim/families' },
-          { label: 'Workflows' },
+          { label: t('pim.workflows.title') },
         ]}
       />
       <WorkflowsClient initial={initial} initialError={loadError} />

@@ -33,6 +33,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface WorkflowRow {
@@ -66,6 +67,7 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const confirm = useConfirm()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const refresh = useCallback(async () => {
     try {
@@ -131,7 +133,12 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
 
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-500 dark:text-slate-400">
-          {workflows.length} workflow{workflows.length === 1 ? '' : 's'}
+          {t(
+            workflows.length === 1
+              ? 'pim.workflows.count.one'
+              : 'pim.workflows.count.other',
+            { count: workflows.length },
+          )}
         </div>
         <Button
           variant="primary"
@@ -139,7 +146,7 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
           icon={<Plus className="w-3 h-3" />}
           onClick={() => setCreating(true)}
         >
-          New workflow
+          {t('pim.workflows.new')}
         </Button>
       </div>
 
@@ -147,10 +154,10 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
         <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 text-center">
           <GitBranch className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
           <div className="text-md text-slate-700 dark:text-slate-300">
-            No workflows yet.
+            {t('pim.workflows.empty.title')}
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-            Create one (the default 4-stage Draft → Review → Approved → Published is a good starting point), then attach it to a family from the family editor.
+            {t('pim.workflows.empty.body')}
           </div>
         </div>
       ) : (
@@ -158,10 +165,10 @@ export default function WorkflowsClient({ initial, initialError }: Props) {
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
               <tr className="text-left">
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Code</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Label</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Stages</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Families</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.workflows.col.code')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.workflows.col.label')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.workflows.col.stages')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.workflows.col.families')}</th>
                 <th className="px-3 py-2 w-8" aria-label="Actions" />
               </tr>
             </thead>
