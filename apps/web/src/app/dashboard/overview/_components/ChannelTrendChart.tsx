@@ -72,7 +72,11 @@ export default function ChannelTrendChart({
   return (
     <Card title={t('overview.channelTrend.heading')} noPadding>
       <div className="px-4 py-3">
-        <div className="h-[180px]">
+        <div
+          className="h-[180px]"
+          role="img"
+          aria-label={t('overview.channelTrend.heading')}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={points}

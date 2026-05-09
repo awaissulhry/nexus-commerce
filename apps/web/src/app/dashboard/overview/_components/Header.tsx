@@ -68,6 +68,7 @@ export default function Header({
                 type="button"
                 role="tab"
                 aria-selected={w.id === currentWindow}
+                aria-current={w.id === currentWindow ? 'true' : undefined}
                 onClick={() => onWindowChange(w.id)}
                 className={cn(
                   'h-6 px-2.5 text-sm rounded transition-colors',

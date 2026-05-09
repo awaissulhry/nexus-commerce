@@ -216,9 +216,14 @@ function KpiCard({
     </>
   )
   if (href) {
+    // DO.38 — aria-label combines label + value + delta so screen
+    // readers announce a complete picture rather than three
+    // separate fragments per card.
+    const ariaLabel = [label, value, delta.label].filter(Boolean).join(', ')
     return (
       <Link
         href={href}
+        aria-label={ariaLabel}
         className={cn(
           'block rounded-lg border bg-white dark:bg-slate-900 px-4 py-3 transition-colors',
           'border-slate-200 dark:border-slate-800',

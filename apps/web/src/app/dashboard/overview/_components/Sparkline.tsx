@@ -70,7 +70,11 @@ export default function Sparkline({
       noPadding
     >
       <div className="px-4 py-3">
-        <div className="h-[180px]">
+        <div
+          className="h-[180px]"
+          role="img"
+          aria-label={t('overview.trend.heading', { label })}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={points}
