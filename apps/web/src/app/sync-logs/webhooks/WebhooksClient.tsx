@@ -18,10 +18,12 @@ import {
   CheckCircle2,
   Loader2,
   RefreshCw,
+  RotateCw,
   Webhook,
   X,
   XCircle,
 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
@@ -400,6 +402,11 @@ export default function WebhooksClient() {
           row={selected}
           loading={loadingDetail}
           onClose={() => setSelected(null)}
+          onReplayed={() => {
+            // Refresh both the list and the detail row.
+            void fetchList(true)
+            void openDetail(selected)
+          }}
         />
       )}
     </div>
@@ -410,11 +417,37 @@ function DetailPanel({
   row,
   loading,
   onClose,
+  onReplayed,
 }: {
   row: WebhookDetail
   loading: boolean
   onClose: () => void
+  onReplayed: () => void
 }) {
+  const { toast } = useToast()
+  const [replaying, setReplaying] = useState(false)
+
+  const replay = async () => {
+    if (!confirm(`Replay this ${row.channel} ${row.eventType} webhook?`)) return
+    setReplaying(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/sync-logs/webhooks/${row.id}/replay`,
+        { method: 'POST' },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`)
+      }
+      toast.success('Replayed successfully')
+      onReplayed()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setReplaying(false)
+    }
+  }
+  const replaySupported = ['SHOPIFY', 'WOOCOMMERCE', 'ETSY'].includes(row.channel)
   return (
     <div
       className="fixed inset-0 z-40 flex justify-end"
@@ -497,11 +530,34 @@ function DetailPanel({
             )}
           </Section>
 
-          <p className="text-xs text-slate-500 dark:text-slate-500 italic pt-2 border-t border-slate-100 dark:border-slate-800">
-            Replay capability ships in a follow-up. To re-process this
-            webhook today, copy the payload and POST it back to the
-            corresponding endpoint with a fresh HMAC signature.
-          </p>
+          {/* L.17.0 — replay action */}
+          {replaySupported && (
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => void replay()}
+                disabled={replaying}
+                className="h-8 px-3 text-sm font-medium rounded border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {replaying ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCw className="w-3.5 h-3.5" />
+                )}
+                Replay this webhook
+              </button>
+              <p className="text-xs text-slate-500 dark:text-slate-500 italic mt-1.5">
+                Re-dispatches the saved payload through the original handler.
+                Signature check is skipped (already authenticated at receipt).
+                The processed flag flips to true on success, error on failure.
+              </p>
+            </div>
+          )}
+          {!replaySupported && (
+            <p className="text-xs text-slate-500 dark:text-slate-500 italic pt-2 border-t border-slate-100 dark:border-slate-800">
+              Replay isn&apos;t supported for {row.channel} channel yet.
+            </p>
+          )}
         </div>
       </aside>
     </div>

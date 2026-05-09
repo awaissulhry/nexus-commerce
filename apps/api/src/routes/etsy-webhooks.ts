@@ -624,3 +624,32 @@ export async function estyWebhookRoutes(app: FastifyInstance) {
     }
   );
 }
+
+/**
+ * L.17.0 — replay dispatcher (mirrors dispatchShopifyWebhook).
+ *
+ * Etsy stores the raw event_type from its webhook payload as
+ * WebhookEvent.eventType (e.g. "listing_update", "receipt_create").
+ * We pattern-match on those substrings rather than exact equality
+ * to tolerate Etsy adding/renaming event variants.
+ */
+export async function dispatchEtsyWebhook(
+  eventType: string,
+  payload: unknown,
+): Promise<void> {
+  const p = payload as EtsyWebhookPayload
+  const t = eventType.toLowerCase()
+
+  if (t.includes('listing') && t.includes('update')) return handleListingUpdate(p)
+  if (t.includes('listing') && t.includes('delete')) return handleListingDelete(p)
+  if (t.includes('inventory')) return handleInventoryUpdate(p)
+  // "receipt_create" / "order/create"
+  if ((t.includes('receipt') || t.includes('order')) && t.includes('create'))
+    return handleOrderCreate(p)
+  if ((t.includes('receipt') || t.includes('order')) && t.includes('update'))
+    return handleOrderUpdate(p)
+  if ((t.includes('receipt') || t.includes('order')) && t.includes('delete'))
+    return handleOrderDelete(p)
+
+  throw new Error(`Unknown Etsy eventType: ${eventType}`)
+}

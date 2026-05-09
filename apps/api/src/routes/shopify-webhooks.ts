@@ -1224,3 +1224,40 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
     }
   });
 }
+
+/**
+ * L.17.0 — replay dispatcher.
+ *
+ * Maps eventType (the same string written to WebhookEvent) to the
+ * corresponding handle* function. Used by the replay endpoint at
+ * /api/sync-logs/webhooks/:id/replay so operators can re-dispatch
+ * a stored webhook without re-receiving it from Shopify.
+ *
+ * Throws on unknown eventType so the replay endpoint can surface a
+ * clear error.
+ */
+export async function dispatchShopifyWebhook(
+  eventType: string,
+  payload: unknown,
+): Promise<void> {
+  const p = payload as ShopifyWebhookPayload
+  switch (eventType) {
+    case 'product/update':
+      return handleProductUpdate(p)
+    case 'product/delete':
+      return handleProductDelete(p)
+    case 'inventory/update':
+      return handleInventoryUpdate(p)
+    case 'order/create':
+      return handleOrderCreate(p)
+    case 'order/update':
+      return handleOrderUpdate(p)
+    case 'fulfillment/create':
+      return handleFulfillmentCreate(p)
+    case 'refund/create':
+      await handleRefundCreate(p)
+      return
+    default:
+      throw new Error(`Unknown Shopify eventType: ${eventType}`)
+  }
+}

@@ -37,6 +37,9 @@ import {
   listKnownCrons,
 } from '../jobs/cron-registry.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { dispatchShopifyWebhook } from './shopify-webhooks.js'
+import { dispatchWooWebhook } from './woocommerce-webhooks.js'
+import { dispatchEtsyWebhook } from './etsy-webhooks.js'
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -973,6 +976,81 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: message })
     }
   })
+
+  /**
+   * L.17.0 — webhook replay.
+   *
+   * POST /api/sync-logs/webhooks/:id/replay
+   *
+   * Reads the WebhookEvent row, dispatches the saved payload through
+   * the same handle* function the original receipt would have hit,
+   * and updates isProcessed/processedAt/error based on the result.
+   *
+   * Stripe-tier: same behaviour as receiving the webhook again, except
+   * the signature check is skipped (we already authenticated the
+   * payload at original receipt time and stored it locally — re-
+   * dispatching it doesn't need the original HMAC).
+   */
+  fastify.post<{ Params: { id: string } }>(
+    '/sync-logs/webhooks/:id/replay',
+    async (request, reply) => {
+      try {
+        const event = await prisma.webhookEvent.findUnique({
+          where: { id: request.params.id },
+        })
+        if (!event) {
+          return reply.code(404).send({ error: 'Webhook event not found' })
+        }
+
+        const dispatcher =
+          event.channel === 'SHOPIFY'
+            ? dispatchShopifyWebhook
+            : event.channel === 'WOOCOMMERCE'
+              ? dispatchWooWebhook
+              : event.channel === 'ETSY'
+                ? dispatchEtsyWebhook
+                : null
+        if (!dispatcher) {
+          return reply.code(400).send({
+            error: `Replay not supported for channel '${event.channel}'`,
+          })
+        }
+
+        try {
+          await dispatcher(event.eventType, event.payload)
+          await prisma.webhookEvent.update({
+            where: { id: event.id },
+            data: {
+              isProcessed: true,
+              processedAt: new Date(),
+              error: null,
+            },
+          })
+          return reply.send({ success: true })
+        } catch (handlerErr) {
+          const msg =
+            handlerErr instanceof Error
+              ? handlerErr.message
+              : String(handlerErr)
+          await prisma.webhookEvent.update({
+            where: { id: event.id },
+            data: {
+              isProcessed: false,
+              error: msg.slice(0, 2000),
+            },
+          })
+          return reply.code(500).send({ success: false, error: msg })
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error(
+          { err },
+          '[sync-logs/webhooks/:id/replay] failed',
+        )
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
 
   /**
    * Single webhook detail. Returns the full row INCLUDING payload +

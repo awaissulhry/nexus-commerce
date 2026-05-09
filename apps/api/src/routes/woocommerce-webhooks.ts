@@ -688,3 +688,29 @@ export async function woocommerceWebhookRoutes(app: FastifyInstance) {
     }
   );
 }
+
+/**
+ * L.17.0 — replay dispatcher (mirrors dispatchShopifyWebhook).
+ */
+export async function dispatchWooWebhook(
+  eventType: string,
+  payload: unknown,
+): Promise<void> {
+  const p = payload as WooCommerceWebhookPayload
+  switch (eventType) {
+    case 'product/update':
+      return handleProductUpdate(p)
+    case 'product/delete':
+      return handleProductDelete(p)
+    case 'inventory/update':
+      return handleInventoryUpdate(p)
+    case 'order/create':
+      return handleOrderCreate(p)
+    case 'order/update':
+      return handleOrderUpdate(p)
+    case 'order/delete':
+      return handleOrderDelete(p)
+    default:
+      throw new Error(`Unknown WooCommerce eventType: ${eventType}`)
+  }
+}
