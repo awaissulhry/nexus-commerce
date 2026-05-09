@@ -12,31 +12,21 @@ Triage performed 2026-05-02 after the /products rebuild and the schema-drift inc
 
 ---
 
-## 0. 🔴 Bug class: Schema-migration drift (process gap)
+## 0. ✅ Bug class: Schema-migration drift (process gap) — resolved 2026-05-09
 
-**Symptom:** A Prisma model exists in `schema.prisma` but no migration creates its Postgres table. `prisma generate` happily produces TypeScript types for the model, so `apps/web` and `apps/api` compile clean, route handlers pass typecheck and CI — and then crash at runtime the first time anyone hits the relation.
+**Symptom (historical):** A Prisma model exists in `schema.prisma` but no migration creates its Postgres table. `prisma generate` happily produces TypeScript types for the model, so `apps/web` and `apps/api` compile clean, route handlers pass typecheck and CI — and then crash at runtime the first time anyone hits the relation.
 
-**Surfaced at:** `/products` rebuild. The catalog list 500'd with `The table public.Image does not exist in the current database` because `products.routes.ts` selected the `cloudImages` relation, which points at a `Image` model added in "Phase 31" that was never `prisma migrate dev`'d. Real catalog has 9,756 rows; users saw an empty page.
+**Surfaced at:** `/products` rebuild. The catalog list 500'd with `The table public.Image does not exist in the current database`.
 
-**Workaround applied:** Switched the select to the `images` relation (`ProductImage` table — has been in DB since 2026-04-22). Fix is one line; the bug class is the worry.
+**Resolution:**
 
-**Other code paths still at risk** (verify before next deploy that touches them):
-- **Phase 5.4 GTIN exemption wizard** — entry #8 below explicitly says it "reads the master product's existing images via the `Image` model." Same crash will land the moment a user opens that wizard. **This is the P0 follow-up.**
-- Anywhere else in the codebase that references the `Image` Prisma model. Quick check: `grep -rn "prisma\.image\.\|\.image\b" apps/`.
+- **Code:** Image model + cloudImages relation dropped from schema (option 1). `grep -rn "prisma\.image\.\|cloudImages" apps/` returns 0 hits as of 2026-05-09. Phase 5.4 GTIN wizard P0 follow-up no longer applies (the Image-shaped reads are already gone).
+- **Process gate:** Pre-push hook (`.githooks/pre-push`) runs two scripts:
+  - `packages/database/scripts/check-schema-drift.mjs` — table-level (catches Prisma model with no CREATE TABLE in any migration)
+  - `packages/database/scripts/check-column-drift.mjs` — column-level (TECH_DEBT #37 escalation, fixes the bug class that took prod down 30 min on 2026-05-05)
+- **W5.40+W5.42** added a third pre-push gate (`scripts/check-i18n-catalog.mjs`) catching the same class of bug for i18n catalogs (key in en.json missing from it.json, or t() call with no key in either catalog).
 
-**Proper fix — three options, ordered by effort:**
-
-1. **Drop the orphaned model.** Remove the `Image` model + `cloudImages` relation from `schema.prisma`, sweep all referring code to use `ProductImage`. Keeps the schema honest. Lowest risk if no one needs the extra Image columns (`dominantColor`, `assignedVariants`, `isHero`, `storageMetadata`, etc.).
-2. **Write the missing migration.** Generate a `CREATE TABLE "Image"` migration that matches the schema and ship it. Preserves the Phase 31 design, but you inherit a feature that nobody's exercised.
-3. **Both:** drop the model now (option 1), revisit the Phase 31 image-management design when it's actually needed.
-
-**Process fix to prevent recurrence** — pick at least one:
-
-- **CI gate:** `prisma migrate diff --from-migrations ./prisma/migrations --to-schema-datamodel ./prisma/schema.prisma --exit-code` fails the build if `schema.prisma` describes anything not in a migration. Single command, single env var, blocks the entire failure mode.
-- **Post-deploy smoke test:** hit each list endpoint (`/api/products`, `/api/orders`, `/api/listings`, …) and assert non-500 + non-empty JSON shape. Catches schema drift, missing env vars, and a few other deploy-time gotchas in one go.
-- **Pre-commit check** (lighter): `prisma migrate status` in the pre-push hook (already runs builds — adding one more check is cheap).
-
-A CI gate is the right answer; the post-deploy smoke test is the belt-and-braces version.
+The CI-gate suggestion in the original entry has been satisfied locally via the pre-push hook; teammates need `git config core.hooksPath .githooks` for it to fire. Promoting the hook checks to GitHub Actions / Vercel CI would be the belt-and-braces version + is open as a future hardening (no entry yet — file when needed).
 
 ---
 
