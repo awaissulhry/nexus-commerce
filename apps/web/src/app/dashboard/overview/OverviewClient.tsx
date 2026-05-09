@@ -271,6 +271,7 @@ export default function OverviewClient() {
               <Sparkline
                 points={data.sparkline}
                 currency={data.currency.primary}
+                windowLabel={data.window.label}
               />
               <ChannelGrid
                 byChannel={data.byChannel}
@@ -485,9 +486,11 @@ function DeltaPill({
 function Sparkline({
   points,
   currency,
+  windowLabel,
 }: {
   points: OverviewPayload['sparkline']
   currency: string
+  windowLabel: string
 }) {
   const totalRev = points.reduce((s, p) => s + p.revenue, 0)
   const totalOrders = points.reduce((s, p) => s + p.orders, 0)
@@ -495,7 +498,7 @@ function Sparkline({
     <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-md font-semibold text-slate-900">
-          30-day trend
+          {windowLabel} trend
         </h2>
         <div className="text-sm text-slate-500 tabular-nums">
           {formatCurrency(totalRev, currency)} ·{' '}

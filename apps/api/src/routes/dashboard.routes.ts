@@ -442,13 +442,39 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.warn({ err }, '[dashboard] top SKUs raw query failed')
       }
 
-      // ── 30-day sparkline (gap-filled) ───────────────────────────
-      const sparkFrom = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000)
-      sparkFrom.setHours(0, 0, 0, 0)
+      // ── Sparkline (window-aware, gap-filled) ─────────────────────
+      //
+      // DO.3 — sparkline now follows the window selector. Previously
+      // the sparkline was hardcoded to the trailing 30 days regardless
+      // of whether the operator picked Today / 7d / 30d / 90d / YTD,
+      // which made the chart silently lie about the headline number.
+      //
+      // We choose a per-day bucket count from the selected window:
+      //   today → 24 hourly buckets (so the curve actually moves)
+      //   7d    → 7 daily
+      //   30d   → 30 daily (legacy default)
+      //   90d   → 90 daily
+      //   ytd   → days since Jan 1 in operator timezone
+      //
+      // The sparkline uses the same `from` as the headline KPI window
+      // to guarantee the headline number == area-under-the-curve.
+      const sparkBucketIsHour = window === 'today'
+      let sparkBuckets: number
+      if (window === 'today') sparkBuckets = 24
+      else if (window === '7d') sparkBuckets = 7
+      else if (window === '90d') sparkBuckets = 90
+      else if (window === 'ytd') {
+        const ms = to.getTime() - from.getTime()
+        sparkBuckets = Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)))
+      } else sparkBuckets = 30
+      const sparkFrom = from
       let sparkRows: Array<{ d: string; revenue: number; orders: bigint }> = []
       try {
+        const groupExpr = sparkBucketIsHour
+          ? `to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24')`
+          : `to_char(date_trunc('day',  "createdAt"), 'YYYY-MM-DD')`
         sparkRows = (await prisma.$queryRawUnsafe(
-          `SELECT to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS d,
+          `SELECT ${groupExpr} AS d,
                   COALESCE(SUM("totalPrice"), 0)::float AS revenue,
                   COUNT(*)::bigint AS orders
            FROM "Order"
@@ -466,10 +492,13 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         sparkMap.set(r.d, { revenue: r.revenue, orders: Number(r.orders) })
       }
       const sparkline: Array<{ date: string; revenue: number; orders: number }> = []
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < sparkBuckets; i++) {
         const d = new Date(sparkFrom)
-        d.setDate(d.getDate() + i)
-        const key = d.toISOString().slice(0, 10)
+        if (sparkBucketIsHour) d.setHours(d.getHours() + i)
+        else d.setDate(d.getDate() + i)
+        const key = sparkBucketIsHour
+          ? d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
+          : d.toISOString().slice(0, 10)
         const slot = sparkMap.get(key) ?? { revenue: 0, orders: 0 }
         sparkline.push({ date: key, revenue: slot.revenue, orders: slot.orders })
       }
