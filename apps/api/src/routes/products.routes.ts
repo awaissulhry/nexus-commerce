@@ -977,6 +977,24 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         channel: 'AMAZON' | 'EBAY'
         marketplace: string
       }>
+      /** W1.2 — optimistic concurrency for single-product callers
+       *  (MasterDataTab on /products/[id]/edit). Caller passes the
+       *  Product.version it read with via the If-Match header
+       *  (preferred) or this body field (fallback). When supplied:
+       *
+       *    - all `changes` must target the same product id (else 400),
+       *    - the transaction CAS-bumps version inside the same tx as
+       *      the field updates, so concurrent writers see VERSION_
+       *      CONFLICT instead of silently overwriting,
+       *    - the response includes `currentVersion` (=expectedVersion
+       *      + 1) so the client can keep its local copy in sync
+       *      without a refetch.
+       *
+       *  Multi-product bulk-ops PATCHes (which may legitimately span
+       *  hundreds of products in a single call) still pass nothing
+       *  here and behave exactly as before — version still bumps but
+       *  with no conflict check. */
+      expectedVersion?: number
     }
   }>('/products/bulk', {
     // NN.16 — explicit body limit. Fastify's default is 1MB; bulk
@@ -1027,6 +1045,31 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     if (changes.length > 1000) {
       return reply.code(400).send({ error: 'Max 1000 changes per request' })
+    }
+
+    // W1.2 — pick up the optimistic-concurrency hint. If-Match takes
+    // precedence over the body field; both must parse as a positive
+    // integer to be honoured.
+    const ifMatchHeader = request.headers['if-match']
+    const headerVersion =
+      typeof ifMatchHeader === 'string' && /^\d+$/.test(ifMatchHeader)
+        ? Number(ifMatchHeader)
+        : undefined
+    const bodyExpectedVersion =
+      typeof request.body?.expectedVersion === 'number' &&
+      Number.isFinite(request.body.expectedVersion) &&
+      request.body.expectedVersion >= 0
+        ? Math.floor(request.body.expectedVersion)
+        : undefined
+    const expectedVersion = headerVersion ?? bodyExpectedVersion
+    if (expectedVersion !== undefined) {
+      const ids = new Set(changes.map((c) => c?.id).filter(Boolean))
+      if (ids.size !== 1) {
+        return reply.code(400).send({
+          error:
+            'expectedVersion / If-Match requires every change to target the same product id',
+        })
+      }
     }
 
     const ALLOWED_FIELDS = new Set([
@@ -1717,9 +1760,51 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      await prisma.$transaction(updates, {
-        isolationLevel: 'ReadCommitted',
-      })
+      // W1.2 — optimistic concurrency CAS. When the caller passed an
+      // expectedVersion, prepend a Product.update keyed by (id,
+      // version) so the database itself rejects the write when the
+      // row has moved on. Prisma throws P2025 on the not-found CAS;
+      // we catch it below and return 409 with the current version
+      // so the client can refresh and retry.
+      const targetId =
+        expectedVersion !== undefined
+          ? Array.from(productIds)[0]
+          : undefined
+      if (expectedVersion !== undefined && targetId) {
+        updates.unshift(
+          prisma.product.update({
+            where: { id: targetId, version: expectedVersion },
+            data: { version: { increment: 1 } },
+          }),
+        )
+      }
+
+      try {
+        await prisma.$transaction(updates, {
+          isolationLevel: 'ReadCommitted',
+        })
+      } catch (txErr: any) {
+        if (
+          expectedVersion !== undefined &&
+          targetId &&
+          txErr?.code === 'P2025'
+        ) {
+          const fresh = await prisma.product
+            .findUnique({
+              where: { id: targetId },
+              select: { version: true },
+            })
+            .catch(() => null)
+          return reply.code(409).send({
+            code: 'VERSION_CONFLICT',
+            error:
+              'Another change landed first — refresh the product to pick up the latest version.',
+            expectedVersion,
+            currentVersion: fresh?.version ?? null,
+          })
+        }
+        throw txErr
+      }
 
       // Phase 13d — process master-data cascades after the bulk
       // transaction commits. Each call is its own transaction
@@ -1843,6 +1928,12 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         affectedChildren: totalAffectedChildren,
         errors: errors.length ? errors : undefined,
         elapsedMs,
+        // W1.2 — when the caller participated in optimistic
+        // concurrency, surface the freshly-incremented version so
+        // the client can keep its local copy in sync without a
+        // round-trip back to GET /api/products/:id.
+        currentVersion:
+          expectedVersion !== undefined ? expectedVersion + 1 : undefined,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[products/bulk] transaction failed')

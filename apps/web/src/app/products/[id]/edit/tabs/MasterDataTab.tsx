@@ -1,11 +1,19 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  X,
+} from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
@@ -75,9 +83,26 @@ export default function MasterDataTab({
   discardSignal,
 }: Props) {
   const { t } = useTranslations()
+  const router = useRouter()
   const [data, setData] = useState<Record<MasterField, string>>(() =>
     seedFromProduct(product),
   )
+  // W1.2 — local copy of Product.version. Sent as If-Match on every
+  // PATCH and bumped from the response so two consecutive saves with
+  // no intervening reload still pass the CAS check on the server.
+  // Seeded from the product prop on mount and on discard (along with
+  // the field values themselves).
+  const [version, setVersion] = useState<number | null>(
+    typeof product.version === 'number' ? product.version : null,
+  )
+  // W1.2 — surfaced when the server returns 409 VERSION_CONFLICT.
+  // Until the user clicks Reload (or Dismiss), the dirty set is held
+  // intact so a second save attempt with a fresh version still has
+  // every touched field to flush.
+  const [conflict, setConflict] = useState<{
+    expected: number
+    current: number | null
+  } | null>(null)
 
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -120,14 +145,56 @@ export default function MasterDataTab({
       return { id: product.id, field, value }
     })
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      // W1.2 — send the version we read with so the server can CAS-
+      // bump in the same transaction as our field updates. expected
+      // Version doubles up in the body for older route handlers that
+      // can't read headers cleanly; the server reads If-Match first.
+      if (typeof version === 'number') {
+        headers['If-Match'] = String(version)
+      }
       const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ changes }),
+        headers,
+        body: JSON.stringify({
+          changes,
+          ...(typeof version === 'number'
+            ? { expectedVersion: version }
+            : {}),
+        }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => null)
+        // W1.2 — VERSION_CONFLICT means another writer landed first.
+        // Keep the dirty set so the user can choose to reapply after
+        // reloading; surface a banner that names the version skew.
+        if (res.status === 409 && body?.code === 'VERSION_CONFLICT') {
+          setStatus('error')
+          setError(null)
+          setConflict({
+            expected:
+              typeof body.expectedVersion === 'number'
+                ? body.expectedVersion
+                : (version ?? 0),
+            current:
+              typeof body.currentVersion === 'number'
+                ? body.currentVersion
+                : null,
+          })
+          return
+        }
         throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const respBody = await res.json().catch(() => null)
+      // W1.2 — track the server's freshly-incremented version so the
+      // next debounced save still passes the CAS check without a
+      // round-trip to GET /api/products/:id.
+      if (typeof respBody?.currentVersion === 'number') {
+        setVersion(respBody.currentVersion)
+      } else if (typeof version === 'number') {
+        setVersion(version + 1)
       }
       const flushedFields = Array.from(dirtyRef.current)
       dirtyRef.current = new Set()
@@ -176,12 +243,27 @@ export default function MasterDataTab({
     setData(seedFromProduct(product))
     setStatus('idle')
     setError(null)
+    // W1.2 — discard also clears the conflict banner and reseeds
+    // version from the freshly-fetched product prop. ProductEditClient
+    // calls router.refresh() right after bumping discardSignal, so
+    // the next render carries the latest version.
+    setConflict(null)
+    setVersion(typeof product.version === 'number' ? product.version : null)
     reportDirty()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [discardSignal, product])
 
   return (
     <div className="space-y-4">
+      {conflict && (
+        <ConflictBanner
+          expected={conflict.expected}
+          current={conflict.current}
+          onReload={() => router.refresh()}
+          onDismiss={() => setConflict(null)}
+          t={t}
+        />
+      )}
       <SaveStatusBar status={status} error={error} t={t} />
 
       <Card title="Identity" description="Core information shared across all channels">
@@ -306,6 +388,55 @@ export default function MasterDataTab({
           />
         </div>
       </Card>
+    </div>
+  )
+}
+
+function ConflictBanner({
+  expected,
+  current,
+  onReload,
+  onDismiss,
+  t,
+}: {
+  expected: number
+  current: number | null
+  onReload: () => void
+  onDismiss: () => void
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  return (
+    <div
+      role="alert"
+      className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-4 py-3 flex items-start justify-between gap-3"
+    >
+      <div className="flex items-start gap-2 min-w-0">
+        <AlertCircle className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+        <div className="min-w-0">
+          <div className="text-md font-semibold text-amber-900 dark:text-amber-200">
+            {t('products.edit.conflict.title')}
+          </div>
+          <div className="text-sm text-amber-800 dark:text-amber-300 mt-0.5">
+            {current != null
+              ? t('products.edit.conflict.body', { expected, current })
+              : t('products.edit.conflict.bodyNoCurrent', { expected })}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <Button variant="primary" size="sm" onClick={onReload}>
+          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+          {t('products.edit.conflict.reload')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDismiss}
+          aria-label={t('products.edit.conflict.dismiss')}
+        >
+          <X className="w-3.5 h-3.5" />
+        </Button>
+      </div>
     </div>
   )
 }
