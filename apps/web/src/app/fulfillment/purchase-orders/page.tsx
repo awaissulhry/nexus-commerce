@@ -1,4 +1,5 @@
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import PurchaseOrdersClient from './PurchaseOrdersClient'
 
 export const dynamic = 'force-dynamic'
@@ -15,15 +16,16 @@ export const revalidate = 0
  * there was no UI to advance them — DB confirmed 6/6 POs stuck in
  * DRAFT. Operators can now drive the approval flow end-to-end here.
  */
-export default function PurchaseOrdersPage() {
+export default async function PurchaseOrdersPage() {
+  const t = await getServerT()
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Purchase Orders"
-        description="Approval workflow for supplier orders · Click any PO for transitions + audit trail"
+        title={t('po.pageTitle')}
+        description={t('po.pageDescription')}
         breadcrumbs={[
-          { label: 'Fulfillment', href: '/fulfillment' },
-          { label: 'Purchase Orders' },
+          { label: t('nav.fulfillment'), href: '/fulfillment' },
+          { label: t('po.pageTitle') },
         ]}
       />
       <PurchaseOrdersClient />

@@ -3379,5 +3379,7 @@
   "po.create.cancel": "Annulla",
   "po.create.create": "Crea PO bozza",
   "po.create.creating": "Creazione…",
-  "po.create.error.noLines": "Aggiungi almeno una riga con SKU + quantità > 0."
+  "po.create.error.noLines": "Aggiungi almeno una riga con SKU + quantità > 0.",
+  "po.pageTitle": "Ordini di acquisto",
+  "po.pageDescription": "Workflow di approvazione per ordini fornitore · Clicca un PO per transizioni + storico"
 }

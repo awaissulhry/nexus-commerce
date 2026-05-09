@@ -3280,6 +3280,11 @@
   "products.edit.noMarkets": "No marketplaces configured for {channel}.",
   "products.edit.listingExists": "Listing exists",
   "products.edit.notListed": "Not listed",
+  "products.edit.conflict.title": "Another change landed first",
+  "products.edit.conflict.body": "Your edit was based on version {expected}; the server is now at version {current}. Reload to pick up the latest data and reapply your change.",
+  "products.edit.conflict.bodyNoCurrent": "Your edit was based on version {expected}, which is now stale. Reload to pick up the latest data and reapply your change.",
+  "products.edit.conflict.reload": "Reload",
+  "products.edit.conflict.dismiss": "Dismiss",
   "inbound.title": "Inbound Shipments",
   "inbound.description": "Receive from suppliers + manufacturing into the warehouse, or send to Amazon FBA end-to-end.",
   "inbound.bulkReceive.button": "Bulk receive",
@@ -3375,5 +3380,7 @@
   "po.create.cancel": "Cancel",
   "po.create.create": "Create draft PO",
   "po.create.creating": "Creating…",
-  "po.create.error.noLines": "Add at least one line with SKU + quantity > 0."
+  "po.create.error.noLines": "Add at least one line with SKU + quantity > 0.",
+  "po.pageTitle": "Purchase Orders",
+  "po.pageDescription": "Approval workflow for supplier orders · Click any PO for transitions + audit trail"
 }
