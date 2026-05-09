@@ -201,6 +201,99 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * L.11.0 — bucketed time-series for the API calls chart.
+   *
+   * GET /api/sync-logs/api-calls/timeseries
+   *   ?since=ISO         (default: now - 24h)
+   *   ?until=ISO         (default: now)
+   *   ?channel=AMAZON    (optional)
+   *   ?operation=getX    (optional)
+   *
+   * Bucket size is chosen from the window:
+   *   < 3h   → 5-minute buckets   (≤ 36 points)
+   *   < 48h  → 1-hour buckets     (≤ 48 points)
+   *   ≥ 48h  → 1-day buckets      (≤ 60 points)
+   *
+   * Postgres date_bin (PG14+) anchors buckets at clean boundaries
+   * so points line up across reloads. percentile_disc is exact;
+   * Prisma's groupBy doesn't surface percentile aggregates so we
+   * reach for $queryRaw.
+   */
+  fastify.get<{
+    Querystring: {
+      since?: string
+      until?: string
+      channel?: string
+      operation?: string
+    }
+  }>('/sync-logs/api-calls/timeseries', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=30')
+      const q = request.query
+      const until = q.until ? new Date(q.until) : new Date()
+      const since = q.since
+        ? new Date(q.since)
+        : new Date(until.getTime() - 24 * 60 * 60 * 1000)
+
+      const windowMs = until.getTime() - since.getTime()
+      const bucket =
+        windowMs < 3 * 60 * 60 * 1000
+          ? '5 minutes'
+          : windowMs < 48 * 60 * 60 * 1000
+            ? '1 hour'
+            : '1 day'
+
+      // date_bin requires an anchor; we use the unix epoch so buckets
+      // are deterministic across calls. The interval string is
+      // server-controlled (not user input) so Prisma.sql interpolates
+      // it cleanly.
+      const rows = await prisma.$queryRaw<
+        Array<{
+          bucket: Date
+          total: bigint
+          failed: bigint
+          p50: number | null
+          p95: number | null
+          p99: number | null
+        }>
+      >`
+        SELECT
+          date_bin(${bucket}::interval, "createdAt", TIMESTAMP '1970-01-01') AS bucket,
+          count(*) AS total,
+          count(*) FILTER (WHERE NOT success) AS failed,
+          percentile_disc(0.50) WITHIN GROUP (ORDER BY "latencyMs")::int AS p50,
+          percentile_disc(0.95) WITHIN GROUP (ORDER BY "latencyMs")::int AS p95,
+          percentile_disc(0.99) WITHIN GROUP (ORDER BY "latencyMs")::int AS p99
+        FROM "OutboundApiCallLog"
+        WHERE "createdAt" >= ${since}
+          AND "createdAt" < ${until}
+          ${q.channel ? Prisma.sql`AND "channel" = ${q.channel}` : Prisma.empty}
+          ${q.operation ? Prisma.sql`AND "operation" = ${q.operation}` : Prisma.empty}
+        GROUP BY bucket
+        ORDER BY bucket
+      `
+
+      return reply.send({
+        bucket,
+        window: { since, until },
+        points: rows.map((r) => ({
+          bucket: r.bucket.toISOString(),
+          total: Number(r.total),
+          failed: Number(r.failed),
+          errorRate: Number(r.total) === 0 ? 0 : Number(r.failed) / Number(r.total),
+          p50: r.p50,
+          p95: r.p95,
+          p99: r.p99,
+        })),
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/api-calls/timeseries] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  /**
    * L.7.0 — SSE event stream for the live tail.
    *
    * Long-lived text/event-stream. Each api-call.recorded event from

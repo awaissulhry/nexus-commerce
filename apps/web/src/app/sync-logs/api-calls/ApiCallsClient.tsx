@@ -28,6 +28,7 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import TimeSeriesChart from './TimeSeriesChart'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -473,6 +474,15 @@ export default function ApiCallsClient() {
             }
           />
         </section>
+      )}
+
+      {/* L.11.0 — time-series charts (latency percentiles + volume) */}
+      {rollup && rollup.stats.total > 0 && (
+        <TimeSeriesChart
+          sinceMs={sinceMs}
+          channel={urlChannel}
+          operation=""
+        />
       )}
 
       {error && (
