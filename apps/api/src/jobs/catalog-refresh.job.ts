@@ -25,6 +25,7 @@ import cron from 'node-cron'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -40,10 +41,11 @@ async function runCatalogRefresh(): Promise<void> {
   logger.info('catalog-refresh cron: tick')
 
   try {
+    await recordCronRun('catalog-refresh', async () => {
     const items = await amazonService.fetchActiveCatalog()
     if (items.length === 0) {
       logger.info('catalog-refresh cron: no products returned by Amazon')
-      return
+      return 'itemsReturned=0'
     }
 
     let upserted = 0
@@ -160,6 +162,8 @@ async function runCatalogRefresh(): Promise<void> {
       upserted,
       upsertFailed,
       parentsLinked,
+    })
+      return `itemsReturned=${items.length} upserted=${upserted} upsertFailed=${upsertFailed} parentsLinked=${parentsLinked}`
     })
   } catch (err) {
     logger.error('catalog-refresh cron: top-level failure', {

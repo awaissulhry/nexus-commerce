@@ -33,6 +33,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import * as sendcloud from '../services/sendcloud/index.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -200,7 +201,10 @@ export function startCarrierServiceSyncCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runCarrierServiceSync().catch((err) => {
+    void recordCronRun('carrier-service-sync', async () => {
+      const r = await runCarrierServiceSync()
+      return `carriers=${r.carriersScanned} synced=${r.servicesSynced} deactivated=${r.servicesDeactivated}`
+    }).catch((err) => {
       lastError = err instanceof Error ? err.message : String(err)
       logger.error('carrier-service-sync cron: failure', { error: lastError })
     })

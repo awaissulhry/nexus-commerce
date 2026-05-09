@@ -30,6 +30,7 @@ import {
   refreshFeeEstimates,
 } from '../services/sp-api-pricing.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let fxTask: ReturnType<typeof cron.schedule> | null = null
 let snapshotTask: ReturnType<typeof cron.schedule> | null = null
@@ -40,8 +41,11 @@ let competitiveTask: ReturnType<typeof cron.schedule> | null = null
 async function runFxRefresh(): Promise<void> {
   logger.info('pricing cron: FX refresh tick')
   try {
-    const result = await refreshFxRates(prisma)
-    logger.info('pricing cron: FX refresh complete', result)
+    await recordCronRun('pricing-fx-refresh', async () => {
+      const result = await refreshFxRates(prisma)
+      logger.info('pricing cron: FX refresh complete', result)
+      return `fetched=${result.fetched} pairsWritten=${result.pairsWritten} errors=${result.errors.length}`
+    })
   } catch (err) {
     logger.error('pricing cron: FX refresh failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -52,8 +56,11 @@ async function runFxRefresh(): Promise<void> {
 async function runSnapshotRefresh(): Promise<void> {
   logger.info('pricing cron: snapshot refresh tick')
   try {
-    const result = await refreshAllSnapshots(prisma)
-    logger.info('pricing cron: snapshot refresh complete', result)
+    await recordCronRun('pricing-snapshot-refresh', async () => {
+      const result = await refreshAllSnapshots(prisma)
+      logger.info('pricing cron: snapshot refresh complete', result)
+      return `skus=${result.skusProcessed} rows=${result.rowsRefreshed}`
+    })
   } catch (err) {
     logger.error('pricing cron: snapshot refresh failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -64,8 +71,11 @@ async function runSnapshotRefresh(): Promise<void> {
 async function runPromotionTick(): Promise<void> {
   logger.info('pricing cron: promotion tick')
   try {
-    const result = await runPromotionScheduler(prisma)
-    logger.info('pricing cron: promotion tick complete', result)
+    await recordCronRun('pricing-promotion-scheduler', async () => {
+      const result = await runPromotionScheduler(prisma)
+      logger.info('pricing cron: promotion tick complete', result)
+      return `listingsUpdated=${result.listingsUpdated} snapshotsRefreshed=${result.snapshotsRefreshed}`
+    })
   } catch (err) {
     logger.error('pricing cron: promotion tick failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -78,55 +88,69 @@ async function runPromotionTick(): Promise<void> {
 // 403 (paywalled account, missing role) doesn't poison the whole batch.
 async function runFeeRefresh(): Promise<void> {
   logger.info('pricing cron: fee refresh tick')
-  const marketplaces = await prisma.marketplace.findMany({
-    where: { channel: 'AMAZON', isActive: true },
-    select: { code: true },
-  })
-  let total = 0
-  let failures = 0
-  for (const mp of marketplaces) {
-    try {
-      const result = await refreshFeeEstimates(prisma, mp.code)
-      total += result.feesWritten
-    } catch (err) {
-      failures++
-      logger.warn('pricing cron: fee refresh failed for marketplace', {
-        marketplace: mp.code,
-        error: err instanceof Error ? err.message : String(err),
-      })
+  await recordCronRun('pricing-fee-refresh', async () => {
+    const marketplaces = await prisma.marketplace.findMany({
+      where: { channel: 'AMAZON', isActive: true },
+      select: { code: true },
+    })
+    let total = 0
+    let failures = 0
+    for (const mp of marketplaces) {
+      try {
+        const result = await refreshFeeEstimates(prisma, mp.code)
+        total += result.feesWritten
+      } catch (err) {
+        failures++
+        logger.warn('pricing cron: fee refresh failed for marketplace', {
+          marketplace: mp.code,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
-  }
-  logger.info('pricing cron: fee refresh complete', {
-    marketplaces: marketplaces.length,
-    feesWritten: total,
-    failures,
+    logger.info('pricing cron: fee refresh complete', {
+      marketplaces: marketplaces.length,
+      feesWritten: total,
+      failures,
+    })
+    return `marketplaces=${marketplaces.length} feesWritten=${total} failures=${failures}`
+  }).catch((err) => {
+    logger.error('pricing cron: fee refresh top-level failure', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   })
 }
 
 async function runCompetitiveRefresh(): Promise<void> {
   logger.info('pricing cron: competitive refresh tick')
-  const marketplaces = await prisma.marketplace.findMany({
-    where: { channel: 'AMAZON', isActive: true },
-    select: { code: true },
-  })
-  let total = 0
-  let failures = 0
-  for (const mp of marketplaces) {
-    try {
-      const result = await refreshCompetitivePricing(prisma, mp.code)
-      total += result.pricesWritten
-    } catch (err) {
-      failures++
-      logger.warn('pricing cron: competitive refresh failed for marketplace', {
-        marketplace: mp.code,
-        error: err instanceof Error ? err.message : String(err),
-      })
+  await recordCronRun('pricing-competitive-refresh', async () => {
+    const marketplaces = await prisma.marketplace.findMany({
+      where: { channel: 'AMAZON', isActive: true },
+      select: { code: true },
+    })
+    let total = 0
+    let failures = 0
+    for (const mp of marketplaces) {
+      try {
+        const result = await refreshCompetitivePricing(prisma, mp.code)
+        total += result.pricesWritten
+      } catch (err) {
+        failures++
+        logger.warn('pricing cron: competitive refresh failed for marketplace', {
+          marketplace: mp.code,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     }
-  }
-  logger.info('pricing cron: competitive refresh complete', {
-    marketplaces: marketplaces.length,
-    pricesWritten: total,
-    failures,
+    logger.info('pricing cron: competitive refresh complete', {
+      marketplaces: marketplaces.length,
+      pricesWritten: total,
+      failures,
+    })
+    return `marketplaces=${marketplaces.length} pricesWritten=${total} failures=${failures}`
+  }).catch((err) => {
+    logger.error('pricing cron: competitive refresh top-level failure', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   })
 }
 

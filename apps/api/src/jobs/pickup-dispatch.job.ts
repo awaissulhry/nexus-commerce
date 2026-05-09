@@ -32,6 +32,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import * as sendcloud from '../services/sendcloud/index.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -193,7 +194,10 @@ export function startPickupDispatchCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runPickupDispatchSweep().catch((err) => {
+    void recordCronRun('pickup-dispatch', async () => {
+      const r = await runPickupDispatchSweep()
+      return `scanned=${r.scanned} dispatched=${r.dispatched} failed=${r.failed} skipped=${r.skipped}`
+    }).catch((err) => {
       lastError = err instanceof Error ? err.message : String(err)
       logger.error('pickup-dispatch cron: failure', { error: lastError })
     })

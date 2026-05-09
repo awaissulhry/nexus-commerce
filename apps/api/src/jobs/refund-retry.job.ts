@@ -19,23 +19,25 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { processRetryQueue } from '../services/refunds/retry.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runRetrySweep(): Promise<void> {
   const startedAt = Date.now()
-  try {
+  await recordCronRun('refund-retry', async () => {
     const result = await processRetryQueue()
     logger.info('refund-retry cron: tick complete', {
       durationMs: Date.now() - startedAt,
       ...result,
     })
-  } catch (err) {
+    return `scanned=${result.scanned} retried=${result.retried} succeeded=${result.succeeded} failed=${result.failed} givenUp=${result.givenUp}`
+  }).catch((err) => {
     logger.error('refund-retry cron: failure', {
       durationMs: Date.now() - startedAt,
       error: err instanceof Error ? err.message : String(err),
     })
-  }
+  })
 }
 
 export function startRefundRetryCron(): void {

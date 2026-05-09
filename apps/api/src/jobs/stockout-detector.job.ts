@@ -16,6 +16,7 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { runStockoutSweep } from '../services/stockout-detector.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -23,12 +24,15 @@ let lastSummary: Awaited<ReturnType<typeof runStockoutSweep>> | null = null
 
 export async function runStockoutCronOnce(): Promise<void> {
   try {
-    const r = await runStockoutSweep()
-    lastRunAt = new Date()
-    lastSummary = r
-    if (r.opened > 0 || r.closed > 0) {
-      logger.info('stockout-detector cron: completed', r)
-    }
+    await recordCronRun('stockout-detector', async () => {
+      const r = await runStockoutSweep()
+      lastRunAt = new Date()
+      lastSummary = r
+      if (r.opened > 0 || r.closed > 0) {
+        logger.info('stockout-detector cron: completed', r)
+      }
+      return `opened=${r.opened} closed=${r.closed}`
+    })
   } catch (err) {
     logger.error('stockout-detector cron: failure', {
       error: err instanceof Error ? err.message : String(err),

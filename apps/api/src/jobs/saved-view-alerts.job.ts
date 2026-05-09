@@ -23,6 +23,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { evaluateAllActiveAlerts } from '../services/saved-view-alerts/evaluator.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -56,7 +57,10 @@ export function startSavedViewAlertsCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runSavedViewAlertsSweep().catch((err) => {
+    void recordCronRun('saved-view-alerts', async () => {
+      const r = await runSavedViewAlertsSweep()
+      return `evaluated=${r.evaluated} fired=${r.fired}`
+    }).catch((err) => {
       logger.error('saved-view-alerts cron: failure', {
         error: err instanceof Error ? err.message : String(err),
       })

@@ -20,23 +20,25 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { pollEbayReturns } from '../services/ebay-returns/ingest.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runPollSweep(): Promise<void> {
   const startedAt = Date.now()
-  try {
+  await recordCronRun('ebay-returns-poll', async () => {
     const result = await pollEbayReturns()
     logger.info('ebay-returns-poll cron: tick complete', {
       durationMs: Date.now() - startedAt,
       ...result,
     })
-  } catch (err) {
+    return `connections=${result.connectionsScanned} created=${result.created} duplicate=${result.duplicate} failed=${result.failed} noLines=${result.noLines}`
+  }).catch((err) => {
     logger.error('ebay-returns-poll cron: failure', {
       durationMs: Date.now() - startedAt,
       error: err instanceof Error ? err.message : String(err),
     })
-  }
+  })
 }
 
 export function startEbayReturnsPollCron(): void {

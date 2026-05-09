@@ -32,6 +32,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { publishOutboundEvent } from '../services/outbound-events.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 import {
   submitShippingConfirmation as amazonSubmit,
   buildConfirmationInputForShipment as amazonBuild,
@@ -361,7 +362,10 @@ export function startTrackingPushbackCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runTrackingPushbackSweep().catch((err) => {
+    void recordCronRun('tracking-pushback', async () => {
+      const stats = await runTrackingPushbackSweep()
+      return `processed=${stats.processed} succeeded=${stats.succeeded} failed=${stats.failed} dead=${stats.dead} reaped=${stats.reaped}`
+    }).catch((err) => {
       logger.error('tracking-pushback cron: failure', {
         error: err instanceof Error ? err.message : String(err),
       })

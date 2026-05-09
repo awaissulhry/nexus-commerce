@@ -7,20 +7,20 @@ import prisma from "../db.js";
 import { WooCommerceSyncService } from "../services/sync/woocommerce-sync.service.js";
 import { ConfigManager } from "../utils/config.js";
 import type { WooCommerceConfig } from "../types/marketplace.js";
+import { recordCronRun } from "../utils/cron-observability.js";
 
 /**
  * Run WooCommerce product sync
  */
 export async function syncWooCommerceProducts(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("WOOCOMMERCE") as WooCommerceConfig;
+  if (!config) {
+    console.warn("[WooCommerceSyncJob] WooCommerce is not configured");
+    return;
+  }
+
+  await recordCronRun("woocommerce-sync-products", async () => {
     console.log("[WooCommerceSyncJob] Starting WooCommerce product sync…");
-
-    const config = ConfigManager.getConfig("WOOCOMMERCE") as WooCommerceConfig;
-    if (!config) {
-      console.warn("[WooCommerceSyncJob] WooCommerce is not configured");
-      return;
-    }
-
     const syncService = new WooCommerceSyncService(config);
     const result = await syncService.syncProducts(100);
 
@@ -45,7 +45,9 @@ export async function syncWooCommerceProducts(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `created=${result.productsCreated} updated=${result.productsUpdated} errors=${result.errors.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[WooCommerceSyncJob] Product sync failed:", message);
 
@@ -60,22 +62,21 @@ export async function syncWooCommerceProducts(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**
  * Run WooCommerce inventory sync
  */
 export async function syncWooCommerceInventory(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("WOOCOMMERCE") as WooCommerceConfig;
+  if (!config) {
+    console.warn("[WooCommerceSyncJob] WooCommerce is not configured");
+    return;
+  }
+
+  await recordCronRun("woocommerce-sync-inventory", async () => {
     console.log("[WooCommerceSyncJob] Starting WooCommerce inventory sync…");
-
-    const config = ConfigManager.getConfig("WOOCOMMERCE") as WooCommerceConfig;
-    if (!config) {
-      console.warn("[WooCommerceSyncJob] WooCommerce is not configured");
-      return;
-    }
-
     const syncService = new WooCommerceSyncService(config);
 
     // Get all products with WooCommerce IDs
@@ -127,7 +128,9 @@ export async function syncWooCommerceInventory(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `updated=${totalUpdated} failed=${totalFailed} products=${products.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[WooCommerceSyncJob] Inventory sync failed:", message);
 
@@ -142,22 +145,21 @@ export async function syncWooCommerceInventory(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**
  * Run WooCommerce order sync
  */
 export async function syncWooCommerceOrders(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("WOOCOMMERCE") as WooCommerceConfig;
+  if (!config) {
+    console.warn("[WooCommerceSyncJob] WooCommerce is not configured");
+    return;
+  }
+
+  await recordCronRun("woocommerce-sync-orders", async () => {
     console.log("[WooCommerceSyncJob] Starting WooCommerce order sync…");
-
-    const config = ConfigManager.getConfig("WOOCOMMERCE") as WooCommerceConfig;
-    if (!config) {
-      console.warn("[WooCommerceSyncJob] WooCommerce is not configured");
-      return;
-    }
-
     const syncService = new WooCommerceSyncService(config);
     const result = await syncService.syncOrders(100);
 
@@ -180,7 +182,9 @@ export async function syncWooCommerceOrders(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `created=${result.created} updated=${result.updated} errors=${result.errors.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[WooCommerceSyncJob] Order sync failed:", message);
 
@@ -195,7 +199,7 @@ export async function syncWooCommerceOrders(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**

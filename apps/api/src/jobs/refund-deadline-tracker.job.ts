@@ -21,23 +21,25 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { scanAndNotifyRefundDeadlines } from '../services/return-policies/deadline-tracker.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runScan(): Promise<void> {
   const startedAt = Date.now()
-  try {
+  await recordCronRun('refund-deadline-tracker', async () => {
     const result = await scanAndNotifyRefundDeadlines()
     logger.info('refund-deadline-tracker cron: tick complete', {
       durationMs: Date.now() - startedAt,
       ...result,
     })
-  } catch (err) {
+    return `scanned=${result.scanned} safe=${result.safe} approaching=${result.approaching} overdue=${result.overdue} notified=${result.notificationsFired}`
+  }).catch((err) => {
     logger.error('refund-deadline-tracker cron: failure', {
       durationMs: Date.now() - startedAt,
       error: err instanceof Error ? err.message : String(err),
     })
-  }
+  })
 }
 
 export function startRefundDeadlineTrackerCron(): void {

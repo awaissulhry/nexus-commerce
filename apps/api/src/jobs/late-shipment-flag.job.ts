@@ -22,6 +22,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -107,7 +108,10 @@ export function startLateShipmentFlagCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runLateShipmentFlagSweep().catch((err) => {
+    void recordCronRun('late-shipment-flag', async () => {
+      const r = await runLateShipmentFlagSweep()
+      return `scanned=${r.scanned} flagged=${r.flagged} skipped=${r.skipped}`
+    }).catch((err) => {
       logger.error('late-shipment-flag cron: failure', {
         error: err instanceof Error ? err.message : String(err),
       })

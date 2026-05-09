@@ -7,20 +7,20 @@ import prisma from "../db.js";
 import { EstySyncService } from "../services/sync/etsy-sync.service.js";
 import { ConfigManager } from "../utils/config.js";
 import type { EtsyConfig } from "../types/marketplace.js";
+import { recordCronRun } from "../utils/cron-observability.js";
 
 /**
  * Run Etsy listing sync
  */
 export async function syncEstyListings(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
+  if (!config) {
+    console.warn("[EstySyncJob] Etsy is not configured");
+    return;
+  }
+
+  await recordCronRun("etsy-sync-listings", async () => {
     console.log("[EstySyncJob] Starting Etsy listing sync…");
-
-    const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
-    if (!config) {
-      console.warn("[EstySyncJob] Etsy is not configured");
-      return;
-    }
-
     const syncService = new EstySyncService(config);
     const result = await syncService.syncListings(100);
 
@@ -45,7 +45,9 @@ export async function syncEstyListings(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `created=${result.listingsCreated} updated=${result.listingsUpdated} errors=${result.errors.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[EstySyncJob] Listing sync failed:", message);
 
@@ -60,22 +62,21 @@ export async function syncEstyListings(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**
  * Run Etsy inventory sync
  */
 export async function syncEstyInventory(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
+  if (!config) {
+    console.warn("[EstySyncJob] Etsy is not configured");
+    return;
+  }
+
+  await recordCronRun("etsy-sync-inventory", async () => {
     console.log("[EstySyncJob] Starting Etsy inventory sync…");
-
-    const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
-    if (!config) {
-      console.warn("[EstySyncJob] Etsy is not configured");
-      return;
-    }
-
     const syncService = new EstySyncService(config);
 
     // Get all products with Etsy listing IDs
@@ -127,7 +128,9 @@ export async function syncEstyInventory(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `updated=${totalUpdated} failed=${totalFailed} products=${products.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[EstySyncJob] Inventory sync failed:", message);
 
@@ -142,22 +145,21 @@ export async function syncEstyInventory(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**
  * Run Etsy order sync
  */
 export async function syncEstyOrders(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
+  if (!config) {
+    console.warn("[EstySyncJob] Etsy is not configured");
+    return;
+  }
+
+  await recordCronRun("etsy-sync-orders", async () => {
     console.log("[EstySyncJob] Starting Etsy order sync…");
-
-    const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
-    if (!config) {
-      console.warn("[EstySyncJob] Etsy is not configured");
-      return;
-    }
-
     const syncService = new EstySyncService(config);
     const result = await syncService.syncOrders(100);
 
@@ -180,7 +182,9 @@ export async function syncEstyOrders(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `created=${result.created} updated=${result.updated} errors=${result.errors.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[EstySyncJob] Order sync failed:", message);
 
@@ -195,7 +199,7 @@ export async function syncEstyOrders(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**

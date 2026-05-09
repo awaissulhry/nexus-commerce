@@ -13,6 +13,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { syncMCFStatus, unconfiguredAdapter, type MCFAdapter } from '../services/amazon-mcf.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -47,30 +48,33 @@ export async function runMCFStatusSyncOnce(): Promise<void> {
 
   const summary = { checked: 0, changed: 0, failed: 0 }
   try {
-    const active = await prisma.mCFShipment.findMany({
-      where: { status: { notIn: TERMINAL_STATUSES } },
-      orderBy: { lastSyncedAt: 'asc' },
-      take: 100,
-      select: { amazonFulfillmentOrderId: true },
-    })
-    for (const s of active) {
-      summary.checked++
-      try {
-        const r = await syncMCFStatus(adapter, s.amazonFulfillmentOrderId)
-        if (r.changed) summary.changed++
-      } catch (err) {
-        summary.failed++
-        logger.warn('amazon-mcf-status cron: per-row sync failed', {
-          amazonFulfillmentOrderId: s.amazonFulfillmentOrderId,
-          error: err instanceof Error ? err.message : String(err),
-        })
+    await recordCronRun('amazon-mcf-status', async () => {
+      const active = await prisma.mCFShipment.findMany({
+        where: { status: { notIn: TERMINAL_STATUSES } },
+        orderBy: { lastSyncedAt: 'asc' },
+        take: 100,
+        select: { amazonFulfillmentOrderId: true },
+      })
+      for (const s of active) {
+        summary.checked++
+        try {
+          const r = await syncMCFStatus(adapter, s.amazonFulfillmentOrderId)
+          if (r.changed) summary.changed++
+        } catch (err) {
+          summary.failed++
+          logger.warn('amazon-mcf-status cron: per-row sync failed', {
+            amazonFulfillmentOrderId: s.amazonFulfillmentOrderId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
-    }
-    lastRunAt = new Date()
-    lastSummary = summary
-    if (summary.checked > 0) {
-      logger.info('amazon-mcf-status cron: completed', summary)
-    }
+      lastRunAt = new Date()
+      lastSummary = summary
+      if (summary.checked > 0) {
+        logger.info('amazon-mcf-status cron: completed', summary)
+      }
+      return `checked=${summary.checked} changed=${summary.changed} failed=${summary.failed}`
+    })
   } catch (err) {
     logger.error('amazon-mcf-status cron: top-level failure', {
       error: err instanceof Error ? err.message : String(err),

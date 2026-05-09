@@ -7,20 +7,20 @@ import prisma from "../db.js";
 import { ShopifySyncService } from "../services/sync/shopify-sync.service.js";
 import { ConfigManager } from "../utils/config.js";
 import type { ShopifyConfig } from "../types/marketplace.js";
+import { recordCronRun } from "../utils/cron-observability.js";
 
 /**
  * Run Shopify product sync
  */
 export async function syncShopifyProducts(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
+  if (!config) {
+    console.warn("[ShopifySyncJob] Shopify is not configured");
+    return;
+  }
+
+  await recordCronRun("shopify-sync-products", async () => {
     console.log("[ShopifySyncJob] Starting Shopify product sync…");
-
-    const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-    if (!config) {
-      console.warn("[ShopifySyncJob] Shopify is not configured");
-      return;
-    }
-
     const syncService = new ShopifySyncService(config);
     const result = await syncService.syncProducts(100);
 
@@ -45,7 +45,9 @@ export async function syncShopifyProducts(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `created=${result.productsCreated} updated=${result.productsUpdated} errors=${result.errors.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ShopifySyncJob] Product sync failed:", message);
 
@@ -60,22 +62,21 @@ export async function syncShopifyProducts(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**
  * Run Shopify inventory sync
  */
 export async function syncShopifyInventory(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
+  if (!config) {
+    console.warn("[ShopifySyncJob] Shopify is not configured");
+    return;
+  }
+
+  await recordCronRun("shopify-sync-inventory", async () => {
     console.log("[ShopifySyncJob] Starting Shopify inventory sync…");
-
-    const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-    if (!config) {
-      console.warn("[ShopifySyncJob] Shopify is not configured");
-      return;
-    }
-
     const syncService = new ShopifySyncService(config);
 
     // Get all products with Shopify IDs
@@ -119,7 +120,9 @@ export async function syncShopifyInventory(): Promise<void> {
         details: { errors },
       },
     });
-  } catch (error) {
+
+    return `updated=${totalUpdated} failed=${totalFailed} products=${products.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ShopifySyncJob] Inventory sync failed:", message);
 
@@ -134,22 +137,21 @@ export async function syncShopifyInventory(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**
  * Run Shopify order sync
  */
 export async function syncShopifyOrders(): Promise<void> {
-  try {
+  const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
+  if (!config) {
+    console.warn("[ShopifySyncJob] Shopify is not configured");
+    return;
+  }
+
+  await recordCronRun("shopify-sync-orders", async () => {
     console.log("[ShopifySyncJob] Starting Shopify order sync…");
-
-    const config = ConfigManager.getConfig("SHOPIFY") as ShopifyConfig;
-    if (!config) {
-      console.warn("[ShopifySyncJob] Shopify is not configured");
-      return;
-    }
-
     const syncService = new ShopifySyncService(config);
     const result = await syncService.syncOrders(50);
 
@@ -172,7 +174,9 @@ export async function syncShopifyOrders(): Promise<void> {
         },
       },
     });
-  } catch (error) {
+
+    return `created=${result.created} updated=${result.updated} errors=${result.errors.length}`;
+  }).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[ShopifySyncJob] Order sync failed:", message);
 
@@ -187,7 +191,7 @@ export async function syncShopifyOrders(): Promise<void> {
         details: { error: message },
       },
     });
-  }
+  });
 }
 
 /**

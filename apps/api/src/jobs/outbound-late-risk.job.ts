@@ -21,6 +21,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -84,7 +85,10 @@ export function startOutboundLateRiskCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runOutboundLateRiskSweep().catch((err) => {
+    void recordCronRun('outbound-late-risk', async () => {
+      const stats = await runOutboundLateRiskSweep()
+      return `overdue=${stats.overdue} today=${stats.today} last24h=${stats.last24h}`
+    }).catch((err) => {
       logger.error('outbound-late-risk cron: failure', {
         error: err instanceof Error ? err.message : String(err),
       })

@@ -22,23 +22,25 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { pollAmazonReturns } from '../services/amazon-returns/ingest.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 async function runPollSweep(): Promise<void> {
   const startedAt = Date.now()
-  try {
+  await recordCronRun('amazon-returns-poll', async () => {
     const result = await pollAmazonReturns()
     logger.info('amazon-returns cron: tick complete', {
       durationMs: Date.now() - startedAt,
       ...result,
     })
-  } catch (err) {
+    return `fbmCreated=${result.fbmCreated} fbmDup=${result.fbmDuplicate} fbmFailed=${result.fbmFailed} fbaCreated=${result.fbaCreated} fbaDup=${result.fbaDuplicate} fbaFailed=${result.fbaFailed}`
+  }).catch((err) => {
     logger.error('amazon-returns cron: failure', {
       durationMs: Date.now() - startedAt,
       error: err instanceof Error ? err.message : String(err),
     })
-  }
+  })
 }
 
 export function startAmazonReturnsPollCron(): void {

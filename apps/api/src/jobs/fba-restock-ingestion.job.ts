@@ -19,6 +19,7 @@ import {
   ingestRestockReportsForAllMarketplaces,
   type IngestionResult,
 } from '../services/fba-restock.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -26,15 +27,18 @@ let lastResults: IngestionResult[] | null = null
 
 export async function runFbaRestockCronOnce(): Promise<void> {
   try {
-    const results = await ingestRestockReportsForAllMarketplaces('cron')
-    lastRunAt = new Date()
-    lastResults = results
-    const fatal = results.filter((r) => r.status === 'FATAL').length
-    const totalRows = results.reduce((s, r) => s + r.rowCount, 0)
-    logger.info('fba-restock cron: completed', {
-      marketplacesProcessed: results.length,
-      totalRows,
-      fatalCount: fatal,
+    await recordCronRun('fba-restock-ingestion', async () => {
+      const results = await ingestRestockReportsForAllMarketplaces('cron')
+      lastRunAt = new Date()
+      lastResults = results
+      const fatal = results.filter((r) => r.status === 'FATAL').length
+      const totalRows = results.reduce((s, r) => s + r.rowCount, 0)
+      logger.info('fba-restock cron: completed', {
+        marketplacesProcessed: results.length,
+        totalRows,
+        fatalCount: fatal,
+      })
+      return `marketplaces=${results.length} totalRows=${totalRows} fatal=${fatal}`
     })
   } catch (err) {
     logger.error('fba-restock cron: failure', {

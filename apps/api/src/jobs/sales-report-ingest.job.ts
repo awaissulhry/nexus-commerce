@@ -19,6 +19,7 @@
 import cron from 'node-cron'
 import { ingestAllAmazonMarketplaces } from '../services/sales-report-ingest.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -37,14 +38,17 @@ async function runYesterdayIngest(): Promise<void> {
   })
 
   try {
-    const results = await ingestAllAmazonMarketplaces(yesterday)
-    const succeeded = results.filter((r) => 'rowsUpserted' in r).length
-    const failed = results.filter((r) => 'error' in r).length
-    logger.info('sales-report-ingest cron: complete', {
-      day: yesterday.toISOString().slice(0, 10),
-      marketplacesProcessed: results.length,
-      succeeded,
-      failed,
+    await recordCronRun('sales-report-ingest', async () => {
+      const results = await ingestAllAmazonMarketplaces(yesterday)
+      const succeeded = results.filter((r) => 'rowsUpserted' in r).length
+      const failed = results.filter((r) => 'error' in r).length
+      logger.info('sales-report-ingest cron: complete', {
+        day: yesterday.toISOString().slice(0, 10),
+        marketplacesProcessed: results.length,
+        succeeded,
+        failed,
+      })
+      return `day=${yesterday.toISOString().slice(0, 10)} marketplaces=${results.length} succeeded=${succeeded} failed=${failed}`
     })
   } catch (err) {
     logger.error('sales-report-ingest cron: top-level failure', {

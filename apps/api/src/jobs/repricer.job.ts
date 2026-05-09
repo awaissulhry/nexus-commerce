@@ -20,12 +20,16 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { runRepricerTick } from '../services/repricer-scheduler.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let task: ReturnType<typeof cron.schedule> | null = null
 
 async function tick(): Promise<void> {
   try {
-    await runRepricerTick(prisma)
+    await recordCronRun('repricer', async () => {
+      const r = await runRepricerTick(prisma)
+      return `live=${r.liveMode} scanned=${r.snapshotsScanned} enqueued=${r.enqueued} dryRunWould=${r.dryRunWouldEnqueue} subThreshold=${r.skippedSubThreshold}`
+    })
   } catch (err) {
     logger.error('G.1 repricer cron: tick failed', {
       error: err instanceof Error ? err.message : String(err),

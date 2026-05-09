@@ -16,6 +16,7 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { runForecastAccuracySweep } from '../services/forecast-accuracy.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -23,9 +24,12 @@ let lastEvaluated = 0
 
 export async function runForecastAccuracyCronOnce(): Promise<void> {
   try {
-    const r = await runForecastAccuracySweep()
-    lastRunAt = new Date()
-    lastEvaluated = r.evaluated
+    await recordCronRun('forecast-accuracy', async () => {
+      const r = await runForecastAccuracySweep()
+      lastRunAt = new Date()
+      lastEvaluated = r.evaluated
+      return `day=${r.day} evaluated=${r.evaluated} skippedNoForecast=${r.skippedNoForecast}`
+    })
   } catch (err) {
     logger.error('forecast-accuracy cron: failure', {
       error: err instanceof Error ? err.message : String(err),

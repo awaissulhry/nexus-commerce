@@ -17,6 +17,7 @@ import {
   fbaPanEuUnconfiguredAdapter,
   type PanEuAdapter,
 } from '../services/fba-pan-eu.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -45,19 +46,22 @@ export async function runFbaPanEuSyncOnce(): Promise<void> {
     return
   }
   try {
-    const r = await syncFbaPanEuInventory(adapter)
-    lastRunAt = new Date()
-    lastSummary = r
-    if (r.rowsUpserted > 0 || r.errors.length > 0) {
-      logger.info('fba-pan-eu cron: completed', {
-        rowsUpserted: r.rowsUpserted,
-        rowsCreated: r.rowsCreated,
-        rowsUpdated: r.rowsUpdated,
-        productsTouched: r.productsTouched,
-        errorCount: r.errors.length,
-        durationMs: r.durationMs,
-      })
-    }
+    await recordCronRun('fba-pan-eu-sync', async () => {
+      const r = await syncFbaPanEuInventory(adapter)
+      lastRunAt = new Date()
+      lastSummary = r
+      if (r.rowsUpserted > 0 || r.errors.length > 0) {
+        logger.info('fba-pan-eu cron: completed', {
+          rowsUpserted: r.rowsUpserted,
+          rowsCreated: r.rowsCreated,
+          rowsUpdated: r.rowsUpdated,
+          productsTouched: r.productsTouched,
+          errorCount: r.errors.length,
+          durationMs: r.durationMs,
+        })
+      }
+      return `upserted=${r.rowsUpserted} created=${r.rowsCreated} updated=${r.rowsUpdated} products=${r.productsTouched} errors=${r.errors.length}`
+    })
   } catch (err) {
     logger.error('fba-pan-eu cron: top-level failure', {
       error: err instanceof Error ? err.message : String(err),

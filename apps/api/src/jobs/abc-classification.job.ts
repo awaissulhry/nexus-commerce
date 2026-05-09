@@ -11,6 +11,7 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recompute } from '../services/abc-classification.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -22,16 +23,19 @@ export async function runAbcCronOnce(): Promise<void> {
     return
   }
   try {
-    const r = await recompute()
-    lastRunAt = new Date()
-    lastSummary = r
-    logger.info('abc-classification cron: completed', {
-      productsTracked: r.totals.productsTracked,
-      A: r.totals.skusInA,
-      B: r.totals.skusInB,
-      C: r.totals.skusInC,
-      D: r.totals.skusInD,
-      durationMs: r.durationMs,
+    await recordCronRun('abc-classification', async () => {
+      const r = await recompute()
+      lastRunAt = new Date()
+      lastSummary = r
+      logger.info('abc-classification cron: completed', {
+        productsTracked: r.totals.productsTracked,
+        A: r.totals.skusInA,
+        B: r.totals.skusInB,
+        C: r.totals.skusInC,
+        D: r.totals.skusInD,
+        durationMs: r.durationMs,
+      })
+      return `tracked=${r.totals.productsTracked} A=${r.totals.skusInA} B=${r.totals.skusInB} C=${r.totals.skusInC} D=${r.totals.skusInD}`
     })
   } catch (err) {
     logger.error('abc-classification cron: failure', {

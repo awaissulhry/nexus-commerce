@@ -33,6 +33,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -162,7 +163,10 @@ export function startCarrierMetricsCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runCarrierMetricsSweep().catch((err) => {
+    void recordCronRun('carrier-metrics', async () => {
+      const r = await runCarrierMetricsSweep()
+      return `carriers=${r.carriersScanned} upserted=${r.rowsUpserted}`
+    }).catch((err) => {
       lastError = err instanceof Error ? err.message : String(err)
       logger.error('carrier-metrics cron: failure', { error: lastError })
     })

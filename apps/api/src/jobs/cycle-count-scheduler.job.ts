@@ -10,6 +10,7 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { scheduleAutoCount } from '../services/cycle-count-scheduler.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -21,16 +22,20 @@ export async function runCycleCountSchedulerOnce(): Promise<void> {
     return
   }
   try {
-    const r = await scheduleAutoCount({})
-    lastRunAt = new Date()
-    lastSummary = r
-    if (r.sessionId) {
-      logger.info('cycle-count-scheduler cron: session created', {
-        sessionId: r.sessionId,
-        itemCount: r.itemCount,
-        due: r.due,
-      })
-    }
+    await recordCronRun('cycle-count-scheduler', async () => {
+      const r = await scheduleAutoCount({})
+      lastRunAt = new Date()
+      lastSummary = r
+      if (r.sessionId) {
+        logger.info('cycle-count-scheduler cron: session created', {
+          sessionId: r.sessionId,
+          itemCount: r.itemCount,
+          due: r.due,
+        })
+      }
+      const dueTotal = r.due.A + r.due.B + r.due.C + r.due.D + r.due.uncategorised
+      return `sessionId=${r.sessionId ?? 'none'} itemCount=${r.itemCount} due=${dueTotal}`
+    })
   } catch (err) {
     logger.error('cycle-count-scheduler cron: failure', {
       error: err instanceof Error ? err.message : String(err),

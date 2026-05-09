@@ -13,6 +13,7 @@
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recomputeAllLeadTimeStats } from '../services/lead-time-stats.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -20,12 +21,15 @@ let lastSummary: Awaited<ReturnType<typeof recomputeAllLeadTimeStats>> | null = 
 
 export async function runLeadTimeStatsCronOnce(): Promise<void> {
   try {
-    const r = await recomputeAllLeadTimeStats()
-    lastRunAt = new Date()
-    lastSummary = r
-    if (r.suppliersUpdated > 0 || r.errorCount > 0) {
-      logger.info('lead-time-stats cron: completed', r)
-    }
+    await recordCronRun('lead-time-stats', async () => {
+      const r = await recomputeAllLeadTimeStats()
+      lastRunAt = new Date()
+      lastSummary = r
+      if (r.suppliersUpdated > 0 || r.errorCount > 0) {
+        logger.info('lead-time-stats cron: completed', r)
+      }
+      return `suppliersUpdated=${r.suppliersUpdated} errors=${r.errorCount}`
+    })
   } catch (err) {
     logger.error('lead-time-stats cron: failure', {
       error: err instanceof Error ? err.message : String(err),

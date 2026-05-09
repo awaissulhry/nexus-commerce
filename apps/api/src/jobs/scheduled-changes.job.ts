@@ -25,6 +25,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { masterStatusService } from '../services/master-status.service.js'
 import { masterPriceService } from '../services/master-price.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 const VALID_KINDS = ['STATUS', 'PRICE'] as const
 type Kind = (typeof VALID_KINDS)[number]
@@ -184,7 +185,18 @@ export function startScheduledChangesCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runScheduledChangesOnce()
+    if (process.env.NEXUS_ENABLE_SCHEDULED_CHANGES === '0') {
+      // Skip silently — runScheduledChangesOnce also no-ops on this gate.
+      return
+    }
+    void recordCronRun('scheduled-changes', async () => {
+      const r = await runScheduledChangesOnce()
+      return `picked=${r.picked} applied=${r.applied} failed=${r.failed}`
+    }).catch((err) => {
+      logger.error('scheduled-changes cron: top-level failure', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
   })
   logger.info('scheduled-changes cron: scheduled', { schedule })
 }

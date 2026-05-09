@@ -30,6 +30,7 @@ import {
   mapAmazonShipmentStatusToLocal,
   type AmazonShipmentStatus,
 } from '../services/fba-inbound.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -143,7 +144,15 @@ export function startFbaStatusPollCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runFbaStatusPoll().catch((err) => {
+    if (!isFbaInboundConfigured()) {
+      // Skip silently — manual run via runFbaStatusPoll() also no-ops.
+      // Don't record a CronRun row for a configuration-skipped tick.
+      return
+    }
+    void recordCronRun('fba-status-poll', async () => {
+      const r = await runFbaStatusPoll()
+      return `scanned=${r.scanned} updated=${r.updated} unchanged=${r.unchanged} skipped=${r.skipped} errors=${r.errors}`
+    }).catch((err) => {
       logger.error('fba-status-poll cron: failure', {
         error: err instanceof Error ? err.message : String(err),
       })

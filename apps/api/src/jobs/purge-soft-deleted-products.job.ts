@@ -21,6 +21,7 @@
 import cron from 'node-cron'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -174,7 +175,18 @@ export function startPurgeSoftDeletedCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runPurgeSoftDeletedOnce()
+    if (process.env.NEXUS_ENABLE_SOFT_DELETE_PURGE === '0') {
+      // Skip silently — runPurgeSoftDeletedOnce also no-ops on this gate.
+      return
+    }
+    void recordCronRun('purge-soft-deleted-products', async () => {
+      const r = await runPurgeSoftDeletedOnce()
+      return `candidates=${r.candidates} purged=${r.purged} images=${r.dependents.productImages} listings=${r.dependents.listings}`
+    }).catch((err) => {
+      logger.error('purge-soft-deleted cron: top-level failure', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
   })
   logger.info('purge-soft-deleted cron: scheduled', { schedule })
 }

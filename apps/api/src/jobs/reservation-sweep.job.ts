@@ -19,6 +19,7 @@
 import cron from 'node-cron'
 import { sweepExpiredReservations } from '../services/stock-level.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -26,12 +27,15 @@ let lastReleasedCount = 0
 
 async function runSweep(): Promise<void> {
   try {
-    const released = await sweepExpiredReservations()
-    lastRunAt = new Date()
-    lastReleasedCount = released
-    if (released > 0) {
-      logger.info('reservation-sweep: released expired reservations', { released })
-    }
+    await recordCronRun('reservation-sweep', async () => {
+      const released = await sweepExpiredReservations()
+      lastRunAt = new Date()
+      lastReleasedCount = released
+      if (released > 0) {
+        logger.info('reservation-sweep: released expired reservations', { released })
+      }
+      return `released=${released}`
+    })
   } catch (err) {
     logger.error('reservation-sweep: failed', {
       error: err instanceof Error ? err.message : String(err),

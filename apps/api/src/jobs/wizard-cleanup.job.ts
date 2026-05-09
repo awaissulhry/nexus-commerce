@@ -25,6 +25,7 @@
 import prisma from '../db.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { writeWizardEvent } from '../services/listing-wizard/telemetry.service.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 const INACTIVE_THRESHOLD_MS = 24 * 60 * 60 * 1000
 
@@ -223,14 +224,20 @@ export function startWizardCleanupCron(): void {
   // Run once at startup (skipped if last-run was very recent — the
   // service is idempotent so a duplicate run is harmless), then once
   // per day.
-  void cleanupAbandonedWizards().catch((err) => {
+  void recordCronRun('wizard-cleanup', async () => {
+    const r = await cleanupAbandonedWizards()
+    return `deleted=${r.deleted} marked=${r.marked} orphans=${r.orphansDeleted} backfilled=${r.expiresAtBackfilled}`
+  }).catch((err) => {
     console.warn(
       '[wizard-cleanup] initial run failed:',
       err instanceof Error ? err.message : String(err),
     )
   })
   cleanupTimer = setInterval(() => {
-    void cleanupAbandonedWizards().catch((err) => {
+    void recordCronRun('wizard-cleanup', async () => {
+      const r = await cleanupAbandonedWizards()
+      return `deleted=${r.deleted} marked=${r.marked} orphans=${r.orphansDeleted} backfilled=${r.expiresAtBackfilled}`
+    }).catch((err) => {
       console.warn(
         '[wizard-cleanup] tick failed:',
         err instanceof Error ? err.message : String(err),
