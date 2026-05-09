@@ -147,6 +147,17 @@ export default function OrderDetailClient({ id }: { id: string }) {
             >
               <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request review
             </button>
+            {/* L.25.0 — drill-through into /sync-logs/api-calls
+                scoped to this order. Operators triaging a failed
+                cancellation / fulfillment / refund land on the
+                per-order API-call timeline. */}
+            <a
+              href={`/sync-logs/api-calls?orderId=${encodeURIComponent(order.id)}`}
+              title="View every channel API call recorded for this order"
+              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            >
+              <ExternalLink size={12} /> Sync activity
+            </a>
             {/* FU.1 — Italian fiscal artifacts (IT marketplace only).
                 B2B unlocks the FatturaPA + SDI dispatch options;
                 everyone else gets a Pro Forma + packing slip. */}

@@ -397,6 +397,20 @@ export default function ProductDrawer({
                 </a>
               )}
               {data?.ebayItemId && <span>eBay {data.ebayItemId}</span>}
+              {/* L.25.0 — drill-through into /sync-logs/api-calls
+                  scoped to this product. Link is unconditional even
+                  if no calls are recorded yet — the empty state
+                  there explains the absence rather than us hiding
+                  the affordance. */}
+              {data?.id && (
+                <a
+                  href={`/sync-logs/api-calls?productId=${encodeURIComponent(data.id)}`}
+                  className="inline-flex items-center gap-0.5 hover:text-blue-600 dark:hover:text-blue-400"
+                  title="View every Amazon SP-API / eBay / Shopify call recorded for this product"
+                >
+                  Sync activity <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
             </div>
           </div>
           <IconButton

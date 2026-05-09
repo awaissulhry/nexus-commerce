@@ -4640,6 +4640,18 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                 <Edit3 size={11} />
                 Open in editor
               </Link>
+              {/* L.25.0 — drill-through into /sync-logs/api-calls
+                  scoped to this listing. Operators triaging a
+                  failed listing land on the per-listing API-call
+                  timeline + scoped p95 latency chart. */}
+              <Link
+                href={`/sync-logs/api-calls?listingId=${encodeURIComponent(listing.id)}`}
+                className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                title="View every channel API call recorded for this listing"
+              >
+                <ExternalLink size={11} />
+                Sync activity
+              </Link>
             </div>
           </div>
 
