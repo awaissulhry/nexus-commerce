@@ -17,6 +17,11 @@ import {
   readYearEndSnapshot,
   snapshotYearEndValuation,
 } from '../services/year-end-snapshot.service.js'
+import {
+  createLot,
+  traceLotForward,
+  traceLotBackward,
+} from '../services/lot.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
 import {
@@ -1569,6 +1574,121 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return result
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/year-end-valuation/snapshot] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/lots ──────────────────────────────────────────
+  // L.3 — list lots. Filters:
+  //   productId (string)        — restrict to one product
+  //   expiringWithinDays (int)  — only lots with expiresAt within N days
+  //   activeOnly (bool, default true) — unitsRemaining > 0
+  //   limit (int, default 100, max 500)
+  // Returns lots in (expiresAt ASC NULLS LAST, receivedAt ASC) order.
+  fastify.get('/stock/lots', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const productId = typeof q.productId === 'string' ? q.productId : undefined
+      const expiringWithinDays = q.expiringWithinDays != null
+        ? Math.max(0, Math.min(3650, Math.floor(safeNum(q.expiringWithinDays, 0) ?? 0)))
+        : null
+      const activeOnly = q.activeOnly !== '0' && q.activeOnly !== 'false'
+      const limit = Math.min(500, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
+
+      const where: any = {}
+      if (productId) where.productId = productId
+      if (activeOnly) where.unitsRemaining = { gt: 0 }
+      if (expiringWithinDays != null) {
+        const cutoff = new Date(Date.now() + expiringWithinDays * 86400_000)
+        where.expiresAt = { not: null, lte: cutoff }
+      }
+
+      const lots = await prisma.lot.findMany({
+        where,
+        orderBy: [{ expiresAt: 'asc' }, { receivedAt: 'asc' }],
+        take: limit,
+        include: {
+          product: { select: { id: true, sku: true, name: true, amazonAsin: true } },
+          variation: { select: { id: true, sku: true } },
+        },
+      })
+      return { items: lots, total: lots.length, limit }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/lots] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/lots/:id/trace ────────────────────────────────
+  // L.3 — full forward + backward trace for a single lot. Drives the
+  // recall workflow's affected-orders report.
+  //   direction=forward|backward|both (default 'both')
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { direction?: 'forward' | 'backward' | 'both' }
+  }>('/stock/lots/:id/trace', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const direction = request.query.direction ?? 'both'
+      const result: any = { lotId: id }
+      if (direction === 'forward' || direction === 'both') {
+        result.forward = await traceLotForward(id)
+      }
+      if (direction === 'backward' || direction === 'both') {
+        result.backward = await traceLotBackward(id)
+      }
+      if (!result.forward && !result.backward) {
+        return reply.code(404).send({ error: 'Lot not found' })
+      }
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/lots/:id/trace] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/lots ─────────────────────────────────────────
+  // L.3 — manual lot creation. Inbound-receive endpoints already pass
+  // lot info to createLot directly; this endpoint covers backfill /
+  // standalone receives the operator records by hand.
+  fastify.post<{
+    Body: {
+      productId: string
+      variationId?: string | null
+      lotNumber: string
+      unitsReceived: number
+      receivedAt?: string
+      expiresAt?: string | null
+      originPoId?: string | null
+      originInboundShipmentId?: string | null
+      supplierLotRef?: string | null
+      notes?: string | null
+    }
+  }>('/stock/lots', async (request, reply) => {
+    try {
+      const b = request.body
+      if (!b?.productId || !b?.lotNumber?.trim() || !(b.unitsReceived > 0)) {
+        return reply.code(400).send({ error: 'productId, lotNumber, unitsReceived (>0) are required' })
+      }
+      const lot = await createLot({
+        productId: b.productId,
+        variationId: b.variationId ?? null,
+        lotNumber: b.lotNumber,
+        unitsReceived: b.unitsReceived,
+        receivedAt: b.receivedAt ? new Date(b.receivedAt) : undefined,
+        expiresAt: b.expiresAt ? new Date(b.expiresAt) : null,
+        originPoId: b.originPoId ?? null,
+        originInboundShipmentId: b.originInboundShipmentId ?? null,
+        supplierLotRef: b.supplierLotRef ?? null,
+        notes: b.notes ?? null,
+      })
+      return lot
+    } catch (error: any) {
+      // Unique violation = lotNumber already exists for this product.
+      if (error?.code === 'P2002') {
+        return reply.code(409).send({ error: `Lot number already exists for this product` })
+      }
+      fastify.log.error({ err: error }, '[stock/lots POST] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
