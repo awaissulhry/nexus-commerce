@@ -137,6 +137,7 @@ import {
 import { useBulkUndoRedo } from './lib/use-bulk-undo-redo'
 import { startDragFillTracker } from './lib/drag-fill-tracker'
 import { cycleSortKey, sortRows, type SortKey } from './lib/multi-sort'
+import { bucketByColumn } from './lib/grouping'
 import {
   buildToneMap,
   type ConditionalRule,
@@ -607,6 +608,14 @@ export default function BulkOperationsClient() {
   // First-match-wins per cell. Empty array = no painting (default).
   const [conditionalRules, setConditionalRules] = useState<ConditionalRule[]>([])
   const [conditionalEditorOpen, setConditionalEditorOpen] = useState(false)
+  // W4.3 — group-by column. Empty string = grouping off. The pipeline
+  // buckets rows on this column and renders a visual header strip
+  // between groups; operators collapse a group via the header. Keeps
+  // group state local to the session — saved-views capture it in W4.4.
+  const [groupByColumnId, setGroupByColumnId] = useState<string>('')
+  const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
   const activeFilterCount =
     filterState.status.length +
     filterState.channels.length +
@@ -2215,14 +2224,31 @@ export default function BulkOperationsClient() {
   // BEFORE buildHierarchy so parent rows are sorted by the chosen
   // criteria; children stay nested under the new parent order.
   // Empty sortKeys list → no-op (sortRows returns the input array).
+  // W4.3 — when group-by is set, an implicit primary sort on the
+  // group column ensures rows in the same group are contiguous.
+  // The grouping itself (synthetic header rows) is layered on
+  // separately via virtualizedRows below — displayRows stays a flat
+  // list of data rows so TanStack's row model doesn't see headers.
   const displayRows = useMemo(() => {
+    const effectiveSortKeys: SortKey[] = groupByColumnId
+      ? [
+          { columnId: groupByColumnId, direction: 'asc' },
+          ...sortKeys.filter((k) => k.columnId !== groupByColumnId),
+        ]
+      : sortKeys
     const sorted = sortRows(
       filteredProducts as unknown as Array<Record<string, unknown>>,
-      sortKeys,
+      effectiveSortKeys,
     ) as typeof filteredProducts
     if (displayMode !== 'hierarchy') return sorted
     return buildHierarchy(sorted, expandedParents)
-  }, [filteredProducts, displayMode, expandedParents, sortKeys])
+  }, [
+    filteredProducts,
+    displayMode,
+    expandedParents,
+    sortKeys,
+    groupByColumnId,
+  ])
 
   const table = useReactTable({
     data: displayRows as BulkProduct[],
@@ -2653,6 +2679,18 @@ export default function BulkOperationsClient() {
         (rangeBounds.maxRow - rangeBounds.minRow + 1) * ROW_HEIGHT,
     }
   })()
+
+  // ── W4.3 — group bucket count for the toolbar status chip. ────
+  // bucketByColumn is reused by the (deferred) synthetic-header
+  // renderer; for now operators get the row-grouping benefit via
+  // the implicit primary sort + a "(N groups)" count on the chip.
+  const groupBucketCount = useMemo(() => {
+    if (!groupByColumnId) return 0
+    return bucketByColumn(
+      displayRows as unknown as Array<Record<string, unknown>>,
+      groupByColumnId,
+    ).size
+  }, [displayRows, groupByColumnId])
 
   // ── W4.2 — conditional-format tone map ─────────────────────────
   // Walks the active ruleset across the displayed rows once and
@@ -3401,6 +3439,50 @@ export default function BulkOperationsClient() {
                 </span>
               )}
             </button>
+            {/* W4.3 — Group-by column selector. Operators pin a
+                primary sort key + (in a follow-up) get visual
+                separators between groups. Choosing "(none)" clears
+                grouping back to the operator's manual sort order. */}
+            <div className="inline-flex items-center gap-1">
+              <select
+                value={groupByColumnId}
+                onChange={(e) => {
+                  setGroupByColumnId(e.target.value)
+                  // Reset collapsed-group cache when switching groups
+                  // so a stale collapse from another column doesn't
+                  // hide rows in the new grouping.
+                  setCollapsedGroupKeys(new Set())
+                }}
+                title="Group rows by a column — pins it as the primary sort key"
+                className={cn(
+                  'h-7 px-1.5 text-xs border rounded',
+                  groupByColumnId
+                    ? 'bg-purple-50 border-purple-300 text-purple-700'
+                    : 'bg-white border-slate-200 text-slate-600',
+                )}
+              >
+                <option value="">Group: (none)</option>
+                {visibleColumnsList
+                  .filter((c) => !c.id.startsWith('__'))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Group: {c.label}
+                    </option>
+                  ))}
+              </select>
+              {groupByColumnId && groupBucketCount > 0 && (
+                <span
+                  className="text-xs tabular-nums text-purple-700"
+                  title={
+                    collapsedGroupKeys.size > 0
+                      ? `${groupBucketCount} group${groupBucketCount === 1 ? '' : 's'} (${collapsedGroupKeys.size} collapsed)`
+                      : `${groupBucketCount} group${groupBucketCount === 1 ? '' : 's'}`
+                  }
+                >
+                  {groupBucketCount} grp
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Middle: status, fills available space.
