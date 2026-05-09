@@ -17,6 +17,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
 import PricingTab from './tabs/PricingTab'
+import ActivityTab from './tabs/ActivityTab'
 import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import { cn } from '@/lib/utils'
@@ -256,6 +257,12 @@ export default function ProductEditClient({
             >
               {t('products.edit.tab.pricing')}
             </TopTabButton>
+            <TopTabButton
+              active={topTab === 'activity'}
+              onClick={() => setTopTab('activity')}
+            >
+              {t('products.edit.tab.activity')}
+            </TopTabButton>
             {product.isParent && (
               <TopTabButton
                 active={topTab === 'variations'}
@@ -329,6 +336,14 @@ export default function ProductEditClient({
             product={product}
             discardSignal={discardSignal}
             onDirtyChange={(count) => setTabDirty('pricing', count)}
+          />
+        )}
+
+        {topTab === 'activity' && (
+          <ActivityTab
+            product={product}
+            discardSignal={discardSignal}
+            onDirtyChange={(count) => setTabDirty('activity', count)}
           />
         )}
 
