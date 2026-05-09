@@ -23,6 +23,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Camera, Check, ChevronRight, Minus, Plus,
   RefreshCw, Scan, Search, X, AlertTriangle, Unlock,
+  Package,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -380,6 +381,12 @@ function ItemReceiveDetail({
   const [busy, setBusy] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // L.11 — optional lot capture (collapsed by default; expand when
+  // recording a lot-tracked SKU like motorcycle helmets).
+  const [lotOpen, setLotOpen] = useState(false)
+  const [lotNumber, setLotNumber] = useState('')
+  const [lotExpiresAt, setLotExpiresAt] = useState('')
+  const [lotSupplierRef, setLotSupplierRef] = useState('')
 
   const remaining = Math.max(0, item.quantityExpected - item.quantityReceived)
   const onHold = item.qcStatus === 'HOLD' || item.qcStatus === 'FAIL'
@@ -399,6 +406,16 @@ function ItemReceiveDetail({
             itemId: item.id,
             quantityReceived: target,
             qcStatus: qc || undefined,
+            // L.11 — only send lot fields when the operator opened
+            // the panel and provided a lot number. Avoids creating
+            // empty/garbage lot rows for non-tracked SKUs.
+            ...(lotOpen && lotNumber.trim()
+              ? {
+                lotNumber: lotNumber.trim(),
+                expiresAt: lotExpiresAt || undefined,
+                supplierLotRef: lotSupplierRef.trim() || undefined,
+              }
+              : {}),
           }],
         }),
       })
@@ -537,6 +554,70 @@ function ItemReceiveDetail({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* L.11 — Lot capture (collapsed by default) */}
+      <div className="bg-white rounded-lg border-2 border-slate-300 p-4">
+        <button
+          type="button"
+          onClick={() => setLotOpen((o) => !o)}
+          className="w-full flex items-center justify-between text-sm uppercase tracking-wider text-slate-500 font-semibold"
+          aria-expanded={lotOpen}
+          aria-controls="lot-capture-panel"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Package size={11} aria-hidden="true" />
+            Lot info {lotNumber.trim() && lotOpen && <span className="text-slate-700 normal-case font-mono">· {lotNumber}</span>}
+          </span>
+          <span className="text-xs text-slate-400">{lotOpen ? '▾' : '▸'}</span>
+        </button>
+        {lotOpen && (
+          <div id="lot-capture-panel" className="mt-3 space-y-2">
+            <div>
+              <label htmlFor={`lot-number-${item.id}`} className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+                Lot number
+              </label>
+              <input
+                id={`lot-number-${item.id}`}
+                type="text"
+                value={lotNumber}
+                onChange={(e) => setLotNumber(e.target.value)}
+                placeholder="e.g. AGV-BATCH-2025-04-A"
+                className="w-full h-12 px-3 text-md border-2 border-slate-200 rounded font-mono"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor={`lot-expires-${item.id}`} className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+                  Expires (optional)
+                </label>
+                <input
+                  id={`lot-expires-${item.id}`}
+                  type="date"
+                  value={lotExpiresAt}
+                  onChange={(e) => setLotExpiresAt(e.target.value)}
+                  className="w-full h-12 px-3 text-md border-2 border-slate-200 rounded"
+                />
+              </div>
+              <div>
+                <label htmlFor={`lot-supplier-${item.id}`} className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-1">
+                  Supplier ref
+                </label>
+                <input
+                  id={`lot-supplier-${item.id}`}
+                  type="text"
+                  value={lotSupplierRef}
+                  onChange={(e) => setLotSupplierRef(e.target.value)}
+                  placeholder="optional"
+                  className="w-full h-12 px-3 text-md border-2 border-slate-200 rounded font-mono"
+                />
+              </div>
+            </div>
+            <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded p-2">
+              Same lot received again? Use the same number — units accumulate, origin chain preserved.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Photos */}
