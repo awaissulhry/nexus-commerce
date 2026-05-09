@@ -19,7 +19,7 @@ import {
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
-  ClipboardCheck, Bookmark, BookmarkPlus, Trash2,
+  ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Star,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
@@ -310,11 +310,15 @@ type SavedView = {
   search: string
   density: Density
   visibleColumns: ColumnKey[]
+  /** T.28 — when true, the view auto-applies on page load. Server
+   *  enforces at most one default per (userId, surface). */
+  isDefault: boolean
 }
 type SavedViewApiRow = {
   id: string
   name: string
-  filters: Partial<Omit<SavedView, 'id' | 'name'>>
+  isDefault: boolean
+  filters: Partial<Omit<SavedView, 'id' | 'name' | 'isDefault'>>
 }
 const SAVED_VIEWS_STORAGE_KEY = 'stock.savedViews'
 const SAVED_VIEWS_BOOTSTRAP_KEY = 'stock.savedViews.bootstrapped'
@@ -325,6 +329,7 @@ function fromApiRow(row: SavedViewApiRow): SavedView | null {
   return {
     id: row.id,
     name: row.name,
+    isDefault: !!row.isDefault,
     view: (f.view as ViewMode) ?? 'table',
     location: f.location ?? 'all',
     status: f.status ?? 'all',
@@ -397,6 +402,21 @@ async function deleteSavedViewApi(id: string): Promise<boolean> {
   }
 }
 
+async function setDefaultSavedView(id: string, isDefault: boolean): Promise<SavedView | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isDefault }),
+    })
+    if (!res.ok) return null
+    const row = await res.json() as SavedViewApiRow
+    return fromApiRow(row)
+  } catch {
+    return null
+  }
+}
+
 /** One-shot import: if the user has localStorage views and we haven't
  *  bootstrapped yet, POST each view to the API once and mark the flag. */
 async function bootstrapLegacyLocalViewsIfNeeded(): Promise<void> {
@@ -416,6 +436,7 @@ async function bootstrapLegacyLocalViewsIfNeeded(): Promise<void> {
       search: v.search,
       density: v.density,
       visibleColumns: v.visibleColumns,
+      isDefault: false,
     })
   }
   window.localStorage.removeItem(SAVED_VIEWS_STORAGE_KEY)
@@ -504,9 +525,22 @@ export default function StockWorkspace() {
     ;(async () => {
       await bootstrapLegacyLocalViewsIfNeeded()
       const rows = await fetchSavedViews()
-      if (!cancelled) setSavedViews(rows)
+      if (cancelled) return
+      setSavedViews(rows)
+      // T.28 — auto-apply the default view on first load, but ONLY when
+      // the URL has no filter params (deep links win over defaults).
+      const hasUrlState =
+        searchParams.has('view') || searchParams.has('location') ||
+        searchParams.has('status') || searchParams.has('search')
+      const def = rows.find((v) => v.isDefault)
+      if (def && !hasUrlState) {
+        applySavedView(def)
+      }
     })()
     return () => { cancelled = true }
+    // applySavedView is stable for first-load purposes; we deliberately
+    // run this exactly once on mount, so we don't include it as a dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Bulk-selection state. Set of StockLevel ids. Only used in table view —
@@ -871,6 +905,7 @@ export default function StockWorkspace() {
       search,
       density,
       visibleColumns,
+      isDefault: false,
     })
     if (created) {
       setSavedViews((prev) => [...prev, created])
@@ -879,6 +914,25 @@ export default function StockWorkspace() {
     setSaveViewName('')
     setSavedViewsOpen(false)
   }, [saveViewName, view, locationCode, status, search, density, visibleColumns])
+
+  const toggleDefaultView = useCallback(async (id: string) => {
+    const target = savedViews.find((v) => v.id === id)
+    if (!target) return
+    const updated = await setDefaultSavedView(id, !target.isDefault)
+    if (updated) {
+      // Server clears any previous default for the same surface; mirror
+      // that locally so only one row shows the pin at a time.
+      setSavedViews((prev) =>
+        prev.map((v) =>
+          v.id === id
+            ? { ...v, isDefault: updated.isDefault }
+            : updated.isDefault
+              ? { ...v, isDefault: false }
+              : v,
+        ),
+      )
+    }
+  }, [savedViews])
 
   const deleteSavedView = useCallback(async (id: string) => {
     const ok = await deleteSavedViewApi(id)
@@ -942,6 +996,7 @@ export default function StockWorkspace() {
               onToggle={() => setSavedViewsOpen((o) => !o)}
               onApply={applySavedView}
               onDelete={deleteSavedView}
+              onToggleDefault={toggleDefaultView}
               onOpenSaveModal={() => { setSavedViewsOpen(false); setSaveViewModalOpen(true) }}
               t={t}
             />
@@ -2480,13 +2535,14 @@ function DensityToggle({ density, onChange }: { density: Density; onChange: (d: 
 // bookmark to open; clicking a row applies that view; the trash icon
 // deletes; "Save current view" triggers the save modal.
 function SavedViewsButton({
-  savedViews, open, onToggle, onApply, onDelete, onOpenSaveModal, t,
+  savedViews, open, onToggle, onApply, onDelete, onToggleDefault, onOpenSaveModal, t,
 }: {
   savedViews: SavedView[]
   open: boolean
   onToggle: () => void
   onApply: (v: SavedView) => void
   onDelete: (id: string) => void
+  onToggleDefault: (id: string) => void
   onOpenSaveModal: () => void
   t: (k: string, v?: Record<string, string | number>) => string
 }) {
@@ -2517,18 +2573,42 @@ function SavedViewsButton({
             ) : (
               <ul className="divide-y divide-slate-100">
                 {savedViews.map((v) => (
-                  <li key={v.id} className="flex items-center gap-2 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 rounded">
+                  <li key={v.id} className="flex items-center gap-1 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 rounded">
                     <button
                       onClick={() => onApply(v)}
                       className="flex-1 text-left min-h-[44px] sm:min-h-0 px-3 py-2 text-sm"
                     >
-                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{v.name}</div>
+                      <div className="font-medium text-slate-900 dark:text-slate-100 truncate inline-flex items-center gap-1.5">
+                        {v.name}
+                        {v.isDefault && (
+                          <span
+                            className="text-[10px] uppercase tracking-wider font-semibold px-1 py-0.5 rounded bg-amber-50 text-amber-700"
+                            aria-label={t('stock.savedViews.defaultBadge')}
+                          >
+                            {t('stock.savedViews.defaultBadge')}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                         {v.view}
                         {v.location && ` · ${v.location}`}
                         {v.status && ` · ${v.status.toLowerCase()}`}
                         {v.search && ` · "${v.search.slice(0, 16)}"`}
                       </div>
+                    </button>
+                    <button
+                      onClick={() => onToggleDefault(v.id)}
+                      className={cn(
+                        'min-h-[44px] sm:min-h-0 px-2 py-2',
+                        v.isDefault
+                          ? 'text-amber-500 hover:text-amber-600'
+                          : 'text-slate-300 hover:text-amber-500',
+                      )}
+                      aria-label={v.isDefault ? t('stock.savedViews.unpinDefault') : t('stock.savedViews.pinDefault')}
+                      title={v.isDefault ? t('stock.savedViews.unpinDefault') : t('stock.savedViews.pinDefault')}
+                      aria-pressed={v.isDefault}
+                    >
+                      <Star size={12} fill={v.isDefault ? 'currentColor' : 'none'} />
                     </button>
                     <button
                       onClick={() => onDelete(v.id)}
