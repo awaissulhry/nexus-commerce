@@ -132,6 +132,14 @@ model Product {
   workflowTransitions WorkflowTransition[] @relation("ProductWorkflowTransitions")
   workflowComments    WorkflowComment[]    @relation("ProductWorkflowComments")
 
+  // ── W4.1 — Tier pricing (Magento parity) ──────────────────────
+  // Volume-discount + customer-group pricing. tierPrices[] holds
+  // per-(minQty, optional customerGroup) discount rows; the
+  // resolver (W4.2) picks the highest-minQty row whose threshold is
+  // met. Independent of Product.basePrice — base remains the
+  // anonymous-customer / qty=1 fallback.
+  tierPrices ProductTierPrice[]
+
   // Pricing intelligence
   costPrice       Decimal? @db.Decimal(10, 2) // Cost of goods for margin calc
   minMargin       Decimal? @db.Decimal(5, 2) // Minimum acceptable margin percentage (e.g., 15 for 15%)
@@ -652,6 +660,83 @@ model WorkflowComment {
 
   @@index([productId, createdAt])
   @@index([stageId])
+}
+
+/// W4.1 — CustomerGroup (Magento + Salesforce B2B parity).
+///
+/// Top-level customer segmentation entity. Each group is a named
+/// bucket of buyers — 'guest', 'retail_b2b', 'wholesale_b2b' — that
+/// can have segment-specific tier pricing. ProductTierPrice rows
+/// reference a group optionally; null group = applies to every
+/// customer regardless of segment.
+///
+/// CustomerGroup is intentionally minimal at this stage — code +
+/// label + description. Discount rules, payment terms, credit
+/// limits all live downstream (Wave 4 follow-ups or Wave 8 B2B
+/// catalog). This model is the join key; everything else builds on
+/// top.
+model CustomerGroup {
+  id          String  @id @default(cuid())
+  // Lower-snake_case: 'guest', 'retail_b2b', 'wholesale_b2b'.
+  code        String  @unique
+  label       String
+  description String?
+
+  tierPrices ProductTierPrice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// W4.1 — ProductTierPrice (Magento parity).
+///
+/// Per-product volume-discount + customer-group pricing. The
+/// resolver (W4.2) picks the row with the highest `minQty` ≤
+/// requested quantity that matches the customer's group (or has
+/// customerGroupId=null for everyone). When no matching tier
+/// applies, falls back to Product.basePrice.
+///
+/// Cascade rules:
+///   product → CASCADE (tier prices owned by the product)
+///   customerGroup → CASCADE (deleting a group drops its
+///                            specific tier rows; "applies to
+///                            everyone" rows survive because
+///                            customerGroupId stays null)
+///
+/// Naming: prefixed `Product` to disambiguate from any future
+/// channel-level or category-level tier pricing models. The
+/// product-scope is explicit so call sites read clearly.
+model ProductTierPrice {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Quantity threshold. Discount applies when buying this many or
+  // more. minQty=1 represents "the base tier" but is not required
+  // (a product can have only minQty=10+ tiers and fall back to
+  // basePrice for qty < 10).
+  minQty Int
+
+  // Discount price for the tier. Stored as absolute amount; the UI
+  // can offer "fixed" vs "percent off" entry but at storage level
+  // we resolve to the absolute value so the runtime resolver is
+  // pure arithmetic.
+  price Decimal @db.Decimal(10, 2)
+
+  // Optional customer group. Null = applies to every customer; set
+  // = applies only to that segment. The resolver picks
+  // group-specific tiers over generic ones at the same minQty.
+  customerGroupId String?
+  customerGroup   CustomerGroup? @relation(fields: [customerGroupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // No two tier rows for the same (product, minQty, group) — the
+  // resolver assumes a deterministic answer per tuple.
+  @@unique([productId, minQty, customerGroupId])
+  @@index([productId])
+  @@index([customerGroupId])
 }
 
 /// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
