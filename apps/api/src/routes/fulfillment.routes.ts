@@ -125,6 +125,10 @@ import {
 } from '../jobs/abc-classification.job.js'
 import { evaluateRule } from '../services/automation-rule.service.js'
 import {
+  seedAutomationRuleTemplates,
+  TEMPLATES as AUTOMATION_RULE_TEMPLATES,
+} from '../services/automation-rule-templates.service.js'
+import {
   transitionPo,
   getPoAuditTrail,
   type WorkflowTransition,
@@ -8069,6 +8073,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send(result)
       }
       return result
+    },
+  )
+
+  // W4.4 — Pre-built rule template catalogue. Read-only; the seeder
+  // endpoint below idempotently creates them. Operators browse this
+  // to pick a starting point in the rule builder ("Start from
+  // template" button in W4.5).
+  fastify.get(
+    '/fulfillment/replenishment/automation/rules/templates',
+    async () => {
+      return { templates: AUTOMATION_RULE_TEMPLATES }
+    },
+  )
+
+  // W4.4 — Idempotent seeder. Creates any template that doesn't
+  // already exist (matched by name + domain). Existing rules are
+  // never modified — operator customisations are preserved.
+  fastify.post(
+    '/fulfillment/replenishment/automation/rules/seed-templates',
+    async () => {
+      return await seedAutomationRuleTemplates()
     },
   )
 
