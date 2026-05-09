@@ -952,6 +952,8 @@
   "stock.subReason.deterioration": "Deterioration",
   "stock.subReason.destruction": "Destruction (cert.)",
   "stock.subReason.internalUse": "Internal use",
+  "stock.import.template.exampleReceived": "received from supplier",
+  "stock.import.template.exampleDamaged": "damaged",
   "stock.drawer.release": "Release",
   "stock.drawer.releaseConfirm": "Release {n} units?",
   "stock.transfers.title": "Transfers",

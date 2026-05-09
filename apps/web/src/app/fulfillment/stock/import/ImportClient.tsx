@@ -60,11 +60,18 @@ interface Location {
   name: string
 }
 
-const CSV_TEMPLATE = `sku,change,notes
-EXAMPLE-SKU-1,+5,received from supplier
-EXAMPLE-SKU-2,-3,damaged
-EXAMPLE-SKU-3,10,
-`
+// T.26 — example notes are localized; the SKU placeholders stay as
+// literal generic markers ("REPLACE-WITH-SKU…") so the operator
+// understands they must be replaced regardless of locale.
+function buildCsvTemplate(t: (k: string) => string): string {
+  return [
+    'sku,change,notes',
+    `REPLACE-WITH-SKU-1,+5,${t('stock.import.template.exampleReceived')}`,
+    `REPLACE-WITH-SKU-2,-3,${t('stock.import.template.exampleDamaged')}`,
+    'REPLACE-WITH-SKU-3,10,',
+    '',
+  ].join('\n')
+}
 
 function parseCsv(text: string): { rows: ParsedRow[]; error: string | null } {
   // Minimal RFC-4180-ish parser. Operator workflow: small files
@@ -172,14 +179,14 @@ export default function ImportClient() {
   }, [parsed, locationCode, t, toast])
 
   const downloadTemplate = useCallback(() => {
-    const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob([buildCsvTemplate(t)], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = 'stock-import-template.csv'
     a.click()
     URL.revokeObjectURL(url)
-  }, [])
+  }, [t])
 
   return (
     <div className="space-y-4">

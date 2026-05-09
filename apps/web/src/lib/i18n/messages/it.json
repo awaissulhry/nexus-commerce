@@ -940,6 +940,8 @@
   "stock.subReason.deterioration": "Deterioramento",
   "stock.subReason.destruction": "Distruzione (cert.)",
   "stock.subReason.internalUse": "Scarico interno",
+  "stock.import.template.exampleReceived": "ricevuto dal fornitore",
+  "stock.import.template.exampleDamaged": "danneggiato",
   "stock.drawer.release": "Rilascia",
   "stock.drawer.releaseConfirm": "Rilasciare {n} unità?",
   "stock.transfers.title": "Trasferimenti",
