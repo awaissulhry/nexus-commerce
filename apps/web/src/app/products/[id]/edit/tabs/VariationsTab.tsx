@@ -48,6 +48,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -592,15 +593,6 @@ function VariantFormModal({
     }
   }, [mode, parent.id, sku])
 
-  // Close on Escape unless mid-submit.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, submitting])
-
   const skuTrimmed = sku.trim()
   const isDuplicateSku =
     skuTrimmed.length > 0 &&
@@ -794,31 +786,15 @@ function VariantFormModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm pt-[8vh] px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={() => !submitting && onClose()}
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      placement="top"
+      size="2xl"
+      title={mode === 'create' ? 'Add Variation' : `Edit ${initial?.sku}`}
     >
-      <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 w-[600px] max-w-[92vw] flex flex-col max-h-[85vh]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {mode === 'create' ? 'Add Variation' : `Edit ${initial?.sku}`}
-          </h2>
-          <button
-            type="button"
-            onClick={() => !submitting && onClose()}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-50"
-            disabled={submitting}
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Variant SKU" required>
@@ -1034,7 +1010,7 @@ function VariantFormModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
+        <ModalFooter>
           <Button
             variant="secondary"
             size="sm"
@@ -1052,9 +1028,8 @@ function VariantFormModal({
           >
             {mode === 'create' ? 'Create variant' : 'Save changes'}
           </Button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+    </Modal>
   )
 }
 
@@ -1124,21 +1099,15 @@ function DeleteConfirmModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm pt-[12vh] px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={() => !submitting && onClose()}
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      placement="top"
+      size="md"
+      title="Delete variant?"
     >
-      <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 w-[440px] max-w-[92vw]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            Delete variant?
-          </h2>
-        </div>
         <div className="px-5 py-4 space-y-3">
           <p className="text-md text-slate-700 dark:text-slate-300">
             This will permanently delete{' '}
@@ -1161,7 +1130,7 @@ function DeleteConfirmModal({
             </div>
           )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-800">
+        <ModalFooter>
           <Button
             variant="secondary"
             size="sm"
@@ -1179,9 +1148,8 @@ function DeleteConfirmModal({
           >
             Delete variant
           </Button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+    </Modal>
   )
 }
 
