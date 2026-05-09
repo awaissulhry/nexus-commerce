@@ -30,15 +30,14 @@ node packages/database/scripts/check-column-drift.mjs || {
   exit 1
 }
 
-# W5.40 — i18n catalog parity + t()-ref check. Currently warn-only:
-# concurrent sessions had ~25 missing keys when this landed (organize.*,
-# replenishment.automation.*, stock.recallDetail.*, stock.serials.*).
-# Promote to hard-fail (drop the `|| true`) once those are cleared so
-# the next race-loss like W5.34/W5.38 fails the push instead of
-# leaving operators on the wrong locale.
+# W5.40 — i18n catalog parity + t()-ref check. Hard-fail since W5.42
+# cleared the 25 inherited bugs (organize.*, replenishment.automation.*,
+# stock.recallDetail.*, stock.serials.*). Race-losses like W5.34/W5.38
+# now fail the push instead of leaving operators on the wrong locale.
 echo "→ Checking i18n catalog parity..."
 node scripts/check-i18n-catalog.mjs || {
-  echo "⚠ i18n catalog has missing keys (warn-only — see message above)"
+  echo "❌ i18n catalog check FAILED — see message above"
+  exit 1
 }
 
 echo "→ Building apps/web..."

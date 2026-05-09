@@ -3038,5 +3038,12 @@
   "stock.lots.col.expires": "Expires",
   "stock.lots.col.received": "Received",
   "stock.lots.col.supplierRef": "Supplier ref",
-  "stock.lots.expiringInDays": "{days}d"
+  "stock.lots.expiringInDays": "{days}d",
+  "stock.recallDetail.releaseReservations": "Release product reservations",
+  "stock.recallDetail.releaseHint": "Releases all open reservations on the product (not just this lot).",
+  "stock.recallDetail.releaseConfirm": "Release every open reservation on this product? Reservations don't track lot, so all open reservations on the product release — better to over-release than over-ship potentially-recalled units.",
+  "stock.recallDetail.releasing": "Releasing…",
+  "stock.recallDetail.releasedToast": "Released {n} reservations",
+  "stock.serials.section": "Serial numbers · {available} of {total} available",
+  "stock.serials.onOrder": "on order {id}…"
 }
