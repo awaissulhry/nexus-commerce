@@ -1073,6 +1073,130 @@ export class SubmissionService {
         }
       }
 
+      if (c.platform === 'SHOPIFY') {
+        // S.1 — compose a Shopify Admin REST productCreate payload
+        // shaped for POST /admin/api/{ver}/products.json. Per the
+        // active-channel scope memory Shopify is single-marketplace
+        // ("GLOBAL"); we still let the channel.marketplace flow
+        // through so a future Shopify Markets multi-store wiring
+        // doesn't churn this composer.
+        //
+        // v1 ships master-only (no variation expansion). Includes
+        // title + body_html + vendor + product_type + tags + status
+        // + first variant + images. Variation children land in a
+        // follow-up — the publish adapter creates them via PUT
+        // /products/{id}/variants once the parent ID is known.
+        const productType =
+          ((slice as any).productType?.productType as string | undefined) ??
+          fallbackProductType ??
+          ''
+        const channelAttrs = ((slice as any).attributes ?? {}) as Record<
+          string,
+          unknown
+        >
+        const mergedAttrs: Record<string, unknown> = {
+          ...baseAttributes,
+          ...channelAttrs,
+        }
+        const groupKey = contentGroupKey(c.platform, c.marketplace)
+        const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
+        const channelPricing = (slice as any).pricing ?? {}
+        const effectivePrice =
+          typeof channelPricing.marketplacePrice === 'number'
+            ? channelPricing.marketplacePrice
+            : typeof basePricing.basePrice === 'number'
+              ? basePricing.basePrice
+              : undefined
+        const compareAtPrice =
+          typeof channelPricing.maxPrice === 'number' &&
+          typeof effectivePrice === 'number' &&
+          channelPricing.maxPrice > effectivePrice
+            ? channelPricing.maxPrice
+            : undefined
+
+        // Title: group content (AI-generated) wins, then item_name
+        // attribute, then the master product name. Same precedence
+        // ladder as eBay so AI-translated content lands consistently.
+        const title =
+          (typeof groupContent?.title?.content === 'string' &&
+            groupContent.title.content.trim().length > 0
+            ? groupContent.title.content.trim()
+            : undefined) ??
+          (typeof mergedAttrs.item_name === 'string'
+            ? (mergedAttrs.item_name as string)
+            : undefined) ??
+          ''
+
+        const bodyHtml =
+          (typeof groupContent?.description?.content === 'string' &&
+            groupContent.description.content.trim().length > 0
+            ? groupContent.description.content.trim()
+            : undefined) ??
+          (typeof mergedAttrs.product_description === 'string'
+            ? (mergedAttrs.product_description as string)
+            : undefined) ??
+          ''
+
+        // Tags: keywords field if string-array shape, else split the
+        // backend-keywords string. Shopify expects a comma-separated
+        // string at the REST surface; we'll join client-side in the
+        // adapter to keep the payload schema strict.
+        const keywordsRaw = mergedAttrs.generic_keyword ?? mergedAttrs.keywords
+        const tags = (() => {
+          const expanded = tryExpandStringArray(keywordsRaw)
+          if (expanded !== null) return expanded.map(String)
+          if (typeof keywordsRaw === 'string') {
+            return keywordsRaw
+              .split(/[\s,]+/)
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          }
+          return []
+        })()
+
+        const shopifyPayload: Record<string, unknown> = {
+          shop: c.marketplace, // 'GLOBAL' for the single-store case
+          product: {
+            title,
+            body_html: bodyHtml,
+            vendor: (mergedAttrs.brand as string | undefined) ?? '',
+            product_type: productType,
+            tags,
+            status: 'draft', // operator activates manually after review
+            variants: [
+              {
+                sku: wizard.product?.sku ?? '',
+                price:
+                  typeof effectivePrice === 'number'
+                    ? effectivePrice.toFixed(2)
+                    : '0.00',
+                compare_at_price:
+                  typeof compareAtPrice === 'number'
+                    ? compareAtPrice.toFixed(2)
+                    : undefined,
+                inventory_quantity:
+                  typeof basePricing.stock === 'number'
+                    ? basePricing.stock
+                    : undefined,
+                inventory_management: 'shopify',
+                inventory_policy: 'deny',
+              },
+            ],
+            images:
+              orderedUrls.length > 0
+                ? orderedUrls.slice(0, 250).map((src) => ({ src }))
+                : undefined,
+          },
+        }
+
+        return {
+          channelKey,
+          platform: c.platform,
+          marketplace: c.marketplace,
+          payload: shopifyPayload,
+        }
+      }
+
       if (c.platform !== 'AMAZON') {
         return {
           channelKey,
