@@ -3360,20 +3360,25 @@ function BulkAdjustModal({
   const wouldGoNegative = valid && selectedItems.some((it) => it.quantity + n < 0)
 
   return (
-    <Modal title="Bulk adjust quantity" onClose={onCancel}>
+    <Modal title={t('stock.bulkAdjust.title')} onClose={onCancel}>
       <div className="space-y-3">
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">Change (signed)</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-change">
+            {t('stock.bulkAdjust.changeLabel')}
+          </label>
           <input
+            id="bulk-adjust-change"
             type="number"
             value={change}
             onChange={(e) => setChange(e.target.value)}
-            placeholder="±n  (e.g. +5 or -3)"
+            placeholder={t('stock.bulkAdjust.changePlaceholder')}
             autoFocus
+            aria-describedby="bulk-adjust-change-help bulk-adjust-warning"
+            aria-invalid={wouldGoNegative}
             className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
           />
-          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Same delta applied to every selected row. Use negative numbers to remove stock.
+          <div id="bulk-adjust-change-help" className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {t('stock.bulkAdjust.changeHelp')}
           </div>
         </div>
         {/* S.12 — structured sub-reason picker. Same options as the
@@ -3381,7 +3386,9 @@ function BulkAdjustModal({
             applied in runBulkAdjust so the schema-level reason +
             structured notes prefix flow consistently. */}
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-reason">Reason</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-reason">
+            {t('stock.bulkAdjust.reasonLabel')}
+          </label>
           <select
             id="bulk-adjust-reason"
             value={subReason}
@@ -3394,19 +3401,22 @@ function BulkAdjustModal({
           </select>
         </div>
         <div>
-          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1">Notes (optional)</label>
+          <label className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-1" htmlFor="bulk-adjust-notes">
+            {t('stock.bulkAdjust.notesLabel')}
+          </label>
           <input
+            id="bulk-adjust-notes"
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. cycle count adjustment 2026-05-06"
+            placeholder={t('stock.bulkAdjust.notesPlaceholder')}
             className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
           />
         </div>
 
         <div className="border border-slate-200 dark:border-slate-700 rounded p-2 bg-slate-50 dark:bg-slate-800/50">
           <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-            Affected rows ({selectedItems.length})
+            {t('stock.bulkAdjust.affectedRows', { n: selectedItems.length })}
           </div>
           <ul className="space-y-0.5 max-h-[160px] overflow-y-auto">
             {selectedItems.slice(0, 50).map((it) => {
@@ -3433,26 +3443,30 @@ function BulkAdjustModal({
               )
             })}
             {selectedItems.length > 50 && (
-              <li className="text-sm text-slate-400 italic">+{selectedItems.length - 50} more</li>
+              <li className="text-sm text-slate-400 italic">{t('stock.bulkAdjust.moreRows', { n: selectedItems.length - 50 })}</li>
             )}
           </ul>
         </div>
 
         {wouldGoNegative && (
-          <div className="text-base text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 inline-flex items-start gap-2">
-            <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-            <span>One or more rows would be driven negative. The server will reject those; others will succeed.</span>
+          <div
+            id="bulk-adjust-warning"
+            role="alert"
+            className="text-base text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 inline-flex items-start gap-2"
+          >
+            <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span>{t('stock.bulkAdjust.negativeWarning')}</span>
           </div>
         )}
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">Cancel</button>
+          <button onClick={onCancel} className="h-11 sm:h-8 px-3 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100">{t('stock.bulkAdjust.cancel')}</button>
           <button
             onClick={() => valid && onConfirm(n, subReason, notes || null)}
             disabled={!valid}
             className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            <Check size={12} /> Apply to {selectedItems.length}
+            <Check size={12} aria-hidden="true" /> {t('stock.bulkAdjust.apply', { n: selectedItems.length })}
           </button>
         </div>
       </div>
