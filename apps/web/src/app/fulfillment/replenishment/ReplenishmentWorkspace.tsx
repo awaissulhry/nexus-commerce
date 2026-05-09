@@ -30,12 +30,12 @@ import {
   ACTIVE_CHANNELS_OPTIONS,
   ACTIVE_MARKETPLACES_OPTIONS,
 } from '@/components/ui/MultiSelectChips'
+import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -866,21 +866,25 @@ export default function ReplenishmentWorkspace() {
             <option value={5}>Auto-refresh: 5 min</option>
             <option value={15}>Auto-refresh: 15 min</option>
           </select>
-          <button
+          <Button
             onClick={fetchData}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
+            variant="secondary"
+            size="md"
+            icon={<RefreshCw size={12} aria-hidden="true" />}
           >
-            <RefreshCw size={12} /> Refresh
-          </button>
+            Refresh
+          </Button>
           {/* R.5 — CSV export of currently filtered + sorted suggestions */}
-          <button
+          <Button
             onClick={() => exportSuggestionsCsv(filtered)}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
+            variant="secondary"
+            size="md"
+            icon={<Download size={12} aria-hidden="true" />}
             title="Export the currently filtered + sorted suggestions to CSV"
             disabled={filtered.length === 0}
           >
-            <Download size={12} /> Export CSV
-          </button>
+            Export CSV
+          </Button>
           <button
             onClick={() => setHelpOpen(true)}
             className="h-8 w-8 grid place-items-center text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
@@ -900,13 +904,14 @@ export default function ReplenishmentWorkspace() {
             selected
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
               onClick={clearSelection}
-              className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900"
+              variant="secondary"
+              size="sm"
             >
               Clear
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => {
@@ -922,13 +927,15 @@ export default function ReplenishmentWorkspace() {
             >
               <X size={12} /> {t('replenishment.dismiss.bulkButton')}
             </button>
-            <button
+            <Button
               type="button"
               onClick={() => setBulkOpen(true)}
-              className="h-7 px-3 text-base bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
+              variant="primary"
+              size="sm"
+              icon={<ShoppingCart size={12} aria-hidden="true" />}
             >
-              <ShoppingCart size={12} /> Bulk-create POs
-            </button>
+              Bulk-create POs
+            </Button>
           </div>
         </div>
       )}

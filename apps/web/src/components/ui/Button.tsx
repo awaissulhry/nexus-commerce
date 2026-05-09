@@ -15,10 +15,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600',
-  secondary: 'bg-white hover:bg-slate-50 text-slate-900 border-slate-200',
-  ghost: 'bg-transparent hover:bg-slate-100 text-slate-700 border-transparent',
-  danger: 'bg-red-600 hover:bg-red-700 text-white border-red-600',
+  primary:
+    'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600 dark:border-blue-500',
+  secondary:
+    'bg-white hover:bg-slate-50 text-slate-900 border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700',
+  ghost:
+    'bg-transparent hover:bg-slate-100 text-slate-700 border-transparent dark:hover:bg-slate-800 dark:text-slate-300',
+  danger:
+    'bg-red-600 hover:bg-red-700 text-white border-red-600 dark:bg-red-500 dark:hover:bg-red-600 dark:border-red-500',
 }
 
 const SIZE: Record<Size, string> = {
@@ -38,7 +42,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           // U.13 — focus-visible (not focus) so keyboard users get
           // the ring but mouse-clickers don't get a sticky outline
           // after every click. Matches WAI-ARIA 1.3 guidance.
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-white',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           VARIANT[variant],
           SIZE[size],
