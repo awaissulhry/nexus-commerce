@@ -441,22 +441,40 @@ export default function AppSidebar() {
         </NavGroup>
 
         <NavGroup label="Fulfillment">
+          {/* Stable layout: sub-links are always rendered (indented)
+              under their parent so navigating from one section to
+              another doesn't reflow the sidebar. The full hierarchy
+              is visible at all times, in semantic order:
+                Stock → Channel Drift
+                Inbound
+                Outbound → Analytics
+                Replenishment
+                Purchase Orders
+                Carriers
+                Returns → Analytics */}
           <NavItem
             href="/fulfillment/stock"
             icon={Warehouse}
-            label="Stock Overview"
+            label="Stock"
             active={pathname === '/fulfillment/stock'}
+          />
+          <NavItem
+            href="/fulfillment/stock/channel-drift"
+            icon={Cable}
+            label="Channel Drift"
+            active={pathname === '/fulfillment/stock/channel-drift'}
+            nested
           />
           <NavItem
             href="/fulfillment/inbound"
             icon={PackageCheck}
-            label="Inbound Shipments"
-            active={pathname === '/fulfillment/inbound'}
+            label="Inbound"
+            active={pathname.startsWith('/fulfillment/inbound')}
           />
           <NavItem
             href="/fulfillment/outbound"
             icon={PackageOpen}
-            label="Outbound Shipments"
+            label="Outbound"
             // O.22: same pending-orders count drives both the Orders
             // entry and the Outbound entry — pending-orders == orders
             // that need a shipment created. Operators expect the same
@@ -467,21 +485,17 @@ export default function AppSidebar() {
             }
             active={pathname === '/fulfillment/outbound' && !pathname.includes('/analytics')}
           />
-          {/* O.33: analytics sub-link rendered when operator is anywhere
-              in the outbound section. Discoverable from sidebar without
-              cluttering the top-level for non-active users. */}
-          {pathname.startsWith('/fulfillment/outbound') && (
-            <NavItem
-              href="/fulfillment/outbound/analytics"
-              icon={BarChart3}
-              label="↳ Outbound Analytics"
-              active={pathname === '/fulfillment/outbound/analytics'}
-            />
-          )}
+          <NavItem
+            href="/fulfillment/outbound/analytics"
+            icon={BarChart3}
+            label="Outbound Analytics"
+            active={pathname === '/fulfillment/outbound/analytics'}
+            nested
+          />
           <NavItem
             href="/fulfillment/replenishment"
             icon={RefreshCw}
-            label="Smart Replenishment"
+            label="Replenishment"
             active={pathname === '/fulfillment/replenishment'}
           />
           {/* F2.7+ — Purchase Orders surface (R.7 approval workflow,
@@ -492,18 +506,6 @@ export default function AppSidebar() {
             label="Purchase Orders"
             active={pathname.startsWith('/fulfillment/purchase-orders')}
           />
-          {/* CS.3 — channel drift triage. Shown only when the operator
-              is somewhere in /fulfillment/stock to mirror the analytics
-              sub-link pattern; the StockSubNav already badges it from
-              every stock surface. */}
-          {pathname.startsWith('/fulfillment/stock') && (
-            <NavItem
-              href="/fulfillment/stock/channel-drift"
-              icon={Cable}
-              label="↳ Channel Drift"
-              active={pathname === '/fulfillment/stock/channel-drift'}
-            />
-          )}
           <NavItem
             href="/fulfillment/carriers"
             icon={Truck}
@@ -514,20 +516,15 @@ export default function AppSidebar() {
             href="/fulfillment/returns"
             icon={Undo2}
             label="Returns"
-            active={pathname === '/fulfillment/returns'}
+            active={pathname === '/fulfillment/returns' || (pathname.startsWith('/fulfillment/returns') && !pathname.includes('/analytics'))}
           />
-          {/* R7.1 — analytics sub-link, same conditional-rendering
-              pattern as outbound. Surfaces only while the operator
-              is anywhere in the returns section so the top-level
-              stays calm for non-active users. */}
-          {pathname.startsWith('/fulfillment/returns') && (
-            <NavItem
-              href="/fulfillment/returns/analytics"
-              icon={BarChart3}
-              label="↳ Returns Analytics"
-              active={pathname === '/fulfillment/returns/analytics'}
-            />
-          )}
+          <NavItem
+            href="/fulfillment/returns/analytics"
+            icon={BarChart3}
+            label="Returns Analytics"
+            active={pathname === '/fulfillment/returns/analytics'}
+            nested
+          />
         </NavGroup>
 
         <NavGroup label="Marketing">
@@ -712,9 +709,14 @@ interface NavItemProps {
   count?: number
   indicator?: 'action' | 'warning' | 'disconnected'
   active?: boolean
+  /** Indent + lighter style for child links rendered under a parent.
+   *  Avoids the visual shifting of the old conditional-render pattern
+   *  (sub-link appearing/disappearing on navigation) by being always
+   *  visible with a clear hierarchy cue. */
+  nested?: boolean
 }
 
-function NavItem({ href, icon: Icon, label, count, indicator, active }: NavItemProps) {
+function NavItem({ href, icon: Icon, label, count, indicator, active, nested }: NavItemProps) {
   const dotClass =
     indicator === 'action'
       ? 'bg-red-500'
@@ -726,14 +728,19 @@ function NavItem({ href, icon: Icon, label, count, indicator, active }: NavItemP
     <Link
       href={href}
       className={cn(
-        'flex items-center gap-2.5 mx-2 px-3 py-1.5 rounded-md text-md transition-colors group',
+        'flex items-center gap-2.5 mx-2 rounded-md transition-colors group',
+        nested ? 'pl-9 pr-3 py-1 text-sm' : 'px-3 py-1.5 text-md',
         active
-          ? 'bg-blue-600 text-white font-medium'
+          ? nested
+            ? 'bg-blue-600/30 text-blue-100 font-medium'
+            : 'bg-blue-600 text-white font-medium'
+          : nested
+          ? 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
           : 'text-slate-300 hover:bg-slate-800 hover:text-white',
         indicator === 'disconnected' && 'opacity-60 hover:opacity-100'
       )}
     >
-      {Icon && <Icon className="w-4 h-4 flex-shrink-0" />}
+      {Icon && <Icon className={cn('flex-shrink-0', nested ? 'w-3.5 h-3.5' : 'w-4 h-4')} />}
       <span className="flex-1 truncate">{label}</span>
 
       {indicator === 'disconnected' ? (
