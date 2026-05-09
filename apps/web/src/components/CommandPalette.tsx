@@ -82,7 +82,14 @@ const COMMANDS: Command[] = [
   // CS.3 — channel→us inbound drift triage queue.
   { id: 'goto-channel-drift', label: 'Go to Channel Stock Drift (inbound triage queue)', icon: Cable, href: '/fulfillment/stock/channel-drift', group: 'Navigation', keywords: 'channel drift shopify ebay amazon inbound reconcile pending review apply ignore drift canale shopify ebay riallineamento stock divergenza' },
   // LP.1 — lots dashboard (FEFO + expiry filters).
-  { id: 'goto-stock-lots', label: 'Go to Lots (FEFO, expiry, supplier ref)', icon: Package, href: '/fulfillment/stock/lots', group: 'Navigation', keywords: 'lots lot batch fefo expiry scadenza supplier ref recall traceability' },
+  { id: 'goto-stock-lots', label: 'Go to Lots (FEFO, expiry, supplier ref)', icon: Cable, href: '/fulfillment/stock/lots', group: 'Navigation', keywords: 'lots lot batch fefo expiry scadenza supplier ref recall traceability' },
+  // Stock subpages — wayfinding for surfaces that operators reach
+  // through StockSubNav today; Cmd+K coverage for anywhere-to-here.
+  { id: 'goto-stock-import', label: 'Go to Stock Import (CSV upload)', icon: Upload, href: '/fulfillment/stock/import', group: 'Navigation', keywords: 'import csv upload stock inventory carico file import csv' },
+  { id: 'goto-shopify-locations', label: 'Go to Shopify Locations (multi-warehouse mapping)', icon: Boxes, href: '/fulfillment/stock/shopify-locations', group: 'Navigation', keywords: 'shopify location warehouse multi mapping discover sync sedi mappatura' },
+  { id: 'goto-stock-mcf', label: 'Go to MCF Shipments (Amazon Multi-Channel Fulfillment)', icon: Truck, href: '/fulfillment/stock/mcf', group: 'Navigation', keywords: 'mcf multi channel fulfillment amazon shopify ebay outbound spedizione amazon mcf' },
+  { id: 'goto-fba-pan-eu', label: 'Go to FBA Pan-EU (cross-marketplace distribution)', icon: Globe, href: '/fulfillment/stock/fba-pan-eu', group: 'Navigation', keywords: 'fba pan-eu pan eu distribution rebalance amazon IT DE FR ES NL trasferimento amazon paneu' },
+  { id: 'goto-fba-inbound-v2', label: 'Go to Send to Amazon FBA wizard', icon: Truck, href: '/fulfillment/inbound/v2', group: 'Navigation', keywords: 'fba inbound amazon send to amazon plan shipment wizard sta v2024' },
   { id: 'goto-replenishment', label: 'Go to Replenishment (forecast, recommendations, automation)', icon: RefreshCw, href: '/fulfillment/replenishment', group: 'Navigation', chord: 'g r r', keywords: 'replenishment riassortimento riordino reorder forecast previsione recommendation raccomandazione automation automazione' },
   { id: 'goto-replen-critical', label: 'Replenishment — Critical only', icon: AlertTriangle, href: '/fulfillment/replenishment?filter=CRITICAL', group: 'Replenishment', keywords: 'critical critico urgent emergenza stockout' },
   { id: 'goto-replen-needs-reorder', label: 'Replenishment — Awaiting review', icon: ClipboardList, href: '/fulfillment/replenishment?filter=NEEDS_REORDER', group: 'Replenishment', keywords: 'awaiting review revisione reorder riordino pending in attesa' },
