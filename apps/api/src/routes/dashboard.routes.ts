@@ -203,6 +203,20 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         'Cache-Control',
         'private, max-age=30, stale-while-revalidate=60',
       )
+
+      // DO.46 — Server-Timing instrumentation. Lets the operator
+      // see per-phase latency in browser DevTools' Network tab
+      // without bespoke logging UI. Phase names track the major
+      // Promise.all blocks below; durations are reported in ms.
+      // Header is written just before the response returns.
+      const __t0 = performance.now()
+      const __phases: Array<{ name: string; ms: number }> = []
+      let __lastMark = __t0
+      const mark = (name: string) => {
+        const now = performance.now()
+        __phases.push({ name, ms: now - __lastMark })
+        __lastMark = now
+      }
       const rawWindow = request.query?.window ?? '30d'
       const window: Window =
         rawWindow === 'today' ||
@@ -1092,6 +1106,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       // we already computed those, just sum them up. Done after
       // byChannel is built.
 
+      mark('predictive')
+
       // ── DO.30 — goal tracking ─────────────────────────────────────
       //
       // Read every ACTIVE Goal for the operator (default-user pre-
@@ -1236,6 +1252,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       )
 
+      mark('financial+customers')
+
       // ── DO.42 — day-of-week × hour-of-day heatmap ─────────────────
       //
       // 7 × 24 cell grid showing revenue density across the active
@@ -1281,6 +1299,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           heatmap[d][h] = r.revenue
         }
       }
+
+      mark('heatmap')
 
       // ── DO.31 — predictive insights ───────────────────────────────
       //
@@ -1438,6 +1458,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         taxCollected: taxRow,
       }
 
+      mark('totals+channel')
+
       // ── DO.27 — customer intelligence ─────────────────────────────
       //
       // Three signals operators ask for daily:
@@ -1527,6 +1549,8 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       }
 
+      mark('goals')
+
       // ── DO.32 / DO.33 / DO.39 — layout + saved-view roster ────────
       const [layout, savedViews] = await Promise.all([
         prisma.dashboardLayout
@@ -1586,6 +1610,18 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           href: string | null
           createdAt: Date
         }>)
+
+      mark('layout+notifications')
+
+      // DO.46 — emit the Server-Timing header just before return so
+      // the browser's Network panel can break down where each
+      // request's wall-clock went.
+      const totalMs = performance.now() - __t0
+      const timingParts = __phases.map(
+        (p) => `${p.name};dur=${p.ms.toFixed(1)}`,
+      )
+      timingParts.push(`total;dur=${totalMs.toFixed(1)}`)
+      reply.header('Server-Timing', timingParts.join(', '))
 
       return {
         window: {
