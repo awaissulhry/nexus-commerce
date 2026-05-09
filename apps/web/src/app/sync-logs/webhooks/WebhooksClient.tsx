@@ -160,7 +160,7 @@ export default function WebhooksClient() {
     <div className="space-y-3">
       {/* Filter bar */}
       <div className="flex items-center gap-1 flex-wrap">
-        <span className="text-xs uppercase tracking-wider text-slate-500 font-medium mr-1">
+        <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
           Channel
         </span>
         <button
@@ -169,8 +169,8 @@ export default function WebhooksClient() {
           className={cn(
             'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
             !urlChannel
-              ? 'bg-slate-900 text-white border-slate-900'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+              ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
           )}
         >
           All
@@ -185,8 +185,8 @@ export default function WebhooksClient() {
             className={cn(
               'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
               urlChannel === c.channel
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
           >
             {c.channel}
@@ -194,7 +194,7 @@ export default function WebhooksClient() {
           </button>
         ))}
 
-        <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 font-medium mr-1">
+        <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
           Status
         </span>
         <button
@@ -208,7 +208,7 @@ export default function WebhooksClient() {
             'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
             urlProcessed === 'true'
               ? 'bg-emerald-600 text-white border-emerald-600'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
           )}
         >
           Processed{totals && ` ${totals.processed}`}
@@ -224,7 +224,7 @@ export default function WebhooksClient() {
             'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
             urlProcessed === 'false'
               ? 'bg-rose-600 text-white border-rose-600'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
           )}
         >
           Unprocessed{totals && ` ${totals.unprocessed}`}
@@ -232,7 +232,7 @@ export default function WebhooksClient() {
 
         {eventTypeOptions.length > 0 && (
           <>
-            <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 font-medium mr-1">
+            <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
               Event
             </span>
             {eventTypeOptions.slice(0, 8).map((et) => (
@@ -245,8 +245,8 @@ export default function WebhooksClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-mono rounded border transition-colors',
                   urlEventType === et
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                 )}
               >
                 {et}
@@ -272,7 +272,7 @@ export default function WebhooksClient() {
       </div>
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-center gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300 flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" /> {error}
         </div>
       )}
@@ -282,7 +282,7 @@ export default function WebhooksClient() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-10 bg-white border border-slate-200 rounded-md animate-pulse"
+              className="h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md animate-pulse"
             />
           ))}
         </div>
@@ -293,24 +293,24 @@ export default function WebhooksClient() {
           description="Once a Shopify / WooCommerce / Etsy webhook hits the platform, the row appears here. Try widening the time window or removing filters."
         />
       ) : (
-        <div className="border border-slate-200 rounded-md bg-white overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-2"></th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-20">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-2"></th>
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   Time
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-24">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-24">
                   Channel
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Event
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-48">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-48">
                   External ID
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Error
                 </th>
               </tr>
@@ -321,8 +321,8 @@ export default function WebhooksClient() {
                   key={r.id}
                   onClick={() => void openDetail(r)}
                   className={cn(
-                    'border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors',
-                    !r.isProcessed && 'bg-rose-50/30',
+                    'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
+                    !r.isProcessed && 'bg-rose-50/30 dark:bg-rose-950/30',
                   )}
                 >
                   <td className="px-3 py-1.5">
@@ -332,22 +332,22 @@ export default function WebhooksClient() {
                       <XCircle className="w-3.5 h-3.5 text-rose-500" />
                     )}
                   </td>
-                  <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-500 whitespace-nowrap">
                     {fmtRelative(r.createdAt)}
                   </td>
-                  <td className="px-3 py-1.5 font-medium text-slate-700">
+                  <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300">
                     {r.channel}
                   </td>
-                  <td className="px-3 py-1.5 font-mono text-slate-700 truncate max-w-md">
+                  <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300 truncate max-w-md">
                     {r.eventType}
                   </td>
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500 truncate">
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500 dark:text-slate-500 truncate">
                     {r.externalId}
                   </td>
                   <td className="px-3 py-1.5 truncate">
                     {r.error && (
                       <span
-                        className="text-xs text-rose-700 truncate"
+                        className="text-xs text-rose-700 dark:text-rose-400 truncate"
                         title={r.error}
                       >
                         {r.error}
@@ -360,7 +360,7 @@ export default function WebhooksClient() {
           </table>
 
           {nextCursor && (
-            <div className="border-t border-slate-200 p-2 flex justify-center">
+            <div className="border-t border-slate-200 dark:border-slate-800 p-2 flex justify-center">
               <Button
                 variant="secondary"
                 size="sm"
@@ -405,12 +405,12 @@ function DetailPanel({
     >
       <div className="absolute inset-0 bg-slate-900/30" aria-hidden />
       <aside
-        className="relative w-full max-w-2xl bg-white shadow-2xl border-l border-slate-200 overflow-y-auto"
+        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Webhook detail"
       >
-        <header className="px-4 py-3 border-b border-slate-200 sticky top-0 bg-white flex items-center justify-between">
+        <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               {row.isProcessed ? (
@@ -418,11 +418,11 @@ function DetailPanel({
               ) : (
                 <XCircle className="w-4 h-4 text-rose-500" />
               )}
-              <span className="font-mono text-base font-semibold text-slate-900 truncate">
+              <span className="font-mono text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
                 {row.eventType}
               </span>
             </div>
-            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+            <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
               <Badge
                 variant={row.isProcessed ? 'success' : 'danger'}
                 size="sm"
@@ -439,7 +439,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700"
+            className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -448,14 +448,14 @@ function DetailPanel({
 
         <div className="px-4 py-3 space-y-4">
           <Section label="External ID">
-            <code className="text-xs font-mono bg-slate-50 px-2 py-1 rounded">
+            <code className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded">
               {row.externalId}
             </code>
           </Section>
 
           {row.signature && (
             <Section label="Signature">
-              <code className="text-xs font-mono bg-slate-50 px-2 py-1 rounded break-all block">
+              <code className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded break-all block">
                 {row.signature}
               </code>
             </Section>
@@ -463,7 +463,7 @@ function DetailPanel({
 
           {row.error && (
             <Section label="Error">
-              <pre className="text-xs font-mono bg-rose-50 border border-rose-200 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all text-rose-900">
+              <pre className="text-xs font-mono bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all text-rose-900 dark:text-rose-200">
                 {row.error}
               </pre>
             </Section>
@@ -471,15 +471,15 @@ function DetailPanel({
 
           <Section label="Payload">
             {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+              <Loader2 className="w-4 h-4 animate-spin text-slate-400 dark:text-slate-500" />
             ) : (
-              <pre className="text-xs font-mono bg-slate-50 px-2 py-1.5 rounded overflow-x-auto max-h-96 whitespace-pre-wrap break-all">
+              <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto max-h-96 whitespace-pre-wrap break-all">
                 {JSON.stringify(row.payload, null, 2)}
               </pre>
             )}
           </Section>
 
-          <p className="text-xs text-slate-500 italic pt-2 border-t border-slate-100">
+          <p className="text-xs text-slate-500 dark:text-slate-500 italic pt-2 border-t border-slate-100 dark:border-slate-800">
             Replay capability ships in a follow-up. To re-process this
             webhook today, copy the payload and POST it back to the
             corresponding endpoint with a fresh HMAC signature.
@@ -499,7 +499,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-semibold mb-1">
         {label}
       </div>
       {children}

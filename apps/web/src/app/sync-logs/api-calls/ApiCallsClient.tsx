@@ -295,7 +295,7 @@ export default function ApiCallsClient() {
       {/* Filter bar */}
       <div className="space-y-2">
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-xs uppercase tracking-wider text-slate-500 font-medium mr-1 inline-flex items-center gap-1">
+          <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1 inline-flex items-center gap-1">
             <Filter className="w-3 h-3" /> Window
           </span>
           {SINCE_PRESETS.map((p) => (
@@ -306,15 +306,15 @@ export default function ApiCallsClient() {
               className={cn(
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlSinceKey === p.key
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {p.label}
             </button>
           ))}
 
-          <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 font-medium mr-1">
+          <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
             Channel
           </span>
           {(rollup?.byChannel ?? []).map((c) => (
@@ -329,8 +329,8 @@ export default function ApiCallsClient() {
               className={cn(
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlChannel === c.channel
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {c.channel}
@@ -338,7 +338,7 @@ export default function ApiCallsClient() {
             </button>
           ))}
 
-          <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 font-medium mr-1">
+          <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
             Error
           </span>
           {ERROR_TYPES.map((t) => (
@@ -355,7 +355,7 @@ export default function ApiCallsClient() {
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 urlErrorType === t
                   ? 'bg-rose-600 text-white border-rose-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
               {t}
@@ -374,7 +374,7 @@ export default function ApiCallsClient() {
               'ml-3 px-2 py-0.5 text-sm font-medium rounded border transition-colors',
               urlSuccess === 'false'
                 ? 'bg-rose-600 text-white border-rose-600'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
           >
             Failures only
@@ -387,7 +387,7 @@ export default function ApiCallsClient() {
               'ml-auto h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
               live
                 ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
             )}
             title={live ? 'Pause live tail' : 'Start live tail'}
           >
@@ -429,7 +429,7 @@ export default function ApiCallsClient() {
 
       {/* KPI strip */}
       {rollup && (
-        <section className="border border-slate-200 rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 bg-white">
+        <section className="border border-slate-200 dark:border-slate-800 rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 bg-white dark:bg-slate-900">
           <Kpi label="Total" value={rollup.stats.total} />
           <Kpi
             label="Failed"
@@ -476,7 +476,7 @@ export default function ApiCallsClient() {
       )}
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-center gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300 flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" /> {error}
         </div>
       )}
@@ -486,7 +486,7 @@ export default function ApiCallsClient() {
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className="h-10 bg-white border border-slate-200 rounded-md animate-pulse"
+              className="h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md animate-pulse"
             />
           ))}
         </div>
@@ -497,27 +497,27 @@ export default function ApiCallsClient() {
           description="Try widening the time range, removing filters, or wait for the next cron tick to populate the log."
         />
       ) : (
-        <div className="border border-slate-200 rounded-md bg-white overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-2"></th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-20">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-2"></th>
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   Time
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-20">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-20">
                   Channel
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Operation
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider w-16">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
                   Status
                 </th>
-                <th className="px-3 py-1.5 text-right font-semibold text-slate-700 uppercase tracking-wider w-16">
+                <th className="px-3 py-1.5 text-right font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-16">
                   Latency
                 </th>
-                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 uppercase tracking-wider">
+                <th className="px-3 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Error
                 </th>
               </tr>
@@ -528,8 +528,8 @@ export default function ApiCallsClient() {
                   key={r.id}
                   onClick={() => setSelected(r)}
                   className={cn(
-                    'border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors',
-                    !r.success && 'bg-rose-50/30',
+                    'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors',
+                    !r.success && 'bg-rose-50/30 dark:bg-rose-950/30',
                   )}
                 >
                   <td className="px-3 py-1.5">
@@ -541,19 +541,19 @@ export default function ApiCallsClient() {
                       aria-hidden
                     />
                   </td>
-                  <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-500 whitespace-nowrap">
                     {fmtRelative(r.createdAt)}
                   </td>
-                  <td className="px-3 py-1.5 font-medium text-slate-700">
+                  <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300">
                     {r.channel}
                   </td>
-                  <td className="px-3 py-1.5 font-mono text-slate-700 truncate max-w-md">
+                  <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300 truncate max-w-md">
                     {r.operation}
                   </td>
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500">
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-500 dark:text-slate-500">
                     {r.statusCode ?? '—'}
                   </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-500 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-right font-mono text-xs text-slate-500 dark:text-slate-500 whitespace-nowrap">
                     {r.latencyMs}ms
                   </td>
                   <td className="px-3 py-1.5 truncate max-w-md">
@@ -574,7 +574,7 @@ export default function ApiCallsClient() {
                     )}
                     {r.errorMessage && (
                       <span
-                        className="ml-2 text-xs text-rose-700 truncate"
+                        className="ml-2 text-xs text-rose-700 dark:text-rose-400 truncate"
                         title={r.errorMessage}
                       >
                         {r.errorMessage}
@@ -587,7 +587,7 @@ export default function ApiCallsClient() {
           </table>
 
           {nextCursor && (
-            <div className="border-t border-slate-200 p-2 flex justify-center">
+            <div className="border-t border-slate-200 dark:border-slate-800 p-2 flex justify-center">
               <Button
                 variant="secondary"
                 size="sm"
@@ -628,12 +628,12 @@ function DetailPanel({
         aria-hidden
       />
       <aside
-        className="relative w-full max-w-2xl bg-white shadow-2xl border-l border-slate-200 overflow-y-auto"
+        className="relative w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="API call detail"
       >
-        <header className="px-4 py-3 border-b border-slate-200 sticky top-0 bg-white flex items-center justify-between">
+        <header className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 flex items-center justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span
@@ -643,11 +643,11 @@ function DetailPanel({
                 )}
                 aria-hidden
               />
-              <span className="font-mono text-base font-semibold text-slate-900 truncate">
+              <span className="font-mono text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
                 {row.operation}
               </span>
             </div>
-            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+            <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
               <span>{row.channel}</span>
               {row.marketplace && <span>· {row.marketplace}</span>}
               <span>· {row.method ?? '—'}</span>
@@ -660,7 +660,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-slate-700"
+            className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -670,7 +670,7 @@ function DetailPanel({
         <div className="px-4 py-3 space-y-4">
           {row.endpoint && (
             <Section label="Endpoint">
-              <pre className="text-xs font-mono bg-slate-50 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all">
+              <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all">
                 {row.endpoint}
               </pre>
             </Section>
@@ -689,7 +689,7 @@ function DetailPanel({
                     {row.errorCode}
                   </Badge>
                 )}
-                <pre className="text-xs font-mono bg-rose-50 border border-rose-200 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all text-rose-900">
+                <pre className="text-xs font-mono bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2 py-1.5 rounded overflow-x-auto whitespace-pre-wrap break-all text-rose-900 dark:text-rose-200">
                   {row.errorMessage}
                 </pre>
               </div>
@@ -698,7 +698,7 @@ function DetailPanel({
 
           {row.requestId && (
             <Section label="Request ID">
-              <code className="text-xs font-mono bg-slate-50 px-2 py-1 rounded">
+              <code className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded">
                 {row.requestId}
               </code>
             </Section>
@@ -706,7 +706,7 @@ function DetailPanel({
 
           {row.requestPayload != null && (
             <Section label="Request payload">
-              <pre className="text-xs font-mono bg-slate-50 px-2 py-1.5 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
+              <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
                 {JSON.stringify(row.requestPayload, null, 2)}
               </pre>
             </Section>
@@ -714,7 +714,7 @@ function DetailPanel({
 
           {row.responsePayload != null && (
             <Section label="Response payload">
-              <pre className="text-xs font-mono bg-slate-50 px-2 py-1.5 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
+              <pre className="text-xs font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1.5 rounded overflow-x-auto max-h-64 whitespace-pre-wrap break-all">
                 {JSON.stringify(row.responsePayload, null, 2)}
               </pre>
             </Section>
@@ -726,7 +726,7 @@ function DetailPanel({
                 {row.productId && (
                   <a
                     href={`/products?drawer=${row.productId}`}
-                    className="text-sm text-blue-700 hover:underline"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
                     Product {row.productId.slice(0, 12)}…
                   </a>
@@ -734,7 +734,7 @@ function DetailPanel({
                 {row.listingId && (
                   <a
                     href={`/listings?drawer=${row.listingId}`}
-                    className="text-sm text-blue-700 hover:underline"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
                     Listing {row.listingId.slice(0, 12)}…
                   </a>
@@ -742,7 +742,7 @@ function DetailPanel({
                 {row.orderId && (
                   <a
                     href={`/orders/${row.orderId}`}
-                    className="text-sm text-blue-700 hover:underline"
+                    className="text-sm text-blue-700 dark:text-blue-400 hover:underline"
                   >
                     Order {row.orderId.slice(0, 12)}…
                   </a>
@@ -765,7 +765,7 @@ function Section({
 }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-semibold mb-1">
         {label}
       </div>
       {children}
@@ -784,15 +784,15 @@ function Kpi({
 }) {
   const valueClass =
     tone === 'good'
-      ? 'text-emerald-700'
+      ? 'text-emerald-700 dark:text-emerald-400'
       : tone === 'warn'
-        ? 'text-amber-700'
+        ? 'text-amber-700 dark:text-amber-400'
         : tone === 'bad'
-          ? 'text-rose-700'
-          : 'text-slate-900'
+          ? 'text-rose-700 dark:text-rose-400'
+          : 'text-slate-900 dark:text-slate-100'
   return (
     <div>
-      <div className="text-xs text-slate-500 uppercase tracking-wider">
+      <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider">
         {label}
       </div>
       <div className={`text-[20px] font-semibold tabular-nums ${valueClass}`}>

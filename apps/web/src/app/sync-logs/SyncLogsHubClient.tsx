@@ -197,10 +197,10 @@ const STATUS_TONE: Record<
   HealthRollup['channels'][number]['status'],
   { dot: string; text: string }
 > = {
-  ok: { dot: 'bg-emerald-500', text: 'text-emerald-700' },
-  warn: { dot: 'bg-amber-500', text: 'text-amber-700' },
-  fail: { dot: 'bg-rose-500', text: 'text-rose-700' },
-  inactive: { dot: 'bg-slate-300', text: 'text-slate-500' },
+  ok: { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
+  warn: { dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-400' },
+  fail: { dot: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' },
+  inactive: { dot: 'bg-slate-300', text: 'text-slate-500 dark:text-slate-500' },
 }
 
 const ACTION_VARIANT: Record<
@@ -328,7 +328,7 @@ export default function SyncLogsHubClient({
       </div>
 
       {error && (
-        <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-center gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300 flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -349,10 +349,10 @@ export default function SyncLogsHubClient({
           <section
             className={`border rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 ${
               apiErrorRatePct >= 5 || errorRatePct >= 5
-                ? 'border-rose-200 bg-rose-50/40'
+                ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/40'
                 : apiErrorRatePct >= 1 || errorRatePct >= 1
-                  ? 'border-amber-200 bg-amber-50/40'
-                  : 'border-emerald-200 bg-emerald-50/40'
+                  ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/40'
+                  : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/40'
             }`}
           >
             <Kpi
@@ -433,24 +433,24 @@ export default function SyncLogsHubClient({
 
           {/* ── Two-column body: channels + crons ────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <section className="border border-slate-200 rounded-md bg-white">
-              <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+            <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Activity className="w-3 h-3" /> Channels
                 </h2>
                 <Link
                   href="/dashboard/health"
-                  className="text-xs text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                  className="text-xs text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
                 >
                   Detail <ExternalLink className="w-3 h-3" />
                 </Link>
               </header>
               {!health || health.channels.length === 0 ? (
-                <div className="p-4 text-base text-slate-400 italic text-center">
+                <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
                   No channel connections configured.
                 </div>
               ) : (
-                <ul className="divide-y divide-slate-100">
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {health.channels.map((c) => {
                     const tone = STATUS_TONE[c.status]
                     return (
@@ -463,16 +463,16 @@ export default function SyncLogsHubClient({
                           aria-hidden
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="text-base font-medium text-slate-900 truncate">
+                          <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
                             {c.channel}
                             {c.marketplace ? ` · ${c.marketplace}` : ''}
                             {c.displayName && (
-                              <span className="ml-2 text-xs text-slate-500 font-normal">
+                              <span className="ml-2 text-xs text-slate-500 dark:text-slate-500 font-normal">
                                 {c.displayName}
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                             <span className={tone.text}>
                               {c.status.toUpperCase()}
                             </span>
@@ -487,7 +487,7 @@ export default function SyncLogsHubClient({
                             {c.errors24h > 0 && (
                               <>
                                 <span className="text-slate-300">·</span>
-                                <span className="text-rose-700">
+                                <span className="text-rose-700 dark:text-rose-400">
                                   {c.errors24h} error
                                   {c.errors24h === 1 ? '' : 's'} 24h
                                 </span>
@@ -496,7 +496,7 @@ export default function SyncLogsHubClient({
                           </div>
                           {c.lastSyncError && (
                             <div
-                              className="text-xs text-rose-700 mt-0.5 truncate"
+                              className="text-xs text-rose-700 dark:text-rose-400 mt-0.5 truncate"
                               title={c.lastSyncError}
                             >
                               {c.lastSyncError}
@@ -510,26 +510,26 @@ export default function SyncLogsHubClient({
               )}
             </section>
 
-            <section className="border border-slate-200 rounded-md bg-white">
-              <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+            <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Timer className="w-3 h-3" /> Cron jobs
                 </h2>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-slate-500">
                   {cronJobs.length} known
                   {cronStale > 0 && (
-                    <span className="ml-2 text-rose-700 font-medium">
+                    <span className="ml-2 text-rose-700 dark:text-rose-400 font-medium">
                       {cronStale} stuck
                     </span>
                   )}
                 </span>
               </header>
               {cronJobs.length === 0 ? (
-                <div className="p-4 text-base text-slate-400 italic text-center">
+                <div className="p-4 text-base text-slate-400 dark:text-slate-500 italic text-center">
                   No cron runs recorded yet — wait for the next tick.
                 </div>
               ) : (
-                <ul className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[420px] overflow-y-auto">
                   {cronJobs.map((j) => (
                     <li
                       key={j.jobName}
@@ -549,7 +549,7 @@ export default function SyncLogsHubClient({
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-base font-mono text-slate-900 truncate">
+                          <span className="text-base font-mono text-slate-900 dark:text-slate-100 truncate">
                             {j.jobName}
                           </span>
                           {j.triggeredBy === 'manual' && (
@@ -558,7 +558,7 @@ export default function SyncLogsHubClient({
                             </Badge>
                           )}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                           <span>{fmtRelative(j.startedAt)}</span>
                           {j.durationMs !== null && (
                             <>
@@ -571,13 +571,13 @@ export default function SyncLogsHubClient({
                           )}
                         </div>
                         {j.outputSummary && j.status === 'SUCCESS' && (
-                          <div className="text-xs text-slate-500 mt-0.5 truncate font-mono">
+                          <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5 truncate font-mono">
                             {j.outputSummary}
                           </div>
                         )}
                         {j.errorMessage && (
                           <div
-                            className="text-xs text-rose-700 mt-0.5 truncate"
+                            className="text-xs text-rose-700 dark:text-rose-400 mt-0.5 truncate"
                             title={j.errorMessage}
                           >
                             {j.errorMessage}
@@ -593,12 +593,12 @@ export default function SyncLogsHubClient({
 
           {/* ── API calls ─────────────────────────────────────────── */}
           {apiCalls && apiCalls.stats.total > 0 && (
-            <section className="border border-slate-200 rounded-md bg-white">
-              <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+            <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Activity className="w-3 h-3" /> Outbound API calls (24h)
                 </h2>
-                <div className="flex items-center gap-3 text-xs text-slate-500">
+                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-500">
                   <span>
                     {apiCalls.stats.total.toLocaleString()} total ·{' '}
                     {apiCalls.stats.failed.toLocaleString()} failed ·{' '}
@@ -606,21 +606,21 @@ export default function SyncLogsHubClient({
                   </span>
                   <Link
                     href="/sync-logs/api-calls"
-                    className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                    className="text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
                   >
                     Drill down <ExternalLink className="w-3 h-3" />
                   </Link>
                 </div>
               </header>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-x divide-slate-100 border-b border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-x divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800">
                 {/* By channel */}
                 <div className="px-3 py-2">
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">
+                  <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
                     By channel
                   </div>
                   {apiCalls.byChannel.length === 0 ? (
-                    <div className="text-sm text-slate-400 italic">none</div>
+                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">none</div>
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byChannel.map((c) => (
@@ -628,10 +628,10 @@ export default function SyncLogsHubClient({
                           key={c.channel}
                           className="text-sm flex justify-between"
                         >
-                          <span className="font-medium text-slate-700">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">
                             {c.channel}
                           </span>
-                          <span className="font-mono text-slate-500">
+                          <span className="font-mono text-slate-500 dark:text-slate-500">
                             {c.count.toLocaleString()}
                           </span>
                         </li>
@@ -642,11 +642,11 @@ export default function SyncLogsHubClient({
 
                 {/* By operation (top 5) */}
                 <div className="px-3 py-2">
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">
+                  <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
                     Top operations
                   </div>
                   {apiCalls.byOperation.length === 0 ? (
-                    <div className="text-sm text-slate-400 italic">none</div>
+                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">none</div>
                   ) : (
                     <ul className="space-y-1">
                       {apiCalls.byOperation.slice(0, 5).map((o) => (
@@ -654,10 +654,10 @@ export default function SyncLogsHubClient({
                           key={o.operation}
                           className="text-sm flex justify-between gap-2"
                         >
-                          <span className="font-mono text-slate-700 truncate">
+                          <span className="font-mono text-slate-700 dark:text-slate-300 truncate">
                             {o.operation}
                           </span>
-                          <span className="font-mono text-slate-500 whitespace-nowrap">
+                          <span className="font-mono text-slate-500 dark:text-slate-500 whitespace-nowrap">
                             {o.count.toLocaleString()}
                           </span>
                         </li>
@@ -668,11 +668,11 @@ export default function SyncLogsHubClient({
 
                 {/* Errors by type */}
                 <div className="px-3 py-2">
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">
+                  <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider mb-1.5">
                     Errors by type
                   </div>
                   {apiCalls.errorsByType.length === 0 ? (
-                    <div className="text-sm text-slate-400 italic">
+                    <div className="text-sm text-slate-400 dark:text-slate-500 italic">
                       <CheckCircle2 className="inline w-3 h-3 text-emerald-500 mr-1" />
                       no failures
                     </div>
@@ -697,7 +697,7 @@ export default function SyncLogsHubClient({
                           >
                             {e.errorType}
                           </Badge>
-                          <span className="font-mono text-rose-700">
+                          <span className="font-mono text-rose-700 dark:text-rose-400">
                             {e.count.toLocaleString()}
                           </span>
                         </li>
@@ -709,7 +709,7 @@ export default function SyncLogsHubClient({
 
               {/* Recent calls */}
               {apiCalls.recent.length > 0 && (
-                <ul className="divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[360px] overflow-y-auto">
                   {apiCalls.recent.map((c) => (
                     <li
                       key={c.id}
@@ -721,24 +721,24 @@ export default function SyncLogsHubClient({
                         }`}
                         aria-hidden
                       />
-                      <span className="text-xs text-slate-500 w-16 flex-shrink-0">
+                      <span className="text-xs text-slate-500 dark:text-slate-500 w-16 flex-shrink-0">
                         {fmtRelative(c.createdAt)}
                       </span>
-                      <span className="font-semibold text-slate-700 w-16 flex-shrink-0">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 w-16 flex-shrink-0">
                         {c.channel}
                       </span>
-                      <span className="font-mono text-slate-700 w-48 flex-shrink-0 truncate">
+                      <span className="font-mono text-slate-700 dark:text-slate-300 w-48 flex-shrink-0 truncate">
                         {c.operation}
                       </span>
-                      <span className="font-mono text-xs text-slate-500 w-12 flex-shrink-0">
+                      <span className="font-mono text-xs text-slate-500 dark:text-slate-500 w-12 flex-shrink-0">
                         {c.statusCode ?? '—'}
                       </span>
-                      <span className="font-mono text-xs text-slate-500 w-14 flex-shrink-0 text-right">
+                      <span className="font-mono text-xs text-slate-500 dark:text-slate-500 w-14 flex-shrink-0 text-right">
                         {c.latencyMs}ms
                       </span>
                       {c.errorMessage && (
                         <span
-                          className="text-xs text-rose-700 truncate flex-1"
+                          className="text-xs text-rose-700 dark:text-rose-400 truncate flex-1"
                           title={c.errorMessage}
                         >
                           {c.errorMessage}
@@ -752,25 +752,25 @@ export default function SyncLogsHubClient({
           )}
 
           {/* ── Recent activity ──────────────────────────────────── */}
-          <section className="border border-slate-200 rounded-md bg-white">
-            <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+          <section className="border border-slate-200 dark:border-slate-800 rounded-md bg-white dark:bg-slate-900">
+            <header className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider inline-flex items-center gap-1.5">
                 <History className="w-3 h-3" /> Recent activity
               </h2>
               <Link
                 href="/audit-log"
-                className="text-xs text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                className="text-xs text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
               >
                 Full audit log <ExternalLink className="w-3 h-3" />
               </Link>
             </header>
             {!audit || audit.items.length === 0 ? (
-              <div className="p-6 text-center text-base text-slate-500">
+              <div className="p-6 text-center text-base text-slate-500 dark:text-slate-500">
                 <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500 mb-1.5" />
                 No mutations in the last 24 hours.
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {audit.items.slice(0, 15).map((e) => (
                   <li
                     key={e.id}
@@ -782,14 +782,14 @@ export default function SyncLogsHubClient({
                     >
                       {e.action}
                     </Badge>
-                    <span className="text-base font-medium text-slate-900">
+                    <span className="text-base font-medium text-slate-900 dark:text-slate-100">
                       {e.entityType}
                     </span>
-                    <span className="font-mono text-sm text-slate-500 truncate">
+                    <span className="font-mono text-sm text-slate-500 dark:text-slate-500 truncate">
                       {e.entityId.slice(0, 16)}
                       {e.entityId.length > 16 && '…'}
                     </span>
-                    <span className="ml-auto text-xs text-slate-500 whitespace-nowrap">
+                    <span className="ml-auto text-xs text-slate-500 dark:text-slate-500 whitespace-nowrap">
                       {fmtRelative(e.createdAt)}
                     </span>
                   </li>
@@ -800,32 +800,32 @@ export default function SyncLogsHubClient({
 
           {/* ── Recent errors (sync layer) ───────────────────────── */}
           {health && health.recentErrors.length > 0 && (
-            <section className="border border-rose-200 rounded-md bg-white">
-              <header className="px-3 py-2 border-b border-rose-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-rose-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+            <section className="border border-rose-200 dark:border-rose-900 rounded-md bg-white dark:bg-slate-900">
+              <header className="px-3 py-2 border-b border-rose-100 dark:border-rose-900 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <AlertCircle className="w-3 h-3" /> Recent sync errors
                 </h2>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-slate-500">
                   {health.recentErrors.length} shown
                 </span>
               </header>
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {health.recentErrors.slice(0, 10).map((e) => (
                   <li
                     key={e.id}
                     className="px-3 py-2 flex items-center gap-3"
                   >
-                    <span className="text-xs text-slate-500 w-16 flex-shrink-0">
+                    <span className="text-xs text-slate-500 dark:text-slate-500 w-16 flex-shrink-0">
                       {fmtRelative(e.when)}
                     </span>
-                    <span className="text-sm font-semibold text-slate-700 w-20 flex-shrink-0">
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 w-20 flex-shrink-0">
                       {e.channel}
                     </span>
-                    <span className="text-xs text-slate-500 font-mono w-32 flex-shrink-0 truncate">
+                    <span className="text-xs text-slate-500 dark:text-slate-500 font-mono w-32 flex-shrink-0 truncate">
                       {e.type}
                     </span>
                     <span
-                      className="text-sm text-slate-700 truncate flex-1"
+                      className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1"
                       title={e.message}
                     >
                       {e.message}
@@ -836,7 +836,7 @@ export default function SyncLogsHubClient({
             </section>
           )}
 
-          <div className="text-xs text-slate-500 text-center pt-2">
+          <div className="text-xs text-slate-500 dark:text-slate-500 text-center pt-2">
             Generated{' '}
             {health?.generatedAt
               ? new Date(health.generatedAt).toLocaleTimeString()
@@ -864,21 +864,21 @@ function Kpi({
 }) {
   const valueClass =
     tone === 'good'
-      ? 'text-emerald-700'
+      ? 'text-emerald-700 dark:text-emerald-400'
       : tone === 'warn'
-        ? 'text-amber-700'
+        ? 'text-amber-700 dark:text-amber-400'
         : tone === 'bad'
-          ? 'text-rose-700'
-          : 'text-slate-900'
+          ? 'text-rose-700 dark:text-rose-400'
+          : 'text-slate-900 dark:text-slate-100'
   return (
     <div>
-      <div className="text-xs text-slate-500 uppercase tracking-wider">
+      <div className="text-xs text-slate-500 dark:text-slate-500 uppercase tracking-wider">
         {label}
       </div>
       <div className={`text-[20px] font-semibold tabular-nums ${valueClass}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
-      {hint && <div className="text-xs text-slate-500 mt-0.5">{hint}</div>}
+      {hint && <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{hint}</div>}
     </div>
   )
 }
