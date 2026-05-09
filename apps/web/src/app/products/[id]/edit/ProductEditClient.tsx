@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ChevronLeft,
@@ -313,6 +313,50 @@ export default function ProductEditClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.isParent, orderedChannels.join(',')])
 
+  // W14.4 — mobile tab strip: scroll indicators + auto-scroll active
+  // tab into view. Twelve tabs overflow on iPad portrait + every
+  // phone; without these affordances the operator would be unaware
+  // they can scroll, and arrow-key navigation would silently focus
+  // off-screen tabs.
+  const tablistRef = useRef<HTMLDivElement | null>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const updateScrollIndicators = useCallback(() => {
+    const el = tablistRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(
+      el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    )
+  }, [])
+  useEffect(() => {
+    updateScrollIndicators()
+    const el = tablistRef.current
+    if (!el) return
+    el.addEventListener('scroll', updateScrollIndicators, { passive: true })
+    window.addEventListener('resize', updateScrollIndicators)
+    return () => {
+      el.removeEventListener('scroll', updateScrollIndicators)
+      window.removeEventListener('resize', updateScrollIndicators)
+    }
+  }, [updateScrollIndicators])
+  // Scroll the active tab into view whenever it changes (click,
+  // keyboard, URL deep link). Sets behavior:'smooth' on user changes
+  // but not on the initial render to avoid a jarring scroll-on-load.
+  const initialMount = useRef(true)
+  useEffect(() => {
+    const el = document.getElementById(`tab-${topTab}`)
+    if (!el) return
+    el.scrollIntoView({
+      behavior: initialMount.current ? 'auto' : 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    })
+    initialMount.current = false
+    // Update fade indicators after the scroll lands.
+    requestAnimationFrame(updateScrollIndicators)
+  }, [topTab, updateScrollIndicators])
+
   // W14.3 — keyboard navigation handler for the tablist. Standard
   // WCAG AA pattern: arrows cycle, Home/End jump to ends, focus
   // follows the active tab so screen readers announce the change.
@@ -464,11 +508,26 @@ export default function ProductEditClient({
         </div>
 
         {/* ── Top tab row ────────────────────────────────────── */}
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-6 relative">
+          {/* W14.4 — left fade indicator. Only renders when scrolled
+              past the start so the affordance disappears at rest. */}
+          {canScrollLeft && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute left-6 top-0 bottom-0 w-8 z-[1] bg-gradient-to-r from-white dark:from-slate-900 to-transparent"
+            />
+          )}
+          {canScrollRight && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute right-6 top-0 bottom-0 w-8 z-[1] bg-gradient-to-l from-white dark:from-slate-900 to-transparent"
+            />
+          )}
           <div
+            ref={tablistRef}
             role="tablist"
             aria-label={t('products.edit.tablistLabel')}
-            className="flex items-center -mb-px overflow-x-auto"
+            className="flex items-center -mb-px overflow-x-auto scroll-smooth"
             onKeyDown={onTabListKeyDown}
           >
             <TopTabButton
