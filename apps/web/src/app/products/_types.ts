@@ -22,6 +22,12 @@ export type ProductRow = {
   productType: string | null
   fulfillmentMethod: string | null
   /**
+   * W2.12 — ProductFamily attached via Product.familyId. Null when
+   * the row hasn't been categorised yet (the legacy categoryAttributes
+   * JSON path still applies). Cheap projection — id/code/label only.
+   */
+  family: { id: string; code: string; label: string } | null
+  /**
    * P.7 — Product.version for optimistic-concurrency check on inline
    * edits. Sent as If-Match on PATCH /api/products/:id; server
    * returns 409 if the row changed since this list was fetched.

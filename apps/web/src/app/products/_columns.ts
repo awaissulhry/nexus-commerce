@@ -30,6 +30,9 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: 'threshold', label: 'Low @', width: 80 },
   { key: 'brand', label: 'Brand', width: 120 },
   { key: 'productType', label: 'Type', width: 130 },
+  // W2.12 — PIM family chip. Hidden by default until the operator
+  // starts attaching families; surfaced via the Cols picker.
+  { key: 'family', label: 'Family', width: 140 },
   { key: 'fulfillment', label: 'FBA/FBM', width: 80 },
   { key: 'coverage', label: 'Channels', width: 180 },
   { key: 'tags', label: 'Tags', width: 160 },

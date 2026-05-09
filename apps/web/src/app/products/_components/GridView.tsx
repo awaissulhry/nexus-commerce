@@ -1495,6 +1495,30 @@ const ProductCell = memo(function ProductCell({
     case 'productType':
     case 'fulfillment':
       return <EditableCell field={col} product={p} onChanged={onChanged} />
+    // W2.12 — PIM family chip. Click → settings/pim/families/:id editor.
+    // Empty state is a small italic hint so the column never shows
+    // a confusing blank.
+    case 'family': {
+      if (!p.family) {
+        return (
+          <span
+            className="text-xs italic text-slate-400 dark:text-slate-500"
+            title="No PIM family attached. Use BulkActionBar → Attach family to categorise."
+          >
+            —
+          </span>
+        )
+      }
+      return (
+        <Link
+          href={`/settings/pim/families/${p.family.id}`}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs bg-slate-100 dark:bg-slate-800 rounded text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 max-w-full truncate"
+          title={`Family: ${p.family.label} (${p.family.code}) — open editor`}
+        >
+          <span className="truncate">{p.family.label}</span>
+        </Link>
+      )
+    }
     case 'coverage': {
       // F8 — surface ALL canonical channels per row, not just the ones
       // already listed. Missing channels render as a gray "+"

@@ -61,7 +61,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       }
       // F.1 — facets reflect only active (non-soft-deleted) products.
       // The recycle-bin lens shows its own row count separately.
-      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, channelCounts, hygieneCounts] = await Promise.all([
+      const [productTypes, brands, fulfillment, statusCounts, marketplaceCounts, marketplaceLookup, channelCounts, hygieneCounts, families, unfamiliedCount] = await Promise.all([
         prisma.product.groupBy({
           by: ['productType'],
           where: { parentId: null, productType: { not: null }, deletedAt: null },
@@ -128,7 +128,32 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           FROM "Product" p
           WHERE p."parentId" IS NULL AND p."deletedAt" IS NULL
         `,
+        // W2.12 — Family facet. groupBy familyId on top-level non-soft-deleted
+        // rows; null bucket counted separately so the FilterBar can show
+        // "no family yet (213)" alongside the per-family rows.
+        prisma.product.groupBy({
+          by: ['familyId'],
+          where: { parentId: null, deletedAt: null, familyId: { not: null } },
+          _count: true,
+        }),
+        prisma.product.count({
+          where: { parentId: null, deletedAt: null, familyId: null },
+        }),
       ])
+
+      // W2.12 — fetch labels for the families that actually appear in
+      // the facet rollup. Tiny secondary query (only families that have
+      // products attached); cached behind the same ETag.
+      const familyIds = families
+        .map((f) => f.familyId)
+        .filter((id): id is string => id !== null)
+      const familyLookup = familyIds.length > 0
+        ? await prisma.productFamily.findMany({
+            where: { id: { in: familyIds } },
+            select: { id: true, code: true, label: true },
+          })
+        : []
+      const familyById = new Map(familyLookup.map((f) => [f.id, f]))
 
       const labelByKey = new Map(
         marketplaceLookup.map((m) => [`${m.channel}:${m.code}`, { name: m.name, region: m.region }]),
@@ -175,6 +200,29 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           missingBrand: Number(hygieneCounts[0]?.missing_brand ?? 0),
           missingGtin: Number(hygieneCounts[0]?.missing_gtin ?? 0),
         },
+        // W2.12 — Family facet. Per-family count + an "unfamilied"
+        // row first so the operator can quickly find the backlog of
+        // products that haven't been categorised yet.
+        families: [
+          {
+            value: 'null',
+            label: 'No family',
+            code: null,
+            count: unfamiliedCount,
+          } as const,
+          ...families
+            .filter((f) => f.familyId !== null)
+            .map((f) => {
+              const meta = familyById.get(f.familyId!)
+              return {
+                value: f.familyId!,
+                label: meta?.label ?? f.familyId!,
+                code: meta?.code ?? null,
+                count: f._count,
+              }
+            })
+            .sort((a, b) => b.count - a.count),
+        ],
       }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })

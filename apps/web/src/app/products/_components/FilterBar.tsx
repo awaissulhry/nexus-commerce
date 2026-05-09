@@ -54,6 +54,15 @@ interface Facets {
     missingGtin: number
   }
   channels?: Array<{ value: string; count: number }>
+  // W2.12 — PIM family facet. The first row (value='null') represents
+  // products with no family attached. The rest are real family ids
+  // sorted by descending count.
+  families?: Array<{
+    value: string
+    label: string
+    code: string | null
+    count: number
+  }>
 }
 
 interface FilterBarProps {
@@ -64,6 +73,11 @@ interface FilterBarProps {
   marketplaceFilters: string[]
   productTypeFilters: string[]
   brandFilters: string[]
+  // W2.12 — selected ProductFamily ids. The literal string 'null'
+  // represents the "products with no family attached" bucket; mixing
+  // it with real ids is allowed (matches families IN list OR familyId
+  // IS NULL semantically — see products.routes.ts where clause).
+  familyFilters: string[]
   tagFilters: string[]
   fulfillmentFilters: string[]
   missingChannelFilters: string[]
@@ -103,6 +117,7 @@ export function FilterBar(props: FilterBarProps) {
     marketplaceFilters,
     productTypeFilters,
     brandFilters,
+    familyFilters,
     tagFilters,
     fulfillmentFilters,
     missingChannelFilters,
@@ -216,6 +231,21 @@ export function FilterBar(props: FilterBarProps) {
       label: 'Brand',
       value: brandFilters.join(', '),
       clear: () => updateUrl({ brands: undefined, page: undefined }),
+    })
+  }
+  // W2.12 — Family pill. Resolves the id back to the label via the
+  // facets lookup so the pill reads "Motorcycle Jacket" not the cuid.
+  if (familyFilters.length > 0) {
+    const familyLookup = new Map(
+      (facets?.families ?? []).map((f) => [f.value, f.label]),
+    )
+    activePills.push({
+      key: 'family',
+      label: 'Family',
+      value: familyFilters
+        .map((id) => familyLookup.get(id) ?? id)
+        .join(', '),
+      clear: () => updateUrl({ families: undefined, page: undefined }),
     })
   }
   if (tagFilters.length > 0) {
@@ -471,6 +501,37 @@ export function FilterBar(props: FilterBarProps) {
                   }
                   onClear={() =>
                     updateUrl({ tags: undefined, page: undefined })
+                  }
+                  searchable
+                />
+              )}
+              {/* W2.12 — Family facet. The first option is the
+                  "no family yet" bucket (value='null') so the
+                  operator can quickly find the unfamilied backlog. */}
+              {facets && facets.families && facets.families.length > 0 && (
+                <FilterGroup
+                  label="Family"
+                  options={facets.families.map((f) => f.value)}
+                  selected={familyFilters}
+                  counts={facets.families.reduce<Record<string, number>>(
+                    (m, s) => {
+                      m[s.value] = s.count
+                      return m
+                    },
+                    {},
+                  )}
+                  renderLabel={(id: string) =>
+                    facets.families!.find((f) => f.value === id)?.label ?? id
+                  }
+                  onToggle={(v) =>
+                    updateUrl({
+                      families:
+                        toggleArr(familyFilters, v).join(',') || undefined,
+                      page: undefined,
+                    })
+                  }
+                  onClear={() =>
+                    updateUrl({ families: undefined, page: undefined })
                   }
                   searchable
                 />

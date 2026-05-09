@@ -131,6 +131,11 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // C.2 — new filters
       productTypes?: string
       brands?: string
+      // W2.12 — filter by ProductFamily.id (comma-separated). Layered
+      // on top of brands/productTypes; matches *any* of the listed
+      // family ids (Prisma `in:`). Pass `families=null` to filter for
+      // products with no family attached (the "unfamilied" backlog).
+      families?: string
       tags?: string
       fulfillment?: string
       marketplaces?: string
@@ -176,6 +181,11 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         .filter(Boolean)
       const productTypeList = (q.productTypes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
       const brandList = (q.brands ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      // W2.12 — family filter. 'null' literal means "products with no
+      // family attached"; otherwise comma-separated family ids.
+      const familiesRaw = (q.families ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      const familyFilterUnattached = familiesRaw.length === 1 && familiesRaw[0] === 'null'
+      const familyIdList = familyFilterUnattached ? [] : familiesRaw
       const tagIdList = (q.tags ?? '').split(',').map((s) => s.trim()).filter(Boolean)
       const fulfillmentList = (q.fulfillment ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
       const marketplaceList = (q.marketplaces ?? '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
@@ -206,6 +216,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (productTypeList.length > 0) where.productType = { in: productTypeList }
       if (brandList.length > 0) where.brand = { in: brandList }
+      // W2.12 — family filter. families=null means "no family attached";
+      // otherwise filter by familyId in the list.
+      if (familyFilterUnattached) where.familyId = null
+      else if (familyIdList.length > 0) where.familyId = { in: familyIdList }
       if (fulfillmentList.length > 0) where.fulfillmentMethod = { in: fulfillmentList }
       if (marketplaceList.length > 0) {
         where.channelListings = { some: { marketplace: { in: marketplaceList } } }
@@ -443,6 +457,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             parentId: true,
             productType: true,
             fulfillmentMethod: true,
+            // W2.12 — Wave 2 PIM family. Cheap join (id+code+label) so
+            // the grid can render the family chip + the FilterBar can
+            // show the family label without a second round-trip.
+            family: { select: { id: true, code: true, label: true } },
             // P.7 — version for inline-edit optimistic concurrency.
             // The grid sends it as If-Match on PATCH; on a 409 we
             // know another change landed first and can prompt.
@@ -553,6 +571,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           parentId: p.parentId,
           productType: p.productType,
           fulfillmentMethod: p.fulfillmentMethod,
+          // W2.12 — family chip data; null when product has no family.
+          family: p.family ?? null,
           // P.7 — version for inline-edit If-Match.
           version: p.version,
           imageUrl: p.images[0]?.url ?? null,
