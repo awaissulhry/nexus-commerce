@@ -10,6 +10,9 @@ const SETTINGS_TABS = [
   // W2.9 — PIM admin (Akeneo cornerstone). Today this points to
   // /families; /attributes lands in W2.10.
   { label: 'PIM', href: '/settings/pim/families', icon: '📚' },
+  // W4.11 — DAM (Plytix cornerstone). Asset library + per-asset
+  // detail panel + usage list.
+  { label: 'DAM', href: '/settings/dam', icon: '🖼️' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
