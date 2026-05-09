@@ -62,6 +62,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { publishSyncLogEvent } from './sync-logs-events.service.js'
 
 type Channel =
   | 'AMAZON'
@@ -226,7 +227,7 @@ export async function recordApiCall<T>(
   } finally {
     const latencyMs = Date.now() - startedAt
     try {
-      await prisma.outboundApiCallLog.create({
+      const row = await prisma.outboundApiCallLog.create({
         data: {
           channel: ctx.channel,
           marketplace: ctx.marketplace,
@@ -253,6 +254,24 @@ export async function recordApiCall<T>(
           listingId: ctx.listingId,
           orderId: ctx.orderId,
         },
+        select: { id: true, createdAt: true },
+      })
+      // L.7.0 — broadcast to the in-process event bus so SSE
+      // subscribers (the hub's live tail) receive a slim row.
+      publishSyncLogEvent({
+        type: 'api-call.recorded',
+        ts: row.createdAt.getTime(),
+        id: row.id,
+        channel: ctx.channel,
+        marketplace: ctx.marketplace ?? null,
+        operation: ctx.operation,
+        statusCode,
+        success,
+        latencyMs,
+        errorType: errorType ?? null,
+        errorMessage: errorMessage
+          ? errorMessage.slice(0, 200)
+          : null,
       })
     } catch (writeErr) {
       // Never break the actual call because logging itself is degraded.

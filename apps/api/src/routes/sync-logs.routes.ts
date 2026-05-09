@@ -27,6 +27,10 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import {
+  subscribeSyncLogEvents,
+  type SyncLogEvent,
+} from '../services/sync-logs-events.service.js'
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -195,6 +199,46 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  /**
+   * L.7.0 — SSE event stream for the live tail.
+   *
+   * Long-lived text/event-stream. Each api-call.recorded event from
+   * the in-process bus emits one `data: <json>` frame. A 25-second
+   * heartbeat ping defeats reverse-proxy idle timeouts; client
+   * EventSource auto-reconnects on transient drops.
+   *
+   * GET /api/sync-logs/events
+   */
+  fastify.get('/sync-logs/events', async (request, reply) => {
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+
+    const send = (event: SyncLogEvent) => {
+      try {
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`)
+      } catch {
+        // Client closed mid-write. Cleanup happens via the close handler.
+      }
+    }
+
+    // Initial hello so the client knows the stream is open.
+    send({ type: 'ping', ts: Date.now() })
+
+    const unsubscribe = subscribeSyncLogEvents(send)
+    const heartbeat = setInterval(() => {
+      send({ type: 'ping', ts: Date.now() })
+    }, 25_000)
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat)
+      unsubscribe()
+    })
+  })
 
   /**
    * Paginated recent calls list with filters. Used by the hub's

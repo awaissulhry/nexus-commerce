@@ -20,6 +20,8 @@ import {
   AlertCircle,
   Filter,
   Loader2,
+  Pause,
+  Play,
   RefreshCw,
   X,
 } from 'lucide-react'
@@ -114,6 +116,10 @@ export default function ApiCallsClient() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<ApiCallRow | null>(null)
+  const [live, setLive] = useState(false)
+  const [liveStatus, setLiveStatus] = useState<
+    'connecting' | 'open' | 'error' | 'closed'
+  >('closed')
   const inFlightRef = useRef<AbortController | null>(null)
 
   const sinceMs = useMemo(() => {
@@ -207,6 +213,83 @@ export default function ApiCallsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sinceMs, urlChannel, urlErrorType, urlSuccess])
 
+  // L.7.0 — live tail. Opens an EventSource against the backend SSE
+  // endpoint while `live` is true. Each api-call.recorded event is
+  // prepended to the table after passing the active filter set
+  // (server doesn't filter the stream — too dynamic — so the client
+  // applies the same predicate that scopes the rest fetch).
+  useEffect(() => {
+    if (!live) return
+    setLiveStatus('connecting')
+    const backend = getBackendUrl()
+    const es = new EventSource(`${backend}/api/sync-logs/events`)
+
+    es.onopen = () => setLiveStatus('open')
+    es.onerror = () => setLiveStatus('error')
+    es.onmessage = (msg) => {
+      try {
+        const event = JSON.parse(msg.data) as
+          | { type: 'ping' }
+          | {
+              type: 'api-call.recorded'
+              ts: number
+              id: string
+              channel: string
+              marketplace: string | null
+              operation: string
+              statusCode: number | null
+              success: boolean
+              latencyMs: number
+              errorType: string | null
+              errorMessage: string | null
+            }
+        if (event.type !== 'api-call.recorded') return
+
+        // Apply active filter predicates (mirror buildWhere on backend).
+        if (urlChannel && event.channel !== urlChannel) return
+        if (urlErrorType && event.errorType !== urlErrorType) return
+        if (urlSuccess === 'false' && event.success) return
+        if (urlSuccess === 'true' && !event.success) return
+
+        setRecent((prev) => {
+          if (prev.some((r) => r.id === event.id)) return prev
+          const row: ApiCallRow = {
+            id: event.id,
+            channel: event.channel,
+            marketplace: event.marketplace,
+            connectionId: null,
+            operation: event.operation,
+            endpoint: null,
+            method: null,
+            statusCode: event.statusCode,
+            success: event.success,
+            latencyMs: event.latencyMs,
+            errorMessage: event.errorMessage,
+            errorCode: null,
+            errorType: event.errorType,
+            requestId: null,
+            triggeredBy: 'api',
+            requestPayload: null,
+            responsePayload: null,
+            productId: null,
+            listingId: null,
+            orderId: null,
+            createdAt: new Date(event.ts).toISOString(),
+          }
+          // Cap the prepended live tail at 500 to keep memory bounded.
+          return [row, ...prev].slice(0, 500)
+        })
+      } catch {
+        // ignore malformed SSE frames
+      }
+    }
+
+    return () => {
+      es.close()
+      setLiveStatus('closed')
+    }
+  }, [live, urlChannel, urlErrorType, urlSuccess])
+
   return (
     <div className="space-y-3">
       {/* Filter bar */}
@@ -297,12 +380,42 @@ export default function ApiCallsClient() {
             Failures only
           </button>
 
+          <button
+            type="button"
+            onClick={() => setLive((v) => !v)}
+            className={cn(
+              'ml-auto h-7 px-2 text-sm font-medium rounded border inline-flex items-center gap-1.5 transition-colors',
+              live
+                ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+            )}
+            title={live ? 'Pause live tail' : 'Start live tail'}
+          >
+            {live ? (
+              <Pause className="w-3 h-3" />
+            ) : (
+              <Play className="w-3 h-3" />
+            )}
+            Live
+            {live && (
+              <span
+                className={cn(
+                  'inline-block w-1.5 h-1.5 rounded-full',
+                  liveStatus === 'open'
+                    ? 'bg-white animate-pulse'
+                    : liveStatus === 'connecting'
+                      ? 'bg-amber-200'
+                      : 'bg-rose-200',
+                )}
+                aria-label={liveStatus}
+              />
+            )}
+          </button>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => void fetchAll(true)}
             disabled={loading}
-            className="ml-auto"
           >
             {loading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
