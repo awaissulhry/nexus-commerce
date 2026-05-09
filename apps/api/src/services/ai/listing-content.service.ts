@@ -145,6 +145,63 @@ export interface ChannelSuggestion {
   reason: string
 }
 
+// AI-4.7 — per-channel listing quality score returned by
+// scoreListingQuality() for the Step 9 "AI: score this listing" CTA.
+export interface QualityDimensionScore {
+  /** Short tag, e.g. "title", "bullets", "images", "compliance". */
+  name: string
+  /** 0–100 score for this dimension. */
+  score: number
+  /** Single sentence — how to lift this dimension's score. Empty
+   *  string when nothing to improve at this score. */
+  hint: string
+}
+export interface ChannelQualityScore {
+  platform: string
+  marketplace: string
+  /** 0–100. Composite score across the dimensions. */
+  overallScore: number
+  dimensions: QualityDimensionScore[]
+}
+export interface SuggestQualityScoreParams {
+  product: ProductContext
+  /** Per-channel payload snapshot. Caller passes a trimmed view
+   *  (title, description, bullets, keywords, image count, price)
+   *  rather than the full SP-API payload — keeps the prompt small
+   *  and the cost predictable. */
+  channels: Array<{
+    platform: string
+    marketplace: string
+    title?: string | null
+    description?: string | null
+    bullets?: string[] | null
+    keywords?: string | null
+    imageCount?: number
+    price?: number | null
+    currency?: string | null
+  }>
+  budgetScope?: BudgetCheckScope
+  provider?: string | null
+}
+export interface SuggestQualityScoreResult {
+  perChannel: ChannelQualityScore[]
+  /** Average overallScore across channels. */
+  overallScore: number
+  /** 3–5 sentences naming the highest-leverage fixes across the
+   *  whole listing set. Cross-channel suggestions live here. */
+  topImprovements: string[]
+  usage: ProviderUsage
+  redactions: RedactionCount[]
+  redactionTotal: number
+  metadata: {
+    productSku: string
+    model: string
+    provider: ProviderName
+    elapsedMs: number
+    generatedAt: string
+  }
+}
+
 // AI-4.6 — per-channel pricing recommendation returned by
 // suggestPricing() for the Step 7 "AI: recommend prices" CTA.
 export interface PricingRecommendation {
@@ -606,6 +663,218 @@ export class ListingContentService {
         generatedAt: new Date().toISOString(),
       },
     }
+  }
+
+  /**
+   * AI-4.7 — score a wizard's prepared per-channel listings and
+   * surface concrete improvements. Single AI call sees ALL channels
+   * at once so cross-channel observations ("eBay title is generic
+   * compared to your Amazon title") are possible.
+   *
+   * Returns 0–100 per-channel + a dimensions breakdown (title,
+   * bullets, images, keywords, price-positioning, compliance) +
+   * a topImprovements list with the highest-leverage fixes across
+   * the whole listing set.
+   *
+   * Honours kill-switch + budget + sanitiser (no fiscal data leaves
+   * the API in scoring prompts either).
+   */
+  async scoreListingQuality(
+    params: SuggestQualityScoreParams,
+  ): Promise<SuggestQualityScoreResult> {
+    if (isAiKillSwitchOn()) {
+      throw new Error(
+        'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
+      )
+    }
+    const provider = getProvider(params.provider)
+    if (!provider) {
+      throw new Error(
+        'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
+      )
+    }
+    if (params.channels.length === 0) {
+      throw new Error('No channels supplied — nothing to score.')
+    }
+
+    const prompt = this.scoreListingQualityPrompt(params)
+
+    if (params.budgetScope) {
+      const estimateUSD = estimateCallCostUSD({
+        prompt,
+        maxOutputTokens: 4096,
+        provider: provider.name,
+        model: provider.defaultModel,
+      })
+      const verdict = await checkBudget(estimateUSD, params.budgetScope)
+      if (!verdict.allowed) {
+        throw new BudgetExceededError(
+          verdict.reason ?? 'per_call',
+          verdict.message ??
+            'Quality scoring refused — budget ceiling reached.',
+        )
+      }
+    }
+
+    const start = Date.now()
+    const { text, usage, redactions } = await this.runOne(provider, prompt, 0)
+    const parsed = this.parseQualityScores(text, params)
+    const overallScore = parsed.perChannel.length > 0
+      ? Math.round(
+          parsed.perChannel.reduce((s, c) => s + c.overallScore, 0) /
+            parsed.perChannel.length,
+        )
+      : 0
+    const redactionTotal = totalRedactions(redactions)
+    return {
+      perChannel: parsed.perChannel,
+      overallScore,
+      topImprovements: parsed.topImprovements,
+      usage,
+      redactions,
+      redactionTotal,
+      metadata: {
+        productSku: params.product.sku,
+        model: usage.model,
+        provider: usage.provider,
+        elapsedMs: Date.now() - start,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  }
+
+  private scoreListingQualityPrompt(params: SuggestQualityScoreParams): string {
+    const channelsBlock = params.channels
+      .map((c, i) => {
+        const lines = [`Channel ${i + 1}: ${c.platform.toUpperCase()}:${c.marketplace.toUpperCase()}`]
+        if (c.title) lines.push(`  title: ${truncate(c.title, 200)}`)
+        if (c.description) lines.push(`  description (first 600c): ${truncate(c.description, 600)}`)
+        if (Array.isArray(c.bullets) && c.bullets.length > 0) {
+          lines.push(
+            `  bullets: ${c.bullets
+              .slice(0, 5)
+              .map((b, j) => `(${j + 1}) ${truncate(b, 200)}`)
+              .join(' ')}`,
+          )
+        }
+        if (c.keywords) lines.push(`  keywords: ${truncate(c.keywords, 250)}`)
+        if (typeof c.imageCount === 'number') lines.push(`  images: ${c.imageCount}`)
+        if (typeof c.price === 'number') {
+          lines.push(`  price: ${c.price.toFixed(2)} ${c.currency ?? ''}`.trim())
+        }
+        return lines.join('\n')
+      })
+      .join('\n\n')
+
+    return `You are an Amazon / eBay / Shopify catalog quality auditor. Score each prepared listing on 0–100 and call out concrete improvements.
+
+Product:
+${this.contextBlock(params.product)}
+
+Listings to score:
+${channelsBlock}
+
+Score each channel along these dimensions (each 0–100):
+  - title: clarity, keyword density, brand prominence, length use
+  - bullets: customer-benefit framing, specificity, length, no keyword stuffing
+  - description: structure, persuasion, completeness
+  - keywords: relevance, no title duplication, language mix where useful
+  - images: presence + count vs platform expectations (Amazon prefers 7+, eBay 4+, Shopify any)
+  - price: positioning vs platform norms (no competitor data — judge from product / brand context only)
+  - compliance: visible signals like brand name, materials, intended use
+
+Return JSON only — no markdown, no commentary, no surrounding text:
+{
+  "perChannel": [
+    {
+      "platform": "AMAZON",
+      "marketplace": "IT",
+      "overallScore": 78,
+      "dimensions": [
+        { "name": "title", "score": 85, "hint": "..." },
+        { "name": "bullets", "score": 72, "hint": "..." },
+        { "name": "description", "score": 80, "hint": "" },
+        { "name": "keywords", "score": 70, "hint": "..." },
+        { "name": "images", "score": 60, "hint": "..." },
+        { "name": "price", "score": 80, "hint": "" },
+        { "name": "compliance", "score": 90, "hint": "" }
+      ]
+    }
+  ],
+  "topImprovements": [
+    "1–2 sentences naming the single highest-leverage fix across the whole listing set",
+    "..."
+  ]
+}
+
+Rules:
+- Score honestly — most listings score 60–80. 90+ requires the listing genuinely is best-in-class.
+- "hint" is empty when score ≥ 90 (nothing to fix). Otherwise 1 sentence — what to change.
+- topImprovements: 3–5 entries, prioritised by impact. Cross-channel observations welcome.`
+  }
+
+  private parseQualityScores(
+    raw: string,
+    params: SuggestQualityScoreParams,
+  ): {
+    perChannel: ChannelQualityScore[]
+    topImprovements: string[]
+  } {
+    const j = this.parseJson<{
+      perChannel?: unknown
+      topImprovements?: unknown
+    }>(raw, 'quality-score')
+    const allowed = new Set(
+      params.channels.map(
+        (c) => `${c.platform.toUpperCase()}:${c.marketplace.toUpperCase()}`,
+      ),
+    )
+    const perChannel: ChannelQualityScore[] = []
+    if (Array.isArray(j.perChannel)) {
+      for (const c of j.perChannel) {
+        if (!c || typeof c !== 'object') continue
+        const ch = c as Record<string, unknown>
+        const platform = typeof ch.platform === 'string'
+          ? ch.platform.toUpperCase()
+          : null
+        const marketplace = typeof ch.marketplace === 'string'
+          ? ch.marketplace.toUpperCase()
+          : null
+        if (!platform || !marketplace) continue
+        if (!allowed.has(`${platform}:${marketplace}`)) continue
+        const overallScore = clampScore(ch.overallScore)
+        const dimensions: QualityDimensionScore[] = []
+        if (Array.isArray(ch.dimensions)) {
+          for (const d of ch.dimensions) {
+            if (!d || typeof d !== 'object') continue
+            const dim = d as Record<string, unknown>
+            const name = typeof dim.name === 'string'
+              ? dim.name.trim().slice(0, 40)
+              : ''
+            if (!name) continue
+            dimensions.push({
+              name,
+              score: clampScore(dim.score),
+              hint: typeof dim.hint === 'string'
+                ? dim.hint.trim().slice(0, 300)
+                : '',
+            })
+          }
+        }
+        perChannel.push({ platform, marketplace, overallScore, dimensions })
+      }
+    }
+    const topImprovements: string[] = []
+    if (Array.isArray(j.topImprovements)) {
+      for (const t of j.topImprovements) {
+        if (typeof t !== 'string') continue
+        const trimmed = t.trim().slice(0, 400)
+        if (trimmed.length === 0) continue
+        topImprovements.push(trimmed)
+        if (topImprovements.length >= 6) break
+      }
+    }
+    return { perChannel, topImprovements }
   }
 
   /**
@@ -1350,6 +1619,16 @@ Return JSON only:
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s
   return s.slice(0, max - 1) + '…'
+}
+
+// AI-4.7 — clamp a candidate score to the 0–100 range. Returns 0 for
+// non-numeric / NaN / Infinity. Used by parseQualityScores to keep
+// AI hallucinations (e.g. score=999) from poisoning the rollup.
+function clampScore(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  if (raw < 0) return 0
+  if (raw > 100) return 100
+  return Math.round(raw)
 }
 
 function flattenAttrs(obj: Record<string, unknown>): string {

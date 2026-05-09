@@ -3846,6 +3846,193 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── AI-4.7 — Step 9 listing quality scorer ─────────────────────
+  //
+  // POST /api/listing-wizard/:id/score-quality
+  // Body: {
+  //   channels: [{platform, marketplace, title?, description?, bullets?,
+  //               keywords?, imageCount?, price?, currency?}],
+  //   provider?
+  // }
+  //
+  // Single AI call. Caller passes a trimmed per-channel snapshot
+  // (no full SP-API payload — keeps the prompt small + cost
+  // predictable). Returns per-channel 0–100 scores with dimension
+  // breakdown + cross-channel topImprovements list.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      channels?: Array<{
+        platform?: string
+        marketplace?: string
+        title?: string
+        description?: string
+        bullets?: string[]
+        keywords?: string
+        imageCount?: number
+        price?: number
+        currency?: string
+      }>
+      provider?: string
+    }
+  }>(
+    '/listing-wizard/:id/score-quality',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API server.',
+        })
+      }
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const channels = Array.isArray(request.body?.channels)
+        ? request.body!.channels!
+            .filter(
+              (c): c is {
+                platform: string
+                marketplace: string
+              } & {
+                title?: string
+                description?: string
+                bullets?: string[]
+                keywords?: string
+                imageCount?: number
+                price?: number
+                currency?: string
+              } =>
+                !!c &&
+                typeof c.platform === 'string' &&
+                typeof c.marketplace === 'string',
+            )
+            .map((c) => ({
+              platform: c.platform.toUpperCase(),
+              marketplace: c.marketplace.toUpperCase(),
+              title: typeof c.title === 'string' ? c.title : null,
+              description:
+                typeof c.description === 'string' ? c.description : null,
+              bullets: Array.isArray(c.bullets)
+                ? c.bullets.filter((b): b is string => typeof b === 'string')
+                : null,
+              keywords: typeof c.keywords === 'string' ? c.keywords : null,
+              imageCount:
+                typeof c.imageCount === 'number' ? c.imageCount : 0,
+              price: typeof c.price === 'number' ? c.price : null,
+              currency: typeof c.currency === 'string' ? c.currency : null,
+            }))
+        : []
+      if (channels.length === 0) {
+        return reply.code(400).send({
+          error:
+            'channels is required and must contain at least one {platform, marketplace} entry.',
+        })
+      }
+
+      try {
+        const result = await listingContentService.scoreListingQuality({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            bulletPoints: product.bulletPoints,
+            keywords: product.keywords,
+            weightValue: product.weightValue
+              ? Number(product.weightValue)
+              : null,
+            weightUnit: product.weightUnit,
+            dimLength: product.dimLength ? Number(product.dimLength) : null,
+            dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+            dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+            dimUnit: product.dimUnit,
+            productType: product.productType,
+            variantAttributes: product.variantAttributes,
+            categoryAttributes: product.categoryAttributes,
+          },
+          channels,
+          provider: request.body?.provider ?? null,
+          budgetScope: {
+            feature: 'listing-wizard',
+            wizardId: wizard.id,
+          },
+        })
+
+        logUsage({
+          provider: result.usage.provider,
+          model: result.usage.model,
+          feature: 'listing-wizard.score-quality',
+          entityType: 'ListingWizard',
+          entityId: wizard.id,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          costUSD: result.usage.costUSD,
+          latencyMs: result.metadata.elapsedMs,
+          ok: true,
+          metadata: {
+            productId: product.id,
+            channelCount: channels.length,
+            overallScore: result.overallScore,
+            redactionTotal: result.redactionTotal,
+          },
+        })
+
+        return {
+          wizard: { id: wizard.id, productId: wizard.productId },
+          perChannel: result.perChannel,
+          overallScore: result.overallScore,
+          topImprovements: result.topImprovements,
+          usage: result.usage,
+          redactionTotal: result.redactionTotal,
+          metadata: result.metadata,
+        }
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          fastify.log.warn(
+            { reason: err.reason },
+            '[score-quality] refused by budget',
+          )
+          return reply.code(402).send({
+            error: err.message,
+            budget: { reason: err.reason },
+          })
+        }
+        fastify.log.error({ err }, '[score-quality] failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // ── AI-4.6 — Step 7 pricing suggester ──────────────────────────
   //
   // POST /api/listing-wizard/:id/suggest-pricing
