@@ -49,6 +49,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface FamilyDetail {
@@ -113,6 +114,7 @@ export default function FamilyEditorClient({
   const [reparentOpen, setReparentOpen] = useState(false)
   const confirm = useConfirm()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const refresh = useCallback(async () => {
     try {
@@ -272,11 +274,17 @@ export default function FamilyEditorClient({
             </Link>
           ) : (
             <span className="px-1.5 py-0.5 text-xs bg-slate-50 dark:bg-slate-900 rounded text-slate-500 dark:text-slate-400 italic border border-slate-200 dark:border-slate-800">
-              root family
+              {t('pim.familyEditor.rootFamily')}
             </span>
           )}
           <span className="text-sm text-slate-500 dark:text-slate-400">
-            · {family._count.products} product{family._count.products === 1 ? '' : 's'} attached
+            ·{' '}
+            {t(
+              family._count.products === 1
+                ? 'pim.familyEditor.productsAttached.one'
+                : 'pim.familyEditor.productsAttached.other',
+              { count: family._count.products },
+            )}
           </span>
           {/* W5.7 — Reparent button. Opens a small modal with a
               parent picker; server-side cycle detection handles
@@ -286,12 +294,12 @@ export default function FamilyEditorClient({
             onClick={() => setReparentOpen(true)}
             className="text-xs text-blue-700 dark:text-blue-300 hover:underline"
           >
-            edit parent
+            {t('pim.familyEditor.editParent')}
           </button>
         </div>
         {family.childFamilies.length > 0 && (
           <div className="text-sm text-slate-600 dark:text-slate-400 inline-flex items-center gap-1.5 flex-wrap">
-            <span className="text-slate-500 dark:text-slate-500">children:</span>
+            <span className="text-slate-500 dark:text-slate-500">{t('pim.familyEditor.children')}</span>
             {family.childFamilies.map((c) => (
               <Link
                 key={c.id}
@@ -309,7 +317,7 @@ export default function FamilyEditorClient({
       <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
         <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-            Own attributes ({family.familyAttributes.length})
+            {t('pim.familyEditor.own.title', { count: family.familyAttributes.length })}
           </div>
           <Button
             variant="primary"
@@ -318,14 +326,17 @@ export default function FamilyEditorClient({
             onClick={() => setAdding(true)}
             disabled={attributePool.length === 0}
           >
-            Add attribute
+            {t('pim.familyEditor.own.add')}
           </Button>
         </div>
         {family.familyAttributes.length === 0 ? (
           <div className="p-6 text-center text-base text-slate-500 dark:text-slate-400">
-            No attributes attached directly to this family yet.
+            {t('pim.familyEditor.own.empty.lead')}
             {inheritedOnly.length > 0 &&
-              ` ${inheritedOnly.length} inherited from ancestors.`}
+              ' ' +
+                t('pim.familyEditor.own.empty.inheritedSuffix', {
+                  count: inheritedOnly.length,
+                })}
           </div>
         ) : (
           <SortableAttributesTable
@@ -343,19 +354,19 @@ export default function FamilyEditorClient({
         <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900/40">
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Inherited from ancestors ({inheritedOnly.length}) · read-only
+              {t('pim.familyEditor.inherited.title', { count: inheritedOnly.length })}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Akeneo-strict: this family inherits these whether you like it or not. To change them, edit the ancestor.
+              {t('pim.familyEditor.inherited.body')}
             </div>
           </div>
           <table className="w-full text-base">
             <thead className="bg-slate-100/60 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
               <tr className="text-left">
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Attribute</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Required</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Channels</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Source</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.attribute')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.required')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.channels')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.source')}</th>
               </tr>
             </thead>
             <tbody>
@@ -375,10 +386,14 @@ export default function FamilyEditorClient({
                       )}
                     </td>
                     <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
-                      {e.required ? 'Required' : 'Optional'}
+                      {e.required
+                        ? t('pim.familyEditor.required.true')
+                        : t('pim.familyEditor.required.false')}
                     </td>
                     <td className="px-3 py-2 text-slate-600 dark:text-slate-400 text-sm">
-                      {e.channels.length === 0 ? 'all' : e.channels.join(', ')}
+                      {e.channels.length === 0
+                        ? t('pim.familyEditor.channels.all')
+                        : e.channels.join(', ')}
                     </td>
                     <td className="px-3 py-2">
                       <Link
@@ -791,6 +806,7 @@ function SortableAttributesTable({
   onRemoveAttr: (faId: string, label: string) => void
   onReorder: (orderedIds: string[]) => void
 }) {
+  const { t } = useTranslations()
   // Optimistic local order — DnD updates this immediately on drop;
   // the server PATCHes happen in the background and refresh fixes
   // any drift.
@@ -854,11 +870,11 @@ function SortableAttributesTable({
         <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
           <tr className="text-left">
             <th className="px-1 w-7" aria-label="Drag handle" />
-            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Code</th>
-            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Label</th>
-            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Type</th>
-            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Required</th>
-            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Channels</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.code')}</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.label')}</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.type')}</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.required')}</th>
+            <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.familyEditor.col.channels')}</th>
             <th className="px-3 py-2 w-8" aria-label="Actions" />
           </tr>
         </thead>
@@ -894,6 +910,7 @@ function SortableAttributeRow({
   onUpdateChannels: (faId: string, channels: string[]) => void
   onRemoveAttr: (faId: string, label: string) => void
 }) {
+  const { t } = useTranslations()
   const {
     attributes,
     listeners,
@@ -940,7 +957,9 @@ function SortableAttributeRow({
             checked={fa.required}
             onChange={() => onToggleRequired(fa.id, fa.required)}
           />
-          {fa.required ? 'Required' : 'Optional'}
+          {fa.required
+            ? t('pim.familyEditor.required.true')
+            : t('pim.familyEditor.required.false')}
         </label>
       </td>
       <td className="px-3 py-2">
