@@ -255,9 +255,6 @@ export default function AddProductPage() {
   };
 
   const addVariationAxis = () => {
-    console.log('🔵 [ADD AXIS] Current axis input:', currentAxisInput);
-    console.log('🔵 [ADD AXIS] Current axis values:', currentAxisValues);
-    
     if (!currentAxisInput.trim()) {
       showToast('Please enter an axis name', 'error');
       return;
@@ -266,10 +263,8 @@ export default function AddProductPage() {
       showToast('Please add at least one value to the axis', 'error');
       return;
     }
-    
+
     const newAxis = { name: currentAxisInput, values: currentAxisValues };
-    console.log('🔵 [ADD AXIS] Adding new axis:', newAxis);
-    
     setVariationAxes([...variationAxes, newAxis]);
     setCurrentAxisInput('');
     setCurrentAxisValues([]);
@@ -346,8 +341,6 @@ export default function AddProductPage() {
           setSubmitting(false);
           return;
         }
-      } else {
-        console.log('📤 [BULK CREATE] Skipping validation for parent product with variations');
       }
 
       const payload: any = {
@@ -363,18 +356,11 @@ export default function AddProductPage() {
         channelListings: platformListings.filter((listing) => listing.title && listing.description),
       };
 
-      console.log('📤 [BULK CREATE] Sending payload:', JSON.stringify(payload, null, 2));
-      console.log('📤 [BULK CREATE] Has variations:', hasVariations);
-      console.log('📤 [BULK CREATE] Generated variations:', generatedVariations);
-      console.log('📤 [BULK CREATE] Platform listings:', platformListings);
-
       const createResponse = await fetch('/api/catalog/products/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      
-      console.log('📥 [BULK CREATE] Response status:', createResponse.status);
 
       const responseText = await createResponse.text();
       if (!createResponse.ok) throw new Error(`API Error ${createResponse.status}`);
@@ -592,15 +578,10 @@ export default function AddProductPage() {
                             if (e.key === 'Enter') {
                               e.preventDefault();
                               const inputValue = currentAxisValuesInput || '';
-                              console.log('🔵 [VALUES INPUT] Raw input:', inputValue);
                               const values = inputValue.split(',').map((v) => v.trim()).filter((v) => v);
-                              console.log('🔵 [VALUES INPUT] Parsed values:', values);
                               if (values.length > 0) {
-                                console.log('🔵 [VALUES INPUT] Setting values:', values);
                                 setCurrentAxisValues(values);
                                 setCurrentAxisValuesInput('');
-                              } else {
-                                console.log('🔵 [VALUES INPUT] No values parsed');
                               }
                             }
                           }}
@@ -610,11 +591,8 @@ export default function AddProductPage() {
                           type="button"
                           onClick={() => {
                             const inputValue = currentAxisValuesInput || '';
-                            console.log('🔵 [VALUES BUTTON] Raw input:', inputValue);
                             const values = inputValue.split(',').map((v) => v.trim()).filter((v) => v);
-                            console.log('🔵 [VALUES BUTTON] Parsed values:', values);
                             if (values.length > 0) {
-                              console.log('🔵 [VALUES BUTTON] Setting values:', values);
                               setCurrentAxisValues(values);
                               setCurrentAxisValuesInput('');
                             } else {

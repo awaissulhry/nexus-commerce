@@ -296,9 +296,11 @@ export default function ManageInventoryClient({
           setSyncModalOpen(false);
           setCurrentSyncId(null);
         }}
-        onRetry={(syncId) => {
-          // Handle retry logic
-          console.log('Retrying sync:', syncId);
+        onRetry={() => {
+          // Retry handler not yet wired (see TECH_DEBT). The modal
+          // dispatches to the sync engine via SyncTriggerButton on
+          // its own retry path; this onRetry hook is a no-op until
+          // the modal is converted to lift state up.
         }}
       />
     </div>

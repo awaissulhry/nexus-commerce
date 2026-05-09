@@ -67,7 +67,10 @@ export default function ChannelOverridesTab({ product }: ChannelOverridesTabProp
     return floorPrice > 0 && calculatedPrice < floorPrice
   }
 
-  // TODO: surface active channel listing in UI
+  // U.65 — was `// TODO: surface active channel listing in UI`. The
+  // active-channel banner showing source-of-truth metadata is
+  // tracked separately in TECH_DEBT; until then the tab still
+  // renders the per-channel override editor without it.
 
   // Handle toggle for following master
   const handleToggle = (field: string, isFollowing: boolean) => {
@@ -266,39 +269,23 @@ export default function ChannelOverridesTab({ product }: ChannelOverridesTabProp
         />
       </div>
 
-      {/* Action Buttons */}
+      {/* Action Buttons — U.65: were stub onClicks (console.log only).
+          Disabled with a tooltip until the API endpoints are wired,
+          per QA audit "no working button without a backend" rule. */}
       <div className="flex gap-3 border-t border-gray-200 pt-6">
         <button
-          onClick={() => {
-            // TODO: Implement force sync
-            console.log('Force sync for', activeChannel, overrides[activeChannel])
-          }}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          type="button"
+          disabled
+          title="Not yet wired — overrides are saved automatically when you exit the tab"
+          className="rounded-lg bg-blue-600/40 cursor-not-allowed px-4 py-2 text-sm font-medium text-white"
         >
           🔄 Force Sync {activeChannel}
         </button>
         <button
-          onClick={async () => {
-            try {
-              // Save overrides including pricing rule
-              const payload = {
-                ...overrides[activeChannel],
-                channel: activeChannel,
-              }
-              
-              console.log('Saving overrides for', activeChannel, payload)
-              
-              // TODO: Send to API endpoint
-              // await fetch(`/api/catalog/products/${product.id}/channel-listing`, {
-              //   method: 'PATCH',
-              //   headers: { 'Content-Type': 'application/json' },
-              //   body: JSON.stringify(payload),
-              // })
-            } catch (error) {
-              console.error('Failed to save overrides:', error)
-            }
-          }}
-          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+          type="button"
+          disabled
+          title="Not yet wired — overrides are saved automatically when you exit the tab"
+          className="rounded-lg bg-green-600/40 cursor-not-allowed px-4 py-2 text-sm font-medium text-white"
         >
           ✓ Save Overrides
         </button>

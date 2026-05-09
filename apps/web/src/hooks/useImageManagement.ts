@@ -191,8 +191,7 @@ export function useImageManagement(productId: string): UseImageManagementReturn 
         throw new Error('Auto-assign failed')
       }
 
-      const data = await response.json()
-      console.log('Auto-assign result:', data)
+      await response.json()
 
       // Refresh images
       await fetchImages(productId)

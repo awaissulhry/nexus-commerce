@@ -278,16 +278,8 @@ function MasterCatalogTabComponent({
     logger.info('Master catalog changes saved', { sku: formData.sku, childCount: childProducts.length })
   }, [formData, childProducts, onUpdate])
 
-  // Nuclear debug logging
-  console.log("🔥 DEBUG MATRIX:", { isParent, childProducts: childProducts?.length || 0, actualIsParent })
-
   return (
     <div className="space-y-8">
-      {/* NUCLEAR DEBUG BANNER */}
-      <div className="bg-red-600 text-white p-4 font-bold text-xl mb-4 rounded">
-        DEBUG: MASTER CATALOG TAB IS RENDERED! Children count: {childProducts?.length || 0} | isParent Prop: {String(isParent)}
-      </div>
-
       {/* Variations (Parent/Child) Section */}
       <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-200">
         <div className="flex items-center justify-between mb-6">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useToast } from '@/components/ui/Toast';
 
 interface SyncTriggerButtonProps {
   onSyncStart?: (syncId: string) => void;
@@ -17,10 +18,13 @@ export function SyncTriggerButton({
 }: SyncTriggerButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
+  // U.64 — was console.log("In a real app, this would use a toast")
+  // — wired to the actual toast system that's already in place.
   const showNotification = (title: string, message: string, type: 'success' | 'error' = 'success') => {
-    console.log(`[${type.toUpperCase()}] ${title}: ${message}`);
-    // In a real app, this would use a toast notification system
+    if (type === 'error') toast.error(`${title}: ${message}`);
+    else toast.success(`${title}: ${message}`);
   };
 
   const handleSync = async () => {

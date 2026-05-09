@@ -9,9 +9,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    console.log('📤 [BULK ROUTE] Proxying request to backend');
-    console.log('📤 [BULK ROUTE] Payload:', JSON.stringify(body, null, 2));
-
     const response = await fetch('http://localhost:3001/api/catalog/products/bulk', {
       method: 'POST',
       headers: {
@@ -21,9 +18,6 @@ export async function POST(request: NextRequest) {
     })
 
     const data = await response.json()
-
-    console.log('📥 [BULK ROUTE] Response status:', response.status);
-    console.log('📥 [BULK ROUTE] Response data:', JSON.stringify(data, null, 2));
 
     return NextResponse.json(data, { status: response.status })
   } catch (error) {
