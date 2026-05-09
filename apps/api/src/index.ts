@@ -64,6 +64,7 @@ import listingContentRoutes from "./routes/listing-content.routes.js";
 import terminologyRoutes from "./routes/terminology.routes.js";
 import bulkOperationsRoutes from "./routes/bulk-operations.routes.js";
 import bulkActionTemplateRoutes from "./routes/bulk-action-templates.routes.js";
+import scheduledBulkActionRoutes from "./routes/scheduled-bulk-actions.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
@@ -91,6 +92,7 @@ import connectionsRoutes from "./routes/connections.routes.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
+import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
@@ -410,6 +412,7 @@ app.register(listingContentRoutes, { prefix: '/api' });
 app.register(terminologyRoutes, { prefix: '/api' });
 app.register(bulkOperationsRoutes, { prefix: '/api' });
 app.register(bulkActionTemplateRoutes, { prefix: '/api' });
+app.register(scheduledBulkActionRoutes, { prefix: '/api' });
 app.register(dashboardRoutes, { prefix: '/api' });
 app.register(pimRoutes, { prefix: '/api' });
 app.register(auditLogRoutes, { prefix: '/api' });
@@ -480,6 +483,11 @@ async function start() {
     // within an hour. Default-ON; the audit found a 3-day-old PENDING
     // job sitting on the active-jobs strip and confusing operators.
     startOrphanBulkJobCleanupCron();
+
+    // W6.2 — scheduled bulk-action tick. Fires every minute, fans
+    // out due ScheduledBulkAction rows into real BulkActionJob runs
+    // via BulkActionService.createJob.
+    startScheduledBulkActionCron();
 
     // W5.4 — seed built-in BulkActionTemplate rows. Idempotent —
     // keyed by (userId='__builtin', name) so re-running on every

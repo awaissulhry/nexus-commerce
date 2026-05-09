@@ -51,6 +51,7 @@ import { runLeadTimeStatsCronOnce } from './lead-time-stats.job.js'
 import { runCatalogRefresh } from './catalog-refresh.job.js'
 import { runObservabilityRetention } from './observability-retention.job.js'
 import { runOrphanBulkJobCleanupOnce } from './bulk-job-orphan-cleanup.job.js'
+import { runScheduledBulkActionCronOnce } from './scheduled-bulk-action.job.js'
 import { runAlertEvaluator } from '../services/alert-evaluator.service.js'
 import {
   runFxRefresh,
@@ -102,6 +103,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'catalog-refresh': () => runCatalogRefresh(),
   'observability-retention': () => runObservabilityRetention(),
   'bulk-job-orphan-cleanup': () => runOrphanBulkJobCleanupOnce(),
+  'scheduled-bulk-action': () => runScheduledBulkActionCronOnce(),
   'alert-evaluator': () => runAlertEvaluator(),
 
   // Multi-tick channels: pricing-refresh exposes 5 distinct ticks
