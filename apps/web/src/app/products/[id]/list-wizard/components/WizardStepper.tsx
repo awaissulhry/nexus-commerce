@@ -42,16 +42,87 @@ export default function WizardStepper({
   // announce 'current page' / 'current step' on focus. Step labels
   // are exposed via aria-label so the visual number is paired with
   // the human title.
+  //
+  // M.1 — mobile-first split. The 9-circle horizontal layout doesn't
+  // fit on a 375px viewport (~360px just for circles + connectors,
+  // leaving zero room for padding). Below md (640px) we render a
+  // compact "Step N of M: Title" strip + progress bar; the full
+  // tablist stays available on md+ for desktop power users.
+  const currentStepConfig = STEPS.find((s) => s.id === currentStep) ?? STEPS[0]
+  const completedCount = STEPS.filter(
+    (s) => completedSteps.has(s.id) || s.id < currentStep,
+  ).length
+  const progressPct = Math.min(
+    100,
+    Math.round((completedCount / STEPS.length) * 100),
+  )
+  const currentBlockers = blockerCounts?.[currentStep] ?? 0
   return (
-    <nav
-      aria-label={t('listWizard.stepper.aria.steps')}
-      className="flex items-center justify-center px-6 py-3 border-b border-slate-200 bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-950"
-    >
-      <ol
-        role="tablist"
-        aria-orientation="horizontal"
-        className="flex items-center gap-1 min-w-max"
+    <>
+      {/* M.1 — mobile compact stepper. Single row with current step
+          info + progress bar. Tap-area is 44px tall to satisfy
+          touch-target minimums. */}
+      <nav
+        aria-label={t('listWizard.stepper.aria.steps')}
+        className="md:hidden border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
       >
+        <div className="px-4 py-2 flex items-center gap-3">
+          <span
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-semibold flex-shrink-0 dark:bg-blue-500"
+            aria-current="step"
+          >
+            {currentStep}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
+              {t(stepTitleKey(currentStep))}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+              {t('listWizard.stepper.mobileProgress', {
+                current: currentStep,
+                total: STEPS.length,
+              })}
+              {currentBlockers > 0 && (
+                <span className="ml-1 text-rose-600 dark:text-rose-400">
+                  · {t(
+                    currentBlockers === 1
+                      ? 'listWizard.stepper.aria.blockerSuffixOne'
+                      : 'listWizard.stepper.aria.blockerSuffixOther',
+                    { n: currentBlockers },
+                  ).trim().replace(/^—\s*/, '')}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* Linear progress bar — sums completed + current-step
+            position. Mirrors the connector line tone on the desktop
+            stepper so a glance maps to the same visual state. */}
+        <div
+          className="h-0.5 w-full bg-slate-100 dark:bg-slate-800"
+          role="progressbar"
+          aria-valuenow={progressPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className="h-full bg-blue-600 dark:bg-blue-500 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </nav>
+
+      {/* Desktop tablist — unchanged from pre-M.1 except hidden below
+          md so the mobile strip above takes over. */}
+      <nav
+        aria-label={t('listWizard.stepper.aria.steps')}
+        className="hidden md:flex items-center justify-center px-6 py-3 border-b border-slate-200 bg-white overflow-x-auto dark:border-slate-800 dark:bg-slate-950"
+      >
+        <ol
+          role="tablist"
+          aria-orientation="horizontal"
+          className="flex items-center gap-1 min-w-max"
+        >
         {STEPS.map((step, idx) => {
           const isCurrent = step.id === currentStep
           const isCompleted = completedSteps.has(step.id)
@@ -172,7 +243,8 @@ export default function WizardStepper({
             </Fragment>
           )
         })}
-      </ol>
-    </nav>
+        </ol>
+      </nav>
+    </>
   )
 }

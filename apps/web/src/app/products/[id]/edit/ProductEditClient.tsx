@@ -28,6 +28,7 @@ import LocalesTab from './tabs/LocalesTab'
 import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import ComplianceTab from './tabs/ComplianceTab'
+import ImagesTab from './tabs/ImagesTab'
 import { cn } from '@/lib/utils'
 import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
 
@@ -302,6 +303,7 @@ export default function ProductEditClient({
   const tabKeys = useMemo<string[]>(() => {
     const base = [
       'master',
+      'images',
       'pricing',
       'inventory',
       'locales',
@@ -541,6 +543,13 @@ export default function ProductEditClient({
               {t('products.edit.tab.master')}
             </TopTabButton>
             <TopTabButton
+              tabKey="images"
+              active={topTab === 'images'}
+              onClick={() => goToTab('images')}
+            >
+              {t('products.edit.tab.images')}
+            </TopTabButton>
+            <TopTabButton
               tabKey="pricing"
               active={topTab === 'pricing'}
               onClick={() => goToTab('pricing')}
@@ -668,6 +677,16 @@ export default function ProductEditClient({
               product={product}
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('master', count)}
+            />
+          </div>
+        )}
+
+        {topTab === 'images' && (
+          <div role="tabpanel" id="panel-images" aria-labelledby="tab-images">
+            <ImagesTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('images', count)}
             />
           </div>
         )}

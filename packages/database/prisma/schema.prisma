@@ -1678,9 +1678,20 @@ model ProductImage {
   productId String
   url       String
   alt       String?
+  /// 'MAIN' | 'ALT' | 'LIFESTYLE' | 'SWATCH' | 'DIAGRAM'
   type      String // 'MAIN', 'ALT', 'LIFESTYLE'
+  /// W8.1 — display sort order; lower = earlier. MAIN is always 0.
+  /// Populated on creation; the PATCH /api/products/:id/images/reorder
+  /// endpoint writes a fresh contiguous sequence on drag-drop commit.
+  sortOrder Int      @default(0)
+  /// W8.1 — Cloudinary public_id so the delete endpoint can clean up
+  /// the asset from Cloudinary as well as the DB row. NULL for images
+  /// imported from external URLs (Amazon sync, URL paste).
+  publicId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([productId, sortOrder])
 }
 
 // (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.
@@ -3860,6 +3871,98 @@ model ScheduledImport {
   lastStatus   String?
   lastError    String?
   runCount     Int @default(0)
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, nextRunAt])
+}
+
+// ── W9 / Wave-9: Export wizard ────────────────────────────────────
+//
+// Counterpart to ImportJob. Operators export a slice of the catalog
+// (filtered, column-selected, format-chosen) for offline analysis,
+// supplier exchange, or feeds. Per-job rowCount + bytes + a
+// download URL so the W9.3 history page can show "what got
+// exported, when, by whom, link to download".
+model ExportJob {
+  id String @id @default(cuid())
+
+  jobName     String
+  description String?
+
+  /** csv | xlsx | json | pdf */
+  format       String
+  /** product | channelListing | inventory */
+  targetEntity String
+
+  /** [{ id, label, format? }] — operator-picked column-spec. */
+  columns Json @default("[]")
+  /** Same shape as BulkActionJob.filters. */
+  filters Json?
+
+  status String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+
+  rowCount Int @default(0)
+  bytes    Int @default(0)
+
+  /** Inline payload for small exports (<1 MB). Base64-encoded. */
+  artifactBase64 String?
+  artifactUrl    String?
+
+  errorMessage String?
+
+  scheduleId String?
+
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([scheduleId])
+}
+
+// ── W9.4: Scheduled exports ───────────────────────────────────────
+//
+// Recurring exports. Most common case: "supplier feed CSV pushed
+// to FTP / emailed every Monday 06:00". Same dispatch shape as
+// the other scheduled-* models: cron + scheduledFor + nextRunAt +
+// enabled toggle, plus delivery configuration.
+model ScheduledExport {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  format       String
+  targetEntity String
+
+  columns Json @default("[]")
+  filters Json?
+
+  /**
+   * Where the rendered export goes. 'email' (W9.4 logs to
+   * notification table; SMTP integration later), 'webhook' POSTs
+   * the bytes, 'ftp' deferred.
+   */
+  delivery       String  @default("email")
+  deliveryTarget String?
+
+  cronExpression String?
+  scheduledFor   DateTime?
+  timezone       String   @default("Europe/Rome")
+
+  nextRunAt DateTime?
+  enabled   Boolean   @default(true)
+
+  lastRunAt   DateTime?
+  lastJobId   String?
+  lastStatus  String?
+  lastError   String?
+  runCount    Int       @default(0)
 
   createdBy String?
   createdAt DateTime @default(now())

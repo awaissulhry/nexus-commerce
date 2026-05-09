@@ -99,3 +99,15 @@ export function uploadBufferToCloudinary(
     stream.end(buffer)
   })
 }
+
+/**
+ * Delete an asset from Cloudinary by its public_id.
+ * Returns true when the asset was found and deleted; false when it
+ * was already gone (result.result === 'not found'). Throws on network
+ * or auth errors so callers can decide whether to surface them.
+ */
+export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
+  ensureConfigured()
+  const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'image' })
+  return result.result === 'ok'
+}
