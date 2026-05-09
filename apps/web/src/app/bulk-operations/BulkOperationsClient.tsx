@@ -1,4 +1,4 @@
-// @ts-nocheck — U.53 BISECT 4: grid disabled, StatusBar + modals rendered
+// @ts-nocheck — U.54 BISECT 5: StatusBar + first 4 modals only
 'use client'
 
 import {
@@ -3474,9 +3474,10 @@ export default function BulkOperationsClient() {
           </div>
         </div>
       </div>
-      {/* U.53 (BISECT 4) — grid stubbed; StatusBar + 7 modals rendered. */}
+      {/* U.54 (BISECT 5) — render StatusBar + first 4 modals only.
+          Skip CascadeChoiceModal, NewProductModal, ReplicateModal. */}
       <div className="p-4 text-base text-slate-500">
-        BISECT 4 — JSX grid (virtualizer + TableRow) disabled. StatusBar + modals enabled.
+        BISECT 5 — grid + last 3 modals (Cascade/New/Replicate) disabled.
       </div>
       <StatusBar
         status={saveStatus}
@@ -3557,58 +3558,6 @@ export default function BulkOperationsClient() {
         })()}
       />
 
-      <CascadeChoiceModal
-        open={cascadeModal !== null}
-        fieldLabel={cascadeModal?.fieldLabel ?? ''}
-        oldValue={cascadeModal?.oldValue}
-        newValue={cascadeModal?.newValue}
-        parentSku={cascadeModal?.parentSku ?? ''}
-        children={cascadeModal?.children ?? []}
-        onApply={handleCascadeApply}
-        onCancel={handleCascadeCancel}
-      />
-
-      <NewProductModal
-        open={newProductOpen}
-        onClose={() => setNewProductOpen(false)}
-        onCreated={() => {
-          // Re-fetch so the new row appears with all the standard
-          // fields the bulk-fetch endpoint hydrates (channel listings,
-          // hierarchy, etc.) — simpler than building that shape locally.
-          void reloadProducts()
-        }}
-        parentCandidates={products
-          .filter((p) => !p.parentId)
-          .map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
-      />
-
-      <ReplicateModal
-        open={replicateOpen}
-        onClose={() => setReplicateOpen(false)}
-        productIds={(() => {
-          // Scope: prefer selected rows when the cell selection
-          // covers >1 row, else fall through to filtered (visible).
-          if (rangeBounds && rangeBounds.maxRow > rangeBounds.minRow) {
-            const ids: string[] = []
-            const rowModel = tableRef.current.getRowModel().rows
-            for (let r = rangeBounds.minRow; r <= rangeBounds.maxRow; r++) {
-              const row = rowModel[r]
-              if (row) ids.push(row.original.id)
-            }
-            return ids
-          }
-          return filteredProducts.map((p) => p.id)
-        })()}
-        scopeLabel={
-          rangeBounds && rangeBounds.maxRow > rangeBounds.minRow
-            ? 'selected rows'
-            : 'visible rows'
-        }
-        options={marketplaceOptions}
-        onReplicated={() => {
-          void reloadProducts()
-        }}
-      />
     </div>
   )
 }
