@@ -68,6 +68,7 @@ import {
   getRequestId,
   getRequestSource,
 } from '../utils/request-context.js'
+import { logTraceEvent } from '../utils/trace-log.js'
 
 type Channel =
   | 'AMAZON'
@@ -266,6 +267,24 @@ export async function recordApiCall<T>(
         },
         select: { id: true, createdAt: true },
       })
+      // L.21.0 — emit structured trace event to stdout (gated on
+      // NEXUS_TRACE_LOG=1). Format follows OTel span semantic
+      // conventions so a stdout-ingesting collector picks it up.
+      logTraceEvent({
+        spanName: `${ctx.channel.toLowerCase()}.${ctx.operation}`,
+        spanKind: 'client',
+        status: success ? 'ok' : 'error',
+        durationMs: latencyMs,
+        attributes: {
+          channel: ctx.channel,
+          operation: ctx.operation,
+          marketplace: ctx.marketplace ?? null,
+          'http.status_code': statusCode,
+          'error.type': errorType ?? null,
+          'error.code': errorCode ?? null,
+        },
+      })
+
       // L.7.0 — broadcast to the in-process event bus so SSE
       // subscribers (the hub's live tail) receive a slim row.
       publishSyncLogEvent({

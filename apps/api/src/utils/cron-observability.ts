@@ -22,6 +22,7 @@
 import prisma from '../db.js'
 import { logger } from './logger.js'
 import { newTickId, runWithRequestId } from './request-context.js'
+import { logTraceEvent } from './trace-log.js'
 
 export interface CronRunOptions {
   triggeredBy?: 'cron' | 'manual'
@@ -78,6 +79,7 @@ async function runCronRunInner<T extends CronHandlerResult>(
     })
   }
 
+  const startMs = Date.now()
   try {
     const result = await handler()
     const summary =
@@ -104,6 +106,20 @@ async function runCronRunInner<T extends CronHandlerResult>(
         })
       }
     }
+    // L.21.0 — emit a trace event for the cron tick. Same structured
+    // shape as outbound API calls so a downstream collector groups
+    // the cron tick + every API call inside it under the same
+    // request-id (set by runWithRequestId at the top of recordCronRun).
+    logTraceEvent({
+      spanName: `cron.${jobName}`,
+      spanKind: 'internal',
+      status: 'ok',
+      durationMs: Date.now() - startMs,
+      attributes: {
+        'cron.jobName': jobName,
+        'cron.summary': typeof summary === 'string' ? summary : null,
+      },
+    })
     return result
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err)
@@ -125,6 +141,16 @@ async function runCronRunInner<T extends CronHandlerResult>(
         })
       }
     }
+    logTraceEvent({
+      spanName: `cron.${jobName}`,
+      spanKind: 'internal',
+      status: 'error',
+      durationMs: Date.now() - startMs,
+      attributes: {
+        'cron.jobName': jobName,
+        'error.message': errorMessage.slice(0, 200),
+      },
+    })
     throw err
   }
 }
