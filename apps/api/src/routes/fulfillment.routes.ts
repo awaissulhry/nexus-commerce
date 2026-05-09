@@ -8614,6 +8614,113 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // W8.4 — Per-SKU forecast bias. Closes the audit's
+  // "bias detection + correction" causal-factor gap. The R.1
+  // ForecastAccuracy table stores signed percentError per
+  // (sku, channel, marketplace, day) — averaging that gives the
+  // operator a "this SKU is consistently over/underforecasted"
+  // signal that the MAPE summary on the workspace doesn't expose.
+  //
+  //   bias > 0  forecast > actual  → overforecasting (orders too
+  //                                  much; risks overstock)
+  //   bias < 0  forecast < actual  → underforecasting (orders too
+  //                                  little; risks stockout)
+  //
+  // Pure read — no correction is applied. Surfacing the bias is
+  // step 1; an operator-applied multiplier (W8.4b) updates the
+  // recommendation engine when configured.
+  //
+  // Default scope: last 30d, min 5 samples per SKU. Sorted by
+  // absolute bias desc so the most miscalibrated SKUs surface
+  // first.
+  fastify.get(
+    '/fulfillment/replenishment/forecast-bias',
+    async (request, reply) => {
+      const q = (request.query ?? {}) as {
+        windowDays?: string
+        minSamples?: string
+        limit?: string
+      }
+      const window = Math.max(
+        7,
+        Math.min(parseInt(q.windowDays ?? '30', 10) || 30, 365),
+      )
+      const minSamples = Math.max(
+        1,
+        Math.min(parseInt(q.minSamples ?? '5', 10) || 5, 90),
+      )
+      const limit = Math.max(
+        1,
+        Math.min(parseInt(q.limit ?? '50', 10) || 50, 500),
+      )
+
+      const cutoff = new Date()
+      cutoff.setUTCDate(cutoff.getUTCDate() - window)
+      cutoff.setUTCHours(0, 0, 0, 0)
+
+      const rows = await prisma.$queryRaw<
+        Array<{
+          sku: string
+          samples: bigint
+          mean_pct_error: number | null
+          mean_abs_pct_error: number | null
+          within_band: bigint
+          last_day: Date | null
+        }>
+      >`
+        SELECT
+          sku,
+          count(*)::bigint AS samples,
+          AVG("percentError")::float AS mean_pct_error,
+          AVG(ABS("percentError"))::float AS mean_abs_pct_error,
+          count(*) FILTER (WHERE "withinBand" = true)::bigint AS within_band,
+          MAX(day) AS last_day
+        FROM "ForecastAccuracy"
+        WHERE day >= ${cutoff}::date
+          AND "percentError" IS NOT NULL
+        GROUP BY sku
+        HAVING count(*) >= ${minSamples}
+        ORDER BY ABS(AVG("percentError")) DESC NULLS LAST
+        LIMIT ${limit}
+      `
+
+      const results = rows.map((r) => {
+        const samples = Number(r.samples ?? 0)
+        const within = Number(r.within_band ?? 0)
+        const meanPct = r.mean_pct_error ?? 0
+        return {
+          sku: r.sku,
+          samples,
+          biasPercent: Number(meanPct.toFixed(2)),
+          mapePercent:
+            r.mean_abs_pct_error != null
+              ? Number(r.mean_abs_pct_error.toFixed(2))
+              : null,
+          withinBandRate: samples > 0 ? Number((within / samples).toFixed(3)) : null,
+          direction:
+            meanPct > 5
+              ? ('OVERFORECAST' as const)
+              : meanPct < -5
+                ? ('UNDERFORECAST' as const)
+                : ('CALIBRATED' as const),
+          lastEvaluatedDay: r.last_day,
+        }
+      })
+
+      reply.header('Cache-Control', 'private, max-age=60')
+      return {
+        params: { windowDays: window, minSamples, limit },
+        totals: {
+          skusEvaluated: results.length,
+          overforecast: results.filter((r) => r.direction === 'OVERFORECAST').length,
+          underforecast: results.filter((r) => r.direction === 'UNDERFORECAST').length,
+          calibrated: results.filter((r) => r.direction === 'CALIBRATED').length,
+        },
+        skus: results,
+      }
+    },
+  )
+
   // W7.4 — New-listing demand estimator. Cold-start helper: a
   // freshly-published SKU with zero sales history gets estimated
   // demand by averaging the first-N-day velocity of comparables
