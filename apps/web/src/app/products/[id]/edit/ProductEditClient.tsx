@@ -21,6 +21,7 @@ import ActivityTab from './tabs/ActivityTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
 import InventoryTab from './tabs/InventoryTab'
+import LocalesTab from './tabs/LocalesTab'
 import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import { cn } from '@/lib/utils'
@@ -267,6 +268,12 @@ export default function ProductEditClient({
               {t('products.edit.tab.inventory')}
             </TopTabButton>
             <TopTabButton
+              active={topTab === 'locales'}
+              onClick={() => setTopTab('locales')}
+            >
+              {t('products.edit.tab.locales')}
+            </TopTabButton>
+            <TopTabButton
               active={topTab === 'workflow'}
               onClick={() => setTopTab('workflow')}
             >
@@ -365,6 +372,14 @@ export default function ProductEditClient({
             product={product}
             discardSignal={discardSignal}
             onDirtyChange={(count) => setTabDirty('inventory', count)}
+          />
+        )}
+
+        {topTab === 'locales' && (
+          <LocalesTab
+            product={product}
+            discardSignal={discardSignal}
+            onDirtyChange={(count) => setTabDirty('locales', count)}
           />
         )}
 
