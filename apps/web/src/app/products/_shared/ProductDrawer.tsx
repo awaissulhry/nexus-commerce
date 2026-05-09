@@ -1367,6 +1367,7 @@ function ListingsTab({
    *  the row's status pill flips to PENDING. */
   onChanged: () => void
 }) {
+  const { t } = useTranslations()
   const grouped = useMemo(() => {
     const map = new Map<string, typeof listings>()
     for (const l of listings) {
@@ -1464,9 +1465,9 @@ function ListingsTab({
     return (
       <div className="px-5 py-10 text-center text-base text-slate-500">
         <Boxes className="w-6 h-6 mx-auto text-slate-300 mb-2" />
-        No listings yet.
-        <div className="text-sm text-slate-400 mt-1">
-          Use the listing wizard to publish this product.
+        {t('products.drawer.listings.empty')}
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {t('products.drawer.listings.emptyHint')}
         </div>
       </div>
     )
@@ -1483,10 +1484,10 @@ function ListingsTab({
             <table className="w-full text-base">
               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-3 py-1.5 text-left">Market</th>
-                  <th className="px-3 py-1.5 text-left">Status</th>
-                  <th className="px-3 py-1.5 text-right">Price</th>
-                  <th className="px-3 py-1.5 text-right">Qty</th>
+                  <th className="px-3 py-1.5 text-left">{t('products.drawer.listings.col.market')}</th>
+                  <th className="px-3 py-1.5 text-left">{t('products.drawer.listings.col.status')}</th>
+                  <th className="px-3 py-1.5 text-right">{t('products.drawer.listings.col.price')}</th>
+                  <th className="px-3 py-1.5 text-right">{t('products.drawer.listings.col.qty')}</th>
                   <th className="px-3 py-1.5" />
                 </tr>
               </thead>
@@ -1540,13 +1541,19 @@ function ListingsTab({
                           className="ml-1 inline-flex items-center h-5 px-1.5 rounded text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200"
                           title={
                             priceDrift && qtyDrift
-                              ? 'Both price and quantity differ from the master snapshot'
+                              ? t('products.drawer.listings.driftTitle.both')
                               : priceDrift
-                              ? `Listing price €${Number(l.price).toFixed(2)} differs from master €${Number(l.masterPrice).toFixed(2)} (followMasterPrice=false)`
-                              : `Listing qty ${l.quantity} differs from master ${l.masterQuantity} (followMasterQuantity=false)`
+                              ? t('products.drawer.listings.driftTitle.price', {
+                                  price: Number(l.price).toFixed(2),
+                                  master: Number(l.masterPrice).toFixed(2),
+                                })
+                              : t('products.drawer.listings.driftTitle.qty', {
+                                  qty: l.quantity ?? 0,
+                                  master: l.masterQuantity ?? 0,
+                                })
                           }
                         >
-                          DRIFT
+                          {t('products.drawer.listings.drift')}
                         </span>
                       )}
                       {/* P.12 — OVERRIDE pill. Shows whenever any
@@ -1561,13 +1568,13 @@ function ListingsTab({
                           title={
                             l.followMasterPrice === false &&
                             l.followMasterQuantity === false
-                              ? 'Price + quantity overridden (manual values; happen to match master)'
+                              ? t('products.drawer.listings.overrideTitle.both')
                               : l.followMasterPrice === false
-                              ? 'Price overridden (manual value; happens to match master)'
-                              : 'Quantity overridden (manual value; happens to match master)'
+                              ? t('products.drawer.listings.overrideTitle.price')
+                              : t('products.drawer.listings.overrideTitle.qty')
                           }
                         >
-                          OVERRIDE
+                          {t('products.drawer.listings.override')}
                         </span>
                       )}
                       {/* P.11 — last sync timestamp + error visibility.
@@ -1576,8 +1583,8 @@ function ListingsTab({
                           open the dedicated /listings/<id> page. */}
                       <div className="text-xs text-slate-500 mt-1">
                         {l.lastSyncedAt
-                          ? `Synced ${new Date(l.lastSyncedAt).toLocaleString()}`
-                          : 'Not yet synced'}
+                          ? t('products.drawer.listings.synced', { when: new Date(l.lastSyncedAt).toLocaleString() })
+                          : t('products.drawer.listings.notSynced')}
                       </div>
                       {l.lastSyncError && l.lastSyncStatus === 'FAILED' && (
                         <div
@@ -1592,7 +1599,7 @@ function ListingsTab({
                       {l.price != null ? `€${Number(l.price).toFixed(2)}` : '—'}
                       {priceDrift && (
                         <div className="text-xs text-amber-700 mt-0.5">
-                          master €{Number(l.masterPrice).toFixed(2)}
+                          {t('products.drawer.listings.masterPrice', { price: Number(l.masterPrice).toFixed(2) })}
                         </div>
                       )}
                     </td>
@@ -1600,7 +1607,7 @@ function ListingsTab({
                       {l.quantity ?? '—'}
                       {qtyDrift && (
                         <div className="text-xs text-amber-700 mt-0.5">
-                          master {l.masterQuantity}
+                          {t('products.drawer.listings.masterQty', { qty: l.masterQuantity ?? 0 })}
                         </div>
                       )}
                     </td>
@@ -1616,7 +1623,7 @@ function ListingsTab({
                           type="button"
                           onClick={() => resync(l.id)}
                           disabled={isResyncing}
-                          title="Re-queue this listing for the next sync tick"
+                          title={t('products.drawer.listings.resyncTitle')}
                           className="text-sm text-slate-500 hover:text-blue-700 disabled:opacity-50 inline-flex items-center gap-0.5"
                         >
                           {isResyncing ? (
@@ -1624,7 +1631,9 @@ function ListingsTab({
                           ) : (
                             <RefreshCw className="w-3 h-3" />
                           )}
-                          {isResyncing ? 'Queuing…' : 'Sync now'}
+                          {isResyncing
+                            ? t('products.drawer.listings.queuing')
+                            : t('products.drawer.listings.syncNow')}
                         </button>
                         {/* P.12 — Snap to master. Only shown when the
                             listing has at least one active override.
@@ -1640,20 +1649,22 @@ function ListingsTab({
                             type="button"
                             onClick={() => snapToMaster(l.id)}
                             disabled={isSnapping}
-                            title="Re-enable follow-master for every field. Next sync resets local values to master."
+                            title={t('products.drawer.listings.snapTitle')}
                             className="text-sm text-amber-700 hover:text-amber-900 disabled:opacity-50 inline-flex items-center gap-0.5"
                           >
                             {isSnapping ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
                             ) : null}
-                            {isSnapping ? 'Snapping…' : 'Snap to master'}
+                            {isSnapping
+                              ? t('products.drawer.listings.snapping')
+                              : t('products.drawer.listings.snap')}
                           </button>
                         )}
                         <Link
                           href={`/listings/${l.id}`}
                           className="text-sm text-blue-700 hover:underline inline-flex items-center gap-0.5"
                         >
-                          Open <ChevronRight className="w-3 h-3" />
+                          {t('products.drawer.listings.open')} <ChevronRight className="w-3 h-3" />
                         </Link>
                       </div>
                       {cellResyncErr && (
@@ -1686,6 +1697,7 @@ function ListingStatusBadge({
   listingStatus: string
   lastSyncStatus: string | null
 }) {
+  const { t } = useTranslations()
   const failed = lastSyncStatus === 'FAILED'
   const tone = failed
     ? 'bg-rose-50 text-rose-700'
@@ -1701,7 +1713,7 @@ function ListingStatusBadge({
         tone,
       )}
     >
-      {failed ? 'SYNC FAILED' : listingStatus}
+      {failed ? t('products.drawer.listings.syncFailed') : listingStatus}
     </span>
   )
 }
