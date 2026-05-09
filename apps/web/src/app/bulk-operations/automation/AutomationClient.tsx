@@ -123,6 +123,64 @@ export default function AutomationClient() {
   } | null>(null)
   const [testing, setTesting] = useState(false)
 
+  // W7.6 — saved-rule dry-run state. Hits the :id/dry-run endpoint
+  // (which actually runs the action handlers in preview mode) and
+  // shows their output (substitutedPayload, wouldPause counts, etc.)
+  // so operators see exactly what WOULD have happened without any
+  // writes touching the DB / external services.
+  const [contextJson, setContextJson] = useState<string>(
+    '{\n  "job": { "failureRate": 0.3, "totalItems": 200, "status": "FAILED" }\n}',
+  )
+  const [contextError, setContextError] = useState<string | null>(null)
+  const [dryRunResult, setDryRunResult] = useState<{
+    matched: boolean
+    status: string
+    actionResults: Array<{
+      type: string
+      ok: boolean
+      output?: unknown
+      error?: string
+    }>
+  } | null>(null)
+  const [dryRunBusy, setDryRunBusy] = useState(false)
+
+  const runSavedDryRun = async () => {
+    if (!editingId) return
+    let parsedCtx: unknown = {}
+    try {
+      parsedCtx = contextJson.trim() ? JSON.parse(contextJson) : {}
+      setContextError(null)
+    } catch (err) {
+      setContextError(
+        err instanceof Error ? err.message : 'Invalid JSON',
+      )
+      return
+    }
+    setDryRunBusy(true)
+    setDryRunResult(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-automation-rules/${editingId}/dry-run`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ context: parsedCtx }),
+        },
+      )
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`)
+      setDryRunResult({
+        matched: j.result?.matched ?? false,
+        status: j.result?.status ?? 'UNKNOWN',
+        actionResults: j.result?.actionResults ?? [],
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDryRunBusy(false)
+    }
+  }
+
   const fetchRules = useCallback(async () => {
     try {
       const res = await fetch(
@@ -651,6 +709,96 @@ export default function AutomationClient() {
             />
           </label>
         </section>
+
+        {/* W7.6 — saved-rule dry-run panel. Available once the rule
+            has an id (i.e. it's been saved at least once); operators
+            paste a sample context JSON, click Run dry-run, and see
+            what each action handler WOULD do. */}
+        {editingId && (
+          <section className="border border-purple-200 dark:border-purple-900 bg-purple-50/30 dark:bg-purple-950/20 rounded p-2 space-y-1.5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300 inline-flex items-center gap-1.5">
+              <TestTube className="w-3 h-3" />
+              5. Dry-run preview
+            </div>
+            <label className="block">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5 block">
+                Sample context (JSON)
+              </span>
+              <textarea
+                value={contextJson}
+                onChange={(e) => setContextJson(e.target.value)}
+                rows={5}
+                className="w-full font-mono text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 dark:bg-slate-900 rounded outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+            {contextError && (
+              <div className="text-xs text-red-700 dark:text-red-300">
+                JSON parse error: {contextError}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={runSavedDryRun}
+                disabled={dryRunBusy}
+                loading={dryRunBusy}
+              >
+                <TestTube className="w-3 h-3 mr-1" />
+                Run dry-run
+              </Button>
+              {dryRunResult && (
+                <span
+                  className={cn(
+                    'text-xs',
+                    dryRunResult.matched
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-slate-500',
+                  )}
+                >
+                  {dryRunResult.matched
+                    ? `matched (${dryRunResult.status}) · ${dryRunResult.actionResults.length} action${dryRunResult.actionResults.length === 1 ? '' : 's'}`
+                    : `no match (${dryRunResult.status})`}
+                </span>
+              )}
+            </div>
+            {dryRunResult && dryRunResult.actionResults.length > 0 && (
+              <div className="space-y-1">
+                {dryRunResult.actionResults.map((a, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'text-xs border rounded p-1.5',
+                      a.ok
+                        ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20'
+                        : 'border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20',
+                    )}
+                  >
+                    <div className="font-mono font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-1">
+                      <span
+                        className={cn(
+                          'h-1.5 w-1.5 rounded-full',
+                          a.ok ? 'bg-emerald-500' : 'bg-red-500',
+                        )}
+                      />
+                      {a.type}
+                    </div>
+                    {a.error && (
+                      <div className="text-red-700 dark:text-red-300 mt-0.5">
+                        {a.error}
+                      </div>
+                    )}
+                    {a.output !== undefined && (
+                      <pre className="mt-0.5 text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono overflow-x-auto">
+                        {JSON.stringify(a.output, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between">
