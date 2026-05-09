@@ -1,10 +1,12 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import DamClient, { type AssetRow } from './DamClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DamSettingsPage() {
+  const t = await getServerT()
   const backend = getBackendUrl()
   let initial: AssetRow[] = []
   let nextCursor: string | null = null
@@ -30,8 +32,8 @@ export default async function DamSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Asset library"
-        subtitle="Plytix-style DAM. Reusable images / videos / documents the catalog references via AssetUsage rows. Upload integration with Cloudinary lands separately — for now, this page browses existing assets + the products they're attached to."
+        title={t('pim.dam.title')}
+        subtitle={t('pim.dam.subtitle')}
         breadcrumbs={[
           { label: 'Settings', href: '/settings/account' },
           { label: 'DAM' },

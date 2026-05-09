@@ -2147,5 +2147,20 @@
   "pim.workflows.create.col.publish": "Publish",
   "pim.workflows.create.stagesHint": "Exactly one stage must be marked Initial. At most one Terminal. Publish is a UI hint — the workflow does NOT mutate Product.status; you flip status to ACTIVE manually after the operator confirms.",
   "pim.workflows.create.cancel": "Cancel",
-  "pim.workflows.create.submit": "Create workflow"
+  "pim.workflows.create.submit": "Create workflow",
+  "pim.dam.title": "Asset library",
+  "pim.dam.subtitle": "Plytix-style DAM. Reusable images / videos / documents the catalog references via AssetUsage rows. Upload integration with Cloudinary lands separately — for now, this page browses existing assets + the products they're attached to.",
+  "pim.dam.search.placeholder": "Search label / code / filename",
+  "pim.dam.filter.allTypes": "All types",
+  "pim.dam.shown.one": "{count} shown",
+  "pim.dam.shown.other": "{count} shown",
+  "pim.dam.shown.more": "{count} shown — more available",
+  "pim.dam.empty.title": "No assets found.",
+  "pim.dam.empty.body": "Cloudinary uploads will start populating the library once W4.11b wires the upload flow into DigitalAsset creation. Until then, assets are created via API only.",
+  "pim.dam.loadMore": "Load 50 more",
+  "pim.dam.useBadge.one": "{count} use",
+  "pim.dam.useBadge.other": "{count} uses",
+  "pim.dam.delete.aria": "Delete {label}",
+  "pim.dam.delete.title": "Delete asset \"{label}\"?",
+  "pim.dam.delete.confirmLabel": "Delete"
 }

@@ -2135,5 +2135,20 @@
   "pim.workflows.create.col.publish": "Pubblica",
   "pim.workflows.create.stagesHint": "Esattamente una fase deve essere marcata Iniziale. Al massimo una Terminale. Pubblica è un suggerimento UI — il workflow NON muta Product.status; tu cambi manualmente lo stato a ACTIVE dopo conferma dell'operatore.",
   "pim.workflows.create.cancel": "Annulla",
-  "pim.workflows.create.submit": "Crea workflow"
+  "pim.workflows.create.submit": "Crea workflow",
+  "pim.dam.title": "Libreria asset",
+  "pim.dam.subtitle": "DAM in stile Plytix. Immagini / video / documenti riutilizzabili che il catalogo referenzia tramite righe AssetUsage. L'integrazione upload con Cloudinary arriva separatamente — per ora questa pagina permette di sfogliare gli asset esistenti e i prodotti a cui sono collegati.",
+  "pim.dam.search.placeholder": "Cerca per etichetta / codice / nome file",
+  "pim.dam.filter.allTypes": "Tutti i tipi",
+  "pim.dam.shown.one": "{count} mostrato",
+  "pim.dam.shown.other": "{count} mostrati",
+  "pim.dam.shown.more": "{count} mostrati — altri disponibili",
+  "pim.dam.empty.title": "Nessun asset trovato.",
+  "pim.dam.empty.body": "Gli upload Cloudinary inizieranno a popolare la libreria una volta che W4.11b collegherà il flusso di upload alla creazione DigitalAsset. Fino ad allora, gli asset si creano solo via API.",
+  "pim.dam.loadMore": "Carica altri 50",
+  "pim.dam.useBadge.one": "{count} uso",
+  "pim.dam.useBadge.other": "{count} usi",
+  "pim.dam.delete.aria": "Elimina {label}",
+  "pim.dam.delete.title": "Eliminare l'asset \"{label}\"?",
+  "pim.dam.delete.confirmLabel": "Elimina"
 }

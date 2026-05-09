@@ -34,6 +34,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -101,6 +102,7 @@ export default function DamClient({
   const [openDetailId, setOpenDetailId] = useState<string | null>(null)
   const confirm = useConfirm()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   // Refresh on filter change.
   const refresh = useCallback(async () => {
@@ -210,7 +212,7 @@ export default function DamClient({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search label / code / filename"
+            placeholder={t('pim.dam.search.placeholder')}
             className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 w-72"
           />
         </div>
@@ -219,14 +221,21 @@ export default function DamClient({
           onChange={(e) => setTypeFilter(e.target.value)}
           className="h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
         >
-          {TYPE_OPTIONS.map((t) => (
-            <option key={t} value={t}>
-              {t === '' ? 'All types' : t}
+          {TYPE_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt === '' ? t('pim.dam.filter.allTypes') : opt}
             </option>
           ))}
         </select>
         <div className="ml-auto text-sm text-slate-500 dark:text-slate-400">
-          {assets.length} shown{cursor ? ' — more available' : ''}
+          {t(
+            cursor
+              ? 'pim.dam.shown.more'
+              : assets.length === 1
+                ? 'pim.dam.shown.one'
+                : 'pim.dam.shown.other',
+            { count: assets.length },
+          )}
         </div>
       </div>
 
@@ -235,12 +244,10 @@ export default function DamClient({
         <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 text-center">
           <ImageIcon className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
           <div className="text-md text-slate-700 dark:text-slate-300">
-            No assets found.
+            {t('pim.dam.empty.title')}
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-            Cloudinary uploads will start populating the library once W4.11b
-            wires the upload flow into DigitalAsset creation. Until then,
-            assets are created via API only.
+            {t('pim.dam.empty.body')}
           </div>
         </div>
       ) : (
@@ -265,7 +272,7 @@ export default function DamClient({
             disabled={loadingMore}
             loading={loadingMore}
           >
-            Load 50 more
+            {t('pim.dam.loadMore')}
           </Button>
         </div>
       )}
