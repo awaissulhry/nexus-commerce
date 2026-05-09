@@ -284,11 +284,11 @@ function buildAdjustmentPayload(
   }
 }
 
-// S.18 — saved views. Capture the operator's current configuration
-// (filters + view mode + density + visible columns) under a name so
-// it can be restored in one click. localStorage-scoped — one
-// operator per browser today; multi-user persistence becomes a
-// schema-backed table later (Wave 4+).
+// S.18 — saved views. T.28 — server-side persistence via the shared
+// SavedView model (surface='stock'). Multi-user warehouse staff can
+// create + share the same set of views from any browser. localStorage
+// is preserved as a one-shot bootstrap so existing single-user views
+// import on first run.
 type SavedView = {
   id: string
   name: string
@@ -299,9 +299,30 @@ type SavedView = {
   density: Density
   visibleColumns: ColumnKey[]
 }
+type SavedViewApiRow = {
+  id: string
+  name: string
+  filters: Partial<Omit<SavedView, 'id' | 'name'>>
+}
 const SAVED_VIEWS_STORAGE_KEY = 'stock.savedViews'
+const SAVED_VIEWS_BOOTSTRAP_KEY = 'stock.savedViews.bootstrapped'
 
-function readSavedViews(): SavedView[] {
+function fromApiRow(row: SavedViewApiRow): SavedView | null {
+  const f = row.filters ?? {}
+  if (!row.id || !row.name) return null
+  return {
+    id: row.id,
+    name: row.name,
+    view: (f.view as ViewMode) ?? 'table',
+    location: f.location ?? 'all',
+    status: f.status ?? 'all',
+    search: f.search ?? '',
+    density: (f.density as Density) ?? 'comfortable',
+    visibleColumns: Array.isArray(f.visibleColumns) ? (f.visibleColumns as ColumnKey[]) : [],
+  }
+}
+
+function readLegacyLocalViews(): SavedView[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY)
@@ -318,13 +339,75 @@ function readSavedViews(): SavedView[] {
   }
 }
 
-function writeSavedViews(views: SavedView[]): void {
-  if (typeof window === 'undefined') return
+async function fetchSavedViews(): Promise<SavedView[]> {
   try {
-    window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(views))
+    const res = await fetch(`${getBackendUrl()}/api/saved-views?surface=stock`, { cache: 'no-store' })
+    if (!res.ok) return []
+    const body = await res.json() as { items?: SavedViewApiRow[] }
+    return (body.items ?? []).map(fromApiRow).filter((v): v is SavedView => v != null)
   } catch {
-    // Quota / private mode — silently drop. Saved views are convenience.
+    return []
   }
+}
+
+async function createSavedView(view: Omit<SavedView, 'id'>): Promise<SavedView | null> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/saved-views`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: view.name,
+        surface: 'stock',
+        filters: {
+          view: view.view,
+          location: view.location,
+          status: view.status,
+          search: view.search,
+          density: view.density,
+          visibleColumns: view.visibleColumns,
+        },
+      }),
+    })
+    if (!res.ok) return null
+    const row = await res.json() as SavedViewApiRow
+    return fromApiRow(row)
+  } catch {
+    return null
+  }
+}
+
+async function deleteSavedViewApi(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${getBackendUrl()}/api/saved-views/${id}`, { method: 'DELETE' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** One-shot import: if the user has localStorage views and we haven't
+ *  bootstrapped yet, POST each view to the API once and mark the flag. */
+async function bootstrapLegacyLocalViewsIfNeeded(): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (window.localStorage.getItem(SAVED_VIEWS_BOOTSTRAP_KEY)) return
+  const legacy = readLegacyLocalViews()
+  if (legacy.length === 0) {
+    window.localStorage.setItem(SAVED_VIEWS_BOOTSTRAP_KEY, '1')
+    return
+  }
+  for (const v of legacy) {
+    await createSavedView({
+      name: v.name,
+      view: v.view,
+      location: v.location,
+      status: v.status,
+      search: v.search,
+      density: v.density,
+      visibleColumns: v.visibleColumns,
+    })
+  }
+  window.localStorage.removeItem(SAVED_VIEWS_STORAGE_KEY)
+  window.localStorage.setItem(SAVED_VIEWS_BOOTSTRAP_KEY, '1')
 }
 
 // S.16 — small Pareto-band chip rendered next to the product name on
@@ -404,7 +487,15 @@ export default function StockWorkspace() {
   const [savedViewsOpen, setSavedViewsOpen] = useState(false)
   const [saveViewName, setSaveViewName] = useState('')
   const [saveViewModalOpen, setSaveViewModalOpen] = useState(false)
-  useEffect(() => { setSavedViews(readSavedViews()) }, [])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      await bootstrapLegacyLocalViewsIfNeeded()
+      const rows = await fetchSavedViews()
+      if (!cancelled) setSavedViews(rows)
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   // Bulk-selection state. Set of StockLevel ids. Only used in table view —
   // matrix and cards address products directly so per-row selection is
@@ -757,11 +848,10 @@ export default function StockWorkspace() {
     setSavedViewsOpen(false)
   }, [pathname, router])
 
-  const saveCurrentAsView = useCallback(() => {
+  const saveCurrentAsView = useCallback(async () => {
     const trimmed = saveViewName.trim()
     if (!trimmed) return
-    const v: SavedView = {
-      id: `view_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    const created = await createSavedView({
       name: trimmed,
       view,
       location: locationCode,
@@ -769,20 +859,21 @@ export default function StockWorkspace() {
       search,
       density,
       visibleColumns,
+    })
+    if (created) {
+      setSavedViews((prev) => [...prev, created])
     }
-    const next = [...savedViews, v]
-    setSavedViews(next)
-    writeSavedViews(next)
     setSaveViewModalOpen(false)
     setSaveViewName('')
     setSavedViewsOpen(false)
-  }, [saveViewName, view, locationCode, status, search, density, visibleColumns, savedViews])
+  }, [saveViewName, view, locationCode, status, search, density, visibleColumns])
 
-  const deleteSavedView = useCallback((id: string) => {
-    const next = savedViews.filter((v) => v.id !== id)
-    setSavedViews(next)
-    writeSavedViews(next)
-  }, [savedViews])
+  const deleteSavedView = useCallback(async (id: string) => {
+    const ok = await deleteSavedViewApi(id)
+    if (ok) {
+      setSavedViews((prev) => prev.filter((v) => v.id !== id))
+    }
+  }, [])
 
   const exportSelectedCsv = useCallback(() => {
     const rows = items.filter((it) => selected.has(it.id))
