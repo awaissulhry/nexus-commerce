@@ -74,6 +74,27 @@ console.log(
   (await migrationApplied('20260509_w14_widget_order')) ? 'applied' : 'PENDING',
 )
 
+console.log('\n=== DO.39 / W14: DashboardView ===')
+console.log('  DashboardView table:         ', await tableExists('DashboardView'))
+console.log(
+  '  DashboardLayout.activeViewId:',
+  (await columnExists('DashboardLayout', 'activeViewId')) ? 'present' : 'MISSING',
+)
+console.log(
+  '  20260509_w14_dashboard_view: ',
+  (await migrationApplied('20260509_w14_dashboard_view')) ? 'applied' : 'PENDING',
+)
+
+console.log('\n=== DO.40 / W15: ScheduledReport ===')
+console.log(
+  '  ScheduledReport table:       ',
+  await tableExists('ScheduledReport'),
+)
+console.log(
+  '  20260509_w15_scheduled_report:',
+  (await migrationApplied('20260509_w15_scheduled_report')) ? 'applied' : 'PENDING',
+)
+
 console.log('\nNote: migrations apply via `prisma migrate deploy` on next')
 console.log('Railway deploy. Per memory: strip -pooler from DATABASE_URL when')
 console.log('running `prisma migrate deploy` directly.')
