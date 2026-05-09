@@ -1796,6 +1796,192 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F1.9 — bulk-mark-shipped. LABEL_PRINTED → SHIPPED in one server
+  // round-trip with partial-success semantics. Mirrors per-row
+  // /:id/mark-shipped: projects shippedAt onto Order when null,
+  // emits per-row outbound events, batch audit log via writeMany.
+  fastify.post('/fulfillment/shipments/bulk-mark-shipped', async (request, reply) => {
+    try {
+      const body = request.body as { shipmentIds?: string[] }
+      const ids = Array.isArray(body.shipmentIds) ? body.shipmentIds : []
+      if (ids.length === 0) return reply.code(400).send({ error: 'shipmentIds[] required' })
+      if (ids.length > 200) return reply.code(400).send({ error: 'Max 200 shipments per call' })
+
+      // Only LABEL_PRINTED shipments can transition to SHIPPED in
+      // this path. Anything already SHIPPED/IN_TRANSIT/DELIVERED is
+      // skipped (not an error — operator may have multi-selected
+      // mixed statuses; the response carries skipped count).
+      const before = await prisma.shipment.findMany({
+        where: { id: { in: ids }, status: 'LABEL_PRINTED' },
+        select: { id: true, status: true, orderId: true },
+      })
+      const eligibleIds = before.map((s) => s.id)
+      if (eligibleIds.length === 0) {
+        return { shipped: 0, skipped: ids.length }
+      }
+
+      const shippedAt = new Date()
+      const result = await prisma.shipment.updateMany({
+        where: { id: { in: eligibleIds } },
+        data: { status: 'SHIPPED', shippedAt, version: { increment: 1 } },
+      })
+
+      // Project shippedAt onto each parent Order when still null —
+      // mirrors per-row mark-shipped + the multi-shipment SLA rule
+      // (first-ship wins). Done as updateMany per orderId because
+      // the null-guard makes it safe-by-default for late shipments.
+      const orderIds = Array.from(
+        new Set(before.map((s) => s.orderId).filter((id): id is string => Boolean(id))),
+      )
+      if (orderIds.length > 0) {
+        await prisma.order.updateMany({
+          where: { id: { in: orderIds }, shippedAt: null },
+          data: { shippedAt },
+        })
+      }
+
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      const { auditLogService } = await import('../services/audit-log.service.js')
+      for (const sid of eligibleIds) {
+        publishOutboundEvent({ type: 'shipment.updated', shipmentId: sid, status: 'SHIPPED', ts: Date.now() })
+      }
+      void auditLogService.writeMany(
+        eligibleIds.map((sid) => ({
+          entityType: 'Shipment',
+          entityId: sid,
+          action: 'mark-shipped',
+          before: { status: 'LABEL_PRINTED' },
+          after: { status: 'SHIPPED', shippedAt },
+          metadata: { bulk: true },
+        })),
+      )
+
+      return { shipped: result.count, skipped: ids.length - eligibleIds.length }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/bulk-mark-shipped] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // F1.9 — bulk-void-label. Sendcloud's voidParcel is per-parcel
+  // (no batch endpoint), so this serializes the carrier calls and
+  // returns per-row outcomes. DB writes happen one-at-a-time so a
+  // mid-batch carrier rejection doesn't roll back successfully-
+  // voided rows. Capped at 50 to keep tail latency bounded.
+  fastify.post('/fulfillment/shipments/bulk-void-label', async (request, reply) => {
+    try {
+      const body = request.body as { shipmentIds?: string[] }
+      const ids = Array.isArray(body.shipmentIds) ? body.shipmentIds : []
+      if (ids.length === 0) return reply.code(400).send({ error: 'shipmentIds[] required' })
+      if (ids.length > 50) {
+        return reply.code(400).send({
+          error: 'Max 50 shipments per bulk-void (carrier API is per-parcel; large batches block the worker).',
+        })
+      }
+
+      const before = await prisma.shipment.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          status: true,
+          sendcloudParcelId: true,
+          weightGrams: true,
+          trackingNumber: true,
+        },
+      })
+      const eligible = before.filter(
+        (s) => s.status === 'LABEL_PRINTED' && s.sendcloudParcelId,
+      )
+
+      if (eligible.length === 0) {
+        return { voided: 0, failed: 0, skipped: ids.length, results: [] }
+      }
+
+      const sendcloud = await import('../services/sendcloud/index.js')
+      let creds
+      try {
+        creds = await sendcloud.resolveCredentials()
+      } catch (e: any) {
+        if (e instanceof sendcloud.SendcloudError) {
+          return reply.code(e.status).send({ error: e.message, code: e.code })
+        }
+        throw e
+      }
+
+      const { publishOutboundEvent } = await import('../services/outbound-events.service.js')
+      const { auditLogService } = await import('../services/audit-log.service.js')
+
+      const results: Array<{ id: string; ok: boolean; reason?: string }> = []
+      let voided = 0
+      let failed = 0
+
+      for (const s of eligible) {
+        try {
+          const result = await sendcloud.voidParcel(creds, Number(s.sendcloudParcelId))
+          if (result.ok === false) {
+            const reason = (result as { ok: false; reason: string }).reason
+            results.push({ id: s.id, ok: false, reason })
+            failed += 1
+            void auditLogService.write({
+              entityType: 'Shipment',
+              entityId: s.id,
+              action: 'void-label-failed',
+              metadata: { reason, bulk: true },
+            })
+            continue
+          }
+          const updated = await prisma.shipment.update({
+            where: { id: s.id },
+            data: {
+              status: s.weightGrams ? 'PACKED' : 'DRAFT',
+              sendcloudParcelId: null,
+              trackingNumber: null,
+              trackingUrl: null,
+              labelUrl: null,
+              labelPrintedAt: null,
+              serviceCode: null,
+              serviceName: null,
+              version: { increment: 1 },
+            },
+          })
+          publishOutboundEvent({
+            type: 'shipment.updated',
+            shipmentId: s.id,
+            status: updated.status,
+            ts: Date.now(),
+          })
+          void auditLogService.write({
+            entityType: 'Shipment',
+            entityId: s.id,
+            action: 'void-label',
+            before: {
+              status: 'LABEL_PRINTED',
+              sendcloudParcelId: s.sendcloudParcelId,
+              trackingNumber: s.trackingNumber,
+            },
+            after: { status: updated.status },
+            metadata: { bulk: true },
+          })
+          results.push({ id: s.id, ok: true })
+          voided += 1
+        } catch (e: any) {
+          results.push({ id: s.id, ok: false, reason: e?.message ?? String(e) })
+          failed += 1
+        }
+      }
+
+      return {
+        voided,
+        failed,
+        skipped: ids.length - eligible.length,
+        results,
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[shipments/bulk-void-label] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   fastify.post('/fulfillment/shipments/bulk-release', async (request, reply) => {
     try {
       const body = request.body as { shipmentIds?: string[] }

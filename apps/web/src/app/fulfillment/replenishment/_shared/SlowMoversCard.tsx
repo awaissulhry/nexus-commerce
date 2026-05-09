@@ -18,7 +18,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Snowflake, Clock, ExternalLink } from 'lucide-react'
+import { Snowflake, Clock, ExternalLink, Tag, Trash2 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -63,9 +65,79 @@ const BUCKET_TONES: Record<SlowMoverRow['bucket'], string> = {
 
 export function SlowMoversCard() {
   const { t } = useTranslations()
+  const { toast } = useToast()
+  const askConfirm = useConfirm()
   const [bucket, setBucket] = useState<Bucket>('DORMANT')
   const [data, setData] = useState<SlowMoverResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [actingIds, setActingIds] = useState<Set<string>>(new Set())
+
+  const suggestMarkdown = async (row: SlowMoverRow) => {
+    const ok = await askConfirm({
+      title: t('replenishment.slowMovers.confirm.markdownTitle', { sku: row.sku }),
+      description: t('replenishment.slowMovers.confirm.markdownDescription'),
+      confirmLabel: t('replenishment.slowMovers.confirm.markdownConfirm'),
+      tone: 'warning',
+    })
+    if (!ok) return
+    setActingIds((s) => new Set(s).add(row.id))
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/slow-movers/${row.id}/suggest-markdown`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ discountPercent: 10 }),
+          cache: 'no-store',
+        },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast.success(t('replenishment.slowMovers.toast.markdownSuccess', { sku: row.sku }))
+    } catch (err) {
+      toast.error(
+        t('replenishment.slowMovers.toast.markdownError', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    } finally {
+      setActingIds((s) => {
+        const n = new Set(s)
+        n.delete(row.id)
+        return n
+      })
+    }
+  }
+
+  const flagWriteOff = async (row: SlowMoverRow) => {
+    const ok = await askConfirm({
+      title: t('replenishment.slowMovers.confirm.writeOffTitle', { sku: row.sku }),
+      description: t('replenishment.slowMovers.confirm.writeOffDescription'),
+      confirmLabel: t('replenishment.slowMovers.confirm.writeOffConfirm'),
+      tone: 'danger',
+    })
+    if (!ok) return
+    setActingIds((s) => new Set(s).add(row.id))
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/slow-movers/${row.id}/flag-write-off`,
+        { method: 'POST', cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast.success(t('replenishment.slowMovers.toast.writeOffSuccess', { sku: row.sku }))
+    } catch (err) {
+      toast.error(
+        t('replenishment.slowMovers.toast.writeOffError', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    } finally {
+      setActingIds((s) => {
+        const n = new Set(s)
+        n.delete(row.id)
+        return n
+      })
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -223,13 +295,35 @@ export function SlowMoversCard() {
                   </span>
                 </td>
                 <td className="px-3 py-1.5 text-right">
-                  <Link
-                    href={`/products/${r.id}`}
-                    className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-                    title={t('replenishment.slowMovers.openProduct')}
-                  >
-                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                  </Link>
+                  <div className="inline-flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => void suggestMarkdown(r)}
+                      disabled={actingIds.has(r.id)}
+                      className="h-6 w-6 inline-flex items-center justify-center rounded text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50"
+                      title={t('replenishment.slowMovers.suggestMarkdown')}
+                      aria-label={t('replenishment.slowMovers.suggestMarkdownAria', { sku: r.sku })}
+                    >
+                      <Tag className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void flagWriteOff(r)}
+                      disabled={actingIds.has(r.id)}
+                      className="h-6 w-6 inline-flex items-center justify-center rounded text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50"
+                      title={t('replenishment.slowMovers.flagWriteOff')}
+                      aria-label={t('replenishment.slowMovers.flagWriteOffAria', { sku: r.sku })}
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                    <Link
+                      href={`/products/${r.id}`}
+                      className="h-6 w-6 inline-flex items-center justify-center rounded text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                      title={t('replenishment.slowMovers.openProduct')}
+                    >
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}
