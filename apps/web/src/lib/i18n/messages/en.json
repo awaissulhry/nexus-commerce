@@ -2858,5 +2858,7 @@
   "stock.lots.expiringSoon": "Expires in {days}d",
   "stock.lots.supplierRef": "supplier ref {ref}",
   "stock.lots.expires": "expires {date}",
-  "stock.lots.received": "received {when}"
+  "stock.lots.received": "received {when}",
+  "cycleCount.session.lot.recalledTitle": "This lot has an OPEN recall",
+  "cycleCount.session.lot.moreLots": "+{n} more"
 }

@@ -2623,6 +2623,7 @@ function PricingTab({
   basePrice: string | number | null
   channelListings: NonNullable<ProductDetail['channelListings']>
 }) {
+  const { t } = useTranslations()
   const baseNum = basePrice == null ? null : Number(basePrice)
   const sorted = [...channelListings].sort((a, b) => {
     if (a.channel !== b.channel) return a.channel.localeCompare(b.channel)
@@ -2634,7 +2635,7 @@ function PricingTab({
       <div className="flex items-center gap-3 flex-wrap">
         <div>
           <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-            Master basePrice
+            {t('products.drawer.pricing.master')}
           </div>
           <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
             {baseNum == null ? '—' : `€${baseNum.toFixed(2)}`}
@@ -2644,16 +2645,15 @@ function PricingTab({
           <Link
             href={`/pricing?search=${encodeURIComponent(sku)}`}
             className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
-            title="Open the full pricing matrix (rules, overrides, clamps, history)"
+            title={t('products.drawer.pricing.openMatrixTitle')}
           >
-            <ExternalLink size={11} /> Open pricing matrix
+            <ExternalLink size={11} /> {t('products.drawer.pricing.openMatrix')}
           </Link>
         </div>
       </div>
       {sorted.length === 0 ? (
         <div className="border border-slate-200 dark:border-slate-800 rounded-md py-8 text-center text-base text-slate-500 dark:text-slate-400 italic">
-          No channel listings yet — once this product is published the
-          per-marketplace prices appear here.
+          {t('products.drawer.pricing.empty')}
         </div>
       ) : (
         <div className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
@@ -2661,19 +2661,19 @@ function PricingTab({
             <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Channel
+                  {t('products.drawer.pricing.col.channel')}
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Marketplace
+                  {t('products.drawer.pricing.col.marketplace')}
                 </th>
                 <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Listing price
+                  {t('products.drawer.pricing.col.listingPrice')}
                 </th>
                 <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Δ vs master
+                  {t('products.drawer.pricing.col.deltaVsMaster')}
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Status
+                  {t('products.drawer.pricing.col.status')}
                 </th>
               </tr>
             </thead>
@@ -2732,9 +2732,7 @@ function PricingTab({
         </div>
       )}
       <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
-        Δ vs master shows how each channel listing's published price
-        differs from this product's basePrice. Push / explain / clamp
-        rules live in the full pricing matrix.
+        {t('products.drawer.pricing.footer')}
       </div>
       {/* W4.13 — Tier / customer-group pricing for this product.
           Sits between the master listings and the repricing rules
@@ -2785,6 +2783,7 @@ function TierPricingSection({
   productId: string
   basePrice: number | null
 }) {
+  const { t } = useTranslations()
   const [tiers, setTiers] = useState<TierPriceRow[] | null>(null)
   const [groups, setGroups] = useState<CustomerGroupOpt[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -2823,23 +2822,26 @@ function TierPricingSection({
     refresh()
   }, [refresh])
 
-  const onDelete = async (t: TierPriceRow) => {
+  const onDelete = async (tier: TierPriceRow) => {
     const ok = await confirm({
-      title: `Delete tier at qty=${t.minQty}${t.customerGroup ? ` (${t.customerGroup.label})` : ''}?`,
-      confirmLabel: 'Delete',
+      title: t('products.drawer.tier.deleteTitle', {
+        qty: tier.minQty,
+        groupSuffix: tier.customerGroup ? ` (${tier.customerGroup.label})` : '',
+      }),
+      confirmLabel: t('products.drawer.tier.deleteLabel'),
       tone: 'danger',
     })
     if (!ok) return
     try {
       const res = await fetch(
-        `${getBackendUrl()}/api/tier-prices/${t.id}`,
+        `${getBackendUrl()}/api/tier-prices/${tier.id}`,
         { method: 'DELETE' },
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      toast.success('Tier deleted')
+      toast.success(t('products.drawer.tier.toast.deleted'))
       refresh()
     } catch (e: any) {
-      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+      toast.error(t('products.drawer.tier.toast.deleteFailed', { msg: e?.message ?? String(e) }))
     }
   }
 
@@ -2868,7 +2870,7 @@ function TierPricingSection({
     <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
-          Tier pricing
+          {t('products.drawer.tier.title')}
         </div>
         <Button
           variant="primary"
@@ -2876,7 +2878,7 @@ function TierPricingSection({
           icon={<Plus className="w-3 h-3" />}
           onClick={() => setAdding(true)}
         >
-          Add tier
+          {t('products.drawer.tier.add')}
         </Button>
       </div>
 
@@ -2886,21 +2888,20 @@ function TierPricingSection({
 
       {tiers === null ? (
         <div className="text-sm italic text-slate-500 dark:text-slate-400">
-          Loading…
+          {t('products.drawer.tier.loading')}
         </div>
       ) : tiers.length === 0 ? (
         <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
-          No tier prices. Base price is €{basePrice?.toFixed(2) ?? '—'}{' '}
-          for everyone, every quantity.
+          {t('products.drawer.tier.empty', { base: basePrice?.toFixed(2) ?? '—' })}
         </div>
       ) : (
         <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900">
             <tr className="text-left">
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Min qty</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Customer group</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Price</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">vs base</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.tier.col.minQty')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.tier.col.customerGroup')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">{t('products.drawer.tier.col.price')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">{t('products.drawer.tier.col.vsBase')}</th>
               <th className="px-1 w-6" />
             </tr>
           </thead>
@@ -2908,24 +2909,24 @@ function TierPricingSection({
             {tiers
               .slice()
               .sort((a, b) => a.minQty - b.minQty)
-              .map((t) => {
-                const priceNum = Number(t.price)
+              .map((tier) => {
+                const priceNum = Number(tier.price)
                 const delta =
                   basePrice != null
                     ? Math.round(((priceNum - basePrice) / basePrice) * 100)
                     : null
                 return (
                   <tr
-                    key={t.id}
+                    key={tier.id}
                     className="border-t border-slate-100 dark:border-slate-800"
                   >
                     <td className="px-2 py-1.5 tabular-nums text-slate-900 dark:text-slate-100">
-                      ≥ {t.minQty}
+                      ≥ {tier.minQty}
                     </td>
                     <td className="px-2 py-1.5 text-slate-700 dark:text-slate-300">
-                      {t.customerGroup?.label ?? (
+                      {tier.customerGroup?.label ?? (
                         <span className="text-xs italic text-slate-500 dark:text-slate-400">
-                          everyone
+                          {t('products.drawer.tier.everyone')}
                         </span>
                       )}
                     </td>
@@ -2951,10 +2952,10 @@ function TierPricingSection({
                     </td>
                     <td className="px-1 py-1.5">
                       <IconButton
-                        aria-label="Delete tier"
+                        aria-label={t('products.drawer.tier.deleteAria')}
                         size="sm"
                         tone="danger"
-                        onClick={() => onDelete(t)}
+                        onClick={() => onDelete(tier)}
                       >
                         <Trash2 className="w-3 h-3" />
                       </IconButton>
@@ -2970,7 +2971,7 @@ function TierPricingSection({
           buyer pay for 50?" ad-hoc checks. */}
       <div className="border border-slate-200 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/40">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
-          Compute price preview
+          {t('products.drawer.tier.preview.title')}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -2978,7 +2979,7 @@ function TierPricingSection({
             min={1}
             value={previewQty}
             onChange={(e) => setPreviewQty(e.target.value)}
-            placeholder="qty"
+            placeholder={t('products.drawer.tier.preview.qtyPlaceholder')}
             className="w-20 h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
           />
           <select
@@ -2986,7 +2987,7 @@ function TierPricingSection({
             onChange={(e) => setPreviewGroupId(e.target.value)}
             className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
-            <option value="">no group (anonymous)</option>
+            <option value="">{t('products.drawer.tier.preview.noGroup')}</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.label}
@@ -2999,15 +3000,15 @@ function TierPricingSection({
             onClick={computePreview}
             disabled={!previewQty}
           >
-            Compute
+            {t('products.drawer.tier.preview.compute')}
           </Button>
           {previewResult && (
             <div className="text-sm tabular-nums text-slate-900 dark:text-slate-100">
               <span className="font-semibold">€{previewResult.price.toFixed(2)}</span>
               <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">
                 {previewResult.source === 'tier'
-                  ? `tier (≥ ${previewResult.appliedTier?.minQty})`
-                  : 'base price'}
+                  ? t('products.drawer.tier.preview.tier', { minQty: previewResult.appliedTier?.minQty ?? 0 })
+                  : t('products.drawer.tier.preview.base')}
               </span>
             </div>
           )}
@@ -3043,6 +3044,7 @@ function AddTierForm({
   onClose: () => void
   onCreated: () => void
 }) {
+  const { t } = useTranslations()
   const [minQty, setMinQty] = useState('1')
   const [price, setPrice] = useState('')
   const [groupId, setGroupId] = useState('')
@@ -3077,7 +3079,7 @@ function AddTierForm({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Tier created')
+      toast.success(t('products.drawer.tier.toast.created'))
       onCreated()
     } catch (e: any) {
       setErr(e?.message ?? String(e))
@@ -3093,13 +3095,13 @@ function AddTierForm({
       dismissOnBackdrop={!submitting}
       dismissOnEscape={!submitting}
       size="md"
-      title="Add tier price"
+      title={t('products.drawer.tier.form.title')}
     >
       <div className="p-5 space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-              Min qty
+              {t('products.drawer.tier.form.minQty')}
             </label>
             <input
               type="number"
@@ -3111,7 +3113,7 @@ function AddTierForm({
           </div>
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-              Price (€)
+              {t('products.drawer.tier.form.price')}
             </label>
             <input
               type="number"
@@ -3125,14 +3127,14 @@ function AddTierForm({
         </div>
         <div className="space-y-1">
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-            Customer group
+            {t('products.drawer.tier.form.customerGroup')}
           </label>
           <select
             value={groupId}
             onChange={(e) => setGroupId(e.target.value)}
             className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
-            <option value="">— everyone (no group) —</option>
+            <option value="">{t('products.drawer.tier.form.everyoneOption')}</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.label}
@@ -3140,15 +3142,12 @@ function AddTierForm({
             ))}
           </select>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Group-specific tiers beat generic at the same minQty.
-            Generic tiers (no group) apply to everyone.
+            {t('products.drawer.tier.form.help')}
           </p>
         </div>
         {conflict && (
           <div className="border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 rounded px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-            A tier already exists at this (min qty, group). The server
-            will reject the create with a 409 — change one of the
-            fields or delete the existing tier first.
+            {t('products.drawer.tier.form.conflict')}
           </div>
         )}
         {err && (
@@ -3159,7 +3158,7 @@ function AddTierForm({
       </div>
       <ModalFooter>
         <Button variant="secondary" onClick={onClose} disabled={submitting}>
-          Cancel
+          {t('products.drawer.tier.form.cancel')}
         </Button>
         <Button
           variant="primary"
@@ -3173,7 +3172,7 @@ function AddTierForm({
           }
           loading={submitting}
         >
-          Create
+          {t('products.drawer.tier.form.create')}
         </Button>
       </ModalFooter>
     </Modal>
@@ -3212,13 +3211,17 @@ interface RepricingRuleSnapshot {
   lastDecisionReason: string | null
 }
 
-const STRATEGY_LABELS: Record<string, string> = {
-  match_buy_box: 'Match buy-box',
-  beat_lowest_by_pct: 'Beat lowest by %',
-  beat_lowest_by_amount: 'Beat lowest by amount',
-  fixed_to_buy_box_minus: 'Buy-box minus fixed',
-  manual: 'Manual (engine off)',
-}
+// W5.38 — STRATEGY_LABELS reduced to a code list. Display labels
+// resolve via t(`products.drawer.repricing.strategy.${code}`) at
+// use-site so the dropdown + table cell read in the operator's
+// locale.
+const STRATEGY_CODES = [
+  'match_buy_box',
+  'beat_lowest_by_pct',
+  'beat_lowest_by_amount',
+  'fixed_to_buy_box_minus',
+  'manual',
+] as const
 
 function RepricingRulesSection({
   productId,
@@ -3227,6 +3230,7 @@ function RepricingRulesSection({
   productId: string
   channelListings: NonNullable<ProductDetail['channelListings']>
 }) {
+  const { t } = useTranslations()
   const [rules, setRules] = useState<RepricingRuleSnapshot[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -3254,11 +3258,11 @@ function RepricingRulesSection({
   }, [refresh])
 
   const onDelete = async (rule: RepricingRuleSnapshot) => {
+    const scope = `${rule.channel}${rule.marketplace ? ` ${rule.marketplace}` : ''}`
     const ok = await confirm({
-      title: `Delete repricing rule for ${rule.channel}${rule.marketplace ? ` ${rule.marketplace}` : ''}?`,
-      description:
-        'Decision history is cascade-deleted. The product price stays where it is — engine just stops moving it.',
-      confirmLabel: 'Delete',
+      title: t('products.drawer.repricing.deleteTitle', { scope }),
+      description: t('products.drawer.repricing.deleteBody'),
+      confirmLabel: t('products.drawer.repricing.deleteLabel'),
       tone: 'danger',
     })
     if (!ok) return
@@ -3268,10 +3272,10 @@ function RepricingRulesSection({
         { method: 'DELETE' },
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      toast.success('Rule deleted')
+      toast.success(t('products.drawer.repricing.toast.deleted'))
       refresh()
     } catch (e: any) {
-      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+      toast.error(t('products.drawer.repricing.toast.deleteFailed', { msg: e?.message ?? String(e) }))
     }
   }
 
@@ -3288,7 +3292,7 @@ function RepricingRulesSection({
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       refresh()
     } catch (e: any) {
-      toast.error(`Toggle failed: ${e?.message ?? String(e)}`)
+      toast.error(t('products.drawer.repricing.toast.toggleFailed', { msg: e?.message ?? String(e) }))
     }
   }
 
@@ -3296,7 +3300,7 @@ function RepricingRulesSection({
     <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
       <div className="flex items-center justify-between">
         <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
-          Repricing rules
+          {t('products.drawer.repricing.title')}
         </div>
         <Button
           variant="primary"
@@ -3304,7 +3308,7 @@ function RepricingRulesSection({
           icon={<Plus className="w-3 h-3" />}
           onClick={() => setAdding(true)}
         >
-          Add rule
+          {t('products.drawer.repricing.add')}
         </Button>
       </div>
 
@@ -3314,21 +3318,21 @@ function RepricingRulesSection({
 
       {rules === null ? (
         <div className="text-sm italic text-slate-500 dark:text-slate-400">
-          Loading rules…
+          {t('products.drawer.repricing.loading')}
         </div>
       ) : rules.length === 0 ? (
         <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
-          No repricing rules yet. Add one to track the buy-box or undercut competitors automatically.
+          {t('products.drawer.repricing.empty')}
         </div>
       ) : (
         <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
           <thead className="bg-slate-50 dark:bg-slate-900">
             <tr className="text-left">
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Channel · MP</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Strategy</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Floor / Ceiling</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Last decision</th>
-              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-center">Enabled</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.repricing.col.channelMp')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.repricing.col.strategy')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">{t('products.drawer.repricing.col.floorCeiling')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">{t('products.drawer.repricing.col.lastDecision')}</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-center">{t('products.drawer.repricing.col.enabled')}</th>
               <th className="px-1 w-6" />
             </tr>
           </thead>
@@ -3348,7 +3352,9 @@ function RepricingRulesSection({
                 </td>
                 <td className="px-2 py-1.5">
                   <div className="text-slate-900 dark:text-slate-100">
-                    {STRATEGY_LABELS[r.strategy] ?? r.strategy}
+                    {STRATEGY_CODES.includes(r.strategy as (typeof STRATEGY_CODES)[number])
+                      ? t(`products.drawer.repricing.strategy.${r.strategy}`)
+                      : r.strategy}
                   </div>
                   {(r.beatPct || r.beatAmount) && (
                     <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
@@ -3365,12 +3371,12 @@ function RepricingRulesSection({
                       type="button"
                       onClick={() => setDecisionsOpenFor(r.id)}
                       className="text-blue-700 dark:text-blue-300 hover:underline"
-                      title={r.lastDecisionReason ?? 'View decision history'}
+                      title={r.lastDecisionReason ?? t('products.drawer.repricing.viewHistory')}
                     >
                       €{Number(r.lastDecisionPrice).toFixed(2)}
                     </button>
                   ) : (
-                    <span className="text-xs italic text-slate-400 dark:text-slate-500">never</span>
+                    <span className="text-xs italic text-slate-500 dark:text-slate-400">{t('products.drawer.repricing.never')}</span>
                   )}
                 </td>
                 <td className="px-2 py-1.5 text-center">
@@ -3378,12 +3384,12 @@ function RepricingRulesSection({
                     type="checkbox"
                     checked={r.enabled}
                     onChange={() => onToggleEnabled(r)}
-                    title={r.enabled ? 'Engine evaluating' : 'Paused'}
+                    title={r.enabled ? t('products.drawer.repricing.evaluating') : t('products.drawer.repricing.paused')}
                   />
                 </td>
                 <td className="px-1 py-1.5">
                   <IconButton
-                    aria-label="Delete rule"
+                    aria-label={t('products.drawer.repricing.deleteAria')}
                     size="sm"
                     tone="danger"
                     onClick={() => onDelete(r)}
@@ -3429,6 +3435,7 @@ function AddRepricingRuleForm({
   onClose: () => void
   onCreated: () => void
 }) {
+  const { t } = useTranslations()
   // Pre-populate channel + marketplace options from the product's
   // existing listings so the operator picks from a real list.
   const channelOpts = useMemo(() => {
@@ -3470,7 +3477,7 @@ function AddRepricingRuleForm({
     setSubmitting(true)
     const opt = channelOpts.find((o) => o.key === channelKey)
     if (!opt) {
-      setErr('pick a channel')
+      setErr(t('products.drawer.repricing.form.pickChannel'))
       setSubmitting(false)
       return
     }
@@ -3495,7 +3502,7 @@ function AddRepricingRuleForm({
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      toast.success('Rule created')
+      toast.success(t('products.drawer.repricing.toast.created'))
       onCreated()
     } catch (e: any) {
       setErr(e?.message ?? String(e))
@@ -3511,13 +3518,13 @@ function AddRepricingRuleForm({
       dismissOnBackdrop={!submitting}
       dismissOnEscape={!submitting}
       size="lg"
-      title="New repricing rule"
-      description="One rule per (channel, marketplace). The engine evaluates active rules on each tick + writes a decision row regardless of whether the price actually changed."
+      title={t('products.drawer.repricing.form.title')}
+      description={t('products.drawer.repricing.form.description')}
     >
       <div className="p-5 space-y-3">
         <div className="space-y-1">
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-            Channel · marketplace
+            {t('products.drawer.repricing.form.channelMp')}
           </label>
           <select
             value={channelKey}
@@ -3527,7 +3534,7 @@ function AddRepricingRuleForm({
             {channelOpts.map((o) => (
               <option key={o.key} value={o.key}>
                 {o.channel}
-                {o.marketplace ? ` · ${o.marketplace}` : ' · all marketplaces'}
+                {o.marketplace ? ` · ${o.marketplace}` : ` · ${t('products.drawer.repricing.form.allMarketplaces')}`}
               </option>
             ))}
           </select>
@@ -3535,16 +3542,16 @@ function AddRepricingRuleForm({
 
         <div className="space-y-1">
           <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-            Strategy
+            {t('products.drawer.repricing.form.strategy')}
           </label>
           <select
             value={strategy}
             onChange={(e) => setStrategy(e.target.value)}
             className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           >
-            {Object.entries(STRATEGY_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
+            {STRATEGY_CODES.map((code) => (
+              <option key={code} value={code}>
+                {t(`products.drawer.repricing.strategy.${code}`)}
               </option>
             ))}
           </select>
@@ -3553,7 +3560,7 @@ function AddRepricingRuleForm({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-              Floor (min €)
+              {t('products.drawer.repricing.form.floor')}
             </label>
             <input
               type="number"
@@ -3566,7 +3573,7 @@ function AddRepricingRuleForm({
           </div>
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-              Ceiling (max €)
+              {t('products.drawer.repricing.form.ceiling')}
             </label>
             <input
               type="number"
@@ -3582,7 +3589,7 @@ function AddRepricingRuleForm({
         {needsPct && (
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-              Beat by (%)
+              {t('products.drawer.repricing.form.beatPct')}
             </label>
             <input
               type="number"
@@ -3598,7 +3605,7 @@ function AddRepricingRuleForm({
         {needsAmount && (
           <div className="space-y-1">
             <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
-              Beat by (€)
+              {t('products.drawer.repricing.form.beatAmount')}
             </label>
             <input
               type="number"
@@ -3620,7 +3627,7 @@ function AddRepricingRuleForm({
       </div>
       <ModalFooter>
         <Button variant="secondary" onClick={onClose} disabled={submitting}>
-          Cancel
+          {t('products.drawer.repricing.form.cancel')}
         </Button>
         <Button
           variant="primary"
@@ -3634,7 +3641,7 @@ function AddRepricingRuleForm({
           }
           loading={submitting}
         >
-          Create
+          {t('products.drawer.repricing.form.create')}
         </Button>
       </ModalFooter>
     </Modal>
@@ -3648,6 +3655,7 @@ function DecisionsModal({
   ruleId: string
   onClose: () => void
 }) {
+  const { t } = useTranslations()
   const [decisions, setDecisions] = useState<
     | Array<{
         id: string
@@ -3680,8 +3688,8 @@ function DecisionsModal({
       open={true}
       onClose={onClose}
       size="2xl"
-      title="Recent repricing decisions"
-      description="Append-only log of every engine evaluation. `applied=false` means the engine considered the move but didn't push (typically because the price was unchanged from the previous tick)."
+      title={t('products.drawer.repricing.decisions.title')}
+      description={t('products.drawer.repricing.decisions.description')}
     >
       <div className="p-5 space-y-2 max-h-[60vh] overflow-y-auto">
         {err && (
@@ -3689,20 +3697,20 @@ function DecisionsModal({
         )}
         {decisions === null ? (
           <div className="text-base text-slate-500 dark:text-slate-400">
-            Loading…
+            {t('products.drawer.repricing.decisions.loading')}
           </div>
         ) : decisions.length === 0 ? (
           <div className="text-base italic text-slate-500 dark:text-slate-400">
-            No decisions yet — this rule hasn't been evaluated.
+            {t('products.drawer.repricing.decisions.empty')}
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
               <tr className="text-left">
-                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">When</th>
-                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Old → New</th>
-                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Reason</th>
-                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-center">Applied</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.repricing.decisions.col.when')}</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">{t('products.drawer.repricing.decisions.col.oldNew')}</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">{t('products.drawer.repricing.decisions.col.reason')}</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-center">{t('products.drawer.repricing.decisions.col.applied')}</th>
               </tr>
             </thead>
             <tbody>
@@ -3744,7 +3752,7 @@ function DecisionsModal({
       </div>
       <ModalFooter>
         <Button variant="secondary" onClick={onClose}>
-          Close
+          {t('products.drawer.repricing.decisions.close')}
         </Button>
       </ModalFooter>
     </Modal>

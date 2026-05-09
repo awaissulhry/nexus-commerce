@@ -2846,5 +2846,7 @@
   "stock.lots.expiringSoon": "Scade tra {days}g",
   "stock.lots.supplierRef": "rif. fornitore {ref}",
   "stock.lots.expires": "scade {date}",
-  "stock.lots.received": "ricevuto {when}"
+  "stock.lots.received": "ricevuto {when}",
+  "cycleCount.session.lot.recalledTitle": "Questo lotto ha un richiamo APERTO",
+  "cycleCount.session.lot.moreLots": "+{n} altri"
 }
