@@ -114,6 +114,15 @@ import {
   getAutoPoStatus,
 } from '../services/auto-po.service.js'
 import { getAutoPoCronStatus } from '../jobs/auto-po-replenishment.job.js'
+import { runForecastTick } from '../jobs/forecast.job.js'
+import {
+  runForecastAccuracyCronOnce,
+  getForecastAccuracyCronStatus,
+} from '../jobs/forecast-accuracy.job.js'
+import {
+  runAbcCronOnce,
+  getAbcClassificationCronStatus,
+} from '../jobs/abc-classification.job.js'
 import {
   transitionPo,
   getPoAuditTrail,
@@ -6698,6 +6707,83 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.log.error({ err: error }, '[sales-reports/ingest] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
+  })
+
+  // W1.3 — Operator-triggered "run pipeline now". Runs the four
+  // foundation steps in sequence on demand, so the operator never has
+  // to wait for the nightly crons (or hunt for individual triggers in
+  // /sync-logs) to populate the replenishment data layer:
+  //
+  //   1. refresh-aggregates    → DailySalesAggregate from OrderItem
+  //   2. forecast              → Holt-Winters point + 80% PI per series
+  //   3. forecast-accuracy     → MAPE row for each (sku, channel, day)
+  //   4. abc-classification    → Product.abcClass A/B/C/D buckets
+  //
+  // Per-step failures are captured but don't abort downstream steps —
+  // the operator gets the full picture in one response. Step results
+  // are read from the existing cron-status getters (the tick functions
+  // themselves return void for cron compat). 200 always; success is
+  // expressed per-step in the response body.
+  fastify.post('/fulfillment/replenishment/pipeline/run', async (request, reply) => {
+    const body = (request.body ?? {}) as { skipBackfill?: boolean; days?: number }
+    const days = body.days ? Math.min(365, Math.max(1, Math.floor(body.days))) : 365
+    const startedAt = Date.now()
+    const steps: Array<{
+      step: string
+      ok: boolean
+      summary?: unknown
+      durationMs: number
+      error?: string
+    }> = []
+
+    async function runStep<T>(name: string, fn: () => Promise<T>): Promise<void> {
+      const t0 = Date.now()
+      try {
+        const summary = await fn()
+        steps.push({ step: name, ok: true, summary, durationMs: Date.now() - t0 })
+      } catch (err) {
+        steps.push({
+          step: name,
+          ok: false,
+          durationMs: Date.now() - t0,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        fastify.log.error({ err, step: name }, '[replenishment/pipeline/run] step failed')
+      }
+    }
+
+    if (!body.skipBackfill) {
+      const to = new Date()
+      const from = new Date(to.getTime() - (days - 1) * 86400000)
+      await runStep('refresh-aggregates', async () => {
+        const r = await refreshSalesAggregates({ from, to })
+        return {
+          from: from.toISOString().slice(0, 10),
+          to: to.toISOString().slice(0, 10),
+          daysProcessed: r.daysProcessed,
+          rowsWritten: r.rowsWritten,
+        }
+      })
+    }
+
+    await runStep('forecast', async () => {
+      await runForecastTick()
+      return { triggered: true }
+    })
+
+    await runStep('forecast-accuracy', async () => {
+      await runForecastAccuracyCronOnce()
+      return getForecastAccuracyCronStatus()
+    })
+
+    await runStep('abc-classification', async () => {
+      await runAbcCronOnce()
+      return getAbcClassificationCronStatus()
+    })
+
+    const totalDurationMs = Date.now() - startedAt
+    const ok = steps.every((s) => s.ok)
+    return reply.code(200).send({ ok, totalDurationMs, steps })
   })
 
   // F.5 — Upcoming retail events for the banner. Returns events whose
