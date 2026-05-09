@@ -91,6 +91,10 @@
   "drafts.aiFillFailed": "AI fill failed",
   "drafts.aiFillUnavailable": "AI provider not configured",
   "drafts.aiFillRateLimited": "Rate limited — try again in a minute",
+  "drafts.aiFillN": "AI fill {n}",
+  "drafts.aiFillNoneEligible": "No selected drafts have AI-fillable gaps",
+  "drafts.aiFillTooMany": "Too many drafts ({n}) — split into batches of 50",
+  "drafts.aiFillBulkDone": "AI fill complete — {ok} succeeded, {fail} failed",
 
   "organize.title": "Catalog Organization",
   "organize.description": "Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout.",

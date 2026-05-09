@@ -91,6 +91,10 @@
   "drafts.aiFillFailed": "Compilazione AI fallita",
   "drafts.aiFillUnavailable": "Provider AI non configurato",
   "drafts.aiFillRateLimited": "Limite raggiunto — riprova fra un minuto",
+  "drafts.aiFillN": "AI compila {n}",
+  "drafts.aiFillNoneEligible": "Nessuna bozza selezionata ha lacune compilabili con AI",
+  "drafts.aiFillTooMany": "Troppe bozze ({n}) — dividi in batch da 50",
+  "drafts.aiFillBulkDone": "Compilazione AI completata — {ok} riuscite, {fail} fallite",
 
   "wizard.stepOf": "Passaggio {current} di {total}",
   "wizard.saveAndExit": "Salva ed esci",

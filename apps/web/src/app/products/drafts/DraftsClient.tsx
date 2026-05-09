@@ -943,6 +943,110 @@ export default function DraftsClient() {
     [confirm, performBulkDelete],
   )
 
+  // DR-A.2 — bulk AI fill across the current selection. Filters to
+  // rows where AI fill makes sense (canAiFill) so the action doesn't
+  // overwrite already-complete drafts. Fans out a single
+  // /api/products/ai/bulk-generate call (capped at 50 per request
+  // by the endpoint, rate-limited at 5/min) so the operator sees
+  // one toast for the batch instead of N.
+  const [busyBulkAi, setBusyBulkAi] = useState(false)
+  const onBulkAiFill = useCallback(async () => {
+    const selectedRows = drafts.filter((d) =>
+      selectedKeys.has(selectionKey(d)),
+    )
+    const eligible = selectedRows.filter(canAiFill)
+    if (eligible.length === 0) {
+      toast({
+        tone: 'info',
+        title: t('drafts.aiFillNoneEligible'),
+      })
+      return
+    }
+    if (eligible.length > 50) {
+      toast({
+        tone: 'warning',
+        title: t('drafts.aiFillTooMany', { n: eligible.length }),
+      })
+      return
+    }
+    setBusyBulkAi(true)
+    // Mark every eligible row as in-flight for the spinner UX.
+    setAiBusyIds((prev) => {
+      const next = new Set(prev)
+      for (const r of eligible) next.add(r.productId)
+      return next
+    })
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/ai/bulk-generate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productIds: eligible.map((d) => d.productId),
+            fields: AI_FILL_FIELDS,
+            marketplace: 'IT',
+          }),
+        },
+      )
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string }
+        if (res.status === 503) {
+          toast({
+            tone: 'error',
+            title: t('drafts.aiFillUnavailable'),
+            description: json.error,
+          })
+        } else if (res.status === 429) {
+          toast({ tone: 'warning', title: t('drafts.aiFillRateLimited') })
+        } else {
+          toast({
+            tone: 'error',
+            title: t('drafts.aiFillFailed'),
+            description: json.error ?? `HTTP ${res.status}`,
+          })
+        }
+        return
+      }
+      const json = (await res.json()) as {
+        results?: Array<{ productId: string; ok: boolean; error?: string }>
+      }
+      const results = json.results ?? []
+      const okCount = results.filter((r) => r.ok).length
+      const failCount = results.length - okCount
+      toast({
+        tone: failCount === 0 ? 'success' : 'warning',
+        title: t('drafts.aiFillBulkDone', { ok: okCount, fail: failCount }),
+        description:
+          failCount > 0
+            ? results
+                .filter((r) => !r.ok)
+                .slice(0, 3)
+                .map((r) => `${r.productId}: ${r.error ?? '?'}`)
+                .join('; ')
+            : undefined,
+      })
+      for (const r of results) {
+        if (r.ok) emitInvalidation({ type: 'product.updated', id: r.productId })
+      }
+      await refetch()
+      await fetchSummary()
+    } catch (err) {
+      toast({
+        tone: 'error',
+        title: t('drafts.aiFillFailed'),
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setBusyBulkAi(false)
+      setAiBusyIds((prev) => {
+        const next = new Set(prev)
+        for (const r of eligible) next.delete(r.productId)
+        return next
+      })
+    }
+  }, [drafts, selectedKeys, toast, refetch, fetchSummary, t])
+
   const onBulkDelete = useCallback(async () => {
     const selectedRows = drafts.filter((d) =>
       selectedKeys.has(selectionKey(d)),
@@ -1093,35 +1197,59 @@ export default function DraftsClient() {
       </div>
 
       {/* Bulk-action toolbar — appears only with active selection. */}
-      {selectedKeys.size > 0 && (
-        <div
-          role="toolbar"
-          aria-label="Bulk draft actions"
-          className="flex items-center gap-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-900 dark:text-blue-100"
-        >
-          <span className="text-base font-medium tabular-nums">
-            {t('drafts.bulkSelected', { n: selectedKeys.size })}
-          </span>
-          <span className="text-blue-300 dark:text-blue-700">·</span>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={onBulkDelete}
-            disabled={busyDelete}
+      {selectedKeys.size > 0 && (() => {
+        // DR-A.2 — count selected rows that AI fill can actually
+        // help. Surfaced on the bulk button so the operator sees
+        // exactly how many rows the action will touch.
+        const eligibleAiCount = drafts.filter(
+          (d) => selectedKeys.has(selectionKey(d)) && canAiFill(d),
+        ).length
+        return (
+          <div
+            role="toolbar"
+            aria-label="Bulk draft actions"
+            className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-blue-900 dark:bg-blue-950/40 dark:border-blue-900 dark:text-blue-100"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            {t('drafts.deleteN', { n: selectedKeys.size })}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setSelectedKeys(new Set())}
-          >
-            <X className="w-3.5 h-3.5" />
-            {t('drafts.clearSelection')}
-          </Button>
-        </div>
-      )}
+            <span className="text-base font-medium tabular-nums">
+              {t('drafts.bulkSelected', { n: selectedKeys.size })}
+            </span>
+            <span className="text-blue-300 dark:text-blue-700">·</span>
+            {eligibleAiCount > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onBulkAiFill}
+                disabled={busyBulkAi}
+                className="!bg-violet-600 !text-white hover:!bg-violet-700 disabled:opacity-60"
+              >
+                {busyBulkAi ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                {t('drafts.aiFillN', { n: eligibleAiCount })}
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={onBulkDelete}
+              disabled={busyDelete}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t('drafts.deleteN', { n: selectedKeys.size })}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSelectedKeys(new Set())}
+            >
+              <X className="w-3.5 h-3.5" />
+              {t('drafts.clearSelection')}
+            </Button>
+          </div>
+        )
+      })()}
 
       {error && (
         <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-800 flex items-start gap-2 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
