@@ -99,6 +99,7 @@ export function ScenariosCard() {
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const fetchScenarios = useCallback(async () => {
     setLoading(true)
@@ -270,73 +271,93 @@ export function ScenariosCard() {
           const Icon = KIND_ICONS[s.kind] ?? Beaker
           const lastRun = s.runs[0] ?? null
           const busy = busyIds.has(s.id)
+          const expanded = expandedId === s.id
           return (
-            <li key={s.id} className="px-3 py-2 flex items-start gap-3">
-              <Icon
-                className="h-4 w-4 text-slate-500 dark:text-slate-400 mt-0.5"
-                aria-hidden="true"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {s.name}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
-                    {s.kind}
-                  </span>
-                </div>
-                {s.description && (
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
-                    {s.description}
+            <li key={s.id}>
+              <div className="px-3 py-2 flex items-start gap-3">
+                <Icon
+                  className="h-4 w-4 text-slate-500 dark:text-slate-400 mt-0.5"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(expanded ? null : s.id)}
+                  disabled={!lastRun}
+                  className="flex-1 min-w-0 text-left disabled:cursor-default"
+                  aria-expanded={expanded}
+                  title={
+                    lastRun
+                      ? t('replenishment.scenarios.expandTooltip')
+                      : t('replenishment.scenarios.notYetRun')
+                  }
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {s.name}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                      {s.kind}
+                    </span>
                   </div>
-                )}
-                {lastRun ? (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    {t('replenishment.scenarios.lastRun', {
-                      ago: relativeTime(lastRun.startedAt),
-                      recs: lastRun.recsAffected,
-                      units: lastRun.totalUnitsDelta,
-                      cost: formatEur(lastRun.totalCostDeltaCents),
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 italic mt-1">
-                    {t('replenishment.scenarios.notYetRun')}
-                  </div>
-                )}
+                  {s.description && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                      {s.description}
+                    </div>
+                  )}
+                  {lastRun ? (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      {t('replenishment.scenarios.lastRun', {
+                        ago: relativeTime(lastRun.startedAt),
+                        recs: lastRun.recsAffected,
+                        units: lastRun.totalUnitsDelta,
+                        cost: formatEur(lastRun.totalCostDeltaCents),
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 italic mt-1">
+                      {t('replenishment.scenarios.notYetRun')}
+                    </div>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void runScenario(s)}
+                  disabled={busy}
+                  className={cn(
+                    'h-7 px-2.5 inline-flex items-center gap-1 rounded ring-1 ring-inset text-xs',
+                    'bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                  title={t('replenishment.scenarios.runTooltip')}
+                  aria-label={t('replenishment.scenarios.runAriaLabel', { name: s.name })}
+                >
+                  {busy ? (
+                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Play className="h-3 w-3" aria-hidden="true" />
+                  )}
+                  {busy
+                    ? t('replenishment.scenarios.running')
+                    : t('replenishment.scenarios.runButton')}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void deleteScenario(s)}
+                  className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded"
+                  title={t('replenishment.scenarios.deleteTooltip')}
+                  aria-label={t('replenishment.scenarios.deleteAriaLabel', { name: s.name })}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void runScenario(s)}
-                disabled={busy}
-                className={cn(
-                  'h-7 px-2.5 inline-flex items-center gap-1 rounded ring-1 ring-inset text-xs',
-                  'bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                )}
-                title={t('replenishment.scenarios.runTooltip')}
-                aria-label={t('replenishment.scenarios.runAriaLabel', { name: s.name })}
-              >
-                {busy ? (
-                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Play className="h-3 w-3" aria-hidden="true" />
-                )}
-                {busy
-                  ? t('replenishment.scenarios.running')
-                  : t('replenishment.scenarios.runButton')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void deleteScenario(s)}
-                className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded"
-                title={t('replenishment.scenarios.deleteTooltip')}
-                aria-label={t('replenishment.scenarios.deleteAriaLabel', { name: s.name })}
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
+              {expanded && lastRun && (
+                <div className="px-3 pb-3 pl-10">
+                  <ScenarioRunDetail scenarioId={s.id} runId={lastRun.id} />
+                </div>
+              )}
             </li>
           )
         })}
@@ -546,5 +567,273 @@ function ScenarioCreateModal({
         </Button>
       </ModalFooter>
     </Modal>
+  )
+}
+
+interface ScenarioRunOutput {
+  summary: {
+    recsAffected: number
+    totalUnitsDelta: number
+    totalCostDeltaCents: number
+    stockoutCount: number
+  }
+  recommendations: Array<{
+    id: string
+    sku: string
+    baselineQty: number
+    scenarioQty: number
+    deltaQty: number
+    baselineCostCents: number
+    scenarioCostCents: number
+    deltaCostCents: number
+    note?: string
+  }>
+  warnings: string[]
+}
+
+interface ScenarioRunFull {
+  id: string
+  status: string
+  output: ScenarioRunOutput
+  startedAt: string
+  durationMs: number | null
+}
+
+/**
+ * W5.5 — Scenario run detail panel. Lazy-loaded inline expand.
+ * Renders the per-rec deltas table from the most recent ScenarioRun's
+ * full output JSON. Shows top 20 by absolute cost delta — operator
+ * sees the biggest movers first.
+ */
+function ScenarioRunDetail({
+  scenarioId,
+  runId,
+}: {
+  scenarioId: string
+  runId: string
+}) {
+  const { t } = useTranslations()
+  const [run, setRun] = useState<ScenarioRunFull | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/fulfillment/replenishment/scenarios/${scenarioId}/runs/${runId}`,
+      { cache: 'no-store' },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled) setRun(json?.run ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setRun(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scenarioId, runId])
+
+  if (loading) {
+    return (
+      <div className="text-xs text-slate-500 dark:text-slate-400">
+        {t('replenishment.scenarios.detail.loading')}
+      </div>
+    )
+  }
+  if (!run) {
+    return (
+      <div className="text-xs text-rose-700 dark:text-rose-400">
+        {t('replenishment.scenarios.detail.unavailable')}
+      </div>
+    )
+  }
+  const output = run.output
+  if (!output?.recommendations) {
+    return (
+      <div className="text-xs text-slate-500 dark:text-slate-400">
+        {t('replenishment.scenarios.detail.noOutput')}
+      </div>
+    )
+  }
+
+  // Top 20 by |deltaCostCents|. Operator wants the biggest movers
+  // (positive or negative) at the top.
+  const sorted = [...output.recommendations]
+    .sort((a, b) => Math.abs(b.deltaCostCents) - Math.abs(a.deltaCostCents))
+    .slice(0, 20)
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            {t('replenishment.scenarios.detail.kpi.recsAffected')}
+          </div>
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+            {output.summary.recsAffected}
+          </div>
+        </div>
+        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            {t('replenishment.scenarios.detail.kpi.unitsDelta')}
+          </div>
+          <div
+            className={cn(
+              'text-sm font-semibold tabular-nums',
+              output.summary.totalUnitsDelta > 0
+                ? 'text-rose-700 dark:text-rose-400'
+                : output.summary.totalUnitsDelta < 0
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-slate-900 dark:text-slate-100',
+            )}
+          >
+            {output.summary.totalUnitsDelta > 0 ? '+' : ''}
+            {output.summary.totalUnitsDelta.toLocaleString()}
+          </div>
+        </div>
+        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            {t('replenishment.scenarios.detail.kpi.costDelta')}
+          </div>
+          <div
+            className={cn(
+              'text-sm font-semibold tabular-nums',
+              output.summary.totalCostDeltaCents > 0
+                ? 'text-rose-700 dark:text-rose-400'
+                : output.summary.totalCostDeltaCents < 0
+                  ? 'text-emerald-700 dark:text-emerald-400'
+                  : 'text-slate-900 dark:text-slate-100',
+            )}
+          >
+            {formatEur(output.summary.totalCostDeltaCents)}
+          </div>
+        </div>
+        <div className="rounded border border-slate-200 dark:border-slate-800 px-2 py-1.5 bg-slate-50 dark:bg-slate-950">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            {t('replenishment.scenarios.detail.kpi.stockouts')}
+          </div>
+          <div
+            className={cn(
+              'text-sm font-semibold tabular-nums',
+              output.summary.stockoutCount > 0
+                ? 'text-rose-700 dark:text-rose-400'
+                : 'text-slate-900 dark:text-slate-100',
+            )}
+          >
+            {output.summary.stockoutCount}
+          </div>
+        </div>
+      </div>
+
+      {output.warnings && output.warnings.length > 0 && (
+        <div className="rounded border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+          <div className="font-semibold mb-0.5">
+            {t('replenishment.scenarios.detail.warnings', {
+              n: output.warnings.length,
+            })}
+          </div>
+          <ul className="list-disc list-inside space-y-0.5">
+            {output.warnings.slice(0, 5).map((w, i) => (
+              <li key={i} className="truncate">
+                {w}
+              </li>
+            ))}
+            {output.warnings.length > 5 && (
+              <li className="italic">
+                {t('replenishment.scenarios.detail.warningsMore', {
+                  n: output.warnings.length - 5,
+                })}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-800">
+        <table className="w-full text-xs">
+          <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <tr>
+              <th className="text-left px-2 py-1 font-semibold">
+                {t('replenishment.scenarios.detail.col.sku')}
+              </th>
+              <th className="text-right px-2 py-1 font-semibold">
+                {t('replenishment.scenarios.detail.col.baseline')}
+              </th>
+              <th className="text-right px-2 py-1 font-semibold">
+                {t('replenishment.scenarios.detail.col.scenario')}
+              </th>
+              <th className="text-right px-2 py-1 font-semibold">
+                {t('replenishment.scenarios.detail.col.deltaQty')}
+              </th>
+              <th className="text-right px-2 py-1 font-semibold">
+                {t('replenishment.scenarios.detail.col.deltaCost')}
+              </th>
+              <th className="text-left px-2 py-1 font-semibold">
+                {t('replenishment.scenarios.detail.col.note')}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            {sorted.map((rec) => (
+              <tr
+                key={rec.id}
+                className="hover:bg-slate-50 dark:hover:bg-slate-950/50"
+              >
+                <td className="px-2 py-1 font-medium text-slate-900 dark:text-slate-100">
+                  {rec.sku}
+                </td>
+                <td className="px-2 py-1 text-right tabular-nums text-slate-600 dark:text-slate-400">
+                  {rec.baselineQty}
+                </td>
+                <td className="px-2 py-1 text-right tabular-nums text-slate-900 dark:text-slate-100 font-medium">
+                  {rec.scenarioQty}
+                </td>
+                <td
+                  className={cn(
+                    'px-2 py-1 text-right tabular-nums font-medium',
+                    rec.deltaQty > 0
+                      ? 'text-rose-700 dark:text-rose-400'
+                      : rec.deltaQty < 0
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-slate-500 dark:text-slate-500',
+                  )}
+                >
+                  {rec.deltaQty > 0 ? '+' : ''}
+                  {rec.deltaQty}
+                </td>
+                <td
+                  className={cn(
+                    'px-2 py-1 text-right tabular-nums font-medium',
+                    rec.deltaCostCents > 0
+                      ? 'text-rose-700 dark:text-rose-400'
+                      : rec.deltaCostCents < 0
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-slate-500 dark:text-slate-500',
+                  )}
+                >
+                  {formatEur(rec.deltaCostCents)}
+                </td>
+                <td className="px-2 py-1 text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[160px]">
+                  {rec.note ?? ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {output.recommendations.length > sorted.length && (
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+          {t('replenishment.scenarios.detail.truncated', {
+            shown: sorted.length,
+            total: output.recommendations.length,
+          })}
+        </div>
+      )}
+    </div>
   )
 }
