@@ -982,6 +982,7 @@ function DetailsTab({
 }
 
 function ForecastCard({ productId }: { productId: string }) {
+  const { t } = useTranslations()
   const [projection, setProjection] = useState<{
     daysOfCover: number | null
     stockoutDate: string | null
@@ -1016,9 +1017,8 @@ function ForecastCard({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <div className="border border-slate-200 rounded-md p-3 text-sm text-slate-400 italic">
-        <Loader2 className="w-3 h-3 animate-spin inline mr-1.5" /> Loading
-        forecast…
+      <div className="border border-slate-200 rounded-md p-3 text-sm text-slate-500 dark:text-slate-400 italic">
+        <Loader2 className="w-3 h-3 animate-spin inline mr-1.5" /> {t('products.drawer.forecast.loading')}
       </div>
     )
   }
@@ -1037,38 +1037,38 @@ function ForecastCard({ productId }: { productId: string }) {
     <div className={`border rounded-md p-3 ${tone.ring}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">
-          Forecast
+          {t('products.drawer.forecast.title')}
         </div>
         <span
           className={`text-xs font-semibold uppercase tracking-wider ${tone.text}`}
         >
-          {projection.urgency}
+          {t(`products.drawer.forecast.urgency.${projection.urgency}`)}
         </span>
       </div>
       <div className="grid grid-cols-3 gap-2 text-sm">
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-xs">
-            Days of cover
+          <div className="text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+            {t('products.drawer.forecast.daysOfCover')}
           </div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">
             {projection.daysOfCover != null
-              ? `${projection.daysOfCover}d`
+              ? t('products.drawer.forecast.dayUnit', { count: projection.daysOfCover })
               : '—'}
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-xs">
-            Velocity
+          <div className="text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+            {t('products.drawer.forecast.velocity')}
           </div>
           <div className="text-lg font-semibold tabular-nums text-slate-900">
             {projection.velocity != null
-              ? `${projection.velocity.toFixed(1)}/d`
+              ? t('products.drawer.forecast.velocityUnit', { value: projection.velocity.toFixed(1) })
               : '—'}
           </div>
         </div>
         <div>
-          <div className="text-slate-400 uppercase tracking-wider text-xs">
-            Stocks out
+          <div className="text-slate-500 dark:text-slate-400 uppercase tracking-wider text-xs">
+            {t('products.drawer.forecast.stocksOut')}
           </div>
           <div className="text-base font-medium tabular-nums text-slate-900">
             {projection.stockoutDate
@@ -1079,10 +1079,10 @@ function ForecastCard({ productId }: { productId: string }) {
       </div>
       <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-200/50">
         {projection.basis === 'forecast'
-          ? `Based on ${projection.forecastDays} days of demand data.`
+          ? t('products.drawer.forecast.basis.forecast', { days: projection.forecastDays })
           : projection.basis === 'threshold'
-            ? 'No demand signal yet — using stock threshold.'
-            : 'No demand signal yet. Generate sales history to project a stockout date.'}
+            ? t('products.drawer.forecast.basis.threshold')
+            : t('products.drawer.forecast.basis.none')}
       </div>
     </div>
   )
