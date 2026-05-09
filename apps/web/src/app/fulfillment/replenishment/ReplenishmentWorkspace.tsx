@@ -73,6 +73,7 @@ import { SlowMoversCard } from './_shared/SlowMoversCard'
 import { PanEuDistributionCard } from './_shared/PanEuDistributionCard'
 import { SupplierSpendCard } from './_shared/SupplierSpendCard'
 import { ForecastBiasCard } from './_shared/ForecastBiasCard'
+import { CannibalizationCard } from './_shared/CannibalizationCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -811,6 +812,13 @@ export default function ReplenishmentWorkspace() {
           surfaces top 20 most-miscalibrated SKUs by bias direction. */}
       <div id="forecast-bias" className="scroll-mt-4">
         <ForecastBiasCard />
+      </div>
+
+      {/* W8.3b — cannibalization card. Hides itself when no recently
+          launched SKU has cannibalized siblings. Each finding expands
+          to show pre/post velocity for affected SKUs. */}
+      <div id="cannibalization" className="scroll-mt-4">
+        <CannibalizationCard />
       </div>
 
       {/* W3.2 — command-center KPI strip. Five tiles answering
