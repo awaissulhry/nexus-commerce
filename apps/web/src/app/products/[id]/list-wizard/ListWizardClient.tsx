@@ -562,6 +562,7 @@ export default function ListWizardClient({
         productName={product.name}
         channels={channels}
         onClose={handleClose}
+        wizardId={wizardId}
       />
       <WizardStepper
         currentStep={currentStep}

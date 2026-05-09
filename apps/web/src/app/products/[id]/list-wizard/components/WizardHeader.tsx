@@ -7,6 +7,7 @@ import { CHANNEL_TONE } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ChannelTuple } from '../ListWizardClient'
+import AiCompleteWizardButton from './AiCompleteWizardModal'
 
 interface Props {
   productId: string
@@ -14,6 +15,10 @@ interface Props {
   productName: string
   channels: ChannelTuple[]
   onClose: () => void
+  /** AI-4.8 — wizard id is needed by the AI orchestrator button.
+   *  Optional so legacy callers (none today, but keeping the door
+   *  open) don't break; when missing, the button doesn't render. */
+  wizardId?: string
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -29,6 +34,7 @@ export default function WizardHeader({
   productName,
   channels,
   onClose,
+  wizardId,
 }: Props) {
   const { t } = useTranslations()
   return (
@@ -56,6 +62,17 @@ export default function WizardHeader({
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         <ChannelsSummary channels={channels} />
+        {/* AI-4.8 — bulk orchestrator trigger. Disabled until at
+            least one channel is picked (matches the orchestrator's
+            409 floor). Hidden entirely when the host doesn't pass
+            wizardId (defensive — happens if future callers reuse
+            this header outside the wizard surface). */}
+        {wizardId && (
+          <AiCompleteWizardButton
+            wizardId={wizardId}
+            channelsPicked={channels.length > 0}
+          />
+        )}
         <button
           type="button"
           onClick={onClose}
