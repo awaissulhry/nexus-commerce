@@ -741,6 +741,7 @@ function HealthCard({
     marketplace?: string
   }>
 }) {
+  const { t } = useTranslations()
   const errors = issues.filter((i) => i.severity === 'error')
   const warnings = issues.filter((i) => i.severity === 'warning')
   const infos = issues.filter((i) => i.severity === 'info')
@@ -760,8 +761,8 @@ function HealthCard({
   return (
     <div className="border border-slate-200 rounded-md p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          Health
+        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          {t('products.drawer.health.title')}
         </div>
         {score != null && (
           <div className="flex items-center gap-2">
@@ -770,24 +771,30 @@ function HealthCard({
                 'inline-flex items-center h-6 px-2 rounded border text-base font-semibold tabular-nums',
                 scoreTone,
               )}
-              title="Composite score 0-100. Each error -10, warning -3, info -1, capped at 0."
+              title={t('products.drawer.health.scoreTitle')}
             >
               {score}
-              <span className="text-xs opacity-60 ml-0.5">/100</span>
+              <span className="text-xs opacity-60 ml-0.5">{t('products.drawer.health.scoreSuffix')}</span>
             </span>
             <span className="text-sm text-slate-500 tabular-nums">
               {errors.length > 0 && (
-                <span className="text-rose-700">{errors.length}E</span>
+                <span className="text-rose-700">
+                  {t('products.drawer.health.abbr.errors', { count: errors.length })}
+                </span>
               )}
               {errors.length > 0 && warnings.length > 0 && ' · '}
               {warnings.length > 0 && (
-                <span className="text-amber-700">{warnings.length}W</span>
+                <span className="text-amber-700">
+                  {t('products.drawer.health.abbr.warnings', { count: warnings.length })}
+                </span>
               )}
               {(errors.length > 0 || warnings.length > 0) &&
                 infos.length > 0 &&
                 ' · '}
               {infos.length > 0 && (
-                <span className="text-slate-500">{infos.length}I</span>
+                <span className="text-slate-500">
+                  {t('products.drawer.health.abbr.infos', { count: infos.length })}
+                </span>
               )}
             </span>
           </div>
@@ -796,7 +803,7 @@ function HealthCard({
 
       {issues.length === 0 ? (
         <div className="text-base text-slate-500 italic">
-          No issues. The product passes every readiness check.
+          {t('products.drawer.health.empty')}
         </div>
       ) : (
         <ul className="space-y-1">
@@ -2507,22 +2514,21 @@ function ImagesTab({
   productId: string
   images: Array<{ url: string; type: string | null }>
 }) {
+  const { t } = useTranslations()
   if (images.length === 0) {
     return (
       <div className="px-5 py-12 text-center text-base text-slate-500 dark:text-slate-400">
         <ImageIcon className="w-6 h-6 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
-        No images yet for this product.
-        <div className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-          Drop a folder of photos onto the bulk image-upload modal on
-          the main grid, or upload individually from the full image
-          manager below.
+        {t('products.drawer.images.empty')}
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          {t('products.drawer.images.emptyHint')}
         </div>
         <div className="mt-3">
           <Link
             href={`/products/${productId}/images`}
             className="h-8 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
           >
-            <ExternalLink size={11} /> Open image manager
+            <ExternalLink size={11} /> {t('products.drawer.images.openManager')}
           </Link>
         </div>
       </div>
@@ -2532,13 +2538,18 @@ function ImagesTab({
     <div className="px-5 py-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-          {images.length} image{images.length === 1 ? '' : 's'}
+          {t(
+            images.length === 1
+              ? 'products.drawer.images.count.one'
+              : 'products.drawer.images.count.other',
+            { count: images.length },
+          )}
         </div>
         <Link
           href={`/products/${productId}/images`}
           className="h-7 px-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5"
         >
-          <ExternalLink size={11} /> Manage images
+          <ExternalLink size={11} /> {t('products.drawer.images.manage')}
         </Link>
       </div>
       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -2562,8 +2573,7 @@ function ImagesTab({
         ))}
       </div>
       <div className="text-sm text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
-        Drag-reorder, slot assignment (MAIN / ALT / LIFESTYLE), and
-        bulk upload happen in the full image manager.
+        {t('products.drawer.images.footer')}
       </div>
     </div>
   )

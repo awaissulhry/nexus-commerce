@@ -2578,5 +2578,19 @@
   "products.drawer.detail.ai.applied": "Applicato",
   "products.drawer.detail.ai.apply": "Applica",
   "products.drawer.detail.ai.applying": "Applicazione…",
-  "products.drawer.detail.ai.dismiss": "Ignora"
+  "products.drawer.detail.ai.dismiss": "Ignora",
+  "products.drawer.images.empty": "Nessuna immagine ancora per questo prodotto.",
+  "products.drawer.images.emptyHint": "Trascina una cartella di foto sul modal di upload bulk nella griglia principale, oppure carica singolarmente dal gestore immagini completo qui sotto.",
+  "products.drawer.images.openManager": "Apri gestore immagini",
+  "products.drawer.images.manage": "Gestisci immagini",
+  "products.drawer.images.count.one": "{count} immagine",
+  "products.drawer.images.count.other": "{count} immagini",
+  "products.drawer.images.footer": "Riordino drag, assegnazione slot (MAIN / ALT / LIFESTYLE) e upload bulk avvengono nel gestore immagini completo.",
+  "products.drawer.health.title": "Salute",
+  "products.drawer.health.scoreTitle": "Punteggio composito 0-100. Ogni errore -10, avviso -3, info -1, limitato a 0.",
+  "products.drawer.health.scoreSuffix": "/100",
+  "products.drawer.health.abbr.errors": "{count}E",
+  "products.drawer.health.abbr.warnings": "{count}A",
+  "products.drawer.health.abbr.infos": "{count}I",
+  "products.drawer.health.empty": "Nessun problema. Il prodotto supera ogni controllo di idoneità."
 }

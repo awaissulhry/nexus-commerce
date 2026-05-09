@@ -2590,5 +2590,19 @@
   "products.drawer.detail.ai.applied": "Applied",
   "products.drawer.detail.ai.apply": "Apply",
   "products.drawer.detail.ai.applying": "Applying…",
-  "products.drawer.detail.ai.dismiss": "Dismiss"
+  "products.drawer.detail.ai.dismiss": "Dismiss",
+  "products.drawer.images.empty": "No images yet for this product.",
+  "products.drawer.images.emptyHint": "Drop a folder of photos onto the bulk image-upload modal on the main grid, or upload individually from the full image manager below.",
+  "products.drawer.images.openManager": "Open image manager",
+  "products.drawer.images.manage": "Manage images",
+  "products.drawer.images.count.one": "{count} image",
+  "products.drawer.images.count.other": "{count} images",
+  "products.drawer.images.footer": "Drag-reorder, slot assignment (MAIN / ALT / LIFESTYLE), and bulk upload happen in the full image manager.",
+  "products.drawer.health.title": "Health",
+  "products.drawer.health.scoreTitle": "Composite score 0-100. Each error -10, warning -3, info -1, capped at 0.",
+  "products.drawer.health.scoreSuffix": "/100",
+  "products.drawer.health.abbr.errors": "{count}E",
+  "products.drawer.health.abbr.warnings": "{count}W",
+  "products.drawer.health.abbr.infos": "{count}I",
+  "products.drawer.health.empty": "No issues. The product passes every readiness check."
 }
