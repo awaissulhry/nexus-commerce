@@ -552,11 +552,16 @@ export default function SyncLogsHubClient({
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {health.channels.map((c) => {
                     const tone = STATUS_TONE[c.status]
+                    // L.14.1 — clicking the row drills into the API
+                    // calls list scoped to this channel. Channel
+                    // identifier matches the value recorded by
+                    // recordApiCall (uppercase enum name).
                     return (
-                      <li
-                        key={c.id}
-                        className="px-3 py-2 flex items-center gap-3"
-                      >
+                      <li key={c.id}>
+                        <Link
+                          href={`/sync-logs/api-calls?channel=${encodeURIComponent(c.channel)}`}
+                          className="px-3 py-2 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        >
                         <span
                           className={`w-2 h-2 rounded-full flex-shrink-0 ${tone.dot}`}
                           aria-hidden
@@ -602,6 +607,11 @@ export default function SyncLogsHubClient({
                             </div>
                           )}
                         </div>
+                        <ExternalLink
+                          className="w-3 h-3 text-slate-300 dark:text-slate-600 flex-shrink-0"
+                          aria-hidden
+                        />
+                        </Link>
                       </li>
                     )
                   })}
