@@ -186,6 +186,34 @@ export function coercePasteValue(
     if (/^\+?\d{4,15}$/.test(cleaned)) return { value: cleaned }
     return { value: null, error: 'Use a phone number with optional + prefix' }
   }
+  // W2.6 — multiSelect: comma / semicolon / pipe separated, or a
+  // JSON array. When meta.options is present, validate each entry
+  // against the allowed set.
+  if (field.type === 'multiSelect' || field.type === 'string_array') {
+    let parts: string[]
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        parts = Array.isArray(parsed) ? parsed.map((x) => String(x).trim()) : []
+      } catch {
+        parts = []
+      }
+    } else {
+      parts = trimmed.split(/[,;|]/).map((x) => x.trim()).filter((x) => x.length > 0)
+    }
+    parts = Array.from(new Set(parts.filter((x) => x.length > 0)))
+    if (field.options && field.options.length > 0) {
+      const allowed = new Set(field.options)
+      const invalid = parts.filter((x) => !allowed.has(x))
+      if (invalid.length > 0) {
+        return {
+          value: null,
+          error: `Unknown values: ${invalid.slice(0, 3).join(', ')}${invalid.length > 3 ? '…' : ''}`,
+        }
+      }
+    }
+    return { value: parts }
+  }
   // W2.5 — color: accepts #rrggbb, #rgb, rgb(), or a named color.
   if (field.type === 'color') {
     const lower = trimmed.toLowerCase()

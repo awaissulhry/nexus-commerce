@@ -99,6 +99,14 @@ export type FieldType =
    * lowercase '#rrggbb'.
    */
   | 'color'
+  /**
+   * W2.6 — multi-select. Stores a string[]; display renders chips;
+   * edit pops a checkbox list of meta.options. Paste accepts a
+   * comma-separated list and validates each entry against options
+   * (when provided). Use cases: per-product channel list,
+   * categories, marketplace tags.
+   */
+  | 'multiSelect'
 
 export interface EditableMeta {
   editable: true
@@ -264,6 +272,35 @@ export function formatDateTime(
   } catch {
     return iso
   }
+}
+
+/**
+ * W2.6 — coerce arbitrary input to a string[] for the multiSelect
+ * cell. Accepts: actual arrays, JSON-string arrays, comma /
+ * semicolon / pipe separated strings. Trims + de-dupes. Returns []
+ * for empty / null. Order preserved from the source.
+ */
+export function coerceMultiSelect(v: unknown): string[] {
+  if (v === null || v === undefined || v === '') return []
+  if (Array.isArray(v)) {
+    return Array.from(
+      new Set(v.map((x) => String(x).trim()).filter((x) => x.length > 0)),
+    )
+  }
+  const s = String(v).trim()
+  if (!s) return []
+  // JSON array literal
+  if (s.startsWith('[') && s.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(s)
+      if (Array.isArray(parsed)) return coerceMultiSelect(parsed)
+    } catch {
+      // fall through to delimiter parsing
+    }
+  }
+  // Common operator delimiters
+  const parts = s.split(/[,;|]/).map((x) => x.trim()).filter((x) => x.length > 0)
+  return Array.from(new Set(parts))
 }
 
 /**
@@ -588,6 +625,65 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.6 — multiSelect edit: a popover-style checkbox list inside
+      // the cell. Operators tick on/off; blur commits the array. When
+      // meta.options isn't provided we fall back to a comma-separated
+      // text input (so an unbounded tag column still works).
+      if (meta.fieldType === 'multiSelect') {
+        const selected = coerceMultiSelect(draftValue)
+        if (meta.options && meta.options.length > 0) {
+          return (
+            <div
+              ref={(el) => {
+                inputRef.current = el as unknown as HTMLInputElement
+              }}
+              tabIndex={0}
+              onBlur={handleBlur}
+              onKeyDown={
+                handleKeyDown as unknown as React.KeyboardEventHandler<HTMLDivElement>
+              }
+              className="absolute z-10 left-0 top-0 min-w-full bg-white ring-2 ring-blue-500 rounded-sm shadow-md max-h-48 overflow-auto p-1 outline-none"
+            >
+              {meta.options.map((opt) => {
+                const checked = selected.includes(opt)
+                return (
+                  <label
+                    key={opt}
+                    className="flex items-center gap-2 px-2 py-1 text-md hover:bg-slate-50 cursor-pointer rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? selected.filter((x) => x !== opt)
+                          : [...selected, opt]
+                        setDraftValue(next)
+                      }}
+                    />
+                    <span className="truncate">{opt}</span>
+                  </label>
+                )
+              })}
+            </div>
+          )
+        }
+        // Free-form fallback: comma-separated text editor.
+        return (
+          <input
+            ref={(el) => {
+              inputRef.current = el
+            }}
+            type="text"
+            value={selected.join(', ')}
+            onChange={(e) => setDraftValue(coerceMultiSelect(e.target.value))}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            placeholder="tag, tag, tag"
+            className={baseInputClass}
+          />
+        )
+      }
       // W2.5 — color edit: native <input type="color"> + a parallel
       // hex text input so operators can either pick visually or paste
       // a hex value. Both are bound to draftValue; whichever changes
@@ -778,6 +874,48 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.6 — multiSelect display: chips of the selected values. The
+    // chip count is capped to keep the cell single-line; overflow
+    // shows '+N more' with a tooltip listing the rest.
+    if (meta.fieldType === 'multiSelect') {
+      const tags = coerceMultiSelect(draftValue)
+      const VISIBLE = 3
+      const visible = tags.slice(0, VISIBLE)
+      const overflow = tags.length - visible.length
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? tags.join(', ')}
+          className={cn(
+            'w-full h-full px-2 flex items-center gap-1 text-md cursor-cell overflow-hidden',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {tags.length === 0 ? (
+            <span className="text-slate-300">—</span>
+          ) : (
+            <>
+              {visible.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center max-w-[120px] truncate px-1.5 py-0.5 text-xs rounded bg-slate-100 text-slate-700 border border-slate-200"
+                >
+                  {tag}
+                </span>
+              ))}
+              {overflow > 0 && (
+                <span className="text-xs text-slate-500 flex-shrink-0">
+                  +{overflow}
+                </span>
+              )}
+            </>
+          )}
+        </div>
       )
     }
 
