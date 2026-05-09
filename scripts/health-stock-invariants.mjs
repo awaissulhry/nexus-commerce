@@ -245,6 +245,53 @@ await c.connect()
     r.rows[0].n === 0 ? 'constraint dropped — invariant #6 lost its DB-level enforcement' : null)
 }
 
+// 17. T.6/T.7: cost-layer fiscal capture columns + CHECK constraints
+{
+  const r = await c.query(`
+    SELECT count(*)::int n FROM pg_constraint
+    WHERE conname IN (
+      'StockCostLayer_currency_rate_consistency',
+      'StockCostLayer_vatRate_range'
+    )
+  `)
+  record('T.6/T.7: StockCostLayer fiscal CHECK constraints present', r.rows[0].n === 2,
+    r.rows[0].n < 2 ? `${r.rows[0].n}/2 fiscal CHECKs present — currency/VAT enforcement at risk` : null)
+}
+
+// 18. T.1 eBay silent-drift-risk: credentials present but real-API
+//     opt-in not set. eBay sync attempts will fail-loud per T.1, but
+//     this surfaces the config gap as a CI warning so it's caught
+//     before the OutboundSyncQueue starts piling up failures.
+{
+  const credsPresent = !!(
+    process.env.EBAY_APP_ID && process.env.EBAY_CERT_ID &&
+    process.env.EBAY_DEV_ID && process.env.EBAY_TOKEN
+  )
+  const realApi = process.env.NEXUS_EBAY_REAL_API === 'true'
+  const driftRisk = credsPresent && !realApi
+  record('T.1: eBay credentials + real-API opt-in are consistent', !driftRisk,
+    driftRisk ? 'EBAY_* credentials set but NEXUS_EBAY_REAL_API not enabled — sync will fail-loud in prod' : null)
+}
+
+// 19. T.2 Pan-EU silent-skip-risk: AMAZON_FBA_PAN_EU_LIVE=1 set but
+//     adapter still the unconfigured stub. The cron silently skips —
+//     warn so it's not missed for weeks.
+{
+  const intent = process.env.AMAZON_FBA_PAN_EU_LIVE === '1'
+  // Adapter wiring detection: look at the resolveAdapter source.
+  // Today this is hard-coded to the unconfigured stub even when the
+  // env is set, so intent=true → skipping. Keep this check simple
+  // and forward-compatible: when the real adapter ships, the stub
+  // path will be removed and this becomes a no-op for live envs.
+  const fs = await import('node:fs')
+  const jobPath = path.join(here, '..', 'apps/api/src/jobs/fba-pan-eu-sync.job.ts')
+  const jobSrc = fs.readFileSync(jobPath, 'utf8')
+  const adapterStillStub = /TODO: wire the real SP-API adapter/.test(jobSrc)
+  const skipRisk = intent && adapterStillStub
+  record('T.2: Pan-EU intent vs adapter wiring are consistent', !skipRisk,
+    skipRisk ? 'AMAZON_FBA_PAN_EU_LIVE=1 but adapter still stub — daily cron skips silently' : null)
+}
+
 await c.end()
 
 const failed = checks.filter((c) => !c.pass).length
