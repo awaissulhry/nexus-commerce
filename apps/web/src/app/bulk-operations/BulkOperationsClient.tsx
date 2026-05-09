@@ -142,6 +142,7 @@ import {
   ExpandCollapseControls,
 } from './components/DisplayControls'
 import { useBulkUndoRedo } from './lib/use-bulk-undo-redo'
+import { startDragFillTracker } from './lib/drag-fill-tracker'
 
 // Re-export BulkProduct so any sibling file (modals, cells, etc.) that
 // used to import it from this file still finds it here.
@@ -2335,66 +2336,23 @@ export default function BulkOperationsClient() {
       source: { ...rb },
       target: { rowIdx: rb.maxRow, colIdx: rb.maxCol },
     })
-    const local = { rafId: null as number | null, x: 0, y: 0 }
-    const flush = () => {
-      local.rafId = null
-      const el = document.elementFromPoint(local.x, local.y) as
-        | HTMLElement
-        | null
-      if (!el) return
-      const cellEl = el.closest('[data-row-idx]') as HTMLElement | null
-      if (!cellEl) return
-      const r = parseInt(cellEl.getAttribute('data-row-idx') ?? '', 10)
-      const c = parseInt(cellEl.getAttribute('data-col-idx') ?? '', 10)
-      if (Number.isNaN(r) || Number.isNaN(c)) return
-      setFillState((curr) =>
-        curr ? { ...curr, target: { rowIdx: r, colIdx: c } } : curr,
-      )
-    }
-    const teardown = () => {
-      if (local.rafId !== null) cancelAnimationFrame(local.rafId)
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('contextmenu', onContext)
-    }
-    const onMove = (e: MouseEvent) => {
-      local.x = e.clientX
-      local.y = e.clientY
-      if (local.rafId === null) {
-        local.rafId = requestAnimationFrame(flush)
-      }
-    }
-    const onUp = () => {
-      teardown()
-      // Read the latest fillState off the setter so we always commit
-      // the final target, not whatever stale value the handler closure
-      // captured.
-      setFillState((curr) => {
-        if (curr) commitFill(curr)
-        return null
-      })
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        teardown()
-        setFillState(null)
-      }
-    }
-    // TECH_DEBT #26 — right-click cancels mid-drag. Same effect as Esc;
-    // mouse-driven users get an affordance that doesn't require their
-    // other hand on the keyboard. preventDefault suppresses the
-    // browser context menu so the cancel feels intentional.
-    const onContext = (e: MouseEvent) => {
-      e.preventDefault()
-      teardown()
-      setFillState(null)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('contextmenu', onContext)
+    // W1.5 — document-level mousemove/up/Esc/right-click machinery
+    // moved to startDragFillTracker so this callback only owns the
+    // grid-state side of the gesture. Behaviour preserved verbatim:
+    // commit reads the latest fillState off the setter so the final
+    // target wins regardless of stale closures.
+    startDragFillTracker({
+      onTarget: (target) => {
+        setFillState((curr) => (curr ? { ...curr, target } : curr))
+      },
+      onCommit: () => {
+        setFillState((curr) => {
+          if (curr) commitFill(curr)
+          return null
+        })
+      },
+      onCancel: () => setFillState(null),
+    })
   }, [commitFill])
   selectCtxRef.current.beginFill = beginFill
   useEffect(() => {
