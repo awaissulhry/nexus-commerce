@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import TimeSeriesChart from './TimeSeriesChart'
+import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -447,6 +448,30 @@ export default function ApiCallsClient() {
               />
             )}
           </button>
+          <SavedSearchPicker
+            surface="api-calls"
+            currentFilters={{
+              since: urlSinceKey,
+              channel: urlChannel,
+              errorType: urlErrorType,
+              success: urlSuccess,
+              operation: urlOperation,
+              requestId: urlRequestId,
+            }}
+            onApply={(filters) => {
+              // Reset every URL param the picker manages, then apply the
+              // saved set. updateUrl deletes empty values automatically.
+              updateUrl({
+                since: '',
+                channel: '',
+                errorType: '',
+                success: '',
+                operation: '',
+                requestId: '',
+                ...filters,
+              })
+            }}
+          />
           <Button
             variant="secondary"
             size="sm"
@@ -456,6 +481,8 @@ export default function ApiCallsClient() {
               if (urlChannel) params.set('channel', urlChannel)
               if (urlErrorType) params.set('errorType', urlErrorType)
               if (urlSuccess) params.set('success', urlSuccess)
+              if (urlOperation) params.set('operation', urlOperation)
+              if (urlRequestId) params.set('requestId', urlRequestId)
               window.open(
                 `${getBackendUrl()}/api/sync-logs/api-calls/export?${params.toString()}`,
                 '_blank',
