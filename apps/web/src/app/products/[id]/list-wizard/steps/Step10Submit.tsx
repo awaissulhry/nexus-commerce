@@ -459,15 +459,15 @@ export default function Step10Submit({
   if (!submissions) {
     return (
       <div className="max-w-xl mx-auto py-12 px-6">
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-600 mb-4">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-8 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 mb-4">
             <Rocket className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-semibold text-slate-900">
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
             Ready to submit
           </h2>
-          <p className="mt-2 text-md text-slate-600">
-            <span className="font-mono text-slate-800">{product.sku}</span>{' '}
+          <p className="mt-2 text-md text-slate-600 dark:text-slate-400">
+            <span className="font-mono text-slate-800 dark:text-slate-200">{product.sku}</span>{' '}
             will be submitted to{' '}
             <span className="font-semibold">{channels.length}</span>{' '}
             channel{channels.length === 1 ? '' : 's'} in parallel.
@@ -476,7 +476,7 @@ export default function Step10Submit({
             {channels.map((c) => (
               <span
                 key={`${c.platform}:${c.marketplace}`}
-                className="text-xs font-mono font-medium bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded"
+                className="text-xs font-mono font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded"
               >
                 {c.platform}:{c.marketplace}
               </span>
@@ -484,7 +484,7 @@ export default function Step10Submit({
           </div>
 
           {error && (
-            <div className="mt-4 border border-rose-200 bg-rose-50 rounded px-3 py-2 text-base text-rose-700 inline-flex items-start gap-2 text-left">
+            <div className="mt-4 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300 inline-flex items-start gap-2 text-left">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               {error}
             </div>
@@ -530,10 +530,10 @@ export default function Step10Submit({
   return (
     <div className="max-w-2xl mx-auto py-10 px-6">
       <div className="mb-5">
-        <h2 className="text-xl font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Submission
         </h2>
-        <p className="mt-1 text-md text-slate-600">
+        <p className="mt-1 text-md text-slate-600 dark:text-slate-400">
           Per-channel publish status. Failed channels can be retried
           individually without re-pushing the successful ones.
         </p>
@@ -544,7 +544,7 @@ export default function Step10Submit({
           updating. The poll loop is hard-capped at 15 minutes so a
           stuck channel doesn't run polling forever. */}
       {timedOut && (
-        <div className="mb-4 border border-amber-200 bg-amber-50 rounded-lg px-4 py-3 flex items-center justify-between">
+        <div className="mb-4 border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-4 py-3 flex items-center justify-between">
           <div className="text-base text-amber-900">
             <div className="font-semibold">
               Still waiting after 15 minutes.
@@ -556,7 +556,7 @@ export default function Step10Submit({
           <button
             type="button"
             onClick={manualRefresh}
-            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-base font-medium border border-amber-300 text-amber-900 hover:bg-amber-100"
+            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-base font-medium border border-amber-300 text-amber-900 hover:bg-amber-100 dark:hover:bg-amber-900/60"
           >
             <RotateCw className="w-3 h-3" />
             Refresh
@@ -569,18 +569,18 @@ export default function Step10Submit({
         className={cn(
           'mb-4 border rounded-lg px-4 py-3 flex items-center justify-between',
           overallStatus === 'LIVE'
-            ? 'border-emerald-200 bg-emerald-50'
+            ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40'
             : overallStatus === 'FAILED'
-            ? 'border-rose-200 bg-rose-50'
-            : 'border-slate-200 bg-white',
+            ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
+            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
         )}
       >
         <div className="text-md">
-          <div className="font-medium text-slate-900">
+          <div className="font-medium text-slate-900 dark:text-slate-100">
             Wizard status:{' '}
             <span className="font-mono">{overallStatus ?? '—'}</span>
           </div>
-          <div className="text-sm text-slate-600 mt-0.5">
+          <div className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
             {liveCount} live · {failedCount} failed ·{' '}
             {notImplCount} adapter-not-wired ·{' '}
             {submissions.length - liveCount - failedCount - notImplCount}{' '}
@@ -592,7 +592,7 @@ export default function Step10Submit({
             type="button"
             onClick={onRetryAllFailed}
             disabled={retrying.size > 0}
-            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-base font-medium border border-rose-200 text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+            className="inline-flex items-center gap-1 h-8 px-3 rounded-md text-base font-medium border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-40"
           >
             <RotateCw className="w-3 h-3" />
             Retry all failed
@@ -601,7 +601,7 @@ export default function Step10Submit({
       </div>
 
       {error && (
-        <div className="mb-4 border border-rose-200 bg-rose-50 rounded-md px-3 py-2 text-base text-rose-700 inline-flex items-start gap-2">
+        <div className="mb-4 border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-700 dark:text-rose-300 inline-flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -621,7 +621,7 @@ export default function Step10Submit({
 
       {/* Footer */}
       <div className="mt-6 flex items-center justify-between gap-3">
-        <span className="text-base text-slate-500">
+        <span className="text-base text-slate-500 dark:text-slate-400">
           {inFlight ? (
             <span className="inline-flex items-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -634,7 +634,7 @@ export default function Step10Submit({
         <button
           type="button"
           onClick={goToProduct}
-          className="inline-flex items-center gap-2 h-9 px-4 rounded-md text-md font-medium bg-slate-100 text-slate-700 hover:bg-slate-200"
+          className="inline-flex items-center gap-2 h-9 px-4 rounded-md text-md font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200"
         >
           Back to product
           <ArrowRight className="w-3.5 h-3.5" />
@@ -677,28 +677,28 @@ function HistoryStrip({
   const visible = expanded ? events : events.slice(0, 1)
   const hiddenCount = events.length - visible.length
   return (
-    <div className="mt-6 border border-slate-200 rounded-lg bg-white">
+    <div className="mt-6 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="w-full px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 text-left"
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left"
       >
         <div className="flex items-center gap-2">
           {expanded ? (
-            <ChevronDown className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            <ChevronDown className="w-4 h-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            <ChevronRight className="w-4 h-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
           )}
-          <span className="text-md font-medium text-slate-700">
+          <span className="text-md font-medium text-slate-700 dark:text-slate-300">
             Previous attempts
           </span>
-          <span className="text-sm text-slate-500 tabular-nums">
+          <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
             ({events.length})
           </span>
         </div>
         {!expanded && hiddenCount > 0 && (
-          <span className="text-sm text-slate-500 tabular-nums">
+          <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
             +{hiddenCount} more
           </span>
         )}
@@ -720,31 +720,31 @@ function HistoryStrip({
             >
               {ok ? (
                 <CheckCircle2
-                  className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"
+                  className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0"
                   aria-hidden="true"
                 />
               ) : (
                 <XCircle
-                  className="w-3.5 h-3.5 text-rose-600 flex-shrink-0"
+                  className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 flex-shrink-0"
                   aria-hidden="true"
                 />
               )}
-              <span className="text-slate-700 tabular-nums">
+              <span className="text-slate-700 dark:text-slate-300 tabular-nums">
                 {new Date(e.createdAt).toLocaleString()}
               </span>
-              <span className="text-slate-500">·</span>
+              <span className="text-slate-500 dark:text-slate-400">·</span>
               <span
                 className={cn(
                   'font-medium',
-                  ok ? 'text-emerald-700' : 'text-rose-700',
+                  ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300',
                 )}
               >
                 {ok ? 'Completed' : 'Failed'}
               </span>
               {total > 0 && (
                 <>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-slate-700 tabular-nums">
+                  <span className="text-slate-500 dark:text-slate-400">·</span>
+                  <span className="text-slate-700 dark:text-slate-300 tabular-nums">
                     {succeeded}/{total} channel
                     {total === 1 ? '' : 's'}
                   </span>
@@ -752,8 +752,8 @@ function HistoryStrip({
               )}
               {dur > 0 && (
                 <>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-slate-500 tabular-nums">
+                  <span className="text-slate-500 dark:text-slate-400">·</span>
+                  <span className="text-slate-500 dark:text-slate-400 tabular-nums">
                     {(dur / 1000).toFixed(1)}s
                   </span>
                 </>
@@ -777,12 +777,12 @@ function SubmissionRow({
 }) {
   const tone =
     entry.status === 'LIVE'
-      ? 'border-emerald-200 bg-emerald-50/50'
+      ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50'
       : entry.status === 'FAILED'
-      ? 'border-rose-200 bg-rose-50/50'
+      ? 'border-rose-200 dark:border-rose-900 bg-rose-50/50'
       : entry.status === 'NOT_IMPLEMENTED'
-      ? 'border-slate-200 bg-slate-50/50'
-      : 'border-slate-200 bg-white'
+      ? 'border-slate-200 dark:border-slate-700 bg-slate-50/50'
+      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
 
   return (
     <div className={cn('border rounded-lg px-4 py-3', tone)}>
@@ -790,13 +790,13 @@ function SubmissionRow({
         <div className="flex items-center gap-2.5 min-w-0">
           <StatusIcon status={entry.status} retrying={retrying} />
           <div className="min-w-0">
-            <div className="font-mono text-md text-slate-900 font-medium truncate">
+            <div className="font-mono text-md text-slate-900 dark:text-slate-100 font-medium truncate">
               {entry.channelKey}
             </div>
-            <div className="text-sm text-slate-500 truncate">
+            <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
               {humanStatus(entry.status, retrying)}
               {entry.submissionId && (
-                <span className="ml-1 font-mono text-slate-400">
+                <span className="ml-1 font-mono text-slate-400 dark:text-slate-500">
                   · id: {entry.submissionId}
                 </span>
               )}
@@ -809,7 +809,7 @@ function SubmissionRow({
               href={entry.listingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+              className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
             >
               View listing
               <ExternalLink className="w-3 h-3" />
@@ -826,7 +826,7 @@ function SubmissionRow({
                   ? 'Retry will stay NOT_IMPLEMENTED until the adapter is wired.'
                   : 'Retry this channel'
               }
-              className="inline-flex items-center gap-1 h-7 px-2 rounded text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 h-7 px-2 rounded text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {retrying ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -839,7 +839,7 @@ function SubmissionRow({
         </div>
       </div>
       {entry.error && (
-        <div className="mt-2 text-sm text-rose-700 inline-flex items-start gap-1.5">
+        <div className="mt-2 text-sm text-rose-700 dark:text-rose-300 inline-flex items-start gap-1.5">
           <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
           {entry.error}
         </div>
@@ -848,16 +848,16 @@ function SubmissionRow({
           per-child counts surfaced to confirm catalog assignment without
           requiring the user to dive into the DB. */}
       {entry.parentAsin && (
-        <div className="mt-2 text-sm text-slate-700 inline-flex items-center gap-2 flex-wrap">
-          <span className="text-slate-500">Parent ASIN:</span>
-          <span className="font-mono font-medium text-slate-900">
+        <div className="mt-2 text-sm text-slate-700 dark:text-slate-300 inline-flex items-center gap-2 flex-wrap">
+          <span className="text-slate-500 dark:text-slate-400">Parent ASIN:</span>
+          <span className="font-mono font-medium text-slate-900 dark:text-slate-100">
             {entry.parentAsin}
           </span>
           {entry.childAsinsByMasterSku &&
             Object.keys(entry.childAsinsByMasterSku).length > 0 && (
-              <span className="text-slate-500">
+              <span className="text-slate-500 dark:text-slate-400">
                 ·{' '}
-                <span className="font-medium text-slate-700">
+                <span className="font-medium text-slate-700 dark:text-slate-300">
                   {Object.keys(entry.childAsinsByMasterSku).length}
                 </span>{' '}
                 child ASIN
@@ -870,7 +870,7 @@ function SubmissionRow({
         </div>
       )}
       {entry.notImplementedReason && (
-        <div className="mt-2 text-sm text-slate-600 italic">
+        <div className="mt-2 text-sm text-slate-600 dark:text-slate-400 italic">
           {entry.notImplementedReason}
         </div>
       )}
@@ -911,9 +911,9 @@ function SubmissionWarnings({
   const hidden = warnings.length - visible.length
 
   return (
-    <div className="mt-2 border border-amber-200 bg-amber-50/60 rounded-md px-3 py-2">
+    <div className="mt-2 border border-amber-200 dark:border-amber-900 bg-amber-50/60 rounded-md px-3 py-2">
       <div className="flex items-center gap-2 mb-1">
-        <AlertCircle className="w-3 h-3 text-amber-600 flex-shrink-0" />
+        <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400 flex-shrink-0" />
         <span className="text-sm font-medium text-amber-900">
           {(grouped.WARNING ?? 0) > 0 && (
             <>
@@ -927,7 +927,7 @@ function SubmissionWarnings({
             </>
           )}
         </span>
-        <span className="text-xs text-amber-700">
+        <span className="text-xs text-amber-700 dark:text-amber-300">
           (publish succeeded; review for catalog quality)
         </span>
       </div>
@@ -935,7 +935,7 @@ function SubmissionWarnings({
         {visible.map((w, i) => (
           <li
             key={i}
-            className="text-sm text-slate-800 leading-snug flex items-start gap-1.5"
+            className="text-sm text-slate-800 dark:text-slate-200 leading-snug flex items-start gap-1.5"
           >
             <span
               className={cn(
@@ -944,18 +944,18 @@ function SubmissionWarnings({
               )}
             />
             <div className="min-w-0 flex-1">
-              <span className="font-medium text-slate-900">{w.code}</span>
+              <span className="font-medium text-slate-900 dark:text-slate-100">{w.code}</span>
               {w.sku && (
-                <span className="ml-1 font-mono text-xs text-slate-500">
+                <span className="ml-1 font-mono text-xs text-slate-500 dark:text-slate-400">
                   · {w.sku}
                 </span>
               )}
               {w.attributeNames && w.attributeNames.length > 0 && (
-                <span className="ml-1 font-mono text-xs text-amber-700">
+                <span className="ml-1 font-mono text-xs text-amber-700 dark:text-amber-300">
                   · {w.attributeNames.join(', ')}
                 </span>
               )}
-              <div className="text-slate-700">{w.message}</div>
+              <div className="text-slate-700 dark:text-slate-300">{w.message}</div>
             </div>
           </li>
         ))}
@@ -964,7 +964,7 @@ function SubmissionWarnings({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-1 text-xs text-amber-700 hover:text-amber-900 hover:underline"
+          className="mt-1 text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 hover:underline"
         >
           Show {hidden} more
         </button>
@@ -973,7 +973,7 @@ function SubmissionWarnings({
         <button
           type="button"
           onClick={() => setExpanded(false)}
-          className="mt-1 text-xs text-amber-700 hover:text-amber-900 hover:underline"
+          className="mt-1 text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 hover:underline"
         >
           Show fewer
         </button>
@@ -990,20 +990,20 @@ function StatusIcon({
   retrying: boolean
 }) {
   if (retrying) {
-    return <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+    return <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
   }
   switch (status) {
     case 'LIVE':
-      return <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+      return <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
     case 'FAILED':
-      return <XCircle className="w-4 h-4 text-rose-600" />
+      return <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
     case 'NOT_IMPLEMENTED':
-      return <AlertCircle className="w-4 h-4 text-slate-400" />
+      return <AlertCircle className="w-4 h-4 text-slate-400 dark:text-slate-500" />
     case 'SUBMITTED':
     case 'SUBMITTING':
     case 'PENDING':
     default:
-      return <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+      return <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
   }
 }
 

@@ -365,8 +365,8 @@ export function FieldGroupSection({
   return (
     <div
       className={cn(
-        'border rounded-lg bg-white overflow-hidden',
-        (unsatisfiedCount ?? 0) > 0 ? 'border-amber-200' : 'border-slate-200',
+        'border rounded-lg bg-white dark:bg-slate-900 overflow-hidden',
+        (unsatisfiedCount ?? 0) > 0 ? 'border-amber-200 dark:border-amber-900' : 'border-slate-200 dark:border-slate-700',
       )}
     >
       <div className="flex items-stretch justify-between gap-2">
@@ -374,31 +374,31 @@ export function FieldGroupSection({
           type="button"
           onClick={() => setExpanded((s) => !s)}
           aria-expanded={expanded}
-          className="flex-1 flex items-center gap-2 flex-wrap min-w-0 px-4 py-2.5 hover:bg-slate-50 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+          className="flex-1 flex items-center gap-2 flex-wrap min-w-0 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
         >
           {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
           ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
           )}
-          <span className="text-md font-semibold text-slate-900">
+          <span className="text-md font-semibold text-slate-900 dark:text-slate-100">
             {name}
           </span>
-          <span className="text-sm text-slate-500 tabular-nums">
+          <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
             {count} field{count === 1 ? '' : 's'}
           </span>
           {(requiredCount ?? 0) > 0 && (
-            <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-1.5 py-0.5 rounded">
               {requiredCount} required
             </span>
           )}
           {(unsatisfiedCount ?? 0) > 0 && (
-            <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded">
               {unsatisfiedCount} unfilled
             </span>
           )}
           {(filledCount ?? 0) > 0 && (
-            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-1.5 py-0.5 rounded">
               {filledCount} filled
             </span>
           )}
@@ -413,7 +413,7 @@ export function FieldGroupSection({
         )}
       </div>
       {expanded && (
-        <div className="border-t border-slate-100 p-3 space-y-3 bg-slate-50/30">
+        <div className="border-t border-slate-100 dark:border-slate-800 p-3 space-y-3 bg-slate-50/30">
           {children}
         </div>
       )}
@@ -509,18 +509,18 @@ export function FieldCard({
       id={id}
       tabIndex={-1}
       className={cn(
-        'border rounded-lg bg-white px-4 py-3 scroll-mt-32 outline-none transition-shadow',
-        hasUnsatisfied ? 'border-amber-200' : 'border-slate-200',
+        'border rounded-lg bg-white dark:bg-slate-900 px-4 py-3 scroll-mt-32 outline-none transition-shadow',
+        hasUnsatisfied ? 'border-amber-200 dark:border-amber-900' : 'border-slate-200 dark:border-slate-700',
         highlight && 'ring-2 ring-blue-400 ring-offset-2 shadow-md',
       )}
     >
       <div className="mb-1.5 flex items-baseline justify-between gap-3 flex-wrap">
-        <label className="text-md font-medium text-slate-900">
+        <label className="text-md font-medium text-slate-900 dark:text-slate-100">
           {field.label}
           {(viewMode === 'base'
             ? field.requiredFor.length > 0
-            : isRequiredHere) && <span className="text-rose-600 ml-0.5">*</span>}
-          <span className="ml-2 text-sm font-mono font-normal text-slate-400">
+            : isRequiredHere) && <span className="text-rose-600 dark:text-rose-400 ml-0.5">*</span>}
+          <span className="ml-2 text-sm font-mono font-normal text-slate-400 dark:text-slate-500">
             {field.id}
           </span>
         </label>
@@ -545,10 +545,10 @@ export function FieldCard({
               className={cn(
                 'text-xs uppercase tracking-wide font-medium px-1.5 py-0.5 border rounded',
                 isRequiredHere
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
                   : isOptionalHere
-                  ? 'bg-slate-50 text-slate-600 border-slate-200'
-                  : 'bg-slate-50 text-slate-400 border-slate-200',
+                  ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
               )}
             >
               {isRequiredHere
@@ -561,10 +561,10 @@ export function FieldCard({
         </div>
       </div>
       {field.description && (
-        <p className="text-base text-slate-500 mb-2">{field.description}</p>
+        <p className="text-base text-slate-500 dark:text-slate-400 mb-2">{field.description}</p>
       )}
       {field.divergent && (
-        <p className="text-sm text-amber-700 mb-2">
+        <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
           Heads-up: this field's metadata differs across channels (different
           enum values or length limits). Use overrides per channel if the
           merged shape doesn't fit one of them.
@@ -579,7 +579,7 @@ export function FieldCard({
             onClick={onAIGenerate}
             loading={aiBusy}
             icon={!aiBusy ? <Sparkles className="w-3 h-3" /> : undefined}
-            className="!h-6 !px-2 !text-sm !text-blue-700 !border-blue-200 hover:!bg-blue-50"
+            className="!h-6 !px-2 !text-sm !text-blue-700 dark:text-blue-300 !border-blue-200 dark:border-blue-900 hover:!bg-blue-50 dark:bg-blue-950/40"
             title={`Generate ${field.label} with AI for the first selected channel`}
           >
             AI generate
@@ -645,12 +645,12 @@ export function FieldCard({
       )}
 
       {field.examples && field.examples.length > 0 && field.kind !== 'enum' && (
-        <p className="mt-1.5 text-sm text-slate-400">
+        <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500">
           Examples: {field.examples.join(', ')}
         </p>
       )}
       {field.maxLength && field.kind !== 'enum' && (
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
           {currentLength(
             viewMode === 'base' ? baseValue : channelOverrideValue,
           )}{' '}
@@ -659,12 +659,12 @@ export function FieldCard({
       )}
 
       {viewMode === 'base' && field.requiredFor.length > 1 && (
-        <div className="mt-3 border-t border-slate-100 pt-2">
+        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2">
           <button
             type="button"
             onClick={onToggleExpanded}
             aria-expanded={expanded}
-            className="text-base text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
+            className="text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
           >
             {expanded ? (
               <ChevronDown className="w-3 h-3" />
@@ -673,7 +673,7 @@ export function FieldCard({
             )}
             Override per channel
             {overrideCount > 0 && (
-              <span className="text-xs font-medium text-blue-700 bg-blue-50 px-1 py-0.5 rounded">
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.5 rounded">
                 {overrideCount}
               </span>
             )}
@@ -695,7 +695,7 @@ export function FieldCard({
                       isUnsatisfied && 'bg-amber-50/40 -mx-2 px-2 rounded',
                     )}
                   >
-                    <span className="text-sm font-mono text-slate-600 w-24 flex-shrink-0">
+                    <span className="text-sm font-mono text-slate-600 dark:text-slate-400 w-24 flex-shrink-0">
                       {channelKey}
                     </span>
                     <FieldInput
@@ -753,13 +753,13 @@ export function FieldCard({
       )}
 
       {showVariantSection && (
-        <div className="mt-3 border-t border-slate-100 pt-2">
+        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={onToggleVariants}
               aria-expanded={variantsExpanded}
-              className="text-base text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
+              className="text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded"
             >
               {variantsExpanded ? (
                 <ChevronDown className="w-3 h-3" />
@@ -774,13 +774,13 @@ export function FieldCard({
               )}
               {!field.variantEligible ? (
                 <span
-                  className="text-xs uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded"
+                  className="text-xs uppercase tracking-wide font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-1 py-0.5 rounded"
                   title="Amazon rejects per-variant values on this field. Override at your own risk — Shopify and other channels may accept it."
                 >
                   not Amazon-eligible
                 </span>
               ) : (
-                <span className="text-xs text-slate-400 italic">
+                <span className="text-xs text-slate-400 dark:text-slate-500 italic">
                   (variant-eligible)
                 </span>
               )}
@@ -802,7 +802,7 @@ export function FieldCard({
                     }
                   }}
                   title="Fill empty variant slots with each variant's master attribute value"
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                 >
                   Pull master values
                 </button>
@@ -817,7 +817,7 @@ export function FieldCard({
                       }
                     }}
                     title="Clear every per-variant override for this field"
-                    className="text-sm text-slate-500 hover:text-slate-900 hover:underline"
+                    className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:underline"
                   >
                     Clear all
                   </button>
@@ -828,7 +828,7 @@ export function FieldCard({
           {variantsExpanded && (
             <div className="mt-2 space-y-1.5">
               {!field.variantEligible && (
-                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-1">
+                <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-2 py-1.5 mb-1">
                   Amazon's listing model treats this field as product-
                   level, so per-variant values are rejected at submit
                   time. Shopify accepts more variant-level shapes; the
@@ -847,10 +847,10 @@ export function FieldCard({
                 return (
                   <div key={v.id} className="flex items-center gap-2">
                     <div className="w-32 flex-shrink-0 min-w-0">
-                      <div className="font-mono text-sm text-slate-700 truncate">
+                      <div className="font-mono text-sm text-slate-700 dark:text-slate-300 truncate">
                         {v.sku}
                       </div>
-                      <div className="text-xs text-slate-500 truncate">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                         {Object.entries(v.attributes)
                           .map(([k, val]) => `${k}: ${val}`)
                           .join(' · ') || '—'}
@@ -912,7 +912,7 @@ export function FieldInput({
 }) {
   if (field.kind === 'unsupported') {
     return (
-      <div className="text-base text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+      <div className="text-base text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-3 py-2">
         Can't render this field automatically yet.
         {field.unsupportedReason ? ` (${field.unsupportedReason})` : ''}
       </div>
@@ -926,7 +926,7 @@ export function FieldInput({
         value={v}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'w-full px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white',
+          'w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
           compact ? 'h-7' : 'h-8',
         )}
       >
@@ -943,12 +943,12 @@ export function FieldInput({
   if (field.kind === 'boolean') {
     const v = Boolean(value)
     return (
-      <label className="flex items-center gap-2 text-md text-slate-700">
+      <label className="flex items-center gap-2 text-md text-slate-700 dark:text-slate-300">
         <input
           type="checkbox"
           checked={v}
           onChange={(e) => onChange(e.target.checked)}
-          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
         />
         {v ? 'Yes' : 'No'}
       </label>
@@ -964,7 +964,7 @@ export function FieldInput({
       <div className="space-y-1.5">
         {slots.map((slot, idx) => (
           <div key={idx} className="flex items-start gap-2">
-            <span className="text-xs font-mono text-slate-400 mt-2 flex-shrink-0">
+            <span className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-2 flex-shrink-0">
               {idx + 1}.
             </span>
             <textarea
@@ -982,10 +982,10 @@ export function FieldInput({
                 }
                 onChange(next.length === 0 ? '' : JSON.stringify(next))
               }}
-              className="flex-1 px-2 py-1 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="flex-1 px-2 py-1 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             {field.maxLength && (
-              <span className="text-xs font-mono text-slate-400 mt-2 tabular-nums w-12 text-right flex-shrink-0">
+              <span className="text-xs font-mono text-slate-400 dark:text-slate-500 mt-2 tabular-nums w-12 text-right flex-shrink-0">
                 {slot.length}/{field.maxLength}
               </span>
             )}
@@ -1011,7 +1011,7 @@ export function FieldInput({
           }
         }}
         className={cn(
-          'w-full px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+          'w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
           compact ? 'h-7' : 'h-8',
         )}
       />
@@ -1027,7 +1027,7 @@ export function FieldInput({
         rows={compact ? 2 : 4}
         maxLength={field.maxLength}
         placeholder={placeholder}
-        className="w-full px-2 py-1.5 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full px-2 py-1.5 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
     )
   }
@@ -1042,7 +1042,7 @@ export function FieldInput({
       maxLength={field.maxLength}
       placeholder={placeholder}
       className={cn(
-        'w-full px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+        'w-full px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
         compact ? 'h-7' : 'h-8',
       )}
     />
@@ -1058,12 +1058,12 @@ export function ChannelTagGroup({
 }) {
   const toneClass =
     tone === 'required'
-      ? 'bg-blue-50 text-blue-700 border-blue-200'
-      : 'bg-slate-50 text-slate-600 border-slate-200'
+      ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
+      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
   const label = tone === 'required' ? 'Required' : 'Optional'
   return (
     <div className="inline-flex items-center gap-1 flex-wrap">
-      <span className="text-xs uppercase tracking-wide text-slate-500 font-medium">
+      <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium">
         {label}:
       </span>
       {channels.map((c) => (
@@ -1114,7 +1114,7 @@ export function AttributesTabStrip({
   const activePlatform = activeTab === 'base' ? null : activeTab.split(':')[0]
 
   return (
-    <div className="border-b border-slate-200">
+    <div className="border-b border-slate-200 dark:border-slate-700">
       <div className="flex items-end gap-1 overflow-x-auto">
         <TabButton
           label="Shared base"
@@ -1147,7 +1147,7 @@ export function AttributesTabStrip({
       </div>
 
       {activePlatform && (
-        <div className="flex items-center gap-1 px-2 py-1.5 bg-slate-50 border-t border-slate-100 overflow-x-auto">
+        <div className="flex items-center gap-1 px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800 overflow-x-auto">
           {byPlatform
             .find(([p]) => p === activePlatform)?.[1]
             .map((m) => {
@@ -1188,8 +1188,8 @@ export function TabButton({
       className={cn(
         'px-3 py-2 text-base font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 flex-shrink-0',
         active
-          ? 'border-blue-600 text-blue-700'
-          : 'border-transparent text-slate-600 hover:text-slate-900',
+          ? 'border-blue-600 text-blue-700 dark:text-blue-300'
+          : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
       )}
     >
       {label}
@@ -1198,8 +1198,8 @@ export function TabButton({
           className={cn(
             'text-xs font-mono px-1 rounded',
             active
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-amber-50 text-amber-600',
+              ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
           )}
           title={`${badge} required field${badge === '1' ? '' : 's'} unsatisfied`}
         >
@@ -1228,13 +1228,13 @@ export function SubTabButton({
       className={cn(
         'h-7 px-2 text-sm font-mono font-medium rounded inline-flex items-center gap-1.5 transition-colors flex-shrink-0',
         active
-          ? 'bg-blue-100 text-blue-800'
-          : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900',
+          ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-800'
+          : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
       )}
     >
       {label}
       {badge && (
-        <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">
+        <span className="text-xs bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 px-1 rounded">
           {badge}
         </span>
       )}
@@ -1300,7 +1300,7 @@ export function OverrideMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px] text-base">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[200px] text-base">
             {hasBase && (
               <button
                 type="button"
@@ -1308,14 +1308,14 @@ export function OverrideMenu({
                   onCopyFromBase()
                   setOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
               >
                 Copy from base
               </button>
             )}
             {otherChannels.length > 0 && (
               <>
-                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   Copy from
                 </div>
                 {otherChannels.map((k) => (
@@ -1326,10 +1326,10 @@ export function OverrideMenu({
                       onCopyFrom(k)
                       setOpen(false)
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                   >
                     <span className="font-mono text-sm">{k}</span>
-                    <span className="block text-xs text-slate-500 truncate">
+                    <span className="block text-xs text-slate-500 dark:text-slate-400 truncate">
                       {String(otherValues[k]).slice(0, 40)}
                     </span>
                   </button>
@@ -1343,7 +1343,7 @@ export function OverrideMenu({
                   onTranslate()
                   setOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-blue-700 inline-flex items-center gap-1.5"
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-blue-700 dark:text-blue-300 inline-flex items-center gap-1.5"
               >
                 <Sparkles className="w-3 h-3" />
                 Translate from base for {channelKey.split(':')[1]}
@@ -1351,8 +1351,8 @@ export function OverrideMenu({
             )}
             {!isEmpty(currentValue) && (
               <>
-                <div className="border-t border-slate-100 my-1" />
-                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+                <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   Apply this value to
                 </div>
                 <button
@@ -1363,10 +1363,10 @@ export function OverrideMenu({
                     )
                     setOpen(false)
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                 >
                   All other channels{' '}
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
                     ({allChannelKeys.length - 1})
                   </span>
                 </button>
@@ -1383,10 +1383,10 @@ export function OverrideMenu({
                         onApplyToChannels(samePlatform)
                         setOpen(false)
                       }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                     >
                       Other {platform} marketplaces{' '}
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
                         ({samePlatform.length})
                       </span>
                     </button>
@@ -1410,10 +1410,10 @@ export function OverrideMenu({
                           onApplyToChannels(targets)
                           setOpen(false)
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                        className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                       >
                         Group: {g.name}{' '}
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
                           ({targets.length})
                         </span>
                       </button>
@@ -1428,7 +1428,7 @@ export function OverrideMenu({
                   onClear()
                   setOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-rose-700 border-t border-slate-100 mt-1"
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-rose-700 dark:text-rose-300 border-t border-slate-100 dark:border-slate-800 mt-1"
               >
                 Clear override
               </button>
@@ -1454,7 +1454,7 @@ export function SchemaAgeIndicator({
 }) {
   if (!fetchedAt) {
     return (
-      <div className="mt-2 text-xs text-slate-400 px-1">
+      <div className="mt-2 text-xs text-slate-400 dark:text-slate-500 px-1">
         Schema for <span className="font-mono">{channelKey}</span>: not yet
         fetched
       </div>
@@ -1462,23 +1462,23 @@ export function SchemaAgeIndicator({
   }
   const age = Date.now() - new Date(fetchedAt).getTime()
   const days = age / (1000 * 60 * 60 * 24)
-  let tone = 'text-slate-500'
+  let tone = 'text-slate-500 dark:text-slate-400'
   let label = ''
   if (days < 1) {
     label = `fetched ${Math.max(1, Math.round(age / (1000 * 60 * 60)))}h ago`
-    tone = 'text-slate-500'
+    tone = 'text-slate-500 dark:text-slate-400'
   } else if (days < 7) {
     label = `fetched ${Math.round(days)}d ago`
-    tone = 'text-slate-500'
+    tone = 'text-slate-500 dark:text-slate-400'
   } else {
     label = `fetched ${Math.round(days)}d ago — consider refreshing`
-    tone = 'text-amber-700'
+    tone = 'text-amber-700 dark:text-amber-300'
   }
   return (
     <div className={cn('mt-2 text-xs px-1', tone)}>
       Schema for <span className="font-mono">{channelKey}</span>: {label}
       {schemaVersion && (
-        <span className="ml-1 text-slate-400">· version {schemaVersion}</span>
+        <span className="ml-1 text-slate-400 dark:text-slate-500">· version {schemaVersion}</span>
       )}
     </div>
   )
@@ -1523,8 +1523,8 @@ export function VariantBroadcastMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px] text-base">
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[200px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Apply this value to
             </div>
             <button
@@ -1533,10 +1533,10 @@ export function VariantBroadcastMenu({
                 onBroadcast(otherIds)
                 setOpen(false)
               }}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
             >
               All other variants{' '}
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 ({otherIds.length})
               </span>
             </button>
@@ -1548,10 +1548,10 @@ export function VariantBroadcastMenu({
                     onBroadcast(emptyOtherIds)
                     setOpen(false)
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                 >
                   Empty variants only{' '}
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
                     ({emptyOtherIds.length})
                   </span>
                 </button>
@@ -1563,10 +1563,10 @@ export function VariantBroadcastMenu({
                   onBroadcast(otherFilledIds)
                   setOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700"
+                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
               >
                 Other variants with values{' '}
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   ({otherFilledIds.length})
                 </span>
               </button>

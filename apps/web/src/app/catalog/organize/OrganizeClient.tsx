@@ -193,7 +193,7 @@ export default function OrganizeClient() {
       <nav
         role="tablist"
         aria-label={t('organize.title')}
-        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-slate-200 flex items-center gap-1 overflow-x-auto dark:bg-slate-950/85 dark:border-slate-800"
+        className="sticky top-0 z-10 -mx-6 px-6 bg-white/85 backdrop-blur border-b border-slate-200 dark:border-slate-700 flex items-center gap-1 overflow-x-auto dark:bg-slate-950/85 dark:border-slate-800"
       >
         {TABS.map((tabDef) => (
           <button
@@ -206,8 +206,8 @@ export default function OrganizeClient() {
             className={cn(
               'inline-flex items-center gap-2 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
               tab === tabDef.id
-                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 dark:text-slate-400 dark:hover:text-slate-200',
             )}
           >
             {tabDef.id === 'groups' && <Layers className="w-3.5 h-3.5" />}
@@ -371,19 +371,19 @@ function GroupsTab({
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search base name or master SKU"
-              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <label className="inline-flex items-center gap-1.5 text-sm text-slate-600">
+          <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
             Min confidence
             <input
               type="range"
@@ -400,7 +400,7 @@ function GroupsTab({
             type="button"
             onClick={() => void fetchDetection()}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -433,15 +433,15 @@ function GroupsTab({
             Apply {approved.size || ''}
           </Button>
         </div>
-        <div className="mt-2 flex items-center gap-4 text-sm text-slate-600">
+        <div className="mt-2 flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
           <span>
-            <strong className="text-slate-900">{filtered.length}</strong> group
+            <strong className="text-slate-900 dark:text-slate-100">{filtered.length}</strong> group
             {filtered.length === 1 ? '' : 's'} ·{' '}
-            <strong className="text-slate-900">{totalMembers}</strong> products
+            <strong className="text-slate-900 dark:text-slate-100">{totalMembers}</strong> products
           </span>
-          <span className="text-emerald-700">{approved.size} approved</span>
-          <span className="text-rose-700">{rejected.size} rejected</span>
-          <span className="text-slate-500">{pending} pending</span>
+          <span className="text-emerald-700 dark:text-emerald-300">{approved.size} approved</span>
+          <span className="text-rose-700 dark:text-rose-300">{rejected.size} rejected</span>
+          <span className="text-slate-500 dark:text-slate-400">{pending} pending</span>
         </div>
       </div>
 
@@ -454,7 +454,7 @@ function GroupsTab({
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="bg-white border border-slate-200 rounded-lg p-4"
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4"
             >
               <Skeleton variant="text" lines={2} />
             </div>
@@ -538,17 +538,17 @@ function GroupRow({
   return (
     <div
       className={cn(
-        'bg-white border-2 rounded-lg overflow-hidden transition-colors',
+        'bg-white dark:bg-slate-900 border-2 rounded-lg overflow-hidden transition-colors',
         isApproved && 'border-emerald-400',
         isRejected && 'border-rose-300 opacity-60',
-        !isApproved && !isRejected && 'border-slate-200',
+        !isApproved && !isRejected && 'border-slate-200 dark:border-slate-700',
       )}
     >
       <div className="p-4 flex items-center gap-3 flex-wrap">
         <button
           type="button"
           onClick={onToggleExpand}
-          className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors"
+          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
           aria-label={isExpanded ? 'Collapse' : 'Expand'}
         >
           <ChevronRight
@@ -559,11 +559,11 @@ function GroupRow({
           />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-md font-semibold text-slate-900 truncate">
+          <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate">
             {group.baseName}
           </div>
-          <div className="text-sm text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-            <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+            <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
               {group.suggestedMasterSku}
             </span>
             <span>·</span>
@@ -575,7 +575,7 @@ function GroupRow({
             {group.detectionMethod && (
               <>
                 <span>·</span>
-                <span className="uppercase tracking-wide text-xs text-slate-400">
+                <span className="uppercase tracking-wide text-xs text-slate-400 dark:text-slate-500">
                   {group.detectionMethod.replace(/_/g, ' ')}
                 </span>
               </>
@@ -593,7 +593,7 @@ function GroupRow({
               'p-1.5 rounded-md transition-colors',
               isApproved
                 ? 'bg-emerald-500 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-emerald-100',
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60',
             )}
             title="Approve"
           >
@@ -606,7 +606,7 @@ function GroupRow({
               'p-1.5 rounded-md transition-colors',
               isRejected
                 ? 'bg-rose-500 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-rose-100',
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-rose-100 dark:hover:bg-rose-900/60',
             )}
             title="Reject"
           >
@@ -615,25 +615,25 @@ function GroupRow({
         </div>
       </div>
       {isExpanded && (
-        <div className="border-t border-slate-200 bg-slate-50 p-4">
+        <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
           <ul className="space-y-1.5">
             {group.members.map((m) => (
               <li
                 key={m.productId}
-                className="bg-white border border-slate-200 rounded-md p-2.5 flex items-center justify-between gap-3"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-2.5 flex items-center justify-between gap-3"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="text-md font-medium text-slate-900 truncate font-mono">
+                  <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate font-mono">
                     {m.sku}
                   </div>
-                  <div className="text-sm text-slate-500 truncate">
+                  <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
                     {m.name}
                   </div>
                 </div>
                 <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
                   {Object.entries(m.detectedAttributes).map(([k, v]) => (
                     <Badge key={k} variant="info" size="sm">
-                      <span className="text-blue-600">{k}:</span>
+                      <span className="text-blue-600 dark:text-blue-400">{k}:</span>
                       <span className="ml-1">{v}</span>
                     </Badge>
                   ))}
@@ -732,22 +732,22 @@ function StandaloneTab({
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search SKU, name, brand"
-              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
           <select
             value={coverage}
             onChange={(e) => setCoverage(e.target.value as any)}
-            className="h-8 px-2 text-base border border-slate-200 rounded-md bg-white"
+            className="h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
           >
             <option value="all">All</option>
             <option value="unlisted">Unlisted only</option>
@@ -758,7 +758,7 @@ function StandaloneTab({
             type="button"
             onClick={() => void refetch()}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -796,8 +796,8 @@ function StandaloneTab({
             </>
           )}
         </div>
-        <div className="mt-2 text-sm text-slate-500">
-          <strong className="text-slate-900">{items.length}</strong> shown of{' '}
+        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}
           {total} standalone product{total === 1 ? '' : 's'}.
         </div>
       </div>
@@ -811,7 +811,7 @@ function StandaloneTab({
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="border border-slate-200 rounded-lg bg-white p-3"
+              className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 p-3"
             >
               <Skeleton variant="text" lines={2} />
             </div>
@@ -824,9 +824,9 @@ function StandaloneTab({
           description="Either every product is grouped, or your filters exclude them all."
         />
       ) : (
-        <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
                 <th className="px-3 py-2 text-left">
                   <input
@@ -841,22 +841,22 @@ function StandaloneTab({
                     }
                   />
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   SKU
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Channels
                 </th>
-                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Price
                 </th>
-                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Stock
                 </th>
-                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Actions
                 </th>
               </tr>
@@ -865,7 +865,7 @@ function StandaloneTab({
               {items.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-t border-slate-100 hover:bg-slate-50/50"
+                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/50"
                 >
                   <td className="px-3 py-2">
                     <input
@@ -884,15 +884,15 @@ function StandaloneTab({
                   <td className="px-3 py-2 font-mono text-sm">
                     <Link
                       href={`/products/${p.id}/edit`}
-                      className="text-blue-600 hover:underline"
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       {p.sku}
                     </Link>
                   </td>
                   <td className="px-3 py-2 max-w-[260px]">
-                    <div className="truncate text-slate-800">{p.name}</div>
+                    <div className="truncate text-slate-800 dark:text-slate-200">{p.name}</div>
                     {p.brand && (
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
                         {p.brand}
                       </div>
                     )}
@@ -906,7 +906,7 @@ function StandaloneTab({
                   <td className="px-3 py-2 text-right tabular-nums">
                     <span
                       className={
-                        p.totalStock === 0 ? 'text-rose-600' : 'text-slate-700'
+                        p.totalStock === 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300'
                       }
                     >
                       {p.totalStock}
@@ -917,7 +917,7 @@ function StandaloneTab({
                       <button
                         type="button"
                         onClick={() => setPromoteId(p)}
-                        className="h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-100 text-slate-700"
+                        className="h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
                         title="Mark as parent (will accept variants)"
                       >
                         Promote
@@ -927,7 +927,7 @@ function StandaloneTab({
                         onClick={() =>
                           setAttachOpen({ productIds: [p.id] })
                         }
-                        className="h-6 px-2 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                        className="h-6 px-2 text-xs rounded-md bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
                       >
                         Attach to parent
                       </button>
@@ -1006,7 +1006,7 @@ function StandaloneTab({
 function CoverageBadge({ cov }: { cov: StandaloneItem['channelCoverage'] }) {
   if (cov.status === 'unlisted') {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded border border-slate-200 bg-slate-50 text-slate-600">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
         unlisted
       </span>
     )
@@ -1016,25 +1016,25 @@ function CoverageBadge({ cov }: { cov: StandaloneItem['channelCoverage'] }) {
       {cov.slots.slice(0, 4).map((s) => (
         <span
           key={s}
-          className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 text-slate-700"
+          className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
         >
           {s.replace(':', '·')}
         </span>
       ))}
       {cov.slots.length > 4 && (
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-slate-500 dark:text-slate-400">
           +{cov.slots.length - 4}
         </span>
       )}
       {cov.status === 'partial' && (
-        <span className="text-xs text-amber-700">
+        <span className="text-xs text-amber-700 dark:text-amber-300">
           {cov.draftCount + cov.failedCount > 0
             ? `${cov.draftCount}d/${cov.failedCount}f`
             : 'partial'}
         </span>
       )}
       {cov.status === 'complete' && (
-        <span className="text-xs text-emerald-700">all live</span>
+        <span className="text-xs text-emerald-700 dark:text-emerald-300">all live</span>
       )}
     </div>
   )
@@ -1247,29 +1247,29 @@ function AttachModal({
         */}
           {!selected && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Search parent SKU or name
               </label>
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Min 2 characters"
-                  className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   autoFocus
                 />
               </div>
-              <div className="mt-2 max-h-[200px] overflow-y-auto border border-slate-100 rounded-md">
+              <div className="mt-2 max-h-[200px] overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-md">
                 {searching && (
-                  <div className="px-3 py-2 text-sm text-slate-500 inline-flex items-center gap-1.5">
+                  <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     Searching…
                   </div>
                 )}
                 {!searching && results.length === 0 && search.trim().length >= 2 && (
-                  <div className="px-3 py-3 text-sm text-slate-500 text-center">
+                  <div className="px-3 py-3 text-sm text-slate-500 dark:text-slate-400 text-center">
                     No parents match.
                   </div>
                 )}
@@ -1278,10 +1278,10 @@ function AttachModal({
                     key={p.id}
                     type="button"
                     onClick={() => setSelected(p)}
-                    className="w-full text-left px-3 py-2 text-base hover:bg-slate-50 border-b border-slate-100 last:border-b-0"
+                    className="w-full text-left px-3 py-2 text-base hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-b-0"
                   >
-                    <div className="font-mono text-slate-900">{p.sku}</div>
-                    <div className="text-xs text-slate-500 truncate">
+                    <div className="font-mono text-slate-900 dark:text-slate-100">{p.sku}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       {p.name}
                     </div>
                   </button>
@@ -1292,38 +1292,38 @@ function AttachModal({
 
           {selected && (
             <>
-              <div className="border border-slate-200 rounded-md px-3 py-2 flex items-center justify-between">
+              <div className="border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2 flex items-center justify-between">
                 <div>
-                  <div className="text-sm text-slate-500">Parent</div>
-                  <div className="font-mono text-md text-slate-900">
+                  <div className="text-sm text-slate-500 dark:text-slate-400">Parent</div>
+                  <div className="font-mono text-md text-slate-900 dark:text-slate-100">
                     {selected.sku}
                   </div>
-                  <div className="text-sm text-slate-600">
+                  <div className="text-sm text-slate-600 dark:text-slate-400">
                     {selected.name}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
-                  className="text-xs text-slate-500 hover:underline"
+                  className="text-xs text-slate-500 dark:text-slate-400 hover:underline"
                 >
                   change
                 </button>
               </div>
 
               {parentAxes.length > 0 && parentVariants.length > 0 && (
-                <div className="border border-slate-200 rounded-md px-3 py-2">
-                  <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-md px-3 py-2">
+                  <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-1">
                     Existing variants under this parent
                   </div>
-                  <div className="text-sm text-slate-600 max-h-[100px] overflow-y-auto">
+                  <div className="text-sm text-slate-600 dark:text-slate-400 max-h-[100px] overflow-y-auto">
                     {parentVariants.slice(0, 8).map((v) => (
                       <div
                         key={v.sku}
                         className="flex items-center gap-2 truncate"
                       >
-                        <span className="font-mono text-slate-700">{v.sku}</span>
-                        <span className="text-slate-500">
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{v.sku}</span>
+                        <span className="text-slate-500 dark:text-slate-400">
                           {Object.entries(v.attrs ?? {})
                             .map(([k, val]) => `${k}=${val}`)
                             .join(' · ')}
@@ -1331,7 +1331,7 @@ function AttachModal({
                       </div>
                     ))}
                     {parentVariants.length > 8 && (
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-slate-400 dark:text-slate-500">
                         …and {parentVariants.length - 8} more
                       </div>
                     )}
@@ -1340,11 +1340,11 @@ function AttachModal({
               )}
 
               <div>
-                <div className="text-sm font-medium text-slate-700 mb-1">
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Set axis values per product (optional but recommended)
                 </div>
                 {parentAxes.length === 0 ? (
-                  <p className="text-sm text-slate-500 italic">
+                  <p className="text-sm text-slate-500 dark:text-slate-400 italic">
                     The parent has no defined axes yet — your values
                     here will set them.
                   </p>
@@ -1409,8 +1409,8 @@ function ProductAxisRow({
   onChange: (axis: string, value: string) => void
 }) {
   return (
-    <div className="border border-slate-200 rounded-md p-2.5 bg-slate-50/30">
-      <div className="text-xs font-mono text-slate-500 mb-1.5 truncate">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-md p-2.5 bg-slate-50/30">
+      <div className="text-xs font-mono text-slate-500 dark:text-slate-400 mb-1.5 truncate">
         {productId}
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1420,14 +1420,14 @@ function ProductAxisRow({
           const isCustom = v !== '' && !known.includes(v)
           return (
             <div key={axis}>
-              <div className="text-xs text-slate-500 mb-0.5">{axis}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">{axis}</div>
               <select
                 value={isCustom ? '__custom__' : v}
                 onChange={(e) => {
                   if (e.target.value === '__custom__') onChange(axis, '')
                   else onChange(axis, e.target.value)
                 }}
-                className="w-full h-7 px-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                className="w-full h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
               >
                 <option value="">— Select —</option>
                 {known.map((k) => (
@@ -1443,7 +1443,7 @@ function ProductAxisRow({
                   value={v}
                   onChange={(e) => onChange(axis, e.target.value)}
                   placeholder={`New ${axis} value`}
-                  className="mt-1 w-full h-7 px-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                  className="mt-1 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
                 />
               )}
             </div>
@@ -1518,16 +1518,16 @@ function PromoteModal({
       dismissOnEscape={!submitting}
     >
       <div className="space-y-4">
-        <p className="text-base text-slate-700">
+        <p className="text-base text-slate-700 dark:text-slate-300">
           {isBulk
             ? `Marks ${targets.length} products as parents. You can attach standalones to them from this page; existing variants on each product carry through.`
             : 'Marks this product as a parent. You can then add child variants from the Variations tab on its edit page, or attach existing standalones to it from this page.'}
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
             Variation theme{' '}
-            <span className="font-normal text-xs text-slate-500">
+            <span className="font-normal text-xs text-slate-500 dark:text-slate-400">
               (optional — controls which axes children share)
             </span>
           </label>
@@ -1544,15 +1544,15 @@ function PromoteModal({
                     'text-left rounded-md border px-2.5 py-2 transition-colors',
                     active
                       ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
-                      : 'border-slate-200 bg-white hover:border-slate-300',
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
                     submitting && 'opacity-50 cursor-not-allowed',
                   )}
                   aria-pressed={active}
                 >
-                  <div className="text-base font-medium text-slate-900">
+                  <div className="text-base font-medium text-slate-900 dark:text-slate-100">
                     {t.label}
                   </div>
-                  <div className="text-xs text-slate-500">{t.hint}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t.hint}</div>
                 </button>
               )
             })}
@@ -1564,15 +1564,15 @@ function PromoteModal({
                 'text-left rounded-md border px-2.5 py-2 transition-colors',
                 selectedTheme === 'CUSTOM'
                   ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
-                  : 'border-slate-200 bg-white hover:border-slate-300',
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
                 submitting && 'opacity-50 cursor-not-allowed',
               )}
               aria-pressed={selectedTheme === 'CUSTOM'}
             >
-              <div className="text-base font-medium text-slate-900">
+              <div className="text-base font-medium text-slate-900 dark:text-slate-100">
                 Custom…
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
                 Free-form, e.g. "Color / Material"
               </div>
             </button>
@@ -1584,15 +1584,15 @@ function PromoteModal({
                 'text-left rounded-md border px-2.5 py-2 transition-colors',
                 selectedTheme === null
                   ? 'border-blue-300 bg-blue-50/40 ring-1 ring-blue-200'
-                  : 'border-slate-200 bg-white hover:border-slate-300',
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
                 submitting && 'opacity-50 cursor-not-allowed',
               )}
               aria-pressed={selectedTheme === null}
             >
-              <div className="text-base font-medium text-slate-900">
+              <div className="text-base font-medium text-slate-900 dark:text-slate-100">
                 No theme yet
               </div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
                 Set later from the parent's Variations tab
               </div>
             </button>
@@ -1605,7 +1605,7 @@ function PromoteModal({
               onChange={(e) => setCustomTheme(e.target.value)}
               placeholder="Size / Color"
               autoFocus
-              className="mt-2 w-full h-8 px-2.5 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="mt-2 w-full h-8 px-2.5 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               disabled={submitting}
             />
           )}
@@ -1744,19 +1744,19 @@ const ChildItem = memo(function ChildItem({
         checked={isSelected}
         onChange={() => onToggleSelect(c.id)}
         aria-label={`Select ${c.sku}`}
-        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+        className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500"
       />
-      <div className="font-mono text-slate-700 min-w-[120px]">{c.sku}</div>
-      <div className="flex-1 min-w-0 truncate text-slate-700">{c.name}</div>
+      <div className="font-mono text-slate-700 dark:text-slate-300 min-w-[120px]">{c.sku}</div>
+      <div className="flex-1 min-w-0 truncate text-slate-700 dark:text-slate-300">{c.name}</div>
       {attrs && (
-        <div className="text-xs text-slate-500 truncate max-w-[260px]">
+        <div className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[260px]">
           {attrs}
         </div>
       )}
       <div className="flex items-center gap-1">
         <Link
           href={`/products/${c.id}/edit`}
-          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
+          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
         >
           Open
           <ChevronRight className="w-3 h-3" />
@@ -1766,7 +1766,7 @@ const ChildItem = memo(function ChildItem({
             type="button"
             onClick={() => void onDetach(parentId, c)}
             aria-label="Detach from parent"
-            className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 hover:text-rose-700 hover:bg-rose-50"
+            className="inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -2053,19 +2053,19 @@ function ParentsTab({
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search parent SKU or name"
-              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
-          <label className="inline-flex items-center gap-1.5 text-sm text-slate-700">
+          <label className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
               checked={incompleteOnly}
@@ -2077,7 +2077,7 @@ function ParentsTab({
             type="button"
             onClick={() => void refetch()}
             disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -2087,8 +2087,8 @@ function ParentsTab({
             Refresh
           </button>
         </div>
-        <div className="mt-2 text-sm text-slate-500">
-          <strong className="text-slate-900">{items.length}</strong> shown of{' '}
+        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}
           {total} parent product{total === 1 ? '' : 's'}.
         </div>
       </div>
@@ -2102,7 +2102,7 @@ function ParentsTab({
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="border border-slate-200 rounded-lg p-3 bg-white"
+              className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900"
             >
               <Skeleton variant="text" lines={2} />
             </div>
@@ -2115,30 +2115,30 @@ function ParentsTab({
           description="Promote a standalone or apply a suggested group to create one."
         />
       ) : (
-        <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-base">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
                 <th className="px-3 py-2 w-[36px]" />
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   SKU
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Theme
                 </th>
-                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Children
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Listings
                 </th>
-                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Channels
                 </th>
-                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
+                <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                   Actions
                 </th>
               </tr>
@@ -2151,7 +2151,7 @@ function ParentsTab({
                   <Fragment key={p.id}>
                     <tr
                       className={cn(
-                        'border-t border-slate-100',
+                        'border-t border-slate-100 dark:border-slate-800',
                         isExpanded
                           ? 'bg-blue-50/40'
                           : 'hover:bg-slate-50/50',
@@ -2178,10 +2178,10 @@ function ParentsTab({
                                 : 'Show children inline'
                             }
                             className={cn(
-                              'inline-flex items-center justify-center w-6 h-6 rounded text-slate-500',
+                              'inline-flex items-center justify-center w-6 h-6 rounded text-slate-500 dark:text-slate-400',
                               p.childCount === 0
                                 ? 'opacity-30 cursor-not-allowed'
-                                : 'hover:bg-slate-100 hover:text-slate-900',
+                                : 'hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100',
                             )}
                           >
                             <ChevronRight
@@ -2196,34 +2196,34 @@ function ParentsTab({
                       <td className="px-3 py-2 font-mono text-sm">
                         <Link
                           href={`/products/${p.id}/edit`}
-                          className="text-blue-600 hover:underline"
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           {p.sku}
                         </Link>
                       </td>
                       <td className="px-3 py-2 max-w-[260px]">
-                        <div className="truncate text-slate-800">{p.name}</div>
+                        <div className="truncate text-slate-800 dark:text-slate-200">{p.name}</div>
                         {p.brand && (
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
                             {p.brand}
                           </div>
                         )}
                       </td>
                       <td className="px-3 py-2">
                         {p.variationTheme ? (
-                          <span className="text-slate-700">
+                          <span className="text-slate-700 dark:text-slate-300">
                             {p.variationTheme}
                           </span>
                         ) : (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         <span
                           className={
                             p.childCount === 0
-                              ? 'text-amber-600'
-                              : 'text-slate-700'
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-slate-700 dark:text-slate-300'
                           }
                         >
                           {p.childCount}
@@ -2231,16 +2231,16 @@ function ParentsTab({
                       </td>
                       <td className="px-3 py-2">
                         <div className="inline-flex gap-1">
-                          <span className="px-1.5 py-0.5 text-xs rounded border border-emerald-200 bg-emerald-50 text-emerald-700 tabular-nums">
+                          <span className="px-1.5 py-0.5 text-xs rounded border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 tabular-nums">
                             {p.listings.live} live
                           </span>
                           {p.listings.draft > 0 && (
-                            <span className="px-1.5 py-0.5 text-xs rounded border border-amber-200 bg-amber-50 text-amber-700 tabular-nums">
+                            <span className="px-1.5 py-0.5 text-xs rounded border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 tabular-nums">
                               {p.listings.draft} draft
                             </span>
                           )}
                           {p.listings.failed > 0 && (
-                            <span className="px-1.5 py-0.5 text-xs rounded border border-rose-200 bg-rose-50 text-rose-700 tabular-nums">
+                            <span className="px-1.5 py-0.5 text-xs rounded border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 tabular-nums">
                               {p.listings.failed} failed
                             </span>
                           )}
@@ -2251,13 +2251,13 @@ function ParentsTab({
                           {p.listings.channels.slice(0, 4).map((c) => (
                             <span
                               key={c}
-                              className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 text-slate-700"
+                              className="font-mono text-xs px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                             >
                               {c.replace(':', '·')}
                             </span>
                           ))}
                           {p.listings.channels.length > 4 && (
-                            <span className="text-xs text-slate-500">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
                               +{p.listings.channels.length - 4}
                             </span>
                           )}
@@ -2266,7 +2266,7 @@ function ParentsTab({
                       <td className="px-3 py-2 text-right">
                         <Link
                           href={`/products/${p.id}/edit`}
-                          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700"
+                          className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
                         >
                           Open
                           <ChevronRight className="w-3 h-3" />
@@ -2277,7 +2277,7 @@ function ParentsTab({
                       <tr id={`children-${p.id}`}>
                         <td
                           colSpan={8}
-                          className="bg-slate-50/60 border-t border-slate-100 px-4 py-3"
+                          className="bg-slate-50/60 border-t border-slate-100 dark:border-slate-800 px-4 py-3"
                         >
                           {panel?.loading && (
                             <div
@@ -2288,14 +2288,14 @@ function ParentsTab({
                             </div>
                           )}
                           {panel?.error && !panel.loading && (
-                            <div className="text-sm text-rose-700">
+                            <div className="text-sm text-rose-700 dark:text-rose-300">
                               Failed to load children: {panel.error}
                             </div>
                           )}
                           {panel?.children && (
                             <div className="space-y-2">
                               {selectedChildren.size > 0 && (
-                                <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-blue-50 border border-blue-200">
+                                <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900">
                                   <span className="text-base font-medium text-blue-900 tabular-nums">
                                     {selectedChildren.size} selected
                                   </span>
@@ -2319,11 +2319,11 @@ function ParentsTab({
                                 </div>
                               )}
                               {panel.children.length === 0 ? (
-                                <div className="text-sm text-slate-500 px-2 py-1">
+                                <div className="text-sm text-slate-500 dark:text-slate-400 px-2 py-1">
                                   No children — this parent is empty.
                                 </div>
                               ) : (
-                                <ul className="divide-y divide-slate-100 border border-slate-200 rounded-md bg-white">
+                                <ul className="divide-y divide-slate-100 border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900">
                                   {panel.children.map((c) => (
                                     <ChildItem
                                       key={c.id}
@@ -2360,7 +2360,7 @@ function RightRail({ tab }: { tab: Tab }) {
   return (
     <aside className="space-y-4">
       <Card title="Tab help">
-        <div className="text-sm text-slate-600 leading-snug space-y-2">
+        <div className="text-sm text-slate-600 dark:text-slate-400 leading-snug space-y-2">
           {tab === 'groups' && (
             <p>
               Auto-detected variation clusters. Approve the ones that
@@ -2387,40 +2387,40 @@ function RightRail({ tab }: { tab: Tab }) {
       </Card>
 
       <Card title="Quick actions">
-        <ul className="text-base text-slate-700 space-y-1">
+        <ul className="text-base text-slate-700 dark:text-slate-300 space-y-1">
           <li>
             <Link
               href="/products/new"
-              className="inline-flex items-center gap-1.5 hover:text-blue-700"
+              className="inline-flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <PackagePlus className="w-3.5 h-3.5 text-slate-500" />
+              <PackagePlus className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               Add new product
             </Link>
           </li>
           <li>
             <Link
               href="/bulk-operations"
-              className="inline-flex items-center gap-1.5 hover:text-blue-700"
+              className="inline-flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              <Filter className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               Bulk operations grid
             </Link>
           </li>
           <li>
             <Link
               href="/dashboard/overview"
-              className="inline-flex items-center gap-1.5 hover:text-blue-700"
+              className="inline-flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <Sparkles className="w-3.5 h-3.5 text-slate-500" />
+              <Sparkles className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               Command Center
             </Link>
           </li>
           <li>
             <Link
               href="/settings/channels"
-              className="inline-flex items-center gap-1.5 hover:text-blue-700"
+              className="inline-flex items-center gap-1.5 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               Channel settings
             </Link>
           </li>

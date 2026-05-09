@@ -241,7 +241,7 @@ export default function Step3ProductType({
   if (channels.length === 0) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6 text-center">
-        <p className="text-md text-slate-600">
+        <p className="text-md text-slate-600 dark:text-slate-400">
           Pick channels in Step 1 first.
         </p>
       </div>
@@ -251,10 +251,10 @@ export default function Step3ProductType({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Product Type
         </h2>
-        <p className="text-md text-slate-600 mt-1">
+        <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
           Pick a category per channel. Amazon uses its productType
           taxonomy; eBay uses its category tree (search by name).
           The "Same as" dropdown mirrors a sibling channel's pick
@@ -309,12 +309,12 @@ export default function Step3ProductType({
       <div className="mt-6 flex items-center justify-between gap-3">
         <span className="text-base">
           {unsatisfied.length === 0 ? (
-            <span className="inline-flex items-center gap-1.5 text-emerald-700">
+            <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
               <CheckCircle2 className="w-3.5 h-3.5" />
               Every channel has a product type.
             </span>
           ) : (
-            <span className="text-amber-700">
+            <span className="text-amber-700 dark:text-amber-300">
               {unsatisfied.length} channel
               {unsatisfied.length === 1 ? '' : 's'} still need a category
             </span>
@@ -351,10 +351,10 @@ function GtinStatusBanner({
   }
 }) {
   const tone = !status.needed
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800'
     : status.reason === 'in_progress'
-    ? 'border-amber-200 bg-amber-50 text-amber-800'
-    : 'border-slate-200 bg-slate-50 text-slate-700'
+    ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800'
+    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
   const headline = (() => {
     switch (status.reason) {
       case 'has_gtin':
@@ -377,7 +377,7 @@ function GtinStatusBanner({
       )}
     >
       {!status.needed ? (
-        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-600 flex-shrink-0" />
+        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
       ) : (
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
       )}
@@ -397,16 +397,16 @@ function NonPickableRow({
   platform: string
 }) {
   return (
-    <div className="border border-slate-200 rounded-lg bg-slate-50/50 px-4 py-3 flex items-center justify-between">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50/50 px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-2 min-w-0">
-        <span className="text-xs uppercase tracking-wide text-slate-400 font-medium">
+        <span className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 font-medium">
           Skipped
         </span>
-        <span className="font-mono text-base text-slate-600 truncate">
+        <span className="font-mono text-base text-slate-600 dark:text-slate-400 truncate">
           {channelKey}
         </span>
       </div>
-      <span className="text-sm text-slate-500">
+      <span className="text-sm text-slate-500 dark:text-slate-400">
         {platform} doesn't use a productType — handled by tags/collections at submit.
       </span>
     </div>
@@ -459,8 +459,8 @@ function ChannelRow({
   return (
     <div
       className={cn(
-        'border rounded-lg bg-white',
-        hasPick ? 'border-slate-200' : 'border-amber-200 bg-amber-50/30',
+        'border rounded-lg bg-white dark:bg-slate-900',
+        hasPick ? 'border-slate-200 dark:border-slate-700' : 'border-amber-200 dark:border-amber-900 bg-amber-50/30',
       )}
     >
       <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -470,33 +470,33 @@ function ChannelRow({
           className="flex items-center gap-2 min-w-0 text-left"
         >
           {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
           )}
           {hasPick ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
           )}
           <div className="min-w-0">
-            <div className="font-mono text-md text-slate-900 font-medium truncate">
+            <div className="font-mono text-md text-slate-900 dark:text-slate-100 font-medium truncate">
               {channelKey}
             </div>
             {hasPick ? (
-              <div className="text-sm text-slate-500 truncate">
+              <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
                 {pick.displayName ?? pick.productType}{' '}
-                <span className="text-slate-400">
+                <span className="text-slate-400 dark:text-slate-500">
                   · {pick.productType}
                 </span>
                 {pick.source === 'mirror' && pick.mirrorOf && (
-                  <span className="ml-1 text-xs uppercase tracking-wide text-blue-700">
+                  <span className="ml-1 text-xs uppercase tracking-wide text-blue-700 dark:text-blue-300">
                     · mirrors {pick.mirrorOf}
                   </span>
                 )}
               </div>
             ) : (
-              <div className="text-sm text-amber-700">
+              <div className="text-sm text-amber-700 dark:text-amber-300">
                 No product type picked
               </div>
             )}
@@ -519,7 +519,7 @@ function ChannelRow({
       )}
 
       {expanded && (
-        <div className="border-t border-slate-100">
+        <div className="border-t border-slate-100 dark:border-slate-800">
           <Picker
             wizardId={wizardId}
             channel={platform}
@@ -582,7 +582,7 @@ function MirrorMenu({
         onClick={() => setOpen((s) => !s)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+        className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
       >
         <Copy className="w-3 h-3" />
         Same as ▾
@@ -590,7 +590,7 @@ function MirrorMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[200px]"
+          className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[200px]"
         >
           {candidates.map((c) => {
             const p = picks[c]
@@ -603,10 +603,10 @@ function MirrorMenu({
                   onMirror(c)
                   setOpen(false)
                 }}
-                className="w-full text-left px-3 py-1.5 text-base hover:bg-slate-50"
+                className="w-full text-left px-3 py-1.5 text-base hover:bg-slate-50 dark:hover:bg-slate-800"
               >
-                <div className="font-mono text-slate-700">{c}</div>
-                <div className="text-xs text-slate-500 truncate">
+                <div className="font-mono text-slate-700 dark:text-slate-300">{c}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {p?.productType}
                 </div>
               </button>
@@ -817,9 +817,9 @@ function Picker({
         />
       )}
 
-      <div className="border border-slate-200 rounded-lg bg-white">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200">
-          <Search className="w-4 h-4 text-slate-400" />
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+          <Search className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           <input
             value={search}
             onChange={(e) => {
@@ -831,7 +831,7 @@ function Picker({
             className="flex-1 h-7 text-md focus:outline-none bg-transparent"
           />
           {listLoading && (
-            <Loader2 className="w-3.5 h-3.5 text-slate-400 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 animate-spin" />
           )}
         </div>
         <div
@@ -847,7 +847,7 @@ function Picker({
             />
           )}
           {!listError && !listLoading && items.length === 0 && (
-            <div className="px-3 py-6 text-base text-slate-500 text-center">
+            <div className="px-3 py-6 text-base text-slate-500 dark:text-slate-400 text-center">
               {channel === 'EBAY' && search.trim().length < 2
                 ? 'Type at least 2 characters to search eBay categories.'
                 : 'No matches.'}
@@ -864,29 +864,29 @@ function Picker({
                 onClick={() => handleSelect(item, 'manual')}
                 onMouseEnter={() => setActiveIdx(idx)}
                 className={cn(
-                  'w-full text-left px-3 py-2 flex items-center gap-3 border-b border-slate-100 last:border-b-0 transition-colors',
-                  isActive && !isSelected && 'bg-slate-50',
-                  isSelected && 'bg-blue-50',
+                  'w-full text-left px-3 py-2 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0 transition-colors',
+                  isActive && !isSelected && 'bg-slate-50 dark:bg-slate-800',
+                  isSelected && 'bg-blue-50 dark:bg-blue-950/40',
                 )}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="text-md text-slate-900 truncate">
+                  <div className="text-md text-slate-900 dark:text-slate-100 truncate">
                     {item.displayName}
                   </div>
-                  <div className="text-sm font-mono text-slate-500 truncate">
+                  <div className="text-sm font-mono text-slate-500 dark:text-slate-400 truncate">
                     {item.productType}
                   </div>
                 </div>
                 {item.bundled && (
                   <span
-                    className="text-xs text-slate-400"
+                    className="text-xs text-slate-400 dark:text-slate-500"
                     title="From bundled fallback list — connect Amazon SP-API for live results"
                   >
                     bundled
                   </span>
                 )}
                 {isSelected && (
-                  <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 )}
               </button>
             )
@@ -930,10 +930,10 @@ function BrowseNodeInput({
     setDraft(value.join(', '))
   }, [value])
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-3 py-2">
-      <label className="block text-sm font-medium text-slate-700 mb-1">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2">
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
         Browse-node IDs
-        <span className="ml-2 text-xs font-normal text-slate-500">
+        <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
           comma-separated, marketplace-specific
         </span>
       </label>
@@ -949,9 +949,9 @@ function BrowseNodeInput({
           onChange(parts)
         }}
         placeholder="e.g. 1571265031, 1400717031"
-        className="w-full h-7 px-2 text-base font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full h-7 px-2 text-base font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
-      <p className="mt-1 text-xs text-slate-400">
+      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
         Look these up in Amazon Seller Central → Inventory → Add a Product →
         the category page footer shows the node ID. The wizard publishes
         them as <span className="font-mono">recommended_browse_nodes</span>.
@@ -989,9 +989,9 @@ function SuggestionsPanel({
     return 'Suggestions'
   })()
   return (
-    <div className="border border-slate-200 rounded-lg bg-white">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200">
-        <div className="flex items-center gap-2 text-base font-medium text-slate-700">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-2 text-base font-medium text-slate-700 dark:text-slate-300">
           <Sparkles className="w-3.5 h-3.5 text-blue-500" />
           {sourceLabel}
         </div>
@@ -999,7 +999,7 @@ function SuggestionsPanel({
           type="button"
           onClick={onFetch}
           disabled={loading}
-          className="inline-flex items-center gap-1 h-6 px-2 text-sm text-slate-600 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40"
+          className="inline-flex items-center gap-1 h-6 px-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40"
         >
           {loading ? (
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -1011,13 +1011,13 @@ function SuggestionsPanel({
       </div>
       <div className="px-3 py-2">
         {error && (
-          <div className="flex items-center gap-2 text-base text-rose-700 py-2">
+          <div className="flex items-center gap-2 text-base text-rose-700 dark:text-rose-300 py-2">
             <AlertCircle className="w-3.5 h-3.5" />
             {error}
           </div>
         )}
         {!error && !hasResults && !loading && (
-          <p className="text-base text-slate-500 py-2">
+          <p className="text-base text-slate-500 dark:text-slate-400 py-2">
             Click <span className="font-medium">Get suggestions</span> for an
             AI-ranked shortlist.
           </p>
@@ -1034,26 +1034,26 @@ function SuggestionsPanel({
                   className={cn(
                     'w-full text-left flex items-center gap-3 px-2 py-2 rounded-md transition-colors',
                     isSelected
-                      ? 'bg-blue-50 ring-1 ring-blue-200'
-                      : 'hover:bg-slate-50',
+                      ? 'bg-blue-50 dark:bg-blue-950/40 ring-1 ring-blue-200'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-md text-slate-900 font-medium">
+                      <span className="text-md text-slate-900 dark:text-slate-100 font-medium">
                         {s.displayName}
                       </span>
-                      <span className="text-sm font-mono text-slate-500">
+                      <span className="text-sm font-mono text-slate-500 dark:text-slate-400">
                         {s.productType}
                       </span>
                     </div>
-                    <div className="text-sm text-slate-500 truncate">
+                    <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
                       {s.reason}
                     </div>
                   </div>
                   <ConfidenceBadge value={s.confidence} />
                   {isSelected && (
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                   )}
                 </button>
               )
@@ -1102,7 +1102,7 @@ function ListErrorBanner({
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="font-medium">{headline}</div>
-          <div className="text-sm text-rose-700 mt-0.5 break-words">
+          <div className="text-sm text-rose-700 dark:text-rose-300 mt-0.5 break-words">
             {message}
           </div>
           {ctaLabel && (
@@ -1110,7 +1110,7 @@ function ListErrorBanner({
               href="/settings/channels"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 mt-2 h-6 px-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-md bg-white hover:bg-blue-50"
+              className="inline-flex items-center gap-1 mt-2 h-6 px-2 text-sm font-medium text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded-md bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950/40"
             >
               {ctaLabel}
             </a>
@@ -1141,10 +1141,10 @@ function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100)
   const tone =
     pct >= 75
-      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
       : pct >= 50
-      ? 'bg-amber-50 text-amber-700 border-amber-200'
-      : 'bg-slate-50 text-slate-600 border-slate-200'
+      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+      : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
   return (
     <span
       className={cn(

@@ -91,12 +91,12 @@ interface PublishStatusResponse {
 }
 
 const OUTCOME_TONE: Record<string, { bg: string; text: string; icon: any }> = {
-  success: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle2 },
-  gated: { bg: 'bg-slate-50', text: 'text-slate-600', icon: ShieldAlert },
-  failed: { bg: 'bg-rose-50', text: 'text-rose-700', icon: XCircle },
-  timeout: { bg: 'bg-rose-50', text: 'text-rose-700', icon: Clock },
-  'rate-limited': { bg: 'bg-amber-50', text: 'text-amber-700', icon: AlertTriangle },
-  'circuit-open': { bg: 'bg-rose-50', text: 'text-rose-700', icon: XCircle },
+  success: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', icon: CheckCircle2 },
+  gated: { bg: 'bg-slate-50 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', icon: ShieldAlert },
+  failed: { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', icon: XCircle },
+  timeout: { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', icon: Clock },
+  'rate-limited': { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', icon: AlertTriangle },
+  'circuit-open': { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', icon: XCircle },
 }
 
 interface Breadcrumb {
@@ -137,14 +137,14 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* Env block — what the API thinks the publish gate is set to */}
       <Card>
         <div className="space-y-1.5">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             Publish gate · env (live from this API instance)
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
             <EnvCell label="Amazon publish" enabled={status?.env.AMAZON_PUBLISH_ENABLED} mode={status?.env.AMAZON_PUBLISH_MODE} />
             <EnvCell label="eBay publish" enabled={status?.env.EBAY_PUBLISH_ENABLED} mode={status?.env.EBAY_PUBLISH_MODE} />
           </div>
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-slate-400 dark:text-slate-500">
             Defaults: gated + dry-run. Flip via Railway env vars
             (NEXUS_ENABLE_&lt;CH&gt;_PUBLISH, &lt;CH&gt;_PUBLISH_MODE) — see PHASE_B_VERIFICATION.md.
           </div>
@@ -155,12 +155,12 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {status && status.trippedCircuits.length > 0 && (
         <Card className="border-rose-300 bg-rose-50/50">
           <div className="space-y-2">
-            <div className="text-xs uppercase tracking-wider text-rose-700 font-semibold inline-flex items-center gap-1.5">
+            <div className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300 font-semibold inline-flex items-center gap-1.5">
               <AlertTriangle size={12} /> Likely-tripped circuits — 3+ failures in last 5 min
             </div>
             <div className="overflow-x-auto">
               <table className="text-sm w-full">
-                <thead className="text-xs uppercase tracking-wider text-rose-700">
+                <thead className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-300">
                   <tr>
                     <th className="text-left px-2 py-1">Channel</th>
                     <th className="text-left px-2 py-1">Marketplace</th>
@@ -171,12 +171,12 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 </thead>
                 <tbody>
                   {status.trippedCircuits.map((c, i) => (
-                    <tr key={i} className="border-t border-rose-200">
+                    <tr key={i} className="border-t border-rose-200 dark:border-rose-900">
                       <td className="px-2 py-1 font-mono">{c.channel}</td>
                       <td className="px-2 py-1 font-mono">{c.marketplace ?? '—'}</td>
                       <td className="px-2 py-1 font-mono text-xs">{c.sellerId ?? '—'}</td>
-                      <td className="px-2 py-1 text-right tabular-nums font-semibold text-rose-700">{c.recent_failures}</td>
-                      <td className="px-2 py-1 text-right text-xs text-slate-600">{new Date(c.last_failure).toLocaleString()}</td>
+                      <td className="px-2 py-1 text-right tabular-nums font-semibold text-rose-700 dark:text-rose-300">{c.recent_failures}</td>
+                      <td className="px-2 py-1 text-right text-xs text-slate-600 dark:text-slate-400">{new Date(c.last_failure).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -189,7 +189,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* 30-day per-channel rollup */}
       <Card>
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5">
             <Activity size={12} /> 30-day per-channel health
           </div>
           {loading && !status ? (
@@ -204,14 +204,14 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                   className={`border rounded p-3 ${
                     c.tone === 'critical' ? 'border-rose-300 bg-rose-50/50'
                     : c.tone === 'warning' ? 'border-amber-300 bg-amber-50/50'
-                    : 'border-emerald-200 bg-emerald-50/30'
+                    : 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/30'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5 gap-2">
-                    <span className="font-mono font-semibold text-slate-900">{c.channel}</span>
+                    <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">{c.channel}</span>
                     <div className="inline-flex items-center gap-2">
                       <Sparkline points={status?.dailyTrend?.[c.channel] ?? []} />
-                      <span className="text-xs tabular-nums text-slate-600 whitespace-nowrap">
+                      <span className="text-xs tabular-nums text-slate-600 dark:text-slate-400 whitespace-nowrap">
                         {c.success_pct != null ? `${c.success_pct.toFixed(1)}% success` : 'no data'}
                       </span>
                     </div>
@@ -235,7 +235,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* Last-24h activity table */}
       <Card>
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5">
             <Clock size={12} /> Last 24 hours · activity by (channel, mode, outcome)
           </div>
           {loading && !status ? (
@@ -251,7 +251,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* Last-7d activity table */}
       <Card>
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5">
             <Clock size={12} /> Last 7 days · activity by (channel, mode, outcome)
           </div>
           {loading && !status ? (
@@ -267,7 +267,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* Recent failures — the operator's daily triage queue */}
       <Card>
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold inline-flex items-center gap-1.5">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold inline-flex items-center gap-1.5">
             <XCircle size={12} /> Recent failures · top 20 in last 7 days
           </div>
           {loading && !status ? (
@@ -277,7 +277,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
           ) : (
             <div className="overflow-x-auto">
               <table className="text-sm w-full">
-                <thead className="text-xs uppercase tracking-wider text-slate-500">
+                <thead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="text-left px-2 py-1">When</th>
                     <th className="text-left px-2 py-1">Channel</th>
@@ -289,11 +289,11 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 </thead>
                 <tbody>
                   {status?.recentFailures.map((r, i) => {
-                    const tone = OUTCOME_TONE[r.outcome] ?? { bg: 'bg-slate-50', text: 'text-slate-600', icon: AlertTriangle }
+                    const tone = OUTCOME_TONE[r.outcome] ?? { bg: 'bg-slate-50 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', icon: AlertTriangle }
                     const Icon = tone.icon
                     return (
-                      <tr key={i} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-2 py-1 text-xs text-slate-600 whitespace-nowrap">{new Date(r.at).toLocaleString()}</td>
+                      <tr key={i} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/50">
+                        <td className="px-2 py-1 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">{new Date(r.at).toLocaleString()}</td>
                         <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                         <td className="px-2 py-1 font-mono text-xs">{r.mode}</td>
                         <td className="px-2 py-1">
@@ -305,14 +305,14 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                           {r.sku ? (
                             <Link
                               href={`/listings?search=${encodeURIComponent(r.sku)}`}
-                              className="text-slate-700 hover:text-blue-700 hover:underline"
+                              className="text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
                               title={`Open /listings filtered to ${r.sku}`}
                             >
                               {r.sku}
                             </Link>
                           ) : '—'}
                         </td>
-                        <td className="px-2 py-1 text-xs text-slate-700 max-w-md truncate" title={r.error_excerpt ?? ''}>
+                        <td className="px-2 py-1 text-xs text-slate-700 dark:text-slate-300 max-w-md truncate" title={r.error_excerpt ?? ''}>
                           {r.error_excerpt ?? '—'}
                         </td>
                       </tr>
@@ -328,7 +328,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* SKU coverage — how many distinct SKUs the gate has seen, per (channel, mode) */}
       <Card>
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             SKU coverage · last 30 days
           </div>
           {loading && !status ? (
@@ -338,7 +338,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
           ) : (
             <div className="overflow-x-auto">
               <table className="text-sm w-full">
-                <thead className="text-xs uppercase tracking-wider text-slate-500">
+                <thead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="text-left px-2 py-1">Channel</th>
                     <th className="text-left px-2 py-1">Mode</th>
@@ -349,12 +349,12 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 </thead>
                 <tbody>
                   {status?.skuCoverage.map((r, i) => (
-                    <tr key={i} className="border-t border-slate-100">
+                    <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
                       <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                       <td className="px-2 py-1 font-mono text-xs">{r.mode}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{r.distinct_skus}</td>
-                      <td className="px-2 py-1 text-right text-xs text-slate-600">{new Date(r.first_seen).toLocaleString()}</td>
-                      <td className="px-2 py-1 text-right text-xs text-slate-600">{new Date(r.last_seen).toLocaleString()}</td>
+                      <td className="px-2 py-1 text-right text-xs text-slate-600 dark:text-slate-400">{new Date(r.first_seen).toLocaleString()}</td>
+                      <td className="px-2 py-1 text-right text-xs text-slate-600 dark:text-slate-400">{new Date(r.last_seen).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -367,7 +367,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       {/* Repeat-attempt SKUs — potential drift / loop */}
       <Card>
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             Repeat attempts · top 10 SKUs in last 7 days
           </div>
           {loading && !status ? (
@@ -377,7 +377,7 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
           ) : (
             <div className="overflow-x-auto">
               <table className="text-sm w-full">
-                <thead className="text-xs uppercase tracking-wider text-slate-500">
+                <thead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <tr>
                     <th className="text-left px-2 py-1">SKU</th>
                     <th className="text-left px-2 py-1">Channel</th>
@@ -389,12 +389,12 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                 </thead>
                 <tbody>
                   {status?.repeatAttempts.map((r, i) => (
-                    <tr key={i} className="border-t border-slate-100">
+                    <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
                       <td className="px-2 py-1 font-mono text-xs">
                         {r.sku ? (
                           <Link
                             href={`/listings?search=${encodeURIComponent(r.sku)}`}
-                            className="text-slate-700 hover:text-blue-700 hover:underline"
+                            className="text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
                             title={`Open /listings filtered to ${r.sku}`}
                           >
                             {r.sku}
@@ -404,8 +404,8 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
                       <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                       <td className="px-2 py-1 font-mono text-xs">{r.marketplace ?? '—'}</td>
                       <td className="px-2 py-1 text-right tabular-nums font-semibold">{r.attempts}</td>
-                      <td className="px-2 py-1 text-right tabular-nums text-emerald-700">{r.succeeded}</td>
-                      <td className="px-2 py-1 text-right tabular-nums text-rose-700">{r.unhappy}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{r.succeeded}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-rose-700 dark:text-rose-300">{r.unhappy}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -416,12 +416,12 @@ export default function PublishStatusClient({ breadcrumbs }: { breadcrumbs?: Bre
       </Card>
 
       {error && (
-        <Card className="border-rose-300 bg-rose-50">
-          <div className="text-sm text-rose-700">Failed to load: {error}</div>
+        <Card className="border-rose-300 bg-rose-50 dark:bg-rose-950/40">
+          <div className="text-sm text-rose-700 dark:text-rose-300">Failed to load: {error}</div>
         </Card>
       )}
 
-      <div className="text-xs text-slate-400 text-right">
+      <div className="text-xs text-slate-400 dark:text-slate-500 text-right">
         Last fetched {lastFetchedAt ? new Date(lastFetchedAt).toLocaleTimeString() : '—'} ·{' '}
         polls every 30s ·{' '}
         <button onClick={() => refetch()} className="underline hover:text-slate-600">
@@ -443,26 +443,26 @@ function EnvCell({
 }) {
   if (enabled == null) {
     return (
-      <div className="border border-slate-200 rounded p-2">
-        <div className="text-xs text-slate-500">{label}</div>
-        <div className="text-sm text-slate-400">loading…</div>
+      <div className="border border-slate-200 dark:border-slate-700 rounded p-2">
+        <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+        <div className="text-sm text-slate-400 dark:text-slate-500">loading…</div>
       </div>
     )
   }
   const tone =
-    !enabled ? 'border-slate-200 bg-slate-50'
-    : mode === 'live' ? 'border-emerald-300 bg-emerald-50'
-    : mode === 'sandbox' ? 'border-amber-300 bg-amber-50'
-    : 'border-slate-300 bg-slate-50'
+    !enabled ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+    : mode === 'live' ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
+    : mode === 'sandbox' ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40'
+    : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800'
   return (
     <div className={`border rounded p-2 ${tone}`}>
-      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
       <div className="text-sm">
-        <span className={enabled ? 'font-semibold text-slate-900' : 'text-slate-500'}>
+        <span className={enabled ? 'font-semibold text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}>
           {enabled ? 'Enabled' : 'Disabled'}
         </span>
         {' · '}
-        <span className="font-mono text-slate-700">{mode ?? 'dry-run'}</span>
+        <span className="font-mono text-slate-700 dark:text-slate-300">{mode ?? 'dry-run'}</span>
       </div>
     </div>
   )
@@ -479,16 +479,16 @@ function Stat({
 }) {
   const cls =
     value === 0
-      ? 'text-slate-400'
-      : tone === 'emerald' ? 'text-emerald-700 font-semibold'
-      : tone === 'rose' ? 'text-rose-700 font-semibold'
-      : tone === 'amber' ? 'text-amber-700 font-semibold'
-      : tone === 'slate' ? 'text-slate-700'
-      : 'text-slate-900 font-semibold'
+      ? 'text-slate-400 dark:text-slate-500'
+      : tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-300 font-semibold'
+      : tone === 'rose' ? 'text-rose-700 dark:text-rose-300 font-semibold'
+      : tone === 'amber' ? 'text-amber-700 dark:text-amber-300 font-semibold'
+      : tone === 'slate' ? 'text-slate-700 dark:text-slate-300'
+      : 'text-slate-900 dark:text-slate-100 font-semibold'
   return (
     <div>
       <div className={`text-sm tabular-nums ${cls}`}>{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500">{label}</div>
     </div>
   )
 }
@@ -497,7 +497,7 @@ function ActivityTable({ rows }: { rows: Array<{ channel: string; mode: string; 
   return (
     <div className="overflow-x-auto">
       <table className="text-sm w-full">
-        <thead className="text-xs uppercase tracking-wider text-slate-500">
+        <thead className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
           <tr>
             <th className="text-left px-2 py-1">Channel</th>
             <th className="text-left px-2 py-1">Mode</th>
@@ -508,10 +508,10 @@ function ActivityTable({ rows }: { rows: Array<{ channel: string; mode: string; 
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const tone = OUTCOME_TONE[r.outcome] ?? { bg: 'bg-slate-50', text: 'text-slate-600', icon: AlertTriangle }
+            const tone = OUTCOME_TONE[r.outcome] ?? { bg: 'bg-slate-50 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', icon: AlertTriangle }
             const Icon = tone.icon
             return (
-              <tr key={i} className="border-t border-slate-100">
+              <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
                 <td className="px-2 py-1 font-mono text-xs">{r.channel}</td>
                 <td className="px-2 py-1 font-mono text-xs">{r.mode}</td>
                 <td className="px-2 py-1">
@@ -520,7 +520,7 @@ function ActivityTable({ rows }: { rows: Array<{ channel: string; mode: string; 
                   </span>
                 </td>
                 <td className="px-2 py-1 text-right tabular-nums font-semibold">{r.attempts}</td>
-                <td className="px-2 py-1 text-right tabular-nums text-slate-600">{r.distinct_skus}</td>
+                <td className="px-2 py-1 text-right tabular-nums text-slate-600 dark:text-slate-400">{r.distinct_skus}</td>
               </tr>
             )
           })}
@@ -531,7 +531,7 @@ function ActivityTable({ rows }: { rows: Array<{ channel: string; mode: string; 
 }
 
 function EmptyText({ text }: { text: string }) {
-  return <div className="text-sm text-slate-500 py-3">{text}</div>
+  return <div className="text-sm text-slate-500 dark:text-slate-400 py-3">{text}</div>
 }
 
 // M.10 — 14-day sparkline. Each day is one column; success (emerald)
@@ -550,7 +550,7 @@ function Sparkline({ points }: { points: DailyTrendPoint[] }) {
 
   if (points.length === 0) {
     return (
-      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-slate-400">
+      <div className="h-7 w-[112px] flex items-center justify-center text-[10px] text-slate-400 dark:text-slate-500">
         no 14d data
       </div>
     )

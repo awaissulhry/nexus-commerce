@@ -281,10 +281,10 @@ export default function Step9Review({
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
             Review &amp; Verify
           </h2>
-          <p className="text-md text-slate-600 mt-1">
+          <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
             Per-channel pre-submit checklist. Expand any card to see its
             full step-by-step status or the prepared channel payload.
           </p>
@@ -293,7 +293,7 @@ export default function Step9Review({
           type="button"
           onClick={() => setReloadKey((k) => k + 1)}
           disabled={loading}
-          className="text-base text-blue-600 hover:underline disabled:opacity-40"
+          className="text-base text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
         >
           Refresh
         </button>
@@ -301,7 +301,7 @@ export default function Step9Review({
 
       {loading && (
         <div
-          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
           aria-busy="true"
           aria-label="Loading review"
         >
@@ -312,7 +312,7 @@ export default function Step9Review({
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-md text-rose-700 dark:text-rose-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -321,8 +321,8 @@ export default function Step9Review({
       {data && !loading && (
         <>
           {/* Top summary */}
-          <div className="mb-4 border border-slate-200 rounded-lg bg-white px-4 py-3 flex items-center justify-between">
-            <div className="text-md text-slate-700">
+          <div className="mb-4 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 flex items-center justify-between">
+            <div className="text-md text-slate-700 dark:text-slate-300">
               <span className="font-semibold">
                 {data.validation.channels.length}
               </span>{' '}
@@ -331,8 +331,8 @@ export default function Step9Review({
                 className={cn(
                   'font-semibold',
                   data.validation.blockingChannels.length === 0
-                    ? 'text-emerald-700'
-                    : 'text-amber-700',
+                    ? 'text-emerald-700 dark:text-emerald-300'
+                    : 'text-amber-700 dark:text-amber-300',
                 )}
               >
                 {data.validation.blockingChannels.length === 0
@@ -414,7 +414,7 @@ export default function Step9Review({
 
           {/* Continue */}
           <div className="mt-6 flex items-center justify-between gap-3">
-            <span className="text-base text-slate-600">
+            <span className="text-base text-slate-600 dark:text-slate-400">
               {data.validation.allReady
                 ? 'All channels complete — proceed to submit.'
                 : `${data.validation.blockingChannels.length} channel${
@@ -468,8 +468,8 @@ function ChannelGroupCard({
   return (
     <div
       className={cn(
-        'border rounded-lg bg-white',
-        allReady ? 'border-slate-200' : 'border-amber-200 bg-amber-50/30',
+        'border rounded-lg bg-white dark:bg-slate-900',
+        allReady ? 'border-slate-200 dark:border-slate-700' : 'border-amber-200 dark:border-amber-900 bg-amber-50/30',
       )}
     >
       <button
@@ -479,35 +479,35 @@ function ChannelGroupCard({
         aria-controls={`group-${group.id}`}
         className={cn(
           'w-full px-4 py-3 flex items-center justify-between gap-3 text-left',
-          'border-b border-slate-100',
+          'border-b border-slate-100 dark:border-slate-800',
           'hover:bg-slate-50/60',
         )}
       >
         <div className="flex items-center gap-2 min-w-0">
           {expanded ? (
             <ChevronDown
-              className="w-4 h-4 text-slate-500 flex-shrink-0"
+              className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0"
               aria-hidden="true"
             />
           ) : (
             <ChevronRight
-              className="w-4 h-4 text-slate-500 flex-shrink-0"
+              className="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0"
               aria-hidden="true"
             />
           )}
           {allReady ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
           )}
           <div className="min-w-0">
-            <div className="text-md text-slate-900 font-semibold truncate">
+            <div className="text-md text-slate-900 dark:text-slate-100 font-semibold truncate">
               {group.label}{' '}
-              <span className="text-slate-500 font-normal tabular-nums">
+              <span className="text-slate-500 dark:text-slate-400 font-normal tabular-nums">
                 ({totalCount} marketplace{totalCount === 1 ? '' : 's'})
               </span>
             </div>
-            <div className="text-sm text-slate-500 truncate">
+            <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
               {group.members
                 .map((m) => m.report.marketplace)
                 .join(' · ')}
@@ -516,11 +516,11 @@ function ChannelGroupCard({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {allReady ? (
-            <span className="text-xs uppercase tracking-wide font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs uppercase tracking-wide font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-1.5 py-0.5 rounded">
               All ready
             </span>
           ) : (
-            <span className="text-xs uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded tabular-nums">
+            <span className="text-xs uppercase tracking-wide font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded tabular-nums">
               {readyCount}/{totalCount} ready
             </span>
           )}
@@ -581,40 +581,40 @@ function ChannelCard({
   onJumpToStep: (stepId: number) => void
 }) {
   const tone = report.ready
-    ? 'border-slate-200'
-    : 'border-amber-200 bg-amber-50/30'
+    ? 'border-slate-200 dark:border-slate-700'
+    : 'border-amber-200 dark:border-amber-900 bg-amber-50/30'
   const incomplete = report.items.filter((i) => i.status === 'incomplete')
   return (
-    <div className={cn('border rounded-lg bg-white', tone)}>
-      <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-100">
+    <div className={cn('border rounded-lg bg-white dark:bg-slate-900', tone)}>
+      <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-2 min-w-0">
           {report.ready ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
           )}
           <div className="min-w-0">
-            <div className="font-mono text-md text-slate-900 font-medium truncate">
+            <div className="font-mono text-md text-slate-900 dark:text-slate-100 font-medium truncate">
               {report.channelKey}
             </div>
-            <div className="text-sm text-slate-500 truncate">
+            <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
               {report.platform} · {report.marketplace}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {report.ready ? (
-            <span className="text-xs uppercase tracking-wide font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs uppercase tracking-wide font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-1.5 py-0.5 rounded">
               Ready
             </span>
           ) : (
-            <span className="text-xs uppercase tracking-wide font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+            <span className="text-xs uppercase tracking-wide font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-1.5 py-0.5 rounded">
               {report.blockingCount} blocking
             </span>
           )}
           {payload?.unsupported && (
             <span
-              className="text-xs uppercase tracking-wide font-medium text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded"
+              className="text-xs uppercase tracking-wide font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded"
               title={payload.reason}
             >
               Adapter not wired
@@ -641,7 +641,7 @@ function ChannelCard({
           the gap between Step 5 selection and what actually resolved at
           composition time so the user knows specific picks were dropped. */}
       {payload?.missingChildSkus && payload.missingChildSkus.length > 0 && (
-        <div className="px-4 py-2 border-b border-slate-100 bg-amber-50/40">
+        <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 bg-amber-50/40">
           <div className="text-base text-amber-800 inline-flex items-start gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <span>
@@ -669,7 +669,7 @@ function ChannelCard({
           stepper. The "Fix" button on the right is the explicit
           affordance; the row body is clickable for ergonomic targets. */}
       {(incomplete.length > 0 || report.warnings.length > 0) && (
-        <div className="px-4 py-2 space-y-1 border-b border-slate-100">
+        <div className="px-4 py-2 space-y-1 border-b border-slate-100 dark:border-slate-800">
           {incomplete.map((it, i) => (
             <div
               key={`i-${i}`}
@@ -678,7 +678,7 @@ function ChannelCard({
               <button
                 type="button"
                 onClick={() => onJumpToStep(it.step)}
-                className="text-base text-amber-700 inline-flex items-start gap-1.5 text-left flex-1 min-w-0 hover:text-amber-900 hover:underline rounded"
+                className="text-base text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5 text-left flex-1 min-w-0 hover:text-amber-900 hover:underline rounded"
                 title={`Jump to Step ${it.step} to fix this`}
               >
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
@@ -689,7 +689,7 @@ function ChannelCard({
               <button
                 type="button"
                 onClick={() => onJumpToStep(it.step)}
-                className="flex-shrink-0 inline-flex items-center gap-1 h-6 px-2 text-sm font-medium border border-amber-300 text-amber-900 bg-amber-50 rounded hover:bg-amber-100"
+                className="flex-shrink-0 inline-flex items-center gap-1 h-6 px-2 text-sm font-medium border border-amber-300 text-amber-900 bg-amber-50 dark:bg-amber-950/40 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60"
               >
                 Fix →
               </button>
@@ -698,7 +698,7 @@ function ChannelCard({
           {report.warnings.map((w, i) => (
             <div
               key={`w-${i}`}
-              className="text-base text-slate-600 inline-flex items-start gap-1.5"
+              className="text-base text-slate-600 dark:text-slate-400 inline-flex items-start gap-1.5"
             >
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
               <span>{w}</span>
@@ -711,7 +711,7 @@ function ChannelCard({
       <button
         type="button"
         onClick={onToggleChecklist}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2 text-base text-slate-700 hover:bg-slate-50"
+        className="w-full flex items-center justify-between gap-2 px-4 py-2 text-base text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
       >
         <span className="inline-flex items-center gap-1.5">
           {checklistExpanded ? (
@@ -721,13 +721,13 @@ function ChannelCard({
           )}
           {checklistExpanded ? 'Hide' : 'Show'} full step checklist
         </span>
-        <span className="text-xs text-slate-400 font-mono">
+        <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
           {report.items.filter((i) => i.status === 'complete').length}/
           {report.items.length}
         </span>
       </button>
       {checklistExpanded && (
-        <div className="px-4 py-2 border-t border-slate-100 space-y-1">
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
           {report.items.map((it) => {
             const clickable = it.status === 'incomplete' || it.status === 'complete'
             const Wrapper: any = clickable ? 'button' : 'div'
@@ -743,16 +743,16 @@ function ChannelCard({
                   : {})}
                 className={cn(
                   'w-full flex items-center gap-2 text-base text-left rounded px-1 -mx-1',
-                  clickable && 'hover:bg-slate-50 cursor-pointer',
+                  clickable && 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer',
                 )}
               >
                 <StatusIcon status={it.status} />
-                <span className="font-mono text-slate-500 w-12 text-sm">
+                <span className="font-mono text-slate-500 dark:text-slate-400 w-12 text-sm">
                   Step {it.step}
                 </span>
-                <span className="text-slate-700">{it.title}</span>
+                <span className="text-slate-700 dark:text-slate-300">{it.title}</span>
                 {it.message && (
-                  <span className="text-slate-500 text-sm truncate">
+                  <span className="text-slate-500 dark:text-slate-400 text-sm truncate">
                     · {it.message}
                   </span>
                 )}
@@ -768,7 +768,7 @@ function ChannelCard({
           <button
             type="button"
             onClick={onTogglePayload}
-            className="w-full flex items-center justify-between gap-2 px-4 py-2 text-base text-slate-700 border-t border-slate-100 hover:bg-slate-50"
+            className="w-full flex items-center justify-between gap-2 px-4 py-2 text-base text-slate-700 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <span className="inline-flex items-center gap-1.5">
               {payloadExpanded ? (
@@ -778,19 +778,19 @@ function ChannelCard({
               )}
               {payloadExpanded ? 'Hide' : 'Show'} prepared payload
             </span>
-            <span className="text-xs text-slate-400 font-mono">
+            <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
               {payload.platform}
             </span>
           </button>
           {payloadExpanded && (
-            <pre className="px-4 py-3 text-sm font-mono text-slate-700 bg-slate-50 max-h-[360px] overflow-auto border-t border-slate-100">
+            <pre className="px-4 py-3 text-sm font-mono text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 max-h-[360px] overflow-auto border-t border-slate-100 dark:border-slate-800">
               {JSON.stringify(payload.payload, null, 2)}
             </pre>
           )}
         </>
       )}
       {payload?.unsupported && (
-        <div className="px-4 py-2 border-t border-slate-100 text-base text-slate-500">
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-base text-slate-500 dark:text-slate-400">
           {payload.reason}
         </div>
       )}
@@ -865,7 +865,7 @@ function ListingSummary({
   })()
 
   return (
-    <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/40">
+    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/40">
       {/* Top metadata row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mb-2">
         <SummaryField
@@ -893,18 +893,18 @@ function ListingSummary({
 
       {/* Variation summary */}
       {isAmazon && (variationTheme || children.length > 0) && (
-        <div className="text-sm text-slate-600 mb-2">
-          <span className="text-slate-500">Variations: </span>
+        <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+          <span className="text-slate-500 dark:text-slate-400">Variations: </span>
           {children.length > 0 ? (
             <>
-              <span className="font-semibold text-slate-800">
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {children.length}
               </span>{' '}
               child{children.length === 1 ? '' : 'ren'}
               {variationTheme && (
                 <>
                   {' · theme '}
-                  <span className="font-mono text-slate-700">{variationTheme}</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300">{variationTheme}</span>
                 </>
               )}
             </>
@@ -922,7 +922,7 @@ function ListingSummary({
 
       {/* Expected ASIN behaviour */}
       {asinExpectation && (
-        <div className="mt-2 text-sm text-slate-500 italic">
+        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400 italic">
           {asinExpectation}
         </div>
       )}
@@ -941,12 +941,12 @@ function SummaryField({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium">
         {label}
       </div>
       <div
         className={cn(
-          'truncate text-slate-800',
+          'truncate text-slate-800 dark:text-slate-200',
           mono ? 'font-mono text-sm' : 'text-base',
         )}
         title={value}
@@ -975,15 +975,15 @@ function ChildSkuMap({
   )
   if (!hasOverrides) {
     return (
-      <div className="text-sm text-slate-500">
+      <div className="text-sm text-slate-500 dark:text-slate-400">
         Child SKUs: shared across marketplaces ·{' '}
-        <span className="text-slate-400">no ASINs assigned yet</span>
+        <span className="text-slate-400 dark:text-slate-500">no ASINs assigned yet</span>
       </div>
     )
   }
   return (
-    <div className="border border-slate-200 rounded bg-white overflow-hidden">
-      <div className="grid grid-cols-3 gap-2 px-2 py-1 text-xs uppercase tracking-wide text-slate-500 font-medium border-b border-slate-100 bg-slate-50">
+    <div className="border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="grid grid-cols-3 gap-2 px-2 py-1 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
         <div>Master SKU</div>
         <div>Marketplace SKU</div>
         <div>Child ASIN</div>
@@ -994,13 +994,13 @@ function ChildSkuMap({
             key={c.masterSku}
             className="grid grid-cols-3 gap-2 px-2 py-1 text-sm font-mono border-b border-slate-50 last:border-b-0"
           >
-            <div className="truncate text-slate-700" title={c.masterSku}>
+            <div className="truncate text-slate-700 dark:text-slate-300" title={c.masterSku}>
               {c.masterSku}
             </div>
             <div
               className={cn(
                 'truncate',
-                c.channelSku === c.masterSku ? 'text-slate-400' : 'text-slate-700',
+                c.channelSku === c.masterSku ? 'text-slate-400 dark:text-slate-500' : 'text-slate-700 dark:text-slate-300',
               )}
               title={c.channelSku}
             >
@@ -1009,7 +1009,7 @@ function ChildSkuMap({
             <div
               className={cn(
                 'truncate',
-                c.channelProductId ? 'text-slate-700' : 'text-slate-400',
+                c.channelProductId ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500',
               )}
               title={c.channelProductId ?? 'not yet assigned'}
             >
@@ -1024,24 +1024,24 @@ function ChildSkuMap({
 
 function StatusIcon({ status }: { status: SliceStatus }) {
   if (status === 'complete')
-    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+    return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
   if (status === 'incomplete')
-    return <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+    return <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
   if (status === 'skipped')
-    return <MinusCircle className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-  return <Circle className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+    return <MinusCircle className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+  return <Circle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 flex-shrink-0" />
 }
 
 function ReadyBadge({ allReady }: { allReady: boolean }) {
   if (allReady) {
     return (
-      <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-2 py-0.5 rounded">
         <CheckCircle2 className="w-3 h-3" /> Ready to submit
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+    <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 rounded">
       <AlertCircle className="w-3 h-3" /> Not ready
     </span>
   )

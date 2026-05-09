@@ -178,11 +178,11 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default
 }
 
 const CHANNEL_TONE: Record<string, string> = {
-  AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
-  EBAY: 'bg-blue-50 text-blue-700 border-blue-200',
-  SHOPIFY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  WOOCOMMERCE: 'bg-violet-50 text-violet-700 border-violet-200',
-  ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
+  AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
+  EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+  SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
+  ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
 }
 
 // ── Component ───────────────────────────────────────────────────────
@@ -585,7 +585,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           locked to a specific channel (/listings/amazon, etc.); same
           for Market on lockMarketplace pages. */}
       {(!lockChannel || !lockMarketplace) && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
+        <div className="bg-white dark:bg-slate-900 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
           {!lockChannel && (
             <MultiSelectChips
               label="Channel"
@@ -703,7 +703,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
             }
           >
             <span
-              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500"
+              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
               aria-label={sseConnected ? t('listings.live.tooltipConnected') : t('listings.live.tooltipDisconnected')}
             >
               <span
@@ -716,10 +716,10 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
             </span>
           </Tooltip>
           {facets && (
-            <div className="flex items-center gap-3 text-base text-slate-500">
-              <span><span className="font-semibold text-slate-700 tabular-nums">{facets.total}</span> {t('listings.stats.total')}</span>
-              <span className="text-slate-300">·</span>
-              <span className={facets.errorCount > 0 ? 'text-rose-600' : ''}>
+            <div className="flex items-center gap-3 text-base text-slate-500 dark:text-slate-400">
+              <span><span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{facets.total}</span> {t('listings.stats.total')}</span>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <span className={facets.errorCount > 0 ? 'text-rose-600 dark:text-rose-400' : ''}>
                 <span className="font-semibold tabular-nums">{facets.errorCount}</span> {t('listings.stats.errors')}
               </span>
             </div>
@@ -735,7 +735,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           {lens !== 'grid' && (
             <button
               onClick={() => { fetchGrid(); fetchFacets() }}
-              className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> Refresh
             </button>
@@ -898,13 +898,13 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'performance', labelKey: 'listings.lens.performance', icon: Activity },
   ]
   return (
-    <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+    <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
       {tabs.map((tab) => (
         <button
           key={tab.key}
           onClick={() => onChange(tab.key)}
           className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
-            current === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            current === tab.key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
           }`}
         >
           <tab.icon size={12} />
@@ -1049,7 +1049,7 @@ function InlineNumberCell({
       <button
         onClick={() => setEditing(true)}
         aria-label={`Set ${field}`}
-        className="text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded px-1 -mx-1 cursor-pointer w-full text-right"
+        className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer w-full text-right"
       >
         —
       </button>
@@ -1060,11 +1060,11 @@ function InlineNumberCell({
     <button
       onClick={() => setEditing(true)}
       aria-label={`Edit ${field} (currently ${format(value)})`}
-      className={`tabular-nums hover:bg-slate-50 rounded px-1 -mx-1 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${align === 'right' ? 'text-right block w-full' : ''}`}
+      className={`tabular-nums hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -mx-1 cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${align === 'right' ? 'text-right block w-full' : ''}`}
     >
-      <div className={`text-md ${tone ?? 'text-slate-900'}`}>{format(value)}</div>
+      <div className={`text-md ${tone ?? 'text-slate-900 dark:text-slate-100'}`}>{format(value)}</div>
       {subline && (
-        <div className={`text-sm ${subTone === 'rose' ? 'text-rose-600' : subTone === 'amber' ? 'text-amber-600' : 'text-slate-500'}`}>
+        <div className={`text-sm ${subTone === 'rose' ? 'text-rose-600 dark:text-rose-400' : subTone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
           {subline}
         </div>
       )}
@@ -1227,11 +1227,11 @@ function QuickPresets({
         const tone = (p as any).tone as 'danger' | 'warning' | undefined
         const activeClass = p.isActive
           ? tone === 'danger'
-            ? 'bg-rose-100 border-rose-300 text-rose-700'
+            ? 'bg-rose-100 dark:bg-rose-900/60 border-rose-300 text-rose-700 dark:text-rose-300'
             : tone === 'warning'
-              ? 'bg-amber-100 border-amber-300 text-amber-700'
-              : 'bg-blue-100 border-blue-300 text-blue-700'
-          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              ? 'bg-amber-100 dark:bg-amber-900/60 border-amber-300 text-amber-700 dark:text-amber-300'
+              : 'bg-blue-100 dark:bg-blue-900/60 border-blue-300 text-blue-700 dark:text-blue-300'
+          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
         return (
           <button
             key={p.id}
@@ -1304,7 +1304,7 @@ function FilterBar(props: {
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex-1 min-w-[240px] max-w-md relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <Input
               id="listings-search"
               placeholder="Search SKU, product name, external ID, or title — press / to focus"
@@ -1317,8 +1317,8 @@ function FilterBar(props: {
             onClick={() => setFiltersOpen(!filtersOpen)}
             className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
               filtersOpen || activeFilterCount > 0
-                ? 'border-slate-300 bg-slate-50 text-slate-900'
-                : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}
           >
             <Filter size={12} />
@@ -1340,7 +1340,7 @@ function FilterBar(props: {
                 published: undefined,
                 page: undefined,
               })}
-              className="h-8 px-2 text-base text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+              className="h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
             >
               <X size={12} /> Clear
             </button>
@@ -1348,7 +1348,7 @@ function FilterBar(props: {
         </div>
 
         {filtersOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             {!lockChannel && (
               <FilterGroup
                 label="Channel"
@@ -1382,7 +1382,7 @@ function FilterBar(props: {
               onToggle={(val) => updateUrl({ syncStatus: toggleArr(syncStatusFilters, val).join(',') || undefined, page: undefined })}
             />
 
-            <div className="md:col-span-2 lg:col-span-4 flex items-center gap-3 flex-wrap pt-2 border-t border-slate-100">
+            <div className="md:col-span-2 lg:col-span-4 flex items-center gap-3 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
               <ToggleChip
                 active={hasError}
                 label="Has error"
@@ -1422,7 +1422,7 @@ function FilterGroup({
   if (options.length === 0) return null
   return (
     <div>
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1.5">{label}</div>
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">{label}</div>
       <div className="flex items-center gap-1.5 flex-wrap">
         {options.map((opt) => {
           const active = selected.includes(opt)
@@ -1432,12 +1432,12 @@ function FilterGroup({
               key={opt}
               onClick={() => onToggle(opt)}
               className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 transition-colors ${
-                active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >
               {renderLabel ? renderLabel(opt) : opt}
               {count != null && (
-                <span className={`tabular-nums ${active ? 'text-slate-300' : 'text-slate-400'}`}>{count}</span>
+                <span className={`tabular-nums ${active ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>{count}</span>
               )}
             </button>
           )
@@ -1449,15 +1449,15 @@ function FilterGroup({
 
 function ToggleChip({ active, label, onClick, tone }: { active: boolean; label: string; onClick: () => void; tone: 'danger' | 'warning' | 'success' }) {
   const activeClasses = {
-    danger: 'bg-rose-50 text-rose-700 border-rose-300',
-    warning: 'bg-amber-50 text-amber-700 border-amber-300',
-    success: 'bg-emerald-50 text-emerald-700 border-emerald-300',
+    danger: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300',
+    warning: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300',
+    success: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300',
   }[tone]
   return (
     <button
       onClick={onClick}
       className={`h-7 px-3 text-sm border rounded-full font-medium transition-colors ${
-        active ? activeClasses : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+        active ? activeClasses : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
       }`}
     >
       {label}
@@ -1518,10 +1518,10 @@ function GridLens(props: {
   }
 
   if (grid.loading && grid.listings.length === 0) {
-    return <Card><div className="text-md text-slate-500 py-8 text-center">Loading listings…</div></Card>
+    return <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">Loading listings…</div></Card>
   }
   if (grid.error) {
-    return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load: {grid.error}</div></Card>
+    return <Card><div className="text-md text-rose-600 dark:text-rose-400 py-8 text-center">Failed to load: {grid.error}</div></Card>
   }
   if (grid.listings.length === 0) {
     // U.1 — when filters are active, the CTA is "Clear filters", not
@@ -1533,11 +1533,11 @@ function GridLens(props: {
       return (
         <Card>
           <div className="text-center py-12 space-y-3">
-            <FilterX size={32} className="text-slate-300 mx-auto" />
-            <div className="text-md font-semibold text-slate-700">
+            <FilterX size={32} className="text-slate-300 dark:text-slate-600 mx-auto" />
+            <div className="text-md font-semibold text-slate-700 dark:text-slate-300">
               No listings match these filters
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               {props.activeFilterCount > 0 && props.search
                 ? `${props.activeFilterCount} filter${props.activeFilterCount === 1 ? '' : 's'} + search "${props.search}" active`
                 : props.activeFilterCount > 0
@@ -1546,7 +1546,7 @@ function GridLens(props: {
             </div>
             <button
               onClick={props.onClearFilters}
-              className="h-9 px-4 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-2"
+              className="h-9 px-4 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-2"
             >
               <FilterX size={12} /> Clear filters
             </button>
@@ -1646,14 +1646,14 @@ function GridLens(props: {
               ? 'Nothing to export'
               : `Download ${grid.listings.length} row${grid.listings.length === 1 ? '' : 's'} as CSV (current filter + sort)`
           }
-          className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
           <Download size={12} /> Export CSV
         </button>
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            className="h-7 px-2 text-base border border-slate-200 rounded inline-flex items-center gap-1.5 hover:bg-slate-50"
+            className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <Settings2 size={12} /> Columns ({visibleColumns.length})
           </button>
@@ -1670,7 +1670,7 @@ function GridLens(props: {
       <Card noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-md">
-            <thead className="border-b border-slate-200 bg-slate-50 sticky top-0">
+            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0">
               <tr>
                 <th className="px-3 py-2 w-8">
                   <input
@@ -1683,7 +1683,7 @@ function GridLens(props: {
                 {visible.map((col) => (
                   <th
                     key={col.key}
-                    className={`px-3 py-2 text-sm font-semibold text-slate-700 uppercase tracking-wider text-left ${col.key !== 'thumb' && col.key !== 'actions' ? 'cursor-pointer hover:bg-slate-100' : ''}`}
+                    className={`px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-left ${col.key !== 'thumb' && col.key !== 'actions' ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700' : ''}`}
                     style={{ width: col.width, minWidth: col.width }}
                     onClick={() => {
                       const sortableKeys: Record<string, string> = {
@@ -1696,7 +1696,7 @@ function GridLens(props: {
                     <span className="inline-flex items-center gap-1">
                       {col.label}
                       {sortBy === ({ product: 'name', channel: 'channel', marketplace: 'marketplace', price: 'price', quantity: 'quantity', lastSync: 'lastSyncedAt' } as any)[col.key] && (
-                        <span className="text-slate-400">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                        <span className="text-slate-400 dark:text-slate-500">{sortDir === 'asc' ? '↑' : '↓'}</span>
                       )}
                     </span>
                   </th>
@@ -1711,7 +1711,7 @@ function GridLens(props: {
                   <tr
                     key={l.id}
                     data-row-index={idx}
-                    className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50/30' : ''} ${isActive ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${isSelected ? 'bg-blue-50/30' : ''} ${isActive ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
                   >
                     <td className="px-3 py-2">
                       <input
@@ -1744,9 +1744,9 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
   switch (col) {
     case 'thumb':
       return l.product.thumbnailUrl ? (
-        <img src={l.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100" />
+        <img src={l.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 dark:bg-slate-800" />
       ) : (
-        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+        <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
           <Package size={14} />
         </div>
       )
@@ -1755,23 +1755,23 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
         <div className="min-w-0">
           <button
             onClick={() => onOpenDrawer(l.id)}
-            className="text-md font-medium text-slate-900 hover:text-blue-600 text-left truncate block max-w-full"
+            className="text-md font-medium text-slate-900 dark:text-slate-100 hover:text-blue-600 text-left truncate block max-w-full"
           >
             {l.product.name}
-            {l.product.isParent && <Layers size={11} className="inline ml-1 text-slate-400" />}
+            {l.product.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
           </button>
-          <div className="text-sm text-slate-500 font-mono truncate">{l.product.sku}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">{l.product.sku}</div>
         </div>
       )
     case 'channel':
       return (
-        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[l.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+        <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[l.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
           {l.channel}
         </span>
       )
     case 'marketplace':
       return (
-        <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+        <span className="font-mono text-sm font-semibold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
           {l.marketplace}
         </span>
       )
@@ -1783,7 +1783,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
       return (
         <div className="flex items-center gap-1">
           <Badge variant={variant} size="sm">{status}</Badge>
-          {l.syncRetryCount > 0 && <span className="text-xs text-slate-400 tabular-nums">×{l.syncRetryCount}</span>}
+          {l.syncRetryCount > 0 && <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">×{l.syncRetryCount}</span>}
         </div>
       )
     }
@@ -1809,7 +1809,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
       )
     case 'pricingRule':
       return (
-        <span className="text-sm text-slate-600">
+        <span className="text-sm text-slate-600 dark:text-slate-400">
           {l.pricingRule === 'PERCENT_OF_MASTER' && l.priceAdjustmentPercent != null
             ? `${l.priceAdjustmentPercent > 0 ? '+' : ''}${l.priceAdjustmentPercent}% master`
             : l.pricingRule === 'MATCH_AMAZON' ? 'Match Amazon'
@@ -1818,10 +1818,10 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
         </span>
       )
     case 'masterDelta': {
-      if (l.price == null || l.masterPrice == null) return <span className="text-slate-400">—</span>
+      if (l.price == null || l.masterPrice == null) return <span className="text-slate-400 dark:text-slate-500">—</span>
       const delta = l.price - l.masterPrice
       const pct = l.masterPrice > 0 ? (delta / l.masterPrice) * 100 : 0
-      const tone = Math.abs(pct) < 0.5 ? 'text-slate-500' : pct > 0 ? 'text-emerald-600' : 'text-rose-600'
+      const tone = Math.abs(pct) < 0.5 ? 'text-slate-500 dark:text-slate-400' : pct > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
       return (
         <span className={`text-sm tabular-nums ${tone}`}>
           {delta >= 0 ? '+' : ''}{delta.toFixed(2)} ({pct >= 0 ? '+' : ''}{pct.toFixed(0)}%)
@@ -1835,7 +1835,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
       // so operators can set an initial qty without opening the
       // drawer.
       const q = l.quantity
-      const tone = q === 0 ? 'text-rose-600' : q != null && q <= 5 ? 'text-amber-600' : 'text-slate-700'
+      const tone = q === 0 ? 'text-rose-600 dark:text-rose-400' : q != null && q <= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
       return (
         <InlineNumberCell
           value={q ?? null}
@@ -1852,7 +1852,7 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
     }
     case 'follow':
       return (
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-slate-500 dark:text-slate-400">
           {[
             l.followMasterTitle && 'T',
             l.followMasterPrice && 'P',
@@ -1863,17 +1863,17 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
     case 'externalId':
       return l.externalListingId ? (
         l.listingUrl ? (
-          <a href={l.listingUrl} target="_blank" rel="noreferrer" className="text-base text-blue-600 hover:underline font-mono inline-flex items-center gap-1">
+          <a href={l.listingUrl} target="_blank" rel="noreferrer" className="text-base text-blue-600 dark:text-blue-400 hover:underline font-mono inline-flex items-center gap-1">
             {l.externalListingId.slice(0, 14)}{l.externalListingId.length > 14 ? '…' : ''}
             <ExternalLink size={10} />
           </a>
         ) : (
-          <span className="text-base font-mono text-slate-700">{l.externalListingId}</span>
+          <span className="text-base font-mono text-slate-700 dark:text-slate-300">{l.externalListingId}</span>
         )
-      ) : <span className="text-slate-400">—</span>
+      ) : <span className="text-slate-400 dark:text-slate-500">—</span>
     case 'lastSync':
       return (
-        <span className="text-base text-slate-500">
+        <span className="text-base text-slate-500 dark:text-slate-400">
           {l.lastSyncedAt
             ? new Date(l.lastSyncedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
             : 'Never'}
@@ -1885,13 +1885,13 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
           <button
             onClick={() => onResync(l.id)}
             title="Resync"
-            className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded"
+            className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
           >
             <RefreshCw size={12} />
           </button>
           <Link
             href={`/products/${l.productId}/edit?channel=${l.channel}&marketplace=${l.marketplace}`}
-            className="h-6 px-2 text-sm inline-flex items-center text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
+            className="h-6 px-2 text-sm inline-flex items-center text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
           >
             Edit
           </Link>
@@ -1916,10 +1916,10 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
   }, [onClose])
   const togglable = ALL_COLUMNS.filter((c) => c.key !== 'thumb')
   return (
-    <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-10 p-1.5">
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">Visible columns</div>
+    <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-10 p-1.5">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">Visible columns</div>
       {togglable.map((c) => (
-        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-base cursor-pointer">
+        <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded text-base cursor-pointer">
           <input
             type="checkbox"
             checked={visible.includes(c.key)}
@@ -1928,12 +1928,12 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
               else setVisible([...visible, c.key])
             }}
           />
-          <span className="text-slate-700">{c.label || c.key}</span>
+          <span className="text-slate-700 dark:text-slate-300">{c.label || c.key}</span>
         </label>
       ))}
-      <div className="border-t border-slate-100 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 hover:text-slate-900">Reset</button>
-        <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-900">Close</button>
+      <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
+        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Reset</button>
+        <button onClick={onClose} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Close</button>
       </div>
     </div>
   )
@@ -1945,18 +1945,18 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
 function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
   if (totalPages <= 1) return null
   return (
-    <div className="flex items-center justify-between text-base text-slate-500">
-      <span>Page <span className="font-semibold text-slate-700 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
+    <div className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400">
+      <span>Page <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onPage(Math.max(1, page - 1))}
           disabled={page === 1}
-          className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
         >Previous</button>
         <button
           onClick={() => onPage(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
-          className="h-7 px-3 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
         >Next</button>
       </div>
     </div>
@@ -2166,22 +2166,22 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
     <div className="sticky top-2 z-20">
       <Card>
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-base font-semibold text-slate-700">
+          <span className="text-base font-semibold text-slate-700 dark:text-slate-300">
             {selectedIds.length} selected
           </span>
-          <div className="h-4 w-px bg-slate-200" />
-          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> {t('listings.bulk.publish')}</button>
-          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> {t('listings.bulk.unpublish')}</button>
-          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> {t('listings.bulk.resync')}</button>
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> {t('listings.bulk.publish')}</button>
+          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> {t('listings.bulk.unpublish')}</button>
+          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> {t('listings.bulk.resync')}</button>
           <button
             onClick={() => setSetPriceOpen(true)}
             disabled={busy}
-            className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
           ><Tag size={12} /> {t('listings.bulk.setPrice')}</button>
-          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> {t('listings.bulk.followMaster')}</button>
-          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-base bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5">{t('listings.bulk.unfollowMaster')}</button>
-          {jobStatus && <span className="text-sm text-slate-500 ml-2">{jobStatus}</span>}
-          <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded disabled:opacity-50">
+          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> {t('listings.bulk.followMaster')}</button>
+          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5">{t('listings.bulk.unfollowMaster')}</button>
+          {jobStatus && <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">{jobStatus}</span>}
+          <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded disabled:opacity-50">
             <X size={14} />
           </button>
         </div>
@@ -2257,7 +2257,7 @@ function SetPriceModal({
       <ModalBody>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Price
             </label>
             <Input
@@ -2279,11 +2279,11 @@ function SetPriceModal({
               autoFocus
             />
             {error && (
-              <div className="text-sm text-rose-600 mt-1.5">{error}</div>
+              <div className="text-sm text-rose-600 dark:text-rose-400 mt-1.5">{error}</div>
             )}
           </div>
-          <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-md p-2.5">
-            <strong className="text-slate-700">Heads up:</strong> setting a
+          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2.5">
+            <strong className="text-slate-700 dark:text-slate-300">Heads up:</strong> setting a
             price unfollows the master price for these listings — they
             won&apos;t auto-update from the catalog basePrice anymore. Use
             &quot;Follow master&quot; to re-link later.
@@ -2293,13 +2293,13 @@ function SetPriceModal({
       <ModalFooter>
         <button
           onClick={onClose}
-          className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50"
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
         <button
           onClick={submit}
-          className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1.5"
+          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
         >
           <Tag size={12} /> Apply price
         </button>
@@ -2325,9 +2325,9 @@ function HealthScoreBadge({
   size?: 'sm' | 'md' | 'lg'
 }) {
   const tone =
-    category === 'HEALTHY' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    : category === 'WARNING' ? 'bg-amber-50 text-amber-700 border-amber-200'
-    : 'bg-rose-50 text-rose-700 border-rose-200'
+    category === 'HEALTHY' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
+    : category === 'WARNING' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
   const sizeClass =
     size === 'sm' ? 'h-5 px-1.5 text-xs'
     : size === 'lg' ? 'h-9 px-3 text-lg'
@@ -2384,18 +2384,18 @@ function HealthPanel({
   }, [health.issues])
 
   const tone =
-    health.category === 'HEALTHY' ? 'border-emerald-200 bg-emerald-50/30'
-    : health.category === 'WARNING' ? 'border-amber-200 bg-amber-50/30'
-    : 'border-rose-200 bg-rose-50/30'
+    health.category === 'HEALTHY' ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/30'
+    : health.category === 'WARNING' ? 'border-amber-200 dark:border-amber-900 bg-amber-50/30'
+    : 'border-rose-200 dark:border-rose-900 bg-rose-50/30'
 
   return (
     <div className={`border rounded-md p-3 space-y-3 ${tone}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Health</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Health</div>
           <div className="flex items-center gap-2 mt-0.5">
             <HealthScoreBadge score={health.score} category={health.category} size="lg" />
-            <span className="text-sm text-slate-600">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
               {health.category === 'HEALTHY'
                 ? 'All clear.'
                 : `${health.issues.length} issue${health.issues.length === 1 ? '' : 's'} to review.`}
@@ -2430,7 +2430,7 @@ function HealthIssueRow({
   const sevTone =
     issue.severity === 'error' ? 'border-l-rose-500 bg-rose-50/40'
     : issue.severity === 'warning' ? 'border-l-amber-500 bg-amber-50/40'
-    : 'border-l-blue-300 bg-white'
+    : 'border-l-blue-300 bg-white dark:bg-slate-900'
 
   const fix = issue.fix as
     | { type: 'resync'; label: string }
@@ -2448,21 +2448,21 @@ function HealthIssueRow({
   }, [fix, handlers])
 
   return (
-    <li className={`border border-slate-200 border-l-4 rounded p-2.5 ${sevTone}`}>
+    <li className={`border border-slate-200 dark:border-slate-700 border-l-4 rounded p-2.5 ${sevTone}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500">
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               {ISSUE_CATEGORY_LABEL[issue.category] ?? issue.category}
             </span>
-            <span className="text-base font-semibold text-slate-900">{issue.title}</span>
+            <span className="text-base font-semibold text-slate-900 dark:text-slate-100">{issue.title}</span>
           </div>
-          <div className="text-sm text-slate-700">{issue.detail}</div>
+          <div className="text-sm text-slate-700 dark:text-slate-300">{issue.detail}</div>
         </div>
         {fix && (
           <button
             onClick={onFix}
-            className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-300 rounded hover:bg-slate-50 inline-flex items-center gap-1 flex-shrink-0"
+            className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 flex-shrink-0"
           >
             {fix.label}
           </button>
@@ -2483,13 +2483,13 @@ function HealthIssueRow({
 // ────────────────────────────────────────────────────────────────────
 
 const CATEGORY_TONE: Record<string, string> = {
-  sync: 'text-rose-700 bg-rose-50 border-rose-200',
-  validation: 'text-amber-700 bg-amber-50 border-amber-200',
-  data: 'text-amber-700 bg-amber-50 border-amber-200',
-  drift: 'text-blue-700 bg-blue-50 border-blue-200',
-  staleness: 'text-slate-700 bg-slate-50 border-slate-200',
-  suppression: 'text-rose-700 bg-rose-50 border-rose-200',
-  retry: 'text-amber-700 bg-amber-50 border-amber-200',
+  sync: 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900',
+  validation: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900',
+  data: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900',
+  drift: 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900',
+  staleness: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700',
+  suppression: 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900',
+  retry: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900',
 }
 
 function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpenDrawer: (id: string) => void }) {
@@ -2510,8 +2510,8 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
   })
 
   if (loading && !data) return <Card><Skeleton variant="text" lines={3} /></Card>
-  if (error && !data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup: {error}</div></Card>
-  if (!data) return <Card><div className="text-md text-rose-600 py-8 text-center">Failed to load health rollup.</div></Card>
+  if (error && !data) return <Card><div className="text-md text-rose-600 dark:text-rose-400 py-8 text-center">Failed to load health rollup: {error}</div></Card>
+  if (!data) return <Card><div className="text-md text-rose-600 dark:text-rose-400 py-8 text-center">Failed to load health rollup.</div></Card>
 
   const buckets = data.scoreBuckets ?? { HEALTHY: 0, WARNING: 0, CRITICAL: 0 }
   const totalScored = (buckets.HEALTHY ?? 0) + (buckets.WARNING ?? 0) + (buckets.CRITICAL ?? 0)
@@ -2523,7 +2523,7 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
       {/* Score-bucket distribution */}
       <Card title="Health distribution" description={data.sampleSize != null ? `Computed over ${data.sampleSize} most recent listing${data.sampleSize === 1 ? '' : 's'}.` : undefined}>
         {totalScored === 0 ? (
-          <div className="text-md text-slate-500 py-4 text-center">No listings to score yet.</div>
+          <div className="text-md text-slate-500 dark:text-slate-400 py-4 text-center">No listings to score yet.</div>
         ) : (
           <div className="space-y-2">
             <HealthBucketRow label="Healthy" tone="emerald" count={buckets.HEALTHY ?? 0} total={totalScored} />
@@ -2543,7 +2543,7 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
               .map(([category, count]) => (
                 <div
                   key={category}
-                  className={`border rounded-md px-3 py-2 ${CATEGORY_TONE[category] ?? 'border-slate-200 bg-slate-50 text-slate-700'}`}
+                  className={`border rounded-md px-3 py-2 ${CATEGORY_TONE[category] ?? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}
                 >
                   <div className="text-xs uppercase tracking-wider font-semibold opacity-70">
                     {ISSUE_CATEGORY_LABEL[category] ?? category}
@@ -2562,8 +2562,8 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
         <Card title="Top error reasons" description="Grouped by message — fix the cause once, retry many.">
           <div className="space-y-1">
             {data.topReasons.map((r: any) => (
-              <div key={r.reason} className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
-                <span className="text-base text-slate-700 flex-1 min-w-0 truncate" title={r.reason}>{r.reason}</span>
+              <div key={r.reason} className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0">
+                <span className="text-base text-slate-700 dark:text-slate-300 flex-1 min-w-0 truncate" title={r.reason}>{r.reason}</span>
                 <Badge variant="danger" size="sm">{r.count}</Badge>
               </div>
             ))}
@@ -2576,7 +2576,7 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
         {data.recentErrors?.length === 0 ? (
           <div className="py-8 text-center">
             <CheckCircle2 className="text-emerald-500 mx-auto mb-2" size={32} />
-            <div className="text-md text-slate-700 font-medium">
+            <div className="text-md text-slate-700 dark:text-slate-300 font-medium">
               {allClear ? 'All clear — listings are syncing cleanly.' : 'No recent errors to show.'}
             </div>
           </div>
@@ -2586,21 +2586,21 @@ function HealthLens({ lockChannel, onOpenDrawer }: { lockChannel?: string; onOpe
               <li key={e.id}>
                 <button
                   onClick={() => onOpenDrawer(e.id)}
-                  className="w-full flex items-start justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50 text-left transition-colors"
+                  className="w-full flex items-start justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors"
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded mt-0.5 ${CHANNEL_TONE[e.channel] ?? ''}`}>{e.channel}</span>
-                    <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 mt-0.5">{e.marketplace}</span>
+                    <span className="font-mono text-sm font-semibold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 mt-0.5">{e.marketplace}</span>
                     <div className="min-w-0">
-                      <div className="text-md text-slate-900 truncate">{e.productName}</div>
-                      <div className="text-sm text-slate-500 font-mono truncate">{e.productSku}</div>
+                      <div className="text-md text-slate-900 dark:text-slate-100 truncate">{e.productName}</div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">{e.productSku}</div>
                       {e.lastSyncError && (
-                        <div className="text-sm text-rose-600 mt-1 truncate">{e.lastSyncError}</div>
+                        <div className="text-sm text-rose-600 dark:text-rose-400 mt-1 truncate">{e.lastSyncError}</div>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {e.syncRetryCount > 0 && <span className="text-xs text-slate-400 tabular-nums">×{e.syncRetryCount}</span>}
+                    {e.syncRetryCount > 0 && <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">×{e.syncRetryCount}</span>}
                     <StatusBadge status={e.lastSyncStatus ?? e.listingStatus} />
                   </div>
                 </button>
@@ -2630,20 +2630,20 @@ function HealthBucketRow({
     : tone === 'amber' ? 'bg-amber-500'
     : 'bg-rose-500'
   const labelTone =
-    tone === 'emerald' ? 'text-emerald-700'
-    : tone === 'amber' ? 'text-amber-700'
-    : 'text-rose-700'
+    tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-300'
+    : tone === 'amber' ? 'text-amber-700 dark:text-amber-300'
+    : 'text-rose-700 dark:text-rose-300'
   return (
     <div className="flex items-center gap-3">
       <div className={`w-24 text-sm font-semibold uppercase tracking-wider ${labelTone}`}>
         {label}
       </div>
-      <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+      <div className="flex-1 h-5 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
         <div className={`h-full ${barTone} transition-all`} style={{ width: `${pct}%` }} />
       </div>
       <div className="w-20 text-right text-sm tabular-nums">
-        <span className="font-semibold text-slate-900">{count}</span>
-        <span className="text-slate-500 ml-1">({pct}%)</span>
+        <span className="font-semibold text-slate-900 dark:text-slate-100">{count}</span>
+        <span className="text-slate-500 dark:text-slate-400 ml-1">({pct}%)</span>
       </div>
     </div>
   )
@@ -2797,11 +2797,11 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
   if (error && !data) {
     return (
       <Card>
-        <div className="text-md text-rose-600 py-6 text-center space-y-2">
+        <div className="text-md text-rose-600 dark:text-rose-400 py-6 text-center space-y-2">
           <div>Failed to load matrix: {error}</div>
           <button
             onClick={() => refetch()}
-            className="h-8 px-3 text-base bg-white text-rose-700 border border-rose-300 rounded hover:bg-rose-50 inline-flex items-center gap-1.5 mx-auto"
+            className="h-8 px-3 text-base bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 border border-rose-300 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5 mx-auto"
           >
             <RefreshCw size={12} /> Retry
           </button>
@@ -2895,12 +2895,12 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
       {/* Header bar — coverage filter + sort + refresh */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
-          <Filter size={14} className="text-slate-500" />
-          <span className="text-sm uppercase tracking-wider text-slate-500">{t('listings.matrix.coverage')}</span>
+          <Filter size={14} className="text-slate-500 dark:text-slate-400" />
+          <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('listings.matrix.coverage')}</span>
           <select
             value={coverage}
             onChange={(e) => setCoverage(e.target.value as Coverage | '')}
-            className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+            className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
             aria-label={t('listings.matrix.coverage')}
           >
             {COVERAGE_OPTIONS.map((opt) => (
@@ -2909,11 +2909,11 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
           </select>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-sm uppercase tracking-wider text-slate-500">{t('listings.matrix.sort')}</span>
+          <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('listings.matrix.sort')}</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as MatrixSort)}
-            className="h-8 px-2 text-base bg-white border border-slate-200 rounded text-slate-700 hover:border-slate-300 focus:outline-none focus:border-blue-500"
+            className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
             aria-label={t('listings.matrix.sort')}
           >
             {SORT_OPTIONS.map((opt) => (
@@ -2921,7 +2921,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
             ))}
           </select>
         </div>
-        <span className="text-sm text-slate-500 ml-auto">
+        <span className="text-sm text-slate-500 dark:text-slate-400 ml-auto">
           {data.totalMatched != null && data.totalMatched > data.count
             ? t('listings.matrix.showingOf', { count: data.count, total: data.totalMatched })
             : t(data.count === 1 ? 'listings.matrix.productsCount' : 'listings.matrix.productsCountPlural', { count: data.count })}
@@ -3082,7 +3082,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
           setBulkBusy(false)
         }
         return (
-          <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded border border-blue-200 bg-blue-50 text-sm flex-wrap">
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 text-sm flex-wrap">
             <span className="text-blue-900">
               Showing{' '}
               <span className="tabular-nums font-semibold">{visibleProducts.length}</span>{' '}
@@ -3093,17 +3093,17 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
               {lastBulk && (
                 <span className="ml-2 text-xs">
                   · {bulkBusy ? 'progress' : 'last batch'}:{' '}
-                  <span className="text-emerald-700 font-semibold">{lastBulk.ok} succeeded</span>
+                  <span className="text-emerald-700 dark:text-emerald-300 font-semibold">{lastBulk.ok} succeeded</span>
                   {lastBulk.failed > 0 && (
                     <>
                       ,{' '}
-                      <span className="text-rose-700 font-semibold">{lastBulk.failed} failed</span>
+                      <span className="text-rose-700 dark:text-rose-300 font-semibold">{lastBulk.failed} failed</span>
                     </>
                   )}
                   {typeof lastBulk.costUSD === 'number' && lastBulk.costUSD > 0 && (
                     <>
                       ,{' '}
-                      <span className="text-slate-600 tabular-nums">
+                      <span className="text-slate-600 dark:text-slate-400 tabular-nums">
                         ${lastBulk.costUSD.toFixed(4)}
                       </span>
                     </>
@@ -3116,7 +3116,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                 <button
                   onClick={runBulkResync}
                   disabled={bulkBusy}
-                  className="h-6 px-2 text-xs bg-blue-600 text-white border border-blue-700 rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1"
+                  className="h-6 px-2 text-xs bg-blue-600 dark:bg-blue-700 text-white border border-blue-700 rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1"
                   aria-label={`Resync all ${targetCells.length} listings`}
                 >
                   <RefreshCw size={11} className={bulkBusy ? 'animate-spin' : ''} />
@@ -3137,7 +3137,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
               )}
               <button
                 onClick={() => setPipFilter(null)}
-                className="h-6 px-2 text-xs bg-white border border-blue-300 rounded text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1"
+                className="h-6 px-2 text-xs bg-white dark:bg-slate-900 border border-blue-300 rounded text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center gap-1"
                 aria-label="Clear column filter"
               >
                 <FilterX size={11} /> Clear
@@ -3152,18 +3152,18 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
           bulk-diagnose run. Each card mirrors the AmazonContextSection
           drawer card so the operator's eye recognises the format. */}
       {Object.keys(bulkDiagnoses).length > 0 && (
-        <div className="border border-violet-200 bg-white rounded-md">
-          <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-violet-100 bg-violet-50">
-            <div className="text-xs uppercase tracking-wider font-semibold text-violet-700 inline-flex items-center gap-1.5">
+        <div className="border border-violet-200 dark:border-violet-900 bg-white dark:bg-slate-900 rounded-md">
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-violet-100 bg-violet-50 dark:bg-violet-950/40">
+            <div className="text-xs uppercase tracking-wider font-semibold text-violet-700 dark:text-violet-300 inline-flex items-center gap-1.5">
               <Sparkles size={11} />
               AI suppression diagnoses
-              <span className="ml-1 text-slate-500 normal-case font-normal">
+              <span className="ml-1 text-slate-500 dark:text-slate-400 normal-case font-normal">
                 ({Object.keys(bulkDiagnoses).length})
               </span>
             </div>
             <button
               onClick={() => setBulkDiagnoses({})}
-              className="h-6 px-2 text-xs bg-white border border-violet-200 rounded text-violet-700 hover:bg-violet-50 inline-flex items-center gap-1"
+              className="h-6 px-2 text-xs bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-900 rounded text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 inline-flex items-center gap-1"
               aria-label="Dismiss diagnoses panel"
             >
               <FilterX size={11} /> Dismiss
@@ -3175,19 +3175,19 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                 <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => setDrawerOpen(listingId)}
-                    className="text-sm font-mono text-slate-900 hover:text-blue-700 hover:underline"
+                    className="text-sm font-mono text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
                   >
                     {d.sku}
                   </button>
-                  <div className="text-xs text-slate-500 tabular-nums inline-flex items-center gap-2">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums inline-flex items-center gap-2">
                     {d.confidence && (
                       <span
                         className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
                           d.confidence === 'high'
-                            ? 'bg-emerald-100 text-emerald-700'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
                             : d.confidence === 'medium'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                         }`}
                       >
                         {d.confidence}
@@ -3198,15 +3198,15 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                 </div>
                 {d.rootCause && (
                   <div className="text-xs">
-                    <span className="font-semibold text-slate-600">Root cause:</span>{' '}
-                    <span className="text-slate-900">{d.rootCause}</span>
+                    <span className="font-semibold text-slate-600 dark:text-slate-400">Root cause:</span>{' '}
+                    <span className="text-slate-900 dark:text-slate-100">{d.rootCause}</span>
                   </div>
                 )}
                 {d.explanation && (
-                  <div className="text-sm text-slate-700">{d.explanation}</div>
+                  <div className="text-sm text-slate-700 dark:text-slate-300">{d.explanation}</div>
                 )}
                 {d.suggestedFix.length > 0 && (
-                  <ol className="text-sm text-slate-800 list-decimal list-inside space-y-0.5">
+                  <ol className="text-sm text-slate-800 dark:text-slate-200 list-decimal list-inside space-y-0.5">
                     {d.suggestedFix.map((step, i) => (
                       <li key={i}>{step}</li>
                     ))}
@@ -3268,16 +3268,16 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
         }
         if (cards.length === 0) return null
         return (
-          <div className="border border-amber-200 bg-white rounded-md">
-            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-amber-100 bg-amber-50">
-              <div className="text-xs uppercase tracking-wider font-semibold text-amber-700 inline-flex items-center gap-1.5">
+          <div className="border border-amber-200 dark:border-amber-900 bg-white dark:bg-slate-900 rounded-md">
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-amber-100 bg-amber-50 dark:bg-amber-950/40">
+              <div className="text-xs uppercase tracking-wider font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle size={11} />
                 Drift inspector — master vs <span className="font-mono">{col}</span>
-                <span className="ml-1 text-slate-500 normal-case font-normal">
+                <span className="ml-1 text-slate-500 dark:text-slate-400 normal-case font-normal">
                   ({cards.length})
                 </span>
               </div>
-              <span className="text-xs text-slate-600">
+              <span className="text-xs text-slate-600 dark:text-slate-400">
                 Resync re-pushes master values to the channel for any cell with{' '}
                 <code className="font-mono text-[11px]">followMaster*=true</code>.
               </span>
@@ -3288,12 +3288,12 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                   <div className="flex items-center justify-between gap-2">
                     <button
                       onClick={() => setDrawerOpen(c.listingId)}
-                      className="text-sm font-mono text-slate-900 hover:text-blue-700 hover:underline"
+                      className="text-sm font-mono text-slate-900 dark:text-slate-100 hover:text-blue-700 dark:hover:text-blue-300 hover:underline"
                       title="Open drawer for this listing"
                     >
                       {c.sku}
                     </button>
-                    <span className="text-xs text-slate-500 truncate max-w-md" title={c.name}>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-md" title={c.name}>
                       {c.name}
                     </span>
                   </div>
@@ -3301,19 +3301,19 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                     {c.fields.map((f) => (
                       <div
                         key={f.field}
-                        className="border border-slate-200 rounded px-2 py-1"
+                        className="border border-slate-200 dark:border-slate-700 rounded px-2 py-1"
                       >
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
                           {f.field}
                           {f.delta && (
-                            <span className="ml-1 text-amber-700 font-semibold">{f.delta}</span>
+                            <span className="ml-1 text-amber-700 dark:text-amber-300 font-semibold">{f.delta}</span>
                           )}
                         </div>
                         <div className="text-xs grid grid-cols-2 gap-1.5 mt-0.5">
                           <div>
-                            <div className="text-[10px] text-slate-400">master</div>
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500">master</div>
                             <div
-                              className="text-slate-900 truncate"
+                              className="text-slate-900 dark:text-slate-100 truncate"
                               title={String(f.master)}
                             >
                               {f.field === 'title' ? (
@@ -3324,7 +3324,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                             </div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-slate-400">channel</div>
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500">channel</div>
                             <div
                               className="text-amber-800 truncate"
                               title={String(f.channel)}
@@ -3369,11 +3369,11 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
               aria-rowcount={data.products.length + 1}
               aria-colcount={columns.length + 2}
             >
-              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20">
                 <tr role="row">
                   <th
                     role="columnheader"
-                    className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-50 z-30 min-w-[260px]"
+                    className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider sticky left-0 bg-slate-50 dark:bg-slate-800 z-30 min-w-[260px]"
                   >
                     Product
                   </th>
@@ -3384,12 +3384,12 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                       channel tone) so it's never confused with a cell. */}
                   <th
                     role="columnheader"
-                    className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[120px] bg-slate-100 border-x border-slate-200"
+                    className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[120px] bg-slate-100 dark:bg-slate-800 border-x border-slate-200 dark:border-slate-700"
                   >
-                    <div className="inline-block px-1.5 py-0.5 rounded border border-slate-300 text-slate-700 bg-white">
+                    <div className="inline-block px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900">
                       Master
                     </div>
-                    <div className="text-xs text-slate-400 mt-1">reference</div>
+                    <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">reference</div>
                   </th>
                   {columns.map((key) => {
                     const [ch, mp] = key.split(':')
@@ -3401,7 +3401,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                         className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider min-w-[110px] align-top"
                       >
                         <div className={`inline-block px-1.5 py-0.5 rounded border ${CHANNEL_TONE[ch] ?? ''}`}>{ch}</div>
-                        <div className="text-xs text-slate-500 font-mono mt-1">{mp}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">{mp}</div>
                         {stats && stats.cells > 0 && (
                           <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[10px] font-normal normal-case">
                             <KpiPip
@@ -3469,20 +3469,20 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                     <tr
                       key={p.id}
                       role="row"
-                      className="group/row border-b border-slate-100 hover:bg-slate-50/50"
+                      className="group/row border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50"
                     >
                       <td
                         role="rowheader"
-                        className="px-3 py-2 sticky left-0 bg-white border-r border-slate-100 z-10 group-hover/row:bg-slate-50/50"
+                        className="px-3 py-2 sticky left-0 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 z-10 group-hover/row:bg-slate-50/50"
                       >
                         <Link href={`/products/${p.id}/edit`} className="hover:text-blue-600 block">
-                          <div className="text-md font-medium text-slate-900 truncate max-w-xs">{p.name}</div>
-                          <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
+                          <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">{p.name}</div>
+                          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{p.sku}</div>
                         </Link>
                       </td>
                       <td
                         role="gridcell"
-                        className="px-2 py-2 text-center bg-slate-50 border-x border-slate-200"
+                        className="px-2 py-2 text-center bg-slate-50 dark:bg-slate-800 border-x border-slate-200 dark:border-slate-700"
                       >
                         <MasterCell master={master} />
                       </td>
@@ -3519,7 +3519,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
       )}
 
       {/* Refresh footer — surfaces freshness from usePolledList */}
-      <div className="flex items-center justify-between text-sm text-slate-500 px-1">
+      <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400 px-1">
         <span>
           {lastFetchedAt
             ? `Updated ${formatRelative(lastFetchedAt)}`
@@ -3527,7 +3527,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
         </span>
         <button
           onClick={() => refetch()}
-          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+          className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
           aria-label="Refresh matrix"
         >
           <RefreshCw size={11} /> Refresh
@@ -3578,13 +3578,13 @@ function KpiPip({
   onClick: () => void
 }) {
   const inactive: Record<typeof tone, string> = {
-    emerald: 'text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100',
-    rose: 'text-rose-700 bg-rose-50/50 hover:bg-rose-100',
-    orange: 'text-orange-700 bg-orange-50/50 hover:bg-orange-100',
-    amber: 'text-amber-700 bg-amber-50/50 hover:bg-amber-100',
+    emerald: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60',
+    rose: 'text-rose-700 dark:text-rose-300 bg-rose-50/50 hover:bg-rose-100 dark:hover:bg-rose-900/60',
+    orange: 'text-orange-700 dark:text-orange-300 bg-orange-50/50 hover:bg-orange-100 dark:hover:bg-orange-900/60',
+    amber: 'text-amber-700 dark:text-amber-300 bg-amber-50/50 hover:bg-amber-100 dark:hover:bg-amber-900/60',
   }
   const activeCls: Record<typeof tone, string> = {
-    emerald: 'text-white bg-emerald-600 ring-2 ring-emerald-300',
+    emerald: 'text-white bg-emerald-600 dark:bg-emerald-700 ring-2 ring-emerald-300',
     rose: 'text-white bg-rose-600 ring-2 ring-rose-300',
     orange: 'text-white bg-orange-600 ring-2 ring-orange-300',
     amber: 'text-white bg-amber-600 ring-2 ring-amber-300',
@@ -3657,11 +3657,11 @@ function MatrixCell({
     cell.title.trim() !== master.title.trim()
 
   const tone =
-    cell.listingStatus === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-    : hasError ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-    : cell.listingStatus === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-    : cell.listingStatus === 'SUPPRESSED' ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+    cell.listingStatus === 'ACTIVE' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+    : hasError ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+    : cell.listingStatus === 'DRAFT' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+    : cell.listingStatus === 'SUPPRESSED' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-900/60'
+    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
 
   const ariaLabel = [
     `${cell.channel} ${cell.marketplace}`,
@@ -3685,11 +3685,11 @@ function MatrixCell({
     <div className="space-y-2 max-w-[320px]">
       <div className="font-semibold">{cell.channel} · {cell.marketplace}</div>
       <div className="grid grid-cols-[auto_1fr_1fr] gap-x-2 gap-y-1 text-xs">
-        <div className="text-slate-400 uppercase tracking-wider"></div>
-        <div className="text-slate-300 font-semibold uppercase tracking-wider">Master</div>
-        <div className="text-slate-300 font-semibold uppercase tracking-wider">Channel</div>
+        <div className="text-slate-400 dark:text-slate-500 uppercase tracking-wider"></div>
+        <div className="text-slate-300 dark:text-slate-600 font-semibold uppercase tracking-wider">Master</div>
+        <div className="text-slate-300 dark:text-slate-600 font-semibold uppercase tracking-wider">Channel</div>
 
-        <div className="text-slate-400">Price</div>
+        <div className="text-slate-400 dark:text-slate-500">Price</div>
         <div className="tabular-nums">{master.price != null ? master.price.toFixed(2) : '—'}</div>
         <div className="tabular-nums">
           {cell.price != null ? cell.price.toFixed(2) : '—'}
@@ -3700,29 +3700,29 @@ function MatrixCell({
           )}
         </div>
 
-        <div className="text-slate-400">Stock</div>
+        <div className="text-slate-400 dark:text-slate-500">Stock</div>
         <div className="tabular-nums">{master.quantity ?? '—'}</div>
         <div className="tabular-nums">
           {cell.quantity ?? '—'}
           {qtyDrift != null && (
-            <span className={qtyDrift > 0 ? ' text-slate-300' : ' text-rose-300'}>
+            <span className={qtyDrift > 0 ? ' text-slate-300 dark:text-slate-600' : ' text-rose-300'}>
               {' '}({qtyDrift > 0 ? '+' : ''}{qtyDrift})
             </span>
           )}
         </div>
 
-        <div className="text-slate-400">Title</div>
+        <div className="text-slate-400 dark:text-slate-500">Title</div>
         <div className="truncate">{master.title ?? '—'}</div>
         <div className="truncate">
           {cell.title ?? '—'}
           {titleDrift && <span className="text-amber-300"> ⚠</span>}
         </div>
       </div>
-      <div className="text-xs text-slate-300 border-t border-slate-700 pt-1.5">
+      <div className="text-xs text-slate-300 dark:text-slate-600 border-t border-slate-700 pt-1.5">
         Status: {cell.listingStatus}
         {cell.lastSyncStatus && ` · Sync: ${cell.lastSyncStatus}`}
       </div>
-      <div className="text-xs text-slate-300">
+      <div className="text-xs text-slate-300 dark:text-slate-600">
         {cell.lastSyncedAt
           ? `Last synced ${formatRelative(new Date(cell.lastSyncedAt).getTime())}`
           : 'Never synced'}
@@ -3768,7 +3768,7 @@ function MatrixCell({
           )}
           {titleDrift && (
             <div
-              className="text-xs mt-0.5 inline-flex items-center gap-1 px-1 rounded bg-amber-50 border border-amber-200 text-amber-700"
+              className="text-xs mt-0.5 inline-flex items-center gap-1 px-1 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300"
               title={`Channel title differs from master: "${cell.title}"`}
               aria-label="Title differs from master"
             >
@@ -3776,7 +3776,7 @@ function MatrixCell({
             </div>
           )}
           {cell.lastSyncError && (
-            <div className="text-xs text-rose-600 mt-0.5 truncate" title={cell.lastSyncError}>
+            <div className="text-xs text-rose-600 dark:text-rose-400 mt-0.5 truncate" title={cell.lastSyncError}>
               ⚠ {cell.lastSyncError.slice(0, 24)}{cell.lastSyncError.length > 24 ? '…' : ''}
             </div>
           )}
@@ -3819,7 +3819,7 @@ function MasterCell({
       {master.quantity != null && (
         <div className="text-xs tabular-nums">Stock: {master.quantity} pcs</div>
       )}
-      <div className="text-xs text-slate-300 border-t border-slate-700 pt-1">
+      <div className="text-xs text-slate-300 dark:text-slate-600 border-t border-slate-700 pt-1">
         Channel cells in this row diff against these values.
       </div>
     </div>
@@ -3827,11 +3827,11 @@ function MasterCell({
   return (
     <Tooltip content={tooltipContent} delay={400}>
       <div
-        className="block w-full text-left px-1.5 py-1 border border-slate-300 rounded text-xs bg-white text-slate-700 min-w-[100px]"
+        className="block w-full text-left px-1.5 py-1 border border-slate-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 min-w-[100px]"
         aria-label={`Master reference price ${master.price?.toFixed(2) ?? 'unset'}, stock ${master.quantity ?? 'unset'}`}
       >
         <div className="flex items-center justify-between gap-1.5">
-          <div className="font-semibold uppercase tracking-wider truncate text-slate-500">
+          <div className="font-semibold uppercase tracking-wider truncate text-slate-500 dark:text-slate-400">
             Master
           </div>
         </div>
@@ -3844,7 +3844,7 @@ function MasterCell({
           <div className="tabular-nums text-xs opacity-70">{master.quantity} pcs</div>
         )}
         {truncatedTitle && (
-          <div className="text-xs text-slate-500 mt-0.5 truncate" title={master.title ?? undefined}>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate" title={master.title ?? undefined}>
             {truncatedTitle}
           </div>
         )}
@@ -3867,11 +3867,11 @@ function DriftBadge({ delta, unit }: { delta: number; unit: 'price' | 'qty' }) {
   const tone =
     unit === 'price'
       ? delta > 0
-        ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-        : 'text-rose-700 bg-rose-50 border-rose-200'
+        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900'
+        : 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900'
       : delta > 0
-        ? 'text-slate-600 bg-slate-50 border-slate-200'
-        : 'text-rose-700 bg-rose-50 border-rose-200'
+        ? 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+        : 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900'
   const ariaText =
     unit === 'price'
       ? `${delta > 0 ? 'above' : 'below'} master by ${formatted.replace('-', '')}`
@@ -3980,7 +3980,7 @@ function CellActionButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="w-5 h-5 inline-flex items-center justify-center bg-white/85 border border-slate-200 rounded text-slate-500 hover:text-slate-900 hover:border-slate-400 hover:bg-white shadow-sm transition-colors"
+      className="w-5 h-5 inline-flex items-center justify-center bg-white/85 border border-slate-200 dark:border-slate-700 rounded text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-400 hover:bg-white shadow-sm transition-colors"
     >
       <Icon size={11} />
     </button>
@@ -4013,7 +4013,7 @@ function EmptyMatrixCell({
       <Link
         href={`/products/${productId}/list-wizard?channel=${channel}&marketplace=${marketplace}`}
         aria-label={`List on ${channel} ${marketplace}`}
-        className="inline-flex items-center justify-center min-w-[100px] h-[44px] px-1.5 py-1 border border-dashed border-slate-200 rounded text-xs text-slate-300 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+        className="inline-flex items-center justify-center min-w-[100px] h-[44px] px-1.5 py-1 border border-dashed border-slate-200 dark:border-slate-700 rounded text-xs text-slate-300 dark:text-slate-600 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/40 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
       >
         <Plus size={12} className="mr-0.5" />
         <span className="text-xs uppercase tracking-wider">List</span>
@@ -4116,7 +4116,7 @@ function PerformanceLens({
   const headerCell = (key: typeof sortBy, label: string, align: 'left' | 'right' = 'right') => (
     <th
       onClick={() => setSortBy(key)}
-      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-100 select-none ${align === 'right' ? 'text-right' : 'text-left'} ${sortBy === key ? 'text-blue-700' : 'text-slate-700'}`}
+      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 select-none ${align === 'right' ? 'text-right' : 'text-left'} ${sortBy === key ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'}`}
     >
       <span className="inline-flex items-center gap-1">
         {label}
@@ -4135,11 +4135,11 @@ function PerformanceLens({
   if (error && !data) {
     return (
       <Card>
-        <div className="text-rose-600 text-md py-8 text-center space-y-2">
+        <div className="text-rose-600 dark:text-rose-400 text-md py-8 text-center space-y-2">
           <div>Failed to load performance: {error}</div>
           <button
             onClick={() => refetch()}
-            className="h-8 px-3 text-base bg-white text-rose-700 border border-rose-300 rounded hover:bg-rose-50 inline-flex items-center gap-1.5 mx-auto"
+            className="h-8 px-3 text-base bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 border border-rose-300 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5 mx-auto"
           >
             <RefreshCw size={12} /> Retry
           </button>
@@ -4153,36 +4153,36 @@ function PerformanceLens({
     <div className="space-y-3">
       {/* Header — range selector + totals strip */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="inline-flex items-center bg-slate-100 rounded-md p-0.5">
+        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
           {(['7d', '30d', '90d'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               aria-pressed={range === r}
-              className={`h-7 px-3 text-base font-medium rounded transition-colors ${range === r ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`h-7 px-3 text-base font-medium rounded transition-colors ${range === r ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
             >
               Last {r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}
             </button>
           ))}
         </div>
         {data.rows.length > 0 && (
-          <div className="flex items-center gap-3 text-base text-slate-500 ml-auto">
+          <div className="flex items-center gap-3 text-base text-slate-500 dark:text-slate-400 ml-auto">
             <span>
-              <span className="font-semibold text-slate-700 tabular-nums">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                 {data.totals.unitsSold.toLocaleString()}
               </span>{' '}
               units
             </span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <span>
-              <span className="font-semibold text-slate-700 tabular-nums">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                 €{data.totals.grossRevenue.toFixed(2)}
               </span>{' '}
               revenue
             </span>
-            <span className="text-slate-300">·</span>
+            <span className="text-slate-300 dark:text-slate-600">·</span>
             <span>
-              <span className="font-semibold text-slate-700 tabular-nums">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                 {data.totals.orderCount.toLocaleString()}
               </span>{' '}
               orders
@@ -4194,11 +4194,11 @@ function PerformanceLens({
       {sorted.length === 0 ? (
         <Card>
           <div className="text-center py-12 space-y-2">
-            <Activity size={32} className="text-slate-300 mx-auto" />
-            <div className="text-md font-semibold text-slate-700">
+            <Activity size={32} className="text-slate-300 dark:text-slate-600 mx-auto" />
+            <div className="text-md font-semibold text-slate-700 dark:text-slate-300">
               No orders yet in the last {data.rangeDays} days
             </div>
-            <div className="text-sm text-slate-500">
+            <div className="text-sm text-slate-500 dark:text-slate-400">
               Once orders flow through{' '}
               {lockChannel ? lockChannel.toLowerCase() : 'your channels'}, this
               lens will show units sold, revenue, and sales velocity per
@@ -4210,23 +4210,23 @@ function PerformanceLens({
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Listing
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Channel
                   </th>
                   {headerCell('unitsSold', 'Units')}
                   {headerCell('grossRevenue', 'Revenue')}
                   {headerCell('avgSellingPrice', 'Avg price')}
                   {headerCell('velocity', 'Velocity')}
-                  <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-right text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Orders
                   </th>
                   {headerCell('lastSoldAt', 'Last sold')}
-                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Status
                   </th>
                 </tr>
@@ -4241,21 +4241,21 @@ function PerformanceLens({
                   // by sorting on the Velocity column directly.
                   const velocityTone =
                     r.velocity >= 1
-                      ? 'text-emerald-700'
+                      ? 'text-emerald-700 dark:text-emerald-300'
                       : r.velocity >= 0.3
-                        ? 'text-slate-700'
-                        : 'text-slate-400'
+                        ? 'text-slate-700 dark:text-slate-300'
+                        : 'text-slate-400 dark:text-slate-500'
                   return (
                     <tr
                       key={`${r.sku}::${r.channel}::${r.marketplace}::${i}`}
                       onClick={handleClick}
-                      className={`border-b border-slate-100 hover:bg-slate-50 ${r.listing ? 'cursor-pointer' : ''}`}
+                      className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 ${r.listing ? 'cursor-pointer' : ''}`}
                     >
                       <td className="px-3 py-2">
-                        <div className="font-medium text-slate-900 truncate max-w-xs">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">
                           {r.productName ?? '(unknown product)'}
                         </div>
-                        <div className="text-xs text-slate-500 font-mono">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                           {r.sku}
                         </div>
                       </td>
@@ -4263,7 +4263,7 @@ function PerformanceLens({
                         <div className="inline-flex items-center gap-1.5">
                           <span className="font-mono text-xs">{r.channel}</span>
                           {r.marketplace && (
-                            <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded text-slate-600">
+                            <span className="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-slate-600 dark:text-slate-400">
                               {r.marketplace}
                             </span>
                           )}
@@ -4275,7 +4275,7 @@ function PerformanceLens({
                       <td className="px-3 py-2 text-right tabular-nums font-semibold">
                         €{r.grossRevenue.toFixed(2)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
                         €{r.avgSellingPrice.toFixed(2)}
                       </td>
                       <td className={`px-3 py-2 text-right tabular-nums ${velocityTone}`}>
@@ -4284,10 +4284,10 @@ function PerformanceLens({
                           <TrendingUp size={11} className="inline ml-1" />
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">
                         {r.orderCount}
                       </td>
-                      <td className="px-3 py-2 text-sm text-slate-500 whitespace-nowrap">
+                      <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {r.lastSoldAt
                           ? new Date(r.lastSoldAt).toLocaleDateString('en-GB', {
                               day: 'numeric',
@@ -4306,7 +4306,7 @@ function PerformanceLens({
                             {r.listing.listingStatus}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
                             no listing
                           </span>
                         )}
@@ -4356,37 +4356,37 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
     <div className="space-y-3">
       {!lockChannel && (
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-sm uppercase tracking-wider text-slate-500 mr-2">Drafts for:</span>
+          <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mr-2">Drafts for:</span>
           {['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map((ch) => (
             <button
               key={ch}
               onClick={() => setActiveChannel(ch)}
               className={`h-7 px-3 text-sm border rounded inline-flex items-center transition-colors ${
-                activeChannel === ch ? `${CHANNEL_TONE[ch]} font-semibold` : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                activeChannel === ch ? `${CHANNEL_TONE[ch]} font-semibold` : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
             >{ch}</button>
           ))}
         </div>
       )}
 
-      {loading && <Card><div className="text-md text-slate-500 py-8 text-center">Loading drafts…</div></Card>}
+      {loading && <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">Loading drafts…</div></Card>}
 
       {!loading && data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card title={`Drafts (${data.draftCount})`} description="Created but not yet published — review and publish.">
             {data.drafts.length === 0 ? (
-              <div className="py-6 text-base text-slate-500 text-center">No drafts on this channel.</div>
+              <div className="py-6 text-base text-slate-500 dark:text-slate-400 text-center">No drafts on this channel.</div>
             ) : (
               <ul className="space-y-1 -my-1">
                 {data.drafts.slice(0, 25).map((d: any) => (
-                  <li key={d.id} className="flex items-center justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50">
+                  <li key={d.id} className="flex items-center justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div className="min-w-0 flex-1">
-                      <div className="text-md text-slate-900 truncate">{d.product.name}</div>
-                      <div className="text-sm text-slate-500 font-mono">{d.product.sku} · {d.marketplace}</div>
+                      <div className="text-md text-slate-900 dark:text-slate-100 truncate">{d.product.name}</div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{d.product.sku} · {d.marketplace}</div>
                     </div>
                     <Link
                       href={`/products/${d.productId}/list-wizard?channel=${d.channel}&marketplace=${d.marketplace}`}
-                      className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+                      className="h-7 px-3 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
                     >Publish →</Link>
                   </li>
                 ))}
@@ -4396,18 +4396,18 @@ function DraftsLens({ lockChannel, lockMarketplace, search }: { lockChannel?: st
 
           <Card title={`Uncovered products (${data.uncoveredCount})`} description={`Products not yet listed on ${activeChannel}.`}>
             {data.uncovered.length === 0 ? (
-              <div className="py-6 text-base text-slate-500 text-center">All products covered.</div>
+              <div className="py-6 text-base text-slate-500 dark:text-slate-400 text-center">All products covered.</div>
             ) : (
               <ul className="space-y-1 -my-1">
                 {data.uncovered.slice(0, 25).map((p: any) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50">
+                  <li key={p.id} className="flex items-center justify-between gap-3 py-2 px-3 -mx-3 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div className="min-w-0 flex-1">
-                      <div className="text-md text-slate-900 truncate">{p.name}</div>
-                      <div className="text-sm text-slate-500 font-mono">{p.sku}</div>
+                      <div className="text-md text-slate-900 dark:text-slate-100 truncate">{p.name}</div>
+                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{p.sku}</div>
                     </div>
                     <Link
                       href={`/products/${p.id}/list-wizard?channel=${activeChannel}`}
-                      className="h-7 px-3 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                      className="h-7 px-3 text-sm bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60"
                     >List on {activeChannel.charAt(0) + activeChannel.slice(1).toLowerCase()} →</Link>
                   </li>
                 ))}
@@ -4552,12 +4552,12 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
         </ModalBody>
       ) : error ? (
         <ModalBody>
-          <div className="bg-rose-50 border border-rose-200 rounded-md p-3 space-y-2">
-            <div className="text-sm font-semibold uppercase tracking-wider text-rose-700">Failed to load listing</div>
-            <div className="text-base text-rose-700">{error}</div>
+          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-md p-3 space-y-2">
+            <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300">Failed to load listing</div>
+            <div className="text-base text-rose-700 dark:text-rose-300">{error}</div>
             <button
               onClick={loadListing}
-              className="h-8 px-3 text-base bg-white text-rose-700 border border-rose-300 rounded hover:bg-rose-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 border border-rose-300 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> Retry
             </button>
@@ -4565,27 +4565,27 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
         </ModalBody>
       ) : !listing ? (
         <ModalBody>
-          <div className="text-base text-slate-500">Listing not found.</div>
+          <div className="text-base text-slate-500 dark:text-slate-400">Listing not found.</div>
         </ModalBody>
       ) : (
         <>
           {/* Header: thumbnail + name + channel/marketplace + action toolbar */}
-          <div className="px-5 py-3 border-b border-slate-200 flex-shrink-0">
+          <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 {listing.product?.images?.[0] && (
                   <img
                     src={listing.product.images[0]}
                     alt=""
-                    className="w-12 h-12 rounded-md object-cover bg-slate-100 flex-shrink-0"
+                    className="w-12 h-12 rounded-md object-cover bg-slate-100 dark:bg-slate-800 flex-shrink-0"
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-md font-semibold text-slate-900 truncate">{listing.product?.name}</div>
-                  <div className="text-sm text-slate-500 font-mono truncate">{listing.product?.sku}</div>
+                  <div className="text-md font-semibold text-slate-900 dark:text-slate-100 truncate">{listing.product?.name}</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">{listing.product?.sku}</div>
                   <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[listing.channel] ?? ''}`}>{listing.channel}</span>
-                    <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{listing.marketplace}</span>
+                    <span className="font-mono text-sm font-semibold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">{listing.marketplace}</span>
                     <StatusBadge status={listing.listingStatus} />
                     {listing.syncStatus && listing.syncStatus !== 'IDLE' && (
                       <StatusBadge status={listing.syncStatus} />
@@ -4604,7 +4604,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                 <button
                   onClick={resync}
                   disabled={actionPending === 'resync'}
-                  className="h-7 px-2.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-7 px-2.5 text-sm bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <RefreshCw size={11} className={actionPending === 'resync' ? 'animate-spin' : ''} />
                   Sync
@@ -4614,7 +4614,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                 <button
                   onClick={togglePublish}
                   disabled={actionPending === 'publish'}
-                  className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   {listing.isPublished ? <Pause size={11} /> : <Play size={11} />}
                   {listing.isPublished ? 'Pause' : 'Resume'}
@@ -4626,7 +4626,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                     href={listing.listingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                    className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                   >
                     <ExternalLink size={11} />
                     On marketplace
@@ -4635,7 +4635,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
               )}
               <Link
                 href={`/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`}
-                className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
               >
                 <Edit3 size={11} />
                 Open in editor
@@ -4646,7 +4646,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                   timeline + scoped p95 latency chart. */}
               <Link
                 href={`/sync-logs/api-calls?listingId=${encodeURIComponent(listing.id)}`}
-                className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 title="View every channel API call recorded for this listing"
               >
                 <ExternalLink size={11} />
@@ -4820,7 +4820,7 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
       {/* Pricing rule + adjustment percent — drawer-level inline edits */}
       <div className="grid grid-cols-2 gap-3 pt-2">
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Pricing rule</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Pricing rule</div>
           {editingRule ? (
             <select
               value={listing.pricingRule ?? 'FIXED'}
@@ -4830,7 +4830,7 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
               }}
               onBlur={() => setEditingRule(false)}
               autoFocus
-              className="h-7 px-1 text-base border border-blue-400 rounded text-slate-900 bg-white"
+              className="h-7 px-1 text-base border border-blue-400 rounded text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900"
             >
               <option value="FIXED">FIXED</option>
               <option value="MATCH_AMAZON">MATCH_AMAZON</option>
@@ -4838,13 +4838,13 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
             </select>
           ) : (
             <InlineEditTrigger label="pricing rule" onClick={() => setEditingRule(true)}>
-              <span className="text-base text-slate-900">{listing.pricingRule ?? '—'}</span>
+              <span className="text-base text-slate-900 dark:text-slate-100">{listing.pricingRule ?? '—'}</span>
             </InlineEditTrigger>
           )}
         </div>
         {listing.pricingRule === 'PERCENT_OF_MASTER' && (
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Adjustment %</div>
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Adjustment %</div>
             {editingPercent ? (
               <Input
                 type="number"
@@ -4867,7 +4867,7 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
               />
             ) : (
               <InlineEditTrigger label="adjustment percent" onClick={() => setEditingPercent(true)}>
-                <span className="text-base text-slate-900 tabular-nums">
+                <span className="text-base text-slate-900 dark:text-slate-100 tabular-nums">
                   {listing.priceAdjustmentPercent != null ? `${listing.priceAdjustmentPercent}%` : '—'}
                 </span>
               </InlineEditTrigger>
@@ -4875,7 +4875,7 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
           </div>
         )}
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Stock buffer</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Stock buffer</div>
           {editingBuffer ? (
             <Input
               type="number"
@@ -4898,15 +4898,15 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
             />
           ) : (
             <InlineEditTrigger label="stock buffer" onClick={() => setEditingBuffer(true)}>
-              <span className="text-base text-slate-900 tabular-nums">
+              <span className="text-base text-slate-900 dark:text-slate-100 tabular-nums">
                 {listing.stockBuffer ?? 0} units reserved
               </span>
             </InlineEditTrigger>
           )}
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">External ID</div>
-          <div className="text-base font-mono text-slate-900 truncate" title={listing.externalListingId ?? ''}>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">External ID</div>
+          <div className="text-base font-mono text-slate-900 dark:text-slate-100 truncate" title={listing.externalListingId ?? ''}>
             {listing.externalListingId ?? '—'}
           </div>
         </div>
@@ -4940,16 +4940,16 @@ function FieldComparison({
   compact?: boolean
 }) {
   return (
-    <div className={`border border-slate-200 rounded-md p-3 ${drifted && !followingMaster ? 'bg-amber-50/40' : 'bg-white'}`}>
+    <div className={`border border-slate-200 dark:border-slate-700 rounded-md p-3 ${drifted && !followingMaster ? 'bg-amber-50/40' : 'bg-white dark:bg-slate-900'}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">{label}</div>
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{label}</div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={followingMaster ? onUnfollow : onSnapToMaster}
             className={`h-6 px-2 text-xs rounded inline-flex items-center gap-1 transition-colors ${
               followingMaster
-                ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
             }`}
             aria-label={followingMaster ? `Unfollow master ${label.toLowerCase()}` : `Follow master ${label.toLowerCase()}`}
           >
@@ -4960,21 +4960,21 @@ function FieldComparison({
       </div>
       <div className={`grid grid-cols-2 gap-3 ${compact ? 'text-sm' : 'text-base'}`}>
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-400 font-medium mb-0.5">Master</div>
-          <div className="text-slate-700 truncate" title={masterValue}>{masterValue}</div>
+          <div className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500 font-medium mb-0.5">Master</div>
+          <div className="text-slate-700 dark:text-slate-300 truncate" title={masterValue}>{masterValue}</div>
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-400 font-medium mb-0.5">
+          <div className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500 font-medium mb-0.5">
             Channel
             {drifted && (
-              <span className="ml-1.5 text-amber-700 normal-case font-semibold">drifted</span>
+              <span className="ml-1.5 text-amber-700 dark:text-amber-300 normal-case font-semibold">drifted</span>
             )}
           </div>
-          <div className="text-slate-900 truncate" title={channelValue}>{channelValue}</div>
+          <div className="text-slate-900 dark:text-slate-100 truncate" title={channelValue}>{channelValue}</div>
         </div>
       </div>
       {driftLabel && drifted && (
-        <div className="mt-2 text-xs text-amber-700">{driftLabel}</div>
+        <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">{driftLabel}</div>
       )}
     </div>
   )
@@ -5040,15 +5040,15 @@ function AmazonContextSection({
       : null
 
   return (
-    <div className="border border-orange-200 bg-orange-50/30 rounded-md p-3 space-y-3">
+    <div className="border border-orange-200 dark:border-orange-900 bg-orange-50/30 rounded-md p-3 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs uppercase tracking-wider text-orange-700 font-semibold inline-flex items-center gap-1.5">
+        <div className="text-xs uppercase tracking-wider text-orange-700 dark:text-orange-300 font-semibold inline-flex items-center gap-1.5">
           <Package size={12} /> Amazon
         </div>
         {!ctx.activeSuppression && (
           <button
             onClick={() => setLogOpen(true)}
-            className="h-6 px-2 text-xs bg-white text-rose-700 border border-rose-200 rounded hover:bg-rose-50 inline-flex items-center gap-1"
+            className="h-6 px-2 text-xs bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1"
             aria-label="Log a suppression"
           >
             <AlertTriangle size={10} /> Log suppression
@@ -5059,15 +5059,15 @@ function AmazonContextSection({
       {/* ASIN identifiers */}
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-0.5">ASIN</div>
-          <div className="font-mono text-slate-900 font-semibold">
-            {ctx.asin ?? <span className="text-slate-400">—</span>}
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium mb-0.5">ASIN</div>
+          <div className="font-mono text-slate-900 dark:text-slate-100 font-semibold">
+            {ctx.asin ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
           </div>
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-0.5">Parent ASIN</div>
-          <div className="font-mono text-slate-900">
-            {ctx.parentAsin ?? <span className="text-slate-400">—</span>}
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium mb-0.5">Parent ASIN</div>
+          <div className="font-mono text-slate-900 dark:text-slate-100">
+            {ctx.parentAsin ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
           </div>
         </div>
       </div>
@@ -5075,19 +5075,19 @@ function AmazonContextSection({
       {/* Variation tree (when this is a parent SKU) */}
       {ctx.isParentSku && Array.isArray(ctx.variations) && ctx.variations.length > 0 && (
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-1.5">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium mb-1.5">
             Variations ({ctx.variations.length})
           </div>
-          <div className="border border-slate-200 rounded-md bg-white divide-y divide-slate-100">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 divide-y divide-slate-100">
             {ctx.variations.map((v: any) => (
               <div key={v.id} className="flex items-center gap-3 px-2.5 py-1.5">
-                <span className="font-mono text-xs font-semibold text-slate-700 truncate flex-1">
+                <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300 truncate flex-1">
                   {v.sku}
                 </span>
                 {v.amazonAsin && (
-                  <span className="font-mono text-xs text-slate-500">{v.amazonAsin}</span>
+                  <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{v.amazonAsin}</span>
                 )}
-                <span className="text-xs text-slate-500 tabular-nums w-12 text-right">
+                <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums w-12 text-right">
                   {v.stock ?? 0} pcs
                 </span>
               </div>
@@ -5098,7 +5098,7 @@ function AmazonContextSection({
 
       {/* FBA economics + margin estimate */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-1.5">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium mb-1.5">
           FBA economics
         </div>
         <div className="grid grid-cols-3 gap-2 text-sm">
@@ -5120,7 +5120,7 @@ function AmazonContextSection({
           />
         </div>
         {ctx.fbaEconomics.feeFetchedAt == null && (
-          <div className="text-xs text-slate-400 italic mt-1.5">
+          <div className="text-xs text-slate-400 dark:text-slate-500 italic mt-1.5">
             Fee data not yet fetched — runs via SP-API GetMyFeesEstimate cron (S.5b).
           </div>
         )}
@@ -5128,16 +5128,16 @@ function AmazonContextSection({
 
       {/* Buy Box intelligence */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-1.5">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium mb-1.5">
           Buy Box intelligence
         </div>
         {ctx.buyBox.lowestCompetitorPrice == null ? (
-          <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-md p-2.5">
+          <div className="text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-2.5">
             Competitor pricing not yet fetched. Real Buy Box ownership requires the SP-API
             GetItemOffersBatch integration (S.5b — pending).
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 text-sm bg-white border border-slate-200 rounded-md p-2.5">
+          <div className="grid grid-cols-3 gap-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-2.5">
             <FbaCell
               label="Our price"
               value={ctx.buyBox.ourPrice != null ? `€${ctx.buyBox.ourPrice.toFixed(2)}` : '—'}
@@ -5159,7 +5159,7 @@ function AmazonContextSection({
           </div>
         )}
         {ctx.buyBox.competitorFetchedAt && (
-          <div className="text-xs text-slate-400 mt-1">
+          <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
             Last competitor fetch: {new Date(ctx.buyBox.competitorFetchedAt).toLocaleString()}
           </div>
         )}
@@ -5167,18 +5167,18 @@ function AmazonContextSection({
 
       {/* Active suppression record */}
       {ctx.activeSuppression && (
-        <div className="border border-rose-300 bg-rose-50 rounded-md p-2.5 space-y-2">
+        <div className="border border-rose-300 bg-rose-50 dark:bg-rose-950/40 rounded-md p-2.5 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
-              <AlertTriangle size={12} className="text-rose-600" />
-              <span className="text-xs uppercase tracking-wider font-semibold text-rose-700">
+              <AlertTriangle size={12} className="text-rose-600 dark:text-rose-400" />
+              <span className="text-xs uppercase tracking-wider font-semibold text-rose-700 dark:text-rose-300">
                 Active suppression
               </span>
             </div>
             <button
               onClick={runDiagnose}
               disabled={diagnosing}
-              className="h-6 px-2 text-xs bg-white text-violet-700 border border-violet-300 rounded hover:bg-violet-50 disabled:opacity-50 inline-flex items-center gap-1"
+              className="h-6 px-2 text-xs bg-white dark:bg-slate-900 text-violet-700 dark:text-violet-300 border border-violet-300 rounded hover:bg-violet-50 dark:hover:bg-violet-950/40 disabled:opacity-50 inline-flex items-center gap-1"
               aria-label="Diagnose suppression with AI"
               title="Ask the configured AI provider to explain why Amazon suppressed this listing and what to fix"
             >
@@ -5186,40 +5186,40 @@ function AmazonContextSection({
               {diagnosing ? 'Diagnosing…' : diagnosis ? 'Re-diagnose' : 'Diagnose with AI'}
             </button>
           </div>
-          <div className="text-base text-rose-700">
+          <div className="text-base text-rose-700 dark:text-rose-300">
             {ctx.activeSuppression.reasonCode && (
               <span className="font-mono mr-1">[{ctx.activeSuppression.reasonCode}]</span>
             )}
             {ctx.activeSuppression.reasonText}
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
             Suppressed {new Date(ctx.activeSuppression.suppressedAt).toLocaleString()} ·{' '}
             source: {ctx.activeSuppression.source}
           </div>
 
           {diagError && (
-            <div className="border border-amber-300 bg-amber-50 rounded p-2 text-xs text-amber-800">
+            <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded p-2 text-xs text-amber-800">
               <span className="font-semibold">Diagnosis failed:</span> {diagError}
             </div>
           )}
 
           {diagnosis && (
-            <div className="border border-violet-200 bg-white rounded p-2.5 space-y-2">
+            <div className="border border-violet-200 dark:border-violet-900 bg-white dark:bg-slate-900 rounded p-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-xs uppercase tracking-wider font-semibold text-violet-700 inline-flex items-center gap-1.5">
+                <div className="text-xs uppercase tracking-wider font-semibold text-violet-700 dark:text-violet-300 inline-flex items-center gap-1.5">
                   <Sparkles size={11} /> AI diagnosis
                 </div>
-                <div className="text-xs text-slate-500 tabular-nums">
+                <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                   {diagnosis.provider.name} · {diagnosis.provider.model} · $
                   {diagnosis.provider.costUSD.toFixed(4)}
                   {diagnosis.confidence && (
                     <span
                       className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
                         diagnosis.confidence === 'high'
-                          ? 'bg-emerald-100 text-emerald-700'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
                           : diagnosis.confidence === 'medium'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-slate-100 text-slate-600'
+                            ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                       }`}
                     >
                       {diagnosis.confidence}
@@ -5230,21 +5230,21 @@ function AmazonContextSection({
 
               {diagnosis.rootCause && (
                 <div className="text-xs">
-                  <span className="font-semibold text-slate-600">Root cause:</span>{' '}
-                  <span className="text-slate-900">{diagnosis.rootCause}</span>
+                  <span className="font-semibold text-slate-600 dark:text-slate-400">Root cause:</span>{' '}
+                  <span className="text-slate-900 dark:text-slate-100">{diagnosis.rootCause}</span>
                 </div>
               )}
 
               {diagnosis.explanation && (
-                <div className="text-sm text-slate-700 leading-relaxed">{diagnosis.explanation}</div>
+                <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{diagnosis.explanation}</div>
               )}
 
               {diagnosis.suggestedFix.length > 0 && (
                 <div>
-                  <div className="text-xs uppercase tracking-wider font-semibold text-slate-600 mb-1">
+                  <div className="text-xs uppercase tracking-wider font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Suggested fix
                   </div>
-                  <ol className="text-sm text-slate-800 space-y-1 list-decimal list-inside">
+                  <ol className="text-sm text-slate-800 dark:text-slate-200 space-y-1 list-decimal list-inside">
                     {diagnosis.suggestedFix.map((step, i) => (
                       <li key={i}>{step}</li>
                     ))}
@@ -5278,14 +5278,14 @@ function FbaCell({
   tone?: 'default' | 'success' | 'danger'
 }) {
   const toneClass =
-    tone === 'success' ? 'text-emerald-700'
-    : tone === 'danger' ? 'text-rose-700'
-    : 'text-slate-900'
+    tone === 'success' ? 'text-emerald-700 dark:text-emerald-300'
+    : tone === 'danger' ? 'text-rose-700 dark:text-rose-300'
+    : 'text-slate-900 dark:text-slate-100'
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-400 font-medium mb-0.5">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500 font-medium mb-0.5">{label}</div>
       <div className={`text-base font-semibold tabular-nums ${toneClass}`}>{value}</div>
-      {sub && <div className="text-xs text-slate-500">{sub}</div>}
+      {sub && <div className="text-xs text-slate-500 dark:text-slate-400">{sub}</div>}
     </div>
   )
 }
@@ -5350,7 +5350,7 @@ function ChannelsTab({
   const totalCombos = companions.length + 1
   return (
     <div className="space-y-3">
-      <div className="text-sm text-slate-600">
+      <div className="text-sm text-slate-600 dark:text-slate-400">
         {t(
           totalCombos === 1
             ? 'listings.drawer.combosCount'
@@ -5404,12 +5404,12 @@ function ChannelsTab({
       ))}
 
       {companions.length === 0 && (
-        <div className="border border-dashed border-slate-300 rounded-md py-6 text-center text-sm text-slate-500">
+        <div className="border border-dashed border-slate-300 dark:border-slate-600 rounded-md py-6 text-center text-sm text-slate-500 dark:text-slate-400">
           {t('listings.drawer.empty')}
           <div className="mt-2">
             <Link
               href={`/products/${listing.productId}/list-wizard`}
-              className="inline-flex items-center gap-1.5 text-blue-600 hover:underline"
+              className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:underline"
             >
               <Plus size={11} /> {t('listings.drawer.listOnAnother')}
             </Link>
@@ -5431,22 +5431,22 @@ function ComparisonMasterCard({
 }) {
   const { t } = useTranslations()
   return (
-    <div className="flex items-start gap-3 p-2.5 border border-slate-300 rounded-md bg-slate-50">
-      <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border border-slate-300 rounded bg-white text-slate-700 flex-shrink-0">
+    <div className="flex items-start gap-3 p-2.5 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-800">
+      <span className="inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 flex-shrink-0">
         {t('listings.drawer.master')}
       </span>
       <div className="flex-1 min-w-0">
         {master.title && (
-          <div className="text-sm text-slate-700 truncate" title={master.title}>
+          <div className="text-sm text-slate-700 dark:text-slate-300 truncate" title={master.title}>
             {master.title}
           </div>
         )}
-        <div className="flex items-center gap-3 mt-0.5 text-xs tabular-nums text-slate-500">
+        <div className="flex items-center gap-3 mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
           {master.price != null && <span>Price {master.price.toFixed(2)}</span>}
           {master.quantity != null && <span>Stock {master.quantity}</span>}
         </div>
       </div>
-      <div className="text-xs text-slate-400 flex-shrink-0">{t('listings.matrix.reference')}</div>
+      <div className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">{t('listings.matrix.reference')}</div>
     </div>
   )
 }
@@ -5511,13 +5511,13 @@ function CompanionCard({
 
   const Inner = (
     <div
-      className={`p-2.5 border rounded-md ${isCurrent ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'}`}
+      className={`p-2.5 border rounded-md ${isCurrent ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer'}`}
     >
       <div className="flex items-center gap-3 flex-wrap">
         <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[channel] ?? ''} flex-shrink-0`}>
           {channel}
         </span>
-        <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 flex-shrink-0">
+        <span className="font-mono text-sm font-semibold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 flex-shrink-0">
           {marketplace}
         </span>
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -5526,7 +5526,7 @@ function CompanionCard({
         </div>
         <div className="ml-auto flex items-center gap-2 text-sm tabular-nums flex-wrap">
           {price != null && (
-            <span className="text-slate-700 inline-flex items-center gap-1">
+            <span className="text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
               {Number(price).toFixed(2)}
               {priceDrift != null && <DriftBadge delta={priceDrift} unit="price" />}
               {hasPriceOverride && <OverridePill labelKey="listings.drawer.override" />}
@@ -5536,7 +5536,7 @@ function CompanionCard({
             </span>
           )}
           {quantity != null && (
-            <span className="text-slate-500 inline-flex items-center gap-1">
+            <span className="text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
               {quantity} pcs
               {qtyDrift != null && <DriftBadge delta={qtyDrift} unit="qty" />}
               {hasQuantityOverride && <OverridePill labelKey="listings.drawer.override" />}
@@ -5545,18 +5545,18 @@ function CompanionCard({
           {isCurrent ? (
             <Badge variant="info" size="sm">{t('listings.drawer.current')}</Badge>
           ) : (
-            <ArrowUpRight size={12} className="text-slate-400" />
+            <ArrowUpRight size={12} className="text-slate-400 dark:text-slate-500" />
           )}
         </div>
       </div>
       {(truncatedTitle || titleDrift || hasTitleOverride) && (
-        <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-          <span className="text-slate-400 uppercase tracking-wider">{t('listings.drawer.titleLabel')}</span>
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+          <span className="text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('listings.drawer.titleLabel')}</span>
           <span className="truncate flex-1 min-w-0" title={title ?? undefined}>
             {truncatedTitle ?? '—'}
           </span>
           {titleDrift && (
-            <span className="inline-flex items-center px-1 rounded border bg-amber-50 border-amber-200 text-amber-700">
+            <span className="inline-flex items-center px-1 rounded border bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300">
               ⚠ {t('listings.drawer.titleDiffers')}
             </span>
           )}
@@ -5575,7 +5575,7 @@ function CompanionCard({
           href={listingUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-blue-600 hover:underline ml-3 mt-0.5 inline-flex items-center gap-1"
+          className="text-xs text-blue-600 dark:text-blue-400 hover:underline ml-3 mt-0.5 inline-flex items-center gap-1"
         >
           <ExternalLink size={9} /> {t('listings.drawer.openOnMarketplace')}
         </a>
@@ -5600,8 +5600,8 @@ function OverridePill({
   const label = t(labelKey)
   const toneClass =
     tone === 'amber'
-      ? 'bg-amber-50 border-amber-200 text-amber-700'
-      : 'bg-blue-50 border-blue-200 text-blue-700'
+      ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300'
+      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-300'
   return (
     <span
       className={`inline-flex items-center px-1 rounded border text-xs uppercase tracking-wider ${toneClass}`}
@@ -5614,7 +5614,7 @@ function OverridePill({
 
 function ErrorRow({ error }: { error: string }) {
   return (
-    <div className="text-xs text-rose-700 mt-1 ml-3 truncate" title={error}>
+    <div className="text-xs text-rose-700 dark:text-rose-300 mt-1 ml-3 truncate" title={error}>
       ⚠ {error}
     </div>
   )
@@ -5669,7 +5669,7 @@ function SavedViewsButton({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+        className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -5677,16 +5677,16 @@ function SavedViewsButton({
       </button>
       {open && (
         <div
-          className="absolute left-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2"
+          className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-20 p-2"
           role="menu"
         >
           {!saveMode ? (
             <>
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
                 {t('listings.savedViews.heading')}
               </div>
               {views.length === 0 ? (
-                <div className="px-2 py-3 text-base text-slate-400 text-center">
+                <div className="px-2 py-3 text-base text-slate-400 dark:text-slate-500 text-center">
                   {t('listings.savedViews.empty')}
                 </div>
               ) : (
@@ -5694,11 +5694,11 @@ function SavedViewsButton({
                   {views.map((v) => (
                     <li
                       key={v.id}
-                      className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 rounded"
+                      className="flex items-center justify-between gap-1 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded"
                     >
                       <button
                         onClick={() => onApply(v)}
-                        className="flex-1 min-w-0 text-left text-base text-slate-900 inline-flex items-center gap-1.5"
+                        className="flex-1 min-w-0 text-left text-base text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
                       >
                         {v.isDefault && (
                           <Star
@@ -5712,7 +5712,7 @@ function SavedViewsButton({
                         onClick={() => onSetDefault(v.id)}
                         title="Set as default"
                         aria-label={`Set "${v.name}" as default view`}
-                        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-amber-500"
+                        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-amber-500"
                       >
                         <Star size={12} />
                       </button>
@@ -5728,7 +5728,7 @@ function SavedViewsButton({
                         }}
                         title={t('common.delete')}
                         aria-label={`Delete saved view "${v.name}"`}
-                        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 hover:text-rose-600"
+                        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-600"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -5738,14 +5738,14 @@ function SavedViewsButton({
               )}
               <button
                 onClick={() => setSaveMode(true)}
-                className="w-full mt-1 h-8 px-2 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center justify-center gap-1.5"
+                className="w-full mt-1 h-8 px-2 text-base bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center justify-center gap-1.5"
               >
                 <BookmarkPlus size={12} /> {t('listings.savedViews.saveCurrent')}
               </button>
             </>
           ) : (
             <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 px-2 py-1">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
                 {t('listings.savedViews.saveCurrent')}
               </div>
               <input
@@ -5754,9 +5754,9 @@ function SavedViewsButton({
                 placeholder={t('listings.savedViews.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-8 px-2 text-md border border-slate-200 rounded"
+                className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
               />
-              <label className="flex items-center gap-2 px-2 text-base text-slate-700">
+              <label className="flex items-center gap-2 px-2 text-base text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={isDefault}
@@ -5776,7 +5776,7 @@ function SavedViewsButton({
                       setOpen(false)
                     }
                   }}
-                  className="flex-1 h-8 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
+                  className="flex-1 h-8 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800"
                 >
                   {t('common.save')}
                 </button>
@@ -5785,7 +5785,7 @@ function SavedViewsButton({
                     setSaveMode(false)
                     setName('')
                   }}
-                  className="flex-1 h-8 text-base border border-slate-200 rounded hover:bg-slate-50"
+                  className="flex-1 h-8 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   {t('common.cancel')}
                 </button>
@@ -5830,24 +5830,24 @@ function SyncTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 p-3 border border-slate-200 rounded-md bg-slate-50">
+      <div className="flex items-center justify-between gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800">
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-0.5">Current sync state</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Current sync state</div>
           <div className="flex items-center gap-2">
             <StatusBadge status={listing.syncStatus ?? 'IDLE'} />
             {listing.lastSyncStatus && (
-              <span className="text-sm text-slate-600">
+              <span className="text-sm text-slate-600 dark:text-slate-400">
                 last attempt: <StatusBadge status={listing.lastSyncStatus} />
               </span>
             )}
           </div>
-          <div className="text-sm text-slate-500 mt-1">
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {listing.lastSyncedAt
               ? `Last synced ${new Date(listing.lastSyncedAt).toLocaleString()}`
               : 'Never synced'}
           </div>
           {listing.syncRetryCount > 0 && (
-            <div className="text-sm text-slate-500 mt-0.5">
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               Retry count: <span className="tabular-nums">{listing.syncRetryCount}</span>
             </div>
           )}
@@ -5855,7 +5855,7 @@ function SyncTab({
         <button
           onClick={onResync}
           disabled={resyncing}
-          className="h-9 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+          className="h-9 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           <RefreshCw size={12} className={resyncing ? 'animate-spin' : ''} />
           {resyncing ? 'Syncing…' : 'Sync now'}
@@ -5863,17 +5863,17 @@ function SyncTab({
       </div>
 
       {listing.lastSyncError && (
-        <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
-          <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 mb-1">Last sync error</div>
-          <div className="text-base text-rose-700 whitespace-pre-wrap">{listing.lastSyncError}</div>
+        <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-md p-3">
+          <div className="text-sm font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300 mb-1">Last sync error</div>
+          <div className="text-base text-rose-700 dark:text-rose-300 whitespace-pre-wrap">{listing.lastSyncError}</div>
         </div>
       )}
 
       <div>
-        <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
           Sync history
           {historyData && (
-            <span className="ml-2 normal-case font-normal text-slate-400">
+            <span className="ml-2 normal-case font-normal text-slate-400 dark:text-slate-500">
               {historyData.count} attempt{historyData.count === 1 ? '' : 's'}
             </span>
           )}
@@ -5881,7 +5881,7 @@ function SyncTab({
         {historyLoading && attempts.length === 0 ? (
           <Skeleton variant="text" lines={3} />
         ) : attempts.length === 0 ? (
-          <div className="border-l-2 border-slate-200 pl-3 space-y-3">
+          <div className="border-l-2 border-slate-200 dark:border-slate-700 pl-3 space-y-3">
             <TimelineEntry
               status="CREATED"
               when={listing.createdAt}
@@ -5889,7 +5889,7 @@ function SyncTab({
             />
           </div>
         ) : (
-          <div className="border-l-2 border-slate-200 pl-3 space-y-3">
+          <div className="border-l-2 border-slate-200 dark:border-slate-700 pl-3 space-y-3">
             {attempts.map((a) => (
               <TimelineEntry
                 key={a.id}
@@ -5928,12 +5928,12 @@ function TimelineEntry({
   return (
     <div className="relative">
       <div className={`absolute -left-[17px] top-0.5 w-3 h-3 rounded-full border-2 ${
-        status === 'SUCCESS' ? 'bg-emerald-500 border-emerald-200'
-        : status === 'FAILED' ? 'bg-rose-500 border-rose-200'
-        : 'bg-slate-300 border-slate-100'
+        status === 'SUCCESS' ? 'bg-emerald-500 border-emerald-200 dark:border-emerald-900'
+        : status === 'FAILED' ? 'bg-rose-500 border-rose-200 dark:border-rose-900'
+        : 'bg-slate-300 border-slate-100 dark:border-slate-800'
       }`} />
-      <div className="text-base text-slate-700">{detail}</div>
-      <div className="text-xs text-slate-500 tabular-nums mt-0.5">
+      <div className="text-base text-slate-700 dark:text-slate-300">{detail}</div>
+      <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums mt-0.5">
         {new Date(when).toLocaleString()}
       </div>
     </div>
@@ -5978,7 +5978,7 @@ function PublishesTab({ listing }: { listing: any }) {
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-slate-600">
+      <div className="text-sm text-slate-600 dark:text-slate-400">
         Channel-write attempts the publish gate has recorded for this
         listing. Use this to confirm dry-run / sandbox / live mode is
         what you expect, spot repeated failures on the same payload,
@@ -5988,7 +5988,7 @@ function PublishesTab({ listing }: { listing: any }) {
       {loading && attempts.length === 0 ? (
         <Skeleton variant="text" lines={4} />
       ) : attempts.length === 0 ? (
-        <div className="border border-slate-200 rounded p-3 text-sm text-slate-500">
+        <div className="border border-slate-200 dark:border-slate-700 rounded p-3 text-sm text-slate-500 dark:text-slate-400">
           No publish attempts recorded yet for this (channel, marketplace,
           sku). Either no wizard run or outbound-sync push has touched
           this listing, or the master flag has been off the whole time
@@ -5997,57 +5997,57 @@ function PublishesTab({ listing }: { listing: any }) {
         </div>
       ) : (
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2 inline-flex items-center gap-2">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2 inline-flex items-center gap-2">
             Publish history
-            <span className="normal-case font-normal text-slate-400">
+            <span className="normal-case font-normal text-slate-400 dark:text-slate-500">
               {data?.count} attempt{data?.count === 1 ? '' : 's'}
             </span>
           </div>
           <div className="space-y-1.5">
             {attempts.map((a) => {
               const tone =
-                a.outcome === 'success' ? 'border-emerald-200 bg-emerald-50/50'
-                : a.outcome === 'gated' ? 'border-slate-200 bg-slate-50'
-                : 'border-rose-200 bg-rose-50/50'
+                a.outcome === 'success' ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/50'
+                : a.outcome === 'gated' ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
+                : 'border-rose-200 dark:border-rose-900 bg-rose-50/50'
               const isStuckOnSameDigest =
                 lastDigest && a.payloadDigest === lastDigest && a.id !== attempts[0]?.id && a.outcome !== 'success'
               return (
                 <div key={a.id} className={`border rounded p-2.5 text-sm ${tone}`}>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="inline-flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-slate-600 tabular-nums whitespace-nowrap">
+                      <span className="text-xs text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">
                         {new Date(a.attemptedAt).toLocaleString()}
                       </span>
-                      <span className="text-xs font-mono px-1.5 py-0.5 rounded border border-slate-300 bg-white text-slate-700">
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300">
                         {a.mode}
                       </span>
                       <PublishOutcomeBadge outcome={a.outcome} />
                       {a.durationMs != null && (
-                        <span className="text-xs text-slate-500 tabular-nums">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                           {a.durationMs}ms
                         </span>
                       )}
                     </div>
                     {a.submissionId && (
-                      <span className="text-xs text-slate-500 font-mono" title={`Submission ID: ${a.submissionId}`}>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-mono" title={`Submission ID: ${a.submissionId}`}>
                         sub: {a.submissionId.slice(0, 12)}{a.submissionId.length > 12 ? '…' : ''}
                       </span>
                     )}
                   </div>
                   {a.errorMessage && (
-                    <div className="text-xs text-rose-700 mt-1.5 whitespace-pre-wrap">
+                    <div className="text-xs text-rose-700 dark:text-rose-300 mt-1.5 whitespace-pre-wrap">
                       {a.errorCode && (
                         <span className="font-mono mr-1">[{a.errorCode}]</span>
                       )}
                       {a.errorMessage}
                     </div>
                   )}
-                  <div className="text-[10px] text-slate-400 font-mono mt-1 inline-flex items-center gap-2">
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-1 inline-flex items-center gap-2">
                     <span title="sha256 of canonicalised payload — same digest on repeated attempts means the same payload didn't change">
                       digest {a.payloadDigest.slice(0, 12)}…
                     </span>
                     {isStuckOnSameDigest && (
-                      <span className="text-amber-700 normal-case font-semibold">
+                      <span className="text-amber-700 dark:text-amber-300 normal-case font-semibold">
                         ⚠ same payload as latest — consider editing before retrying
                       </span>
                     )}
@@ -6064,10 +6064,10 @@ function PublishesTab({ listing }: { listing: any }) {
 
 function PublishOutcomeBadge({ outcome }: { outcome: string }) {
   const tone =
-    outcome === 'success' ? 'bg-emerald-100 text-emerald-700' :
-    outcome === 'gated' ? 'bg-slate-100 text-slate-600' :
-    outcome === 'rate-limited' ? 'bg-amber-100 text-amber-700' :
-    'bg-rose-100 text-rose-700'
+    outcome === 'success' ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300' :
+    outcome === 'gated' ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' :
+    outcome === 'rate-limited' ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300' :
+    'bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300'
   return (
     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${tone}`}>
       {outcome}
@@ -6081,7 +6081,7 @@ function PublishOutcomeBadge({ outcome }: { outcome: string }) {
 function ActivityTab({ listing }: { listing: any }) {
   return (
     <div className="space-y-4">
-      <div className="text-sm text-slate-600">
+      <div className="text-sm text-slate-600 dark:text-slate-400">
         Listing-level activity. A full per-field audit log requires a dedicated
         ChannelListingActivity table (TECH_DEBT — coming with S.5 deep view).
       </div>
@@ -6100,8 +6100,8 @@ function ActivityTab({ listing }: { listing: any }) {
 function Detail({ label, value }: { label: string; value: any }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
-      <div className="text-base text-slate-900 mt-0.5">{String(value)}</div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
+      <div className="text-base text-slate-900 dark:text-slate-100 mt-0.5">{String(value)}</div>
     </div>
   )
 }
@@ -6131,7 +6131,7 @@ function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
         <div className="space-y-4">
           {sections.map((section) => (
             <div key={section}>
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 {section}
               </div>
               <ul className="space-y-1.5">
@@ -6142,12 +6142,12 @@ function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
                       key={`${section}-${i}`}
                       className="flex items-center justify-between gap-3 text-sm"
                     >
-                      <span className="text-slate-700 flex-1">{s.description}</span>
+                      <span className="text-slate-700 dark:text-slate-300 flex-1">{s.description}</span>
                       <span className="inline-flex items-center gap-1">
                         {s.keys.map((k, j) => (
                           <kbd
                             key={j}
-                            className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 text-xs font-mono bg-white border border-slate-300 rounded shadow-sm"
+                            className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded shadow-sm"
                           >
                             {k}
                           </kbd>
@@ -6163,7 +6163,7 @@ function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
       <ModalFooter>
         <button
           onClick={onClose}
-          className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
+          className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800"
         >
           Got it
         </button>
