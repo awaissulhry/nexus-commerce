@@ -23,7 +23,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 
-type Window = 'today' | '7d' | '30d' | '90d' | 'ytd'
+type Window = 'today' | '7d' | '30d' | '90d' | 'ytd' | 'custom'
 
 // DO.11 — comparison-period keys. `prev` is the legacy "previous of
 // equal length" behavior; the others apply a fixed shift in days
@@ -110,6 +110,8 @@ function zonedStartOfYear(at: Date, timeZone: string): Date {
 function windowBounds(
   window: Window,
   compare: Compare = 'prev',
+  customFrom?: Date,
+  customTo?: Date,
 ): {
   from: Date
   to: Date
@@ -117,35 +119,45 @@ function windowBounds(
   prevTo: Date
   label: string
 } {
-  const to = new Date()
+  // DO.25 — custom range overrides the preset entirely. customTo
+  // is allowed to be in the future for forward-looking ranges, but
+  // typical usage is "show me last quarter": from/to both in past.
+  let to: Date
   let from: Date
   let label: string
-  switch (window) {
-    case 'today': {
-      from = zonedStartOfDay(to, OPERATOR_TIMEZONE)
-      label = 'Today'
-      break
-    }
-    case '7d': {
-      from = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000)
-      label = 'Last 7 days'
-      break
-    }
-    case '90d': {
-      from = new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000)
-      label = 'Last 90 days'
-      break
-    }
-    case 'ytd': {
-      from = zonedStartOfYear(to, OPERATOR_TIMEZONE)
-      label = 'Year to date'
-      break
-    }
-    case '30d':
-    default: {
-      from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000)
-      label = 'Last 30 days'
-      break
+  if (window === 'custom' && customFrom && customTo) {
+    from = customFrom
+    to = customTo
+    label = 'Custom range'
+  } else {
+    to = new Date()
+    switch (window) {
+      case 'today': {
+        from = zonedStartOfDay(to, OPERATOR_TIMEZONE)
+        label = 'Today'
+        break
+      }
+      case '7d': {
+        from = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000)
+        label = 'Last 7 days'
+        break
+      }
+      case '90d': {
+        from = new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000)
+        label = 'Last 90 days'
+        break
+      }
+      case 'ytd': {
+        from = zonedStartOfYear(to, OPERATOR_TIMEZONE)
+        label = 'Year to date'
+        break
+      }
+      case '30d':
+      default: {
+        from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000)
+        label = 'Last 30 days'
+        break
+      }
     }
   }
   // DO.11 — compute the comparison range. For `prev`, shift by the
@@ -170,10 +182,23 @@ function deltaPct(current: number, previous: number): number | null {
 }
 
 const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get<{ Querystring: { window?: string; compare?: string } }>(
-    '/dashboard/overview',
-    async (request, reply) => {
-      const window = ((request.query?.window ?? '30d') as Window)
+  fastify.get<{
+    Querystring: {
+      window?: string
+      compare?: string
+      from?: string
+      to?: string
+    }
+  }>('/dashboard/overview', async (request, reply) => {
+      const rawWindow = request.query?.window ?? '30d'
+      const window: Window =
+        rawWindow === 'today' ||
+        rawWindow === '7d' ||
+        rawWindow === '90d' ||
+        rawWindow === 'ytd' ||
+        rawWindow === 'custom'
+          ? rawWindow
+          : '30d'
       const rawCompare = request.query?.compare
       const compare: Compare =
         rawCompare === 'dod' ||
@@ -182,9 +207,28 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         rawCompare === 'yoy'
           ? rawCompare
           : 'prev'
+      // DO.25 — custom from/to. Reject if either is unparseable; fall
+      // back to the default 30d window. Don't trust client input
+      // beyond ISO-date parsing.
+      let customFrom: Date | undefined
+      let customTo: Date | undefined
+      if (window === 'custom' && request.query?.from && request.query?.to) {
+        const fParsed = new Date(request.query.from)
+        const tParsed = new Date(request.query.to)
+        if (
+          !Number.isNaN(fParsed.getTime()) &&
+          !Number.isNaN(tParsed.getTime()) &&
+          fParsed.getTime() < tParsed.getTime()
+        ) {
+          customFrom = fParsed
+          customTo = tParsed
+        }
+      }
       const { from, to, prevFrom, prevTo, label } = windowBounds(
         window,
         compare,
+        customFrom,
+        customTo,
       )
 
       // ── Period totals ─────────────────────────────────────────────

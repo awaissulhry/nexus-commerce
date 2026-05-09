@@ -9,6 +9,7 @@ import {
   COMPARES,
   WINDOWS,
   type CompareKey,
+  type CustomRange,
   type T,
   type WindowKey,
 } from '../_lib/types'
@@ -29,6 +30,8 @@ export default function Header({
   onWindowChange,
   currentCompare,
   onCompareChange,
+  customRange,
+  onCustomRangeChange,
   liveMode,
   onLiveModeChange,
   lastRefreshed,
@@ -40,6 +43,8 @@ export default function Header({
   onWindowChange: (w: WindowKey) => void
   currentCompare: CompareKey
   onCompareChange: (c: CompareKey) => void
+  customRange: CustomRange
+  onCustomRangeChange: (next: CustomRange) => void
   liveMode: boolean
   onLiveModeChange: (next: boolean) => void
   lastRefreshed: number
@@ -76,6 +81,50 @@ export default function Header({
               </button>
             ))}
           </div>
+          {/* DO.25 — custom range pair. Renders only when "Custom"
+              is the active window. Native <input type="date"> gives
+              free locale-aware date pickers (Italian operator gets
+              Italian month names automatically) without pulling in
+              a date library. */}
+          {currentWindow === 'custom' && (
+            <div className="inline-flex items-center gap-1">
+              <input
+                type="date"
+                aria-label={t('overview.customRange.from')}
+                value={customRange.from}
+                max={customRange.to}
+                onChange={(e) =>
+                  onCustomRangeChange({ ...customRange, from: e.target.value })
+                }
+                className={cn(
+                  'h-7 px-2 text-sm rounded-md border tabular-nums',
+                  'border-slate-200 dark:border-slate-700',
+                  'bg-white dark:bg-slate-900',
+                  'text-slate-700 dark:text-slate-300',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                )}
+              />
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                →
+              </span>
+              <input
+                type="date"
+                aria-label={t('overview.customRange.to')}
+                value={customRange.to}
+                min={customRange.from}
+                onChange={(e) =>
+                  onCustomRangeChange({ ...customRange, to: e.target.value })
+                }
+                className={cn(
+                  'h-7 px-2 text-sm rounded-md border tabular-nums',
+                  'border-slate-200 dark:border-slate-700',
+                  'bg-white dark:bg-slate-900',
+                  'text-slate-700 dark:text-slate-300',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                )}
+              />
+            </div>
+          )}
           {/* DO.11 — comparison-period dropdown. Native <select> is
               the right primitive here: it wears the platform's
               keyboard / screen-reader affordances for free, mobile

@@ -147,9 +147,17 @@ export const WINDOWS = [
   { id: '30d' },
   { id: '90d' },
   { id: 'ytd' },
+  { id: 'custom' },
 ] as const
 
 export type WindowKey = (typeof WINDOWS)[number]['id']
+
+// DO.25 — custom range bounds. ISO yyyy-mm-dd; both sides
+// inclusive. Empty strings mean "not yet picked".
+export interface CustomRange {
+  from: string
+  to: string
+}
 
 // DO.11 — comparison-period options. `prev` shifts by the window's
 // own length (legacy default); the rest shift by a fixed number of

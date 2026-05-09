@@ -25,14 +25,29 @@ import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
   CompareKey,
+  CustomRange,
   OverviewPayload,
   WindowKey,
 } from './_lib/types'
+
+// DO.25 — initial custom range = last 14 days. Operator can adjust
+// once they pick "Custom" from the window selector.
+function defaultCustomRange(): CustomRange {
+  const now = new Date()
+  const start = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+  return {
+    from: start.toISOString().slice(0, 10),
+    to: now.toISOString().slice(0, 10),
+  }
+}
 
 export default function OverviewClient() {
   const { t } = useTranslations()
   const [window, setWindow] = useState<WindowKey>('30d')
   const [compare, setCompare] = useState<CompareKey>('prev')
+  const [customRange, setCustomRange] = useState<CustomRange>(
+    defaultCustomRange,
+  )
   // DO.16 — Live mode. When on, a second EventSource subscribes to
   // /api/dashboard/events and triggers a silent refetch on every
   // event (debounced 2s). When off, only the 60s polling and tab-
@@ -52,8 +67,16 @@ export default function OverviewClient() {
       else setLoading(true)
       setError(null)
       try {
+        const params = new URLSearchParams({
+          window,
+          compare,
+        })
+        if (window === 'custom' && customRange.from && customRange.to) {
+          params.set('from', customRange.from)
+          params.set('to', customRange.to)
+        }
         const res = await fetch(
-          `${getBackendUrl()}/api/dashboard/overview?window=${window}&compare=${compare}`,
+          `${getBackendUrl()}/api/dashboard/overview?${params.toString()}`,
           { cache: 'no-store' },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -67,7 +90,7 @@ export default function OverviewClient() {
         setRefreshing(false)
       }
     },
-    [window, compare],
+    [window, compare, customRange.from, customRange.to],
   )
 
   useEffect(() => {
@@ -164,6 +187,8 @@ export default function OverviewClient() {
         onWindowChange={setWindow}
         currentCompare={compare}
         onCompareChange={setCompare}
+        customRange={customRange}
+        onCustomRangeChange={setCustomRange}
         liveMode={liveMode}
         onLiveModeChange={setLiveMode}
         lastRefreshed={lastRefreshed}
