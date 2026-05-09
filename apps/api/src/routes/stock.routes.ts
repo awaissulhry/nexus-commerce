@@ -770,6 +770,25 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             location: { id: sl.location.id, code: sl.location.code },
           })),
         ),
+        // L.10 — active lots for this product, FEFO-ordered. Includes
+        // any OPEN recall so the drawer can flag recalled batches
+        // even though they're suppressed from FEFO consume. Capped at
+        // 50 — products with more lots than that need the dedicated
+        // /api/stock/lots endpoint with filters.
+        lots: await prisma.lot.findMany({
+          where: { productId, unitsRemaining: { gt: 0 } },
+          orderBy: [{ expiresAt: 'asc' }, { receivedAt: 'asc' }],
+          take: 50,
+          select: {
+            id: true, lotNumber: true, receivedAt: true, expiresAt: true,
+            unitsReceived: true, unitsRemaining: true, supplierLotRef: true,
+            recalls: {
+              where: { status: 'OPEN' },
+              select: { id: true, reason: true, openedAt: true },
+              take: 1,
+            },
+          },
+        }),
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/product/:id] failed')

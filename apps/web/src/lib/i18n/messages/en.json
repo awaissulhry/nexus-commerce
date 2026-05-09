@@ -2786,5 +2786,11 @@
   "products.drawer.translations.row.save": "Save",
   "products.lens.translations.locale.nl": "Dutch",
   "products.lens.translations.locale.sv": "Swedish",
-  "products.lens.translations.locale.pl": "Polish"
+  "products.lens.translations.locale.pl": "Polish",
+  "stock.lots.section": "Lots",
+  "stock.lots.recalledBadge": "Recalled",
+  "stock.lots.expiringSoon": "Expires in {days}d",
+  "stock.lots.supplierRef": "supplier ref {ref}",
+  "stock.lots.expires": "expires {date}",
+  "stock.lots.received": "received {when}"
 }

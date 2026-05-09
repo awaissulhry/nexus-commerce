@@ -20,6 +20,7 @@ import {
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
   ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Star,
+  ShieldAlert,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
@@ -1758,6 +1759,18 @@ type DrawerBundle = {
       locationCode: string | null
     }>
   }
+  // L.10 — active lots for this product, FEFO-ordered. Includes any
+  // OPEN recall so the drawer can flag recalled batches.
+  lots?: Array<{
+    id: string
+    lotNumber: string
+    receivedAt: string
+    expiresAt: string | null
+    unitsReceived: number
+    unitsRemaining: number
+    supplierLotRef: string | null
+    recalls: Array<{ id: string; reason: string; openedAt: string }>
+  }>
 }
 
 type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: string } | { kind: 'transfer' } | { kind: 'reserve' }
@@ -2240,6 +2253,65 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                       ))}
                     </ul>
                   )}
+                </Section>
+              )}
+
+              {/* L.10 — Lots: shown only when this product has tracked
+                  lots. FEFO-ordered (expiresAt ASC); recalled lots
+                  flagged with a danger badge + reason. Operator can
+                  click into the recall detail page directly. */}
+              {bundle.lots && bundle.lots.length > 0 && (
+                <Section title={t('stock.lots.section')} icon={ShieldAlert}>
+                  <ul className="space-y-1">
+                    {bundle.lots.map((lot) => {
+                      const recall = lot.recalls[0]
+                      const expiresInDays = lot.expiresAt
+                        ? Math.ceil((new Date(lot.expiresAt).getTime() - Date.now()) / 86400_000)
+                        : null
+                      const expiringSoon = expiresInDays != null && expiresInDays <= 30 && expiresInDays >= 0
+                      return (
+                        <li
+                          key={lot.id}
+                          className="flex items-start justify-between gap-3 py-1.5 px-2 -mx-2 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{lot.lotNumber}</span>
+                              {recall && (
+                                <Link
+                                  href={`/fulfillment/stock/recalls/${recall.id}`}
+                                  className="text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-950/40 dark:text-rose-300"
+                                  title={recall.reason}
+                                >
+                                  {t('stock.lots.recalledBadge')}
+                                </Link>
+                              )}
+                              {expiringSoon && !recall && (
+                                <span className="text-xs uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                                  {t('stock.lots.expiringSoon', { days: expiresInDays })}
+                                </span>
+                              )}
+                              {lot.supplierLotRef && (
+                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                  {t('stock.lots.supplierRef', { ref: lot.supplierLotRef })}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
+                              {t('stock.recalls.lotState', {
+                                remaining: lot.unitsRemaining,
+                                received: lot.unitsReceived,
+                              })}
+                              {lot.expiresAt && (
+                                <> · {t('stock.lots.expires', { date: new Date(lot.expiresAt).toLocaleDateString() })}</>
+                              )}
+                              {' · '}{t('stock.lots.received', { when: formatRelative(lot.receivedAt, t) })}
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </Section>
               )}
 
