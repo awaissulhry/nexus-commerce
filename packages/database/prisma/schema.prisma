@@ -279,6 +279,7 @@ model Product {
   outboundSyncQueue         OutboundSyncQueue[] // Phase 8: Outbound Sync Engine
   stockLevels               StockLevel[] // H.1: per-location stock ledger
   fbaInventoryDetails       FbaInventoryDetail[] // S.25: per-FC FBA snapshot
+  lots                      Lot[] // L.1: lot tracking for recall traceability
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -1092,6 +1093,8 @@ model ProductVariation {
 
   // H.1: per-location stock ledger
   stockLevels StockLevel[]
+  // L.1: lot tracking for recall traceability
+  lots        Lot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3788,10 +3791,18 @@ model StockMovement {
   // adjustments, and pre-S.20 rows.
   cogsCents      Int?
 
-  warehouse    Warehouse?     @relation(fields: [warehouseId], references: [id])
-  location     StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
-  fromLocation StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
-  toLocation   StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
+  // L.1 — lot reference. Optional; populated on receives that capture
+  // a lotNumber and on consumes that depleted a specific lot.
+  lotId          String?
+
+  warehouse       Warehouse?     @relation(fields: [warehouseId], references: [id])
+  location        StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
+  fromLocation    StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
+  toLocation      StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
+  lot             Lot?           @relation("LotMovements", fields: [lotId], references: [id])
+  // Back-relation for the Lot.originStockMovementId FK (one movement
+  // can be the origin receive of one or more lots — split-receive case).
+  lotsOriginated  Lot[]          @relation("LotOrigin")
 
   @@index([productId, createdAt])
   @@index([variationId, createdAt])
@@ -3802,6 +3813,7 @@ model StockMovement {
   @@index([orderId])
   @@index([shipmentId])
   @@index([returnId])
+  @@index([lotId])
 }
 
 // S.20 — One row per stock receive event. FIFO/LIFO consume in
@@ -3843,16 +3855,66 @@ model StockCostLayer {
   inboundShipmentId String?
   stockMovementId   String?
   notes             String?
+  // L.1 — link a cost layer to its source lot when a receive captured
+  // both. Lets the rimanenze report break down value by lot for recall
+  // / compliance audits.
+  lotId             String?
 
   createdAt DateTime @default(now())
 
   product  Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   location StockLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  lot      Lot?           @relation("LotCostLayers", fields: [lotId], references: [id], onDelete: SetNull)
 
   @@index([productId, receivedAt])
   @@index([productId, unitsRemaining])
   @@index([inboundShipmentId])
   @@index([stockMovementId])
+  @@index([lotId])
+}
+
+// L.1 — Lot tracking for compliance traceability. Required for Xavia's
+// motorcycle helmet category under EU GPSR (in force Dec 2024) which
+// makes manufacturers and distributors of safety equipment liable for
+// recall traceability: identify affected units, find which orders
+// shipped them, suppress remaining sellable.
+//
+// One row per (productId, lotNumber). lotNumber matches the supplier's
+// batch label. unitsReceived is the lifetime total; unitsRemaining
+// drops on consume (FEFO when expiresAt is set, FIFO otherwise).
+//
+// CHECK constraints (added in migration):
+//   unitsRemaining >= 0
+//   unitsRemaining <= unitsReceived
+model Lot {
+  id            String   @id @default(cuid())
+  productId     String
+  variationId   String?
+  lotNumber     String
+  receivedAt    DateTime @default(now())
+  expiresAt     DateTime?
+  unitsReceived  Int
+  unitsRemaining Int
+  // Origin links for backward trace.
+  originPoId             String?
+  originInboundShipmentId String?
+  originStockMovementId  String?
+  // Supplier's own lot reference if it differs from our lotNumber.
+  supplierLotRef String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variation     ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  originMovement StockMovement?   @relation("LotOrigin", fields: [originStockMovementId], references: [id], onDelete: SetNull)
+  movements     StockMovement[]   @relation("LotMovements")
+  costLayers    StockCostLayer[]  @relation("LotCostLayers")
+
+  @@unique([productId, lotNumber])
+  @@index([productId, receivedAt])
+  @@index([expiresAt])
+  @@index([productId, unitsRemaining])
 }
 
 // T.8 part 2 — Year-end inventory valuation snapshot ("rimanenze
