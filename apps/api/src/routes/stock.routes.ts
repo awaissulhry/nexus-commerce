@@ -209,12 +209,37 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         outboundCounts[r.syncStatus] = r._count.syncStatus
       }
 
+      // T.2/T.1 — surface Pan-EU + eBay configuration health so the
+      // SyncIndicator can warn the operator when an integration is
+      // wired but disabled (silent failure mode).
+      const panEuLive = process.env.AMAZON_FBA_PAN_EU_LIVE === '1'
+      const ebayCredsPresent = !!(
+        process.env.EBAY_APP_ID && process.env.EBAY_CERT_ID &&
+        process.env.EBAY_DEV_ID && process.env.EBAY_TOKEN
+      )
+      const ebayRealApi = process.env.NEXUS_EBAY_REAL_API === 'true'
+
       return {
         amazonFbaCron: {
           configured: amazonInventoryService.isConfigured(),
           enabled: process.env.NEXUS_ENABLE_AMAZON_INVENTORY_CRON === '1',
           lastReconciliationAt: lastFbaReconciliation?.createdAt ?? null,
           lastReconciliationDelta: lastFbaReconciliation?.change ?? null,
+        },
+        panEu: {
+          enabledIntent: panEuLive,
+          adapterWired: false, // adapter is the unconfigured stub today
+          // When intent is set but the adapter isn't wired, the cron
+          // silently skips. This flag lets the UI warn explicitly.
+          silentSkipRisk: panEuLive,
+        },
+        ebay: {
+          credentialsConfigured: ebayCredsPresent,
+          realApiEnabled: ebayRealApi,
+          // The dangerous combo: creds present but real-API opt-in
+          // not set. eBay sync attempts will fail-loud in production
+          // (T.1 — better than silent overselling).
+          silentDriftRisk: ebayCredsPresent && !ebayRealApi,
         },
         reservationSweep: getReservationSweepStatus(),
         outboundQueue: {

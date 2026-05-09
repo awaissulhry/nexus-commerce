@@ -98,6 +98,18 @@ type SyncStatus = {
     lastReconciliationAt: string | null
     lastReconciliationDelta: number | null
   }
+  /** T.2 — Pan-EU integration state (env intent vs adapter wiring). */
+  panEu?: {
+    enabledIntent: boolean
+    adapterWired: boolean
+    silentSkipRisk: boolean
+  }
+  /** T.1 — eBay credential / real-API opt-in state. */
+  ebay?: {
+    credentialsConfigured: boolean
+    realApiEnabled: boolean
+    silentDriftRisk: boolean
+  }
   reservationSweep: {
     scheduled: boolean
     lastRunAt: string | null
@@ -2638,9 +2650,15 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
 function SyncIndicator({ status }: { status: SyncStatus }) {
   const [open, setOpen] = useState(false)
 
-  // Health rollup. Failed > stale > healthy.
+  // Health rollup. Failed > silent-risk > stale > healthy.
   const failed = status.outboundQueue.failed > 0
   const fbaConfiguredButDisabled = status.amazonFbaCron.configured && !status.amazonFbaCron.enabled
+  // T.1/T.2 — silent-risk states: integration looks wired but a
+  // missing opt-in / unwired adapter means it'll either fail-loud
+  // (eBay) or silently no-op (Pan-EU). Either way: warn the operator.
+  const ebaySilentRisk = status.ebay?.silentDriftRisk === true
+  const panEuSilentRisk = status.panEu?.silentSkipRisk === true
+  const silentRisk = ebaySilentRisk || panEuSilentRisk
   const stalePendingMs = status.outboundQueue.oldestPendingAt
     ? Date.now() - new Date(status.outboundQueue.oldestPendingAt).getTime()
     : 0
@@ -2648,12 +2666,14 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
 
   const tone =
     failed ? 'bg-rose-50 text-rose-700 border-rose-200' :
+    silentRisk ? 'bg-amber-50 text-amber-700 border-amber-200' :
     stale ? 'bg-amber-50 text-amber-700 border-amber-200' :
     fbaConfiguredButDisabled ? 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700' :
     'bg-emerald-50 text-emerald-700 border-emerald-200'
 
   const label =
     failed ? `${status.outboundQueue.failed} failed` :
+    silentRisk ? (ebaySilentRisk && panEuSilentRisk ? 'eBay + Pan-EU' : ebaySilentRisk ? 'eBay drift risk' : 'Pan-EU not wired') :
     stale ? `${status.outboundQueue.pending} pending` :
     fbaConfiguredButDisabled ? 'FBA cron off' :
     'Synced'
@@ -2661,7 +2681,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
   // T.29 — sync status changes are operationally important; surface
   // via aria-live so screen-reader users hear "3 failed" the moment
   // it appears, not just on next focus pass.
-  const ariaState = failed ? 'failed' : stale ? 'stale' : fbaConfiguredButDisabled ? 'disabled' : 'healthy'
+  const ariaState = failed ? 'failed' : silentRisk ? 'config-warning' : stale ? 'stale' : fbaConfiguredButDisabled ? 'disabled' : 'healthy'
 
   return (
     <div className="relative">
@@ -2755,6 +2775,30 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
               </div>
             )}
           </div>
+          {status.ebay && (
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">eBay sync</div>
+              <div className="text-slate-700 dark:text-slate-300 mt-0.5">
+                {!status.ebay.credentialsConfigured
+                  ? <span className="text-slate-500 dark:text-slate-400">Not configured</span>
+                  : status.ebay.realApiEnabled
+                    ? <span className="text-emerald-700">Real API enabled</span>
+                    : <span className="text-amber-700">Drift risk — set NEXUS_EBAY_REAL_API to opt in</span>}
+              </div>
+            </div>
+          )}
+          {status.panEu && (
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-2">
+              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Pan-EU FBA</div>
+              <div className="text-slate-700 dark:text-slate-300 mt-0.5">
+                {status.panEu.adapterWired
+                  ? <span className="text-emerald-700">Adapter wired · daily 03:00 UTC</span>
+                  : status.panEu.enabledIntent
+                    ? <span className="text-amber-700">Intent set but adapter not wired</span>
+                    : <span className="text-slate-500 dark:text-slate-400">Not configured</span>}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
