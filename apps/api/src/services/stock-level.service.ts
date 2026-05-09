@@ -199,20 +199,29 @@ export async function consumeReservation(
     return r // idempotent
   }
 
-  // Use applyStockMovement for the quantity decrement so totalStock
-  // recomputes correctly. Then mark consumed + decrement reserved
-  // separately (since applyStockMovement doesn't touch reserved).
-  await applyStockMovement({
+  // L.13 — route through consumeWithFefo so lot-tracked products
+  // automatically pick FEFO lots at consume time. Reservations stay
+  // at the StockLevel grain (no lotId on reservation rows) — the
+  // FEFO pick happens at consume time so a recall opened between
+  // reserve and ship transparently re-routes consumption to a
+  // different lot. allowShortfall=true so partial lot coverage
+  // doesn't fail the consume; remainder logs as non-lot stock.
+  //
+  // For untracked products, the wrapper degrades to a single
+  // applyStockMovement — identical to the prior code path.
+  const { consumeWithFefo } = await import('./lot.service.js')
+  await consumeWithFefo({
     productId: r.stockLevel.productId,
     variationId: r.stockLevel.variationId ?? undefined,
     locationId: r.stockLevel.locationId,
-    change: -r.quantity,
+    quantity: r.quantity,
     reason: 'RESERVATION_CONSUMED',
     referenceType: 'StockReservation',
     referenceId: reservationId,
     orderId: r.orderId ?? undefined,
     reservationId,
     actor: opts.actor,
+    allowShortfall: true,
   })
 
   return await prisma.$transaction(async (tx) => {
