@@ -582,15 +582,23 @@ export default function SyncLogsHubClient({
           {/* ── API calls ─────────────────────────────────────────── */}
           {apiCalls && apiCalls.stats.total > 0 && (
             <section className="border border-slate-200 rounded-md bg-white">
-              <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+              <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
                   <Activity className="w-3 h-3" /> Outbound API calls (24h)
                 </h2>
-                <span className="text-xs text-slate-500">
-                  {apiCalls.stats.total.toLocaleString()} total ·{' '}
-                  {apiCalls.stats.failed.toLocaleString()} failed ·{' '}
-                  {(apiCalls.stats.errorRate * 100).toFixed(2)}% error rate
-                </span>
+                <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <span>
+                    {apiCalls.stats.total.toLocaleString()} total ·{' '}
+                    {apiCalls.stats.failed.toLocaleString()} failed ·{' '}
+                    {(apiCalls.stats.errorRate * 100).toFixed(2)}% error rate
+                  </span>
+                  <Link
+                    href="/sync-logs/api-calls"
+                    className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                  >
+                    Drill down <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
               </header>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-x divide-slate-100 border-b border-slate-100">
