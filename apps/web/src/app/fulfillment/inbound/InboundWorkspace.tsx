@@ -25,6 +25,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   emitInvalidation,
   useInvalidationChannel,
@@ -134,6 +135,7 @@ const STATUS_OPTIONS: Array<{ value: InboundStatus | 'OPEN'; label: string }> = 
 const OPEN_STATUSES = 'DRAFT,SUBMITTED,IN_TRANSIT,ARRIVED,RECEIVING,PARTIALLY_RECEIVED,RECEIVED'
 
 export default function InboundWorkspace() {
+  const { t } = useTranslations()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -277,22 +279,22 @@ export default function InboundWorkspace() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Inbound Shipments"
-        description="Receive from suppliers + manufacturing into the warehouse, or send to Amazon FBA end-to-end."
-        breadcrumbs={[{ label: 'Fulfillment', href: '/fulfillment' }, { label: 'Inbound' }]}
+        title={t('inbound.title')}
+        description={t('inbound.description')}
+        breadcrumbs={[{ label: t('nav.fulfillment'), href: '/fulfillment' }, { label: t('nav.inbound') }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button onClick={() => setBulkReceiveOpen(true)} className="h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5" title="Scan SKUs across any open shipment">
-              <ArrowDownToLine size={12} /> Bulk receive
+            <button onClick={() => setBulkReceiveOpen(true)} className="h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5" title={t('inbound.bulkReceive.tooltip')}>
+              <ArrowDownToLine size={12} /> {t('inbound.bulkReceive.button')}
             </button>
             <button onClick={() => setFbaWizardOpen(true)} className="h-8 px-3 text-base bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900 rounded hover:bg-orange-100 dark:hover:bg-orange-900/60 inline-flex items-center gap-1.5">
-              <Truck size={12} /> Send to Amazon FBA
+              <Truck size={12} /> {t('inbound.sendToFba')}
             </button>
             <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
-              <Plus size={12} /> New inbound
+              <Plus size={12} /> {t('inbound.newInbound')}
             </button>
             <button onClick={() => { fetchAll(); fetchKpis() }} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Refresh
+              <RefreshCw size={12} /> {t('common.refresh')}
             </button>
           </div>
         }
@@ -326,25 +328,22 @@ export default function InboundWorkspace() {
         <div className="space-y-3">
           {/* Type tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">Type</span>
-            {(['ALL', 'SUPPLIER', 'MANUFACTURING', 'TRANSFER', 'FBA'] as const).map((t) => {
-              const active = tab === t
+            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">{t('inbound.filter.type')}</span>
+            {(['ALL', 'SUPPLIER', 'MANUFACTURING', 'TRANSFER', 'FBA'] as const).map((typ) => {
+              const active = tab === typ
               return (
                 <button
-                  key={t}
-                  onClick={() => updateUrl({ type: t === 'ALL' ? undefined : t, page: undefined })}
+                  key={typ}
+                  onClick={() => updateUrl({ type: typ === 'ALL' ? undefined : typ, page: undefined })}
                   className={`h-7 px-3 text-sm rounded-full font-medium border ${
                     active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  {t === 'SUPPLIER' ? 'Suppliers' :
-                   t === 'MANUFACTURING' ? 'In-house' :
-                   t === 'FBA' ? 'To FBA' :
-                   t === 'TRANSFER' ? 'Transfers' : 'All'}
-                  {kpis?.typeCounts?.[t] != null && t !== 'ALL' && (
+                  {t(`inbound.filter.type.${typ}` as any)}
+                  {kpis?.typeCounts?.[typ] != null && typ !== 'ALL' && (
                     <span className={`ml-1.5 text-xs tabular-nums ${active ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>
-                      {kpis.typeCounts[t]}
+                      {kpis.typeCounts[typ]}
                     </span>
                   )}
                 </button>
@@ -357,19 +356,19 @@ export default function InboundWorkspace() {
             <div className="flex-1 min-w-[240px] max-w-md relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <Input
-                placeholder="Search reference, tracking, PO, SKU…"
+                placeholder={t('inbound.search.placeholder')}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-7"
               />
             </div>
-            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-1">Status</span>
+            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold ml-1">{t('inbound.filter.status')}</span>
             <select
               value={status}
               onChange={(e) => updateUrl({ status: e.target.value || undefined, page: undefined })}
               className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-medium"
             >
-              <option value="">All</option>
+              <option value="">{t('inbound.filter.all')}</option>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
@@ -380,10 +379,10 @@ export default function InboundWorkspace() {
                 delayed ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300'
                         : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
               }`}
-              title="Past expected arrival in non-terminal status"
+              title={t('inbound.filter.delayed.tooltip')}
             >
               <CalendarClock size={11} />
-              Delayed
+              {t('inbound.filter.delayed')}
               {kpis?.delayed != null && kpis.delayed > 0 && (
                 <span className={`ml-0.5 text-xs tabular-nums ${delayed ? 'text-rose-500' : 'text-slate-400 dark:text-slate-500'}`}>
                   {kpis.delayed}
@@ -395,11 +394,11 @@ export default function InboundWorkspace() {
                 onClick={() => updateUrl({ type: undefined, status: undefined, delayed: undefined, search: undefined, page: undefined })}
                 className="h-7 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
               >
-                <X size={12} /> Clear
+                <X size={12} /> {t('inbound.filter.clear')}
               </button>
             )}
             <div className="ml-auto text-base text-slate-500 dark:text-slate-400">
-              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{total}</span> shipments
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{total}</span> {t('inbound.shipmentsCount')}
             </div>
           </div>
         </div>
@@ -407,19 +406,19 @@ export default function InboundWorkspace() {
 
       {/* Table */}
       {error ? (
-        <Card><div className="text-md text-rose-700 dark:text-rose-300 py-8 text-center">Failed to load: {error}</div></Card>
+        <Card><div className="text-md text-rose-700 dark:text-rose-300 py-8 text-center">{t('inbound.failedToLoad', { error })}</div></Card>
       ) : loading && items.length === 0 ? (
-        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">Loading inbound…</div></Card>
+        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('inbound.loading')}</div></Card>
       ) : items.length === 0 ? (
         <EmptyState
           icon={PackageCheck}
-          title="No inbound shipments"
-          description={filterCount > 0 ? 'Try clearing filters.' :
-            tab === 'FBA' ? 'Use "Send to Amazon FBA" to plan a shipment.' :
-            'Receipts from suppliers or manufacturing show up here.'}
+          title={t('inbound.empty.title')}
+          description={filterCount > 0 ? t('inbound.empty.tryClearFilters') :
+            tab === 'FBA' ? t('inbound.empty.fbaHint') :
+            t('inbound.empty.warehouseHint')}
           action={filterCount > 0
-            ? { label: 'Clear filters', onClick: () => updateUrl({ type: undefined, status: undefined, delayed: undefined, search: undefined, page: undefined }) }
-            : { label: 'New inbound', onClick: () => setCreateOpen(true) }}
+            ? { label: t('inbound.empty.clearFiltersAction'), onClick: () => updateUrl({ type: undefined, status: undefined, delayed: undefined, search: undefined, page: undefined }) }
+            : { label: t('inbound.newInbound'), onClick: () => setCreateOpen(true) }}
         />
       ) : (
         <Card noPadding>
@@ -427,15 +426,15 @@ export default function InboundWorkspace() {
             <table className="w-full text-md">
               <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
-                  <SortableTh label="Type" sortKey="type" current={sortBy} dir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Status" sortKey="status" current={sortBy} dir={sortDir} onSort={toggleSort} />
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Source</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Carrier · tracking</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Items</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Progress</th>
-                  <SortableTh label="ETA" sortKey="expectedAt" current={sortBy} dir={sortDir} onSort={toggleSort} align="right" />
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Flags</th>
-                  <SortableTh label="Created" sortKey="createdAt" current={sortBy} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label={t('inbound.col.type')} sortKey="type" current={sortBy} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label={t('inbound.col.status')} sortKey="status" current={sortBy} dir={sortDir} onSort={toggleSort} />
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('inbound.col.source')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('inbound.col.carrierTracking')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('inbound.col.items')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('inbound.col.progress')}</th>
+                  <SortableTh label={t('inbound.col.eta')} sortKey="expectedAt" current={sortBy} dir={sortDir} onSort={toggleSort} align="right" />
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('inbound.col.flags')}</th>
+                  <SortableTh label={t('inbound.col.created')} sortKey="createdAt" current={sortBy} dir={sortDir} onSort={toggleSort} align="right" />
                   <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
@@ -538,18 +537,18 @@ export default function InboundWorkspace() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400">
-          <span>Page <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
+          <span>{t('inbound.pagination.page', { page, total: totalPages })}</span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
               disabled={page === 1}
               className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
-            >Previous</button>
+            >{t('inbound.pagination.previous')}</button>
             <button
               onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
               disabled={page >= totalPages}
               className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
-            >Next</button>
+            >{t('inbound.pagination.next')}</button>
           </div>
         </div>
       )}
