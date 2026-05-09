@@ -1,7 +1,7 @@
 /**
  * W4.10 — Repricing evaluator cron.
  *
- * Schedule: every 5 minutes (*/5 * * * *). Picks up every enabled
+ * Schedule: every 5 minutes (the cron 5-minute pattern). Picks up every enabled
  * RepricingRule, builds a market context from the latest
  * BuyBoxHistory observation + the matching ChannelListing's current
  * price, calls repricingEngineService.evaluate(), and logs a
