@@ -852,6 +852,7 @@ function DetailsTab({
   onSaved: () => void
 }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [basePrice, setBasePrice] = useState(
     product.basePrice != null ? String(Number(product.basePrice)) : '',
   )
@@ -909,7 +910,7 @@ function DetailsTab({
       {/* Quick-edit row */}
       <div className="grid grid-cols-3 gap-3">
         <QuickField
-          label="Base price"
+          label={t('products.drawer.detail.basePrice')}
           value={basePrice}
           onChange={setBasePrice}
           onCommit={(v) => save('basePrice', v)}
@@ -918,7 +919,7 @@ function DetailsTab({
           prefix="€"
         />
         <QuickField
-          label="Total stock"
+          label={t('products.drawer.detail.totalStock')}
           value={totalStock}
           onChange={setTotalStock}
           onCommit={(v) => save('totalStock', v)}
@@ -926,7 +927,7 @@ function DetailsTab({
           numeric
         />
         <QuickField
-          label="Low-stock threshold"
+          label={t('products.drawer.detail.lowStockThreshold')}
           value={threshold}
           onChange={setThreshold}
           onCommit={(v) => save('threshold', v)}
@@ -935,7 +936,7 @@ function DetailsTab({
         />
       </div>
       {savedAt && (
-        <div className="text-sm text-emerald-700">Saved.</div>
+        <div className="text-sm text-emerald-700">{t('products.drawer.detail.saved')}</div>
       )}
 
       {/* Master read-only summary */}
@@ -957,8 +958,8 @@ function DetailsTab({
       {/* Description */}
       {product.description && (
         <div>
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-            Description
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+            {t('products.drawer.detail.description')}
           </div>
           <p className="text-base text-slate-700 whitespace-pre-line">
             {product.description}
@@ -1081,6 +1082,7 @@ function ForecastCard({ productId }: { productId: string }) {
 }
 
 function DetailGrid({ product }: { product: ProductDetail }) {
+  const { t } = useTranslations()
   // P.14 — AI suggest state. When either brand or productType is
   // empty, the operator can hit "Suggest with AI" to call
   // /api/products/:id/ai/suggest-fields. Suggestions surface inline
@@ -1151,18 +1153,18 @@ function DetailGrid({ product }: { product: ProductDetail }) {
   }
 
   const fields: Array<{ label: string; value: React.ReactNode }> = [
-    { label: 'Brand', value: product.brand ?? <em className="text-slate-400">—</em> },
-    { label: 'Type', value: product.productType ?? <em className="text-slate-400">—</em> },
-    { label: 'Fulfillment', value: product.fulfillmentMethod ?? <em className="text-slate-400">—</em> },
+    { label: t('products.drawer.detail.field.brand'), value: product.brand ?? <em className="text-slate-400">—</em> },
+    { label: t('products.drawer.detail.field.type'), value: product.productType ?? <em className="text-slate-400">—</em> },
+    { label: t('products.drawer.detail.field.fulfillment'), value: product.fulfillmentMethod ?? <em className="text-slate-400">—</em> },
     {
-      label: 'Weight',
+      label: t('products.drawer.detail.field.weight'),
       value:
         product.weightValue != null
           ? `${product.weightValue} ${product.weightUnit ?? ''}`.trim()
           : (<em className="text-slate-400">—</em>),
     },
     {
-      label: 'Images',
+      label: t('products.drawer.detail.field.images'),
       value: (
         <span className="inline-flex items-center gap-1">
           <ImageIcon className="w-3 h-3 text-slate-400" />
@@ -1171,7 +1173,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
       ),
     },
     {
-      label: 'Listings',
+      label: t('products.drawer.detail.field.listings'),
       value: (
         <span className="inline-flex items-center gap-1">
           <Boxes className="w-3 h-3 text-slate-400" />
@@ -1208,23 +1210,29 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                 <Sparkles className="w-3 h-3" />
               )}
               {suggesting
-                ? 'Asking AI…'
-                : `Suggest ${needsBrand && needsType ? 'brand + type' : needsBrand ? 'brand' : 'type'} with AI`}
+                ? t('products.drawer.detail.ai.asking')
+                : t(
+                    needsBrand && needsType
+                      ? 'products.drawer.detail.ai.suggest.both'
+                      : needsBrand
+                        ? 'products.drawer.detail.ai.suggest.brand'
+                        : 'products.drawer.detail.ai.suggest.type',
+                  )}
             </button>
           )}
           {suggestion && (
             <>
               <div className="text-xs uppercase tracking-wider text-purple-700 font-semibold">
-                AI suggestion
+                {t('products.drawer.detail.ai.heading')}
               </div>
               {suggestion.brand && needsBrand && (
                 <div className="flex items-center justify-between gap-2 text-base">
                   <span className="text-slate-700">
-                    Brand: <span className="font-medium">{suggestion.brand}</span>
+                    {t('products.drawer.detail.ai.brandLabel')}<span className="font-medium">{suggestion.brand}</span>
                   </span>
                   {applied.has('brand') ? (
                     <span className="text-emerald-700 inline-flex items-center gap-0.5">
-                      <Check className="w-3 h-3" /> Applied
+                      <Check className="w-3 h-3" /> {t('products.drawer.detail.ai.applied')}
                     </span>
                   ) : (
                     <button
@@ -1233,7 +1241,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                       disabled={applying === 'brand'}
                       className="text-sm text-blue-700 hover:underline disabled:opacity-50"
                     >
-                      {applying === 'brand' ? 'Applying…' : 'Apply'}
+                      {applying === 'brand' ? t('products.drawer.detail.ai.applying') : t('products.drawer.detail.ai.apply')}
                     </button>
                   )}
                 </div>
@@ -1241,11 +1249,11 @@ function DetailGrid({ product }: { product: ProductDetail }) {
               {suggestion.productType && needsType && (
                 <div className="flex items-center justify-between gap-2 text-base">
                   <span className="text-slate-700">
-                    Type: <span className="font-medium">{suggestion.productType}</span>
+                    {t('products.drawer.detail.ai.typeLabel')}<span className="font-medium">{suggestion.productType}</span>
                   </span>
                   {applied.has('productType') ? (
                     <span className="text-emerald-700 inline-flex items-center gap-0.5">
-                      <Check className="w-3 h-3" /> Applied
+                      <Check className="w-3 h-3" /> {t('products.drawer.detail.ai.applied')}
                     </span>
                   ) : (
                     <button
@@ -1254,7 +1262,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                       disabled={applying === 'productType'}
                       className="text-sm text-blue-700 hover:underline disabled:opacity-50"
                     >
-                      {applying === 'productType' ? 'Applying…' : 'Apply'}
+                      {applying === 'productType' ? t('products.drawer.detail.ai.applying') : t('products.drawer.detail.ai.apply')}
                     </button>
                   )}
                 </div>
@@ -1272,7 +1280,7 @@ function DetailGrid({ product }: { product: ProductDetail }) {
                 }}
                 className="text-xs text-slate-500 hover:text-slate-700"
               >
-                Dismiss
+                {t('products.drawer.detail.ai.dismiss')}
               </button>
             </>
           )}
