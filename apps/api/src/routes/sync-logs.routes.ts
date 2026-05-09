@@ -209,6 +209,188 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * L.16.0 — alert rules + events (PagerDuty-tier).
+   *
+   * GET    /api/sync-logs/alerts/rules
+   * POST   /api/sync-logs/alerts/rules        Body: AlertRule (sans id)
+   * PATCH  /api/sync-logs/alerts/rules/:id    Body: partial AlertRule
+   * DELETE /api/sync-logs/alerts/rules/:id
+   *
+   * GET    /api/sync-logs/alerts/events?status=TRIGGERED|ALL&limit=50
+   * POST   /api/sync-logs/alerts/events/:id/acknowledge
+   *           Body: { notes?, acknowledgedBy? }
+   * POST   /api/sync-logs/alerts/events/:id/resolve
+   *           Body: { notes?, resolvedBy? }
+   */
+  fastify.get('/sync-logs/alerts/rules', async (_request, reply) => {
+    const rules = await prisma.alertRule.findMany({
+      orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
+    })
+    return reply.send({ items: rules })
+  })
+
+  fastify.post<{
+    Body: {
+      name: string
+      description?: string
+      metric: string
+      operator: string
+      threshold: number
+      windowMinutes?: number
+      channel?: string
+      notificationChannels: string[]
+      enabled?: boolean
+    }
+  }>('/sync-logs/alerts/rules', async (request, reply) => {
+    try {
+      const b = request.body
+      const validMetrics = [
+        'errorRate',
+        'latencyP95',
+        'queueDepth',
+        'activeErrorGroups',
+        'staleCrons',
+      ]
+      const validOps = ['gt', 'gte', 'lt', 'lte']
+      if (!validMetrics.includes(b.metric)) {
+        return reply.code(400).send({
+          error: `metric must be one of ${validMetrics.join(', ')}`,
+        })
+      }
+      if (!validOps.includes(b.operator)) {
+        return reply
+          .code(400)
+          .send({ error: `operator must be one of ${validOps.join(', ')}` })
+      }
+      if (
+        !Array.isArray(b.notificationChannels) ||
+        b.notificationChannels.length === 0
+      ) {
+        return reply.code(400).send({
+          error: 'notificationChannels must be a non-empty array',
+        })
+      }
+      const row = await prisma.alertRule.create({
+        data: {
+          name: b.name,
+          description: b.description,
+          metric: b.metric,
+          operator: b.operator,
+          threshold: b.threshold,
+          windowMinutes: b.windowMinutes ?? 15,
+          channel: b.channel,
+          notificationChannels: b.notificationChannels as never,
+          enabled: b.enabled ?? true,
+        },
+      })
+      return reply.code(201).send(row)
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[alerts/rules POST] failed')
+      return reply.code(500).send({ error: m })
+    }
+  })
+
+  fastify.patch<{
+    Params: { id: string }
+    Body: Partial<{
+      name: string
+      description: string
+      threshold: number
+      windowMinutes: number
+      channel: string | null
+      notificationChannels: string[]
+      enabled: boolean
+    }>
+  }>('/sync-logs/alerts/rules/:id', async (request, reply) => {
+    try {
+      const data: Record<string, unknown> = {}
+      const b = request.body
+      if (b.name !== undefined) data.name = b.name
+      if (b.description !== undefined) data.description = b.description
+      if (b.threshold !== undefined) data.threshold = b.threshold
+      if (b.windowMinutes !== undefined) data.windowMinutes = b.windowMinutes
+      if (b.channel !== undefined) data.channel = b.channel
+      if (b.notificationChannels !== undefined)
+        data.notificationChannels = b.notificationChannels
+      if (b.enabled !== undefined) data.enabled = b.enabled
+      const updated = await prisma.alertRule.update({
+        where: { id: request.params.id },
+        data,
+      })
+      return reply.send(updated)
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[alerts/rules PATCH] failed')
+      return reply.code(500).send({ error: m })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/sync-logs/alerts/rules/:id',
+    async (request, reply) => {
+      await prisma.alertRule.delete({ where: { id: request.params.id } })
+      return reply.code(204).send()
+    },
+  )
+
+  fastify.get<{ Querystring: { status?: string; limit?: string } }>(
+    '/sync-logs/alerts/events',
+    async (request, reply) => {
+      const { status, limit } = request.query
+      const take = Math.min(Math.max(Number(limit ?? 50), 1), 200)
+      const where: Prisma.AlertEventWhereInput = {}
+      if (status && status !== 'ALL') where.status = status
+      const items = await prisma.alertEvent.findMany({
+        where,
+        include: { rule: true },
+        orderBy: { triggeredAt: 'desc' },
+        take,
+      })
+      return reply.send({ items })
+    },
+  )
+
+  fastify.post<{
+    Params: { id: string }
+    Body: { notes?: string; acknowledgedBy?: string }
+  }>('/sync-logs/alerts/events/:id/acknowledge', async (request, reply) => {
+    const updated = await prisma.alertEvent.update({
+      where: { id: request.params.id },
+      data: {
+        status: 'ACKNOWLEDGED',
+        acknowledgedAt: new Date(),
+        acknowledgedBy: request.body.acknowledgedBy ?? null,
+        notes: request.body.notes ?? undefined,
+      },
+    })
+    return reply.send(updated)
+  })
+
+  fastify.post<{
+    Params: { id: string }
+    Body: { notes?: string; resolvedBy?: string }
+  }>('/sync-logs/alerts/events/:id/resolve', async (request, reply) => {
+    const updated = await prisma.alertEvent.update({
+      where: { id: request.params.id },
+      data: {
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        resolvedBy: request.body.resolvedBy ?? null,
+        notes: request.body.notes ?? undefined,
+      },
+    })
+    // Also flip the rule's lastFired so a manual resolve doesn't
+    // immediately re-fire on the next eval tick when the condition
+    // is still true (operator may have ack'd while triaging).
+    await prisma.alertRule.update({
+      where: { id: updated.ruleId },
+      data: { lastFired: false },
+    })
+    return reply.send(updated)
+  })
+
+  /**
    * L.15.0 — saved searches.
    *
    * GET    /api/sync-logs/saved-searches?surface=api-calls

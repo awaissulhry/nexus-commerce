@@ -5248,6 +5248,98 @@ model SyncLogSavedSearch {
   @@index([surface, name])
 }
 
+// ── L.16.0: Alert rule engine (PagerDuty-tier) ───────────────────
+//
+// Operators define conditions on the live metrics the hub already
+// computes — error rate, latency p95, queue depth, active error
+// groups, stuck-RUNNING crons — and the evaluator cron fires every
+// minute to compare against the threshold. When a rule fires,
+// AlertEvent gets a row with status=TRIGGERED that the operator
+// can ACK or RESOLVE from the UI.
+//
+// Notification channels are stored on the rule as a JSON array of
+// strings: 'log' (stdout only), 'email:x@y.com', 'slack:#channel',
+// 'webhook:https://...'. The dispatcher dispatches in order; failures
+// to one channel don't block the others.
+//
+// Re-firing semantics: if a rule's condition stays true across
+// multiple ticks the evaluator does NOT spam — there's at most one
+// TRIGGERED AlertEvent per rule at a time. The next evaluation
+// either keeps the same row (still triggering) or auto-resolves it
+// (condition cleared) and is free to fire again.
+
+model AlertRule {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  // What metric to watch + condition shape:
+  //   metric: 'errorRate' | 'latencyP95' | 'queueDepth' | 'activeErrorGroups' | 'staleCrons'
+  //   operator: 'gt' | 'gte' | 'lt' | 'lte'
+  //   threshold: number
+  //   windowMinutes: int (lookback window for the metric)
+  //   channel?: string (optional — scope errorRate/latencyP95 to one channel)
+  metric        String
+  operator      String
+  threshold     Float
+  windowMinutes Int    @default(15)
+  channel       String?
+
+  // Notification channels. Array of strings — see schema-level note.
+  notificationChannels Json
+
+  enabled Boolean @default(true)
+
+  // The most-recent evaluation result so the UI can show "fired 12s ago"
+  // without scanning AlertEvent.
+  lastEvaluatedAt DateTime?
+  lastValue       Float?
+  lastFired       Boolean   @default(false)
+
+  events AlertEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([metric])
+}
+
+model AlertEvent {
+  id String @id @default(cuid())
+
+  ruleId String
+  rule   AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  // The captured value that crossed the threshold.
+  value Float
+
+  // 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+  status      String    @default("TRIGGERED")
+  triggeredAt DateTime  @default(now())
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt    DateTime?
+  resolvedBy    String?
+
+  // Free-form notes operators add when ack-ing (e.g. "investigating
+  // — Amazon EU outage").
+  notes String?
+
+  // What channels were notified at trigger time + their dispatch
+  // status. Shape:
+  //   [{ channel: 'log', ok: true }, { channel: 'email:ops@x', ok: false, error: '...' }]
+  notifications Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ruleId, status])
+  @@index([status, triggeredAt])
+  @@index([triggeredAt])
+}
+
 // ── R.17: Substitution-aware demand ───────────────────────────────
 // One-way link: when `primary` is out of stock, customers buy
 // `substitute`. substitutionFraction (0-1) is what portion of
