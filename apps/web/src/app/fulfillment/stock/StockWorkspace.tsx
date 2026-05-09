@@ -2354,6 +2354,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
         <input
           type="number" value={change} onChange={(e) => setChange(e.target.value)}
           placeholder="±n" autoFocus
+          aria-label={t('stock.bulkAdjust.changeLabel')}
           className="h-11 sm:h-8 w-24 px-2 text-md border border-slate-200 dark:border-slate-700 rounded font-mono tabular-nums"
         />
         <select
@@ -2369,6 +2370,7 @@ function AdjustPanel({ stockLevelId, locationCode, onCancel, onDone }: { stockLe
         <input
           type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder={t('stock.adjust.notesPlaceholder')}
+          aria-label={t('stock.bulkAdjust.notesLabel')}
           className="flex-1 min-w-[120px] h-11 sm:h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
         />
         <button onClick={submit} disabled={submitting} className="h-11 sm:h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50">{t('stock.drawer.adjustApply')}</button>
