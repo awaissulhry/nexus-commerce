@@ -72,6 +72,7 @@ import { AutomationRulesCard } from './_shared/AutomationRulesCard'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
 import { ScenariosCard } from './_shared/ScenariosCard'
 import { SlowMoversCard } from './_shared/SlowMoversCard'
+import { PanEuDistributionCard } from './_shared/PanEuDistributionCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -798,6 +799,11 @@ export default function ReplenishmentWorkspace() {
           no DORMANT inventory exists; otherwise lists top 50 by
           capital tied up with bucket switcher. */}
       <SlowMoversCard />
+
+      {/* W7.2 — Pan-EU FBA distribution recommender. Hides itself
+          when inventory is balanced; otherwise lists surplus →
+          shortage transfer suggestions across IT/DE/FR/ES/NL. */}
+      <PanEuDistributionCard />
 
       {/* W3.2 — command-center KPI strip. Five tiles answering
           "what should I do today?" — open POs / awaiting review /
