@@ -53,6 +53,10 @@ interface Draft {
   createdAt: string
   updatedAt: string
   isStale: boolean
+  /** DR-S.2 — 0..100 product-data completeness, separate from wizard
+   *  step progress. Same 7 factors used by the audit script. */
+  completenessPct: number
+  missingFactors: string[]
 }
 
 interface DraftsResponse {
@@ -129,6 +133,36 @@ function formatRelative(iso: string): string {
 // theoretically share the same uuid (separate tables) so we prefix.
 function selectionKey(d: Draft): string {
   return `${d.kind}:${d.id}`
+}
+
+// DR-S.2 — product-data completeness badge. Colour-codes by bucket
+// so the operator can scan a list and immediately see which drafts
+// are nearly-publishable vs. stub-only. Tooltip lists the missing
+// factors so the operator knows exactly what's holding it back.
+function CompletenessBadge({ pct }: { pct: number }) {
+  let toneClasses: string
+  if (pct >= 100)
+    toneClasses =
+      'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+  else if (pct >= 75)
+    toneClasses =
+      'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+  else if (pct >= 50)
+    toneClasses =
+      'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+  else
+    toneClasses =
+      'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center h-4 px-1.5 rounded text-xs font-semibold tabular-nums self-start',
+        toneClasses,
+      )}
+    >
+      {pct}%
+    </span>
+  )
 }
 
 // DR-S.1 — KPI tile for the drafts summary strip. Compact card,
@@ -301,26 +335,32 @@ const DraftRow = memo(function DraftRow({
       </td>
       <td className="px-4 py-2.5">
         {d.kind === 'wizard' && typeof d.currentStep === 'number' ? (
-          <div className="flex flex-col gap-1 min-w-[120px]">
+          <div className="flex flex-col gap-1 min-w-[140px]">
             <div className="flex items-center gap-1.5">
               <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold tabular-nums bg-blue-50 text-blue-700">
                 {d.currentStep}/{totalSteps}
               </span>
-              <span className="text-slate-600 text-sm truncate">
+              <span className="text-slate-600 dark:text-slate-300 text-sm truncate">
                 {STEP_LABELS[d.currentStep] ?? `Step ${d.currentStep}`}
               </span>
             </div>
-            <div className="h-1 w-full bg-slate-100 rounded overflow-hidden">
+            <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
               <div
                 className="h-full bg-blue-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
+            {/* DR-S.2 — product-data completeness, separate signal
+                from wizard step progress. */}
+            <CompletenessBadge pct={d.completenessPct} />
           </div>
         ) : (
-          <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold uppercase tracking-wide bg-slate-100 text-slate-600">
-            Product · DRAFT
-          </span>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold uppercase tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 self-start">
+              Product · DRAFT
+            </span>
+            <CompletenessBadge pct={d.completenessPct} />
+          </div>
         )}
       </td>
       <td className="px-4 py-2.5">

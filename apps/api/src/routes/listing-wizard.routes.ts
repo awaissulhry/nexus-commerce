@@ -485,12 +485,22 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               channels: true,
               createdAt: true,
               updatedAt: true,
+              // DR-S.2 — Product fields needed for completeness scoring,
+              // pulled inline so we don't need a second round-trip per
+              // wizard row.
               product: {
                 select: {
                   id: true,
                   sku: true,
                   name: true,
                   isParent: true,
+                  basePrice: true,
+                  brand: true,
+                  productType: true,
+                  description: true,
+                  gtin: true,
+                  upc: true,
+                  ean: true,
                 },
               },
             },
@@ -509,6 +519,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         createdAt: Date
         updatedAt: Date
         isStale: boolean
+        // DR-S.2 — 0..100 product-data completeness, separate from
+        // wizard step progress (currentStep / 9). 7 factors weighted
+        // equally; see scoreCompleteness().
+        completenessPct: number
+        missingFactors: string[]
       }
       const wizardDrafts: DraftRow[] = wizardRows.map((r) => ({
         kind: 'wizard',
@@ -522,6 +537,9 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
         isStale: r.updatedAt < staleCutoff,
+        // Filled in below after image-presence batch fetch.
+        completenessPct: 0,
+        missingFactors: [],
       }))
 
       // Product DRAFT rows. Excludes products that already have a
@@ -530,6 +548,20 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // wizard). Wizard rows take precedence since they carry richer
       // step state.
       let productDrafts: DraftRow[] = []
+      // DR-S.2 — keep raw productRows in scope so the scoring loop
+      // below can read price/brand/etc. Mapping to DraftRow drops
+      // those fields on purpose (wire format stays lean).
+      let productRowsForScoring: Array<{
+        id: string
+        name: string | null
+        basePrice: any
+        brand: string | null
+        productType: string | null
+        description: string | null
+        gtin: string | null
+        upc: string | null
+        ean: string | null
+      }> = []
       if (includeProducts) {
         const wizardProductIds = new Set(wizardRows.map((r) => r.productId))
         const productWhere: any = {
@@ -554,8 +586,27 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             isParent: true,
             createdAt: true,
             updatedAt: true,
+            // DR-S.2 — same scoring fields as the wizard branch.
+            basePrice: true,
+            brand: true,
+            productType: true,
+            description: true,
+            gtin: true,
+            upc: true,
+            ean: true,
           },
         })
+        productRowsForScoring = productRows.map((p) => ({
+          id: p.id,
+          name: p.name,
+          basePrice: p.basePrice,
+          brand: p.brand,
+          productType: p.productType,
+          description: p.description,
+          gtin: p.gtin,
+          upc: p.upc,
+          ean: p.ean,
+        }))
         productDrafts = productRows.map<DraftRow>((p) => ({
           kind: 'product',
           // For product DRAFTs we use the productId as the row id so
@@ -570,7 +621,99 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
           isStale: p.updatedAt < staleCutoff,
+          completenessPct: 0,
+          missingFactors: [],
         }))
+      }
+
+      // DR-S.2 — completeness scoring. Single batch fetch tells us
+      // which productIds have ≥1 image; pair that with the inlined
+      // product fields and compute a 7-factor 0..100 score per row.
+      // Same factors used by /products/drafts/summary's distribution
+      // bucket and the audit script — kept in one place here.
+      const allProductIds = Array.from(
+        new Set([
+          ...wizardRows.map((r) => r.productId),
+          ...(includeProducts ? productDrafts.map((p) => p.productId) : []),
+        ]),
+      )
+      const productImageCounts =
+        allProductIds.length === 0
+          ? new Map<string, number>()
+          : new Map(
+              (
+                await prisma.productImage.groupBy({
+                  by: ['productId'],
+                  where: { productId: { in: allProductIds } },
+                  _count: { _all: true },
+                })
+              ).map((row) => [row.productId, row._count._all] as const),
+            )
+
+      type ProductLike = {
+        name: string | null
+        basePrice: any
+        brand: string | null
+        productType: string | null
+        description: string | null
+        gtin: string | null
+        upc: string | null
+        ean: string | null
+      }
+      function scoreCompleteness(
+        p: ProductLike | null | undefined,
+        productId: string,
+      ): { pct: number; missing: string[] } {
+        if (!p) return { pct: 0, missing: ['name', 'price', 'brand', 'type', 'description', 'gtin', 'image'] }
+        const missing: string[] = []
+        const checks: Array<[string, boolean]> = [
+          [
+            'name',
+            !!p.name &&
+              !p.name.toUpperCase().startsWith('NEW-') &&
+              p.name !== 'Untitled product',
+          ],
+          [
+            'price',
+            p.basePrice !== null &&
+              p.basePrice !== undefined &&
+              Number(p.basePrice) > 0,
+          ],
+          ['brand', !!p.brand],
+          ['type', !!p.productType],
+          ['description', !!p.description && p.description.length >= 50],
+          ['gtin', !!(p.gtin || p.upc || p.ean)],
+          ['image', (productImageCounts.get(productId) ?? 0) > 0],
+        ]
+        let passed = 0
+        for (const [key, ok] of checks) {
+          if (ok) passed++
+          else missing.push(key)
+        }
+        return { pct: Math.round((passed / checks.length) * 100), missing }
+      }
+
+      const wizardProductByWizardId = new Map(
+        wizardRows.map((r) => [r.id, r.product] as const),
+      )
+      for (const w of wizardDrafts) {
+        const score = scoreCompleteness(
+          wizardProductByWizardId.get(w.id) ?? null,
+          w.productId,
+        )
+        w.completenessPct = score.pct
+        w.missingFactors = score.missing
+      }
+      const productScoringById = new Map(
+        productRowsForScoring.map((p) => [p.id, p] as const),
+      )
+      for (const p of productDrafts) {
+        const score = scoreCompleteness(
+          productScoringById.get(p.productId) ?? null,
+          p.productId,
+        )
+        p.completenessPct = score.pct
+        p.missingFactors = score.missing
       }
 
       // Merge + sort + paginate. For wizard-only the rows already
@@ -590,7 +733,12 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           case 'name':
             return compareName(a, b)
           case 'completion':
+            // DR-S.2 — real product-data completeness as primary, then
+            // wizard step (so a 100%-product wizard at step 9 beats a
+            // 100%-product wizard at step 4), then recency. Was step
+            // only — gave operators no signal on data quality.
             return (
+              b.completenessPct - a.completenessPct ||
               (b.currentStep ?? 0) - (a.currentStep ?? 0) ||
               b.updatedAt.getTime() - a.updatedAt.getTime()
             )
