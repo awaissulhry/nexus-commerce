@@ -311,6 +311,70 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     return { results }
   })
 
+  // POST /api/products/translation-coverage/bulk { productIds: [...] }
+  //
+  // W5.6 — Bulk per-locale translation coverage for the
+  // Translations lens. Returns, per productId, a map of language →
+  // { hasContent, fieldCount } where:
+  //   hasContent = at least one ProductTranslation field is non-empty
+  //   fieldCount = number of fields with content (0..4: name/desc/
+  //                bullets/keywords)
+  //
+  // Cap 200 ids per call. Single Prisma query batched across all
+  // productIds — much cheaper than per-product evaluators.
+  fastify.post(
+    '/products/translation-coverage/bulk',
+    async (request, reply) => {
+      const body = request.body as { productIds?: string[] }
+      if (!Array.isArray(body.productIds) || body.productIds.length === 0)
+        return reply
+          .code(400)
+          .send({ error: 'productIds must be a non-empty array' })
+      if (body.productIds.length > 200)
+        return reply
+          .code(400)
+          .send({ error: 'productIds cannot exceed 200 per call' })
+
+      const rows = await prisma.productTranslation.findMany({
+        where: { productId: { in: body.productIds } },
+        select: {
+          productId: true,
+          language: true,
+          name: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          reviewedAt: true,
+        },
+      })
+
+      // Group by productId → language → coverage shape.
+      const results: Record<
+        string,
+        Record<
+          string,
+          { hasContent: boolean; fieldCount: number; reviewed: boolean }
+        >
+      > = {}
+      for (const id of body.productIds) results[id] = {}
+      for (const r of rows) {
+        let count = 0
+        if (r.name && r.name.trim()) count++
+        if (r.description && r.description.trim()) count++
+        if (Array.isArray(r.bulletPoints) && r.bulletPoints.length > 0) count++
+        if (Array.isArray(r.keywords) && r.keywords.length > 0) count++
+        if (results[r.productId]) {
+          results[r.productId][r.language] = {
+            hasContent: count > 0,
+            fieldCount: count,
+            reviewed: !!r.reviewedAt,
+          }
+        }
+      }
+      return { results }
+    },
+  )
+
   // POST /api/products/family-completeness/bulk { productIds: [...] }
   //
   // W5.1 — Bulk family-completeness for the /products grid column.

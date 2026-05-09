@@ -17,6 +17,7 @@ import {
   AlignJustify, Menu as MenuIcon, Equal,
   Trash2,
   GitBranch,
+  Globe,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -44,6 +45,7 @@ import { CoverageLens } from './_lenses/CoverageLens'
 import { PricingLens } from './_lenses/PricingLens'
 import { WorkflowLens } from './_lenses/WorkflowLens'
 import { ReadinessLens } from './_lenses/ReadinessLens'
+import { TranslationsLens } from './_lenses/TranslationsLens'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { FilterBar } from './_components/FilterBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
@@ -78,7 +80,7 @@ const BulkImageUploadModal = dynamic(
 import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness'
+type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness' | 'translations'
 
 // ProductRow + Tag types moved to ./_types.ts (P.1f) so GridView and
 // the workspace share a canonical shape.
@@ -1320,6 +1322,7 @@ export default function ProductsWorkspace() {
       {lens === 'drafts' && <DraftsLens />}
       {lens === 'workflow' && <WorkflowLens />}
       {lens === 'readiness' && <ReadinessLens products={products} loading={loading} />}
+      {lens === 'translations' && <TranslationsLens products={products} loading={loading} />}
 
       {tagEditorProductId && (
         <TagEditor
@@ -1390,6 +1393,9 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     // channel score + missing-fields tooltip. Reuses the FilterBar
     // products[] so filters compose cleanly.
     { key: 'readiness', label: 'Readiness', icon: AlertTriangle },
+    // W5.6 — Akeneo per-locale completeness. Products × supported
+    // locales matrix; cell = N/4 fields filled in that language.
+    { key: 'translations', label: 'Translations', icon: Globe },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
