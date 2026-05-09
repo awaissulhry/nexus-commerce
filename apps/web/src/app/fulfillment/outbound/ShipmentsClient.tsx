@@ -344,18 +344,82 @@ export default function ShipmentsClient() {
     fetchShipments()
   }
 
+  // F1.9 — server-side batch instead of N round-trips. Single audit
+  // batch via writeMany on the API side; client just reports the
+  // {shipped, skipped} pair. Mixed-status selections degrade
+  // gracefully (skipped count surfaces in the toast).
   const bulkMarkShipped = async () => {
     if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
     const eligible = items.filter((s) => selected.has(s.id) && s.status === 'LABEL_PRINTED')
     if (eligible.length === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
-    const { ok } = await runBulk(eligible, async (s) => {
-      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/${s.id}/mark-shipped`, { method: 'POST' })
-      return res.ok
-    })
-    reportBulk('shipped', ok, eligible.length)
-    if (ok > 0) emitInvalidation({ type: 'order.shipped', meta: { count: ok } })
-    setSelected(new Set())
-    fetchShipments()
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-mark-shipped`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentIds: eligible.map((s) => s.id) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error ?? t('common.error'))
+        return
+      }
+      reportBulk('shipped', data.shipped ?? 0, eligible.length)
+      if ((data.shipped ?? 0) > 0) {
+        emitInvalidation({ type: 'order.shipped', meta: { count: data.shipped } })
+      }
+      setSelected(new Set())
+      fetchShipments()
+    } catch (e: any) {
+      toast.error(e?.message ?? t('common.error'))
+    }
+  }
+
+  // F1.9 — bulk void-label. Carrier API is per-parcel so the server
+  // serialises the calls; the client gets a {voided, failed, skipped,
+  // results[]} payload. Cap is 50 (mirrors backend) — chunking
+  // beyond that would block the worker too long.
+  const bulkVoidLabel = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    const eligible = items.filter((s) => selected.has(s.id) && s.status === 'LABEL_PRINTED')
+    if (eligible.length === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    if (eligible.length > 50) {
+      toast.error(t('outbound.shipments.toast.bulkVoidCap', { cap: 50 }))
+      return
+    }
+    if (!(await askConfirm({
+      title: t('outbound.shipments.bulkVoid.title', { n: eligible.length }),
+      description: t('outbound.shipments.bulkVoid.description'),
+      confirmLabel: t('outbound.shipments.bulkVoid.confirm'),
+      tone: 'warning',
+    }))) return
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-void-label`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentIds: eligible.map((s) => s.id) }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error ?? t('common.error'))
+        return
+      }
+      const voided = data.voided ?? 0
+      const failed = data.failed ?? 0
+      if (failed === 0) {
+        toast.success(t('outbound.shipments.toast.bulkVoidAll', { n: voided }))
+      } else if (voided === 0) {
+        toast.error(t('outbound.shipments.toast.bulkVoidNone', { n: failed }))
+      } else {
+        toast.warning(t('outbound.shipments.toast.bulkVoidPartial', { ok: voided, failed }))
+      }
+      if (voided > 0) {
+        emitInvalidation({ type: 'shipment.updated', meta: { count: voided } })
+      }
+      setSelected(new Set())
+      fetchShipments()
+    } catch (e: any) {
+      toast.error(e?.message ?? t('common.error'))
+    }
   }
 
   const bulkExportCsv = () => {
@@ -458,6 +522,12 @@ export default function ShipmentsClient() {
               </button>
               <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
                 <Send size={12} /> {t('outbound.shipments.bulk.markShipped')}
+              </button>
+              {/* F1.9 — bulk void-label. Destructive (cancels carrier
+                  parcel + resets the shipment to PACKED), so confirm
+                  modal lives in bulkVoidLabel(). */}
+              <button onClick={bulkVoidLabel} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 inline-flex items-center gap-1.5">
+                <X size={12} /> {t('outbound.shipments.bulk.voidLabel')}
               </button>
               <button onClick={bulkHold} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1.5">
                 <Pause size={12} /> {t('outbound.shipments.bulk.hold')}
