@@ -2150,5 +2150,6 @@
   "pim.dam.useBadge.other": "{count} usi",
   "pim.dam.delete.aria": "Elimina {label}",
   "pim.dam.delete.title": "Eliminare l'asset \"{label}\"?",
-  "pim.dam.delete.confirmLabel": "Elimina"
+  "pim.dam.delete.confirmLabel": "Elimina",
+  "a11y.skipToContent": "Vai al contenuto principale"
 }
