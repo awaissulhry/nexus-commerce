@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 // ── Types (mirror PO API response) ─────────────────────────────────
@@ -90,16 +91,18 @@ type StatusFilter =
   | 'RECEIVED'
   | 'CANCELLED'
 
-const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'DRAFT', label: 'Draft' },
-  { key: 'REVIEW', label: 'In Review' },
-  { key: 'APPROVED', label: 'Approved' },
-  { key: 'SUBMITTED', label: 'Submitted' },
-  { key: 'ACKNOWLEDGED', label: 'Acknowledged' },
-  { key: 'RECEIVED', label: 'Received' },
-  { key: 'CANCELLED', label: 'Cancelled' },
+// labelKey → t() lookup at render. Keeps the mapping table flat
+// while still locale-aware.
+const STATUS_FILTERS: Array<{ key: StatusFilter; labelKey: string }> = [
+  { key: 'all', labelKey: 'po.filter.all' },
+  { key: 'active', labelKey: 'po.filter.active' },
+  { key: 'DRAFT', labelKey: 'po.status.DRAFT' },
+  { key: 'REVIEW', labelKey: 'po.status.REVIEW' },
+  { key: 'APPROVED', labelKey: 'po.status.APPROVED' },
+  { key: 'SUBMITTED', labelKey: 'po.status.SUBMITTED' },
+  { key: 'ACKNOWLEDGED', labelKey: 'po.status.ACKNOWLEDGED' },
+  { key: 'RECEIVED', labelKey: 'po.status.RECEIVED' },
+  { key: 'CANCELLED', labelKey: 'po.status.CANCELLED' },
 ]
 
 // "active" means anything pre-terminal that needs operator attention.
@@ -138,22 +141,22 @@ function StatusIcon({ status, className }: { status: string; className?: string 
   const cls = cn('w-3.5 h-3.5', className)
   switch (status) {
     case 'DRAFT':
-      return <FileText className={cn(cls, 'text-slate-500')} />
+      return <FileText className={cn(cls, 'text-slate-500 dark:text-slate-400')} />
     case 'REVIEW':
-      return <Clock className={cn(cls, 'text-amber-600')} />
+      return <Clock className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
     case 'APPROVED':
-      return <FileCheck2 className={cn(cls, 'text-blue-600')} />
+      return <FileCheck2 className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
     case 'SUBMITTED':
-      return <Send className={cn(cls, 'text-blue-600')} />
+      return <Send className={cn(cls, 'text-blue-600 dark:text-blue-400')} />
     case 'ACKNOWLEDGED':
     case 'CONFIRMED':
-      return <CheckCircle2 className={cn(cls, 'text-green-600')} />
+      return <CheckCircle2 className={cn(cls, 'text-green-600 dark:text-green-400')} />
     case 'PARTIAL':
-      return <PackageCheck className={cn(cls, 'text-amber-600')} />
+      return <PackageCheck className={cn(cls, 'text-amber-600 dark:text-amber-400')} />
     case 'RECEIVED':
-      return <PackageCheck className={cn(cls, 'text-green-600')} />
+      return <PackageCheck className={cn(cls, 'text-green-600 dark:text-green-400')} />
     case 'CANCELLED':
-      return <Ban className={cn(cls, 'text-red-600')} />
+      return <Ban className={cn(cls, 'text-red-600 dark:text-red-400')} />
     default:
       return <Clock className={cls} />
   }
@@ -197,7 +200,7 @@ function availableTransitions(
   status: string,
 ): Array<{
   key: 'submit-for-review' | 'approve' | 'send' | 'acknowledge' | 'cancel'
-  label: string
+  labelKey: string
   variant: 'primary' | 'secondary' | 'danger'
   icon: typeof Send
   destructive?: boolean
@@ -205,22 +208,22 @@ function availableTransitions(
   switch (status) {
     case 'DRAFT':
       return [
-        { key: 'submit-for-review', label: 'Submit for review', variant: 'primary', icon: ChevronRight },
-        { key: 'cancel', label: 'Cancel', variant: 'danger', icon: Ban, destructive: true },
+        { key: 'submit-for-review', labelKey: 'po.transition.submitForReview', variant: 'primary', icon: ChevronRight },
+        { key: 'cancel', labelKey: 'po.transition.cancel', variant: 'danger', icon: Ban, destructive: true },
       ]
     case 'REVIEW':
       return [
-        { key: 'approve', label: 'Approve', variant: 'primary', icon: FileCheck2 },
-        { key: 'cancel', label: 'Cancel', variant: 'danger', icon: Ban, destructive: true },
+        { key: 'approve', labelKey: 'po.transition.approve', variant: 'primary', icon: FileCheck2 },
+        { key: 'cancel', labelKey: 'po.transition.cancel', variant: 'danger', icon: Ban, destructive: true },
       ]
     case 'APPROVED':
       return [
-        { key: 'send', label: 'Send to supplier', variant: 'primary', icon: Send },
-        { key: 'cancel', label: 'Cancel', variant: 'danger', icon: Ban, destructive: true },
+        { key: 'send', labelKey: 'po.transition.send', variant: 'primary', icon: Send },
+        { key: 'cancel', labelKey: 'po.transition.cancel', variant: 'danger', icon: Ban, destructive: true },
       ]
     case 'SUBMITTED':
       return [
-        { key: 'acknowledge', label: 'Mark acknowledged', variant: 'primary', icon: CheckCircle2 },
+        { key: 'acknowledge', labelKey: 'po.transition.acknowledge', variant: 'primary', icon: CheckCircle2 },
       ]
     default:
       return []
@@ -230,6 +233,7 @@ function availableTransitions(
 // ── Audit trail panel ──────────────────────────────────────────────
 
 function AuditTrailPanel({ poId }: { poId: string }) {
+  const { t } = useTranslations()
   const [trail, setTrail] = useState<AuditEntry[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -261,20 +265,20 @@ function AuditTrailPanel({ poId }: { poId: string }) {
 
   if (loading) {
     return (
-      <div className="text-base text-slate-500 inline-flex items-center gap-1.5">
+      <div className="text-base text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
         <Loader2 className="w-3 h-3 animate-spin" />
-        Loading audit trail…
+        {t('po.audit.loading')}
       </div>
     )
   }
   if (error) {
     return (
-      <div className="text-base text-red-700">Audit unavailable: {error}</div>
+      <div className="text-base text-red-700 dark:text-red-300">{t('po.audit.unavailable', { error })}</div>
     )
   }
   if (!trail || trail.length === 0) {
     return (
-      <div className="text-base text-slate-500">No transitions recorded.</div>
+      <div className="text-base text-slate-500 dark:text-slate-400">{t('po.audit.empty')}</div>
     )
   }
 
@@ -289,14 +293,14 @@ function AuditTrailPanel({ poId }: { poId: string }) {
           <Badge variant={statusVariant(entry.status)} size="sm">
             {entry.status.replace(/_/g, ' ')}
           </Badge>
-          <span className="text-slate-500" title={new Date(entry.at).toLocaleString()}>
+          <span className="text-slate-500 dark:text-slate-400" title={new Date(entry.at).toLocaleString()}>
             {relativeTime(entry.at)}
           </span>
           {entry.byUserId && (
-            <span className="text-slate-500">· {entry.byUserId}</span>
+            <span className="text-slate-500 dark:text-slate-400">· {entry.byUserId}</span>
           )}
           {entry.reason && (
-            <span className="text-slate-500">· {entry.reason}</span>
+            <span className="text-slate-500 dark:text-slate-400">· {entry.reason}</span>
           )}
         </div>
       ))}
@@ -313,6 +317,7 @@ function PoCard({
   po: PORow
   onTransition: (poId: string, transition: string, reason?: string) => Promise<void>
 }) {
+  const { t } = useTranslations()
   const [expanded, setExpanded] = useState(false)
   const [transitioning, setTransitioning] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState('')
@@ -341,42 +346,42 @@ function PoCard({
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left"
+        className="w-full px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
       >
         <div className="flex-shrink-0">
           {expanded ? (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           )}
         </div>
         <StatusIcon status={po.status} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="font-mono font-medium text-slate-900 text-md">
+            <h3 className="font-mono font-medium text-slate-900 dark:text-slate-100 text-md">
               {po.poNumber}
             </h3>
             <Badge variant={statusVariant(po.status)} size="sm">
               {po.status.replace(/_/g, ' ')}
             </Badge>
             {po.supplier ? (
-              <span className="text-base text-slate-700">
+              <span className="text-base text-slate-700 dark:text-slate-300">
                 {po.supplier.name}
               </span>
             ) : (
-              <span className="text-base text-amber-700">(no supplier)</span>
+              <span className="text-base text-amber-700 dark:text-amber-300">{t('po.noSupplier')}</span>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 flex-wrap">
+          <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
             <span className="font-medium tabular-nums">
               {formatCurrency(po.totalCents, po.currencyCode)}
             </span>
             <span>
-              {itemCount} {itemCount === 1 ? 'line' : 'lines'} · {totalUnits} units
+              {t(itemCount === 1 ? 'po.summary.line' : 'po.summary.lines', { count: itemCount, units: totalUnits })}
             </span>
             <span title={new Date(po.createdAt).toLocaleString()}>
               · {relativeTime(po.createdAt)}
@@ -387,55 +392,55 @@ function PoCard({
       </button>
 
       {expanded && (
-        <div className="bg-slate-50 border-t border-slate-200 px-5 py-4 space-y-4">
+        <div className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-5 py-4 space-y-4">
           {/* Action buttons */}
           {transitions.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
-              {transitions.map((t) => {
-                const requireReason = t.key === 'cancel'
-                const Icon = t.icon
-                if (showCancelConfirm && t.key === 'cancel') {
+              {transitions.map((tr) => {
+                const requireReason = tr.key === 'cancel'
+                const Icon = tr.icon
+                if (showCancelConfirm && tr.key === 'cancel') {
                   return null
                 }
                 return (
                   <button
-                    key={t.key}
+                    key={tr.key}
                     type="button"
-                    onClick={() => handleTransition(t.key, requireReason)}
+                    onClick={() => handleTransition(tr.key, requireReason)}
                     disabled={transitioning !== null}
                     className={cn(
                       'inline-flex items-center gap-1.5 px-3 py-1.5 text-base font-medium rounded border transition-colors disabled:opacity-50',
-                      t.variant === 'primary' &&
-                        'bg-slate-900 text-white border-slate-900 hover:bg-slate-800',
-                      t.variant === 'secondary' &&
-                        'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
-                      t.variant === 'danger' &&
-                        'bg-white text-red-700 border-red-200 hover:bg-red-50',
+                      tr.variant === 'primary' &&
+                        'bg-slate-900 dark:bg-slate-100 text-white border-slate-900 hover:bg-slate-800',
+                      tr.variant === 'secondary' &&
+                        'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
+                      tr.variant === 'danger' &&
+                        'bg-white dark:bg-slate-900 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40',
                     )}
                   >
                     <Icon
                       className={cn(
                         'w-3.5 h-3.5',
-                        transitioning === t.key && 'animate-spin',
+                        transitioning === tr.key && 'animate-spin',
                       )}
                     />
-                    {transitioning === t.key ? 'Working…' : t.label}
+                    {transitioning === tr.key ? t('po.working') : t(tr.labelKey as any)}
                   </button>
                 )
               })}
             </div>
           )}
           {showCancelConfirm && (
-            <div className="bg-red-50 border border-red-200 rounded p-3 space-y-2">
-              <div className="text-base text-red-900 font-medium">
-                Cancel this PO?
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded p-3 space-y-2">
+              <div className="text-base text-red-900 dark:text-red-100 font-medium">
+                {t('po.cancel.title')}
               </div>
               <input
                 type="text"
-                placeholder="Reason (required)"
+                placeholder={t('po.cancel.reasonPlaceholder')}
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full px-2 py-1 text-base border border-red-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-red-300"
+                className="w-full px-2 py-1 text-base border border-red-200 dark:border-red-900 rounded bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-red-300"
                 autoFocus
               />
               <div className="flex items-center gap-2">
@@ -443,9 +448,9 @@ function PoCard({
                   type="button"
                   onClick={() => handleTransition('cancel', true)}
                   disabled={!cancelReason.trim() || transitioning !== null}
-                  className="px-3 py-1 text-base font-medium text-white bg-red-600 border border-red-600 rounded hover:bg-red-700 disabled:opacity-50"
+                  className="px-3 py-1 text-base font-medium text-white bg-red-600 dark:bg-red-700 border border-red-600 dark:border-red-500 rounded hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50"
                 >
-                  Confirm cancel
+                  {t('po.cancel.confirm')}
                 </button>
                 <button
                   type="button"
@@ -453,32 +458,32 @@ function PoCard({
                     setShowCancelConfirm(false)
                     setCancelReason('')
                   }}
-                  className="px-3 py-1 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50"
+                  className="px-3 py-1 text-base font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  Keep PO
+                  {t('po.cancel.keep')}
                 </button>
               </div>
             </div>
           )}
 
           {/* Line items */}
-          <div className="bg-white border border-slate-200 rounded overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700 uppercase tracking-wide">
-              Line items
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              {t('po.lineItems')}
             </div>
             <table className="w-full text-base">
-              <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="text-left font-medium px-3 py-1.5">SKU</th>
-                  <th className="text-right font-medium px-3 py-1.5">Ordered</th>
-                  <th className="text-right font-medium px-3 py-1.5">Received</th>
-                  <th className="text-right font-medium px-3 py-1.5">Unit cost</th>
-                  <th className="text-right font-medium px-3 py-1.5">Subtotal</th>
+                  <th className="text-left font-medium px-3 py-1.5">{t('po.col.sku')}</th>
+                  <th className="text-right font-medium px-3 py-1.5">{t('po.col.ordered')}</th>
+                  <th className="text-right font-medium px-3 py-1.5">{t('po.col.received')}</th>
+                  <th className="text-right font-medium px-3 py-1.5">{t('po.col.unitCost')}</th>
+                  <th className="text-right font-medium px-3 py-1.5">{t('po.col.subtotal')}</th>
                 </tr>
               </thead>
               <tbody>
                 {po.items.map((it) => (
-                  <tr key={it.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
                     <td className="px-3 py-1.5 font-mono text-sm">{it.sku}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums">
                       {it.quantityOrdered}
@@ -487,10 +492,10 @@ function PoCard({
                       <span
                         className={cn(
                           it.quantityReceived === 0
-                            ? 'text-slate-400'
+                            ? 'text-slate-400 dark:text-slate-500'
                             : it.quantityReceived < it.quantityOrdered
-                              ? 'text-amber-700'
-                              : 'text-green-700',
+                              ? 'text-amber-700 dark:text-amber-300'
+                              : 'text-green-700 dark:text-green-300',
                         )}
                       >
                         {it.quantityReceived}
@@ -512,9 +517,9 @@ function PoCard({
           </div>
 
           {/* Audit trail */}
-          <div className="bg-white border border-slate-200 rounded p-3">
-            <div className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-2">
-              Audit trail
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-3">
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-2">
+              {t('po.auditTrail')}
             </div>
             <AuditTrailPanel poId={po.id} />
           </div>
@@ -525,22 +530,22 @@ function PoCard({
               href={`${getBackendUrl()}/api/fulfillment/purchase-orders/${po.id}/factory.pdf`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             >
               <FileText className="w-3 h-3" />
-              Factory PDF
+              {t('po.factoryPdf')}
             </a>
             {po.supplier && po.supplierId && (
               <a
                 href={`/products?supplierId=${po.supplierId}`}
-                className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900"
+                className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
               >
                 <ShoppingCart className="w-3 h-3" />
-                Supplier products
+                {t('po.supplierProducts')}
               </a>
             )}
             {po.notes && (
-              <span className="text-slate-500 italic truncate flex-1">
+              <span className="text-slate-500 dark:text-slate-400 italic truncate flex-1">
                 · {po.notes}
               </span>
             )}
@@ -554,6 +559,7 @@ function PoCard({
 // ── Top-level client ───────────────────────────────────────────────
 
 export default function PurchaseOrdersClient() {
+  const { t } = useTranslations()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -661,11 +667,11 @@ export default function PurchaseOrdersClient() {
                 className={cn(
                   'px-3 py-1 text-sm font-medium rounded border transition-colors',
                   statusFilter === f.key
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300',
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
-                {f.label}
+                {t(f.labelKey as any)}
                 {pos && count > 0 && (
                   <span className="ml-1 opacity-70">{count}</span>
                 )}
@@ -675,19 +681,19 @@ export default function PurchaseOrdersClient() {
         </div>
         <Button variant="secondary" size="sm" onClick={fetchPos} disabled={loading}>
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-          Refresh
+          {t('common.refresh')}
         </Button>
       </div>
 
       {/* Error toasts */}
       {error && (
-        <div className="text-md text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
-          Failed to load: {error}
+          {t('po.failedToLoad', { error })}
         </div>
       )}
       {actionError && (
-        <div className="text-md text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
           {actionError}
         </div>
@@ -699,7 +705,7 @@ export default function PurchaseOrdersClient() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-16 bg-white border border-slate-200 rounded-lg animate-pulse"
+              className="h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse"
             />
           ))}
         </div>
@@ -711,17 +717,17 @@ export default function PurchaseOrdersClient() {
           icon={ShoppingCart}
           title={
             statusFilter === 'all'
-              ? 'No purchase orders yet'
-              : 'No POs in this state'
+              ? t('po.empty.title')
+              : t('po.empty.titleFiltered')
           }
           description={
             statusFilter === 'all'
-              ? 'Run a bulk-PO from /fulfillment/replenishment or create one manually to populate this view.'
-              : 'Try a different filter or wait for POs to land in this state.'
+              ? t('po.empty.description')
+              : t('po.empty.descriptionFiltered')
           }
           action={
             statusFilter === 'all'
-              ? { label: 'Open Replenishment', href: '/fulfillment/replenishment' }
+              ? { label: t('po.empty.openReplenishment'), href: '/fulfillment/replenishment' }
               : undefined
           }
         />
