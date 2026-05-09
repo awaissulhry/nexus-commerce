@@ -20,6 +20,7 @@ import PricingTab from './tabs/PricingTab'
 import ActivityTab from './tabs/ActivityTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
+import InventoryTab from './tabs/InventoryTab'
 import VariationsTab from './tabs/VariationsTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import { cn } from '@/lib/utils'
@@ -260,6 +261,12 @@ export default function ProductEditClient({
               {t('products.edit.tab.pricing')}
             </TopTabButton>
             <TopTabButton
+              active={topTab === 'inventory'}
+              onClick={() => setTopTab('inventory')}
+            >
+              {t('products.edit.tab.inventory')}
+            </TopTabButton>
+            <TopTabButton
               active={topTab === 'workflow'}
               onClick={() => setTopTab('workflow')}
             >
@@ -350,6 +357,14 @@ export default function ProductEditClient({
             product={product}
             discardSignal={discardSignal}
             onDirtyChange={(count) => setTabDirty('pricing', count)}
+          />
+        )}
+
+        {topTab === 'inventory' && (
+          <InventoryTab
+            product={product}
+            discardSignal={discardSignal}
+            onDirtyChange={(count) => setTabDirty('inventory', count)}
           />
         )}
 
