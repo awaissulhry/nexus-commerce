@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -255,12 +256,29 @@ export default function WebhooksClient() {
           </>
         )}
 
+        <div className="ml-auto" />
+        <SavedSearchPicker
+          surface="webhooks"
+          currentFilters={{
+            channel: urlChannel,
+            processed: urlProcessed,
+            eventType: urlEventType,
+          }}
+          onApply={(filters) =>
+            updateUrl({
+              channel: '',
+              processed: '',
+              eventType: '',
+              ...filters,
+            })
+          }
+        />
+
         <Button
           variant="secondary"
           size="sm"
           onClick={() => void fetchList(true)}
           disabled={loading}
-          className="ml-auto"
         >
           {loading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />

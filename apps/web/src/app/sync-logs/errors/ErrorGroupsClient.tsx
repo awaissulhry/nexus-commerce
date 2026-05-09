@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -240,12 +241,18 @@ export default function ErrorGroupsClient() {
           </>
         )}
 
+        <div className="ml-auto" />
+        <SavedSearchPicker
+          surface="errors"
+          currentFilters={{ status: urlStatus, channel: urlChannel }}
+          onApply={(filters) => updateUrl({ status: '', channel: '', ...filters })}
+        />
+
         <Button
           variant="secondary"
           size="sm"
           onClick={() => void fetchList(true)}
           disabled={loading}
-          className="ml-auto"
         >
           {loading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
