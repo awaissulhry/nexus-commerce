@@ -18,6 +18,7 @@
 import cron from 'node-cron'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -28,21 +29,23 @@ async function runOrdersPoll(): Promise<void> {
   }
 
   try {
-    const latest = await amazonOrdersService.getLatestPurchaseDate()
-    const summary = latest
-      ? await amazonOrdersService.syncNewOrders(latest)
-      : await amazonOrdersService.syncAllOrders({ daysBack: 30 })
+    await recordCronRun('amazon-orders-sync', async () => {
+      const latest = await amazonOrdersService.getLatestPurchaseDate()
+      const summary = latest
+        ? await amazonOrdersService.syncNewOrders(latest)
+        : await amazonOrdersService.syncAllOrders({ daysBack: 30 })
 
-    if (summary.ordersFailed > 0 || summary.itemsFailed > 0) {
-      logger.warn('amazon-orders cron: completed with failures', {
-        cursor: summary.cursor,
-        ordersFetched: summary.ordersFetched,
-        ordersUpserted: summary.ordersUpserted,
-        ordersFailed: summary.ordersFailed,
-        itemsFailed: summary.itemsFailed,
-      })
-    }
-    // Success-case logging is already emitted by amazonOrdersService.runSync().
+      if (summary.ordersFailed > 0 || summary.itemsFailed > 0) {
+        logger.warn('amazon-orders cron: completed with failures', {
+          cursor: summary.cursor,
+          ordersFetched: summary.ordersFetched,
+          ordersUpserted: summary.ordersUpserted,
+          ordersFailed: summary.ordersFailed,
+          itemsFailed: summary.itemsFailed,
+        })
+      }
+      return `fetched=${summary.ordersFetched} upserted=${summary.ordersUpserted} ordersFailed=${summary.ordersFailed} itemsFailed=${summary.itemsFailed}`
+    })
   } catch (err) {
     logger.error('amazon-orders cron: top-level failure', {
       error: err instanceof Error ? err.message : String(err),

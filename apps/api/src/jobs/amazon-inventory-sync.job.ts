@@ -20,6 +20,7 @@
 import cron from 'node-cron'
 import { amazonInventoryService } from '../services/amazon-inventory.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -30,23 +31,25 @@ async function runInventorySweep(): Promise<void> {
   }
 
   try {
-    const summary = await amazonInventoryService.syncFBAInventory()
-    if (summary.errors.length > 0) {
-      logger.warn('amazon-inventory cron: completed with errors', {
-        marketplaceId: summary.marketplaceId,
-        rowsFetched: summary.rowsFetched,
-        productsUpdated: summary.productsUpdated,
-        errorCount: summary.errors.length,
-        firstErrors: summary.errors.slice(0, 3),
-      })
-    }
-    if (summary.skusNotFoundInDb > 0) {
-      logger.warn('amazon-inventory cron: some SKUs absent from local DB', {
-        skusNotFoundInDb: summary.skusNotFoundInDb,
-        sample: summary.unmatchedSampleSkus,
-      })
-    }
-    // Success-case logging is already emitted by the service.
+    await recordCronRun('amazon-inventory-sync', async () => {
+      const summary = await amazonInventoryService.syncFBAInventory()
+      if (summary.errors.length > 0) {
+        logger.warn('amazon-inventory cron: completed with errors', {
+          marketplaceId: summary.marketplaceId,
+          rowsFetched: summary.rowsFetched,
+          productsUpdated: summary.productsUpdated,
+          errorCount: summary.errors.length,
+          firstErrors: summary.errors.slice(0, 3),
+        })
+      }
+      if (summary.skusNotFoundInDb > 0) {
+        logger.warn('amazon-inventory cron: some SKUs absent from local DB', {
+          skusNotFoundInDb: summary.skusNotFoundInDb,
+          sample: summary.unmatchedSampleSkus,
+        })
+      }
+      return `marketplace=${summary.marketplaceId} fetched=${summary.rowsFetched} updated=${summary.productsUpdated} errors=${summary.errors.length} unmatched=${summary.skusNotFoundInDb}`
+    })
   } catch (err) {
     logger.error('amazon-inventory cron: top-level failure', {
       error: err instanceof Error ? err.message : String(err),

@@ -28,6 +28,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { ebayOrdersService } from '../services/ebay-orders.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -50,48 +51,55 @@ async function runOrdersPoll(): Promise<void> {
     return
   }
 
-  const totals = {
-    connectionsTried: connections.length,
-    connectionsOk: 0,
-    connectionsPartial: 0,
-    connectionsFailed: 0,
-    ordersFetched: 0,
-    ordersCreated: 0,
-    ordersUpdated: 0,
-    inventoryDeducted: 0,
-  }
+  await recordCronRun('ebay-orders-sync', async () => {
+    const totals = {
+      connectionsTried: connections.length,
+      connectionsOk: 0,
+      connectionsPartial: 0,
+      connectionsFailed: 0,
+      ordersFetched: 0,
+      ordersCreated: 0,
+      ordersUpdated: 0,
+      inventoryDeducted: 0,
+    }
 
-  for (const conn of connections) {
-    try {
-      const result = await ebayOrdersService.syncEbayOrders(conn.id)
-      totals.ordersFetched += result.ordersFetched
-      totals.ordersCreated += result.ordersCreated
-      totals.ordersUpdated += result.ordersUpdated
-      totals.inventoryDeducted += result.inventoryDeducted
+    for (const conn of connections) {
+      try {
+        const result = await ebayOrdersService.syncEbayOrders(conn.id)
+        totals.ordersFetched += result.ordersFetched
+        totals.ordersCreated += result.ordersCreated
+        totals.ordersUpdated += result.ordersUpdated
+        totals.inventoryDeducted += result.inventoryDeducted
 
-      if (result.status === 'SUCCESS') totals.connectionsOk++
-      else if (result.status === 'PARTIAL') totals.connectionsPartial++
-      else totals.connectionsFailed++
+        if (result.status === 'SUCCESS') totals.connectionsOk++
+        else if (result.status === 'PARTIAL') totals.connectionsPartial++
+        else totals.connectionsFailed++
 
-      if (result.status !== 'SUCCESS') {
-        logger.warn('ebay-orders cron: connection completed with errors', {
+        if (result.status !== 'SUCCESS') {
+          logger.warn('ebay-orders cron: connection completed with errors', {
+            connectionId: conn.id,
+            displayName: conn.displayName,
+            status: result.status,
+            errors: result.errors.slice(0, 5),
+          })
+        }
+      } catch (err) {
+        totals.connectionsFailed++
+        logger.error('ebay-orders cron: connection threw', {
           connectionId: conn.id,
           displayName: conn.displayName,
-          status: result.status,
-          errors: result.errors.slice(0, 5),
+          error: err instanceof Error ? err.message : String(err),
         })
       }
-    } catch (err) {
-      totals.connectionsFailed++
-      logger.error('ebay-orders cron: connection threw', {
-        connectionId: conn.id,
-        displayName: conn.displayName,
-        error: err instanceof Error ? err.message : String(err),
-      })
     }
-  }
 
-  logger.info('ebay-orders cron: tick complete', totals)
+    logger.info('ebay-orders cron: tick complete', totals)
+    return `connections=${totals.connectionsTried} ok=${totals.connectionsOk} partial=${totals.connectionsPartial} failed=${totals.connectionsFailed} fetched=${totals.ordersFetched} created=${totals.ordersCreated}`
+  }).catch((err) => {
+    logger.error('ebay-orders cron: top-level failure', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
 }
 
 export function startEbayOrdersCron(): void {

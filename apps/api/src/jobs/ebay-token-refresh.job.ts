@@ -23,6 +23,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -62,58 +63,65 @@ async function runRefreshSweep(): Promise<void> {
     return
   }
 
-  let refreshed = 0
-  let stillValid = 0
-  let failed = 0
+  await recordCronRun('ebay-token-refresh', async () => {
+    let refreshed = 0
+    let stillValid = 0
+    let failed = 0
 
-  for (const conn of connections) {
-    try {
-      // Read once before, once after — if expiresAt advanced, a refresh
-      // happened. Compare the generic tokenExpiresAt (with legacy
-      // fallback for rows that haven't been re-saved since the H.2
-      // backfill) so callers using either field see the same picture.
-      const before = await prisma.channelConnection.findUnique({
-        where: { id: conn.id },
-        select: { tokenExpiresAt: true, ebayTokenExpiresAt: true },
-      })
+    for (const conn of connections) {
+      try {
+        // Read once before, once after — if expiresAt advanced, a refresh
+        // happened. Compare the generic tokenExpiresAt (with legacy
+        // fallback for rows that haven't been re-saved since the H.2
+        // backfill) so callers using either field see the same picture.
+        const before = await prisma.channelConnection.findUnique({
+          where: { id: conn.id },
+          select: { tokenExpiresAt: true, ebayTokenExpiresAt: true },
+        })
 
-      await ebayAuthService.getValidToken(conn.id)
+        await ebayAuthService.getValidToken(conn.id)
 
-      const after = await prisma.channelConnection.findUnique({
-        where: { id: conn.id },
-        select: { tokenExpiresAt: true, ebayTokenExpiresAt: true },
-      })
+        const after = await prisma.channelConnection.findUnique({
+          where: { id: conn.id },
+          select: { tokenExpiresAt: true, ebayTokenExpiresAt: true },
+        })
 
-      const beforeExp = before?.tokenExpiresAt ?? before?.ebayTokenExpiresAt
-      const afterExp = after?.tokenExpiresAt ?? after?.ebayTokenExpiresAt
-      const advanced =
-        beforeExp &&
-        afterExp &&
-        afterExp.getTime() > beforeExp.getTime()
+        const beforeExp = before?.tokenExpiresAt ?? before?.ebayTokenExpiresAt
+        const afterExp = after?.tokenExpiresAt ?? after?.ebayTokenExpiresAt
+        const advanced =
+          beforeExp &&
+          afterExp &&
+          afterExp.getTime() > beforeExp.getTime()
 
-      if (advanced) {
-        refreshed++
-      } else {
-        stillValid++
+        if (advanced) {
+          refreshed++
+        } else {
+          stillValid++
+        }
+      } catch (err) {
+        failed++
+        logger.warn('ebay-token-refresh cron: refresh failed for connection', {
+          connectionId: conn.id,
+          signInName: conn.ebaySignInName ?? null,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        // getValidToken already wrote lastSyncStatus/lastSyncError to the
+        // connection — surfaces in the channels UI.
       }
-    } catch (err) {
-      failed++
-      logger.warn('ebay-token-refresh cron: refresh failed for connection', {
-        connectionId: conn.id,
-        signInName: conn.ebaySignInName ?? null,
-        error: err instanceof Error ? err.message : String(err),
-      })
-      // getValidToken already wrote lastSyncStatus/lastSyncError to the
-      // connection — surfaces in the channels UI.
     }
-  }
 
-  logger.info('ebay-token-refresh cron: complete', {
-    durationMs: Date.now() - startedAt,
-    connections: connections.length,
-    refreshed,
-    stillValid,
-    failed,
+    logger.info('ebay-token-refresh cron: complete', {
+      durationMs: Date.now() - startedAt,
+      connections: connections.length,
+      refreshed,
+      stillValid,
+      failed,
+    })
+    return `connections=${connections.length} refreshed=${refreshed} stillValid=${stillValid} failed=${failed}`
+  }).catch((err) => {
+    logger.error('ebay-token-refresh cron: top-level failure', {
+      error: err instanceof Error ? err.message : String(err),
+    })
   })
 }
 

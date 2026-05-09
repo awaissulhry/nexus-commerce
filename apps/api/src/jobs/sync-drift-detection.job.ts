@@ -46,6 +46,7 @@ import cron from 'node-cron'
 import prisma from '../db.js'
 import { syncHealthService } from '../services/sync-health.service.js'
 import { logger } from '../utils/logger.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 interface PriceDriftRow {
   listing_id: string
@@ -254,7 +255,10 @@ export function startSyncDriftDetectionCron(): void {
     return
   }
   scheduledTask = cron.schedule(schedule, () => {
-    void runSyncDriftDetection().catch((err) => {
+    void recordCronRun('sync-drift-detection', async () => {
+      const r = await runSyncDriftDetection()
+      return `scanned=${r.scanned} priceDrifts=${r.priceDrifts} qtyDrifts=${r.quantityDrifts} logged=${r.conflictsLogged} deduped=${r.conflictsDeduped} errors=${r.errors} durationMs=${r.durationMs}`
+    }).catch((err) => {
       logger.error('sync-drift-detection cron: failure', {
         error: err instanceof Error ? err.message : String(err),
       })
