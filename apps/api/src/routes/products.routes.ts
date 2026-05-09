@@ -1116,6 +1116,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // bulk-ops paste workflows share the same validator.
       'hsCode',
       'countryOfOrigin',
+      // W7.1 — EU compliance: PPE directive category + ADR/IATA hazmat
+      'ppeCategory',
+      'hazmatClass',
+      'hazmatUnNumber',
     ])
     // D.3d: prefixed channel fields write to ChannelListing instead of
     // Product. Only the suffixes in this set are wired today; the rest
@@ -1471,6 +1475,19 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             continue
           }
           value = raw
+        }
+      } else if (c.field === 'ppeCategory') {
+        // W7.1 — PPE Directive 2016/425 category. Empty / null clears.
+        const VALID_PPE = new Set(['CAT_I', 'CAT_II', 'CAT_III'])
+        if (value === null || value === undefined || value === '') {
+          value = null
+        } else if (!VALID_PPE.has(String(value))) {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: 'ppeCategory must be CAT_I, CAT_II, or CAT_III',
+          })
+          continue
         }
       } else {
         // text fields — trim, coerce empty string to null only for

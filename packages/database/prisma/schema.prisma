@@ -302,6 +302,18 @@ model Product {
   hsCode          String?
   countryOfOrigin String?
 
+  // W7.1 — EU compliance fields (CE/PPE/Hazmat) for Italian operator
+  // selling motorcycle gear across EU Amazon + eBay marketplaces.
+  // PPE Directive 2016/425: Cat I (min risk), Cat II (intermediate),
+  // Cat III (mortal risk — motorcycle helmets, body armour).
+  ppeCategory    String?  // 'CAT_I' | 'CAT_II' | 'CAT_III'
+  // ADR/IATA hazardous materials flags (uncommon for apparel, but
+  // needed for aerosols, chain lube, etc. in Xavia's accessories range).
+  hazmatClass    String?  // UN hazard class e.g. "3", "8", "9"
+  hazmatUnNumber String?  // UN number e.g. "UN1950"
+  // Back-relation to per-product certificate rows (CE, EN-13595, REACH…)
+  certificates   ProductCertificate[]
+
   // R.4 — Replenishment economics. Per-product overrides for the
   // global defaults (95% service / 25% carrying cost / €15 ordering
   // cost). All nullable; code applies defaults when null.
@@ -7373,6 +7385,45 @@ model ProductRelation {
   @@unique([fromProductId, toProductId, type])
   @@index([fromProductId, type])
   @@index([toProductId, type])
+}
+
+/// W7.1 — ProductCertificate: CE, EN-13595, REACH, RoHS, WEEE and
+/// any other compliance certificates attached to a product.
+///
+/// Xavia context: motorcycle gear sold on EU Amazon + eBay must carry
+/// CE marking under the PPE Directive 2016/425. Helmets (EN 22.05) and
+/// body armour (EN 13595) are Cat III — operators must be able to attach
+/// the Notified Body certificate and track expiration dates.
+///
+/// fileUrl points to an object already in the DAM (DigitalAsset) or a
+/// raw storage URL. We store the URL here rather than a foreign key so
+/// operators can paste a link from any source without first going
+/// through the DAM upload flow.
+model ProductCertificate {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// 'CE' | 'EN_13595' | 'EN_22_05' | 'REACH' | 'ROHS' | 'WEEE' | 'ATEX' | 'OTHER'
+  certType    String
+  /// Certificate reference number issued by Notified Body
+  certNumber  String?
+  /// Specific harmonised standard e.g. "EN 13595-1:2002+A1:2005"
+  standard    String?
+  /// Issuing Notified Body or lab name e.g. "TÜV Rheinland", "Bureau Veritas"
+  issuingBody String?
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  /// Storage URL for the certificate file (PDF)
+  fileUrl     String?
+  notes       String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([productId])
+  @@index([productId, certType])
+  @@index([expiresAt])
 }
 
 // ── C.6: Channel publish audit log ────────────────────────────────────

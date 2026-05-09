@@ -68,6 +68,7 @@ import scheduledBulkActionRoutes from "./routes/scheduled-bulk-actions.routes.js
 import bulkAutomationRulesRoutes from "./routes/bulk-automation-rules.routes.js";
 import bulkAutomationApprovalsRoutes from "./routes/bulk-automation-approvals.routes.js";
 import importWizardRoutes from "./routes/import-wizard.routes.js";
+import scheduledImportsRoutes from "./routes/scheduled-imports.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
@@ -80,6 +81,7 @@ import productsImagesRoutes from "./routes/products-images.routes.js";
 import listingImagesRoutes from "./routes/listing-images.routes.js";
 import productTranslationsRoutes from "./routes/product-translations.routes.js";
 import productRelationsRoutes from "./routes/product-relations.routes.js";
+import productCertificatesRoutes from "./routes/product-certificates.routes.js";
 import forecastRoutes from "./routes/forecast.routes.js";
 import aiUsageRoutes from "./routes/ai-usage.routes.js";
 import savedViewAlertsRoutes from "./routes/saved-view-alerts.routes.js";
@@ -97,6 +99,7 @@ import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
 import { startBulkAutomationTickCron } from "./jobs/bulk-automation-tick.job.js";
+import { startScheduledImportCron } from "./jobs/scheduled-import.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
@@ -420,6 +423,7 @@ app.register(scheduledBulkActionRoutes, { prefix: '/api' });
 app.register(bulkAutomationRulesRoutes, { prefix: '/api' });
 app.register(bulkAutomationApprovalsRoutes, { prefix: '/api' });
 app.register(importWizardRoutes, { prefix: '/api' });
+app.register(scheduledImportsRoutes, { prefix: '/api' });
 app.register(dashboardRoutes, { prefix: '/api' });
 app.register(pimRoutes, { prefix: '/api' });
 app.register(auditLogRoutes, { prefix: '/api' });
@@ -431,6 +435,7 @@ app.register(productsImagesRoutes, { prefix: '/api' });
 app.register(listingImagesRoutes, { prefix: '/api' });
 app.register(productTranslationsRoutes, { prefix: '/api' });
 app.register(productRelationsRoutes, { prefix: '/api' });
+app.register(productCertificatesRoutes, { prefix: '/api' });
 app.register(forecastRoutes, { prefix: '/api' });
 app.register(aiUsageRoutes, { prefix: '/api' });
 app.register(savedViewAlertsRoutes, { prefix: '/api' });
@@ -495,6 +500,11 @@ async function start() {
     // out due ScheduledBulkAction rows into real BulkActionJob runs
     // via BulkActionService.createJob.
     startScheduledBulkActionCron();
+
+    // W8.4 — scheduled-import tick. 5-min cron fans out due
+    // ScheduledImport rows into real ImportJob runs via the
+    // import-wizard service. No-op when no schedules are due.
+    startScheduledImportCron();
 
     // W7.1 — register bulk-ops action handlers into the existing
     // AutomationRule registry. Idempotent — safe to call before /
