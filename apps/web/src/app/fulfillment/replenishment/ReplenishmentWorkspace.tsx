@@ -18,8 +18,6 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   AlertCircle,
-  ArrowDown,
-  ArrowUp,
   Bookmark,
   Check,
   CheckCircle2,
@@ -210,7 +208,9 @@ import { URGENCY_TONE } from './_shared/UrgencyTiles'
 // through to backend ordering (CRITICAL → HIGH → MEDIUM → LOW with
 // daysOfStockLeft asc as tiebreaker); other keys re-sort the
 // already-fetched array in JS.
-type SortKey = 'urgency' | 'daysOfCover' | 'velocity' | 'qty' | 'stock' | 'sku' | 'name'
+// W9.6b — SortKey + SortableTh moved to _shared/SortableTh.tsx
+import type { SortKey } from './_shared/SortableTh'
+import { SortableTh } from './_shared/SortableTh'
 
 export default function ReplenishmentWorkspace() {
   // R.5 — URL-driven state. Filters / search / sort are bookmarkable
@@ -1184,36 +1184,7 @@ function thRight() {
 // W9.6 — UrgencyTile + UpcomingEventsBanner moved to
 // _shared/UrgencyTiles.tsx (imported at the top of this file).
 
-// R.5 — sortable column header. Click to set sort; click again to
-// flip direction. Renders a small chevron next to the active column.
-function SortableTh({
-  sortKey,
-  current,
-  dir,
-  onSort,
-  className,
-  children,
-}: {
-  sortKey: SortKey
-  current: SortKey
-  dir: 'asc' | 'desc'
-  onSort: (k: SortKey) => void
-  className: string
-  children: React.ReactNode
-}) {
-  const active = current === sortKey
-  return (
-    <th className={className}>
-      <button
-        onClick={() => onSort(sortKey)}
-        className="inline-flex items-center gap-1 hover:text-slate-900"
-      >
-        {children}
-        {active && (dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
-      </button>
-    </th>
-  )
-}
+// W9.6b — SortableTh moved to _shared/SortableTh.tsx (imported above).
 
 // R.5 — mobile-card alternative to the 13-column table. Shows the
 // most important fields stacked, with the row's actions accessible
