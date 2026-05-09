@@ -49,6 +49,41 @@ interface AutomationRule {
   updatedAt: string
 }
 
+interface RuleExecution {
+  id: string
+  triggerData: unknown
+  actionResults: unknown
+  dryRun: boolean
+  status: string
+  errorMessage: string | null
+  startedAt: string
+  finishedAt: string | null
+  durationMs: number | null
+}
+
+const EXEC_STATUS_TONES: Record<string, string> = {
+  SUCCESS:
+    'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
+  DRY_RUN:
+    'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+  PARTIAL:
+    'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+  FAILED:
+    'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900',
+  NO_MATCH:
+    'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800',
+  CAP_EXCEEDED:
+    'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900',
+}
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))}s ago`
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m ago`
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h ago`
+  return `${Math.round(ms / 86_400_000)}d ago`
+}
+
 export function AutomationRulesCard() {
   const { toast } = useToast()
   const { t } = useTranslations()
@@ -443,24 +478,27 @@ export function AutomationRulesCard() {
                   </button>
 
                   {expanded && (
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                          {t('replenishment.automation.conditionsLabel')}
+                    <>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                            {t('replenishment.automation.conditionsLabel')}
+                          </div>
+                          <pre className="bg-slate-50 dark:bg-slate-950 rounded p-2 overflow-x-auto text-[11px] text-slate-700 dark:text-slate-300">
+                            {JSON.stringify(rule.conditions, null, 2)}
+                          </pre>
                         </div>
-                        <pre className="bg-slate-50 dark:bg-slate-950 rounded p-2 overflow-x-auto text-[11px] text-slate-700 dark:text-slate-300">
-                          {JSON.stringify(rule.conditions, null, 2)}
-                        </pre>
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
-                          {t('replenishment.automation.actionsLabel')}
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                            {t('replenishment.automation.actionsLabel')}
+                          </div>
+                          <pre className="bg-slate-50 dark:bg-slate-950 rounded p-2 overflow-x-auto text-[11px] text-slate-700 dark:text-slate-300">
+                            {JSON.stringify(rule.actions, null, 2)}
+                          </pre>
                         </div>
-                        <pre className="bg-slate-50 dark:bg-slate-950 rounded p-2 overflow-x-auto text-[11px] text-slate-700 dark:text-slate-300">
-                          {JSON.stringify(rule.actions, null, 2)}
-                        </pre>
                       </div>
-                    </div>
+                      <RecentExecutions ruleId={rule.id} />
+                    </>
                   )}
                 </div>
 
@@ -479,6 +517,129 @@ export function AutomationRulesCard() {
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * W4.11 — recent executions panel inside the rule expand view.
+ * Loads on first expand; ~50 newest first. Status pills colour-coded
+ * via EXEC_STATUS_TONES (SUCCESS=green / DRY_RUN=amber / PARTIAL=
+ * amber / FAILED=rose / NO_MATCH=slate / CAP_EXCEEDED=rose).
+ *
+ * Click an execution → expands the JSON triggerData + actionResults
+ * inline so the operator can debug "why didn't this match?" without
+ * leaving the workspace.
+ */
+function RecentExecutions({ ruleId }: { ruleId: string }) {
+  const { t } = useTranslations()
+  const [executions, setExecutions] = useState<RuleExecution[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [openExecId, setOpenExecId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/fulfillment/replenishment/automation/rules/${ruleId}/executions?limit=20`,
+      { cache: 'no-store' },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled) setExecutions(json?.executions ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setExecutions([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ruleId])
+
+  return (
+    <div className="mt-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+        {t('replenishment.automation.recentExecutions.title')}
+      </div>
+      {loading ? (
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          {t('replenishment.automation.recentExecutions.loading')}
+        </div>
+      ) : !executions || executions.length === 0 ? (
+        <div className="text-xs text-slate-500 dark:text-slate-400 italic">
+          {t('replenishment.automation.recentExecutions.empty')}
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {executions.map((exec) => {
+            const tone = EXEC_STATUS_TONES[exec.status] ?? EXEC_STATUS_TONES.NO_MATCH
+            const open = openExecId === exec.id
+            return (
+              <li
+                key={exec.id}
+                className="rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenExecId(open ? null : exec.id)}
+                  className="w-full text-left px-2 py-1.5 flex items-center gap-2 flex-wrap"
+                  aria-expanded={open}
+                >
+                  <span
+                    className={cn(
+                      'text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset font-medium',
+                      tone,
+                    )}
+                  >
+                    {exec.status}
+                  </span>
+                  {exec.dryRun && (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                      {t('replenishment.automation.dryRunBadge')}
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                    {relativeTime(exec.startedAt)}
+                  </span>
+                  {exec.durationMs != null && (
+                    <span className="text-[11px] text-slate-500 dark:text-slate-500">
+                      · {exec.durationMs}ms
+                    </span>
+                  )}
+                  {exec.errorMessage && (
+                    <span className="text-[11px] text-rose-700 dark:text-rose-400 truncate">
+                      · {exec.errorMessage}
+                    </span>
+                  )}
+                </button>
+                {open && (
+                  <div className="px-2 pb-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                        {t('replenishment.automation.recentExecutions.triggerData')}
+                      </div>
+                      <pre className="bg-white dark:bg-slate-900 rounded p-2 overflow-x-auto text-[10px] text-slate-700 dark:text-slate-300 max-h-48">
+                        {JSON.stringify(exec.triggerData, null, 2)}
+                      </pre>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+                        {t('replenishment.automation.recentExecutions.actionResults')}
+                      </div>
+                      <pre className="bg-white dark:bg-slate-900 rounded p-2 overflow-x-auto text-[10px] text-slate-700 dark:text-slate-300 max-h-48">
+                        {JSON.stringify(exec.actionResults, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
