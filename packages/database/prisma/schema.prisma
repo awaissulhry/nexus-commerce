@@ -3825,6 +3825,13 @@ model StockCostLayer {
   dutyCents      Int?
   insuranceCents Int?
   brokerCents    Int?
+  // T.6 — Multi-currency capture. Italian fiscal valuation
+  // (Codice Civile Art. 2427-bis) requires inventory in EUR at the
+  // historical exchange rate. costCurrency is the supplier-invoice
+  // currency; exchangeRateOnReceive is the rate to base (EUR) on
+  // receivedAt — required when costCurrency != 'EUR' (DB CHECK).
+  costCurrency           String   @default("EUR")
+  exchangeRateOnReceive  Decimal? @db.Decimal(14, 8)
   // Source linkage.
   inboundShipmentId String?
   stockMovementId   String?

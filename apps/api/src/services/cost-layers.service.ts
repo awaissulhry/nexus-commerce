@@ -45,6 +45,13 @@ export interface ReceiveLayerArgs {
   dutyCents?: number
   insuranceCents?: number
   brokerCents?: number
+  /** T.6 — supplier-invoice currency (ISO-4217). Defaults to EUR.
+   *  When != EUR, exchangeRate is required and unitCostCents is
+   *  expected to already be EUR-converted at exchangeRate. */
+  costCurrency?: string
+  /** Rate from costCurrency to base (EUR) at receivedAt. Required
+   *  when costCurrency != 'EUR' (DB CHECK enforces). */
+  exchangeRate?: number
   inboundShipmentId?: string
   stockMovementId?: string
   notes?: string
@@ -83,6 +90,11 @@ export async function receiveLayerInTx(tx: Tx, args: ReceiveLayerArgs): Promise<
   }
   const unitCost = unitCostCents / 100
 
+  const costCurrency = (args.costCurrency ?? 'EUR').toUpperCase()
+  if (costCurrency !== 'EUR' && (args.exchangeRate == null || args.exchangeRate <= 0)) {
+    throw new Error(`receiveLayer: exchangeRate required when costCurrency=${costCurrency}`)
+  }
+
   const layer = await tx.stockCostLayer.create({
     data: {
       productId,
@@ -95,6 +107,8 @@ export async function receiveLayerInTx(tx: Tx, args: ReceiveLayerArgs): Promise<
       dutyCents: args.dutyCents ?? null,
       insuranceCents: args.insuranceCents ?? null,
       brokerCents: args.brokerCents ?? null,
+      costCurrency,
+      exchangeRateOnReceive: args.exchangeRate ?? null,
       inboundShipmentId: inboundShipmentId ?? null,
       stockMovementId: stockMovementId ?? null,
       notes: notes ?? null,
