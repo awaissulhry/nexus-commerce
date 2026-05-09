@@ -1,4 +1,4 @@
-// @ts-nocheck — U.51 BISECT 2 diagnostic, JSX render disabled, many imports unused
+// @ts-nocheck — U.52 BISECT 3: JSX second half disabled, many unused
 'use client'
 
 import {
@@ -3021,19 +3021,467 @@ export default function BulkOperationsClient() {
     collapsedGroups,
   ])
 
-  // U.51 (BISECT 2) — all hooks above this line still fire (data fetch,
-  // useReactTable, useVirtualizer, all 30+ useEffects). Only the heavy
-  // JSX render is replaced with a placeholder. If sidebar Links navigate
-  // after this deploy, the bug is in the JSX render output (virtualizer,
-  // millions of memo'd cells, ColumnSelector, etc.) — not in the hooks.
-  // If they still die, the bug is in one of the hooks/effects.
   return (
-    <div className="p-6 rounded-lg border border-purple-300 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-700">
-      <p className="text-base text-purple-900 dark:text-purple-200">
-        BulkOps hooks + effects loaded — JSX disabled (U.51 BISECT 2).
-        Test sidebar Links + Job History.
-      </p>
+    // U.38 — was `flex-1 min-h-0 px-6 pb-6 flex flex-col` which
+    // depended on the page wrapper being a flex column with an
+    // explicit height. After the page wrapper was simplified to
+    // remove the negative-margin trickery (so it stops fighting the
+    // layout's sidebar / scroll context), this client anchors its
+    // own max-height to the viewport via dvh. 12rem accommodates
+    // PageHeader + ActiveJobsStrip + the layout's p-3/md:p-6 padding
+    // + the mobile top bar; close-enough on every breakpoint.
+    <div
+      className="flex flex-col"
+      style={{ height: 'calc(100dvh - 12rem)' }}
+    >
+      {!online && (
+        <div className="flex-shrink-0 mb-3 flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-base text-amber-800">
+          <WifiOff className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>You're offline. Changes are kept locally and will save when you reconnect.</span>
+        </div>
+      )}
+
+      {/* P.9 — scope banner. Visible when /products' bulk-action bar
+          deep-linked here with ?productIds=... so the operator
+          knows they're in a filtered slice rather than the full
+          catalog, and can drop back to the full view in one click. */}
+      {isScoped && (
+        <div className="flex-shrink-0 mb-3 flex items-center justify-between gap-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-base text-blue-900">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+            <span className="truncate">
+              Editing{' '}
+              <span className="font-semibold tabular-nums">
+                {scopedProductIds.length}
+              </span>{' '}
+              product{scopedProductIds.length === 1 ? '' : 's'} from your
+              /products selection.
+              {products.length > 0 && products.length !== scopedProductIds.length && (
+                <span className="text-slate-600">
+                  {' '}({products.length} loaded
+                  {products.length < scopedProductIds.length
+                    ? ` — ${scopedProductIds.length - products.length} not found`
+                    : ''})
+                </span>
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={clearScope}
+            className="flex-shrink-0 h-7 px-2 text-sm text-blue-700 hover:text-blue-900 hover:bg-blue-100 rounded inline-flex items-center gap-1"
+          >
+            <X className="w-3 h-3" />
+            Show all products
+          </button>
+        </div>
+      )}
+
+      <MarketplaceContextBanner
+        visible={showContextBanner}
+        pendingChannelChanges={pendingChannelChanges}
+      />
+
+      {/* T.7 — marketplace tab strip. Master tab clears the primary
+          context; each marketplace tab sets it to that single (channel,
+          marketplace) so _channelListing hydration + channel-prefixed
+          column rendering switches in one click. The multi-select
+          selector in the toolbar below still drives fan-out edit
+          scope (Cmd+S broadcasts to every selected target). */}
+      <MarketplaceTabs
+        options={marketplaceOptions}
+        primaryKey={
+          primaryContext
+            ? `${primaryContext.channel}:${primaryContext.marketplace}`
+            : null
+        }
+        onSelect={(channel, marketplace) => {
+          if (channel === null) {
+            setMarketplaceTargets([])
+          } else {
+            setMarketplaceTargets([{ channel, marketplace }])
+          }
+        }}
+      />
+
+      {/* Two-row toolbar.
+          Row 1: scope (mode/expand/search/filter) on the left,
+                 marketplace + write actions (Bulk apply / Upload /
+                 Preview / Save) on the right — Save is always visible
+                 without horizontal scrolling at any reasonable width.
+          Row 2: secondary tools (undo/redo, columns, reset widths)
+                 on the left, status text on the right.
+
+          `relative z-30` is load-bearing: the table container below
+          uses `contain: strict` which creates its own stacking context.
+          Without an explicit stacking context here, popovers in the
+          toolbar (Filter / Marketplace / Cols) render UNDER the table
+          even though they are at z-30 internally. Elevating the whole
+          toolbar wrapper above the table's SC keeps the popovers
+          visually on top whenever they expand downward over the grid. */}
+      <div className="flex-shrink-0 mb-3 flex flex-col gap-1.5 px-1 pb-2 border-b border-slate-200 bg-white relative z-30">
+        {/* ── Row 1 — primary scope + write actions ─────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Left: scope */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <DisplayModeToggle mode={displayMode} onChange={setDisplayMode} />
+            {displayMode === 'hierarchy' && (
+              <ExpandCollapseControls
+                products={products}
+                expandedParents={expandedParents}
+                onChange={setExpandedParents}
+              />
+            )}
+
+            <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+
+            <div className="relative flex items-center">
+              <Search className="absolute left-2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search SKU, name, brand…"
+                className="h-7 pl-7 pr-7 text-base border border-slate-200 rounded-md w-40 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1.5 text-slate-400 hover:text-slate-700"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <FilterDropdown
+              open={filterOpen}
+              onOpenChange={setFilterOpen}
+              value={filterState}
+              onChange={setFilterState}
+              onReset={resetFilters}
+              activeCount={activeFilterCount}
+              availableProductTypes={productTypesInData}
+            />
+          </div>
+
+          {/* Right: marketplace + write actions */}
+          <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+            <MarketplaceSelector
+              value={marketplaceTargets}
+              onChange={setMarketplaceTargets}
+              options={marketplaceOptions}
+              pulse={showContextBanner}
+            />
+
+            <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setNewProductOpen(true)}
+              title="Create a new master product or a variant of an existing parent"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              New product
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setReplicateOpen(true)}
+              disabled={products.length === 0}
+              title="Pull title / description / price / attributes from one marketplace and replicate to others across many products"
+            >
+              <Copy className="w-3.5 h-3.5 mr-1.5" />
+              Replicate
+            </Button>
+            {selectedRowCount > 1 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleBatchDelete()}
+                title={`Delete ${selectedRowCount} selected rows + their cascades`}
+                className="text-rose-700 border-rose-200 hover:bg-rose-50"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Delete {selectedRowCount}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setBulkOpModalOpen(true)}
+              title="Apply price / stock / status / attribute changes to a scoped subset of products"
+            >
+              <Wand2 className="w-3.5 h-3.5 mr-1.5" />
+              Bulk apply
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Upload className="w-3.5 h-3.5 mr-1.5" />
+              Upload
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pendingCount === 0}
+              onClick={() => setPreviewOpen(true)}
+            >
+              Preview
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={
+                pendingCount === 0 ||
+                saveStatus.kind === 'saving' ||
+                !online ||
+                hasUnsavablePendingChanges
+              }
+              loading={saveStatus.kind === 'saving'}
+              onClick={handleSave}
+              title={
+                hasUnsavablePendingChanges
+                  ? `${pendingChannelChanges} channel change${
+                      pendingChannelChanges === 1 ? '' : 's'
+                    } need a marketplace context to save`
+                  : undefined
+              }
+            >
+              {saveLabel}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Row 2 — secondary tools + status ──────────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          {/* Left: history. V.2 — count badges show stack depth at a
+              glance so undo/redo state is visible in real time. */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-0.5 border border-slate-200 rounded-md">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={!canUndo}
+                title={
+                  canUndo
+                    ? `Undo last edit (⌘Z) — ${historyIndex + 1} step${
+                        historyIndex === 0 ? '' : 's'
+                      } available`
+                    : 'Nothing to undo'
+                }
+                aria-label="Undo"
+                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-l-md"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                {canUndo && (
+                  <span className="text-xs tabular-nums text-slate-500">
+                    {historyIndex + 1}
+                  </span>
+                )}
+              </button>
+              <div className="w-px h-4 bg-slate-200" />
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                title={
+                  canRedo
+                    ? `Redo (⌘⇧Z) — ${
+                        history.length - 1 - historyIndex
+                      } step${
+                        history.length - 1 - historyIndex === 1 ? '' : 's'
+                      } available`
+                    : 'Nothing to redo'
+                }
+                aria-label="Redo"
+                className="h-7 px-1.5 inline-flex items-center gap-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-default rounded-r-md"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+                {canRedo && (
+                  <span className="text-xs tabular-nums text-slate-500">
+                    {history.length - 1 - historyIndex}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Middle: status, fills available space.
+              U.9 — bare "Loading…" replaced with spinner + label so
+              the inline status reads as actually-running rather than
+              static text on a slow fetch. */}
+          <div className="flex-1 min-w-0 text-slate-500 tabular-nums truncate">
+            {loading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading…
+              </span>
+            ) : filteredProducts.length === products.length ? (
+              `${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+            ) : (
+              `${filteredProducts.length.toLocaleString()} of ${products.length.toLocaleString()} rows · ${visibleColumnIds.length}/${allFields.length} cols · ⌘S to save`
+            )}
+          </div>
+
+          {/* Right: view tools. */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* T.2 — surface every dynamic schema attribute (attr_*)
+             *  for the productTypes seen in the loaded data. One-shot
+             *  append; user can hide individual ones via Cols.
+             *  CC.3 — when a marketplace tab is active, the same button
+             *  also pulls in channel-specific columns (channel-prefixed
+             *  fields whose channel matches the active tab). Label and
+             *  tooltip reflect current scope so the click is explicit. */}
+            {(() => {
+              const onMarketplaceTab = !!primaryContext
+              const missingFields = allFields.filter((f) => {
+                if (visibleColumnIds.includes(f.id)) return false
+                if (f.id.startsWith('attr_')) return true
+                if (onMarketplaceTab && f.channel === primaryContext!.channel) {
+                  return true
+                }
+                return false
+              })
+              if (missingFields.length === 0) return null
+              const scopeLabel = onMarketplaceTab
+                ? `${primaryContext!.channel}:${primaryContext!.marketplace}`
+                : null
+              return (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleColumnIds((prev) => [
+                      ...prev,
+                      ...missingFields.map((f) => f.id),
+                    ])
+                  }
+                  title={
+                    scopeLabel
+                      ? `Add every schema-driven category attribute plus channel-specific fields for ${scopeLabel} as columns`
+                      : 'Add every schema-driven category attribute (attr_*) for the loaded productTypes as columns'
+                  }
+                  className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+                >
+                  + {missingFields.length}
+                  {scopeLabel
+                    ? ` for ${scopeLabel}`
+                    : ` schema field${missingFields.length === 1 ? '' : 's'}`}
+                </button>
+              )
+            })()}
+            <ColumnSelector
+              allFields={allFields}
+              visibleColumnIds={visibleColumnIds}
+              onVisibleChange={setVisibleColumnIds}
+              enabledChannels={enabledChannels}
+              onEnabledChannelsChange={setEnabledChannels}
+              enabledProductTypes={enabledProductTypes}
+              onEnabledProductTypesChange={setEnabledProductTypes}
+              views={savedViews}
+              activeViewId={activeViewIdState}
+              onSelectView={handleSelectView}
+              onSaveAsView={handleSaveAsView}
+              onDeleteView={handleDeleteView}
+            />
+            {/* V.5 — overwrite the active server template with current
+                state. Only renders when the active view is server-backed. */}
+            {canUpdateActiveView && (
+              <button
+                type="button"
+                onClick={() => void handleUpdateActiveView()}
+                disabled={updateFlash === 'saving'}
+                title={`Save current columns + filters back to "${activeView?.name}"`}
+                className={cn(
+                  'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium border rounded-md transition-colors',
+                  updateFlash === 'saved'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                )}
+              >
+                {updateFlash === 'saving'
+                  ? 'Updating…'
+                  : updateFlash === 'saved'
+                  ? 'Updated'
+                  : `Update "${activeView?.name}"`}
+              </button>
+            )}
+            {Object.keys(columnSizing).length > 0 && (
+              <button
+                type="button"
+                onClick={resetColumnWidths}
+                title="Reset column widths to defaults"
+                className="inline-flex items-center gap-1 h-7 px-2 text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 hover:text-slate-900"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset widths
+              </button>
+            )}
+            {/* MM — group expand/collapse-all. Placed in the toolbar so
+                it's always reachable; clicking the band chevrons one
+                by one is fine for a few groups but tedious past 5+. */}
+            {groupedFields.length > 1 && (
+              <div className="inline-flex items-center gap-0.5 h-7 px-1 text-sm text-slate-600 border border-slate-200 rounded-md bg-white">
+                <span className="px-1.5 text-slate-400">Groups</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCollapsedGroups((prev) => {
+                      if (prev.size === 0) return prev
+                      saveCollapsedGroups(new Set())
+                      return new Set()
+                    })
+                  }}
+                  disabled={collapsedGroups.size === 0}
+                  title="Expand every group"
+                  className={cn(
+                    'h-5 px-1.5 rounded transition-colors',
+                    collapsedGroups.size === 0
+                      ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:bg-slate-100 hover:text-slate-900',
+                  )}
+                >
+                  Expand all
+                </button>
+                <span className="text-slate-300">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allKeys = new Set(groupedFields.map((g) => g.key))
+                    setCollapsedGroups((prev) => {
+                      if (prev.size >= allKeys.size) return prev
+                      saveCollapsedGroups(allKeys)
+                      return allKeys
+                    })
+                  }}
+                  disabled={collapsedGroups.size >= groupedFields.length}
+                  title="Collapse every group"
+                  className={cn(
+                    'h-5 px-1.5 rounded transition-colors',
+                    collapsedGroups.size >= groupedFields.length
+                      ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:bg-slate-100 hover:text-slate-900',
+                  )}
+                >
+                  Collapse all
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {/* U.52 (BISECT 3) — second half of original JSX disabled. The
+          grid (virtualizer + memoised TableRow), StatusBar, and 7
+          modals are not rendered. If sidebar Links navigate now, the
+          bug is in those. If they still die, it's in the toolbar /
+          banners / MarketplaceTabs above. */}
+      <div className="p-4 text-base text-slate-500">
+        BISECT 3 — JSX second half disabled (grid + StatusBar + modals).
+      </div>
     </div>
   )
-
 }
