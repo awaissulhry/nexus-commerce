@@ -25,6 +25,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { familyHierarchyService } from '../services/family-hierarchy.service.js'
+import { auditLogService } from '../services/audit-log.service.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const MAX_DEPTH = 8
@@ -364,6 +365,106 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
       if (err?.code === 'P2025')
         return reply.code(404).send({ error: 'family-attribute not found' })
       throw err
+    }
+  })
+
+  // ── W2.8 — bulk attach/detach family on N products ─────────────
+  //
+  // Lives in families.routes.ts (not products.routes.ts, which is
+  // already 2k+ LOC) but uses the /products/bulk-* path family for
+  // discoverability — every other bulk product mutation is at
+  // /api/products/bulk-*, so co-locating the path matters more
+  // than co-locating the file.
+  //
+  // Single endpoint with dual semantics:
+  //   familyId = '<id>'  → attach this family to all productIds
+  //   familyId = null    → detach (clear familyId on all productIds)
+  //
+  // Per-product audit row written. updates run inside one
+  // $transaction so a partial failure rolls back cleanly.
+  //
+  // Hard cap at 500 productIds per call (matches bulk-status etc.)
+  // — operator can always call again. Larger jobs should go through
+  // the BulkOperation queue, but at 280-product catalogs this cap
+  // never bites in practice.
+  fastify.post('/products/bulk-attach-family', async (request, reply) => {
+    const body = request.body as {
+      productIds?: string[]
+      familyId?: string | null
+    }
+    if (!Array.isArray(body.productIds) || body.productIds.length === 0)
+      return reply
+        .code(400)
+        .send({ error: 'productIds must be a non-empty array' })
+    if (body.productIds.length > 500)
+      return reply
+        .code(400)
+        .send({ error: 'productIds cannot exceed 500 per call' })
+
+    const targetFamilyId = body.familyId ?? null
+    if (targetFamilyId !== null) {
+      const family = await prisma.productFamily.findUnique({
+        where: { id: targetFamilyId },
+        select: { id: true },
+      })
+      if (!family)
+        return reply.code(400).send({ error: 'familyId does not exist' })
+    }
+
+    // Read current state for the audit before/after diff. Skips
+    // soft-deleted products (deletedAt IS NOT NULL) — operators
+    // shouldn't be able to attach a family to a row that's in
+    // the trash.
+    const products = await prisma.product.findMany({
+      where: { id: { in: body.productIds }, deletedAt: null },
+      select: { id: true, familyId: true },
+    })
+    if (products.length === 0)
+      return reply
+        .code(404)
+        .send({ error: 'no matching active products found' })
+
+    const startTs = Date.now()
+
+    await prisma.$transaction(async (tx) => {
+      await tx.product.updateMany({
+        where: { id: { in: products.map((p) => p.id) } },
+        data: { familyId: targetFamilyId },
+      })
+    })
+
+    // Fail-open audit: never throws, so a Redis blip can't roll back
+    // the attach operation. Each row diffs only the changed field.
+    const auditRows = products
+      .filter((p) => p.familyId !== targetFamilyId) // no-op rows skipped
+      .map((p) => ({
+        userId: null,
+        ip: request.ip ?? null,
+        entityType: 'Product',
+        entityId: p.id,
+        action: 'update',
+        before: { familyId: p.familyId },
+        after: { familyId: targetFamilyId },
+        metadata: {
+          source: 'bulk-attach-family',
+          attachOrDetach: targetFamilyId === null ? 'detach' : 'attach',
+        },
+      }))
+    if (auditRows.length > 0) {
+      void auditLogService.writeMany(auditRows)
+    }
+
+    const skipped = body.productIds.length - products.length
+    const noOpCount = products.length - auditRows.length
+    return {
+      ok: true,
+      familyId: targetFamilyId,
+      requested: body.productIds.length,
+      updated: products.length,
+      changed: auditRows.length,
+      noOp: noOpCount,
+      skipped,
+      elapsedMs: Date.now() - startTs,
     }
   })
 }
