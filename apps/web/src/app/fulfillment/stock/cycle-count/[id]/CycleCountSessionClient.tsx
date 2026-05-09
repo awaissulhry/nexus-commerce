@@ -37,6 +37,18 @@ interface CountItem {
   countedAt: string | null
   reconciledAt: string | null
   notes: string | null
+  /** L.14 — active lots for this product. Empty for non-tracked SKUs.
+   *  Read-only; cycle-count variance reconciliation stays at the
+   *  StockLevel grain (the operator audits which lot a discrepancy
+   *  belongs to manually post-count). */
+  lots?: Array<{
+    id: string
+    lotNumber: string
+    unitsRemaining: number
+    unitsReceived: number
+    expiresAt: string | null
+    recalled: boolean
+  }>
 }
 
 interface CountSession {
@@ -612,6 +624,33 @@ export default function CycleCountSessionClient({ countId }: { countId: string }
                         <div className="font-mono text-sm text-slate-900 dark:text-slate-100 break-all">{it.sku}</div>
                         {it.productName && (
                           <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{it.productName}</div>
+                        )}
+                        {/* L.14 — lot context inline. Read-only; cycle
+                            count is product-level, but the operator
+                            sees which lots make up the expected qty. */}
+                        {it.lots && it.lots.length > 0 && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap gap-1.5">
+                            {it.lots.slice(0, 4).map((l) => (
+                              <span
+                                key={l.id}
+                                className={
+                                  'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded font-mono ' +
+                                  (l.recalled
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300')
+                                }
+                                title={l.recalled ? t('cycleCount.session.lot.recalledTitle') : undefined}
+                              >
+                                {l.lotNumber}
+                                <span className="tabular-nums opacity-60 ml-0.5">·{l.unitsRemaining}</span>
+                              </span>
+                            ))}
+                            {it.lots.length > 4 && (
+                              <span className="text-slate-400 italic">
+                                {t('cycleCount.session.lot.moreLots', { n: it.lots.length - 4 })}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                       <Badge variant={statusVariant(it.status)} size="sm">

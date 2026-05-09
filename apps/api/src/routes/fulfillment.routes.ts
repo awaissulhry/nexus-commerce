@@ -691,6 +691,45 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             })
           : []
         const nameById = new Map(products.map((p) => [p.id, p.name] as const))
+
+        // L.14 — fetch active lots for every counted product so the
+        // session UI can show lot-level context inline. Variance
+        // reconciliation stays at StockLevel grain (a count is
+        // product-level, not lot-level), but the operator sees which
+        // lots make up the expected qty so a discrepancy can be
+        // attributed to a specific batch in the post-count audit.
+        const lotsByProductId = new Map<string, Array<{
+          id: string
+          lotNumber: string
+          unitsRemaining: number
+          unitsReceived: number
+          expiresAt: Date | null
+          recalled: boolean
+        }>>()
+        if (productIds.length > 0) {
+          const lots = await prisma.lot.findMany({
+            where: { productId: { in: productIds }, unitsRemaining: { gt: 0 } },
+            orderBy: [{ expiresAt: 'asc' }, { receivedAt: 'asc' }],
+            select: {
+              id: true, productId: true, lotNumber: true,
+              unitsRemaining: true, unitsReceived: true, expiresAt: true,
+              recalls: { where: { status: 'OPEN' }, select: { id: true }, take: 1 },
+            },
+          })
+          for (const lot of lots) {
+            const arr = lotsByProductId.get(lot.productId) ?? []
+            arr.push({
+              id: lot.id,
+              lotNumber: lot.lotNumber,
+              unitsRemaining: lot.unitsRemaining,
+              unitsReceived: lot.unitsReceived,
+              expiresAt: lot.expiresAt,
+              recalled: lot.recalls.length > 0,
+            })
+            lotsByProductId.set(lot.productId, arr)
+          }
+        }
+
         return reply.send({
           success: true,
           count: {
@@ -702,6 +741,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
                 it.countedQuantity != null
                   ? it.countedQuantity - it.expectedQuantity
                   : null,
+              // L.14 — empty array for non-lot-tracked products
+              // (operator UI hides the section when length === 0).
+              lots: lotsByProductId.get(it.productId) ?? [],
             })),
           },
         })
