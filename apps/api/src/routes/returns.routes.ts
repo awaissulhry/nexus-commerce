@@ -363,23 +363,80 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
   // restock decides their fate). The fix is audit visibility: log
   // the state transition + receivedAt timestamp so operators can
   // answer "when did this come back?". Stock semantics unchanged.
+  //
+  // F1.3 — also records a per-item RETURN_RECEIVED StockMovement
+  // (change=0, audit-only) so the canonical movement ledger captures
+  // "items landed at warehouse" before inspection. Without this the
+  // audit jumps from AUTHORIZED to RESTOCKED and operators can't
+  // answer "when did the unit physically arrive?" from the movement
+  // log alone.
   fastify.post('/fulfillment/returns/:id/receive', async (request, reply) => {
     const { id } = request.params as { id: string }
+    const body = (request.body ?? {}) as { warehouseId?: string }
     const before = await prisma.return.findUnique({
       where: { id },
       select: { status: true },
     })
+    const retDetail = await prisma.return.findUnique({
+      where: { id },
+      include: { items: { select: { id: true, productId: true, sku: true, quantity: true } } },
+    })
+
     const updated = await prisma.return.update({
       where: { id },
       data: { status: 'RECEIVED', receivedAt: new Date(), version: { increment: 1 } },
     })
+
+    // F1.3 — emit RETURN_RECEIVED audit-only movements (change=0) per
+    // item with productId. Scope to the receiving warehouse → its
+    // primary StockLocation. Failures don't roll back the receive
+    // (the receive itself succeeded; movement rows are best-effort
+    // audit, mirrors the L.11 inbound pattern).
+    if (retDetail?.items?.length) {
+      try {
+        const warehouseId = body.warehouseId ?? (await prisma.warehouse.findFirst({ where: { isDefault: true } }))?.id
+        const stockLocation = warehouseId
+          ? await prisma.stockLocation.findFirst({ where: { warehouseId }, select: { id: true } })
+          : null
+
+        if (stockLocation) {
+          for (const it of retDetail.items) {
+            if (!it.productId) continue
+            const sl = await prisma.stockLevel.findFirst({
+              where: { productId: it.productId, locationId: stockLocation.id },
+              select: { quantity: true },
+            })
+            const balance = sl?.quantity ?? 0
+            await prisma.stockMovement.create({
+              data: {
+                productId: it.productId,
+                locationId: stockLocation.id,
+                change: 0,
+                balanceAfter: balance,
+                quantityBefore: balance,
+                reason: 'RETURN_RECEIVED',
+                referenceType: 'Return',
+                referenceId: id,
+                returnId: id,
+                notes: `Return ${retDetail.rmaNumber ?? id.slice(0, 8)} arrived at warehouse — awaiting inspection`,
+                actor: 'return-receive',
+              },
+            })
+          }
+        }
+      } catch (err) {
+        // Don't fail the receive on audit-write error — log + continue.
+        request.log.warn({ err }, '[returns/:id/receive] RETURN_RECEIVED audit-row write failed')
+      }
+    }
+
     void auditLogService.write({
       ...auditCtx(request),
       entityType: 'Return',
       entityId: id,
       action: 'receive',
       before: { status: before?.status ?? null },
-      after: { status: updated.status, receivedAt: updated.receivedAt },
+      after: { status: updated.status, receivedAt: updated.receivedAt, itemsTouched: retDetail?.items.length ?? 0 },
     })
     return updated
   })
