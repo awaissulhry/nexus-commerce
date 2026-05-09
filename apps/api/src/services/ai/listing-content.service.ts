@@ -19,6 +19,11 @@ import {
   type BudgetCheckScope,
 } from './budget.service.js'
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
+import {
+  sanitizeOutboundPrompt,
+  totalRedactions,
+  type RedactionCount,
+} from './prompt-sanitizer.js'
 import type {
   LLMProvider,
   ProviderName,
@@ -144,6 +149,12 @@ export interface GenerationResult {
    *  when no budget scope was provided OR no horizon is in the warn
    *  zone. */
   budgetWarn?: 'per_wizard' | 'per_day' | 'per_month'
+  /** AI-3.1 — per-kind tally of fiscal / personal-data redactions
+   *  applied to every prompt before it left for the vendor. Empty
+   *  array when prompts were clean. */
+  redactions: RedactionCount[]
+  /** AI-3.1 — convenience: redactions.reduce((s, r) => s + r.count, 0). */
+  redactionTotal: number
   metadata: {
     productSku: string
     marketplace: string
@@ -189,8 +200,6 @@ export class ListingContentService {
     let budgetWarn: BudgetCheckScope extends never ? never : ('per_wizard' | 'per_day' | 'per_month' | undefined) =
       undefined as never
     if (params.budgetScope) {
-      const language =
-        LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
       let totalEstimateUSD = 0
       for (const f of params.fields) {
         const prompt =
@@ -227,12 +236,18 @@ export class ListingContentService {
       field: ContentField
       result: unknown
       usage: ProviderUsage
+      redactions: RedactionCount[]
     }>> = []
     for (const f of params.fields) {
       if (f === 'title') {
         tasks.push(
           this.runOne(provider, this.titlePrompt(params, language), params.variant).then(
-            (r) => ({ field: 'title', result: this.parseTitle(r.text), usage: r.usage }),
+            (r) => ({
+              field: 'title',
+              result: this.parseTitle(r.text),
+              usage: r.usage,
+              redactions: r.redactions,
+            }),
           ),
         )
       } else if (f === 'bullets') {
@@ -246,6 +261,7 @@ export class ListingContentService {
             field: 'bullets',
             result: this.parseBullets(r.text),
             usage: r.usage,
+            redactions: r.redactions,
           })),
         )
       } else if (f === 'description') {
@@ -258,6 +274,7 @@ export class ListingContentService {
             field: 'description',
             result: this.parseDescription(r.text),
             usage: r.usage,
+            redactions: r.redactions,
           })),
         )
       } else if (f === 'keywords') {
@@ -270,6 +287,7 @@ export class ListingContentService {
             field: 'keywords',
             result: this.parseKeywords(r.text),
             usage: r.usage,
+            redactions: r.redactions,
           })),
         )
       }
@@ -277,9 +295,27 @@ export class ListingContentService {
 
     const settled = await Promise.all(tasks)
     const usageList = settled.map((s) => s.usage)
+
+    // AI-3.1 — sum redactions across every field's prompt. The route
+    // logs this to AiUsageLog.metadata so audits can flag operators
+    // / surfaces / products that consistently leak fiscal data into
+    // AI prompts. Returned to the caller for UI surfacing too.
+    const redactionTotals = new Map<string, number>()
+    for (const s of settled) {
+      for (const r of s.redactions) {
+        redactionTotals.set(r.kind, (redactionTotals.get(r.kind) ?? 0) + r.count)
+      }
+    }
+    const redactions: RedactionCount[] = Array.from(redactionTotals.entries()).map(
+      ([kind, count]) => ({ kind: kind as RedactionCount['kind'], count }),
+    )
+    const redactionTotal = totalRedactions(redactions)
+
     const result: GenerationResult = {
       usage: usageList,
       budgetWarn: budgetWarn === undefined ? undefined : budgetWarn,
+      redactions,
+      redactionTotal,
       metadata: {
         productSku: params.product.sku,
         marketplace: params.marketplace,
@@ -483,18 +519,29 @@ Return JSON only:
     prompt: string,
     variant: number = 0,
     extraTemperatureBump: number = 0,
-  ): Promise<{ text: string; usage: ProviderUsage }> {
+  ): Promise<{
+    text: string
+    usage: ProviderUsage
+    redactions: RedactionCount[]
+  }> {
     // Base 0.6 + variant bump; bullets get a slightly higher base so
     // repeats feel meaningfully different.
     const temperature = Math.min(
       1.0,
       0.6 + variant * 0.07 + extraTemperatureBump,
     )
-    return provider.generate({
-      prompt,
+    // AI-3.1 — sanitize before the vendor call. Anything matching a
+    // fiscal / personal-data shape becomes a [REDACTED:KIND]
+    // placeholder; the redactions count gets bubbled up to the
+    // caller for telemetry. The vendor sees the sanitized prompt
+    // only.
+    const { sanitized, redactions } = sanitizeOutboundPrompt(prompt)
+    const result = await provider.generate({
+      prompt: sanitized,
       temperature,
       jsonMode: true,
     })
+    return { ...result, redactions }
   }
 
   private parseJson<T>(raw: string, field: string): T {

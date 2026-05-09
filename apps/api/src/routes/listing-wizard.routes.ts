@@ -2305,6 +2305,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
                 marketplace: representativeMarketplace,
                 fields: requested,
                 groupKey,
+                // AI-3.1 — fiscal / personal-data redactions applied
+                // to outbound prompts. Persisted to AiUsageLog so
+                // audits can flag operators / products / channels
+                // that leak sensitive data. Tally is shared across
+                // every usage row in the group (same prompts).
+                redactionTotal: result.redactionTotal,
+                redactions: result.redactions,
               },
             })
           }
