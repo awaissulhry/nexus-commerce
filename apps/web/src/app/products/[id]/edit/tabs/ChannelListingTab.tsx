@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Sparkles, ArrowDownToLine, ArrowUpFromLine, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import ChannelFieldEditor from '../../../_shared/ChannelFieldEditor'
 
@@ -58,7 +59,16 @@ export default function ChannelListingTab({
   onDirtyChange,
   onSave,
 }: Props) {
+  const { t } = useTranslations()
   const [pulling, setPulling] = useState(false)
+  // W1.5 — translate-all is debounced to one in-flight call at a
+  // time; the editor below drives the actual fan-out via the ref
+  // ChannelFieldEditor binds when its schema manifest loads.
+  const [translating, setTranslating] = useState(false)
+  const translateAllRef = useRef<
+    | (() => Promise<{ translated: number; skipped: number }>)
+    | null
+  >(null)
   const [statusMsg, setStatusMsg] = useState<{
     kind: 'info' | 'error' | 'success'
     text: string
@@ -180,8 +190,66 @@ export default function ChannelListingTab({
     setStatusMsg({ kind: 'info', text: `Pull from ${channel} ships when its adapter lands.` })
   }
 
-  function handleAITranslate() {
-    setStatusMsg({ kind: 'info', text: 'Q.9 — AI translate ships next.' })
+  // W1.5 — translate every AI-supported string field on the active
+  // listing in one click. ChannelFieldEditor binds the imperative
+  // handle when its manifest loads; if the user clicks before that,
+  // we say so rather than no-op silently.
+  async function handleAITranslate() {
+    const fn = translateAllRef.current
+    if (!fn) {
+      setStatusMsg({
+        kind: 'info',
+        text: t('products.edit.translate.editorLoading'),
+      })
+      return
+    }
+    setTranslating(true)
+    setStatusMsg({
+      kind: 'info',
+      text: t('products.edit.translate.running', {
+        marketplace: marketInfo.code,
+      }),
+    })
+    try {
+      const { translated, skipped } = await fn()
+      if (translated === 0 && skipped === 0) {
+        setStatusMsg({
+          kind: 'info',
+          text: t('products.edit.translate.noFields'),
+        })
+      } else if (translated === 0) {
+        setStatusMsg({
+          kind: 'error',
+          text: t('products.edit.translate.allSkipped', {
+            count: skipped,
+          }),
+        })
+      } else if (skipped === 0) {
+        setStatusMsg({
+          kind: 'success',
+          text: t('products.edit.translate.success', {
+            count: translated,
+          }),
+        })
+      } else {
+        setStatusMsg({
+          kind: 'success',
+          text: t('products.edit.translate.partial', {
+            translated,
+            skipped,
+          }),
+        })
+      }
+    } catch (e) {
+      setStatusMsg({
+        kind: 'error',
+        text: t('products.edit.translate.failed', {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      })
+    } finally {
+      setTranslating(false)
+    }
   }
 
   function handlePushPlaceholder() {
@@ -244,10 +312,14 @@ export default function ChannelListingTab({
             <Button
               variant="secondary"
               size="sm"
+              loading={translating}
               icon={<Sparkles className="w-3.5 h-3.5" />}
               onClick={handleAITranslate}
+              title={t('products.edit.translate.tooltip', {
+                marketplace: marketInfo.code,
+              })}
             >
-              Translate
+              {t('products.edit.translate.button')}
             </Button>
             <Button
               variant="secondary"
@@ -283,6 +355,9 @@ export default function ChannelListingTab({
         onDirtyChange={onDirtyChange}
         onSaved={(updated) => {
           onSave(updated as Listing)
+        }}
+        bindTranslateAll={(fn) => {
+          translateAllRef.current = fn
         }}
       />
     </div>

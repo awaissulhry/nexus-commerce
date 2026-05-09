@@ -54,6 +54,17 @@ interface Props {
    *  Called whenever any dirty ref changes, including after a
    *  successful flush which clears it back to zero. */
   onDirtyChange?: (count: number) => void
+  /** W1.5 — toolbar Translate button on ChannelListingTab needs an
+   *  imperative handle to the editor's translate-all routine. When
+   *  the schema manifest is loaded, ChannelFieldEditor calls this
+   *  callback with a function that iterates every AI-supported field
+   *  and runs onTranslate for the active channel. The callback also
+   *  fires with `null` on unmount so the parent's ref doesn't dangle. */
+  bindTranslateAll?: (
+    fn:
+      | (() => Promise<{ translated: number; skipped: number }>)
+      | null,
+  ) => void
 }
 
 /** Maps schema field ids to the master product columns they inherit
@@ -129,6 +140,7 @@ export default function ChannelFieldEditor({
   product,
   onSaved,
   onDirtyChange,
+  bindTranslateAll,
 }: Props) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
@@ -774,6 +786,86 @@ export default function ChannelFieldEditor({
     },
     [productId, channel, marketplace, channelKey, setBase],
   )
+
+  // ── W1.5 — translate every AI-supported field on the active
+  //     listing in one click. ChannelListingTab's toolbar Translate
+  //     button calls this via bindTranslateAll. Iterates serially
+  //     so rate-limited providers don't fan out beyond their bucket;
+  //     each field's setBase plugs into the existing debounced
+  //     auto-save so the values land in the listing's stored
+  //     attributes without a separate explicit save step. ────────
+  const translateAllFields = useCallback(async () => {
+    if (!manifest) return { translated: 0, skipped: 0 }
+    let translated = 0
+    let skipped = 0
+    for (const field of manifest.fields) {
+      const aiKind = AI_FIELD_MAP[field.id]
+      if (!aiKind) continue
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/${productId}/generate-content`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fields: [aiKind],
+              channel,
+              marketplace,
+              variant: 0,
+            }),
+          },
+        )
+        if (!res.ok) {
+          skipped++
+          continue
+        }
+        const json = await res.json().catch(() => null)
+        const first = json?.groups?.[0]?.result
+        if (!first) {
+          skipped++
+          continue
+        }
+        let value: string | undefined
+        if (aiKind === 'title') value = first.title?.content
+        else if (aiKind === 'description') value = first.description?.content
+        else if (aiKind === 'keywords') value = first.keywords?.content
+        else if (aiKind === 'bullets') {
+          const bullets = first.bullets?.content
+          if (Array.isArray(bullets)) {
+            value = JSON.stringify(
+              bullets.filter(
+                (b: unknown) =>
+                  typeof b === 'string' && b.trim().length > 0,
+              ),
+            )
+          }
+        }
+        if (typeof value === 'string' && value.length > 0) {
+          setBase(field.id, value as Primitive)
+          translated++
+        } else {
+          skipped++
+        }
+      } catch {
+        skipped++
+      }
+    }
+    return { translated, skipped }
+  }, [manifest, productId, channel, marketplace, setBase])
+
+  // Wire the imperative handle for the parent's Translate button.
+  // Only bind once the manifest is in hand — translateAllFields is a
+  // no-op without it, but parents shouldn't see a stale function
+  // pointer either; null while loading is the cleaner contract.
+  useEffect(() => {
+    if (!bindTranslateAll) return
+    if (!manifest) {
+      bindTranslateAll(null)
+      return
+    }
+    bindTranslateAll(translateAllFields)
+    return () => bindTranslateAll(null)
+  }, [bindTranslateAll, manifest, translateAllFields])
 
   // ── AI generate (master-level fill, used by the per-field
   //     "AI generate" button on the FieldCard) ───────────────────
