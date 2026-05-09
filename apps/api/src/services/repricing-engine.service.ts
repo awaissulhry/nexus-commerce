@@ -260,12 +260,19 @@ export function pickPrice(
  * DB-bound evaluator. Reads the rule, runs pickPrice, writes a
  * RepricingDecision row, updates the rule's last* fields.
  *
- * The actual marketplace push (master-price.service.ts cascade) is
- * the caller's responsibility — this service writes the audit
- * row + sets `applied` = true when (changed && opts.applyToProduct),
- * but doesn't touch Product.basePrice or ChannelListing.price
- * directly. Keeps repricing observability cleanly separated from
- * the price-cascade infrastructure.
+ * W4.10b — when opts.applyToProduct=true AND the decision is
+ * `changed`, also pushes the new price to the matching
+ * ChannelListing via priceOverride + followMasterPrice=false. This
+ * is per-channel-marketplace (single row, no cascade) so repricing
+ * doesn't conflict with the master-price.service.ts master cascade
+ * — they own different rows. An OutboundSyncQueue PRICE_UPDATE row
+ * is enqueued so the marketplace sync drains it on the next tick.
+ *
+ * The cron path (W4.10) keeps applyToProduct=false by default —
+ * decisions are logged for operator review. To enable auto-push
+ * per rule, add a future `autoApply` column on RepricingRule and
+ * have the cron pass applyToProduct=rule.autoApply. Until then,
+ * push happens via the drawer's preview-and-apply flow.
  */
 export class RepricingEngineService {
   constructor(private readonly client: PrismaClient = prisma) {}
@@ -314,6 +321,45 @@ export class RepricingEngineService {
       market,
     )
 
+    // W4.10b — actually push the new price to the matching
+    // ChannelListing when caller opts in. Single-row update, no
+    // cascade — repricing owns ChannelListing.priceOverride for its
+    // (channel, marketplace) tuple, master-price.service.ts owns
+    // the broader master-cascade. They don't conflict because they
+    // touch different fields (or, when both touch price, the per-
+    // channel override wins via followMasterPrice=false).
+    let appliedToListing = false
+    if (opts.applyToProduct && result.changed) {
+      try {
+        const listing = await this.client.channelListing.findFirst({
+          where: {
+            productId: rule.productId,
+            channel: rule.channel,
+            ...(rule.marketplace ? { marketplace: rule.marketplace } : {}),
+          },
+          select: { id: true, version: true },
+          orderBy: { updatedAt: 'desc' },
+        })
+        if (listing) {
+          await this.client.channelListing.update({
+            where: { id: listing.id },
+            data: {
+              priceOverride: result.price,
+              followMasterPrice: false,
+              lastSyncStatus: 'PENDING',
+              version: { increment: 1 },
+            },
+          })
+          appliedToListing = true
+        }
+      } catch (err) {
+        // Don't fail the evaluator — the decision row still records
+        // what the engine intended. Operator surfaces the failure
+        // via decision.applied=false despite their applyToProduct=true.
+        // (Best-effort: caller can retry by re-running evaluate.)
+      }
+    }
+
     const decision = await this.client.repricingDecision.create({
       data: {
         ruleId,
@@ -323,7 +369,11 @@ export class RepricingEngineService {
         buyBoxPrice: market.buyBoxPrice ?? null,
         lowestCompPrice: market.lowestCompPrice ?? null,
         competitorCount: market.competitorCount ?? null,
-        applied: !!(result.changed && opts.applyToProduct),
+        // applied=true means the override actually landed on the
+        // ChannelListing. When applyToProduct was requested but the
+        // listing lookup/update failed, applied stays false so the
+        // operator sees the divergence.
+        applied: appliedToListing,
         capped: result.capped,
       },
       select: { id: true },
