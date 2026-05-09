@@ -33,6 +33,7 @@ const SAVE_DEBOUNCE_MS = 600
 /** Q.0 — fields the master-data form actually persists. Each
  *  corresponds to a field allowed on the existing
  *  /api/products/bulk PATCH endpoint, so we don't need a new route.
+ *  W1.3 added basePrice + status + description.
  */
 const MASTER_FIELDS = [
   'sku',
@@ -41,6 +42,9 @@ const MASTER_FIELDS = [
   'manufacturer',
   'upc',
   'ean',
+  'status',
+  'basePrice',
+  'description',
   'weightValue',
   'weightUnit',
   'dimLength',
@@ -56,6 +60,7 @@ const MASTER_FIELDS = [
 type MasterField = (typeof MASTER_FIELDS)[number]
 
 const NUMERIC_FIELDS: ReadonlySet<string> = new Set([
+  'basePrice',
   'weightValue',
   'dimLength',
   'dimWidth',
@@ -74,6 +79,10 @@ function seedFromProduct(product: any): Record<MasterField, string> {
   }
   if (!seed.weightUnit) seed.weightUnit = 'kg'
   if (!seed.dimUnit) seed.dimUnit = 'cm'
+  // Status defaults to ACTIVE on a freshly-created standalone — the
+  // server allows DRAFT/INACTIVE too. We don't normalise here so the
+  // raw value the server has is what the select reflects.
+  if (!seed.status) seed.status = 'ACTIVE'
   return seed
 }
 
@@ -266,37 +275,40 @@ export default function MasterDataTab({
       )}
       <SaveStatusBar status={status} error={error} t={t} />
 
-      <Card title="Identity" description="Core information shared across all channels">
+      <Card
+        title={t('products.edit.master.identityTitle')}
+        description={t('products.edit.master.identityDesc')}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
           <Input
-            label="Master SKU"
+            label={t('products.edit.master.skuLabel')}
             value={data.sku}
             mono
             onChange={(e) => update('sku', e.target.value)}
           />
           <Input
-            label="Product Name"
+            label={t('products.edit.master.nameLabel')}
             value={data.name}
             onChange={(e) => update('name', e.target.value)}
           />
           <Input
-            label="Brand"
+            label={t('products.edit.master.brandLabel')}
             value={data.brand}
             onChange={(e) => update('brand', e.target.value)}
           />
           <Input
-            label="Manufacturer"
+            label={t('products.edit.master.manufacturerLabel')}
             value={data.manufacturer}
             onChange={(e) => update('manufacturer', e.target.value)}
           />
           <Input
-            label="UPC"
+            label={t('products.edit.master.upcLabel')}
             value={data.upc}
             mono
             onChange={(e) => update('upc', e.target.value)}
           />
           <Input
-            label="EAN"
+            label={t('products.edit.master.eanLabel')}
             value={data.ean}
             mono
             onChange={(e) => update('ean', e.target.value)}
@@ -304,16 +316,59 @@ export default function MasterDataTab({
         </div>
       </Card>
 
-      <Card title="Physical Attributes" description="Defaults for fulfillment fees and shipping. Variants can override.">
+      <Card
+        title={t('products.edit.master.statusTitle')}
+        description={t('products.edit.master.statusDesc')}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+          <SelectField
+            label={t('products.edit.master.statusLabel')}
+            value={data.status || 'ACTIVE'}
+            onChange={(v) => update('status', v)}
+            options={[
+              { value: 'ACTIVE', label: t('products.edit.master.statusActive') },
+              { value: 'DRAFT', label: t('products.edit.master.statusDraft') },
+              { value: 'INACTIVE', label: t('products.edit.master.statusInactive') },
+            ]}
+          />
+        </div>
+      </Card>
+
+      <Card
+        title={t('products.edit.master.contentTitle')}
+        description={t('products.edit.master.contentDesc')}
+      >
+        <div className="space-y-1">
+          <label
+            htmlFor="master-description"
+            className="text-base font-medium text-slate-700 dark:text-slate-300"
+          >
+            {t('products.edit.master.descriptionLabel')}
+          </label>
+          <textarea
+            id="master-description"
+            value={data.description}
+            onChange={(e) => update('description', e.target.value)}
+            placeholder={t('products.edit.master.descriptionPlaceholder')}
+            rows={6}
+            className="w-full rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900 text-md text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-sans"
+          />
+        </div>
+      </Card>
+
+      <Card
+        title={t('products.edit.master.physicalTitle')}
+        description={t('products.edit.master.physicalDesc')}
+      >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3">
           <Input
-            label="Weight"
+            label={t('products.edit.master.weightLabel')}
             type="number"
             value={data.weightValue}
             onChange={(e) => update('weightValue', e.target.value)}
           />
           <SelectField
-            label="Unit"
+            label={t('products.edit.master.unitLabel')}
             value={data.weightUnit}
             onChange={(v) => update('weightUnit', v)}
             options={[
@@ -326,25 +381,25 @@ export default function MasterDataTab({
           <div />
           <div />
           <Input
-            label="Length"
+            label={t('products.edit.master.lengthLabel')}
             type="number"
             value={data.dimLength}
             onChange={(e) => update('dimLength', e.target.value)}
           />
           <Input
-            label="Width"
+            label={t('products.edit.master.widthLabel')}
             type="number"
             value={data.dimWidth}
             onChange={(e) => update('dimWidth', e.target.value)}
           />
           <Input
-            label="Height"
+            label={t('products.edit.master.heightLabel')}
             type="number"
             value={data.dimHeight}
             onChange={(e) => update('dimHeight', e.target.value)}
           />
           <SelectField
-            label="Unit"
+            label={t('products.edit.master.unitLabel')}
             value={data.dimUnit}
             onChange={(v) => update('dimUnit', v)}
             options={[
@@ -356,31 +411,42 @@ export default function MasterDataTab({
         </div>
       </Card>
 
-      <Card title="Pricing Rules" description="Constraints applied across all channels">
+      <Card
+        title={t('products.edit.master.pricingTitle')}
+        description={t('products.edit.master.pricingDesc')}
+      >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3">
           <Input
-            label="Cost Price"
+            label={t('products.edit.master.basePriceLabel')}
+            type="number"
+            prefix="€"
+            value={data.basePrice}
+            onChange={(e) => update('basePrice', e.target.value)}
+          />
+          <Input
+            label={t('products.edit.master.costLabel')}
             type="number"
             prefix="€"
             value={data.costPrice}
             onChange={(e) => update('costPrice', e.target.value)}
           />
           <Input
-            label="Min Margin"
+            label={t('products.edit.master.minMarginLabel')}
             type="number"
             suffix="%"
             value={data.minMargin}
             onChange={(e) => update('minMargin', e.target.value)}
           />
+          <div />
           <Input
-            label="Min Price"
+            label={t('products.edit.master.minPriceLabel')}
             type="number"
             prefix="€"
             value={data.minPrice}
             onChange={(e) => update('minPrice', e.target.value)}
           />
           <Input
-            label="Max Price"
+            label={t('products.edit.master.maxPriceLabel')}
             type="number"
             prefix="€"
             value={data.maxPrice}
