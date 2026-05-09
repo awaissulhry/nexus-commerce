@@ -20,8 +20,19 @@ import {
   Lightbulb, Zap, AlertCircle,
   Columns, Maximize2, Minimize2, Keyboard,
   ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Star,
-  ShieldAlert,
+  ShieldAlert, GripVertical,
 } from 'lucide-react'
+// CS.5 — dnd-kit pieces for the column-reorder picker.
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor,
+  useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove, SortableContext, sortableKeyboardCoordinates,
+  useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { AbcBadge } from '@/components/inventory/AbcBadge'
@@ -2762,14 +2773,45 @@ function SavedViewsButton({
   )
 }
 
+// CS.5 — column picker with drag-to-reorder + show/hide.
+// Visible columns appear at the top in current order (drag to reorder);
+// hidden columns appear below (no drag, just toggle to enable). Toggling
+// a hidden column on appends it to the end of the visible list — operator
+// can then drag it into position.
 function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (next: ColumnKey[]) => void }) {
   const [open, setOpen] = useState(false)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const hidden = ALL_COLUMNS.filter((col) => !visible.includes(col.key))
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const oldIdx = visible.indexOf(active.id as ColumnKey)
+    const newIdx = visible.indexOf(over.id as ColumnKey)
+    if (oldIdx === -1 || newIdx === -1) return
+    onChange(arrayMove(visible, oldIdx, newIdx))
+  }
+
+  const toggleHidden = (key: ColumnKey) => {
+    onChange([...visible, key])
+  }
+
+  const removeVisible = (key: ColumnKey) => {
+    const meta = ALL_COLUMNS.find((c) => c.key === key)
+    if (meta?.alwaysOn) return
+    onChange(visible.filter((k) => k !== key))
+  }
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
-        title="Show / hide columns"
+        title="Show / hide / reorder columns"
       >
         <Columns size={12} /> Columns
       </button>
@@ -2777,41 +2819,58 @@ function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div
-            className="absolute right-0 top-full mt-1 w-56 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
+            className="absolute right-0 top-full mt-1 w-64 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pb-1.5">Columns</div>
-            {ALL_COLUMNS.map((col) => {
-              const checked = visible.includes(col.key)
-              return (
-                <label
-                  key={col.key}
-                  className={`flex items-center justify-between gap-2 px-1.5 py-1 rounded cursor-pointer ${col.alwaysOn ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800'}`}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={col.alwaysOn}
-                      onChange={() => {
-                        if (col.alwaysOn) return
-                        onChange(
-                          checked
-                            ? visible.filter((k) => k !== col.key)
-                            : [...visible, col.key],
-                        )
-                      }}
-                      className="cursor-pointer"
-                    />
-                    {col.label}
-                  </span>
-                  {col.alwaysOn && <span className="text-xs text-slate-400">always on</span>}
-                </label>
-              )
-            })}
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pb-1.5 inline-flex items-center gap-1">
+              Visible
+              <span className="text-slate-400 dark:text-slate-500 normal-case font-normal">· drag to reorder</span>
+            </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={visible} strategy={verticalListSortingStrategy}>
+                <ul className="space-y-0.5">
+                  {visible.map((key) => {
+                    const col = ALL_COLUMNS.find((c) => c.key === key)
+                    if (!col) return null
+                    return (
+                      <SortableColumnRow
+                        key={key}
+                        colKey={key}
+                        label={col.label}
+                        alwaysOn={!!col.alwaysOn}
+                        onRemove={() => removeVisible(key)}
+                      />
+                    )
+                  })}
+                </ul>
+              </SortableContext>
+            </DndContext>
+
+            {hidden.length > 0 && (
+              <>
+                <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pt-2 pb-1.5 mt-1.5 border-t border-slate-100 dark:border-slate-800">
+                  Hidden
+                </div>
+                <ul className="space-y-0.5">
+                  {hidden.map((col) => (
+                    <li key={col.key}>
+                      <button
+                        onClick={() => toggleHidden(col.key)}
+                        className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-left text-slate-600 dark:text-slate-400"
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Plus size={11} aria-hidden="true" /> {col.label}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
             <button
               onClick={() => onChange(DEFAULT_VISIBLE_COLUMNS)}
-              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 text-left px-1.5 py-1"
+              className="w-full mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 text-left px-1.5 py-1"
             >
               Reset to default
             </button>
@@ -2819,6 +2878,50 @@ function ColumnPicker({ visible, onChange }: { visible: ColumnKey[]; onChange: (
         </>
       )}
     </div>
+  )
+}
+
+// CS.5 — single sortable row in the column picker. Drag handle on the
+// left, label in the middle, remove button on the right (omitted for
+// alwaysOn columns).
+function SortableColumnRow({
+  colKey, label, alwaysOn, onRemove,
+}: { colKey: ColumnKey; label: string; alwaysOn: boolean; onRemove: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: colKey })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-1 px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800 group"
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${label}`}
+        className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing rounded"
+      >
+        <GripVertical size={12} aria-hidden="true" />
+      </button>
+      <span className="flex-1 text-slate-700 dark:text-slate-300">{label}</span>
+      {alwaysOn ? (
+        <span className="text-xs text-slate-400 dark:text-slate-500">always on</span>
+      ) : (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Hide ${label}`}
+          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 opacity-0 group-hover:opacity-100 rounded"
+        >
+          <X size={12} aria-hidden="true" />
+        </button>
+      )}
+    </li>
   )
 }
 
@@ -3036,6 +3139,123 @@ function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode
   )
 }
 
+// CS.5 — column meta. Each entry knows how to render its own thead
+// + tbody cells. Mapping `visibleColumns.map(...)` over this object
+// is what lets the operator reorder columns: the same array drives
+// both the picker (drag-to-reorder) AND the table render.
+type ColumnRenderCtx = {
+  it: StockRow
+  padY: string
+  density: Density
+  threshold: number
+  stockTone: string
+  t: ReturnType<typeof useTranslations>['t']
+}
+
+const COLUMN_META: Record<ColumnKey, {
+  align: 'left' | 'right'
+  headWidthCls?: string
+  head: string
+  cell: (ctx: ColumnRenderCtx) => React.ReactNode
+}> = {
+  thumb: {
+    align: 'left',
+    headWidthCls: 'w-10',
+    head: '',
+    cell: ({ it, density }) =>
+      it.product.thumbnailUrl ? (
+        <img src={it.product.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
+      ) : (
+        <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-slate-400`}>
+          <Package size={density === 'compact' ? 12 : 14} />
+        </div>
+      ),
+  },
+  product: {
+    align: 'left',
+    head: 'Product',
+    cell: ({ it }) => (
+      <>
+        <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md inline-flex items-center gap-1.5">
+          {it.product.name}
+          {it.product.abcClass && <AbcBadge cls={it.product.abcClass} />}
+        </div>
+        <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
+          {it.product.sku}
+          {it.variation && <span> · {it.variation.sku}</span>}
+          {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
+        </div>
+      </>
+    ),
+  },
+  location: {
+    align: 'left',
+    head: 'Location',
+    cell: ({ it }) => (
+      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
+        LOCATION_TONE[it.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'
+      }`} title={it.location.name}>
+        {it.location.code}
+      </span>
+    ),
+  },
+  onHand: {
+    align: 'right',
+    head: 'On hand',
+    cell: ({ it, stockTone }) => (
+      <span className={`tabular-nums font-semibold ${stockTone}`}>{it.quantity}</span>
+    ),
+  },
+  reserved: {
+    align: 'right',
+    head: 'Reserved',
+    cell: ({ it }) => (
+      <span className="tabular-nums text-slate-500 dark:text-slate-400">{it.reserved}</span>
+    ),
+  },
+  available: {
+    align: 'right',
+    head: 'Available',
+    cell: ({ it }) => (
+      <span className="tabular-nums text-slate-700 dark:text-slate-300">{it.available}</span>
+    ),
+  },
+  threshold: {
+    align: 'right',
+    head: 'Threshold',
+    cell: ({ it, threshold }) => (
+      <span className="tabular-nums text-slate-500 dark:text-slate-400">
+        {/* T.32 — at-reorder rows show "12 · +50" so operator sees
+            ROP + EOQ inline; otherwise just the threshold value. */}
+        {threshold}
+        {it.quantity <= threshold && it.reorderQuantity != null && (
+          <span className="ml-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+            · +{it.reorderQuantity}
+          </span>
+        )}
+      </span>
+    ),
+  },
+  cost: {
+    align: 'right',
+    head: 'Cost',
+    cell: ({ it }) => (
+      <span className="tabular-nums text-slate-600">
+        {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
+      </span>
+    ),
+  },
+  updated: {
+    align: 'right',
+    head: 'Updated',
+    cell: ({ it, t }) => (
+      <span className="tabular-nums text-slate-400 text-sm">
+        {formatRelative(it.lastUpdatedAt, t)}
+      </span>
+    ),
+  },
+}
+
 function TableView({
   items, onOpenProduct, selected, onToggleSelect, onToggleSelectAll,
   density, visibleColumns,
@@ -3052,7 +3272,6 @@ function TableView({
   const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
   const someSelected = !allSelected && items.some((it) => selected.has(it.id))
   const padY = DENSITY_PADDING[density]
-  const visible = (k: ColumnKey) => visibleColumns.includes(k)
 
   return (
     <Card noPadding>
@@ -3070,15 +3289,17 @@ function TableView({
                   className="cursor-pointer"
                 />
               </th>
-              {visible('thumb')     && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 w-10`}></th>}
-              {visible('product')   && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Product</th>}
-              {visible('location')  && <th className={`px-3 ${padY} text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Location</th>}
-              {visible('onHand')    && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>On hand</th>}
-              {visible('reserved')  && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Reserved</th>}
-              {visible('available') && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Available</th>}
-              {visible('threshold') && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Threshold</th>}
-              {visible('cost')      && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Cost</th>}
-              {visible('updated')   && <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}>Updated</th>}
+              {visibleColumns.map((key) => {
+                const meta = COLUMN_META[key]
+                return (
+                  <th
+                    key={key}
+                    className={`px-3 ${padY} text-${meta.align} text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 ${meta.headWidthCls ?? ''}`}
+                  >
+                    {meta.head}
+                  </th>
+                )
+              })}
               <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}></th>
             </tr>
           </thead>
@@ -3090,6 +3311,7 @@ function TableView({
                 it.quantity <= 5 ? 'text-orange-600' :
                 it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
               const isSelected = selected.has(it.id)
+              const ctx: ColumnRenderCtx = { it, padY, density, threshold, stockTone, t }
               return (
                 <tr
                   key={it.id}
@@ -3105,65 +3327,17 @@ function TableView({
                       className="cursor-pointer"
                     />
                   </td>
-                  {visible('thumb') && (
-                    <td className={`px-3 ${padY}`}>
-                      {it.product.thumbnailUrl ? (
-                        <img src={it.product.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
-                      ) : (
-                        <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-slate-400`}>
-                          <Package size={density === 'compact' ? 12 : 14} />
-                        </div>
-                      )}
-                    </td>
-                  )}
-                  {visible('product') && (
-                    <td className={`px-3 ${padY}`}>
-                      <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md inline-flex items-center gap-1.5">
-                        {it.product.name}
-                        {it.product.abcClass && <AbcBadge cls={it.product.abcClass} />}
-                      </div>
-                      <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
-                        {it.product.sku}
-                        {it.variation && <span> · {it.variation.sku}</span>}
-                        {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
-                      </div>
-                    </td>
-                  )}
-                  {visible('location') && (
-                    <td className={`px-3 ${padY}`}>
-                      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
-                        LOCATION_TONE[it.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'
-                      }`} title={it.location.name}>
-                        {it.location.code}
-                      </span>
-                    </td>
-                  )}
-                  {visible('onHand')    && <td className={`px-3 ${padY} text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>}
-                  {visible('reserved')  && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>{it.reserved}</td>}
-                  {visible('available') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-700 dark:text-slate-300`}>{it.available}</td>}
-                  {visible('threshold') && (
-                    <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>
-                      {/* T.32 — at-reorder rows show "12 · +50" so the
-                          operator sees ROP and EOQ inline; otherwise
-                          just the threshold value. */}
-                      {threshold}
-                      {it.quantity <= threshold && it.reorderQuantity != null && (
-                        <span className="ml-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                          · +{it.reorderQuantity}
-                        </span>
-                      )}
-                    </td>
-                  )}
-                  {visible('cost') && (
-                    <td className={`px-3 ${padY} text-right tabular-nums text-slate-600`}>
-                      {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
-                    </td>
-                  )}
-                  {visible('updated') && (
-                    <td className={`px-3 ${padY} text-right tabular-nums text-slate-400 text-sm`}>
-                      {formatRelative(it.lastUpdatedAt, t)}
-                    </td>
-                  )}
+                  {visibleColumns.map((key) => {
+                    const meta = COLUMN_META[key]
+                    return (
+                      <td
+                        key={key}
+                        className={`px-3 ${padY} text-${meta.align}`}
+                      >
+                        {meta.cell(ctx)}
+                      </td>
+                    )
+                  })}
                   <td className={`px-3 ${padY} text-right`}>
                     <ChevronRight size={14} className="text-slate-400 inline" />
                   </td>
