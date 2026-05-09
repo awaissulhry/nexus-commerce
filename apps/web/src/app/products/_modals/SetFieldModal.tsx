@@ -17,9 +17,10 @@
  * chunk only ships when the operator opens it.
  */
 
-import { useEffect, useState } from 'react'
-import { Loader2, Pencil, X } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -122,14 +123,6 @@ export default function SetFieldModal({
 
   const def = FIELDS.find((f) => f.field === field) ?? FIELDS[0]
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose, submitting])
-
   const submit = async () => {
     setSubmitting(true)
     try {
@@ -204,45 +197,20 @@ export default function SetFieldModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="set-field-modal-title"
-      className="fixed inset-0 z-50 bg-black/40 dark:bg-slate-950/60 flex items-center justify-center p-4"
-      onClick={() => {
-        if (!submitting) onClose()
-      }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      size="lg"
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          <Pencil size={14} /> Set field on {productIds.length} product
+          {productIds.length === 1 ? '' : 's'}
+        </span>
+      }
+      description="Pick a field, type the value, apply. One AuditLog row per product. Status / stock / price use the dedicated bulk actions above instead."
     >
-      <div
-        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
-          <div>
-            <div
-              id="set-field-modal-title"
-              className="text-lg font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
-            >
-              <Pencil size={14} /> Set field on {productIds.length} product
-              {productIds.length === 1 ? '' : 's'}
-            </div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              Pick a field, type the value, apply. One AuditLog row per
-              product. Status / stock / price use the dedicated bulk
-              actions above instead.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            aria-label="Close"
-            className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
         <div className="p-5 space-y-4 overflow-y-auto">
           <div className="space-y-2">
             <label
@@ -326,7 +294,7 @@ export default function SetFieldModal({
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-shrink-0">
+        <ModalFooter className="!justify-between">
           <Button
             variant="secondary"
             onClick={onClose}
@@ -350,8 +318,7 @@ export default function SetFieldModal({
               ? 'Applying…'
               : `Apply to ${productIds.length} product${productIds.length === 1 ? '' : 's'}`}
           </Button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+    </Modal>
   )
 }
