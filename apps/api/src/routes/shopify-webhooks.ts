@@ -22,7 +22,8 @@ import {
   resolveLocationByCode,
 } from "../services/stock-level.service.js";
 import { resolveByShopifyId } from "../services/shopify-locations.service.js";
-import { applyStockMovement } from "../services/stock-movement.service.js";
+// applyStockMovement now lives behind the ChannelStockEvent service
+// (CS.2 — drift threshold + auto-apply / review-needed gating).
 import { logger } from "../utils/logger.js";
 
 interface ShopifyWebhookPayload {
@@ -102,27 +103,32 @@ async function handleProductDelete(payload: ShopifyWebhookPayload): Promise<void
 /**
  * Process inventory_levels/update webhook.
  *
- * S.23 — Shopify is canonical for SHOPIFY_LOCATION StockLevel rows.
+ * S.23 + CS.2 — Shopify pushes inventory deltas back; we route them
+ * through ChannelStockEvent so the operator gets visibility into
+ * drift even when auto-applied. Large drifts (> threshold) sit in
+ * REVIEW_NEEDED status until operator confirms — closes the
+ * silent-overwrite risk where a Shopify admin typo would have
+ * blown away local stock without trace.
+ *
  * Webhook payload:
  *   { inventory_item_id, location_id, available, updated_at }
  *
  * Flow:
  *   1. Resolve location_id → Nexus SHOPIFY_LOCATION StockLocation
  *      via resolveByShopifyId (S.22). Skip if unmapped.
- *   2. Resolve inventory_item_id → ChannelListing → Product (the
- *      ChannelListing.externalListingId for Shopify carries the
- *      inventory item id; legacy variantChannelListing path stays
- *      for backward compatibility but Wave 4 catalogs use ChannelListing).
- *   3. Compute the delta (available − current StockLevel.quantity)
- *      and emit applyStockMovement(reason='SYNC_RECONCILIATION',
- *      actor='shopify-webhook:inventory'). Goes through the canonical
- *      ledger so totalStock stays SUM(StockLevel.quantity).
+ *   2. Resolve inventory_item_id → ChannelListing → Product.
+ *   3. recordChannelStockEvent({ channel: 'SHOPIFY', productId,
+ *      channelReportedQty: available, locationId, channelEventId:
+ *      `${inventory_item_id}:${updated_at}` }). The service handles
+ *      the threshold logic (auto-apply small drifts, queue large
+ *      drifts for REVIEW_NEEDED).
  */
 async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<void> {
   const inventory = payload as any;
   const inventoryItemId = String(inventory.inventory_item_id ?? '');
   const shopifyLocationId = inventory.location_id != null ? String(inventory.location_id) : null;
   const available = Number(inventory.available ?? 0);
+  const updatedAt = inventory.updated_at != null ? String(inventory.updated_at) : new Date().toISOString();
 
   logger.info('[ShopifyWebhooks] inventory_levels/update received', {
     inventoryItemId, shopifyLocationId, available,
@@ -182,37 +188,51 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
       logger.warn('[ShopifyWebhooks] inventory webhook for unknown product', {
         inventoryItemId, shopifyLocationId,
       });
+      // Still record the event with no productId so the operator
+      // surface can show "unmapped SKU" entries — easier to debug
+      // mapping holes from one place than via log archaeology.
+      const { recordChannelStockEvent } = await import(
+        '../services/channel-stock-event.service.js'
+      );
+      try {
+        await recordChannelStockEvent({
+          channel: 'SHOPIFY',
+          channelEventId: `${inventoryItemId}:${updatedAt}`,
+          sku: inventoryItemId, // best-effort placeholder
+          channelReportedQty: available,
+          locationId: nexusLocation.id,
+          rawPayload: payload as any,
+        });
+      } catch (e) {
+        logger.warn('[ShopifyWebhooks] could not record unmapped event', {
+          err: e instanceof Error ? e.message : String(e),
+        });
+      }
       return;
     }
 
-    // Compute delta against the current Nexus StockLevel quantity at
-    // the resolved Shopify location. delta=0 short-circuits.
-    const existing = await prisma.stockLevel.findFirst({
-      where: { locationId: nexusLocation.id, productId, variationId: null },
-      select: { quantity: true },
-    });
-    const previousQty = existing?.quantity ?? 0;
-    const delta = available - previousQty;
-    if (delta === 0) {
-      logger.info('[ShopifyWebhooks] inventory webhook no-op (delta=0)', {
-        productId, shopifyLocationId,
-      });
-      return;
-    }
-
-    await applyStockMovement({
+    // CS.2 — route through ChannelStockEvent. The service computes
+    // drift, classifies (AUTO_APPLIED if within threshold, else
+    // REVIEW_NEEDED), and either fires applyStockMovement inline
+    // or leaves the row queued for operator action.
+    const { recordChannelStockEvent } = await import(
+      '../services/channel-stock-event.service.js'
+    );
+    const result = await recordChannelStockEvent({
+      channel: 'SHOPIFY',
+      channelEventId: `${inventoryItemId}:${updatedAt}`,
       productId,
+      channelReportedQty: available,
       locationId: nexusLocation.id,
-      change: delta,
-      reason: 'SYNC_RECONCILIATION',
-      referenceType: 'ShopifyWebhook',
-      referenceId: inventoryItemId,
-      notes: `Shopify inventory_levels/update: ${previousQty} → ${available}`,
-      actor: 'shopify-webhook:inventory',
+      rawPayload: payload as any,
     });
 
-    logger.info('[ShopifyWebhooks] inventory_levels/update applied', {
-      productId, shopifyLocationId, delta, available,
+    logger.info('[ShopifyWebhooks] inventory_levels/update routed via CS.1', {
+      productId,
+      shopifyLocationId,
+      drift: result.drift,
+      status: result.status,
+      newlyRecorded: result.newlyRecorded,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

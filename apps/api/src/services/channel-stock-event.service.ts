@@ -57,7 +57,15 @@ function autoApplyThreshold(channel: string): number {
 export interface RecordChannelStockEventInput {
   channel: 'SHOPIFY' | 'EBAY' | 'AMAZON' | 'WOOCOMMERCE'
   channelEventId: string
-  sku: string
+  /** Either sku OR productId. productId wins when both are set —
+   *  webhook callers that already resolved channel-id → productId
+   *  pass it directly to skip the redundant SKU lookup. */
+  sku?: string
+  productId?: string
+  /** When set, the local-stock lookup AND the resulting movement
+   *  are scoped to this specific ProductVariation. Used by eBay
+   *  variation-listings + Shopify variant inventory items. */
+  variationId?: string | null
   channelReportedQty: number
   /** Optional StockLocation.id pin for multi-warehouse channels. */
   locationId?: string | null
@@ -84,8 +92,9 @@ export interface ChannelStockEventResult {
 export async function recordChannelStockEvent(
   input: RecordChannelStockEventInput,
 ): Promise<ChannelStockEventResult> {
-  const sku = input.sku.trim()
-  if (!sku) throw new Error('recordChannelStockEvent: sku required')
+  if (!input.sku?.trim() && !input.productId) {
+    throw new Error('recordChannelStockEvent: sku or productId required')
+  }
   if (input.channelReportedQty < 0) {
     throw new Error('recordChannelStockEvent: channelReportedQty cannot be negative')
   }
@@ -112,21 +121,42 @@ export async function recordChannelStockEvent(
     return { ...existing, newlyRecorded: false }
   }
 
-  // Resolve SKU → product (master + variant). Master takes precedence;
-  // unmatched SKUs still get recorded so the operator can debug
-  // SKU-mapping issues from the same surface.
-  const product = await prisma.product.findFirst({
-    where: { sku },
-    select: { id: true },
-  })
+  // Resolve productId either from explicit input or by SKU lookup.
+  // Webhook callers (Shopify inventory_item_id → ChannelListing →
+  // productId) pass productId directly; manual / CSV ingest paths
+  // pass SKU and let us look it up.
+  let product: { id: string; sku: string } | null = null
+  if (input.productId) {
+    product = await prisma.product.findUnique({
+      where: { id: input.productId },
+      select: { id: true, sku: true },
+    })
+  } else if (input.sku?.trim()) {
+    product = await prisma.product.findFirst({
+      where: { sku: input.sku.trim() },
+      select: { id: true, sku: true },
+    })
+  }
+  // Materialise the SKU we'll persist on the row. Prefer the
+  // resolved product's sku (canonical); fall back to caller-supplied
+  // sku for unmatched events so the operator can still debug.
+  const sku = product?.sku ?? input.sku?.trim() ?? ''
+  if (!sku) {
+    throw new Error('recordChannelStockEvent: could not resolve sku from input')
+  }
 
   // Compute local stock at observation time. Sum across StockLevel
-  // when the event isn't pinned to a specific location, otherwise
-  // read just that location.
+  // when the event isn't pinned to a specific location/variant,
+  // otherwise scope the read.
   let localQty = 0
   if (product) {
     const where: Prisma.StockLevelWhereInput = {
       productId: product.id,
+      // variationId === null sums master-stock; pinning to a specific
+      // variation IS valid (eBay variation listings, Shopify variant
+      // inventory items). When omitted entirely, sum across all
+      // variants for the product (master + every variation).
+      ...(input.variationId !== undefined ? { variationId: input.variationId } : {}),
       ...(input.locationId ? { locationId: input.locationId } : {}),
     }
     const agg = await prisma.stockLevel.aggregate({
@@ -156,6 +186,7 @@ export async function recordChannelStockEvent(
         channel: input.channel,
         channelEventId: input.channelEventId,
         productId: product?.id ?? null,
+        variationId: input.variationId ?? null,
         sku,
         locationId: input.locationId ?? null,
         channelReportedQty: input.channelReportedQty,
@@ -171,6 +202,7 @@ export async function recordChannelStockEvent(
     if (initialStatus === 'AUTO_APPLIED' && product) {
       const mv = await applyStockMovement({
         productId: product.id,
+        variationId: input.variationId ?? undefined,
         locationId: input.locationId ?? undefined,
         change: drift,
         reason: 'CHANNEL_STOCK_RECONCILIATION',
@@ -251,6 +283,7 @@ export async function applyChannelStockEvent(
   if (event.drift !== 0) {
     const mv = await applyStockMovement({
       productId: event.productId,
+      variationId: event.variationId ?? undefined,
       locationId: event.locationId ?? undefined,
       change: event.drift,
       reason: 'CHANNEL_STOCK_RECONCILIATION',

@@ -379,6 +379,47 @@ export class EbaySyncService {
           id: existing.id,
           itemId: match.ebayItemId,
         });
+
+        // CS.2 — record a ChannelStockEvent so any drift between
+        // eBay-reported quantity and our local StockLevel surfaces
+        // for operator triage (or self-heals when within threshold).
+        // Only fires when listing.quantity is a real number; eBay
+        // sometimes returns null on private/best-offer listings.
+        if (typeof listing.quantity === 'number' && match.matchedVariationId) {
+          try {
+            const variant = await prisma.productVariation.findUnique({
+              where: { id: match.matchedVariationId },
+              select: { productId: true },
+            });
+            if (variant?.productId) {
+              const { recordChannelStockEvent } = await import(
+                './channel-stock-event.service.js'
+              );
+              await recordChannelStockEvent({
+                channel: 'EBAY',
+                // eBay listing-id is the natural channel key; sync runs
+                // multiple times — suffix with the ISO hour so a
+                // multi-tick steady state collapses but real edits
+                // produce distinct events.
+                channelEventId: `${match.ebayItemId}:${new Date().toISOString().slice(0, 13)}`,
+                productId: variant.productId,
+                variationId: match.matchedVariationId,
+                channelReportedQty: listing.quantity,
+                rawPayload: {
+                  ebayItemId: match.ebayItemId,
+                  sku: match.ebaySku,
+                  quantity: listing.quantity,
+                  quantitySold: listing.quantitySold,
+                },
+              });
+            }
+          } catch (e) {
+            logger.warn('eBay → ChannelStockEvent record failed (sync continues)', {
+              ebayItemId: match.ebayItemId,
+              err: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
       } else {
         // Create new listing
         const createData: any = {
