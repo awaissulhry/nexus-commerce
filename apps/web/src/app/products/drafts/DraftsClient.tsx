@@ -579,7 +579,7 @@ export default function DraftsClient() {
     <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-5">
       <PageHeader
         title={t('drafts.title')}
-        description={t('drafts.emptyHint')}
+        description={t('drafts.description')}
         breadcrumbs={[
           { label: t('nav.products'), href: '/products' },
           { label: t('nav.drafts') },
