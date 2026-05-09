@@ -4063,5 +4063,17 @@
   "listWizard.aiComplete.fieldTitle": "Titolo",
   "listWizard.aiComplete.fieldBullets": "Elenco puntato",
   "listWizard.aiComplete.fieldDescription": "Descrizione",
-  "listWizard.aiComplete.fieldKeywords": "Parole chiave"
+  "listWizard.aiComplete.fieldKeywords": "Parole chiave",
+
+  "listWizard.aiSuggestChannels.button": "IA: suggerisci canali",
+  "listWizard.aiSuggestChannels.busy": "Sto chiedendo all'IA…",
+  "listWizard.aiSuggestChannels.title": "Suggerimenti dell'IA",
+  "listWizard.aiSuggestChannels.subtitle": "Classificati per affinità con il prodotto. Applica preseleziona il canale sotto.",
+  "listWizard.aiSuggestChannels.fitHigh": "affinità alta",
+  "listWizard.aiSuggestChannels.fitMedium": "affinità media",
+  "listWizard.aiSuggestChannels.fitLow": "affinità bassa",
+  "listWizard.aiSuggestChannels.applyButton": "Applica",
+  "listWizard.aiSuggestChannels.applyAll": "Applica scelte ad affinità alta",
+  "listWizard.aiSuggestChannels.error": "Impossibile ottenere suggerimenti",
+  "listWizard.aiSuggestChannels.toastApplied": "Applicat{plural} {n} suggeriment{plural}"
 }

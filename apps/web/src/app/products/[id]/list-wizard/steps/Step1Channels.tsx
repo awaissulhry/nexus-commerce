@@ -8,6 +8,7 @@ import {
   Globe,
   Loader2,
   ShoppingBag,
+  Sparkles,
   Store,
   XCircle,
 } from 'lucide-react'
@@ -18,6 +19,8 @@ import type { StepProps } from '../ListWizardClient'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { Button } from '@/components/ui/Button'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface MarketplaceOption {
   code: string
@@ -95,14 +98,26 @@ function summarizeSkuStrategy(s: SkuStrategy): string {
   return `Custom — ${customs.join(', ')}`
 }
 
+// AI-6.1 — recommendation shape returned by /suggest-channels.
+interface AiChannelRecommendation {
+  platform: string
+  marketplace: string
+  fit: 'high' | 'medium' | 'low'
+  rank: number
+  reason: string
+}
+
 export default function Step1Channels({
   channels: initialChannels,
   wizardState,
   updateWizardState,
   updateWizardChannels,
   reportValidity,
+  wizardId,
 }: StepProps) {
   const confirm = useConfirm()
+  const { toast } = useToast()
+  const { t } = useTranslations()
   // Refs so the async toggle reads CURRENT wizardState/selected at
   // click time, without forcing the callback identity to thrash on
   // every state change.
@@ -132,6 +147,17 @@ export default function Step1Channels({
     readSkuStrategy(wizardState),
   )
   const [strategyExpanded, setStrategyExpanded] = useState(false)
+
+  // AI-6.1 — channel suggester state. Click "AI: suggest channels"
+  // → POST /suggest-channels with the connected platforms' available
+  // marketplaces flattened. Backend returns ranked recommendations
+  // (high / medium / low fit + reason). Operator clicks Apply per row
+  // to add the platform:marketplace into selected; "Apply high-fit
+  // picks" applies every high-fit pick at once.
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiRecs, setAiRecs] = useState<AiChannelRecommendation[]>([])
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
 
   // C.0 — gate the chrome's Continue on at least one channel picked.
   // Mirrors the in-step "Continue" affordance which already requires
@@ -246,6 +272,102 @@ export default function Step1Channels({
     })
   }, [selected])
 
+  // AI-6.1 — fire the channel suggester. Builds the availableChannels
+  // payload from status.platforms (skips not-implemented/unconnected
+  // platforms — operators shouldn't get suggestions they can't act
+  // on). Errors classified into a single sticky banner; budget gate
+  // refusals come back as 402 with structured reason.
+  const askAiToSuggest = useCallback(async () => {
+    if (!status) return
+    const available: Array<{ platform: string; marketplace: string }> = []
+    for (const p of status.platforms) {
+      if (p.reason === 'not_implemented') continue
+      for (const m of p.marketplaces) {
+        available.push({ platform: p.platform, marketplace: m.code })
+      }
+    }
+    if (available.length === 0) return
+    setAiBusy(true)
+    setAiError(null)
+    setAiPanelOpen(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}/suggest-channels`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ availableChannels: available }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`)
+      }
+      const recs: AiChannelRecommendation[] = Array.isArray(json?.recommendations)
+        ? json.recommendations
+        : []
+      setAiRecs(recs)
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : String(err))
+      setAiRecs([])
+    } finally {
+      setAiBusy(false)
+    }
+  }, [status, wizardId])
+
+  // AI-6.1 — apply a single recommendation: add platform:marketplace
+  // to selected. Idempotent — re-applying a row already selected is
+  // a no-op so the operator can click confidently.
+  const applyAiPick = useCallback(
+    (rec: AiChannelRecommendation) => {
+      const key = `${rec.platform}:${rec.marketplace}`
+      setSelected((prev) => {
+        if (prev.has(key)) return prev
+        const next = new Set(prev)
+        next.add(key)
+        return next
+      })
+      toast({
+        tone: 'success',
+        title: t('listWizard.aiSuggestChannels.toastApplied', {
+          n: 1,
+          plural: '',
+        }),
+        durationMs: 2400,
+      })
+    },
+    [toast, t],
+  )
+
+  // AI-6.1 — apply every high-fit recommendation in one click. Caps
+  // at the channels currently in the connected list (the AI prompt
+  // already filters but defense in depth — never add a channel the
+  // operator's account can't publish to).
+  const applyAllHighFit = useCallback(() => {
+    const highFit = aiRecs.filter((r) => r.fit === 'high')
+    if (highFit.length === 0) return
+    let added = 0
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const r of highFit) {
+        const key = `${r.platform}:${r.marketplace}`
+        if (!next.has(key)) {
+          next.add(key)
+          added += 1
+        }
+      }
+      return next
+    })
+    toast({
+      tone: 'success',
+      title: t('listWizard.aiSuggestChannels.toastApplied', {
+        n: added,
+        plural: added === 1 ? '' : 's',
+      }),
+      durationMs: 2400,
+    })
+  }, [aiRecs, toast, t])
+
   // Detect if the user picked any disconnected channel — warn but
   // don't block. They might still want to set up the wizard now and
   // come back to wire the connection.
@@ -293,17 +415,51 @@ export default function Step1Channels({
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Channels &amp; Markets
-        </h2>
-        <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
-          Pick every (platform, marketplace) tuple this listing should
-          publish to. Every downstream step adapts to the set you pick
-          here — categories per channel, attribute unions, content tabs,
-          per-marketplace pricing.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+            Channels &amp; Markets
+          </h2>
+          <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
+            Pick every (platform, marketplace) tuple this listing should
+            publish to. Every downstream step adapts to the set you pick
+            here — categories per channel, attribute unions, content tabs,
+            per-marketplace pricing.
+          </p>
+        </div>
+        {/* AI-6.1 — Step 1 channel suggester trigger. Fires
+            /suggest-channels and opens the recommendations panel
+            below. Disabled while the AI call is in flight. */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={askAiToSuggest}
+          disabled={aiBusy}
+          className="flex-shrink-0 inline-flex items-center gap-1.5"
+        >
+          {aiBusy ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          )}
+          {aiBusy
+            ? t('listWizard.aiSuggestChannels.busy')
+            : t('listWizard.aiSuggestChannels.button')}
+        </Button>
       </div>
+
+      {aiPanelOpen && (
+        <AiSuggestionsPanel
+          busy={aiBusy}
+          error={aiError}
+          recommendations={aiRecs}
+          selectedKeys={selected}
+          onApplyOne={applyAiPick}
+          onApplyAllHighFit={applyAllHighFit}
+          onClose={() => setAiPanelOpen(false)}
+          t={t}
+        />
+      )}
 
       <div className="space-y-3">
         {status.platforms.map((p) => (
@@ -635,5 +791,153 @@ function ConnectionBadge({ connected }: { connected: boolean }) {
     <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
       <XCircle className="w-3 h-3" /> Not connected
     </span>
+  )
+}
+
+// AI-6.1 — recommendations panel. Renders below the title row when
+// the operator clicks "AI: suggest channels". Shows ranked rows
+// with fit pill + reason + Apply CTA, plus a header "Apply high-fit
+// picks" CTA when ≥1 high-fit recommendation exists.
+function AiSuggestionsPanel({
+  busy,
+  error,
+  recommendations,
+  selectedKeys,
+  onApplyOne,
+  onApplyAllHighFit,
+  onClose,
+  t,
+}: {
+  busy: boolean
+  error: string | null
+  recommendations: AiChannelRecommendation[]
+  selectedKeys: Set<string>
+  onApplyOne: (rec: AiChannelRecommendation) => void
+  onApplyAllHighFit: () => void
+  onClose: () => void
+  t: ReturnType<typeof useTranslations>['t']
+}) {
+  const highFitCount = recommendations.filter((r) => r.fit === 'high').length
+  return (
+    <div className="mb-5 border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-purple-100 dark:border-purple-900 flex items-center justify-between gap-2 bg-purple-50 dark:bg-purple-950/40">
+        <div className="min-w-0">
+          <div className="text-md font-semibold text-purple-900 dark:text-purple-100 inline-flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            {t('listWizard.aiSuggestChannels.title')}
+          </div>
+          <div className="text-sm text-purple-700 dark:text-purple-300 mt-0.5">
+            {t('listWizard.aiSuggestChannels.subtitle')}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {highFitCount > 0 && !busy && !error && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onApplyAllHighFit}
+              className="inline-flex items-center gap-1"
+            >
+              <Sparkles className="w-3 h-3" />
+              {t('listWizard.aiSuggestChannels.applyAll')} ({highFitCount})
+            </Button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-100"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 py-3">
+        {busy && (
+          <div className="flex items-center gap-2 text-base text-purple-700 dark:text-purple-300">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            {t('listWizard.aiSuggestChannels.busy')}
+          </div>
+        )}
+        {error && !busy && (
+          <div className="flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="font-medium">
+                {t('listWizard.aiSuggestChannels.error')}
+              </div>
+              <div className="text-sm opacity-90 mt-0.5">{error}</div>
+            </div>
+          </div>
+        )}
+        {!busy && !error && recommendations.length === 0 && (
+          <div className="text-base text-slate-500 dark:text-slate-400 italic">
+            (no recommendations)
+          </div>
+        )}
+        {!busy && !error && recommendations.length > 0 && (
+          <ul className="space-y-1.5">
+            {recommendations.map((rec) => {
+              const key = `${rec.platform}:${rec.marketplace}`
+              const alreadyPicked = selectedKeys.has(key)
+              const fitTone =
+                rec.fit === 'high'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                  : rec.fit === 'medium'
+                    ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                    : 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+              const fitLabel =
+                rec.fit === 'high'
+                  ? t('listWizard.aiSuggestChannels.fitHigh')
+                  : rec.fit === 'medium'
+                    ? t('listWizard.aiSuggestChannels.fitMedium')
+                    : t('listWizard.aiSuggestChannels.fitLow')
+              return (
+                <li
+                  key={key}
+                  className="flex items-start justify-between gap-3 py-1.5 px-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {rec.platform}:{rec.marketplace}
+                      </span>
+                      <span
+                        className={cn(
+                          'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border',
+                          fitTone,
+                        )}
+                      >
+                        {fitLabel}
+                      </span>
+                      {alreadyPicked && (
+                        <span className="inline-flex items-center gap-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="w-3 h-3" />
+                          picked
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 leading-snug">
+                      {rec.reason}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => onApplyOne(rec)}
+                      disabled={alreadyPicked}
+                    >
+                      {t('listWizard.aiSuggestChannels.applyButton')}
+                    </Button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }

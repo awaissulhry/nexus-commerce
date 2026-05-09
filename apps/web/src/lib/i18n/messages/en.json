@@ -4012,5 +4012,17 @@
   "listWizard.aiComplete.fieldTitle": "Title",
   "listWizard.aiComplete.fieldBullets": "Bullets",
   "listWizard.aiComplete.fieldDescription": "Description",
-  "listWizard.aiComplete.fieldKeywords": "Keywords"
+  "listWizard.aiComplete.fieldKeywords": "Keywords",
+
+  "listWizard.aiSuggestChannels.button": "AI: suggest channels",
+  "listWizard.aiSuggestChannels.busy": "Asking AI…",
+  "listWizard.aiSuggestChannels.title": "AI recommendations",
+  "listWizard.aiSuggestChannels.subtitle": "Ranked by goodness-of-fit for this product. Apply pre-checks the channel below.",
+  "listWizard.aiSuggestChannels.fitHigh": "high fit",
+  "listWizard.aiSuggestChannels.fitMedium": "medium fit",
+  "listWizard.aiSuggestChannels.fitLow": "low fit",
+  "listWizard.aiSuggestChannels.applyButton": "Apply",
+  "listWizard.aiSuggestChannels.applyAll": "Apply high-fit picks",
+  "listWizard.aiSuggestChannels.error": "Couldn't get recommendations",
+  "listWizard.aiSuggestChannels.toastApplied": "Applied {n} AI pick{plural}"
 }
