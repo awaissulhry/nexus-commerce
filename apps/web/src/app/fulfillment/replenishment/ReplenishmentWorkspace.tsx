@@ -77,6 +77,8 @@ import type { Suggestion } from './_shared/types'
 import { MobileSuggestionCard } from './_shared/MobileSuggestionCard'
 import { SuggestionRow } from './_shared/SuggestionRow'
 import { ReorderMathPanel } from './_shared/ReorderMathPanel'
+import { ForecastModelsCard } from './_shared/ForecastModelsCard'
+import { StockoutImpactCard } from './_shared/StockoutImpactCard'
 import type { DetailResponse } from './_shared/types'
 
 interface ContainerFillEntry {
@@ -2037,120 +2039,6 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
   )
 }
 
-// R.16 — Forecast model A/B card. Shows current champion + any
-// rolled-out challengers with cohort sizes. Renders only when the
-// system has a challenger active (silent until A/B testing is
-// kicked off via the rollout endpoint).
-function ForecastModelsCard() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    setLoading(true)
-    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/forecast-models/active`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading || !data) return null
-  const challengers: Array<{ modelId: string; skuCount: number }> = data.challengers ?? []
-  if (challengers.length === 0) return null  // silent in champion-only state
-
-  return (
-    <Card>
-      <div>
-        <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-          Forecast model A/B
-        </div>
-        <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-          <span className="text-base text-slate-700">
-            Champion: <span className="font-mono">{data.champion?.modelId ?? data.defaultModelId}</span>
-            <span className="text-slate-500 ml-1">({data.champion?.skuCount ?? 0} SKUs)</span>
-          </span>
-          {challengers.map((c) => (
-            <span key={c.modelId} className="text-base text-violet-700">
-              Challenger: <span className="font-mono">{c.modelId}</span>
-              <span className="text-violet-500 ml-1">({c.skuCount} SKUs)</span>
-            </span>
-          ))}
-        </div>
-        <div className="text-xs text-slate-500 mt-0.5">
-          Compare MAPE per model in the Forecast Health card. Promote via
-          <span className="font-mono"> POST /forecast-models/promote</span>.
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-// R.12 — Stockout impact card. Workspace-level summary of YTD/30d
-// stockouts + estimated lost margin/revenue. Renders only when there's
-// data; silent during pre-launch when nothing's actually stocked out.
-function StockoutImpactCard() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshTick, setRefreshTick] = useState(0)
-  useEffect(() => {
-    setLoading(true)
-    fetch(`${getBackendUrl()}/api/fulfillment/replenishment/stockouts/summary?windowDays=30`, { cache: 'no-store' })
-      .then((r) => r.ok ? r.json() : null)
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
-  }, [refreshTick])
-
-  if (loading || !data) return null
-  // Silent on no data — the page already has plenty of content.
-  if (data.eventsInWindow === 0 && data.openCount === 0) return null
-
-  const lostRev = data.totalLostRevenueCents / 100
-  const lostMargin = data.totalLostMarginCents / 100
-
-  return (
-    <Card>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">
-            Stockout impact (last {data.windowDays} days)
-          </div>
-          <div className="mt-1 flex items-baseline gap-3 flex-wrap">
-            <span className="text-[20px] font-semibold tabular-nums text-rose-700">
-              {lostMargin.toFixed(0)}€ lost margin
-            </span>
-            {data.openCount > 0 && (
-              <span className="text-sm text-rose-700 font-semibold">
-                {data.openCount} ongoing
-              </span>
-            )}
-          </div>
-          <div className="text-sm text-slate-500 mt-0.5">
-            {data.eventsInWindow} event{data.eventsInWindow === 1 ? '' : 's'} ·{' '}
-            {Number(data.totalDurationDays).toFixed(1)} days total ·{' '}
-            {data.totalLostUnits} units lost ·{' '}
-            {lostRev.toFixed(0)}€ lost revenue
-          </div>
-          {data.worstSku && (
-            <div className="text-sm text-slate-500 mt-0.5">
-              Worst: <span className="font-mono">{data.worstSku.sku}</span>
-              {' '}({Number(data.worstSku.durationDays).toFixed(1)}d
-              {data.worstSku.estimatedLostMargin != null
-                ? `, ${(data.worstSku.estimatedLostMargin / 100).toFixed(0)}€ lost`
-                : ''})
-            </div>
-          )}
-        </div>
-        <button
-          onClick={() => setRefreshTick((n) => n + 1)}
-          className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1"
-          title="Refresh"
-        >
-          <RefreshCw size={11} /> Refresh
-        </button>
-      </div>
-    </Card>
-  )
-}
 
 // R.9 — drawer: ranked alternative suppliers for this product. Lazy
 // loads on first expand to avoid firing the request for every drawer
