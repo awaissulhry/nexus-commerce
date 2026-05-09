@@ -21,6 +21,7 @@
 
 import { AmazonPublishAdapter } from './amazon-publish.adapter.js'
 import { EbayPublishAdapter } from './ebay-publish.adapter.js'
+import { ShopifyPublishAdapter } from './shopify-publish.adapter.js'
 
 export type SubmissionStatus =
   | 'PENDING'
@@ -85,8 +86,9 @@ const NOT_IMPLEMENTED_REASONS: Record<string, string> = {
   AMAZON:
     'Amazon SP-API putListingsItem adapter not yet wired — see TECH_DEBT #35.',
   EBAY: 'eBay listing adapter blocked behind Phase 2A — see TECH_DEBT #35.',
-  SHOPIFY:
-    'Shopify createProduct exists in apps/api/src/services/marketplaces/shopify.service.ts but is not yet wired into the wizard publish path — see TECH_DEBT #35.',
+  // S.3 — SHOPIFY dropped from the not-implemented list now that the
+  // adapter is wired. Per memory the active-channel scope is Amazon
+  // + eBay + Shopify; WooCommerce + Etsy stay in NOT_IMPLEMENTED.
   WOOCOMMERCE:
     'WooCommerce createProduct not yet implemented — see TECH_DEBT #35.',
 }
@@ -94,6 +96,7 @@ const NOT_IMPLEMENTED_REASONS: Record<string, string> = {
 export class ChannelPublishService {
   private readonly ebayAdapter = new EbayPublishAdapter()
   private readonly amazonAdapter = new AmazonPublishAdapter()
+  private readonly shopifyAdapter = new ShopifyPublishAdapter()
 
   /**
    * Publish a single (channel, marketplace) listing. Returns a
@@ -209,6 +212,51 @@ export class ChannelPublishService {
             err instanceof Error
               ? `eBay publish exception: ${err.message}`
               : 'eBay publish exception (unknown).',
+        }
+      }
+    }
+
+    // S.3 — Shopify Admin REST adapter. v1 ships master-only as a
+    // draft listing. The operator activates on the Shopify admin
+    // after reviewing — listingUrl points to the admin URL since
+    // draft products have no storefront URL. SUBMITTED instead of
+    // LIVE because draft != live; a poll step can flip to LIVE
+    // once the operator activates and the storefront URL becomes
+    // available. Returns FAILED with the Admin API error when
+    // creds are missing or the call rejects.
+    if (platform === 'SHOPIFY') {
+      try {
+        const result = await this.shopifyAdapter.publish(
+          // Composer hands us a Record<string, unknown> shape; the
+          // Shopify adapter's payload contract is stricter (typed
+          // product/variants/images), so we widen via unknown. The
+          // adapter validates required fields at runtime so a wrong
+          // composer shape surfaces as a "config" failedStep.
+          (input.payload ?? {}) as unknown as Parameters<
+            ShopifyPublishAdapter['publish']
+          >[0],
+        )
+        if (!result.ok) {
+          return {
+            ...base,
+            status: 'FAILED',
+            error: result.error,
+          }
+        }
+        return {
+          ...base,
+          status: 'SUBMITTED',
+          submissionId: result.productId,
+          listingUrl: result.listingUrl,
+        }
+      } catch (err) {
+        return {
+          ...base,
+          status: 'FAILED',
+          error:
+            err instanceof Error
+              ? `Shopify publish exception: ${err.message}`
+              : 'Shopify publish exception (unknown).',
         }
       }
     }
