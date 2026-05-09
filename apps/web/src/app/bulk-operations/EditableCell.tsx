@@ -50,6 +50,15 @@ export type FieldType =
    * checkbox. Coerces 'true'/'false'/'1'/'0' on paste.
    */
   | 'boolean'
+  /**
+   * W2.2 — currency. Like 'number' but the meta carries an ISO 4217
+   * currency code (EUR / USD / GBP …) which the cell uses to format
+   * the value in the operator's locale. Also accepts a free-form
+   * `currency` override per row when the column itself is multi-
+   * currency (Xavia sells across IT/DE/FR/UK/US so several pricing
+   * fields hold different currencies per channel).
+   */
+  | 'currency'
 
 export interface EditableMeta {
   editable: true
@@ -59,6 +68,52 @@ export interface EditableMeta {
   prefix?: string
   parse?: (raw: string) => unknown
   format?: (v: unknown) => string
+  /**
+   * W2.2 — ISO 4217 code applied to fieldType='currency'. When unset
+   * the cell falls back to EUR (Xavia's home currency) so a column
+   * with no explicit currency still renders sensibly.
+   */
+  currency?: string
+  /**
+   * W2.2 — locale used for Intl.NumberFormat. Defaults to 'it-IT' so
+   * Awa sees thousand separators / decimal commas the way the rest
+   * of the app does.
+   */
+  locale?: string
+}
+
+/**
+ * W2.2 — format a numeric value as a currency string in the operator's
+ * locale. Falls back to EUR + it-IT (Xavia's home market) when the
+ * meta doesn't provide overrides. Empty / non-numeric inputs render
+ * as the empty-state dash (handled by the caller — this returns the
+ * empty string).
+ */
+export function formatCurrency(
+  value: unknown,
+  currency: string = 'EUR',
+  locale: string = 'it-IT',
+): string {
+  if (value === null || value === undefined || value === '') return ''
+  const n =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? parseFloat(value)
+        : NaN
+  if (!Number.isFinite(n)) return ''
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n)
+  } catch {
+    // Unknown ISO currency or runtime missing locale data — degrade
+    // gracefully so a typo'd code never blanks the cell.
+    return `${currency} ${n.toFixed(2)}`
+  }
 }
 
 /**
@@ -282,6 +337,44 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.2 — currency edit: numeric input on the data side, with the
+      // currency code rendered as a non-editable chip on the left edge
+      // so the operator never types the symbol. Commit / navigation /
+      // escape semantics match the generic number path.
+      if (meta.fieldType === 'currency') {
+        const code = (meta.currency ?? 'EUR').toUpperCase()
+        return (
+          <div className="w-full h-full flex items-stretch bg-white ring-2 ring-blue-500">
+            <span className="flex items-center px-2 text-xs uppercase tracking-wide text-slate-500 bg-slate-50 border-r border-slate-200">
+              {code}
+            </span>
+            <input
+              ref={(el) => {
+                inputRef.current = el
+              }}
+              type="number"
+              step="0.01"
+              value={
+                draftValue === null || draftValue === undefined
+                  ? ''
+                  : String(draftValue)
+              }
+              onChange={(e) => {
+                const raw = e.target.value
+                if (raw === '' || raw === '-') {
+                  setDraftValue(null)
+                  return
+                }
+                const n = parseFloat(raw)
+                setDraftValue(Number.isNaN(n) ? raw : n)
+              }}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              className="flex-1 px-2 outline-none text-md tabular-nums text-right"
+            />
+          </div>
+        )
+      }
       // W2.1 — boolean edit: a single checkbox the operator clicks.
       // Enter / Tab commit + navigate (Excel semantics); Space toggles
       // when the input owns focus; Escape reverts. Render is wrapped
@@ -333,6 +426,30 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.2 — currency display: locale-formatted, right-aligned,
+    // tabular numerics. Empty values render as the standard dash.
+    if (meta.fieldType === 'currency') {
+      const formatted = formatCurrency(draftValue, meta.currency, meta.locale)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? (cellCascading && isDirty ? 'Will cascade to children' : undefined)}
+          className={cn(
+            'w-full h-full px-2 flex items-center justify-end text-md cursor-cell tabular-nums',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {formatted ? (
+            <span className="truncate">{formatted}</span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       )
     }
 

@@ -127,14 +127,24 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
   if (field.type === 'number') {
     const isPrice = PRICE_FIELDS.has(field.id)
     const isInt = field.id === 'totalStock' || field.id === 'lowStockThreshold'
+    // W2.2 — pricing fields render as the dedicated currency type so
+    // they get locale-aware formatting (€1.234,56 in Italian) plus a
+    // currency-code chip in the input. Falls back to the generic
+    // number type for non-pricing numerics.
+    if (isPrice) {
+      return {
+        editable: true,
+        fieldType: 'currency',
+        numeric: true,
+        currency: 'EUR',
+        locale: 'it-IT',
+      }
+    }
     return {
       editable: true,
       fieldType: 'number',
       numeric: true,
-      prefix: isPrice ? '€' : undefined,
-      format: isPrice
-        ? (v) => (v === null || v === undefined ? '' : Number(v).toFixed(2))
-        : isInt
+      format: isInt
         ? (v) =>
             v === null || v === undefined
               ? ''
