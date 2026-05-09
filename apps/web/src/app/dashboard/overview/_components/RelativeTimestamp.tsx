@@ -40,10 +40,10 @@ export default function RelativeTimestamp({
       className={cn(
         'inline-flex items-center gap-1 text-xs tabular-nums whitespace-nowrap',
         seconds < 30
-          ? 'text-emerald-600'
+          ? 'text-emerald-600 dark:text-emerald-400'
           : seconds < 120
-          ? 'text-slate-500'
-          : 'text-amber-600',
+          ? 'text-slate-500 dark:text-slate-400'
+          : 'text-amber-600 dark:text-amber-400',
       )}
       title={`${new Date(at).toLocaleString()}`}
     >

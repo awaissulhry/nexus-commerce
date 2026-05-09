@@ -102,18 +102,20 @@ export default function OverviewClient() {
 
       <div className="space-y-6">
         {loading && !data && (
-          <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 inline-flex items-center justify-center gap-2 w-full">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 inline-flex items-center justify-center gap-2 w-full">
             <Loader2 className="w-4 h-4 animate-spin" />
             {t('overview.loading')}
           </div>
         )}
 
         {error && !loading && (
-          <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
+          <div className="border border-rose-200 dark:border-rose-900 rounded-lg bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-md text-rose-700 dark:text-rose-400 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <div>
               <div className="font-semibold">{t('overview.error.title')}</div>
-              <div className="text-sm text-rose-600">{error}</div>
+              <div className="text-sm text-rose-600 dark:text-rose-500">
+                {error}
+              </div>
             </div>
           </div>
         )}

@@ -1,5 +1,6 @@
 'use client'
 
+import { Card } from '@/components/ui/Card'
 import { formatCurrency, NUM_FMT } from '../_lib/format'
 import type { OverviewPayload, T, WindowKey } from '../_lib/types'
 
@@ -23,12 +24,10 @@ export default function Sparkline({
   const totalOrders = points.reduce((s, p) => s + p.orders, 0)
   const label = t(`overview.windowLabel.${windowKey}`)
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-md font-semibold text-slate-900">
-          {t('overview.trend.heading', { label })}
-        </h2>
-        <div className="text-sm text-slate-500 tabular-nums">
+    <Card
+      title={t('overview.trend.heading', { label })}
+      action={
+        <div className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
           {formatCurrency(totalRev, currency)} ·{' '}
           {t(
             totalOrders === 1
@@ -37,9 +36,10 @@ export default function Sparkline({
             { n: NUM_FMT.format(totalOrders) },
           )}
         </div>
-      </div>
+      }
+    >
       <SvgLineChart t={t} points={points} />
-    </div>
+    </Card>
   )
 }
 
@@ -93,7 +93,7 @@ function SvgLineChart({
           opacity="0.6"
         />
       </svg>
-      <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+      <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400">
         <span className="inline-flex items-center gap-1">
           <span className="inline-block w-2 h-0.5 bg-emerald-500" />
           {t('overview.trend.legend.revenue')}

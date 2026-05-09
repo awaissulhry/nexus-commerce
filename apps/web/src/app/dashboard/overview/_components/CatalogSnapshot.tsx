@@ -1,5 +1,6 @@
 'use client'
 
+import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { NUM_FMT } from '../_lib/format'
 import type { OverviewPayload, T } from '../_lib/types'
@@ -18,13 +19,8 @@ export default function CatalogSnapshot({
   catalog: OverviewPayload['catalog']
 }) {
   return (
-    <div className="border border-slate-200 rounded-lg bg-white">
-      <div className="px-4 py-3 border-b border-slate-100">
-        <h2 className="text-md font-semibold text-slate-900">
-          {t('overview.catalog.heading')}
-        </h2>
-      </div>
-      <div className="px-4 py-3 grid grid-cols-2 gap-3 text-base">
+    <Card title={t('overview.catalog.heading')}>
+      <div className="grid grid-cols-2 gap-3 text-base">
         <SnapshotCell
           label={t('overview.catalog.products')}
           value={NUM_FMT.format(catalog.totalProducts)}
@@ -51,7 +47,7 @@ export default function CatalogSnapshot({
           tone={catalog.failedListings > 0 ? 'rose' : 'slate'}
         />
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -66,13 +62,13 @@ function SnapshotCell({
 }) {
   const valueClass =
     tone === 'rose'
-      ? 'text-rose-700'
+      ? 'text-rose-700 dark:text-rose-400'
       : tone === 'amber'
-      ? 'text-amber-700'
-      : 'text-slate-900'
+      ? 'text-amber-700 dark:text-amber-400'
+      : 'text-slate-900 dark:text-slate-100'
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium">
         {label}
       </div>
       <div className={cn('mt-0.5 text-xl font-semibold tabular-nums', valueClass)}>

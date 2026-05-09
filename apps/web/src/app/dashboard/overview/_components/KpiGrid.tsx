@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import {
   formatCurrency,
@@ -62,7 +63,7 @@ export default function KpiGrid({
         />
       </div>
       {secondaries.length > 0 && (
-        <div className="text-xs text-slate-500 pl-1">
+        <div className="text-xs text-slate-500 dark:text-slate-400 pl-1">
           {t('overview.kpi.includes')}{' '}
           {secondaries.map((s, i) => (
             <span key={s.code}>
@@ -92,22 +93,25 @@ function KpiCard({
   delta: { label: string; tone: 'pos' | 'neg' | 'flat' | 'na' }
   prevValue: string
 }) {
+  // Use Card with custom className to tighten the default p-4 down
+  // to the px-4 py-3 the KPI strip wants. The dark-mode bg/border
+  // come from Card; we just override padding.
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
-      <div className="text-sm text-slate-500 uppercase tracking-wide font-medium">
+    <Card noPadding className="px-4 py-3">
+      <div className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">
         {label}
       </div>
       <div className="mt-1 flex items-baseline justify-between gap-2 flex-wrap">
-        <div className="text-[22px] font-semibold text-slate-900 tabular-nums">
+        <div className="text-[22px] font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
           {value}
         </div>
         <DeltaPill delta={delta} />
       </div>
-      <div className="mt-1 text-xs text-slate-400">
+      <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">
         {t('overview.kpi.prev')}{' '}
         <span className="tabular-nums">{prevValue}</span>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -116,12 +120,16 @@ function DeltaPill({
 }: {
   delta: { label: string; tone: 'pos' | 'neg' | 'flat' | 'na' }
 }) {
+  // Custom delta pill (not <Badge>) because Badge doesn't carry the
+  // up/down arrow icon that makes the trend direction glanceable.
+  // Tones map directly to Badge's success/danger/default but with
+  // an inline icon prefix.
   const tone =
     delta.tone === 'pos'
-      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900'
       : delta.tone === 'neg'
-      ? 'bg-rose-50 text-rose-700 border-rose-200'
-      : 'bg-slate-50 text-slate-500 border-slate-200'
+      ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900'
+      : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
   const Icon =
     delta.tone === 'pos'
       ? ArrowUpRight

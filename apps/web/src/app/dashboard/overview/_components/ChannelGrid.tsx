@@ -1,5 +1,7 @@
 'use client'
 
+import { Badge } from '@/components/ui/Badge'
+import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import { formatCurrency, NUM_FMT } from '../_lib/format'
 import {
@@ -11,7 +13,11 @@ import {
 
 /**
  * Per-channel revenue cards. Hidden when no orders or listings exist
- * for any channel — the empty-state tile takes its place.
+ * for any channel — the empty-state tile takes its place. The
+ * tinted per-channel backgrounds (orange-50 for Amazon, blue-50 for
+ * eBay…) are the brand-recognition cue, so the channel cards stay
+ * custom rather than wearing the neutral Card chrome — the section
+ * heading sits alongside as a header band.
  */
 export default function ChannelGrid({
   t,
@@ -27,19 +33,16 @@ export default function ChannelGrid({
   )
   if (visible.length === 0) {
     return (
-      <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
-        <h2 className="text-md font-semibold text-slate-900 mb-2">
-          {t('overview.channels.heading')}
-        </h2>
-        <div className="text-base text-slate-500 italic">
+      <Card title={t('overview.channels.heading')}>
+        <div className="text-base text-slate-500 dark:text-slate-400 italic">
           {t('overview.channels.empty')}
         </div>
-      </div>
+      </Card>
     )
   }
   return (
     <div>
-      <h2 className="text-md font-semibold text-slate-900 mb-2">
+      <h2 className="text-md font-semibold text-slate-900 dark:text-slate-100 mb-2">
         {t('overview.channels.heading')}
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -83,17 +86,17 @@ export default function ChannelGrid({
                   })}
                 </div>
               </div>
-              <div className="mt-1.5 flex items-center gap-2 text-xs">
-                <Pill tone="emerald">
+              <div className="mt-1.5 flex items-center gap-2 text-xs tabular-nums">
+                <Badge variant="success">
                   {t('overview.channels.live', { n: c.listings.live })}
-                </Pill>
-                <Pill tone="amber">
+                </Badge>
+                <Badge variant="warning">
                   {t('overview.channels.draft', { n: c.listings.draft })}
-                </Pill>
+                </Badge>
                 {c.listings.failed > 0 && (
-                  <Pill tone="rose">
+                  <Badge variant="danger">
                     {t('overview.channels.failed', { n: c.listings.failed })}
-                  </Pill>
+                  </Badge>
                 )}
               </div>
             </div>
@@ -101,30 +104,5 @@ export default function ChannelGrid({
         })}
       </div>
     </div>
-  )
-}
-
-function Pill({
-  tone,
-  children,
-}: {
-  tone: 'emerald' | 'amber' | 'rose'
-  children: React.ReactNode
-}) {
-  const cls =
-    tone === 'emerald'
-      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-      : tone === 'amber'
-      ? 'bg-amber-50 text-amber-700 border-amber-200'
-      : 'bg-rose-50 text-rose-700 border-rose-200'
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded border text-xs tabular-nums',
-        cls,
-      )}
-    >
-      {children}
-    </span>
   )
 }

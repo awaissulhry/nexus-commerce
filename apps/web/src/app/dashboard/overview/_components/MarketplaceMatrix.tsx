@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
 import { cn } from '@/lib/utils'
 import {
   CHANNEL_LABELS,
@@ -28,34 +29,34 @@ export default function MarketplaceMatrix({
   for (const m of matrix) lookup.set(`${m.channel}:${m.marketplace}`, m.listings)
   if (channels.length === 0) return null
   return (
-    <div className="border border-slate-200 rounded-lg bg-white">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <h2 className="text-md font-semibold text-slate-900">
-          {t('overview.matrix.heading')}
-        </h2>
+    <Card
+      title={t('overview.matrix.heading')}
+      action={
         <Link
           href="/bulk-operations"
           className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
         >
           {t('overview.matrix.open')} <ChevronRight className="w-3 h-3" />
         </Link>
-      </div>
+      }
+      noPadding
+    >
       <div className="overflow-x-auto">
         <table className="w-full text-base">
-          <thead className="bg-slate-50">
+          <thead className="bg-slate-50 dark:bg-slate-900/50">
             <tr>
-              <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 font-semibold">
+              <th className="px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                 {t('overview.matrix.colChannel')}
               </th>
               {marketplaces.map((m) => (
                 <th
                   key={m}
-                  className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold font-mono"
+                  className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold font-mono"
                 >
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 font-semibold">
+              <th className="px-3 py-2 text-right text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold">
                 {t('overview.matrix.colTotal')}
               </th>
             </tr>
@@ -69,9 +70,9 @@ export default function MarketplaceMatrix({
               return (
                 <tr
                   key={c}
-                  className="border-t border-slate-100 hover:bg-slate-50/40"
+                  className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/40 dark:hover:bg-slate-800/40"
                 >
-                  <td className="px-3 py-1.5 font-medium text-slate-900">
+                  <td className="px-3 py-1.5 font-medium text-slate-900 dark:text-slate-100">
                     {CHANNEL_LABELS[c] ?? c}
                   </td>
                   {marketplaces.map((m) => {
@@ -81,7 +82,9 @@ export default function MarketplaceMatrix({
                         key={m}
                         className={cn(
                           'px-3 py-1.5 text-right tabular-nums',
-                          v === 0 ? 'text-slate-300' : 'text-slate-700',
+                          v === 0
+                            ? 'text-slate-300 dark:text-slate-600'
+                            : 'text-slate-700 dark:text-slate-300',
                         )}
                       >
                         {v > 0 ? (
@@ -93,7 +96,7 @@ export default function MarketplaceMatrix({
                       </td>
                     )
                   })}
-                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">
+                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                     {total}
                   </td>
                 </tr>
@@ -102,6 +105,6 @@ export default function MarketplaceMatrix({
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   )
 }
