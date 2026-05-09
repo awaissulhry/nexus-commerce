@@ -2531,5 +2531,10 @@
   "products.col.variants": "Var.",
   "products.col.completeness": "Compl.",
   "products.col.familyCompleteness": "Famiglia ✓",
-  "products.col.updated": "Aggiornato"
+  "products.col.updated": "Aggiornato",
+  "stock.analytics.yearEnd.sourceLive": "Stato attuale",
+  "stock.analytics.yearEnd.sourceSnapshot": "Snapshot",
+  "stock.analytics.yearEnd.saveSnapshot": "Salva snapshot",
+  "stock.analytics.yearEnd.snapping": "Salvataggio…",
+  "stock.analytics.yearEnd.snapshotSaved": "Snapshot salvato per {year}"
 }

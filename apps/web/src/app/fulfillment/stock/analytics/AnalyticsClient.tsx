@@ -873,11 +873,17 @@ type YearEndValuation = {
     unknownVat: { units: number; valueEurCents: number }
   }
   layerCount: number
+  /** T.8 part 2 — provenance: 'live' = computed now, 'snapshot' = read from
+   *  YearEndSnapshot. */
+  source?: 'live' | 'snapshot'
+  notes?: string | null
 }
 
 function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string | number>) => string }) {
+  const { toast } = useToast()
   const [data, setData] = useState<YearEndValuation | null>(null)
   const [loading, setLoading] = useState(false)
+  const [snapping, setSnapping] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const currentYear = new Date().getUTCFullYear()
   const [year, setYear] = useState<number>(currentYear)
@@ -897,6 +903,27 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
   }, [year])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // T.8 part 2 — manual snapshot trigger. Lets the operator capture
+  // a closed-year valuation on demand (backfill 2024, refresh after a
+  // late ECB rate, etc).
+  const triggerSnapshot = useCallback(async () => {
+    setSnapping(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/stock/year-end-valuation/snapshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      toast.success(t('stock.analytics.yearEnd.snapshotSaved', { year }))
+      await fetchData()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSnapping(false)
+    }
+  }, [year, fetchData, toast, t])
 
   return (
     <Card>
@@ -921,10 +948,27 @@ function YearEndValuationCard({ t }: { t: (k: string, v?: Record<string, string 
             ))}
           </select>
           <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
           </Button>
+          {data?.source === 'live' && year < currentYear && (
+            <Button variant="secondary" size="sm" onClick={triggerSnapshot} disabled={snapping}>
+              {snapping ? t('stock.analytics.yearEnd.snapping') : t('stock.analytics.yearEnd.saveSnapshot')}
+            </Button>
+          )}
         </div>
       </div>
+      {data && (
+        <div className="text-xs text-slate-500 dark:text-slate-400 -mt-2 mb-2 inline-flex items-center gap-2 flex-wrap">
+          <span className={
+            data.source === 'snapshot'
+              ? 'inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-medium uppercase tracking-wider'
+              : 'inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 font-medium uppercase tracking-wider'
+          }>
+            {data.source === 'snapshot' ? t('stock.analytics.yearEnd.sourceSnapshot') : t('stock.analytics.yearEnd.sourceLive')}
+          </span>
+          {data.notes && <span className="text-slate-400">{data.notes}</span>}
+        </div>
+      )}
       {err && (
         <div className="text-sm text-rose-600 mb-2">{err}</div>
       )}
