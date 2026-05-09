@@ -20,18 +20,23 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
   Loader2,
   RefreshCw,
+  Undo2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +78,12 @@ export default function ActivityTab({
   discardSignal,
 }: Props) {
   const { t } = useTranslations()
+  const { toast } = useToast()
+  const confirm = useConfirm()
+  const router = useRouter()
+  // W10.1 — track which row is currently being rolled back so the
+  // button can show a per-row spinner without locking out other rows.
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null)
 
   const [rows, setRows] = useState<AuditRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -179,6 +190,86 @@ export default function ActivityTab({
     void refresh()
   }, [discardSignal, refresh])
 
+  // W10.1 — rollback. Hits PATCH /api/products/bulk with the field
+  // restored to its pre-change value. Only single-field updates with
+  // an unambiguous `before` snapshot can be rolled back; multi-field
+  // creates and audits without a before don't expose the button. The
+  // PATCH still flows through master-price.service / master-status
+  // service so the cascade fires identically to a manual edit.
+  const onRollback = async (row: AuditRow) => {
+    const target = extractRollbackable(row)
+    if (!target) return
+    const ok = await confirm({
+      title: t('products.edit.activity.rollbackTitle', { field: target.field }),
+      description: t('products.edit.activity.rollbackBody', {
+        field: target.field,
+        from: stringifyValue(target.toValue),
+        to: stringifyValue(target.fromValue),
+      }),
+      confirmLabel: t('products.edit.activity.rollbackConfirm'),
+      tone: 'warning',
+    })
+    if (!ok) return
+    setRollingBackId(row.id)
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (typeof product.version === 'number') {
+        headers['If-Match'] = String(product.version)
+      }
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          changes: [
+            {
+              id: product.id,
+              field: target.field,
+              value: target.fromValue,
+            },
+          ],
+          ...(typeof product.version === 'number'
+            ? { expectedVersion: product.version }
+            : {}),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        if (res.status === 409 && body?.code === 'VERSION_CONFLICT') {
+          toast.error(
+            t('products.edit.activity.rollbackConflict', {
+              expected: body.expectedVersion ?? '?',
+              current: body.currentVersion ?? '?',
+            }),
+          )
+          router.refresh()
+          return
+        }
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      toast.success(
+        t('products.edit.activity.rollbackSuccess', { field: target.field }),
+      )
+      emitInvalidation({
+        type: 'product.updated',
+        id: product.id,
+        fields: [target.field],
+        meta: { source: 'activity-tab-rollback' },
+      })
+      router.refresh()
+      void refresh()
+    } catch (e: any) {
+      toast.error(
+        t('products.edit.activity.rollbackFailed', {
+          error: e?.message ?? String(e),
+        }),
+      )
+    } finally {
+      setRollingBackId(null)
+    }
+  }
+
   const toggle = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -277,6 +368,8 @@ export default function ActivityTab({
                 row={row}
                 expanded={expanded.has(row.id)}
                 onToggle={() => toggle(row.id)}
+                onRollback={onRollback}
+                rollingBack={rollingBackId === row.id}
                 t={t}
               />
             ))}
@@ -305,11 +398,15 @@ function ActivityRowItem({
   row,
   expanded,
   onToggle,
+  onRollback,
+  rollingBack,
   t,
 }: {
   row: AuditRow
   expanded: boolean
   onToggle: () => void
+  onRollback: (row: AuditRow) => void
+  rollingBack: boolean
   t: (key: string, vars?: Record<string, string | number>) => string
 }) {
   const summary = describeRow(row)
@@ -318,6 +415,7 @@ function ActivityRowItem({
     typeof row.userId === 'string' && row.userId.length > 0
       ? row.userId
       : t('products.edit.activity.systemActor')
+  const rollback = extractRollbackable(row)
 
   return (
     <li className="bg-white dark:bg-slate-900">
@@ -359,10 +457,10 @@ function ActivityRowItem({
         </span>
       </button>
       {expanded && (
-        <div className="px-3 pb-3 pl-9 text-xs">
+        <div className="px-3 pb-3 pl-9 text-xs space-y-2">
           <DiffPanel before={row.before} after={row.after} t={t} />
           {row.metadata && Object.keys(row.metadata).length > 0 && (
-            <details className="mt-2">
+            <details>
               <summary className="cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
                 {t('products.edit.activity.metadataLabel')}
               </summary>
@@ -370,6 +468,25 @@ function ActivityRowItem({
                 {JSON.stringify(row.metadata, null, 2)}
               </pre>
             </details>
+          )}
+          {rollback && (
+            <div className="flex items-center justify-end pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={rollingBack}
+                icon={<Undo2 className="w-3.5 h-3.5" />}
+                onClick={() => onRollback(row)}
+                title={t('products.edit.activity.rollbackTooltip', {
+                  field: rollback.field,
+                  to: stringifyValue(rollback.fromValue),
+                })}
+              >
+                {t('products.edit.activity.rollback', {
+                  field: rollback.field,
+                })}
+              </Button>
+            </div>
           )}
         </div>
       )}
@@ -475,6 +592,92 @@ function ActionBadge({
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+// W10.1 — extract rollback target from an audit row.
+//
+// Returns null when the row can't be rolled back unambiguously:
+//   - non-update actions (create / delete / submit)
+//   - rows without a `before` snapshot (most /bulk PATCH writes)
+//   - rows whose before/after touches multiple fields at once
+//   - rows whose field isn't in the rollback allowlist
+//
+// The allowlist matches what /api/products/bulk PATCH accepts, so a
+// rollback can never propose a write the bulk endpoint would reject.
+const ROLLBACKABLE_FIELDS = new Set([
+  'name',
+  'description',
+  'basePrice',
+  'costPrice',
+  'minMargin',
+  'minPrice',
+  'maxPrice',
+  'totalStock',
+  'lowStockThreshold',
+  'brand',
+  'manufacturer',
+  'upc',
+  'ean',
+  'gtin',
+  'status',
+  'fulfillmentChannel',
+  'productType',
+  'bulletPoints',
+  'keywords',
+  'hsCode',
+  'countryOfOrigin',
+])
+
+function extractRollbackable(
+  row: AuditRow,
+): { field: string; fromValue: unknown; toValue: unknown } | null {
+  if (row.action !== 'update') return null
+  const before =
+    row.before && typeof row.before === 'object'
+      ? (row.before as Record<string, unknown>)
+      : null
+  const after =
+    row.after && typeof row.after === 'object'
+      ? (row.after as Record<string, unknown>)
+      : null
+  if (!before || !after) return null
+
+  // Direct shape: master-price.service / master-status.service write
+  // `before: { basePrice: X }, after: { basePrice: Y }`. Pick the
+  // single overlapping key.
+  const beforeKeys = Object.keys(before).filter(
+    (k) => k !== 'field' && k !== 'value',
+  )
+  const afterKeys = Object.keys(after).filter(
+    (k) => k !== 'field' && k !== 'value',
+  )
+  if (beforeKeys.length === 1 && afterKeys.length === 1) {
+    const field = beforeKeys[0]
+    if (
+      field === afterKeys[0] &&
+      ROLLBACKABLE_FIELDS.has(field) &&
+      before[field] !== after[field]
+    ) {
+      return { field, fromValue: before[field], toValue: after[field] }
+    }
+  }
+
+  // /bulk PATCH shape: `after: { field, value }` plus (rarely)
+  // `before: { value: <oldValue> }`.
+  if (typeof after.field === 'string' && ROLLBACKABLE_FIELDS.has(after.field)) {
+    const field = after.field
+    const beforeVal =
+      before.value !== undefined
+        ? before.value
+        : before[field] !== undefined
+          ? before[field]
+          : undefined
+    if (beforeVal !== undefined) {
+      return { field, fromValue: beforeVal, toValue: after.value }
+    }
+  }
+
+  return null
+}
+
 function describeRow(row: AuditRow): string {
   const after = row.after as Record<string, unknown> | null
   const before = row.before as Record<string, unknown> | null
