@@ -38,8 +38,15 @@ export default function WizardHeader({
 }: Props) {
   const { t } = useTranslations()
   return (
-    <div className="px-6 py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-4 flex-shrink-0 dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex items-center gap-3 min-w-0">
+    <div
+      className={cn(
+        // M.3 — tighter padding + smaller gap on mobile so the
+        // product name + 1-2 chip cluster + AI button + close fit
+        // on a 375px viewport without wrapping.
+        'px-3 md:px-6 py-2 md:py-3 border-b border-slate-200 bg-white flex items-center justify-between gap-2 md:gap-4 flex-shrink-0 dark:border-slate-800 dark:bg-slate-950',
+      )}
+    >
+      <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <Link
           href={`/products/${productId}/edit`}
           className="text-slate-400 hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
@@ -51,16 +58,19 @@ export default function WizardHeader({
           {/* U.10 — name promoted to text-md so it reads as the
               primary identifier; SKU drops to text-sm secondary. The
               header is the only place in the wizard that names what
-              you're listing, so it earns the visual weight. */}
-          <div className="text-md font-semibold text-slate-900 truncate dark:text-slate-100">
+              you're listing, so it earns the visual weight.
+              M.3 — name sized text-sm on mobile for compactness;
+              SKU hidden on mobile entirely so the chip cluster has
+              more horizontal room. */}
+          <div className="text-sm md:text-md font-semibold text-slate-900 truncate dark:text-slate-100">
             {productName}
           </div>
-          <div className="font-mono text-sm text-slate-500 truncate dark:text-slate-400">
+          <div className="hidden md:block font-mono text-sm text-slate-500 truncate dark:text-slate-400">
             {productSku}
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
         <ChannelsSummary channels={channels} />
         {/* AI-4.8 — bulk orchestrator trigger. Disabled until at
             least one channel is picked (matches the orchestrator's
@@ -115,53 +125,86 @@ function ChannelsSummary({ channels }: { channels: ChannelTuple[] }) {
   // Cap visible chips so a 10-channel selection doesn't push the
   // close button off-screen on narrow viewports. Overflow rolls into
   // a "+N more" pill that tooltips the full list.
-  const VISIBLE = 4
-  const visibleChannels = channels.slice(0, VISIBLE)
-  const overflow = channels.length - visibleChannels.length
+  //
+  // M.3 — tighter cap (1) on mobile so a 4+ channel selection can
+  // still co-exist with the AI button + close in a 375px viewport.
+  // Desktop keeps the generous 4-chip preview.
+  const VISIBLE_DESKTOP = 4
+  const VISIBLE_MOBILE = 1
+  const desktopChips = channels.slice(0, VISIBLE_DESKTOP)
+  const mobileChips = channels.slice(0, VISIBLE_MOBILE)
+  const desktopOverflow = channels.length - desktopChips.length
+  const mobileOverflow = channels.length - mobileChips.length
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap" title={summary}>
-      <span className="text-sm text-slate-500 dark:text-slate-400">
+    <div className="flex items-center gap-1.5 flex-wrap min-w-0" title={summary}>
+      {/* M.3 — "Listing on" / "{n} channels:" label hidden on mobile;
+          the chip itself names the destination clearly enough. */}
+      <span className="hidden md:inline text-sm text-slate-500 dark:text-slate-400">
         {channels.length === 1
           ? t('listWizard.header.listingOn')
           : t('listWizard.header.channelsCount', { n: channels.length })}
       </span>
-      {visibleChannels.map((c, i) => {
-        const tone =
-          CHANNEL_TONE[c.platform] ??
-          'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-        const platformLabel = CHANNEL_LABEL[c.platform] ?? c.platform
-        const marketLabel =
-          c.marketplace === 'GLOBAL'
-            ? null
-            : COUNTRY_NAMES[c.marketplace] ?? c.marketplace
-        return (
+      {/* Mobile chip set — only first channel rendered; rest spill
+          to the "+N" overflow pill which tooltips the full list. */}
+      <div className="flex md:hidden items-center gap-1.5 min-w-0">
+        {mobileChips.map((c, i) => (
+          <ChannelChip key={`m-${c.platform}:${c.marketplace}:${i}`} c={c} />
+        ))}
+        {mobileOverflow > 0 && (
           <span
-            key={`${c.platform}:${c.marketplace}:${i}`}
-            className={cn(
-              'inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border',
-              tone,
-            )}
-            title={marketLabel ? `${platformLabel} · ${marketLabel}` : platformLabel}
+            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+            title={summary}
           >
-            <span className="font-mono">{platformLabel}</span>
-            {c.marketplace !== 'GLOBAL' && (
-              <>
-                <span className="opacity-50 mx-0.5">·</span>
-                <span>{c.marketplace}</span>
-              </>
-            )}
+            {t('listWizard.header.overflow', { n: mobileOverflow })}
           </span>
-        )
-      })}
-      {overflow > 0 && (
-        <span
-          className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
-          title={summary}
-        >
-          {t('listWizard.header.overflow', { n: overflow })}
-        </span>
-      )}
+        )}
+      </div>
+
+      {/* Desktop chip set — keeps the original 4-visible cap. */}
+      <div className="hidden md:flex items-center gap-1.5 min-w-0">
+        {desktopChips.map((c, i) => (
+          <ChannelChip key={`d-${c.platform}:${c.marketplace}:${i}`} c={c} />
+        ))}
+        {desktopOverflow > 0 && (
+          <span
+            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+            title={summary}
+          >
+            {t('listWizard.header.overflow', { n: desktopOverflow })}
+          </span>
+        )}
+      </div>
     </div>
+  )
+}
+
+// Extracted so the mobile + desktop chip sets share rendering
+// without duplicating the tone / label logic.
+function ChannelChip({ c }: { c: ChannelTuple }) {
+  const tone =
+    CHANNEL_TONE[c.platform] ??
+    'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+  const platformLabel = CHANNEL_LABEL[c.platform] ?? c.platform
+  const marketLabel =
+    c.marketplace === 'GLOBAL'
+      ? null
+      : COUNTRY_NAMES[c.marketplace] ?? c.marketplace
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center h-5 px-1.5 rounded text-xs font-medium border',
+        tone,
+      )}
+      title={marketLabel ? `${platformLabel} · ${marketLabel}` : platformLabel}
+    >
+      <span className="font-mono">{platformLabel}</span>
+      {c.marketplace !== 'GLOBAL' && (
+        <>
+          <span className="opacity-50 mx-0.5">·</span>
+          <span>{c.marketplace}</span>
+        </>
+      )}
+    </span>
   )
 }
