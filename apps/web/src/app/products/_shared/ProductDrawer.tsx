@@ -51,6 +51,8 @@ import {
   XCircle,
   Clock,
   DollarSign,
+  GitBranch,
+  Send,
 } from 'lucide-react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -164,6 +166,7 @@ type Tab =
   | 'related'
   | 'activity'
   | 'schedule'
+  | 'workflow'
 
 export default function ProductDrawer({
   productId,
@@ -179,7 +182,7 @@ export default function ProductDrawer({
   const searchParams = useSearchParams()
   const urlTab = searchParams.get('drawerTab') as Tab | null
   const tab: Tab =
-    urlTab && ['details', 'listings', 'variations', 'translations', 'related', 'activity'].includes(urlTab)
+    urlTab && ['details', 'listings', 'variations', 'translations', 'related', 'activity', 'workflow'].includes(urlTab)
       ? urlTab
       : 'details'
   const setTab = useCallback(
@@ -487,6 +490,16 @@ export default function ProductDrawer({
           >
             <Calendar className="w-3 h-3" /> Schedule
           </DrawerTab>
+          {/* W3.6 — Wave 3 workflow tab. Current stage + transition
+              controls + comment thread + transition history. Only
+              meaningful when the product has a workflowStage; tab
+              renders an "attach workflow" CTA when stageless. */}
+          <DrawerTab
+            active={tab === 'workflow'}
+            onClick={() => setTab('workflow')}
+          >
+            <GitBranch className="w-3 h-3" /> Workflow
+          </DrawerTab>
           </div>
           {/* Right-edge fade hints at scrollable overflow without
               competing for click space (pointer-events-none). */}
@@ -570,6 +583,7 @@ export default function ProductDrawer({
             />
           )}
           {data && tab === 'schedule' && <ScheduleTab productId={data.id} />}
+          {data && tab === 'workflow' && <WorkflowTab productId={data.id} />}
           {data && tab === 'activity' && <ActivityTab productId={data.id} />}
         </div>
 
@@ -1637,6 +1651,354 @@ interface ActivityEntry {
   after: Record<string, unknown> | null
   metadata: Record<string, unknown> | null
   createdAt: string
+}
+
+/**
+ * W3.6 — Workflow tab. Current stage chip + transition dropdown +
+ * comment thread + last 10 transitions. Falls back to "no workflow"
+ * empty state when the product has no workflowStage (the operator
+ * can attach a workflow via the family editor or the bulk modal).
+ */
+interface WorkflowSnapshot {
+  productId: string
+  sku: string
+  currentStage: {
+    id: string
+    code: string
+    label: string
+    slaHours: number | null
+    isPublishable: boolean
+    isInitial: boolean
+    isTerminal: boolean
+    workflowId: string
+    workflow: {
+      id: string
+      code: string
+      label: string
+      stages: Array<{ id: string; code: string; label: string; sortOrder: number; isPublishable: boolean; isTerminal: boolean }>
+    }
+  } | null
+  sla: {
+    state: 'on_track' | 'soon' | 'overdue' | 'no_sla'
+    dueAt: string | null
+    hoursRemaining: number | null
+  } | null
+  transitions: Array<{
+    id: string
+    fromStage: { id: string; code: string; label: string } | null
+    toStage: { id: string; code: string; label: string }
+    comment: string | null
+    createdAt: string
+  }>
+  comments: Array<{
+    id: string
+    body: string
+    createdAt: string
+    stage: { id: string; code: string; label: string }
+  }>
+}
+
+const SLA_TONE: Record<string, string> = {
+  on_track: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  soon: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+  overdue: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+  no_sla: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+}
+
+function WorkflowTab({ productId }: { productId: string }) {
+  const [snap, setSnap] = useState<WorkflowSnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+  const [moving, setMoving] = useState(false)
+  const [moveTo, setMoveTo] = useState('')
+  const [moveComment, setMoveComment] = useState('')
+  const [commenting, setCommenting] = useState(false)
+  const [commentBody, setCommentBody] = useState('')
+  const { toast } = useToast()
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/workflow`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as WorkflowSnapshot
+      setSnap(data)
+      setErr(null)
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [productId])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const moveStage = async () => {
+    if (!moveTo) return
+    setMoving(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/workflow/move`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toStageId: moveTo,
+            comment: moveComment.trim() || null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      setMoveTo('')
+      setMoveComment('')
+      await refresh()
+      toast.success('Stage moved')
+    } catch (e: any) {
+      toast.error(`Move failed: ${e?.message ?? String(e)}`)
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  const addComment = async () => {
+    if (!snap?.currentStage || !commentBody.trim()) return
+    setCommenting(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/workflow/comments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stageId: snap.currentStage.id,
+            body: commentBody.trim(),
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      setCommentBody('')
+      await refresh()
+    } catch (e: any) {
+      toast.error(`Comment failed: ${e?.message ?? String(e)}`)
+    } finally {
+      setCommenting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-4 text-base text-slate-500 dark:text-slate-400">
+        Loading workflow…
+      </div>
+    )
+  }
+  if (err) {
+    return (
+      <div className="p-4 text-base text-rose-700 dark:text-rose-300">{err}</div>
+    )
+  }
+  if (!snap?.currentStage) {
+    return (
+      <div className="p-6 text-center">
+        <GitBranch className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+        <div className="text-md text-slate-700 dark:text-slate-300">
+          No workflow attached.
+        </div>
+        <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+          Attach a family that has a workflow, or use the bulk
+          attach-workflow flow when it lands. Workflow lives in
+          /settings/pim/workflows.
+        </div>
+      </div>
+    )
+  }
+
+  const stage = snap.currentStage
+  const otherStages = stage.workflow.stages.filter((s) => s.id !== stage.id)
+
+  return (
+    <div className="p-4 space-y-5">
+      {/* Current stage card */}
+      <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 bg-slate-50/50 dark:bg-slate-900/40">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
+          Current stage · {stage.workflow.label}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-base font-medium bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded">
+            {stage.label}
+          </span>
+          {stage.isInitial && (
+            <span className="text-xs text-slate-500 dark:text-slate-400 italic">initial</span>
+          )}
+          {stage.isTerminal && (
+            <span className="text-xs text-emerald-700 dark:text-emerald-300 italic">terminal</span>
+          )}
+          {stage.isPublishable && (
+            <span className="text-xs text-amber-700 dark:text-amber-300 italic">publishable</span>
+          )}
+          {snap.sla && (
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded font-medium ${SLA_TONE[snap.sla.state]}`}
+              title={
+                snap.sla.dueAt
+                  ? `Due ${new Date(snap.sla.dueAt).toLocaleString()}`
+                  : 'No SLA on this stage'
+              }
+            >
+              {snap.sla.state === 'no_sla'
+                ? 'no SLA'
+                : snap.sla.state === 'overdue'
+                ? `overdue ${Math.abs(Math.round(snap.sla.hoursRemaining ?? 0))}h`
+                : `${Math.round(snap.sla.hoursRemaining ?? 0)}h left`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Move stage controls */}
+      {otherStages.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            Move to
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={moveTo}
+              onChange={(e) => setMoveTo(e.target.value)}
+              className="flex-1 h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+            >
+              <option value="">— pick a stage —</option>
+              {otherStages
+                .slice()
+                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                    {s.isTerminal ? ' (terminal)' : ''}
+                    {s.isPublishable ? ' · publishable' : ''}
+                  </option>
+                ))}
+            </select>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={moveStage}
+              disabled={!moveTo}
+              loading={moving}
+              icon={<Send className="w-3 h-3" />}
+            >
+              Move
+            </Button>
+          </div>
+          <input
+            type="text"
+            value={moveComment}
+            onChange={(e) => setMoveComment(e.target.value)}
+            placeholder="Optional reason / note for the audit log"
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          />
+        </div>
+      )}
+
+      {/* Comment thread (current stage) */}
+      <div className="space-y-2">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+          Comments on {stage.label}
+        </div>
+        <div className="space-y-1.5">
+          {snap.comments
+            .filter((c) => c.stage.id === stage.id)
+            .slice(0, 10)
+            .map((c) => (
+              <div
+                key={c.id}
+                className="border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5 text-base text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900"
+              >
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 tabular-nums">
+                  {new Date(c.createdAt).toLocaleString()}
+                </div>
+                {c.body}
+              </div>
+            ))}
+          {snap.comments.filter((c) => c.stage.id === stage.id).length === 0 && (
+            <div className="text-sm italic text-slate-500 dark:text-slate-400">
+              No comments on this stage yet.
+            </div>
+          )}
+        </div>
+        <div className="flex items-end gap-2">
+          <textarea
+            value={commentBody}
+            onChange={(e) => setCommentBody(e.target.value)}
+            rows={2}
+            placeholder="Add a comment for this stage…"
+            className="flex-1 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={addComment}
+            disabled={!commentBody.trim()}
+            loading={commenting}
+          >
+            Post
+          </Button>
+        </div>
+      </div>
+
+      {/* Transition history */}
+      <div className="space-y-2">
+        <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+          Transition history
+        </div>
+        {snap.transitions.length === 0 ? (
+          <div className="text-sm italic text-slate-500 dark:text-slate-400">
+            No transitions recorded.
+          </div>
+        ) : (
+          <ul className="space-y-1">
+            {snap.transitions.slice(0, 10).map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+              >
+                <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums w-32 flex-shrink-0">
+                  {new Date(t.createdAt).toLocaleString()}
+                </span>
+                <span className="truncate">
+                  {t.fromStage ? (
+                    <>
+                      <span className="text-slate-500 dark:text-slate-400">{t.fromStage.label}</span>
+                      <span className="mx-1 text-slate-400 dark:text-slate-500">→</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-400 dark:text-slate-500 italic mr-1">entry →</span>
+                  )}
+                  <span className="text-slate-900 dark:text-slate-100">{t.toStage.label}</span>
+                  {t.comment && (
+                    <span className="ml-2 text-slate-500 dark:text-slate-400 italic">
+                      "{t.comment}"
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function ActivityTab({ productId }: { productId: string }) {
