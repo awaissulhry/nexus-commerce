@@ -470,12 +470,12 @@ export default function ShipmentsClient() {
       {!sendcloudConnected && (
         <Card>
           <div className="flex items-center gap-3">
-            <AlertTriangle size={18} className="text-amber-600 flex-shrink-0" />
+            <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
             <div className="flex-1">
-              <div className="text-md font-semibold text-slate-900">{t('outbound.shipments.sendcloudNotConnected.title')}</div>
-              <div className="text-base text-slate-500">{t('outbound.shipments.sendcloudNotConnected.description')}</div>
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100">{t('outbound.shipments.sendcloudNotConnected.title')}</div>
+              <div className="text-base text-slate-500 dark:text-slate-400">{t('outbound.shipments.sendcloudNotConnected.description')}</div>
             </div>
-            <Link href="/fulfillment/carriers" className="h-8 px-3 text-base bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center">
+            <Link href="/fulfillment/carriers" className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center">
               {t('outbound.shipments.sendcloudNotConnected.cta')}
             </Link>
           </div>
@@ -487,17 +487,17 @@ export default function ShipmentsClient() {
           <button
             key={p.key}
             onClick={() => setStatusFilter(p.key)}
-            className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
+            className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
           >
             {t(p.tKey)}
             {counts[p.key] != null && (
-              <span className={`tabular-nums ${statusFilter === p.key ? 'text-slate-300' : 'text-slate-400'}`}>{counts[p.key]}</span>
+              <span className={`tabular-nums ${statusFilter === p.key ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>{counts[p.key]}</span>
             )}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2">
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <Input
               placeholder={t('outbound.shipments.searchPlaceholder')}
               value={search}
@@ -505,7 +505,7 @@ export default function ShipmentsClient() {
               className="pl-7 w-56"
             />
           </div>
-          <button onClick={fetchShipments} className="h-8 px-3 text-base border border-slate-200 rounded-md hover:bg-slate-50 inline-flex items-center gap-1.5">
+          <button onClick={fetchShipments} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
             <RefreshCw size={12} /> {t('common.refresh')}
           </button>
         </div>
@@ -515,30 +515,30 @@ export default function ShipmentsClient() {
         <div className="sticky top-2 z-20">
           <Card>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-semibold text-slate-700">{t('outbound.pending.selectedCount', { n: selected.size })}</span>
-              <div className="h-4 w-px bg-slate-200" />
-              <button onClick={bulkPrint} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5">
+              <span className="text-base font-semibold text-slate-700 dark:text-slate-300">{t('outbound.pending.selectedCount', { n: selected.size })}</span>
+              <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+              <button onClick={bulkPrint} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5">
                 <Printer size={12} /> {t('outbound.shipments.bulk.printLabels')}
               </button>
-              <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+              <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
                 <Send size={12} /> {t('outbound.shipments.bulk.markShipped')}
               </button>
               {/* F1.9 — bulk void-label. Destructive (cancels carrier
                   parcel + resets the shipment to PACKED), so confirm
                   modal lives in bulkVoidLabel(). */}
-              <button onClick={bulkVoidLabel} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 inline-flex items-center gap-1.5">
+              <button onClick={bulkVoidLabel} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 dark:hover:bg-rose-900/60 inline-flex items-center gap-1.5">
                 <X size={12} /> {t('outbound.shipments.bulk.voidLabel')}
               </button>
-              <button onClick={bulkHold} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1.5">
+              <button onClick={bulkHold} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60 inline-flex items-center gap-1.5">
                 <Pause size={12} /> {t('outbound.shipments.bulk.hold')}
               </button>
-              <button onClick={bulkRelease} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5">
+              <button onClick={bulkRelease} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
                 <Play size={12} /> {t('outbound.shipments.bulk.release')}
               </button>
-              <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 inline-flex items-center gap-1.5">
+              <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 inline-flex items-center gap-1.5">
                 <Download size={12} /> {t('outbound.shipments.bulk.exportCsv')}
               </button>
-              <button onClick={() => setSelected(new Set())} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded">
+              <button onClick={() => setSelected(new Set())} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
                 <X size={14} />
               </button>
             </div>
@@ -547,7 +547,7 @@ export default function ShipmentsClient() {
       )}
 
       {loading && items.length === 0 ? (
-        <Card><div className="text-md text-slate-500 py-8 text-center">{t('common.loading')}</div></Card>
+        <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">{t('common.loading')}</div></Card>
       ) : items.length === 0 ? (
         <EmptyState
           icon={Truck}
@@ -558,7 +558,7 @@ export default function ShipmentsClient() {
         <Card noPadding>
           <div className="overflow-x-auto">
             <table className="w-full text-md">
-              <thead className="border-b border-slate-200 bg-slate-50">
+              <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <tr>
                   <th className="px-3 py-2 w-8">
                     <input
@@ -570,20 +570,20 @@ export default function ShipmentsClient() {
                       }}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('outbound.shipments.col.order')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('outbound.shipments.col.status')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('outbound.shipments.col.items')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('outbound.shipments.col.carrier')}</th>
-                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700">{t('outbound.shipments.col.tracking')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700">{t('outbound.shipments.col.cost')}</th>
-                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700"></th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('outbound.shipments.col.order')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('outbound.shipments.col.status')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('outbound.shipments.col.items')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('outbound.shipments.col.carrier')}</th>
+                  <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('outbound.shipments.col.tracking')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">{t('outbound.shipments.col.cost')}</th>
+                  <th className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((s) => (
                   <tr
                     key={s.id}
-                    className={`border-b border-slate-100 hover:bg-slate-50 ${s.orderId ? 'cursor-pointer' : ''}`}
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${s.orderId ? 'cursor-pointer' : ''}`}
                     onClick={() => s.orderId && openDrawer(s.orderId)}
                   >
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
@@ -597,30 +597,30 @@ export default function ShipmentsClient() {
                       {s.orderId ? (
                         <button
                           type="button"
-                          className="text-base font-mono text-blue-600 hover:underline"
+                          className="text-base font-mono text-blue-600 dark:text-blue-400 hover:underline"
                           onClick={(e) => { e.stopPropagation(); openDrawer(s.orderId!) }}
                         >
                           {s.orderId.slice(0, 12)}…
                         </button>
-                      ) : <span className="text-slate-400 text-base">—</span>}
+                      ) : <span className="text-slate-400 dark:text-slate-500 text-base">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       <Badge variant={STATUS_TONE[s.status] ?? 'default'} size="sm">{s.status.replace(/_/g, ' ')}</Badge>
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-700">
+                    <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">
                       <span className="tabular-nums">{s.items.reduce((n, i) => n + i.quantity, 0)}</span> units · {s.items.length} SKU{s.items.length === 1 ? '' : 's'}
                     </td>
-                    <td className="px-3 py-2 text-base text-slate-700">{s.carrierCode}</td>
+                    <td className="px-3 py-2 text-base text-slate-700 dark:text-slate-300">{s.carrierCode}</td>
                     <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       {s.trackingNumber ? (
                         <span className="inline-flex items-center gap-1 group/track">
                           {s.trackingUrl ? (
-                            <a href={s.trackingUrl} target="_blank" rel="noreferrer" className="text-base font-mono text-blue-600 hover:underline inline-flex items-center gap-1">
+                            <a href={s.trackingUrl} target="_blank" rel="noreferrer" className="text-base font-mono text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
                               {s.trackingNumber.slice(0, 16)}{s.trackingNumber.length > 16 ? '…' : ''}
                               <ExternalLink size={10} />
                             </a>
                           ) : (
-                            <span className="text-base font-mono text-slate-700">{s.trackingNumber}</span>
+                            <span className="text-base font-mono text-slate-700 dark:text-slate-300">{s.trackingNumber}</span>
                           )}
                           {/* O.65: copy tracking — operator pastes into
                               customer-support emails without re-typing.
@@ -636,14 +636,14 @@ export default function ShipmentsClient() {
                               }
                             }}
                             title={t('outbound.shipments.copy.title')}
-                            className="opacity-0 group-hover/track:opacity-100 h-5 w-5 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 rounded transition-opacity"
+                            className="opacity-0 group-hover/track:opacity-100 h-5 w-5 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded transition-opacity"
                           >
                             <Copy size={10} />
                           </button>
                         </span>
-                      ) : <span className="text-slate-400 text-base">—</span>}
+                      ) : <span className="text-slate-400 dark:text-slate-500 text-base">—</span>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-base text-slate-600">
+                    <td className="px-3 py-2 text-right tabular-nums text-base text-slate-600 dark:text-slate-400">
                       {s.costCents != null ? `€${(s.costCents / 100).toFixed(2)}` : '—'}
                     </td>
                     <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
@@ -653,11 +653,11 @@ export default function ShipmentsClient() {
                             <button
                               onClick={() => hold(s.id)}
                               title={t('outbound.shipments.action.hold')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded"
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded"
                             >
                               <Pause size={11} />
                             </button>
-                            <button onClick={() => printLabel(s.id)} title={t('outbound.shipments.action.label')} className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1">
+                            <button onClick={() => printLabel(s.id)} title={t('outbound.shipments.action.label')} className="h-6 px-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900 dark:hover:bg-blue-900/60 inline-flex items-center gap-1">
                               <Printer size={11} /> {t('outbound.shipments.action.label')}
                             </button>
                           </>
@@ -666,7 +666,7 @@ export default function ShipmentsClient() {
                           <button
                             onClick={() => release(s.id)}
                             title={s.heldReason ?? t('outbound.shipments.action.release')}
-                            className="h-6 px-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 inline-flex items-center gap-1"
+                            className="h-6 px-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60 inline-flex items-center gap-1"
                           >
                             <Play size={11} /> {t('outbound.shipments.action.release')}
                           </button>
@@ -676,18 +676,18 @@ export default function ShipmentsClient() {
                             <button
                               onClick={() => reprintLabel(s.id)}
                               title={t('outbound.shipments.action.reprint')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded"
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
                             >
                               <RotateCcw size={11} />
                             </button>
                             <button
                               onClick={() => voidLabel(s.id)}
                               title={t('outbound.shipments.action.void')}
-                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded"
+                              className="h-6 w-6 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded"
                             >
                               <Trash size={11} />
                             </button>
-                            <button onClick={() => markShipped(s.id)} title={t('outbound.shipments.action.ship')} className="h-6 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1">
+                            <button onClick={() => markShipped(s.id)} title={t('outbound.shipments.action.ship')} className="h-6 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1">
                               <CheckCircle2 size={11} /> {t('outbound.shipments.action.ship')}
                             </button>
                           </>
