@@ -441,37 +441,34 @@ export default function AppSidebar() {
         </NavGroup>
 
         <NavGroup label="Fulfillment">
-          {/* Stable layout: sub-links are always rendered (indented)
-              under their parent so navigating from one section to
-              another doesn't reflow the sidebar. The full hierarchy
-              is visible at all times, in semantic order:
-                Stock → Channel Drift
-                Inbound
-                Outbound → Analytics
-                Replenishment
-                Purchase Orders
-                Carriers
-                Returns → Analytics */}
-          <NavItem
+          {/* Collapsible parents — each chevron toggle is independent
+              and persists in localStorage. Auto-expands when the
+              current route is one of childRoutes so deep-link / Cmd+K
+              navigation always reveals the active sub-link. */}
+          <NavParentItem
+            storageKey="fulfillment.stock"
             href="/fulfillment/stock"
             icon={Warehouse}
             label="Stock"
             active={pathname === '/fulfillment/stock'}
-          />
-          <NavItem
-            href="/fulfillment/stock/channel-drift"
-            icon={Cable}
-            label="Channel Drift"
-            active={pathname === '/fulfillment/stock/channel-drift'}
-            nested
-          />
+            childRoutes={['/fulfillment/stock/channel-drift']}
+          >
+            <NavItem
+              href="/fulfillment/stock/channel-drift"
+              icon={Cable}
+              label="Channel Drift"
+              active={pathname === '/fulfillment/stock/channel-drift'}
+              nested
+            />
+          </NavParentItem>
           <NavItem
             href="/fulfillment/inbound"
             icon={PackageCheck}
             label="Inbound"
             active={pathname.startsWith('/fulfillment/inbound')}
           />
-          <NavItem
+          <NavParentItem
+            storageKey="fulfillment.outbound"
             href="/fulfillment/outbound"
             icon={PackageOpen}
             label="Outbound"
@@ -484,14 +481,16 @@ export default function AppSidebar() {
               (counts.operations?.pendingOrders ?? 0) > 0 ? 'action' : undefined
             }
             active={pathname === '/fulfillment/outbound' && !pathname.includes('/analytics')}
-          />
-          <NavItem
-            href="/fulfillment/outbound/analytics"
-            icon={BarChart3}
-            label="Outbound Analytics"
-            active={pathname === '/fulfillment/outbound/analytics'}
-            nested
-          />
+            childRoutes={['/fulfillment/outbound/analytics']}
+          >
+            <NavItem
+              href="/fulfillment/outbound/analytics"
+              icon={BarChart3}
+              label="Outbound Analytics"
+              active={pathname === '/fulfillment/outbound/analytics'}
+              nested
+            />
+          </NavParentItem>
           <NavItem
             href="/fulfillment/replenishment"
             icon={RefreshCw}
@@ -512,19 +511,22 @@ export default function AppSidebar() {
             label="Carriers"
             active={pathname === '/fulfillment/carriers'}
           />
-          <NavItem
+          <NavParentItem
+            storageKey="fulfillment.returns"
             href="/fulfillment/returns"
             icon={Undo2}
             label="Returns"
             active={pathname === '/fulfillment/returns' || (pathname.startsWith('/fulfillment/returns') && !pathname.includes('/analytics'))}
-          />
-          <NavItem
-            href="/fulfillment/returns/analytics"
-            icon={BarChart3}
-            label="Returns Analytics"
-            active={pathname === '/fulfillment/returns/analytics'}
-            nested
-          />
+            childRoutes={['/fulfillment/returns/analytics']}
+          >
+            <NavItem
+              href="/fulfillment/returns/analytics"
+              icon={BarChart3}
+              label="Returns Analytics"
+              active={pathname === '/fulfillment/returns/analytics'}
+              nested
+            />
+          </NavParentItem>
         </NavGroup>
 
         <NavGroup label="Marketing">
@@ -765,6 +767,115 @@ function NavItem({ href, icon: Icon, label, count, indicator, active, nested }: 
         </>
       )}
     </Link>
+  )
+}
+
+// Parent NavItem with collapsible children. The whole row navigates
+// to `href` exactly like a regular NavItem; the chevron on the right
+// is its own button that toggles expand/collapse without navigating.
+//
+// State precedence:
+//   1. user toggle (persisted in localStorage)
+//   2. auto-expand when a child route is active (so the highlighted
+//      sub-link is always visible after Cmd+K deep-link)
+//   3. collapsed by default
+//
+// childRoutes is the set of pathnames whose presence triggers (2);
+// the children prop is the JSX rendered when expanded.
+interface NavParentItemProps {
+  storageKey: string
+  href: string
+  icon?: LucideIcon
+  label: string
+  count?: number
+  indicator?: 'action' | 'warning' | 'disconnected'
+  active?: boolean
+  childRoutes: string[]
+  children: React.ReactNode
+}
+
+function NavParentItem({
+  storageKey,
+  href, icon: Icon, label, count, indicator, active,
+  childRoutes, children,
+}: NavParentItemProps) {
+  const pathname = usePathname()
+  const childActive = childRoutes.some((r) => pathname === r || pathname.startsWith(`${r}/`))
+  const [userToggled, setUserToggled] = useState<boolean | null>(null)
+  // Hydrate from localStorage on mount; SSR-safe via lazy initialiser.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`sidebar.expanded.${storageKey}`)
+      if (raw === '1') setUserToggled(true)
+      else if (raw === '0') setUserToggled(false)
+    } catch { /* ignore */ }
+  }, [storageKey])
+  const expanded = userToggled !== null ? userToggled : childActive
+
+  const toggle = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const next = !expanded
+    setUserToggled(next)
+    try {
+      localStorage.setItem(`sidebar.expanded.${storageKey}`, next ? '1' : '0')
+    } catch { /* ignore */ }
+  }
+
+  const dotClass =
+    indicator === 'action'
+      ? 'bg-red-500'
+      : indicator === 'warning'
+      ? 'bg-amber-500'
+      : ''
+
+  return (
+    <>
+      <div className="relative group/parent">
+        <Link
+          href={href}
+          className={cn(
+            'flex items-center gap-2.5 mx-2 px-3 py-1.5 rounded-md text-md transition-colors',
+            // Reserve right padding for the chevron toggle button.
+            'pr-9',
+            active
+              ? 'bg-blue-600 text-white font-medium'
+              : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+          )}
+        >
+          {Icon && <Icon className="w-4 h-4 flex-shrink-0" />}
+          <span className="flex-1 truncate">{label}</span>
+          {count !== undefined && count > 0 && (
+            <span
+              className={cn(
+                'text-xs tabular-nums px-1.5 py-0.5 rounded',
+                active
+                  ? 'bg-blue-700 text-blue-100'
+                  : 'bg-slate-800 text-slate-400'
+              )}
+            >
+              {count}
+            </span>
+          )}
+          {dotClass && <span className={cn('w-1.5 h-1.5 rounded-full', dotClass)} />}
+        </Link>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`}
+          aria-expanded={expanded}
+          className={cn(
+            'absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center rounded',
+            active
+              ? 'text-blue-100 hover:bg-blue-700/50'
+              : 'text-slate-500 hover:text-slate-200 hover:bg-slate-700',
+          )}
+        >
+          {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+      {expanded && children}
+    </>
   )
 }
 
