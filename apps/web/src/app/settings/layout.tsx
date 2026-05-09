@@ -7,6 +7,9 @@ const SETTINGS_TABS = [
   { label: 'AI', href: '/settings/ai', icon: '✨' },
   { label: 'Profile', href: '/settings/profile', icon: '👤' },
   { label: 'Terminology', href: '/settings/terminology', icon: '🌐' },
+  // W2.9 — PIM admin (Akeneo cornerstone). Today this points to
+  // /families; /attributes lands in W2.10.
+  { label: 'PIM', href: '/settings/pim/families', icon: '📚' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
