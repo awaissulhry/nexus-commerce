@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   FileText,
   LayoutGrid,
+  LifeBuoy,
   TableProperties,
   X,
 } from 'lucide-react'
@@ -380,6 +381,15 @@ export default function ProductEditClient({
             >
               <TableProperties className="w-3.5 h-3.5 mr-1.5" />
               {t('products.edit.bulkEdit')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/products/${product.id}/recover`)}
+              title={t('products.edit.recoverTooltip')}
+            >
+              <LifeBuoy className="w-3.5 h-3.5 mr-1.5" />
+              {t('products.edit.recover')}
             </Button>
             <ListOnChannelDropdown productId={product.id} />
             <Button

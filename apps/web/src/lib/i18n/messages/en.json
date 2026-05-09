@@ -3288,6 +3288,8 @@
   "products.edit.matrixTooltip": "Open the variant matrix editor for this parent product",
   "products.edit.datasheet": "Datasheet",
   "products.edit.datasheetTooltip": "Open the printable spec sheet (CE/customs/dimensions) for this product",
+  "products.edit.recover": "Recover",
+  "products.edit.recoverTooltip": "Recover a stuck or broken listing — delete + relist with same/new ASIN/SKU",
   "products.edit.discard": "Discard",
   "products.edit.discardEmptyTitle": "Refresh from server",
   "products.edit.discardEmpty": "Reload product from the database. Useful if another tab made changes.",

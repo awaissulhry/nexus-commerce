@@ -29,9 +29,14 @@ export default async function RecoverPage({ params }: PageProps) {
   const t = await getServerT()
   const backend = getBackendUrl()
 
+  // Reuses /api/products/:id/health — the same endpoint the drawer
+  // pulls from. Returns the master product flattened with a nested
+  // channelListings array, so we get product + listings in one
+  // round-trip. The dedicated /api/products/:id endpoint omits the
+  // channelListings join we need for the picker.
   let productRes: Response
   try {
-    productRes = await fetch(`${backend}/api/products/${productId}`, {
+    productRes = await fetch(`${backend}/api/products/${productId}/health`, {
       cache: 'no-store',
     })
   } catch {
@@ -54,13 +59,10 @@ export default async function RecoverPage({ params }: PageProps) {
     )
   }
 
-  const productJson = (await productRes.json()) as {
-    product?: RecoverProduct & {
-      channelListings?: RecoverChannelListing[]
-    }
+  const product = (await productRes.json()) as RecoverProduct & {
+    channelListings?: RecoverChannelListing[]
   }
-  const product = productJson.product
-  if (!product) notFound()
+  if (!product?.id) notFound()
 
   const eventsRes = await fetch(
     `${backend}/api/products/${productId}/recover/events`,

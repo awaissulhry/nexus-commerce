@@ -3292,6 +3292,8 @@
   "products.edit.matrixTooltip": "Apri l'editor della matrice varianti per questo prodotto padre",
   "products.edit.datasheet": "Scheda tecnica",
   "products.edit.datasheetTooltip": "Apri la scheda tecnica stampabile (CE / dogana / dimensioni) per questo prodotto",
+  "products.edit.recover": "Recupera",
+  "products.edit.recoverTooltip": "Recupera un annuncio bloccato o errato — elimina + ripubblica con ASIN/SKU uguale o nuovo",
   "products.edit.discard": "Scarta",
   "products.edit.discardEmptyTitle": "Aggiorna dal server",
   "products.edit.discardEmpty": "Ricarica il prodotto dal database. Utile se un'altra scheda ha apportato modifiche.",
