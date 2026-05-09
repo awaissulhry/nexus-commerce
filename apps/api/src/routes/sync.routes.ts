@@ -252,40 +252,13 @@ export async function syncRoutes(app: FastifyInstance) {
     }
   );
 
-  /**
-   * GET /api/sync/amazon/catalog/history
-   * Get sync history
-   */
-  app.get(
-    "/sync/amazon/catalog/history",
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      try {
-        const limit = Math.min(parseInt((request.query as any).limit) || 10, 100);
-        const offset = parseInt((request.query as any).offset) || 0;
-
-        logger.info(`[SYNC] Retrieving sync history (limit: ${limit}, offset: ${offset})`);
-
-        // This would query the SyncLog table
-        // For now, return a placeholder response
-        return reply.status(200).send({
-          success: true,
-          data: {
-            syncs: [],
-            total: 0,
-            limit,
-            offset,
-          },
-        });
-      } catch (error) {
-        logger.error("[SYNC] Failed to retrieve sync history:", error);
-
-        return reply.status(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error occurred",
-        });
-      }
-    }
-  );
+  // L.0e — the prior /sync/amazon/catalog/history endpoint was a
+  // placeholder that always returned `{syncs:[], total:0}`. Its only
+  // consumer (apps/web/src/components/inventory/SyncHistoryDisplay.tsx)
+  // was itself unmounted in the app. Removed rather than left as a
+  // misleading 200. The unified /sync-logs hub (Phase L2) will expose
+  // a real history endpoint backed by typed queries on SyncLog +
+  // AuditLog + CronRun.
 
   logger.info("Sync routes registered");
 }
