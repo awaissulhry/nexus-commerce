@@ -342,6 +342,12 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
   // Cheap (4 count() queries + 1 groupBy); not paginated. Distinct
   // from the /drafts list endpoint so the KPI strip can refresh on
   // its own cadence without invalidating the ETag-cached list.
+  //
+  // DR-B.2 — `ready` count surfaces wizards at the Submit step
+  // whose underlying product is data-complete. Computed by
+  // re-running the same scoring pass the list endpoint uses but
+  // only counting wizards at currentStep === 9. Cheap because
+  // the candidate set is small (typically 0–5 rows).
   fastify.get('/listing-wizard/drafts/summary', async (_request, reply) => {
     try {
       const now = new Date()
@@ -355,6 +361,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         productDraftsTotal,
         wizardStepDist,
         wizardOldest,
+        readyCandidates,
       ] = await Promise.all([
         prisma.listingWizard.count({ where: { status: 'DRAFT' } }),
         prisma.listingWizard.count({
@@ -378,7 +385,61 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           orderBy: { createdAt: 'asc' },
           select: { createdAt: true },
         }),
+        prisma.listingWizard.findMany({
+          where: { status: 'DRAFT', currentStep: 9 },
+          select: {
+            productId: true,
+            product: {
+              select: {
+                id: true,
+                name: true,
+                basePrice: true,
+                brand: true,
+                productType: true,
+                description: true,
+                gtin: true,
+                upc: true,
+                ean: true,
+              },
+            },
+          },
+        }),
       ])
+
+      // DR-B.2 — count readyCandidates with image presence + the
+      // 6 product-data factors. Mirrors scoreCompleteness() in the
+      // /drafts list endpoint; kept inline to stay independent.
+      let ready = 0
+      if (readyCandidates.length > 0) {
+        const ids = readyCandidates
+          .map((w) => w.product?.id)
+          .filter((x): x is string => !!x)
+        const imageCounts = new Map(
+          (
+            await prisma.productImage.groupBy({
+              by: ['productId'],
+              where: { productId: { in: ids } },
+              _count: { _all: true },
+            })
+          ).map((r) => [r.productId, r._count._all] as const),
+        )
+        for (const w of readyCandidates) {
+          const p = w.product
+          if (!p) continue
+          const passes = [
+            !!p.name &&
+              !p.name.toUpperCase().startsWith('NEW-') &&
+              p.name !== 'Untitled product',
+            p.basePrice !== null && Number(p.basePrice) > 0,
+            !!p.brand,
+            !!p.productType,
+            !!p.description && p.description.length >= 50,
+            !!(p.gtin || p.upc || p.ean),
+            (imageCounts.get(p.id) ?? 0) > 0,
+          ].filter(Boolean).length
+          if (passes === 7) ready++
+        }
+      }
 
       const byStep: Record<string, number> = {}
       for (const row of wizardStepDist) {
@@ -391,6 +452,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         productDrafts: productDraftsTotal,
         stale: wizardsStale,
         expiring: wizardsExpiring,
+        ready,
         byStep,
         oldestCreatedAt: wizardOldest?.createdAt ?? null,
       }

@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowRight,
   Box,
+  CheckCircle2,
   Clock,
   FileEdit,
   Hourglass,
@@ -74,8 +75,22 @@ interface DraftsSummary {
   productDrafts: number
   stale: number
   expiring: number
+  /** DR-B.2 — wizards at step 9 whose underlying product is 100% complete. */
+  ready: number
   byStep: Record<string, number>
   oldestCreatedAt: string | null
+}
+
+// DR-B.2 — a row is "ready to publish" when its wizard is at the
+// Submit step AND its underlying product is data-complete. Surfaces
+// the rare cases where the operator can sail through Submit without
+// fixing anything else first.
+function isReadyToPublish(d: Draft): boolean {
+  return (
+    d.kind === 'wizard' &&
+    d.currentStep === 9 &&
+    d.completenessPct >= 100
+  )
 }
 
 function formatAgeDays(iso: string | null): string {
@@ -287,17 +302,21 @@ function KpiTile({
   value: number | string
   help?: string
   loading?: boolean
-  tone?: 'default' | 'warn'
+  tone?: 'default' | 'warn' | 'good'
   onClick?: () => void
 }) {
   const toneClasses =
     tone === 'warn'
       ? 'border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30'
-      : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
+      : tone === 'good'
+        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
+        : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'
   const valueClasses =
     tone === 'warn'
       ? 'text-amber-800 dark:text-amber-200'
-      : 'text-slate-900 dark:text-slate-100'
+      : tone === 'good'
+        ? 'text-emerald-800 dark:text-emerald-200'
+        : 'text-slate-900 dark:text-slate-100'
   const Body = (
     <div
       className={cn(
@@ -443,6 +462,16 @@ const DraftRow = memo(function DraftRow({
             {d.productIsParent && (
               <span className="inline-flex items-center h-4 px-1 rounded text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                 parent
+              </span>
+            )}
+            {/* DR-B.2 — READY badge fires on the rare wizard already
+                at Submit with a fully-populated product. Operator
+                can sail through the Submit step without fixing
+                anything else. */}
+            {isReadyToPublish(d) && (
+              <span className="inline-flex items-center gap-0.5 h-4 px-1 rounded text-xs font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                <CheckCircle2 className="w-2.5 h-2.5" />
+                READY
               </span>
             )}
           </div>
@@ -600,9 +629,21 @@ const DraftRow = memo(function DraftRow({
           </Tooltip>
           <Link
             href={resumeHref}
-            className="inline-flex items-center gap-1 h-11 sm:h-7 px-3 sm:px-2.5 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            className={cn(
+              'inline-flex items-center gap-1 h-11 sm:h-7 px-3 sm:px-2.5 rounded-md text-white text-sm font-medium',
+              // DR-B.2 — READY rows get an emerald CTA so the
+              // operator's eye is drawn to publish-eligible items
+              // without scanning the whole table.
+              isReadyToPublish(d)
+                ? 'bg-emerald-600 hover:bg-emerald-700'
+                : 'bg-blue-600 hover:bg-blue-700',
+            )}
           >
-            {d.kind === 'wizard' ? t('drafts.resume') : t('drafts.configure')}
+            {isReadyToPublish(d)
+              ? t('drafts.publish')
+              : d.kind === 'wizard'
+                ? t('drafts.resume')
+                : t('drafts.configure')}
             <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -1292,14 +1333,24 @@ export default function DraftsClient() {
       {/* DR-S.1 — KPI strip. Numbers reflect the unfiltered total
           set so the operator sees scope at a glance, regardless of
           which filters are active. Stale tile is clickable: tapping
-          it scopes the list to stale-only as a quick triage path. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          it scopes the list to stale-only as a quick triage path.
+          DR-B.2 — Ready tile (5th) lights green when there are
+          wizards already eligible to publish. */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         <KpiTile
           icon={Layers}
           label={t('drafts.kpi.total')}
           value={summary?.total ?? '—'}
           help={t('drafts.kpi.totalHelp')}
           loading={!summary}
+        />
+        <KpiTile
+          icon={CheckCircle2}
+          label={t('drafts.kpi.ready')}
+          value={summary?.ready ?? '—'}
+          help={t('drafts.kpi.readyHelp')}
+          loading={!summary}
+          tone={(summary?.ready ?? 0) > 0 ? 'good' : 'default'}
         />
         <KpiTile
           icon={Clock}
