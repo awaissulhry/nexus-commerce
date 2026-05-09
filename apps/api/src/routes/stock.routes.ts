@@ -37,6 +37,13 @@ import {
   disposeSerial,
   traceSerial,
 } from '../services/serial.service.js'
+import {
+  createBin,
+  updateBin,
+  deactivateBin,
+  listBinsForLocation,
+  moveStockBetweenBins,
+} from '../services/bin.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
 import {
@@ -1867,6 +1874,83 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: msg })
     }
   })
+
+  // ── BN.3 — Bins ─────────────────────────────────────────────────
+  fastify.get<{ Querystring: { locationId?: string; activeOnly?: string } }>(
+    '/stock/bins',
+    async (request, reply) => {
+      try {
+        const q = request.query
+        if (!q.locationId) return reply.code(400).send({ error: 'locationId required' })
+        const items = await listBinsForLocation(q.locationId, {
+          activeOnly: q.activeOnly !== '0' && q.activeOnly !== 'false',
+        })
+        return { items }
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/bins] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  fastify.post<{ Body: { locationId: string; code: string; name?: string | null; zone?: string | null; binType?: string | null; capacity?: number | null } }>(
+    '/stock/bins',
+    async (request, reply) => {
+      try {
+        const b = request.body
+        if (!b?.locationId || !b?.code?.trim()) {
+          return reply.code(400).send({ error: 'locationId and code required' })
+        }
+        const bin = await createBin(b)
+        return bin
+      } catch (error: any) {
+        if (error?.code === 'P2002') return reply.code(409).send({ error: 'Bin code already exists in this location' })
+        fastify.log.error({ err: error }, '[stock/bins POST] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  fastify.patch<{ Params: { id: string }; Body: { name?: string | null; zone?: string | null; binType?: string | null; capacity?: number | null } }>(
+    '/stock/bins/:id',
+    async (request, reply) => {
+      try {
+        const bin = await updateBin(request.params.id, request.body)
+        return bin
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/bins PATCH] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string } }>(
+    '/stock/bins/:id/deactivate',
+    async (request, reply) => {
+      try {
+        const bin = await deactivateBin(request.params.id)
+        return bin
+      } catch (error: any) {
+        const msg = error instanceof Error ? error.message : String(error)
+        if (msg.includes('still holds stock')) return reply.code(409).send({ error: msg })
+        fastify.log.error({ err: error }, '[stock/bins/:id/deactivate] failed')
+        return reply.code(500).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Body: { productId: string; variationId?: string | null; fromBinId: string; toBinId: string; quantity: number; actor?: string | null; notes?: string | null } }>(
+    '/stock/bins/move',
+    async (request, reply) => {
+      try {
+        const result = await moveStockBetweenBins(request.body)
+        return result
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[stock/bins/move] failed')
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    },
+  )
 
   // ── GET /api/stock/recalls ───────────────────────────────────────
   // L.4 — list recalls. Defaults to OPEN-only so the dashboard surfaces
