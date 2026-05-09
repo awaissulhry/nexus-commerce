@@ -5601,6 +5601,11 @@ model DashboardLayout {
   id            String   @id @default(cuid())
   userId        String   @unique @default("default-user")
   hiddenWidgets String[] @default([])
+  // DO.33 — operator-defined widget ordering. Empty array = use the
+  // canonical TOGGLEABLE_WIDGETS order from the frontend. New widgets
+  // not yet in the array fall through to the canonical position so
+  // adding a widget doesn't require updating every operator's row.
+  widgetOrder   String[] @default([])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

@@ -1,6 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GripVertical } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
@@ -8,68 +26,113 @@ import { getBackendUrl } from '@/lib/backend-url'
 import type { T } from '../_lib/types'
 
 /**
- * DO.32 — dashboard customise sheet.
+ * DO.32 / DO.33 — dashboard customise sheet with drag-drop reorder.
  *
- * Displays a checkbox per toggleable widget. Unchecked = hidden.
- * Saves via PUT /api/dashboard/layout; on success the parent
- * re-fetches the dashboard payload so the layout updates without
- * a hard reload.
+ * Operator can both hide individual widgets (checkbox per row) and
+ * reorder them via the grip handle on the left. Order is persisted
+ * to DashboardLayout.widgetOrder; visibility to .hiddenWidgets.
  *
- * KpiGrid + AlertsPanel are intentionally omitted from the toggle
- * list — they're the operator's two non-negotiable signals
- * (financial state + what needs attention right now). Hiding
- * either turns the Command Center into a hollow shell.
+ * KpiGrid + AlertsPanel are intentionally omitted from this list
+ * — they're the operator's two non-negotiable signals (financial
+ * state + what needs attention right now). Hiding either turns
+ * the Command Center into a hollow shell.
  */
 
 export interface ToggleableWidget {
   id: string
   labelKey: string
+  /**
+   * Layout column the widget belongs to. The renderer respects
+   * this regardless of the operator's order — reorder is allowed
+   * within a column, not across columns. Mixing them would break
+   * the responsive 2-column grid the dashboard depends on.
+   */
+  column: 'left' | 'right'
 }
 
 export const TOGGLEABLE_WIDGETS: ToggleableWidget[] = [
-  { id: 'sparkline', labelKey: 'overview.customize.widget.sparkline' },
-  { id: 'channelTrend', labelKey: 'overview.customize.widget.channelTrend' },
-  { id: 'channelGrid', labelKey: 'overview.customize.widget.channelGrid' },
-  { id: 'marketplaceMatrix', labelKey: 'overview.customize.widget.marketplaceMatrix' },
-  { id: 'financial', labelKey: 'overview.customize.widget.financial' },
-  { id: 'predictive', labelKey: 'overview.customize.widget.predictive' },
-  { id: 'topProducts', labelKey: 'overview.customize.widget.topProducts' },
-  { id: 'goals', labelKey: 'overview.customize.widget.goals' },
-  { id: 'customer', labelKey: 'overview.customize.widget.customer' },
-  { id: 'catalog', labelKey: 'overview.customize.widget.catalog' },
-  { id: 'activity', labelKey: 'overview.customize.widget.activity' },
-  { id: 'quickActions', labelKey: 'overview.customize.widget.quickActions' },
+  // Left column (charts + lists)
+  { id: 'sparkline', labelKey: 'overview.customize.widget.sparkline', column: 'left' },
+  { id: 'channelTrend', labelKey: 'overview.customize.widget.channelTrend', column: 'left' },
+  { id: 'channelGrid', labelKey: 'overview.customize.widget.channelGrid', column: 'left' },
+  { id: 'marketplaceMatrix', labelKey: 'overview.customize.widget.marketplaceMatrix', column: 'left' },
+  { id: 'financial', labelKey: 'overview.customize.widget.financial', column: 'left' },
+  { id: 'predictive', labelKey: 'overview.customize.widget.predictive', column: 'left' },
+  { id: 'topProducts', labelKey: 'overview.customize.widget.topProducts', column: 'left' },
+  // Right column (panels)
+  { id: 'goals', labelKey: 'overview.customize.widget.goals', column: 'right' },
+  { id: 'customer', labelKey: 'overview.customize.widget.customer', column: 'right' },
+  { id: 'catalog', labelKey: 'overview.customize.widget.catalog', column: 'right' },
+  { id: 'activity', labelKey: 'overview.customize.widget.activity', column: 'right' },
+  { id: 'quickActions', labelKey: 'overview.customize.widget.quickActions', column: 'right' },
 ]
+
+/**
+ * Resolve a canonical widget order respecting (1) the operator's
+ * saved order, (2) any new widgets that didn't exist when the
+ * order was saved.
+ *
+ * Returned list contains every TOGGLEABLE_WIDGET id exactly once;
+ * widgets in `saved` come first in saved order, unknown ones fall
+ * through to canonical position at the end.
+ */
+export function resolveWidgetOrder(saved: string[]): string[] {
+  const known = new Set(TOGGLEABLE_WIDGETS.map((w) => w.id))
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const id of saved) {
+    if (known.has(id) && !seen.has(id)) {
+      result.push(id)
+      seen.add(id)
+    }
+  }
+  for (const w of TOGGLEABLE_WIDGETS) {
+    if (!seen.has(w.id)) result.push(w.id)
+  }
+  return result
+}
 
 export default function CustomizeSheet({
   t,
   open,
   onClose,
   hiddenWidgets,
+  widgetOrder,
   onSaved,
 }: {
   t: T
   open: boolean
   onClose: () => void
   hiddenWidgets: string[]
-  onSaved: (next: string[]) => void
+  widgetOrder: string[]
+  onSaved: (next: { hiddenWidgets: string[]; widgetOrder: string[] }) => void
 }) {
-  const [draft, setDraft] = useState<Set<string>>(
+  const [draftHidden, setDraftHidden] = useState<Set<string>>(
     () => new Set(hiddenWidgets),
+  )
+  const [draftOrder, setDraftOrder] = useState<string[]>(() =>
+    resolveWidgetOrder(widgetOrder),
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Re-seed draft whenever the modal opens with a different baseline.
-  // (The parent passes the latest hiddenWidgets each render; we
-  // resync on open so cancelling a previous edit doesn't poison
-  // the next session.)
-  if (open && draft.size === 0 && hiddenWidgets.length > 0 && !saving) {
-    setDraft(new Set(hiddenWidgets))
-  }
+  // Re-seed drafts whenever the modal opens with a fresh baseline.
+  // Cancelling a previous edit shouldn't carry into the next session.
+  useEffect(() => {
+    if (open) {
+      setDraftHidden(new Set(hiddenWidgets))
+      setDraftOrder(resolveWidgetOrder(widgetOrder))
+      setError(null)
+    }
+  }, [open, hiddenWidgets, widgetOrder])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const toggle = (id: string) => {
-    setDraft((prev) => {
+    setDraftHidden((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -77,18 +140,39 @@ export default function CustomizeSheet({
     })
   }
 
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setDraftOrder((items) => {
+      const oldIndex = items.indexOf(active.id as string)
+      const newIndex = items.indexOf(over.id as string)
+      if (oldIndex < 0 || newIndex < 0) return items
+      // Only allow reorder within the same column. Cross-column
+      // moves silently no-op so the operator's drag doesn't break
+      // the layout shape.
+      const widgetById = new Map(TOGGLEABLE_WIDGETS.map((w) => [w.id, w]))
+      const activeCol = widgetById.get(active.id as string)?.column
+      const overCol = widgetById.get(over.id as string)?.column
+      if (activeCol !== overCol) return items
+      return arrayMove(items, oldIndex, newIndex)
+    })
+  }
+
   const save = async () => {
     setSaving(true)
     setError(null)
     try {
-      const next = Array.from(draft)
+      const nextHidden = Array.from(draftHidden)
       const res = await fetch(`${getBackendUrl()}/api/dashboard/layout`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hiddenWidgets: next }),
+        body: JSON.stringify({
+          hiddenWidgets: nextHidden,
+          widgetOrder: draftOrder,
+        }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      onSaved(next)
+      onSaved({ hiddenWidgets: nextHidden, widgetOrder: draftOrder })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -99,37 +183,41 @@ export default function CustomizeSheet({
 
   if (!open) return null
 
+  // Group draftOrder by column for separate sortable sections.
+  const widgetById = new Map(TOGGLEABLE_WIDGETS.map((w) => [w.id, w]))
+  const leftIds = draftOrder.filter(
+    (id) => widgetById.get(id)?.column === 'left',
+  )
+  const rightIds = draftOrder.filter(
+    (id) => widgetById.get(id)?.column === 'right',
+  )
+
   return (
     <Modal open={open} onClose={onClose} title={t('overview.customize.title')}>
-      <div className="px-4 py-3 space-y-2">
+      <div className="px-4 py-3 space-y-4">
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {t('overview.customize.description')}
         </p>
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-md">
-          {TOGGLEABLE_WIDGETS.map((w) => {
-            const checked = !draft.has(w.id)
-            return (
-              <li key={w.id}>
-                <label
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 cursor-pointer text-base',
-                    'hover:bg-slate-50 dark:hover:bg-slate-800',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggle(w.id)}
-                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500/40"
-                  />
-                  <span className="text-slate-800 dark:text-slate-200">
-                    {t(w.labelKey)}
-                  </span>
-                </label>
-              </li>
-            )
-          })}
-        </ul>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
+          <ColumnList
+            t={t}
+            heading={t('overview.customize.column.left')}
+            ids={leftIds}
+            hidden={draftHidden}
+            onToggle={toggle}
+          />
+          <ColumnList
+            t={t}
+            heading={t('overview.customize.column.right')}
+            ids={rightIds}
+            hidden={draftHidden}
+            onToggle={toggle}
+          />
+        </DndContext>
         {error && (
           <div className="text-sm text-rose-600 dark:text-rose-400">
             {error}
@@ -145,5 +233,110 @@ export default function CustomizeSheet({
         </Button>
       </div>
     </Modal>
+  )
+}
+
+function ColumnList({
+  t,
+  heading,
+  ids,
+  hidden,
+  onToggle,
+}: {
+  t: T
+  heading: string
+  ids: string[]
+  hidden: Set<string>
+  onToggle: (id: string) => void
+}) {
+  if (ids.length === 0) return null
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
+        {heading}
+      </div>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-md">
+          {ids.map((id) => {
+            const widgetDef = TOGGLEABLE_WIDGETS.find((w) => w.id === id)
+            if (!widgetDef) return null
+            return (
+              <SortableRow
+                key={id}
+                t={t}
+                id={id}
+                labelKey={widgetDef.labelKey}
+                checked={!hidden.has(id)}
+                onToggle={() => onToggle(id)}
+              />
+            )
+          })}
+        </ul>
+      </SortableContext>
+    </div>
+  )
+}
+
+function SortableRow({
+  t,
+  id,
+  labelKey,
+  checked,
+  onToggle,
+}: {
+  t: T
+  id: string
+  labelKey: string
+  checked: boolean
+  onToggle: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  } as React.CSSProperties
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-2 px-3 py-2 text-base bg-white dark:bg-slate-900',
+        isDragging && 'opacity-50 z-10',
+      )}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={t('overview.customize.dragHandle')}
+        className={cn(
+          'inline-flex items-center justify-center w-5 h-5 rounded',
+          'text-slate-400 dark:text-slate-500 cursor-grab',
+          'hover:text-slate-700 dark:hover:text-slate-200',
+          'hover:bg-slate-100 dark:hover:bg-slate-800',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+        )}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </button>
+      <label className="flex items-center gap-2 flex-1 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500/40"
+        />
+        <span className="text-slate-800 dark:text-slate-200">
+          {t(labelKey)}
+        </span>
+      </label>
+    </li>
   )
 }

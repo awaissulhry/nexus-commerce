@@ -1481,11 +1481,11 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       }
 
-      // ── DO.32 — per-user layout (hidden widgets) ──────────────────
+      // ── DO.32 / DO.33 — per-user layout (hide + reorder) ─────────
       const layout = await prisma.dashboardLayout
         .findUnique({
           where: { userId: 'default-user' },
-          select: { hiddenWidgets: true },
+          select: { hiddenWidgets: true, widgetOrder: true },
         })
         .catch(() => null)
 
@@ -1619,10 +1619,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // DO.30 — operator-set goals + computed progress against
         // each goal's period bounds.
         goals: goalProgress,
-        // DO.32 — per-user layout deny-list (widget IDs to hide).
-        // Empty array when no row exists yet (default = show all).
+        // DO.32 / DO.33 — per-user layout: hidden widget deny-list
+        // + operator-defined ordering. Empty arrays when no row
+        // exists yet (defaults: show all, canonical order).
         layout: {
           hiddenWidgets: layout?.hiddenWidgets ?? [],
+          widgetOrder: layout?.widgetOrder ?? [],
         },
         catalog: {
           totalProducts,
@@ -2320,28 +2322,37 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   // no order field, no validation against a known widget id list
   // (operator can stash unknown ids and they're ignored by the
   // renderer until a matching widget exists).
-  fastify.put<{ Body: { hiddenWidgets?: unknown } }>(
-    '/dashboard/layout',
-    async (request, reply) => {
-      const raw = request.body?.hiddenWidgets
-      const list = Array.isArray(raw)
+  fastify.put<{
+    Body: { hiddenWidgets?: unknown; widgetOrder?: unknown }
+  }>('/dashboard/layout', async (request, reply) => {
+    const sanitiseList = (raw: unknown): string[] =>
+      Array.isArray(raw)
         ? raw.filter((v): v is string => typeof v === 'string').slice(0, 50)
         : []
-      try {
-        const row = await prisma.dashboardLayout.upsert({
-          where: { userId: 'default-user' },
-          create: { userId: 'default-user', hiddenWidgets: list },
-          update: { hiddenWidgets: list },
-          select: { hiddenWidgets: true },
-        })
-        return { ok: true, hiddenWidgets: row.hiddenWidgets }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        fastify.log.error({ err }, '[dashboard/layout] upsert failed')
-        return reply.code(500).send({ error: message })
+    const hidden = sanitiseList(request.body?.hiddenWidgets)
+    const order = sanitiseList(request.body?.widgetOrder)
+    try {
+      const row = await prisma.dashboardLayout.upsert({
+        where: { userId: 'default-user' },
+        create: {
+          userId: 'default-user',
+          hiddenWidgets: hidden,
+          widgetOrder: order,
+        },
+        update: { hiddenWidgets: hidden, widgetOrder: order },
+        select: { hiddenWidgets: true, widgetOrder: true },
+      })
+      return {
+        ok: true,
+        hiddenWidgets: row.hiddenWidgets,
+        widgetOrder: row.widgetOrder,
       }
-    },
-  )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/layout] upsert failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
 }
 
 export default dashboardRoutes

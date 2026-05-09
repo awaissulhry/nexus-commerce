@@ -27,7 +27,10 @@ import FinancialPanel from './_components/FinancialPanel'
 import GoalsPanel from './_components/GoalsPanel'
 import PredictivePanel from './_components/PredictivePanel'
 import OverviewSkeleton from './_components/OverviewSkeleton'
-import CustomizeSheet from './_components/CustomizeSheet'
+import CustomizeSheet, {
+  TOGGLEABLE_WIDGETS,
+  resolveWidgetOrder,
+} from './_components/CustomizeSheet'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
@@ -63,11 +66,12 @@ export default function OverviewClient() {
   // than a few extra fetches.
   const [liveMode, setLiveMode] = useState(true)
   const [customizeOpen, setCustomizeOpen] = useState(false)
-  // DO.32 — local mirror of hiddenWidgets so a successful save
-  // updates the UI immediately, before the next dashboard refetch
-  // round-trips. Initialised from the server payload on first
-  // render and on every fresh fetch.
+  // DO.32 / DO.33 — local mirror of layout (hidden + order) so a
+  // successful save updates the UI immediately, before the next
+  // dashboard refetch round-trips. Initialised from the server
+  // payload on first render and on every fresh fetch.
   const [hiddenWidgets, setHiddenWidgets] = useState<string[]>([])
+  const [widgetOrder, setWidgetOrder] = useState<string[]>([])
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -102,6 +106,7 @@ export default function OverviewClient() {
         // resyncs each refetch so a parallel session's changes
         // propagate.
         setHiddenWidgets(json.layout?.hiddenWidgets ?? [])
+        setWidgetOrder(json.layout?.widgetOrder ?? [])
         setLastRefreshed(Date.now())
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -221,7 +226,11 @@ export default function OverviewClient() {
         open={customizeOpen}
         onClose={() => setCustomizeOpen(false)}
         hiddenWidgets={hiddenWidgets}
-        onSaved={(next) => setHiddenWidgets(next)}
+        widgetOrder={widgetOrder}
+        onSaved={(next) => {
+          setHiddenWidgets(next.hiddenWidgets)
+          setWidgetOrder(next.widgetOrder)
+        }}
       />
 
       <div className="space-y-6">
@@ -246,66 +255,136 @@ export default function OverviewClient() {
         {data &&
           (() => {
             const hidden = new Set(hiddenWidgets)
-            const show = (id: string) => !hidden.has(id)
+            // DO.33 — resolve operator order, then dispatch each
+            // widget id to its column (per TOGGLEABLE_WIDGETS) so
+            // the responsive 2-column grid is preserved.
+            const resolved = resolveWidgetOrder(widgetOrder)
+            const colById = new Map(
+              TOGGLEABLE_WIDGETS.map((w) => [w.id, w.column]),
+            )
+            const renderWidget = (id: string) => {
+              if (hidden.has(id)) return null
+              switch (id) {
+                case 'sparkline':
+                  return (
+                    <Sparkline
+                      key={id}
+                      t={t}
+                      points={data.sparkline}
+                      currency={data.currency.primary}
+                      windowKey={data.window.key as WindowKey}
+                    />
+                  )
+                case 'channelTrend':
+                  return (
+                    <ChannelTrendChart
+                      key={id}
+                      t={t}
+                      points={data.sparkline}
+                      channels={data.sparklineChannels}
+                      currency={data.currency.primary}
+                      windowKey={data.window.key as WindowKey}
+                    />
+                  )
+                case 'channelGrid':
+                  return (
+                    <ChannelGrid
+                      key={id}
+                      t={t}
+                      byChannel={data.byChannel}
+                      currency={data.currency.primary}
+                    />
+                  )
+                case 'marketplaceMatrix':
+                  return (
+                    <MarketplaceMatrix
+                      key={id}
+                      t={t}
+                      matrix={data.byMarketplace}
+                      currency={data.currency.primary}
+                    />
+                  )
+                case 'financial':
+                  return (
+                    <FinancialPanel
+                      key={id}
+                      t={t}
+                      financial={data.financial}
+                      currency={data.currency.primary}
+                    />
+                  )
+                case 'predictive':
+                  return (
+                    <PredictivePanel
+                      key={id}
+                      t={t}
+                      predictive={data.predictive}
+                    />
+                  )
+                case 'topProducts':
+                  return (
+                    <TopProducts
+                      key={id}
+                      t={t}
+                      items={data.topProducts}
+                      currency={data.currency.primary}
+                    />
+                  )
+                case 'goals':
+                  return <GoalsPanel key={id} t={t} goals={data.goals} />
+                case 'customer':
+                  return (
+                    <CustomerPanel
+                      key={id}
+                      t={t}
+                      customers={data.customers}
+                      currency={data.currency.primary}
+                    />
+                  )
+                case 'catalog':
+                  return (
+                    <CatalogSnapshot
+                      key={id}
+                      t={t}
+                      catalog={data.catalog}
+                      currency={data.currency.primary}
+                    />
+                  )
+                case 'activity':
+                  return (
+                    <ActivityFeed
+                      key={id}
+                      t={t}
+                      items={data.recentActivity}
+                    />
+                  )
+                case 'quickActions':
+                  return (
+                    <QuickActions key={id} t={t} alerts={data.alerts} />
+                  )
+                default:
+                  return null
+              }
+            }
+            const leftWidgets = resolved
+              .filter((id) => colById.get(id) === 'left')
+              .map(renderWidget)
+              .filter(Boolean)
+            const rightWidgets = resolved
+              .filter((id) => colById.get(id) === 'right')
+              .map(renderWidget)
+              .filter(Boolean)
             return (
               <>
                 <KpiGrid t={t} totals={data.totals} currency={data.currency} />
                 {/* DO.36 — mobile glanceable order. On a phone the
-                    alerts panel + customer / catalog / activity
-                    tiles ship in the right column (order-1) right
-                    after the KPIs; the wider charts + lists come
-                    second (order-2). The lg:order-1 / lg:order-2
-                    pair restores desktop layout. */}
+                    right column (alerts + side panels) ships first
+                    via order-1; the wider charts + lists come
+                    second via order-2. lg:order-1 / lg:order-2
+                    restores desktop layout. */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="order-2 lg:order-1 lg:col-span-2 space-y-4">
-                    {show('sparkline') && (
-                      <Sparkline
-                        t={t}
-                        points={data.sparkline}
-                        currency={data.currency.primary}
-                        windowKey={data.window.key as WindowKey}
-                      />
-                    )}
-                    {show('channelTrend') && (
-                      <ChannelTrendChart
-                        t={t}
-                        points={data.sparkline}
-                        channels={data.sparklineChannels}
-                        currency={data.currency.primary}
-                        windowKey={data.window.key as WindowKey}
-                      />
-                    )}
-                    {show('channelGrid') && (
-                      <ChannelGrid
-                        t={t}
-                        byChannel={data.byChannel}
-                        currency={data.currency.primary}
-                      />
-                    )}
-                    {show('marketplaceMatrix') && (
-                      <MarketplaceMatrix
-                        t={t}
-                        matrix={data.byMarketplace}
-                        currency={data.currency.primary}
-                      />
-                    )}
-                    {show('financial') && (
-                      <FinancialPanel
-                        t={t}
-                        financial={data.financial}
-                        currency={data.currency.primary}
-                      />
-                    )}
-                    {show('predictive') && (
-                      <PredictivePanel t={t} predictive={data.predictive} />
-                    )}
-                    {show('topProducts') && (
-                      <TopProducts
-                        t={t}
-                        items={data.topProducts}
-                        currency={data.currency.primary}
-                      />
-                    )}
+                    {leftWidgets}
                   </div>
                   <div className="order-1 lg:order-2 space-y-4">
                     <AlertsPanel
@@ -313,27 +392,7 @@ export default function OverviewClient() {
                       alerts={data.alerts}
                       catalog={data.catalog}
                     />
-                    {show('goals') && <GoalsPanel t={t} goals={data.goals} />}
-                    {show('customer') && (
-                      <CustomerPanel
-                        t={t}
-                        customers={data.customers}
-                        currency={data.currency.primary}
-                      />
-                    )}
-                    {show('catalog') && (
-                      <CatalogSnapshot
-                        t={t}
-                        catalog={data.catalog}
-                        currency={data.currency.primary}
-                      />
-                    )}
-                    {show('activity') && (
-                      <ActivityFeed t={t} items={data.recentActivity} />
-                    )}
-                    {show('quickActions') && (
-                      <QuickActions t={t} alerts={data.alerts} />
-                    )}
+                    {rightWidgets}
                   </div>
                 </div>
               </>
