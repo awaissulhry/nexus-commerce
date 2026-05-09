@@ -1,5 +1,6 @@
 import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
+import { instrumentSellingPartner } from "../outbound-api-call-log.service.js";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -230,6 +231,13 @@ export class AmazonService {
         auto_request_throttled: true,
       },
     } as any);
+
+    // L.3.2 — every sp.callAPI(...) call now writes an
+    // OutboundApiCallLog row via the patched callAPI. Idempotent.
+    instrumentSellingPartner(this.sp as never, {
+      channel: 'AMAZON',
+      marketplace: process.env.AMAZON_MARKETPLACE_ID ?? undefined,
+    });
 
     return this.sp;
   }

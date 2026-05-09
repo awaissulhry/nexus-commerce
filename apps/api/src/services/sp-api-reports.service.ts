@@ -19,6 +19,7 @@
 
 import { SellingPartner } from 'amazon-sp-api'
 import { logger } from '../utils/logger.js'
+import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const POLL_INTERVAL_MS = 10_000 // 10 s between status checks
 const MAX_POLL_ATTEMPTS = 30 // ~5 min total
@@ -94,6 +95,12 @@ function getClient(): SellingPartner {
       auto_request_throttled: true,
     },
   } as any)
+
+  // L.3.2 — every callAPI now writes an OutboundApiCallLog row.
+  instrumentSellingPartner(cachedClient as never, {
+    channel: 'AMAZON',
+    triggeredBy: 'cron',
+  })
 
   return cachedClient
 }

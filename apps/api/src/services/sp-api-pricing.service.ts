@@ -30,6 +30,7 @@
 import { SellingPartner } from 'amazon-sp-api'
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
+import { instrumentSellingPartner } from './outbound-api-call-log.service.js'
 
 const RATE_LIMIT_MS = 200 // SP-API: 5 req/sec for productFees & productPricing
 
@@ -57,6 +58,11 @@ function getClient(): SellingPartner {
     },
     options: { auto_request_tokens: true, auto_request_throttled: true },
   } as any)
+  // L.3.2 — every callAPI now writes an OutboundApiCallLog row.
+  instrumentSellingPartner(cachedClient as never, {
+    channel: 'AMAZON',
+    triggeredBy: 'cron',
+  })
   return cachedClient
 }
 

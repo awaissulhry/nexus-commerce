@@ -150,6 +150,53 @@ function clipPayload(payload: unknown): unknown {
   }
 }
 
+/**
+ * Monkey-patch a SellingPartner instance's callAPI so every call
+ * goes through recordApiCall(). Existing callsites pass through
+ * untouched — they get observability for free.
+ *
+ * The SP-API library's callAPI signature accepts a single object:
+ *   { operation, endpoint, path?, query?, body? }
+ * The patched method reads `operation` + `endpoint` to populate
+ * the OutboundApiCallLog row. Override defaults via `defaultCtx`
+ * (e.g. set `marketplace` per construction site).
+ *
+ * Idempotent: a second call is a no-op (we tag the patched method
+ * with a sentinel symbol).
+ */
+const PATCHED = Symbol('outboundApiCallLog.patched')
+
+interface SpInstance {
+  callAPI: (params: { operation: string; endpoint?: string }) => Promise<unknown>
+  [key: string]: unknown
+}
+
+export function instrumentSellingPartner(
+  sp: SpInstance,
+  defaultCtx: Partial<ApiCallContext> = {},
+): void {
+  const callAPI = sp.callAPI as unknown as {
+    [PATCHED]?: boolean
+  } & SpInstance['callAPI']
+  if (callAPI[PATCHED]) return
+
+  const original = callAPI.bind(sp)
+  const wrapped = async (params: {
+    operation: string
+    endpoint?: string
+  }): Promise<unknown> => {
+    const ctx: ApiCallContext = {
+      channel: 'AMAZON',
+      ...defaultCtx,
+      operation: String(params?.operation ?? 'unknown'),
+      endpoint: params?.endpoint ?? defaultCtx.endpoint,
+    }
+    return recordApiCall(ctx, () => original(params))
+  }
+  ;(wrapped as unknown as { [PATCHED]: boolean })[PATCHED] = true
+  sp.callAPI = wrapped as SpInstance['callAPI']
+}
+
 export async function recordApiCall<T>(
   ctx: ApiCallContext,
   fn: () => Promise<T>,
