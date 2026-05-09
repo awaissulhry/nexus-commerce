@@ -30,6 +30,7 @@ import SyncLogsHubClient, {
   type CronRunsRollup,
   type AuditRollup,
   type ApiCallsRollup,
+  type ErrorGroupsRollup,
 } from './SyncLogsHubClient'
 
 export const dynamic = 'force-dynamic'
@@ -40,25 +41,33 @@ async function fetchInitial(): Promise<{
   crons: CronRunsRollup | null
   audit: AuditRollup | null
   apiCalls: ApiCallsRollup | null
+  errorGroups: ErrorGroupsRollup | null
 }> {
   const backend = getBackendUrl()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const [healthRes, cronsRes, auditRes, apiCallsRes] = await Promise.all([
-    fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }).catch(
-      () => null,
-    ),
-    fetch(`${backend}/api/dashboard/cron-runs`, { cache: 'no-store' }).catch(
-      () => null,
-    ),
-    fetch(
-      `${backend}/api/audit-log/search?limit=15&since=${encodeURIComponent(since)}`,
-      { cache: 'no-store' },
-    ).catch(() => null),
-    fetch(
-      `${backend}/api/sync-logs/api-calls?since=${encodeURIComponent(since)}`,
-      { cache: 'no-store' },
-    ).catch(() => null),
-  ])
+  const [healthRes, cronsRes, auditRes, apiCallsRes, errorGroupsRes] =
+    await Promise.all([
+      fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }).catch(
+        () => null,
+      ),
+      fetch(`${backend}/api/dashboard/cron-runs`, { cache: 'no-store' }).catch(
+        () => null,
+      ),
+      fetch(
+        `${backend}/api/audit-log/search?limit=15&since=${encodeURIComponent(since)}`,
+        { cache: 'no-store' },
+      ).catch(() => null),
+      fetch(
+        `${backend}/api/sync-logs/api-calls?since=${encodeURIComponent(since)}`,
+        { cache: 'no-store' },
+      ).catch(() => null),
+      // L.13.1 — surface active error-group count on the KPI strip.
+      // limit=1 because we only want the totals, not the rows.
+      fetch(
+        `${backend}/api/sync-logs/error-groups?status=ACTIVE&limit=1`,
+        { cache: 'no-store' },
+      ).catch(() => null),
+    ])
 
   const health =
     healthRes && healthRes.ok ? ((await healthRes.json()) as HealthRollup) : null
@@ -70,8 +79,12 @@ async function fetchInitial(): Promise<{
     apiCallsRes && apiCallsRes.ok
       ? ((await apiCallsRes.json()) as ApiCallsRollup)
       : null
+  const errorGroups =
+    errorGroupsRes && errorGroupsRes.ok
+      ? ((await errorGroupsRes.json()) as ErrorGroupsRollup)
+      : null
 
-  return { health, crons, audit, apiCalls }
+  return { health, crons, audit, apiCalls, errorGroups }
 }
 
 export default async function SyncLogsHubPage() {

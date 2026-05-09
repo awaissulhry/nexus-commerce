@@ -172,11 +172,24 @@ export interface ApiCallsRollup {
   }>
 }
 
+export interface ErrorGroupsRollup {
+  items: Array<{
+    id: string
+    channel: string
+    operation: string
+    count: number
+    lastSeen: string
+  }>
+  nextCursor: string | null
+  totals: Array<{ status: string; count: number }>
+}
+
 interface InitialPayload {
   health: HealthRollup | null
   crons: CronRunsRollup | null
   audit: AuditRollup | null
   apiCalls: ApiCallsRollup | null
+  errorGroups: ErrorGroupsRollup | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -227,6 +240,9 @@ export default function SyncLogsHubClient({
   const [apiCalls, setApiCalls] = useState<ApiCallsRollup | null>(
     initial.apiCalls,
   )
+  const [errorGroups, setErrorGroups] = useState<ErrorGroupsRollup | null>(
+    initial.errorGroups,
+  )
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -236,7 +252,7 @@ export default function SyncLogsHubClient({
     try {
       const backend = getBackendUrl()
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const [hRes, cRes, aRes, apiRes] = await Promise.all([
+      const [hRes, cRes, aRes, apiRes, egRes] = await Promise.all([
         fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }),
         fetch(`${backend}/api/dashboard/cron-runs`, { cache: 'no-store' }),
         fetch(
@@ -247,11 +263,16 @@ export default function SyncLogsHubClient({
           `${backend}/api/sync-logs/api-calls?since=${encodeURIComponent(since)}`,
           { cache: 'no-store' },
         ),
+        fetch(
+          `${backend}/api/sync-logs/error-groups?status=ACTIVE&limit=1`,
+          { cache: 'no-store' },
+        ),
       ])
       if (hRes.ok) setHealth(await hRes.json())
       if (cRes.ok) setCrons(await cRes.json())
       if (aRes.ok) setAudit(await aRes.json())
       if (apiRes.ok) setApiCalls(await apiRes.json())
+      if (egRes.ok) setErrorGroups(await egRes.json())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -430,6 +451,37 @@ export default function SyncLogsHubClient({
               }
             />
           </section>
+
+          {/* L.13.1 — active error-group banner. Distinct from "24h errors"
+              (which counts occurrences) — this is the count of unique
+              error CLASSES the operator hasn't yet acknowledged. */}
+          {errorGroups &&
+            (() => {
+              const activeCount =
+                errorGroups.totals.find((t) => t.status === 'ACTIVE')?.count ??
+                0
+              if (activeCount === 0) return null
+              return (
+                <Link
+                  href="/sync-logs/errors"
+                  className="block border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-4 py-2 hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-base font-semibold text-rose-900 dark:text-rose-200">
+                        {activeCount} active error{' '}
+                        {activeCount === 1 ? 'group' : 'groups'} need attention
+                      </div>
+                      <div className="text-xs text-rose-700 dark:text-rose-400 mt-0.5">
+                        Open the error groups view to resolve, mute, or ignore.
+                      </div>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
+                  </div>
+                </Link>
+              )
+            })()}
 
           {/* ── Two-column body: channels + crons ────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
