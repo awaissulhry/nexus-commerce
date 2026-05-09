@@ -391,7 +391,7 @@ export default function Step8Pricing({
   if (channels.length === 0) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-6 text-center">
-        <p className="text-md text-slate-600">
+        <p className="text-md text-slate-600 dark:text-slate-400">
           Pick channels in Step 1 first.
         </p>
       </div>
@@ -401,8 +401,8 @@ export default function Step8Pricing({
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900">Pricing</h2>
-        <p className="text-md text-slate-600 mt-1">
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Pricing</h2>
+        <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
           Set a base price; every channel inherits it. Override per
           marketplace when local fees, currency, or competitive pressure
           calls for a different number.
@@ -411,7 +411,7 @@ export default function Step8Pricing({
 
       {loading && (
         <div
-          className="border border-slate-200 rounded-lg bg-white px-6 py-6 space-y-3"
+          className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-6 space-y-3"
           aria-busy="true"
           aria-label="Loading pricing context"
         >
@@ -422,7 +422,7 @@ export default function Step8Pricing({
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-md text-rose-700 dark:text-rose-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
         </div>
@@ -431,8 +431,8 @@ export default function Step8Pricing({
       {ctx && !loading && (
         <>
           {/* Base pricing */}
-          <div className="border border-slate-200 rounded-lg bg-white px-4 py-3 mb-4">
-            <div className="text-base font-medium text-slate-700 mb-2">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 mb-4">
+            <div className="text-base font-medium text-slate-700 dark:text-slate-300 mb-2">
               Base pricing (applies to every channel by default)
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -454,7 +454,7 @@ export default function Step8Pricing({
               />
             </div>
             {ctx.product.costPrice !== null && (
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Master cost: {formatMoney(ctx.product.costPrice, 'EUR')}
                 {ctx.product.buyBoxPrice !== null &&
                   ` · Buy Box: ${formatMoney(ctx.product.buyBoxPrice, 'EUR')}`}
@@ -508,14 +508,14 @@ export default function Step8Pricing({
           )}
 
           {/* Per-channel override grid */}
-          <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-200 text-base font-medium text-slate-700">
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-base font-medium text-slate-700 dark:text-slate-300">
               Per-channel overrides &amp; margins
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-base">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                  <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">
                     <th className="text-left px-3 py-1.5">Channel</th>
                     <th className="text-left px-2 py-1.5">Price</th>
                     <th className="text-left px-2 py-1.5">Min</th>
@@ -547,10 +547,10 @@ export default function Step8Pricing({
                         : ''
                     const marginTone =
                       r.netMargin < 0
-                        ? 'text-rose-700'
+                        ? 'text-rose-700 dark:text-rose-300'
                         : r.netMargin > 0
-                        ? 'text-emerald-700'
-                        : 'text-slate-600'
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : 'text-slate-600 dark:text-slate-400'
                     const MarginIcon =
                       r.netMargin < 0
                         ? TrendingDown
@@ -566,18 +566,18 @@ export default function Step8Pricing({
                           isFirstBlocked ? 'true' : undefined
                         }
                         className={cn(
-                          'border-t border-slate-100 scroll-mt-24',
+                          'border-t border-slate-100 dark:border-slate-800 scroll-mt-24',
                           tone,
                         )}
                       >
                         <td className="px-3 py-2">
-                          <div className="font-mono text-sm text-slate-700 font-medium">
+                          <div className="font-mono text-sm text-slate-700 dark:text-slate-300 font-medium">
                             {c.channelKey}
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
                             {c.currency}{' '}
                             {r.inheritsBase && (
-                              <span className="ml-1 text-slate-400 italic">
+                              <span className="ml-1 text-slate-400 dark:text-slate-500 italic">
                                 · inherits base
                               </span>
                             )}
@@ -646,7 +646,7 @@ export default function Step8Pricing({
                             )}
                             {formatMoney(r.netMargin, c.currency)}
                           </span>
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
                             {r.netMarginPct.toFixed(1)}%
                           </div>
                         </td>
@@ -672,7 +672,7 @@ export default function Step8Pricing({
                     {v.blocking.map((m, i) => (
                       <div
                         key={`b-${i}`}
-                        className="text-rose-700 inline-flex items-start gap-1.5"
+                        className="text-rose-700 dark:text-rose-300 inline-flex items-start gap-1.5"
                       >
                         <AlertCircle className="w-3 h-3 mt-0.5" />
                         <span>
@@ -683,7 +683,7 @@ export default function Step8Pricing({
                     {v.warnings.map((m, i) => (
                       <div
                         key={`w-${i}`}
-                        className="text-amber-700 inline-flex items-start gap-1.5"
+                        className="text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5"
                       >
                         <AlertCircle className="w-3 h-3 mt-0.5" />
                         <span>
@@ -701,12 +701,12 @@ export default function Step8Pricing({
           <div className="mt-6 flex items-center justify-between gap-3">
             <div className="text-base">
               {totalBlocking === 0 ? (
-                <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Pricing satisfied across every channel.
                 </span>
               ) : (
-                <span className="text-rose-700">
+                <span className="text-rose-700 dark:text-rose-300">
                   {totalBlocking} blocking pricing issue
                   {totalBlocking === 1 ? '' : 's'}
                 </span>
@@ -740,7 +740,7 @@ function BaseField({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-600 mb-0.5">
+      <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-0.5">
         {label}
       </label>
       <input
@@ -749,7 +749,7 @@ function BaseField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-8 px-2 text-md border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
       />
     </div>
   )
@@ -771,7 +771,7 @@ function CompactInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-20 h-7 px-1.5 text-base border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+      className="w-20 h-7 px-1.5 text-base border border-slate-200 dark:border-slate-700 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
     />
   )
 }
@@ -811,8 +811,8 @@ function GroupBulkActions({
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-3 py-2 mb-3">
-      <div className="text-sm font-medium text-slate-700 mb-1.5">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-2 mb-3">
+      <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
         Set price per channel group (bulk)
       </div>
       <div className="space-y-1.5">
@@ -821,10 +821,10 @@ function GroupBulkActions({
             key={g.id}
             className="flex items-center gap-2 text-base"
           >
-            <span className="font-medium text-slate-700 flex-shrink-0 w-32 truncate">
+            <span className="font-medium text-slate-700 dark:text-slate-300 flex-shrink-0 w-32 truncate">
               {g.name}
             </span>
-            <span className="text-xs font-mono text-slate-500 truncate flex-1 min-w-0">
+            <span className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
               {g.channelKeys.join(', ')}
             </span>
             <input
@@ -835,7 +835,7 @@ function GroupBulkActions({
                 setDrafts((prev) => ({ ...prev, [g.id]: e.target.value }))
               }
               placeholder="price"
-              className="w-24 h-7 px-1.5 text-base border border-slate-200 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
+              className="w-24 h-7 px-1.5 text-base border border-slate-200 dark:border-slate-700 rounded text-right tabular-nums focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-300"
             />
             <Button
               variant="primary"

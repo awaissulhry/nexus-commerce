@@ -64,9 +64,9 @@ function DeltaCell({
   delta: number | null
   unit: 'units' | 'currency'
 }) {
-  if (delta == null) return <span className="text-slate-400">—</span>
+  if (delta == null) return <span className="text-slate-400 dark:text-slate-500">—</span>
   const sign = delta > 0 ? '+' : ''
-  const direction = delta > 0 ? 'text-amber-700' : 'text-red-700'
+  const direction = delta > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-red-700 dark:text-red-300'
   const Icon = delta > 0 ? TrendingUp : TrendingDown
   const formatted =
     unit === 'currency'
@@ -166,13 +166,13 @@ export default function StockDriftPanel() {
       : data?.priceDrift.totalCount ?? 0
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             Stock & Price Drift
           </h3>
-          <p className="text-base text-slate-500 mt-0.5">
+          <p className="text-base text-slate-500 dark:text-slate-400 mt-0.5">
             ChannelListings where the cached master snapshot disagrees with
             the displayed value (cascade out of sync, sync queue stuck, or
             manual override applied without flipping followMaster off).
@@ -182,7 +182,7 @@ export default function StockDriftPanel() {
           type="button"
           onClick={fetchData}
           disabled={loading}
-          className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 disabled:opacity-50"
+          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 disabled:opacity-50"
         >
           <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
           Refresh
@@ -190,7 +190,7 @@ export default function StockDriftPanel() {
       </div>
 
       {error && (
-        <div className="px-4 py-2 text-base text-red-700 bg-red-50 border-b border-red-200 inline-flex items-center gap-2">
+        <div className="px-4 py-2 text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border-b border-red-200 dark:border-red-900 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -198,18 +198,18 @@ export default function StockDriftPanel() {
 
       {/* Headline KPIs */}
       {data && (
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-4 flex-wrap">
+        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center gap-4 flex-wrap">
           <button
             type="button"
             onClick={() => setTab('quantity')}
             className={cn(
               'inline-flex items-center gap-2 px-3 py-1.5 rounded border transition-colors',
               tab === 'quantity'
-                ? 'bg-white border-slate-300 shadow-sm'
+                ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 shadow-sm'
                 : 'bg-transparent border-transparent hover:bg-white',
             )}
           >
-            <span className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
               Quantity drift
             </span>
             <Badge
@@ -225,11 +225,11 @@ export default function StockDriftPanel() {
             className={cn(
               'inline-flex items-center gap-2 px-3 py-1.5 rounded border transition-colors',
               tab === 'price'
-                ? 'bg-white border-slate-300 shadow-sm'
+                ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 shadow-sm'
                 : 'bg-transparent border-transparent hover:bg-white',
             )}
           >
-            <span className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
               Price drift (FIXED rule)
             </span>
             <Badge
@@ -245,18 +245,18 @@ export default function StockDriftPanel() {
       {loading && !data && (
         <div className="p-4 space-y-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-9 bg-slate-50 rounded animate-pulse" />
+            <div key={i} className="h-9 bg-slate-50 dark:bg-slate-800 rounded animate-pulse" />
           ))}
         </div>
       )}
 
       {data && allClean && !loading && (
         <div className="p-6 text-center">
-          <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
-          <div className="text-md font-medium text-slate-900">
+          <CheckCircle2 className="w-8 h-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
+          <div className="text-md font-medium text-slate-900 dark:text-slate-100">
             No drift detected
           </div>
-          <div className="text-base text-slate-500 mt-1">
+          <div className="text-base text-slate-500 dark:text-slate-400 mt-1">
             Every follow-master ChannelListing matches its master snapshot.
           </div>
         </div>
@@ -265,7 +265,7 @@ export default function StockDriftPanel() {
       {data && !allClean && activeRows.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-base">
-            <thead className="bg-slate-50 text-sm text-slate-600 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="text-left font-medium px-3 py-2">Listing</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Channel</th>
@@ -280,38 +280,38 @@ export default function StockDriftPanel() {
               {activeRows.map((row) => {
                 const isQty = tab === 'quantity'
                 return (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0 align-top">
+                  <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0 align-top">
                     <td className="px-3 py-2">
-                      <div className="font-mono text-sm text-slate-900">
-                        {row.sku ?? <span className="text-slate-400">—</span>}
+                      <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
+                        {row.sku ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </div>
                       {row.productName && (
-                        <div className="text-sm text-slate-500 truncate max-w-md">
+                        <div className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-md">
                           {row.productName}
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="text-sm text-slate-700">
+                      <div className="text-sm text-slate-700 dark:text-slate-300">
                         {row.channel}
                         {row.marketplace && (
-                          <span className="text-slate-400"> · {row.marketplace}</span>
+                          <span className="text-slate-400 dark:text-slate-500"> · {row.marketplace}</span>
                         )}
                       </div>
                       {row.pricingRule && !isQty && (
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           rule: {row.pricingRule}
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-700">
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
                       {isQty
                         ? (row.masterQuantity ?? '—')
                         : row.masterPrice
                           ? Number(row.masterPrice).toFixed(2)
                           : '—'}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-900 font-medium">
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-900 dark:text-slate-100 font-medium">
                       {isQty
                         ? (row.quantity ?? '—')
                         : row.price
@@ -325,10 +325,10 @@ export default function StockDriftPanel() {
                         <DeltaCell delta={row.priceDelta} unit="currency" />
                       )}
                     </td>
-                    <td className="px-3 py-2 text-sm text-slate-500">
+                    <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                       {relativeTime(row.lastSyncedAt)}
                       {row.lastSyncStatus && (
-                        <div className="text-xs text-slate-400 mt-0.5">
+                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                           {row.lastSyncStatus}
                         </div>
                       )}
@@ -338,7 +338,7 @@ export default function StockDriftPanel() {
                         type="button"
                         onClick={() => handleResync(row, isQty ? 'quantity' : 'price')}
                         disabled={resyncing === row.id}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-50 dark:hover:bg-blue-950/40 disabled:opacity-50"
                         title={`Set ${isQty ? 'quantity' : 'price'} = master and queue immediate sync`}
                       >
                         {resyncing === row.id ? (
@@ -355,7 +355,7 @@ export default function StockDriftPanel() {
             </tbody>
           </table>
           {activeTotal > activeRows.length && (
-            <div className="px-3 py-2 bg-amber-50 border-t border-amber-200 text-sm text-amber-800">
+            <div className="px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-900 text-sm text-amber-800">
               Showing top {activeRows.length} of {activeTotal} drifting listings (sorted by largest delta).
             </div>
           )}

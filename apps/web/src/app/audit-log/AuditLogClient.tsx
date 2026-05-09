@@ -101,17 +101,17 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
   const changed = diffs.filter((d) => d.changed)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
       >
         <div className="flex-shrink-0">
           {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
           ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
           )}
         </div>
         <Badge variant={ACTION_VARIANT[entry.action] ?? 'default'} size="sm">
@@ -119,21 +119,21 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
         </Badge>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-medium text-slate-900">
+            <span className="text-base font-medium text-slate-900 dark:text-slate-100">
               {entry.entityType}
             </span>
-            <span className="font-mono text-sm text-slate-600">
+            <span className="font-mono text-sm text-slate-600 dark:text-slate-400">
               {entry.entityId.slice(0, 16)}
               {entry.entityId.length > 16 && '…'}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5 text-sm text-slate-500">
+          <div className="flex items-center gap-2 mt-0.5 text-sm text-slate-500 dark:text-slate-400">
             <span title={new Date(entry.createdAt).toLocaleString()}>
               {relativeTime(entry.createdAt)}
             </span>
             {entry.userId && <span>· {entry.userId}</span>}
             {entry.ip && (
-              <span className="font-mono text-xs text-slate-400">
+              <span className="font-mono text-xs text-slate-400 dark:text-slate-500">
                 · {entry.ip}
               </span>
             )}
@@ -142,10 +142,10 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
       </button>
 
       {expanded && (
-        <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 space-y-3">
+        <div className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-3 space-y-3">
           {changed.length > 0 ? (
-            <div className="bg-white border border-slate-200 rounded">
-              <div className="px-3 py-1.5 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wide">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
+              <div className="px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 Diff ({changed.length} changed{diffs.length !== changed.length && ` of ${diffs.length}`})
               </div>
               <div className="divide-y divide-slate-100">
@@ -157,21 +157,21 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
                       !d.changed && 'opacity-60',
                     )}
                   >
-                    <span className="font-medium text-slate-700 w-32 flex-shrink-0">
+                    <span className="font-medium text-slate-700 dark:text-slate-300 w-32 flex-shrink-0">
                       {d.key}
                     </span>
                     <span
                       className={cn(
                         'font-mono break-all',
-                        d.changed ? 'text-slate-500 line-through' : 'text-slate-500',
+                        d.changed ? 'text-slate-500 dark:text-slate-400 line-through' : 'text-slate-500 dark:text-slate-400',
                       )}
                     >
                       {formatStateValue(d.before)}
                     </span>
                     {d.changed && (
                       <>
-                        <ArrowRight className="w-3 h-3 text-slate-400 flex-shrink-0 mt-0.5" />
-                        <span className="font-mono text-slate-900 font-medium break-all">
+                        <ArrowRight className="w-3 h-3 text-slate-400 dark:text-slate-500 flex-shrink-0 mt-0.5" />
+                        <span className="font-mono text-slate-900 dark:text-slate-100 font-medium break-all">
                           {formatStateValue(d.after)}
                         </span>
                       </>
@@ -181,17 +181,17 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
               </div>
             </div>
           ) : (
-            <div className="text-sm text-slate-500 italic">
+            <div className="text-sm text-slate-500 dark:text-slate-400 italic">
               No diff available (before/after empty).
             </div>
           )}
 
           {entry.metadata && Object.keys(entry.metadata).length > 0 && (
-            <div className="bg-white border border-slate-200 rounded">
-              <div className="px-3 py-1.5 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wide">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded">
+              <div className="px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 Metadata
               </div>
-              <pre className="px-3 py-1.5 text-sm text-slate-700 overflow-x-auto whitespace-pre-wrap break-all">
+              <pre className="px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap break-all">
                 {JSON.stringify(entry.metadata, null, 2)}
               </pre>
             </div>
@@ -305,7 +305,7 @@ export default function AuditLogClient() {
       <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-[240px] max-w-md">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
             <Input
               type="text"
               value={searchInput}
@@ -317,7 +317,7 @@ export default function AuditLogClient() {
               <button
                 type="button"
                 onClick={() => setSearchInput('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                 aria-label="Clear"
               >
                 <X className="w-3.5 h-3.5" />
@@ -337,7 +337,7 @@ export default function AuditLogClient() {
 
         {/* Time chips */}
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-sm text-slate-500 font-medium uppercase tracking-wide mr-1">
+          <span className="text-sm text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide mr-1">
             Time:
           </span>
           {SINCE_PRESETS.map((p) => {
@@ -350,8 +350,8 @@ export default function AuditLogClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   active
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {p.label}
@@ -363,7 +363,7 @@ export default function AuditLogClient() {
         {/* Entity type chips */}
         {data?.facets?.entityType && data.facets.entityType.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-sm text-slate-500 font-medium uppercase tracking-wide mr-1">
+            <span className="text-sm text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide mr-1">
               Type:
             </span>
             <button
@@ -372,8 +372,8 @@ export default function AuditLogClient() {
               className={cn(
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlEntityType
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               All
@@ -386,8 +386,8 @@ export default function AuditLogClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlEntityType === f.value
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {f.value}
@@ -400,7 +400,7 @@ export default function AuditLogClient() {
         {/* Action chips */}
         {data?.facets?.action && data.facets.action.length > 0 && (
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-sm text-slate-500 font-medium uppercase tracking-wide mr-1">
+            <span className="text-sm text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide mr-1">
               Action:
             </span>
             <button
@@ -409,8 +409,8 @@ export default function AuditLogClient() {
               className={cn(
                 'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                 !urlAction
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
               )}
             >
               All
@@ -423,8 +423,8 @@ export default function AuditLogClient() {
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
                   urlAction === f.value
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300',
+                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                 )}
               >
                 {f.value}
@@ -436,7 +436,7 @@ export default function AuditLogClient() {
       </div>
 
       {error && (
-        <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">
+        <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" />
           {error}
         </div>
@@ -447,7 +447,7 @@ export default function AuditLogClient() {
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="h-14 bg-white border border-slate-200 rounded-lg animate-pulse"
+              className="h-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-pulse"
             />
           ))}
         </div>
@@ -473,7 +473,7 @@ export default function AuditLogClient() {
                 onClick={() => {
                   toast.info('Pagination — load more not yet wired (PR follow-up)')
                 }}
-                className="text-sm text-slate-500 hover:text-slate-900 italic"
+                className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 italic"
               >
                 More entries available · cursor pagination coming
               </button>

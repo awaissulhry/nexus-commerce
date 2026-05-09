@@ -82,9 +82,9 @@ function formatRelative(iso: string): { text: string; tone: 'ok' | 'warn' | 'dan
 }
 
 const TONE_CLASS: Record<'ok' | 'warn' | 'danger', string> = {
-  ok: 'text-slate-900',
-  warn: 'text-amber-700',
-  danger: 'text-red-700',
+  ok: 'text-slate-900 dark:text-slate-100',
+  warn: 'text-amber-700 dark:text-amber-300',
+  danger: 'text-red-700 dark:text-red-300',
 }
 
 const CHANNELS: ChannelDef[] = [
@@ -293,16 +293,16 @@ export function ChannelsClient() {
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="bg-white border border-slate-200 rounded-lg p-4 animate-pulse"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 animate-pulse"
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-slate-200 rounded" />
+              <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded" />
               <div className="flex-1 space-y-2">
-                <div className="h-3 bg-slate-200 rounded w-1/2" />
-                <div className="h-2 bg-slate-200 rounded w-3/4" />
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded w-3/4" />
               </div>
             </div>
-            <div className="h-8 bg-slate-200 rounded" />
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded" />
           </div>
         ))}
       </div>
@@ -315,9 +315,9 @@ export function ChannelsClient() {
         <div
           className={cn(
             'border rounded-lg px-4 py-3 text-base flex items-start gap-2',
-            statusMsg.kind === 'success' && 'bg-green-50 border-green-200 text-green-700',
-            statusMsg.kind === 'error' && 'bg-red-50 border-red-200 text-red-700',
-            statusMsg.kind === 'info' && 'bg-slate-50 border-slate-200 text-slate-700'
+            statusMsg.kind === 'success' && 'bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900 text-green-700 dark:text-green-300',
+            statusMsg.kind === 'error' && 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300',
+            statusMsg.kind === 'info' && 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
           )}
         >
           {statusMsg.kind === 'error' && (
@@ -337,14 +337,14 @@ export function ChannelsClient() {
             <Card key={channel.type}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 bg-slate-100 rounded-md flex items-center justify-center flex-shrink-0">
-                    <ShoppingBag className="w-4 h-4 text-slate-600" />
+                  <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-md flex items-center justify-center flex-shrink-0">
+                    <ShoppingBag className="w-4 h-4 text-slate-600 dark:text-slate-400" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-slate-900">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                       {channel.name}
                     </h3>
-                    <p className="text-sm text-slate-500 mt-0.5">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                       {channel.description}
                     </p>
                   </div>
@@ -373,24 +373,24 @@ export function ChannelsClient() {
               </div>
 
               {isConnected && connection && (
-                <div className="space-y-1.5 mb-3 text-base border-t border-slate-100 pt-3">
+                <div className="space-y-1.5 mb-3 text-base border-t border-slate-100 dark:border-slate-800 pt-3">
                   {connection.sellerName && (
                     <div className="flex justify-between gap-2">
-                      <span className="text-slate-500">Seller</span>
-                      <span className="text-slate-900 truncate">{connection.sellerName}</span>
+                      <span className="text-slate-500 dark:text-slate-400">Seller</span>
+                      <span className="text-slate-900 dark:text-slate-100 truncate">{connection.sellerName}</span>
                     </div>
                   )}
                   {connection.storeName && (
                     <div className="flex justify-between gap-2">
-                      <span className="text-slate-500">Store</span>
-                      <span className="text-slate-900 truncate">{connection.storeName}</span>
+                      <span className="text-slate-500 dark:text-slate-400">Store</span>
+                      <span className="text-slate-900 dark:text-slate-100 truncate">{connection.storeName}</span>
                     </div>
                   )}
                   {connection.tokenExpiresAt && (() => {
                     const r = formatRelative(connection.tokenExpiresAt)
                     return (
                       <div className="flex justify-between gap-2">
-                        <span className="text-slate-500">Token expires</span>
+                        <span className="text-slate-500 dark:text-slate-400">Token expires</span>
                         <span className={cn('tabular-nums', TONE_CLASS[r.tone])}>
                           {r.text}
                         </span>
@@ -399,8 +399,8 @@ export function ChannelsClient() {
                   })()}
                   {connection.lastSyncAt && (
                     <div className="flex justify-between gap-2">
-                      <span className="text-slate-500">Last sync</span>
-                      <span className="text-slate-900 tabular-nums">
+                      <span className="text-slate-500 dark:text-slate-400">Last sync</span>
+                      <span className="text-slate-900 dark:text-slate-100 tabular-nums">
                         {formatRelative(connection.lastSyncAt).text}
                       </span>
                     </div>
@@ -416,8 +416,8 @@ export function ChannelsClient() {
                   className={cn(
                     'mt-2 mb-3 border rounded-md px-3 py-2 text-sm',
                     diagnostics.ok
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-amber-200 bg-amber-50 text-amber-800',
+                      ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800'
+                      : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800',
                   )}
                 >
                   <div className="font-semibold mb-1 flex items-center gap-1">
@@ -428,7 +428,7 @@ export function ChannelsClient() {
                     )}
                     {diagnostics.recommendation}
                   </div>
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-600 leading-relaxed">
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                     {diagnostics.details}
                   </pre>
                 </div>
@@ -442,11 +442,11 @@ export function ChannelsClient() {
               <div className="flex gap-2 flex-wrap">
                 {connection?.isManagedBy === 'env' ? (
                   isConnected ? (
-                    <p className="text-sm text-slate-500 italic">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">
                       Managed via API server env vars. Disconnect by removing creds in Railway.
                     </p>
                   ) : (
-                    <p className="text-sm text-red-600">
+                    <p className="text-sm text-red-600 dark:text-red-400">
                       {connection.lastSyncError ?? 'Credentials missing — set env vars in Railway.'}
                     </p>
                   )
@@ -518,7 +518,7 @@ export function ChannelsClient() {
       </div>
 
       <Card title="About marketplace connections">
-        <ul className="text-base text-slate-600 space-y-1.5">
+        <ul className="text-base text-slate-600 dark:text-slate-400 space-y-1.5">
           <li>· Each connection authorizes Nexus to read products, listings, and orders from that channel.</li>
           <li>· OAuth tokens are refreshed automatically every 30 minutes before expiry.</li>
           <li>· Disconnecting revokes the token and stops all syncs for that channel.</li>

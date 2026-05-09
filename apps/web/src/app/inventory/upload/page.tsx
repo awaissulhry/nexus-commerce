@@ -290,7 +290,7 @@ export default function InventoryUploadPage() {
 
       {/* Error banner */}
       {importError && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg">
           <p className="text-red-800 font-medium">⚠️ {importError}</p>
         </div>
       )}
@@ -305,8 +305,8 @@ export default function InventoryUploadPage() {
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-16 text-center cursor-pointer transition-all ${
               isDragging
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
+                : 'border-gray-300 bg-white dark:bg-slate-900 hover:border-gray-400 hover:bg-gray-50'
             }`}
           >
             <div className="text-5xl mb-4">{isDragging ? '📥' : '📄'}</div>
@@ -318,7 +318,7 @@ export default function InventoryUploadPage() {
             </p>
             <button
               type="button"
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+              className="px-6 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium text-sm"
             >
               Browse Files
             </button>
@@ -332,19 +332,19 @@ export default function InventoryUploadPage() {
           </div>
 
           {/* Template info */}
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="mt-6 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-blue-900 mb-2">📋 Expected Columns</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-blue-800">
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">SKU *</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">Title *</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">Price *</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">Stock</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">UPC</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">EAN</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">Brand</span>
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded">Manufacturer</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">SKU *</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Title *</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Price *</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Stock</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">UPC</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">EAN</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Brand</span>
+              <span className="font-mono bg-blue-100 dark:bg-blue-900/60 px-2 py-1 rounded">Manufacturer</span>
             </div>
-            <p className="text-xs text-blue-700 mt-2">* Required fields</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">* Required fields</p>
           </div>
         </div>
       )}
@@ -354,26 +354,26 @@ export default function InventoryUploadPage() {
         <div>
           {/* Summary bar */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
               <p className="text-sm text-gray-600">File</p>
               <p className="text-lg font-bold text-gray-900 truncate">{fileName}</p>
             </div>
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
               <p className="text-sm text-gray-600">Total Rows</p>
               <p className="text-2xl font-bold text-gray-900">{rows.length}</p>
             </div>
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
               <p className="text-sm text-gray-600">Valid</p>
-              <p className="text-2xl font-bold text-green-600">{validCount}</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{validCount}</p>
             </div>
-            <div className="bg-white rounded-lg shadow p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow p-4">
               <p className="text-sm text-gray-600">Errors</p>
-              <p className="text-2xl font-bold text-red-600">{errorCount}</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{errorCount}</p>
             </div>
           </div>
 
           {/* Preview table */}
-          <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-hidden mb-6">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -414,7 +414,7 @@ export default function InventoryUploadPage() {
                         key={row.rowIndex}
                         className={
                           hasErrors
-                            ? 'bg-red-50'
+                            ? 'bg-red-50 dark:bg-red-950/40'
                             : hasWarnings
                               ? 'bg-yellow-50'
                               : 'hover:bg-gray-50'
@@ -422,7 +422,7 @@ export default function InventoryUploadPage() {
                       >
                         <td className="px-4 py-3 text-center">
                           {hasErrors ? (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-600 text-xs font-bold" title="Error">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-400 text-xs font-bold" title="Error">
                               ✗
                             </span>
                           ) : hasWarnings ? (
@@ -430,7 +430,7 @@ export default function InventoryUploadPage() {
                               !
                             </span>
                           ) : (
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 text-xs font-bold" title="Valid">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-600 dark:text-green-400 text-xs font-bold" title="Valid">
                               ✓
                             </span>
                           )}
@@ -451,13 +451,13 @@ export default function InventoryUploadPage() {
                         </td>
                         <td className="px-4 py-3 text-xs">
                           {row.errors.map((err, i) => (
-                            <span key={`e-${i}`} className="block text-red-600">🔴 {err}</span>
+                            <span key={`e-${i}`} className="block text-red-600 dark:text-red-400">🔴 {err}</span>
                           ))}
                           {row.warnings.map((warn, i) => (
                             <span key={`w-${i}`} className="block text-yellow-600">🟡 {warn}</span>
                           ))}
                           {!hasErrors && !hasWarnings && (
-                            <span className="text-green-600">🟢 Ready</span>
+                            <span className="text-green-600 dark:text-green-400">🟢 Ready</span>
                           )}
                         </td>
                       </tr>
@@ -473,14 +473,14 @@ export default function InventoryUploadPage() {
             <p className="text-sm text-gray-600">
               {validCount} of {rows.length} rows will be imported
               {errorCount > 0 && (
-                <span className="text-red-600 ml-1">({errorCount} skipped due to errors)</span>
+                <span className="text-red-600 dark:text-red-400 ml-1">({errorCount} skipped due to errors)</span>
               )}
             </p>
             <button
               type="button"
               onClick={handleImport}
               disabled={validCount === 0}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
+              className="px-8 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
             >
               📤 Import {validCount} Product{validCount !== 1 ? 's' : ''}
             </button>
@@ -504,22 +504,22 @@ export default function InventoryUploadPage() {
         <div>
           {/* Summary cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
               <p className="text-sm text-gray-600 mb-1">Processed</p>
               <p className="text-4xl font-bold text-gray-900">{importResult.processed}</p>
             </div>
-            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 border-l-4 border-green-500">
               <p className="text-sm text-gray-600 mb-1">Successful</p>
-              <p className="text-4xl font-bold text-green-600">{importResult.successful}</p>
+              <p className="text-4xl font-bold text-green-600 dark:text-green-400">{importResult.successful}</p>
             </div>
-            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 border-l-4 border-red-500">
               <p className="text-sm text-gray-600 mb-1">Failed</p>
-              <p className="text-4xl font-bold text-red-600">{importResult.failed}</p>
+              <p className="text-4xl font-bold text-red-600 dark:text-red-400">{importResult.failed}</p>
             </div>
           </div>
 
           {/* Results table */}
-          <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow overflow-hidden mb-6">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -545,12 +545,12 @@ export default function InventoryUploadPage() {
                         </span>
                       )}
                       {r.status === 'updated' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/60 text-blue-800">
                           ↻ Updated
                         </span>
                       )}
                       {r.status === 'failed' && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/60 text-red-800">
                           ✗ Failed
                         </span>
                       )}
@@ -567,7 +567,7 @@ export default function InventoryUploadPage() {
             <button
               type="button"
               onClick={handleReset}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium"
             >
               📤 Upload Another File
             </button>

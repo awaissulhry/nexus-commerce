@@ -98,7 +98,7 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
         label: (
           <span className="inline-flex items-center gap-1.5">
             <span className="font-mono text-xs">{mp}</span>
-            <span className="text-xs text-slate-400">{COUNTRY_NAMES[mp] ?? mp}</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{COUNTRY_NAMES[mp] ?? mp}</span>
           </span>
         ),
         count: marketCount(mp) || undefined,
@@ -117,7 +117,7 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
           tabs={tabs}
           activeTab={activeMarket}
           onChange={(mp) => setActiveMarket(mp)}
-          className="bg-white border-b-0"
+          className="bg-white dark:bg-slate-900 border-b-0"
         />
       )}
 
@@ -221,17 +221,17 @@ function KpiTile({
   tone: 'default' | 'success' | 'warning' | 'danger'
 }) {
   const toneClass =
-    tone === 'success' ? 'text-emerald-700'
-    : tone === 'warning' ? 'text-amber-700'
-    : tone === 'danger' ? 'text-rose-700'
-    : 'text-slate-900'
+    tone === 'success' ? 'text-emerald-700 dark:text-emerald-300'
+    : tone === 'warning' ? 'text-amber-700 dark:text-amber-300'
+    : tone === 'danger' ? 'text-rose-700 dark:text-rose-300'
+    : 'text-slate-900 dark:text-slate-100'
   return (
     <Card>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">{label}</div>
       <div className={`text-[24px] font-semibold tabular-nums leading-none ${toneClass}`}>
         {value}
       </div>
-      {sub && <div className="text-sm text-slate-500 mt-1">{sub}</div>}
+      {sub && <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{sub}</div>}
     </Card>
   )
 }
@@ -277,7 +277,7 @@ function SuppressionResolver({
     <Card
       title={
         <span className="inline-flex items-center gap-2">
-          <AlertTriangle size={14} className="text-rose-600" />
+          <AlertTriangle size={14} className="text-rose-600 dark:text-rose-400" />
           Active suppressions ({suppressions.length})
         </span>
       }
@@ -287,42 +287,42 @@ function SuppressionResolver({
         {suppressions.map((s) => (
           <div
             key={s.id}
-            className="border border-rose-200 bg-rose-50/40 rounded-md p-3 flex items-start justify-between gap-3"
+            className="border border-rose-200 dark:border-rose-900 bg-rose-50/40 rounded-md p-3 flex items-start justify-between gap-3"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm font-semibold bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                <span className="font-mono text-sm font-semibold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
                   {s.listing.marketplace}
                 </span>
-                <span className="text-md font-medium text-slate-900 truncate">
+                <span className="text-md font-medium text-slate-900 dark:text-slate-100 truncate">
                   {s.listing.product.name}
                 </span>
-                <span className="text-sm text-slate-500 font-mono">{s.listing.product.sku}</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400 font-mono">{s.listing.product.sku}</span>
                 {s.listing.externalListingId && (
-                  <span className="text-xs text-slate-400 font-mono">
+                  <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">
                     ASIN {s.listing.externalListingId}
                   </span>
                 )}
               </div>
-              <div className="mt-1.5 text-base text-rose-700">
+              <div className="mt-1.5 text-base text-rose-700 dark:text-rose-300">
                 {s.reasonCode && <span className="font-mono mr-1">[{s.reasonCode}]</span>}
                 {s.reasonText}
               </div>
-              <div className="mt-1 text-xs text-slate-500">
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Suppressed {new Date(s.suppressedAt).toLocaleString()} · source: {s.source}
               </div>
             </div>
             <div className="flex flex-col gap-1.5 flex-shrink-0">
               <Link
                 href={`/products/${s.listing.product.id}/edit?channel=AMAZON&marketplace=${s.listing.marketplace}`}
-                className="h-7 px-2.5 text-sm bg-white text-slate-700 border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 Open in editor
               </Link>
               <button
                 onClick={() => resolve(s.id)}
                 disabled={resolving.has(s.id)}
-                className="h-7 px-2.5 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 disabled:opacity-50 inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="h-7 px-2.5 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 <CheckCircle2 size={11} /> Mark resolved
               </button>
@@ -401,8 +401,8 @@ export function SuppressionLogModal({
       <ModalBody>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
-              Reason text <span className="text-rose-600">*</span>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Reason text <span className="text-rose-600 dark:text-rose-400">*</span>
             </label>
             <Input
               value={reasonText}
@@ -413,8 +413,8 @@ export function SuppressionLogModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
-                Reason code <span className="text-slate-400 font-normal">(SP-API)</span>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Reason code <span className="text-slate-400 dark:text-slate-500 font-normal">(SP-API)</span>
               </label>
               <Input
                 value={reasonCode}
@@ -423,11 +423,11 @@ export function SuppressionLogModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Severity</label>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Severity</label>
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value as any)}
-                className="h-9 w-full px-2 text-base border border-slate-200 rounded text-slate-700"
+                className="h-9 w-full px-2 text-base border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300"
               >
                 <option value="ERROR">ERROR</option>
                 <option value="WARNING">WARNING</option>
@@ -435,7 +435,7 @@ export function SuppressionLogModal({
               </select>
             </div>
           </div>
-          <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-md p-2.5">
+          <div className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2.5">
             Logging a suppression sets the listing's status to <code>SUPPRESSED</code> and
             opens an audit episode. SP-API auto-detection comes in S.5b — until then, this
             is the manual entry point.
@@ -446,7 +446,7 @@ export function SuppressionLogModal({
         <button
           onClick={onClose}
           disabled={submitting}
-          className="h-8 px-3 text-base text-slate-700 border border-slate-200 rounded hover:bg-slate-50"
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           Cancel
         </button>

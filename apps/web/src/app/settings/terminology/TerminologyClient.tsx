@@ -147,7 +147,7 @@ export default function TerminologyClient({ initial, initialError }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-base text-slate-500">
+        <p className="text-base text-slate-500 dark:text-slate-400">
           {items.length.toLocaleString()} preference
           {items.length === 1 ? '' : 's'}
         </p>
@@ -158,13 +158,13 @@ export default function TerminologyClient({ initial, initialError }: Props) {
       </div>
 
       {error && (
-        <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-base text-red-900 flex items-start gap-2">
+        <div className="px-3 py-2 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-base text-red-900 dark:text-red-100 flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <div className="flex-1">{error}</div>
           <button
             type="button"
             onClick={() => setError(null)}
-            className="text-red-700 hover:text-red-900"
+            className="text-red-700 dark:text-red-300 hover:text-red-900"
             aria-label="Dismiss"
           >
             <X className="w-3 h-3" />
@@ -173,11 +173,11 @@ export default function TerminologyClient({ initial, initialError }: Props) {
       )}
 
       {items.length === 0 ? (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center">
-          <p className="text-lg text-slate-700 mb-2">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center">
+          <p className="text-lg text-slate-700 dark:text-slate-300 mb-2">
             No terminology preferences configured yet.
           </p>
-          <p className="text-base text-slate-500 mb-4">
+          <p className="text-base text-slate-500 dark:text-slate-400 mb-4">
             Add a preference to steer AI-generated titles, bullets, and
             descriptions toward (or away from) specific words.
           </p>
@@ -187,9 +187,9 @@ export default function TerminologyClient({ initial, initialError }: Props) {
           </Button>
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
           <table className="w-full text-md">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
                 <Th>Brand</Th>
                 <Th>Market</Th>
@@ -204,29 +204,29 @@ export default function TerminologyClient({ initial, initialError }: Props) {
               {items.map((it) => (
                 <tr
                   key={it.id}
-                  className="border-b border-slate-100 last:border-b-0"
+                  className="border-b border-slate-100 dark:border-slate-800 last:border-b-0"
                 >
                   <Td>
                     {it.brand ? (
                       it.brand
                     ) : (
-                      <span className="italic text-slate-400">All brands</span>
+                      <span className="italic text-slate-400 dark:text-slate-500">All brands</span>
                     )}
                   </Td>
                   <Td>{it.marketplace}</Td>
                   <Td>{it.language}</Td>
-                  <Td className="font-medium text-slate-900">{it.preferred}</Td>
+                  <Td className="font-medium text-slate-900 dark:text-slate-100">{it.preferred}</Td>
                   <Td>
                     {it.avoid.length === 0 ? (
-                      <span className="text-slate-400">—</span>
+                      <span className="text-slate-400 dark:text-slate-500">—</span>
                     ) : (
-                      <span className="text-slate-700">
+                      <span className="text-slate-700 dark:text-slate-300">
                         {it.avoid.join(', ')}
                       </span>
                     )}
                   </Td>
-                  <Td className="text-slate-600">
-                    {it.context ?? <span className="text-slate-400">—</span>}
+                  <Td className="text-slate-600 dark:text-slate-400">
+                    {it.context ?? <span className="text-slate-400 dark:text-slate-500">—</span>}
                   </Td>
                   <Td className="text-right">
                     <div className="inline-flex items-center gap-1">
@@ -280,7 +280,7 @@ function Th({
   return (
     <th
       className={cn(
-        'text-left px-3 py-2 text-sm font-semibold uppercase tracking-wide text-slate-500',
+        'text-left px-3 py-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400',
         className,
       )}
     >
@@ -319,10 +319,10 @@ function IconButton({
       disabled={disabled}
       title={title}
       className={cn(
-        'inline-flex items-center justify-center w-7 h-7 rounded border text-slate-500',
+        'inline-flex items-center justify-center w-7 h-7 rounded border text-slate-500 dark:text-slate-400',
         danger
-          ? 'border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
-          : 'border-slate-200 hover:bg-slate-50 hover:text-slate-900',
+          ? 'border-slate-200 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 hover:border-red-200'
+          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
         disabled && 'opacity-50 cursor-default',
       )}
     >
@@ -350,17 +350,17 @@ function Modal({
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-lg shadow-xl border border-slate-200 w-[480px] max-w-[92vw] p-5"
+        className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-[480px] max-w-[92vw] p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-3">
-          <h3 className="text-lg font-semibold text-slate-900">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {editor.id ? 'Edit preference' : 'Add preference'}
           </h3>
           <button
             type="button"
             onClick={() => !saving && setEditor(null)}
-            className="text-slate-400 hover:text-slate-700"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -497,14 +497,14 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-1">
+      <div className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
         {label}
       </div>
       {children}
-      {help && <div className="text-sm text-slate-500 mt-1">{help}</div>}
+      {help && <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{help}</div>}
     </label>
   )
 }
 
 const inputCls =
-  'w-full h-8 px-2 text-md border border-slate-200 rounded-md bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+  'w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500'

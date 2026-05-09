@@ -988,8 +988,8 @@ export default function ChannelFieldEditor({
               className={cn(
                 'inline-flex items-center gap-1 h-7 px-2 text-sm border rounded disabled:opacity-40',
                 showAllOptional
-                  ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                  ? 'border-blue-300 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
               )}
             >
               {showAllOptional
@@ -1016,7 +1016,7 @@ export default function ChannelFieldEditor({
               window.setTimeout(() => setForceRefresh(false), 100)
             }}
             disabled={loading}
-            className="text-blue-700 border-blue-200 bg-white hover:bg-blue-50"
+            className="text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950/40"
             title="Force-refresh from Amazon SP-API (bypasses 24h cache)"
             icon={<RefreshCw className="w-3 h-3" />}
           >
@@ -1026,14 +1026,14 @@ export default function ChannelFieldEditor({
       </div>
 
       {loading && !manifest && (
-        <div className="border border-slate-200 rounded-lg bg-white px-6 py-12 text-center text-md text-slate-500 flex items-center justify-center gap-2">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading schema…
         </div>
       )}
 
       {error && !loading && (
-        <div className="border border-rose-200 rounded-lg bg-rose-50 px-4 py-3 text-md text-rose-700 flex items-start gap-2">
+        <div className="border border-rose-200 dark:border-rose-900 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-md text-rose-700 dark:text-rose-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>
             <div>{error}</div>
@@ -1085,7 +1085,7 @@ export default function ChannelFieldEditor({
       )}
 
       {manifest && manifest.fields.length === 0 && !loading && (
-        <div className="border border-slate-200 rounded-lg bg-white px-4 py-6 text-center text-base text-slate-500">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-6 text-center text-base text-slate-500 dark:text-slate-400">
           No fields surfaced for this channel yet.
         </div>
       )}
@@ -1207,7 +1207,7 @@ export default function ChannelFieldEditor({
       )}
 
       {manifest && unsatisfied.length > 0 && (
-        <div className="text-base text-amber-700">
+        <div className="text-base text-amber-700 dark:text-amber-300">
           {unsatisfied.length} required field
           {unsatisfied.length === 1 ? '' : 's'} still unfilled
         </div>
@@ -1258,8 +1258,8 @@ function CopyFromSiblingMenu({
           'inline-flex items-center gap-1 border rounded text-sm font-medium',
           compact ? 'h-7 px-2' : 'h-7 px-2.5',
           flash
-            ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
-            : 'border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+            ? 'border-emerald-300 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'
+            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
         )}
       >
         <Copy className="w-3 h-3" />
@@ -1272,8 +1272,8 @@ function CopyFromSiblingMenu({
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-md py-1 min-w-[220px] text-base">
-            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400">
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded shadow-md py-1 min-w-[220px] text-base">
+            <div className="px-3 py-0.5 text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
               Copy values from
             </div>
             {others.map(({ channelKey: sourceKey }) => {
@@ -1292,14 +1292,14 @@ function CopyFromSiblingMenu({
                     }
                   }}
                   className={cn(
-                    'w-full text-left px-3 py-1.5 hover:bg-slate-50 inline-flex items-center justify-between gap-2',
+                    'w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-between gap-2',
                     n === 0
-                      ? 'text-slate-400 cursor-not-allowed'
-                      : 'text-slate-700',
+                      ? 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                      : 'text-slate-700 dark:text-slate-300',
                   )}
                 >
                   <span className="font-mono text-sm">{sourceKey}</span>
-                  <span className="text-xs text-slate-500 tabular-nums">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {n === 0 ? 'no values' : `${n} field${n === 1 ? '' : 's'}`}
                   </span>
                 </button>
@@ -1324,9 +1324,9 @@ function SaveStatusPill({
     <div
       className={cn(
         'inline-flex items-center gap-1.5 text-sm px-2 py-1 rounded border',
-        status === 'saving' && 'border-slate-200 text-slate-600 bg-slate-50',
-        status === 'saved' && 'border-emerald-200 text-emerald-700 bg-emerald-50',
-        status === 'error' && 'border-rose-200 text-rose-700 bg-rose-50',
+        status === 'saving' && 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800',
+        status === 'saved' && 'border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40',
+        status === 'error' && 'border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40',
       )}
     >
       {status === 'saving' && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -1352,10 +1352,10 @@ function GtinStatusBanner({
 }) {
   if (status.reason === 'non_amazon_channel') return null
   const tone = !status.needed
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800'
     : status.reason === 'in_progress'
-    ? 'border-amber-200 bg-amber-50 text-amber-800'
-    : 'border-slate-200 bg-slate-50 text-slate-700'
+    ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800'
+    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
   const headline = (() => {
     switch (status.reason) {
       case 'has_gtin':
@@ -1380,7 +1380,7 @@ function GtinStatusBanner({
       )}
     >
       {!status.needed ? (
-        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-600 flex-shrink-0" />
+        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
       ) : (
         <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
       )}
@@ -1417,10 +1417,10 @@ function ListingSetupCard({
     | 'WOOCOMMERCE'
     | 'ETSY'
   return (
-    <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
         <div className="space-y-1">
-          <label className="text-sm font-medium uppercase tracking-wide text-slate-500">
+          <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {channel} product type
           </label>
           <ProductTypePicker
@@ -1434,14 +1434,14 @@ function ListingSetupCard({
                 : `Pick a ${channel} product type`
             }
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400 dark:text-slate-500">
             {inheriting
               ? 'Using the master product’s product type. Override here if this listing should map to a different category.'
               : 'Per-listing override active. Schema below reflects this product type.'}
           </p>
         </div>
         <div className="space-y-1">
-          <label className="text-sm font-medium uppercase tracking-wide text-slate-500">
+          <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Variation theme
           </label>
           <input
@@ -1449,9 +1449,9 @@ function ListingSetupCard({
             value={variationTheme}
             onChange={(e) => onChange('variationTheme', e.target.value)}
             placeholder="e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME"
-            className="w-full h-8 px-2 text-md font-mono border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full h-8 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400 dark:text-slate-500">
             Defines how this listing’s variant axes are reported to the
             channel. Leave empty for non-variant listings.
           </p>

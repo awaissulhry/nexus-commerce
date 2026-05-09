@@ -52,7 +52,7 @@ interface PlatformListing {
 function showToast(message: string, type: 'success' | 'error') {
   const toast = document.createElement('div');
   toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg text-white font-medium z-50 ${
-    type === 'success' ? 'bg-green-600' : 'bg-red-600'
+    type === 'success' ? 'bg-green-600' : 'bg-red-600 dark:bg-red-700'
   }`;
   toast.textContent = message;
   document.body.appendChild(toast);
@@ -69,13 +69,13 @@ interface FormFieldProps {
 
 function FormField({ field, value, onChange, error, required }: FormFieldProps) {
   const borderColor = required ? 'border-red-300' : 'border-gray-300';
-  const labelColor = required ? 'text-red-700' : 'text-gray-700';
+  const labelColor = required ? 'text-red-700 dark:text-red-300' : 'text-gray-700';
 
   return (
     <div>
       <label className={`block text-sm font-medium ${labelColor} mb-2`}>
         {field.label}
-        {required && <span className="text-red-600 ml-1">*</span>}
+        {required && <span className="text-red-600 dark:text-red-400 ml-1">*</span>}
       </label>
       <p className="text-xs text-gray-500 mb-2">{field.description}</p>
 
@@ -131,7 +131,7 @@ function FormField({ field, value, onChange, error, required }: FormFieldProps) 
         />
       )}
 
-      {error && <p className="text-red-600 text-sm mt-1">{error}</p>}
+      {error && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{error}</p>}
     </div>
   );
 }
@@ -391,7 +391,7 @@ export default function AddProductPage() {
         <PageHeader title="Add New Product" breadcrumbs={[{ label: 'Catalog', href: '/catalog' }, { label: 'Add Product' }]} />
         <div className="max-w-2xl mx-auto p-6">
           {/* Bulk Upload Alternative */}
-          <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+          <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 dark:border-blue-900 rounded-lg">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Have multiple products?</h3>
@@ -399,7 +399,7 @@ export default function AddProductPage() {
               </div>
               <Link
                 href="/catalog/import"
-                className="ml-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                className="ml-4 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors whitespace-nowrap"
               >
                 📤 Upload via Spreadsheet
               </Link>
@@ -411,7 +411,7 @@ export default function AddProductPage() {
           </div>
 
           <p className="text-gray-600 mb-8">Select a product type to get started.</p>
-          {typesError && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"><p className="text-red-700">{typesError}</p></div>}
+          {typesError && <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg"><p className="text-red-700 dark:text-red-300">{typesError}</p></div>}
           {loadingTypes ? (
             <div className="text-center py-12"><div className="inline-block"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div><p className="mt-4 text-gray-600">Loading product types...</p></div>
           ) : productTypes.length === 0 ? (
@@ -419,7 +419,7 @@ export default function AddProductPage() {
           ) : (
             <div className="space-y-3">
               {productTypes.map((type) => (
-                <button key={type.value} onClick={() => handleProductTypeSelect(type.value)} className="w-full p-4 text-left border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-500 transition-colors">
+                <button key={type.value} onClick={() => handleProductTypeSelect(type.value)} className="w-full p-4 text-left border border-gray-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:border-blue-500 transition-colors">
                   <div className="font-semibold text-gray-900">{type.label}</div>
                   <div className="text-sm text-gray-500">Click to view required fields</div>
                 </button>
@@ -453,40 +453,40 @@ export default function AddProductPage() {
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-900">Create New Product</h2>
           </div>
-          <div className="mb-6 flex items-center gap-2"><div className="flex-1 h-1 bg-blue-600 rounded"></div><span className="text-sm font-medium text-gray-600">Step 1 of 3</span><div className="flex-1 h-1 bg-gray-300 rounded"></div></div>
-          <button onClick={() => setCurrentStep('type')} className="mb-6 text-blue-600 hover:text-blue-800 flex items-center gap-2">← Back to Product Types</button>
-          {errors.schema && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"><p className="text-red-700">{errors.schema}</p></div>}
+          <div className="mb-6 flex items-center gap-2"><div className="flex-1 h-1 bg-blue-600 dark:bg-blue-700 rounded"></div><span className="text-sm font-medium text-gray-600">Step 1 of 3</span><div className="flex-1 h-1 bg-gray-300 rounded"></div></div>
+          <button onClick={() => setCurrentStep('type')} className="mb-6 text-blue-600 dark:text-blue-400 hover:text-blue-800 flex items-center gap-2">← Back to Product Types</button>
+          {errors.schema && <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg"><p className="text-red-700 dark:text-red-300">{errors.schema}</p></div>}
           <form onSubmit={(e) => { e.preventDefault(); setCurrentStep('variations'); }} className="space-y-8">
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
               <h2 className="text-lg font-semibold mb-4 text-gray-900">Master Product Information</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Product Name <span className="text-red-600">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Product Name <span className="text-red-600 dark:text-red-400">*</span></label>
                   <input type="text" value={masterData.name} onChange={(e) => handleMasterFieldChange('name', e.target.value)} placeholder="Enter product name" className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.name ? 'border-red-300' : 'border-gray-300'}`} />
-                  {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
+                  {errors.name && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{errors.name}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">SKU <span className="text-red-600">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">SKU <span className="text-red-600 dark:text-red-400">*</span></label>
                   <input type="text" value={masterData.sku} onChange={(e) => handleMasterFieldChange('sku', e.target.value)} placeholder="Enter SKU" className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.sku ? 'border-red-300' : 'border-gray-300'}`} />
-                  {errors.sku && <p className="text-red-600 text-sm mt-1">{errors.sku}</p>}
+                  {errors.sku && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{errors.sku}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Base Price <span className="text-red-600">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Base Price <span className="text-red-600 dark:text-red-400">*</span></label>
                   <input type="number" step="0.01" value={masterData.basePrice} onChange={(e) => handleMasterFieldChange('basePrice', e.target.value)} placeholder="0.00" className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.basePrice ? 'border-red-300' : 'border-gray-300'}`} />
-                  {errors.basePrice && <p className="text-red-600 text-sm mt-1">{errors.basePrice}</p>}
+                  {errors.basePrice && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{errors.basePrice}</p>}
                 </div>
               </div>
             </div>
 
             {/* Variations Toggle - Early Detection */}
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <div className="bg-blue-50 dark:bg-blue-950/40 p-6 rounded-lg border border-blue-200 dark:border-blue-900">
               <div className="flex items-center gap-4">
                 <input
                   type="checkbox"
                   id="hasVariations"
                   checked={hasVariations}
                   onChange={(e) => setHasVariations(e.target.checked)}
-                  className="w-5 h-5 text-blue-600 rounded"
+                  className="w-5 h-5 text-blue-600 dark:text-blue-400 rounded"
                 />
                 <label htmlFor="hasVariations" className="text-lg font-medium text-gray-900">Does this product have variations?</label>
               </div>
@@ -495,7 +495,7 @@ export default function AddProductPage() {
 
             {/* Informational Banner for Disabled Attributes */}
             {hasVariations && (
-              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <div className="bg-amber-50 dark:bg-amber-950/40 p-4 rounded-lg border border-amber-200 dark:border-amber-900">
                 <p className="text-sm text-amber-800">
                   <span className="font-semibold">ℹ️ Variation attributes disabled:</span> Attributes like Color, Size, Style, and similar variation-specific fields are disabled here because they will be defined in the Variations step. These attributes belong on child products, not the parent.
                 </p>
@@ -503,8 +503,8 @@ export default function AddProductPage() {
             )}
 
             {requiredFieldsFiltered.length > 0 && (
-              <div className="bg-white p-6 rounded-lg border border-gray-200">
-                <h2 className="text-lg font-semibold mb-4 text-red-600">Required Fields</h2>
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
+                <h2 className="text-lg font-semibold mb-4 text-red-600 dark:text-red-400">Required Fields</h2>
                 <div className="space-y-4">
                   {requiredFieldsFiltered.map((field) => (
                     <FormField key={field.name} field={field} value={masterData[field.name] || ''} onChange={(value) => handleMasterFieldChange(field.name, value)} error={errors[field.name]} required />
@@ -514,7 +514,7 @@ export default function AddProductPage() {
             )}
 
             {optionalFieldsFiltered.length > 0 && (
-              <div className="bg-white p-6 rounded-lg border border-gray-200">
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
                 <h2 className="text-lg font-semibold mb-4 text-gray-700">Optional Fields</h2>
                 <div className="space-y-4">
                   {optionalFieldsFiltered.map((field) => (
@@ -526,7 +526,7 @@ export default function AddProductPage() {
 
             <div className="flex gap-4 pt-6 border-t border-gray-200">
               <button type="button" onClick={() => setCurrentStep('type')} className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Back</button>
-              <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Next: Variations</button>
+              <button type="submit" className="px-6 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors">Next: Variations</button>
             </div>
           </form>
         </div>
@@ -541,11 +541,11 @@ export default function AddProductPage() {
       <div>
         <PageHeader title="Configure Variations" breadcrumbs={[{ label: 'Catalog', href: '/catalog' }, { label: 'Add Product' }]} />
         <div className="max-w-4xl mx-auto p-6">
-          <div className="mb-6 flex items-center gap-2"><div className="flex-1 h-1 bg-blue-600 rounded"></div><span className="text-sm font-medium text-gray-600">Step 2 of 3</span><div className="flex-1 h-1 bg-blue-600 rounded"></div><div className="flex-1 h-1 bg-gray-300 rounded"></div></div>
+          <div className="mb-6 flex items-center gap-2"><div className="flex-1 h-1 bg-blue-600 dark:bg-blue-700 rounded"></div><span className="text-sm font-medium text-gray-600">Step 2 of 3</span><div className="flex-1 h-1 bg-blue-600 dark:bg-blue-700 rounded"></div><div className="flex-1 h-1 bg-gray-300 rounded"></div></div>
           <form onSubmit={(e) => { e.preventDefault(); setCurrentStep('platforms'); }} className="space-y-8">
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
               <div className="flex items-center gap-4">
-                <input type="checkbox" id="hasVariations" checked={hasVariations} onChange={(e) => setHasVariations(e.target.checked)} className="w-5 h-5 text-blue-600 rounded" />
+                <input type="checkbox" id="hasVariations" checked={hasVariations} onChange={(e) => setHasVariations(e.target.checked)} className="w-5 h-5 text-blue-600 dark:text-blue-400 rounded" />
                 <label htmlFor="hasVariations" className="text-lg font-medium text-gray-900">Does this product have variations?</label>
               </div>
               <p className="text-sm text-gray-600 mt-2 ml-9">Enable this to create child SKUs with different attributes (e.g., colors, sizes)</p>
@@ -553,12 +553,12 @@ export default function AddProductPage() {
 
             {hasVariations && (
               <>
-                <div className="bg-white p-6 rounded-lg border border-gray-200">
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
                   <h2 className="text-lg font-semibold mb-4 text-gray-900">Define Variation Axes</h2>
                   {variationAxes.map((axis, index) => (
                     <div key={index} className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
                       <div><p className="font-medium text-gray-900">{axis.name}</p><p className="text-sm text-gray-600">{axis.values.join(', ')}</p></div>
-                      <button type="button" onClick={() => removeVariationAxis(index)} className="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
+                      <button type="button" onClick={() => removeVariationAxis(index)} className="text-red-600 dark:text-red-400 hover:text-red-800 text-sm font-medium">Remove</button>
                     </div>
                   ))}
                   <div className="space-y-4 mt-6 pt-6 border-t border-gray-200">
@@ -599,7 +599,7 @@ export default function AddProductPage() {
                               showToast('Please enter at least one value', 'error');
                             }
                           }}
-                          className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
+                          className="px-4 py-2 bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 transition-colors font-medium"
                         >
                           Add Values
                         </button>
@@ -609,7 +609,7 @@ export default function AddProductPage() {
                     {currentAxisValues.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {currentAxisValues.map((value, idx) => (
-                          <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">{value}</span>
+                          <span key={idx} className="px-3 py-1 bg-blue-100 dark:bg-blue-900/60 text-blue-800 rounded-full text-sm">{value}</span>
                         ))}
                       </div>
                     )}
@@ -624,7 +624,7 @@ export default function AddProductPage() {
                 )}
 
                 {generatedVariations.length > 0 && (
-                  <div className="bg-white p-6 rounded-lg border border-gray-200">
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
                     <h2 className="text-lg font-semibold mb-4 text-gray-900">Generated Variations ({generatedVariations.length})</h2>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -654,7 +654,7 @@ export default function AddProductPage() {
 
             <div className="flex gap-4 pt-6 border-t border-gray-200">
               <button type="button" onClick={() => setCurrentStep('master')} className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Back</button>
-              <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Next: Platforms</button>
+              <button type="submit" className="px-6 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors">Next: Platforms</button>
             </div>
           </form>
         </div>
@@ -668,10 +668,10 @@ export default function AddProductPage() {
       <div>
         <PageHeader title="Platform Listings" breadcrumbs={[{ label: 'Catalog', href: '/catalog' }, { label: 'Add Product' }]} />
         <div className="max-w-4xl mx-auto p-6">
-          <div className="mb-6 flex items-center gap-2"><div className="flex-1 h-1 bg-blue-600 rounded"></div><span className="text-sm font-medium text-gray-600">Step 3 of 3</span><div className="flex-1 h-1 bg-blue-600 rounded"></div></div>
+          <div className="mb-6 flex items-center gap-2"><div className="flex-1 h-1 bg-blue-600 dark:bg-blue-700 rounded"></div><span className="text-sm font-medium text-gray-600">Step 3 of 3</span><div className="flex-1 h-1 bg-blue-600 dark:bg-blue-700 rounded"></div></div>
           <form onSubmit={handleSubmit} className="space-y-8">
             {platformListings.map((listing) => (
-              <div key={listing.channel} className="bg-white p-6 rounded-lg border border-gray-200">
+              <div key={listing.channel} className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-gray-200">
                 <h2 className="text-lg font-semibold mb-4 text-gray-900">{listing.channel} Listing</h2>
                 <div className="space-y-4">
                   <div>
@@ -698,7 +698,7 @@ export default function AddProductPage() {
 
             <div className="flex gap-4 pt-6 border-t border-gray-200">
               <button type="button" onClick={() => setCurrentStep('variations')} className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Back</button>
-              <button type="submit" disabled={submitting} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+              <button type="submit" disabled={submitting} className="px-6 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 transition-colors flex items-center gap-2">
                 {submitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

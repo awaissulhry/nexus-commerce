@@ -235,7 +235,7 @@ function PlatformTabComponent({
   return (
     <div className="space-y-6">
       {/* Platform Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200 dark:border-blue-900">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 capitalize">{platform} Listings</h2>
@@ -251,7 +251,7 @@ function PlatformTabComponent({
       {/* ── PHASE 12a: Shopify Simplification ─────────────────────────
            Shopify uses GLOBAL region (no regional sub-tabs) */}
       {platform.toLowerCase() !== 'shopify' ? (
-        <div className="bg-white rounded-lg shadow border border-gray-200">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow border border-gray-200">
           <div className="flex border-b border-gray-200 overflow-x-auto">
             {regions.map((region) => {
               const regionListings = channelListings.filter((cl) => cl.region === region)
@@ -261,13 +261,13 @@ function PlatformTabComponent({
                   onClick={() => setActiveRegion(region)}
                   className={`px-6 py-4 font-medium whitespace-nowrap transition-colors relative ${
                     activeRegion === region
-                      ? 'border-b-2 border-blue-600 text-blue-600 bg-blue-50'
+                      ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
                   {region}
                   {regionListings.length > 0 && (
-                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                    <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 dark:bg-blue-700 rounded-full">
                       {regionListings.length}
                     </span>
                   )}
@@ -282,8 +282,8 @@ function PlatformTabComponent({
                 {/* PHASE 15: Master Publishing Toggle */}
                 <div className={`rounded-lg p-4 border-2 transition-all ${
                   activeListing.isPublished
-                    ? 'bg-green-50 border-green-300'
-                    : 'bg-red-50 border-red-300'
+                    ? 'bg-green-50 dark:bg-green-950/40 border-green-300'
+                    : 'bg-red-50 dark:bg-red-950/40 border-red-300'
                 }`}>
                   <div className="flex items-center justify-between">
                     <div>
@@ -301,7 +301,7 @@ function PlatformTabComponent({
                       className={`px-4 py-2 rounded-lg transition-colors font-medium ${
                         activeListing.isPublished
                           ? 'bg-green-600 text-white hover:bg-green-700'
-                          : 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-600'
                       }`}
                     >
                       {activeListing.isPublished ? '✓ Published' : '✗ Unpublished'}
@@ -327,14 +327,14 @@ function PlatformTabComponent({
                   </div>
                   <button
                     onClick={() => handleDeleteListing(activeListing.id)}
-                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
+                    className="px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors font-medium"
                   >
                     🗑️ Delete
                   </button>
                 </div>
 
                 {/* Sync Control */}
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <div className="bg-blue-50 dark:bg-blue-950/40 rounded-lg p-4 border border-blue-200 dark:border-blue-900">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-semibold text-gray-900">Sync from Master</h4>
@@ -346,7 +346,7 @@ function PlatformTabComponent({
                     </div>
                     <button
                       onClick={handleSyncFromMaster}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium"
                     >
                       🔄 Sync Now
                     </button>
@@ -472,7 +472,7 @@ function PlatformTabComponent({
 
                       {/* Attribute Mapping Inputs */}
                       {activeListing.variationTheme && (
-                        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <div className="bg-blue-50 dark:bg-blue-950/40 rounded-lg p-4 border border-blue-200 dark:border-blue-900">
                           <h4 className="font-semibold text-gray-900 mb-4">Map Your Internal Attributes to Amazon</h4>
                           <p className="text-sm text-gray-600 mb-4">
                             Tell Amazon what you call each attribute in your system. For example, if you use "Size" internally, enter "Size". If you use "Apparel_Size", enter that instead.
@@ -562,11 +562,11 @@ function PlatformTabComponent({
 
                           {/* Linked Children Preview */}
                           {product?.children && product.children.length > 0 && (
-                            <div className="mt-6 pt-6 border-t border-blue-200">
+                            <div className="mt-6 pt-6 border-t border-blue-200 dark:border-blue-900">
                               <h4 className="font-semibold text-gray-900 mb-3">Linked Child Products</h4>
                               <div className="space-y-2">
                                 {product.children.map((child: any) => (
-                                  <div key={child.id} className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                                  <div key={child.id} className="flex items-center justify-between bg-white dark:bg-slate-900 p-3 rounded border border-gray-200">
                                     <div>
                                       <p className="font-medium text-gray-900">{child.sku}</p>
                                       <p className="text-sm text-gray-600">{child.name}</p>
@@ -577,7 +577,7 @@ function PlatformTabComponent({
                                           ([key, value]) => (
                                             <span
                                               key={key}
-                                              className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium"
+                                              className="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900/60 text-blue-800 rounded text-xs font-medium"
                                             >
                                               {key}: {String(value)}
                                             </span>
@@ -637,7 +637,7 @@ function PlatformTabComponent({
 
                     {/* Master Images Preview - Show if using master images */}
                     {!activeListing.useCustomImages && (
-                      <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                      <div className="bg-blue-50 dark:bg-blue-950/40 rounded-lg p-6 border border-blue-200 dark:border-blue-900">
                         <p className="text-sm text-blue-900 mb-4">
                           📌 Master images will be used for this listing. To use region-specific images, toggle "Custom Images" above.
                         </p>
@@ -681,7 +681,7 @@ function PlatformTabComponent({
                 <p className="text-gray-600 mb-4">No listings for {activeRegion} yet</p>
                 <button
                   onClick={handleAddListing}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  className="px-6 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium"
                 >
                   + Create Listing for {activeRegion}
                 </button>
@@ -690,8 +690,8 @@ function PlatformTabComponent({
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 bg-blue-50 dark:bg-blue-950/40">
             <h3 className="font-medium text-gray-900">Global Storefront</h3>
             <p className="text-sm text-gray-600 mt-1">Shopify handles all markets from a single global storefront</p>
           </div>
@@ -715,14 +715,14 @@ function PlatformTabComponent({
                   </div>
                   <button
                     onClick={() => handleDeleteListing(activeListing.id)}
-                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
+                    className="px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors font-medium"
                   >
                     🗑️ Delete
                   </button>
                 </div>
 
                 {/* Sync Control */}
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <div className="bg-blue-50 dark:bg-blue-950/40 rounded-lg p-4 border border-blue-200 dark:border-blue-900">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-semibold text-gray-900">Sync from Master</h4>
@@ -734,7 +734,7 @@ function PlatformTabComponent({
                     </div>
                     <button
                       onClick={handleSyncFromMaster}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                      className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium"
                     >
                       🔄 Sync Now
                     </button>
@@ -844,7 +844,7 @@ function PlatformTabComponent({
 
                     {/* Master Images Preview - Show if using master images */}
                     {!activeListing.useCustomImages && (
-                      <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                      <div className="bg-blue-50 dark:bg-blue-950/40 rounded-lg p-6 border border-blue-200 dark:border-blue-900">
                         <p className="text-sm text-blue-900 mb-4">
                           📌 Master images will be used for this listing. To use custom Shopify images, toggle "Custom Images" above.
                         </p>
@@ -888,7 +888,7 @@ function PlatformTabComponent({
                 <p className="text-gray-600 mb-4">No global storefront listing yet</p>
                 <button
                   onClick={handleAddListing}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  className="px-6 py-2.5 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors font-medium"
                 >
                   + Create Global Listing
                 </button>
