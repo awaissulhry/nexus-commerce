@@ -48,7 +48,6 @@ export default function WizardStepper({
   // leaving zero room for padding). Below md (640px) we render a
   // compact "Step N of M: Title" strip + progress bar; the full
   // tablist stays available on md+ for desktop power users.
-  const currentStepConfig = STEPS.find((s) => s.id === currentStep) ?? STEPS[0]
   const completedCount = STEPS.filter(
     (s) => completedSteps.has(s.id) || s.id < currentStep,
   ).length
