@@ -141,10 +141,42 @@ export interface AuditRollup {
   }
 }
 
+export interface ApiCallsRollup {
+  generatedAt: string
+  window: { since: string; until: string }
+  stats: {
+    total: number
+    successful: number
+    failed: number
+    errorRate: number
+    latencyP50Ms: number | null
+    latencyP95Ms: number | null
+    latencyP99Ms: number | null
+  }
+  byChannel: Array<{ channel: string; count: number }>
+  byOperation: Array<{ operation: string; count: number }>
+  errorsByType: Array<{ errorType: string; count: number }>
+  statusCodes: Array<{ statusCode: number | null; count: number }>
+  recent: Array<{
+    id: string
+    channel: string
+    marketplace: string | null
+    operation: string
+    statusCode: number | null
+    success: boolean
+    latencyMs: number
+    errorType: string | null
+    errorMessage: string | null
+    createdAt: string
+    triggeredBy: string
+  }>
+}
+
 interface InitialPayload {
   health: HealthRollup | null
   crons: CronRunsRollup | null
   audit: AuditRollup | null
+  apiCalls: ApiCallsRollup | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -192,6 +224,9 @@ export default function SyncLogsHubClient({
   const [health, setHealth] = useState<HealthRollup | null>(initial.health)
   const [crons, setCrons] = useState<CronRunsRollup | null>(initial.crons)
   const [audit, setAudit] = useState<AuditRollup | null>(initial.audit)
+  const [apiCalls, setApiCalls] = useState<ApiCallsRollup | null>(
+    initial.apiCalls,
+  )
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -201,17 +236,22 @@ export default function SyncLogsHubClient({
     try {
       const backend = getBackendUrl()
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const [hRes, cRes, aRes] = await Promise.all([
+      const [hRes, cRes, aRes, apiRes] = await Promise.all([
         fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }),
         fetch(`${backend}/api/dashboard/cron-runs`, { cache: 'no-store' }),
         fetch(
           `${backend}/api/audit-log/search?limit=15&since=${encodeURIComponent(since)}`,
           { cache: 'no-store' },
         ),
+        fetch(
+          `${backend}/api/sync-logs/api-calls?since=${encodeURIComponent(since)}`,
+          { cache: 'no-store' },
+        ),
       ])
       if (hRes.ok) setHealth(await hRes.json())
       if (cRes.ok) setCrons(await cRes.json())
       if (aRes.ok) setAudit(await aRes.json())
+      if (apiRes.ok) setApiCalls(await apiRes.json())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -231,7 +271,10 @@ export default function SyncLogsHubClient({
   const cronRunning = cronJobs.filter((j) => j.status === 'RUNNING').length
   const cronStale = crons?.staleRunning.length ?? 0
 
-  const hasNoData = !health && !crons && !audit
+  const apiStats = apiCalls?.stats
+  const apiErrorRatePct = apiStats ? apiStats.errorRate * 100 : 0
+
+  const hasNoData = !health && !crons && !audit && !apiCalls
 
   return (
     <div className="space-y-5">
@@ -288,36 +331,54 @@ export default function SyncLogsHubClient({
       ) : (
         <>
           {/* ── KPI strip ───────────────────────────────────────── */}
+          {/* Reads OutboundApiCallLog (apiStats) — populated once L.3.2/L.3.3
+              instrumentation reaches production. Falls back to SyncLog-based
+              health.logs24h until then. */}
           <section
             className={`border rounded-md px-4 py-3 grid grid-cols-2 md:grid-cols-5 gap-3 ${
-              errorRatePct >= 5
+              apiErrorRatePct >= 5 || errorRatePct >= 5
                 ? 'border-rose-200 bg-rose-50/40'
-                : errorRatePct >= 1
+                : apiErrorRatePct >= 1 || errorRatePct >= 1
                   ? 'border-amber-200 bg-amber-50/40'
                   : 'border-emerald-200 bg-emerald-50/40'
             }`}
           >
             <Kpi
-              label="24h sync calls"
-              value={health?.logs24h.total ?? 0}
+              label="24h API calls"
+              value={apiStats?.total ?? health?.logs24h.total ?? 0}
               tone="default"
             />
             <Kpi
               label="24h errors"
-              value={health?.logs24h.failed ?? 0}
+              value={apiStats?.failed ?? health?.logs24h.failed ?? 0}
               tone={
-                (health?.logs24h.failed ?? 0) === 0 ? 'good' : 'bad'
+                (apiStats?.failed ?? health?.logs24h.failed ?? 0) === 0
+                  ? 'good'
+                  : 'bad'
               }
             />
             <Kpi
-              label="Error rate"
-              value={`${errorRatePct.toFixed(1)}%`}
+              label="Latency p95"
+              value={
+                apiStats?.latencyP95Ms !== null &&
+                apiStats?.latencyP95Ms !== undefined
+                  ? `${apiStats.latencyP95Ms}ms`
+                  : '—'
+              }
+              hint={
+                apiStats?.latencyP99Ms !== null &&
+                apiStats?.latencyP99Ms !== undefined
+                  ? `p99 ${apiStats.latencyP99Ms}ms`
+                  : undefined
+              }
               tone={
-                errorRatePct >= 5
-                  ? 'bad'
-                  : errorRatePct >= 1
-                    ? 'warn'
-                    : 'good'
+                apiStats?.latencyP95Ms == null
+                  ? 'default'
+                  : apiStats.latencyP95Ms > 5000
+                    ? 'bad'
+                    : apiStats.latencyP95Ms > 2000
+                      ? 'warn'
+                      : 'good'
               }
             />
             <Kpi
@@ -517,6 +578,158 @@ export default function SyncLogsHubClient({
               )}
             </section>
           </div>
+
+          {/* ── API calls ─────────────────────────────────────────── */}
+          {apiCalls && apiCalls.stats.total > 0 && (
+            <section className="border border-slate-200 rounded-md bg-white">
+              <header className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
+                  <Activity className="w-3 h-3" /> Outbound API calls (24h)
+                </h2>
+                <span className="text-xs text-slate-500">
+                  {apiCalls.stats.total.toLocaleString()} total ·{' '}
+                  {apiCalls.stats.failed.toLocaleString()} failed ·{' '}
+                  {(apiCalls.stats.errorRate * 100).toFixed(2)}% error rate
+                </span>
+              </header>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-0 divide-x divide-slate-100 border-b border-slate-100">
+                {/* By channel */}
+                <div className="px-3 py-2">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">
+                    By channel
+                  </div>
+                  {apiCalls.byChannel.length === 0 ? (
+                    <div className="text-sm text-slate-400 italic">none</div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {apiCalls.byChannel.map((c) => (
+                        <li
+                          key={c.channel}
+                          className="text-sm flex justify-between"
+                        >
+                          <span className="font-medium text-slate-700">
+                            {c.channel}
+                          </span>
+                          <span className="font-mono text-slate-500">
+                            {c.count.toLocaleString()}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* By operation (top 5) */}
+                <div className="px-3 py-2">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">
+                    Top operations
+                  </div>
+                  {apiCalls.byOperation.length === 0 ? (
+                    <div className="text-sm text-slate-400 italic">none</div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {apiCalls.byOperation.slice(0, 5).map((o) => (
+                        <li
+                          key={o.operation}
+                          className="text-sm flex justify-between gap-2"
+                        >
+                          <span className="font-mono text-slate-700 truncate">
+                            {o.operation}
+                          </span>
+                          <span className="font-mono text-slate-500 whitespace-nowrap">
+                            {o.count.toLocaleString()}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Errors by type */}
+                <div className="px-3 py-2">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">
+                    Errors by type
+                  </div>
+                  {apiCalls.errorsByType.length === 0 ? (
+                    <div className="text-sm text-slate-400 italic">
+                      <CheckCircle2 className="inline w-3 h-3 text-emerald-500 mr-1" />
+                      no failures
+                    </div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {apiCalls.errorsByType.map((e) => (
+                        <li
+                          key={e.errorType}
+                          className="text-sm flex justify-between"
+                        >
+                          <Badge
+                            variant={
+                              e.errorType === 'AUTHENTICATION'
+                                ? 'danger'
+                                : e.errorType === 'RATE_LIMIT'
+                                  ? 'warning'
+                                  : e.errorType === 'SERVER'
+                                    ? 'danger'
+                                    : 'default'
+                            }
+                            size="sm"
+                          >
+                            {e.errorType}
+                          </Badge>
+                          <span className="font-mono text-rose-700">
+                            {e.count.toLocaleString()}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent calls */}
+              {apiCalls.recent.length > 0 && (
+                <ul className="divide-y divide-slate-100 max-h-[360px] overflow-y-auto">
+                  {apiCalls.recent.map((c) => (
+                    <li
+                      key={c.id}
+                      className="px-3 py-1.5 flex items-center gap-3 text-sm"
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          c.success ? 'bg-emerald-500' : 'bg-rose-500'
+                        }`}
+                        aria-hidden
+                      />
+                      <span className="text-xs text-slate-500 w-16 flex-shrink-0">
+                        {fmtRelative(c.createdAt)}
+                      </span>
+                      <span className="font-semibold text-slate-700 w-16 flex-shrink-0">
+                        {c.channel}
+                      </span>
+                      <span className="font-mono text-slate-700 w-48 flex-shrink-0 truncate">
+                        {c.operation}
+                      </span>
+                      <span className="font-mono text-xs text-slate-500 w-12 flex-shrink-0">
+                        {c.statusCode ?? '—'}
+                      </span>
+                      <span className="font-mono text-xs text-slate-500 w-14 flex-shrink-0 text-right">
+                        {c.latencyMs}ms
+                      </span>
+                      {c.errorMessage && (
+                        <span
+                          className="text-xs text-rose-700 truncate flex-1"
+                          title={c.errorMessage}
+                        >
+                          {c.errorMessage}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
           {/* ── Recent activity ──────────────────────────────────── */}
           <section className="border border-slate-200 rounded-md bg-white">

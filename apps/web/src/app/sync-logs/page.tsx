@@ -29,6 +29,7 @@ import SyncLogsHubClient, {
   type HealthRollup,
   type CronRunsRollup,
   type AuditRollup,
+  type ApiCallsRollup,
 } from './SyncLogsHubClient'
 
 export const dynamic = 'force-dynamic'
@@ -38,9 +39,11 @@ async function fetchInitial(): Promise<{
   health: HealthRollup | null
   crons: CronRunsRollup | null
   audit: AuditRollup | null
+  apiCalls: ApiCallsRollup | null
 }> {
   const backend = getBackendUrl()
-  const [healthRes, cronsRes, auditRes] = await Promise.all([
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const [healthRes, cronsRes, auditRes, apiCallsRes] = await Promise.all([
     fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }).catch(
       () => null,
     ),
@@ -48,9 +51,11 @@ async function fetchInitial(): Promise<{
       () => null,
     ),
     fetch(
-      `${backend}/api/audit-log/search?limit=15&since=${encodeURIComponent(
-        new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      )}`,
+      `${backend}/api/audit-log/search?limit=15&since=${encodeURIComponent(since)}`,
+      { cache: 'no-store' },
+    ).catch(() => null),
+    fetch(
+      `${backend}/api/sync-logs/api-calls?since=${encodeURIComponent(since)}`,
       { cache: 'no-store' },
     ).catch(() => null),
   ])
@@ -61,8 +66,12 @@ async function fetchInitial(): Promise<{
     cronsRes && cronsRes.ok ? ((await cronsRes.json()) as CronRunsRollup) : null
   const audit =
     auditRes && auditRes.ok ? ((await auditRes.json()) as AuditRollup) : null
+  const apiCalls =
+    apiCallsRes && apiCallsRes.ok
+      ? ((await apiCallsRes.json()) as ApiCallsRollup)
+      : null
 
-  return { health, crons, audit }
+  return { health, crons, audit, apiCalls }
 }
 
 export default async function SyncLogsHubPage() {
