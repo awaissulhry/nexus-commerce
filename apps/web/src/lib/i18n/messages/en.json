@@ -3915,6 +3915,7 @@
   "listWizard.stepper.title.withBlockerOne": "Step {id}: {title} — {n} blocker",
   "listWizard.stepper.title.withBlockerOther": "Step {id}: {title} — {n} blockers",
   "listWizard.stepper.title.plain": "Step {id}: {title}",
+  "listWizard.stepper.mobileProgress": "Step {current} of {total}",
 
   "listWizard.nav.saveExit": "Save & exit",
   "listWizard.nav.discard": "Discard",
