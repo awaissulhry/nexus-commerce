@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { CHANNEL_TONE } from '@/lib/products/theme'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface HealthData {
   errorCount: number
@@ -35,6 +36,7 @@ interface HealthData {
 }
 
 export function HealthLens() {
+  const { t } = useTranslations()
   const [data, setData] = useState<HealthData | null>(null)
   const [loading, setLoading] = useState(true)
   // P.5 — split state for the error case so the previous failure
@@ -81,7 +83,7 @@ export function HealthLens() {
           aria-live="polite"
           className="text-md text-slate-500 dark:text-slate-400 py-8 text-center"
         >
-          Loading health…
+          {t('products.lens.health.loading')}
         </div>
       </Card>
     )
@@ -93,14 +95,14 @@ export function HealthLens() {
           className="py-8 text-center space-y-2"
         >
           <div className="text-md text-rose-600 dark:text-rose-400">
-            Failed to load health: {error}
+            {t('products.lens.health.failed', { error })}
           </div>
           <button
             type="button"
             onClick={() => void refresh()}
             className="h-7 px-3 text-sm bg-slate-900 text-white rounded hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 inline-flex items-center gap-1.5"
           >
-            Retry
+            {t('products.lens.health.retry')}
           </button>
         </div>
       </Card>
@@ -110,15 +112,15 @@ export function HealthLens() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <HealthStat label="Errors" value={data.errorCount} tone="danger" />
-        <HealthStat label="Suppressed" value={data.suppressedCount} tone="warning" />
-        <HealthStat label="Drafts" value={data.draftCount} tone="default" />
-        <HealthStat label="Pending sync" value={data.pendingSyncCount} tone="info" />
+        <HealthStat label={t('products.lens.health.stat.errors')} value={data.errorCount} tone="danger" />
+        <HealthStat label={t('products.lens.health.stat.suppressed')} value={data.suppressedCount} tone="warning" />
+        <HealthStat label={t('products.lens.health.stat.drafts')} value={data.draftCount} tone="default" />
+        <HealthStat label={t('products.lens.health.stat.pending')} value={data.pendingSyncCount} tone="info" />
       </div>
-      <Card title="Recent failed listings">
+      <Card title={t('products.lens.health.recent.title')}>
         {data.recentErrors.length === 0 ? (
-          <div className="py-6 text-base text-slate-400 dark:text-slate-500 text-center">
-            No errors right now
+          <div className="py-6 text-base text-slate-500 dark:text-slate-400 text-center">
+            {t('products.lens.health.recent.empty')}
           </div>
         ) : (
           <ul className="space-y-1 -my-1">

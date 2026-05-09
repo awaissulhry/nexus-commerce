@@ -2292,5 +2292,14 @@
   "products.lens.translations.locale.en": "English",
   "products.lens.translations.locale.de": "German",
   "products.lens.translations.locale.fr": "French",
-  "products.lens.translations.locale.es": "Spanish"
+  "products.lens.translations.locale.es": "Spanish",
+  "products.lens.health.loading": "Loading health…",
+  "products.lens.health.failed": "Failed to load health: {error}",
+  "products.lens.health.retry": "Retry",
+  "products.lens.health.stat.errors": "Errors",
+  "products.lens.health.stat.suppressed": "Suppressed",
+  "products.lens.health.stat.drafts": "Drafts",
+  "products.lens.health.stat.pending": "Pending sync",
+  "products.lens.health.recent.title": "Recent failed listings",
+  "products.lens.health.recent.empty": "No errors right now"
 }

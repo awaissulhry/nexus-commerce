@@ -2280,5 +2280,14 @@
   "products.lens.translations.locale.en": "Inglese",
   "products.lens.translations.locale.de": "Tedesco",
   "products.lens.translations.locale.fr": "Francese",
-  "products.lens.translations.locale.es": "Spagnolo"
+  "products.lens.translations.locale.es": "Spagnolo",
+  "products.lens.health.loading": "Caricamento salute…",
+  "products.lens.health.failed": "Impossibile caricare la salute: {error}",
+  "products.lens.health.retry": "Riprova",
+  "products.lens.health.stat.errors": "Errori",
+  "products.lens.health.stat.suppressed": "Soppressi",
+  "products.lens.health.stat.drafts": "Bozze",
+  "products.lens.health.stat.pending": "Sync in attesa",
+  "products.lens.health.recent.title": "Listing falliti recenti",
+  "products.lens.health.recent.empty": "Nessun errore al momento"
 }
