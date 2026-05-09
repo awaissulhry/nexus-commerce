@@ -162,6 +162,31 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
     }
   }, [recall, fetchData, toast, t])
 
+  const [releasing, setReleasing] = useState(false)
+  const releaseReservations = useCallback(async () => {
+    if (!recall) return
+    if (!confirm(t('stock.recallDetail.releaseConfirm'))) return
+    setReleasing(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/stock/recalls/${recall.id}/release-reservations`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
+      const body = await res.json() as { released: number }
+      toast.success(t('stock.recallDetail.releasedToast', { n: body.released }))
+      await fetchData()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setReleasing(false)
+    }
+  }, [recall, fetchData, toast, t])
+
   const copyOrderIds = useCallback(async () => {
     if (!forward?.affected.orderIds.length) return
     const text = forward.affected.orderIds.join('\n')
@@ -368,8 +393,16 @@ export default function RecallDetailClient({ recallId }: { recallId: string }) {
         <Card>
           <div className="flex items-start gap-2 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded p-3">
             <ShieldAlert size={16} aria-hidden="true" className="mt-0.5 flex-shrink-0" />
-            <div className="text-sm">
+            <div className="text-sm flex-1">
               {t('stock.recallDetail.openNote')}
+              <div className="mt-2">
+                <Button variant="secondary" size="sm" onClick={releaseReservations} disabled={releasing}>
+                  {releasing ? t('stock.recallDetail.releasing') : t('stock.recallDetail.releaseReservations')}
+                </Button>
+                <span className="ml-2 text-xs text-amber-700">
+                  {t('stock.recallDetail.releaseHint')}
+                </span>
+              </div>
             </div>
           </div>
         </Card>

@@ -25,6 +25,7 @@ import {
   closeRecall,
   listRecalls,
   getRecall,
+  releaseReservationsForRecall,
 } from '../services/lot.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
@@ -1775,6 +1776,30 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/recalls/:id] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/recalls/:id/release-reservations ─────────────
+  // L.15 — operator-initiated bulk release of every open reservation
+  // on the recalled lot's product. Conservative: reservations don't
+  // carry lotId so we release all on the product (better to over-
+  // release than over-ship potentially-recalled units). Operator
+  // confirms before calling.
+  fastify.post<{
+    Params: { id: string }
+    Body: { actor?: string | null }
+  }>('/stock/recalls/:id/release-reservations', async (request, reply) => {
+    try {
+      const result = await releaseReservationsForRecall({
+        recallId: request.params.id,
+        actor: request.body?.actor ?? null,
+      })
+      return result
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      fastify.log.error({ err: error }, '[stock/recalls/:id/release-reservations] failed')
+      return reply.code(500).send({ error: msg })
     }
   })
 

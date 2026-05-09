@@ -373,6 +373,55 @@ export async function closeRecall(args: {
 }
 
 /**
+ * L.15 — Release every open StockReservation on the product whose lot
+ * is being recalled. Operationally cautious: reservations don't carry
+ * lotId, so we can't selectively release only against the recalled
+ * lot. The conservative move is "release all on the product" — better
+ * to over-release than over-ship potentially-recalled units.
+ *
+ * Caller passes the recall id; we look up the lot's product and
+ * release every reservation where releasedAt + consumedAt are both
+ * null. Returns the count released.
+ *
+ * The recall doesn't auto-fire this — it's an operator action from
+ * the recall detail page, intentional and confirmable.
+ */
+export async function releaseReservationsForRecall(args: {
+  recallId: string
+  actor?: string | null
+}): Promise<{ released: number; productId: string }> {
+  const recall = await prisma.lotRecall.findUnique({
+    where: { id: args.recallId },
+    include: { lot: { select: { productId: true } } },
+  })
+  if (!recall) throw new Error(`releaseReservationsForRecall: recall ${args.recallId} not found`)
+
+  const open = await prisma.stockReservation.findMany({
+    where: {
+      releasedAt: null,
+      consumedAt: null,
+      stockLevel: { productId: recall.lot.productId },
+    },
+    select: { id: true },
+  })
+
+  const { releaseReservation } = await import('./stock-level.service.js')
+  let released = 0
+  for (const r of open) {
+    try {
+      await releaseReservation(r.id, {
+        actor: args.actor ?? 'recall-release',
+        reason: `Recall ${args.recallId} — operator-initiated bulk release`,
+      })
+      released++
+    } catch {
+      // best-effort; concurrent consume can race the release
+    }
+  }
+  return { released, productId: recall.lot.productId }
+}
+
+/**
  * L.7 — Get a single recall by id. Returns null when the recall
  * doesn't exist. Used by the detail page so it doesn't have to
  * list-and-filter via the L.4 listRecalls endpoint.
