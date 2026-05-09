@@ -3049,5 +3049,10 @@
   "stock.recallDetail.releasing": "Rilascio…",
   "stock.recallDetail.releasedToast": "Rilasciate {n} prenotazioni",
   "stock.serials.section": "Numeri di serie · {available} di {total} disponibili",
-  "stock.serials.onOrder": "su ordine {id}…"
+  "stock.serials.onOrder": "su ordine {id}…",
+  "replenishment.automation.recentExecutions.title": "Esecuzioni recenti",
+  "replenishment.automation.recentExecutions.loading": "Caricamento esecuzioni…",
+  "replenishment.automation.recentExecutions.empty": "Nessuna esecuzione ancora — quando una regola scatta, le esecuzioni appaiono qui.",
+  "replenishment.automation.recentExecutions.triggerData": "Payload trigger",
+  "replenishment.automation.recentExecutions.actionResults": "Risultati azione"
 }
