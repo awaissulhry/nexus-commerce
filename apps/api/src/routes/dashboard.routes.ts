@@ -445,6 +445,84 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         _count: { _all: true },
       })
 
+      // DO.17 — per-channel health signals. Combines ChannelConnection
+      // last-sync age, 24h SyncError/SyncLog failures, Amazon
+      // suppression count, and Amazon Buy Box win rate (7d).
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      const [
+        connectionsByChannel,
+        syncErrorsByChannel,
+        syncLogFailsByChannel,
+        suppressionsActive,
+        buyBoxRows,
+      ] = await Promise.all([
+        prisma.channelConnection.findMany({
+          where: { isActive: true },
+          select: {
+            channelType: true,
+            lastSyncAt: true,
+            lastSyncStatus: true,
+          },
+          orderBy: { lastSyncAt: 'desc' },
+        }),
+        prisma.syncError.groupBy({
+          by: ['channel'],
+          where: { createdAt: { gte: since24h } },
+          _count: { _all: true },
+        }),
+        prisma.syncLog.groupBy({
+          by: ['syncType'],
+          where: { status: 'FAILED', createdAt: { gte: since24h } },
+          _count: { _all: true },
+        }),
+        prisma.amazonSuppression
+          .count({ where: { resolvedAt: null } })
+          .catch(() => 0),
+        prisma.buyBoxHistory
+          .findMany({
+            where: { observedAt: { gte: since7d } },
+            select: { channel: true, isOurOffer: true },
+          })
+          .catch(() => [] as Array<{ channel: string; isOurOffer: boolean }>),
+      ])
+
+      // Latest connection per channel (the orderBy above puts the
+      // freshest first; we just take the head per channelType).
+      const latestConnByChannel = new Map<
+        string,
+        { lastSyncAt: Date | null; lastSyncStatus: string | null }
+      >()
+      for (const c of connectionsByChannel) {
+        if (!latestConnByChannel.has(c.channelType)) {
+          latestConnByChannel.set(c.channelType, {
+            lastSyncAt: c.lastSyncAt,
+            lastSyncStatus: c.lastSyncStatus,
+          })
+        }
+      }
+
+      // SyncLog.syncType is shaped like "AMAZON_PUBLISH" or
+      // "EBAY_INVENTORY"; the prefix is the channel.
+      const syncLogFailsByCh = new Map<string, number>()
+      for (const r of syncLogFailsByChannel) {
+        const ch = r.syncType.split('_')[0] ?? 'UNKNOWN'
+        syncLogFailsByCh.set(ch, (syncLogFailsByCh.get(ch) ?? 0) + r._count._all)
+      }
+
+      // Buy Box win-rate per channel (Amazon only today, but the
+      // shape supports more channels if they ever expose a box concept).
+      const buyBoxByChannel = new Map<
+        string,
+        { wins: number; obs: number }
+      >()
+      for (const r of buyBoxRows) {
+        const slot = buyBoxByChannel.get(r.channel) ?? { wins: 0, obs: 0 }
+        slot.obs += 1
+        if (r.isOurOffer) slot.wins += 1
+        buyBoxByChannel.set(r.channel, slot)
+      }
+
       const knownChannels = new Set<string>([
         'AMAZON',
         'EBAY',
@@ -465,6 +543,45 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           draftByChannel.find((r) => r.channel === ch)?._count._all ?? 0
         const failed =
           failedByChannel.find((r) => r.channel === ch)?._count._all ?? 0
+
+        // DO.17 — health signals
+        const conn = latestConnByChannel.get(ch) ?? null
+        const syncErrors24h =
+          syncErrorsByChannel.find((r) => r.channel === ch)?._count._all ?? 0
+        const syncLogFails24h = syncLogFailsByCh.get(ch) ?? 0
+        const errors24h = syncErrors24h + syncLogFails24h
+        const suppressionsCount = ch === 'AMAZON' ? suppressionsActive : 0
+        const buyBox = buyBoxByChannel.get(ch) ?? null
+        const buyBoxWinRate7d =
+          buyBox && buyBox.obs > 0 ? buyBox.wins / buyBox.obs : null
+
+        // health: ok | warn | fail | inactive. Promotion logic:
+        //   inactive — no active ChannelConnection on file
+        //   fail     — last sync FAILED, OR > 5 errors in 24h, OR
+        //              any unresolved Amazon suppression
+        //   warn     — > 0 errors in 24h, OR last sync > 24h ago,
+        //              OR any failed listings
+        //   ok       — otherwise
+        let health: 'ok' | 'warn' | 'fail' | 'inactive'
+        if (!conn) {
+          health = 'inactive'
+        } else if (
+          conn.lastSyncStatus === 'FAILED' ||
+          errors24h > 5 ||
+          suppressionsCount > 0
+        ) {
+          health = 'fail'
+        } else if (
+          errors24h > 0 ||
+          (conn.lastSyncAt &&
+            Date.now() - conn.lastSyncAt.getTime() > 24 * 60 * 60 * 1000) ||
+          failed > 0
+        ) {
+          health = 'warn'
+        } else {
+          health = 'ok'
+        }
+
         return {
           channel: ch,
           revenue: slot.revenue,
@@ -472,6 +589,15 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           units: slot.units,
           aov: slot.orders > 0 ? slot.revenue / slot.orders : 0,
           listings: { total, live, draft, failed },
+          health: {
+            status: health,
+            lastSyncAt: conn?.lastSyncAt ? conn.lastSyncAt.toISOString() : null,
+            lastSyncStatus: conn?.lastSyncStatus ?? null,
+            errors24h,
+            suppressions: suppressionsCount,
+            buyBoxWinRate7d,
+            buyBoxObservations7d: buyBox?.obs ?? 0,
+          },
         }
       })
 

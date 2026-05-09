@@ -66,6 +66,19 @@ export interface OverviewPayload {
     units: number
     aov: number
     listings: { total: number; live: number; draft: number; failed: number }
+    // DO.17 — per-channel health snapshot. `status` is computed
+    // server-side from connection state, last-sync age, 24h error
+    // count, and Amazon suppressions; the client just renders it.
+    health: {
+      status: 'ok' | 'warn' | 'fail' | 'inactive'
+      lastSyncAt: string | null
+      lastSyncStatus: string | null
+      errors24h: number
+      suppressions: number
+      // Amazon-only today; null on other channels.
+      buyBoxWinRate7d: number | null
+      buyBoxObservations7d: number
+    }
   }>
   byMarketplace: Array<{
     channel: string
