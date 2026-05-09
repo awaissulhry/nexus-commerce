@@ -293,6 +293,62 @@ export default function ProductEditClient({
 
   const orderedChannels = CHANNEL_ORDER.filter((c) => marketplaces[c]?.length)
 
+  // W14.3 — flat list of tab keys in display order. Powers arrow-key
+  // navigation (ArrowLeft/Right cycle through; Home/End jump to ends)
+  // and the `aria-controls` / `aria-labelledby` pairing between each
+  // tab button and its panel below. Variations only renders when the
+  // product is a parent, so it's conditionally included.
+  const tabKeys = useMemo<string[]>(() => {
+    const base = [
+      'master',
+      'pricing',
+      'inventory',
+      'locales',
+      'workflow',
+      'relations',
+      'activity',
+    ]
+    if (product.isParent) base.push('variations')
+    return [...base, ...orderedChannels]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.isParent, orderedChannels.join(',')])
+
+  // W14.3 — keyboard navigation handler for the tablist. Standard
+  // WCAG AA pattern: arrows cycle, Home/End jump to ends, focus
+  // follows the active tab so screen readers announce the change.
+  const onTabListKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const idx = tabKeys.indexOf(topTab)
+      let nextIdx = -1
+      if (e.key === 'ArrowRight') nextIdx = (idx + 1) % tabKeys.length
+      else if (e.key === 'ArrowLeft')
+        nextIdx = (idx - 1 + tabKeys.length) % tabKeys.length
+      else if (e.key === 'Home') nextIdx = 0
+      else if (e.key === 'End') nextIdx = tabKeys.length - 1
+      else return
+      e.preventDefault()
+      const nextKey = tabKeys[nextIdx]
+      if (!nextKey) return
+      // Channel tabs need their first market preselected before the
+      // panel renders, mirroring the click handler below.
+      if (orderedChannels.includes(nextKey)) {
+        if (SINGLE_STORE_CHANNELS.has(nextKey)) {
+          setMarketSelection((s) => ({ ...s, [nextKey]: 'GLOBAL' }))
+        } else {
+          ensureMarketSelected(nextKey)
+        }
+      }
+      goToTab(nextKey)
+      // Move DOM focus to the freshly-active tab so screen readers
+      // announce it. requestAnimationFrame waits one paint so the
+      // tabIndex prop has flipped to 0 before we focus.
+      requestAnimationFrame(() => {
+        document.getElementById(`tab-${nextKey}`)?.focus()
+      })
+    },
+    [tabKeys, topTab, orderedChannels, goToTab],
+  )
+
   const hasListing = (channel: string, marketplace: string) =>
     listings[channel]?.some((l) => l.marketplace === marketplace) ?? false
 
@@ -411,46 +467,54 @@ export default function ProductEditClient({
         <div className="max-w-7xl mx-auto px-6">
           <div
             role="tablist"
-            aria-label="Product sections"
+            aria-label={t('products.edit.tablistLabel')}
             className="flex items-center -mb-px overflow-x-auto"
+            onKeyDown={onTabListKeyDown}
           >
             <TopTabButton
+              tabKey="master"
               active={topTab === 'master'}
               onClick={() => goToTab('master')}
             >
               {t('products.edit.tab.master')}
             </TopTabButton>
             <TopTabButton
+              tabKey="pricing"
               active={topTab === 'pricing'}
               onClick={() => goToTab('pricing')}
             >
               {t('products.edit.tab.pricing')}
             </TopTabButton>
             <TopTabButton
+              tabKey="inventory"
               active={topTab === 'inventory'}
               onClick={() => goToTab('inventory')}
             >
               {t('products.edit.tab.inventory')}
             </TopTabButton>
             <TopTabButton
+              tabKey="locales"
               active={topTab === 'locales'}
               onClick={() => goToTab('locales')}
             >
               {t('products.edit.tab.locales')}
             </TopTabButton>
             <TopTabButton
+              tabKey="workflow"
               active={topTab === 'workflow'}
               onClick={() => goToTab('workflow')}
             >
               {t('products.edit.tab.workflow')}
             </TopTabButton>
             <TopTabButton
+              tabKey="relations"
               active={topTab === 'relations'}
               onClick={() => goToTab('relations')}
             >
               {t('products.edit.tab.relations')}
             </TopTabButton>
             <TopTabButton
+              tabKey="activity"
               active={topTab === 'activity'}
               onClick={() => goToTab('activity')}
             >
@@ -458,6 +522,7 @@ export default function ProductEditClient({
             </TopTabButton>
             {product.isParent && (
               <TopTabButton
+                tabKey="variations"
                 active={topTab === 'variations'}
                 onClick={() => goToTab('variations')}
                 count={childrenList.length}
@@ -472,6 +537,7 @@ export default function ProductEditClient({
               return (
                 <TopTabButton
                   key={channel}
+                  tabKey={channel}
                   active={isActive}
                   onClick={() => {
                     if (SINGLE_STORE_CHANNELS.has(channel)) {
@@ -519,63 +585,91 @@ export default function ProductEditClient({
           </div>
         )}
         {topTab === 'master' && (
-          <MasterDataTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('master', count)}
-          />
+          <div role="tabpanel" id="panel-master" aria-labelledby="tab-master">
+            <MasterDataTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('master', count)}
+            />
+          </div>
         )}
 
         {topTab === 'pricing' && (
-          <PricingTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('pricing', count)}
-          />
+          <div role="tabpanel" id="panel-pricing" aria-labelledby="tab-pricing">
+            <PricingTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('pricing', count)}
+            />
+          </div>
         )}
 
         {topTab === 'inventory' && (
-          <InventoryTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('inventory', count)}
-          />
+          <div
+            role="tabpanel"
+            id="panel-inventory"
+            aria-labelledby="tab-inventory"
+          >
+            <InventoryTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('inventory', count)}
+            />
+          </div>
         )}
 
         {topTab === 'locales' && (
-          <LocalesTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('locales', count)}
-          />
+          <div role="tabpanel" id="panel-locales" aria-labelledby="tab-locales">
+            <LocalesTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('locales', count)}
+            />
+          </div>
         )}
 
         {topTab === 'workflow' && (
-          <WorkflowTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('workflow', count)}
-          />
+          <div role="tabpanel" id="panel-workflow" aria-labelledby="tab-workflow">
+            <WorkflowTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('workflow', count)}
+            />
+          </div>
         )}
 
         {topTab === 'relations' && (
-          <RelationsTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('relations', count)}
-          />
+          <div
+            role="tabpanel"
+            id="panel-relations"
+            aria-labelledby="tab-relations"
+          >
+            <RelationsTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('relations', count)}
+            />
+          </div>
         )}
 
         {topTab === 'activity' && (
-          <ActivityTab
-            product={product}
-            discardSignal={discardSignal}
-            onDirtyChange={(count) => setTabDirty('activity', count)}
-          />
+          <div role="tabpanel" id="panel-activity" aria-labelledby="tab-activity">
+            <ActivityTab
+              product={product}
+              discardSignal={discardSignal}
+              onDirtyChange={(count) => setTabDirty('activity', count)}
+            />
+          </div>
         )}
 
         {topTab === 'variations' && product.isParent && (
-          <VariationsTab parent={product} childrenList={childrenList} />
+          <div
+            role="tabpanel"
+            id="panel-variations"
+            aria-labelledby="tab-variations"
+          >
+            <VariationsTab parent={product} childrenList={childrenList} />
+          </div>
         )}
 
         {orderedChannels.includes(topTab) && (() => {
@@ -596,7 +690,15 @@ export default function ProductEditClient({
 
           const tabKey = `channel:${channel}:${selectedMarket}`
           return (
-            <div className={cn('grid gap-6', !isSingleStore && 'grid-cols-[200px_1fr]')}>
+            <div
+              role="tabpanel"
+              id={`panel-${channel}`}
+              aria-labelledby={`tab-${channel}`}
+              className={cn(
+                'grid gap-6',
+                !isSingleStore && 'grid-cols-[200px_1fr]',
+              )}
+            >
               {!isSingleStore && (
                 <MarketplaceSidebar
                   channel={channel}
@@ -631,12 +733,17 @@ export default function ProductEditClient({
 }
 
 function TopTabButton({
+  tabKey,
   active,
   onClick,
   children,
   count,
   readiness,
 }: {
+  /** W14.3 — stable id for ARIA tabpanel pairing + keyboard focus
+   *  routing. Must match the panel's `aria-labelledby` and the
+   *  arrow-key handler's `getElementById` lookup. */
+  tabKey: string
   active: boolean
   onClick: () => void
   children: React.ReactNode
@@ -658,7 +765,9 @@ function TopTabButton({
     <button
       type="button"
       role="tab"
+      id={`tab-${tabKey}`}
       aria-selected={active}
+      aria-controls={`panel-${tabKey}`}
       tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={cn(

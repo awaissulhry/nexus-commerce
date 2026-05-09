@@ -3305,6 +3305,7 @@
   "products.edit.unsavedCount": "{count} non salvati",
   "products.edit.savedFlag": "Salvato",
   "products.edit.savingFlag": "Salvataggio…",
+  "products.edit.tablistLabel": "Sezioni prodotto — usa le frecce per navigare, Home / End per saltare agli estremi",
   "products.edit.tab.master": "Dati Master",
   "products.edit.tab.variations": "Varianti",
   "products.edit.variantsBadge": "{count} varianti",

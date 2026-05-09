@@ -3301,6 +3301,7 @@
   "products.edit.unsavedCount": "{count} unsaved",
   "products.edit.savedFlag": "Saved",
   "products.edit.savingFlag": "Saving…",
+  "products.edit.tablistLabel": "Product sections — use arrow keys to navigate, Home / End to jump to ends",
   "products.edit.tab.master": "Master Data",
   "products.edit.tab.variations": "Variations",
   "products.edit.variantsBadge": "{count} variants",
