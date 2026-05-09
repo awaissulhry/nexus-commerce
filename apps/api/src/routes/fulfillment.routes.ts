@@ -4582,6 +4582,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           idempotencyKey?: string
           notes?: string
           photoUrls?: string[]
+          // L.11 — optional lot capture per item
+          lotNumber?: string
+          expiresAt?: string
+          supplierLotRef?: string
+          lotNotes?: string
         }>
         actor?: string
         receivedById?: string

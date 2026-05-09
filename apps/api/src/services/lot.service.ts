@@ -80,6 +80,82 @@ export async function createLot(args: CreateLotArgs) {
 }
 
 /**
+ * L.11 — Upsert helper for the inbound receive flow. If a lot row
+ * already exists for (productId, lotNumber), bumps unitsReceived and
+ * unitsRemaining by the delta. Otherwise inserts a new row with the
+ * full origin chain (PO + inbound shipment + stock movement).
+ *
+ * Why upsert: a single supplier batch can ship across multiple
+ * inbound containers; the operator records each receive with the same
+ * batch label. The unique (productId, lotNumber) constraint blocks
+ * naive insert; this helper resolves correctly.
+ *
+ * Returns { lot, isNew } so callers can audit-log accordingly.
+ */
+export async function receiveIntoLotInTx(tx: Tx, args: {
+  productId: string
+  variationId?: string | null
+  lotNumber: string
+  unitsAdded: number
+  /** When upserting, expiresAt + supplierLotRef are set ONLY if the
+   *  lot row is newly created. The first receive establishes them;
+   *  subsequent receives don't overwrite (would discard operator
+   *  intent on the original receive). */
+  expiresAt?: Date | null
+  supplierLotRef?: string | null
+  /** Origin links — populated on every receive into a lot, but only
+   *  if the field is currently null (first-receive wins). */
+  originPoId?: string | null
+  originInboundShipmentId?: string | null
+  originStockMovementId?: string | null
+  notes?: string | null
+}): Promise<{ lot: Awaited<ReturnType<typeof tx.lot.findUnique>>; isNew: boolean }> {
+  if (!args.lotNumber?.trim()) throw new Error('receiveIntoLot: lotNumber is required')
+  if (args.unitsAdded <= 0) throw new Error('receiveIntoLot: unitsAdded must be > 0')
+
+  const existing = await tx.lot.findUnique({
+    where: { productId_lotNumber: { productId: args.productId, lotNumber: args.lotNumber.trim() } },
+  })
+
+  if (existing) {
+    const updated = await tx.lot.update({
+      where: { id: existing.id },
+      data: {
+        unitsReceived: existing.unitsReceived + args.unitsAdded,
+        unitsRemaining: existing.unitsRemaining + args.unitsAdded,
+        // First-receive-wins for origin fields when the prior receive
+        // didn't capture them.
+        originPoId: existing.originPoId ?? args.originPoId ?? null,
+        originInboundShipmentId: existing.originInboundShipmentId ?? args.originInboundShipmentId ?? null,
+        originStockMovementId: existing.originStockMovementId ?? args.originStockMovementId ?? null,
+      },
+    })
+    return { lot: updated, isNew: false }
+  }
+
+  const created = await tx.lot.create({
+    data: {
+      productId: args.productId,
+      variationId: args.variationId ?? null,
+      lotNumber: args.lotNumber.trim(),
+      unitsReceived: args.unitsAdded,
+      unitsRemaining: args.unitsAdded,
+      expiresAt: args.expiresAt ?? null,
+      supplierLotRef: args.supplierLotRef ?? null,
+      originPoId: args.originPoId ?? null,
+      originInboundShipmentId: args.originInboundShipmentId ?? null,
+      originStockMovementId: args.originStockMovementId ?? null,
+      notes: args.notes ?? null,
+    },
+  })
+  return { lot: created, isNew: true }
+}
+
+export async function receiveIntoLot(args: Parameters<typeof receiveIntoLotInTx>[1]) {
+  return prisma.$transaction(async (tx) => receiveIntoLotInTx(tx, args))
+}
+
+/**
  * Forward trace — every movement that touched this lot. Used by the
  * recall workflow to enumerate orders / shipments / returns.
  */

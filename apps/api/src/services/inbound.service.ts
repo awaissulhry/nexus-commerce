@@ -40,6 +40,7 @@
 import prisma from '../db.js'
 import type { InboundStatus, Prisma } from '@prisma/client'
 import { applyStockMovement } from './stock-movement.service.js'
+import { logger } from '../utils/logger.js'
 
 // ─── State machine ──────────────────────────────────────────────────
 
@@ -81,6 +82,14 @@ interface ReceiveItemInput {
   notes?: string
   /** Append-only — pushed onto InboundShipmentItem.photoUrls */
   photoUrls?: string[]
+  /** L.11 — optional lot capture. When lotNumber is set AND the
+   *  receive results in stock-up (qcStatus PASS or unset), a Lot row
+   *  is created (or upserted into) and linked back to the
+   *  StockMovement that recorded the stock change. */
+  lotNumber?: string
+  expiresAt?: string
+  supplierLotRef?: string
+  lotNotes?: string
 }
 
 interface ReceiveArgs {
@@ -151,6 +160,37 @@ export async function receiveItems(args: ReceiveArgs) {
         actor: actor ?? 'inbound-receive',
       })
       stockMovementId = mv.id
+
+      // L.11 — capture lot when the operator provided a number on this
+      // receipt. Receives only add to lots (sign = +1); the FBA
+      // outbound case (sign = -1) doesn't create lots since FBA
+      // ownership has already transferred.
+      if (sign > 0 && upd.lotNumber?.trim()) {
+        try {
+          const { receiveIntoLot } = await import('./lot.service.js')
+          await receiveIntoLot({
+            productId: orig.productId,
+            lotNumber: upd.lotNumber,
+            unitsAdded: delta,
+            expiresAt: upd.expiresAt ? new Date(upd.expiresAt) : null,
+            supplierLotRef: upd.supplierLotRef ?? null,
+            originPoId: shipment.purchaseOrderId ?? null,
+            originInboundShipmentId: shipment.id,
+            originStockMovementId: stockMovementId,
+            notes: upd.lotNotes ?? null,
+          })
+        } catch (err) {
+          // Lot capture failure shouldn't roll back the stock movement
+          // — the receive itself succeeded. Log loudly and continue.
+          // Operator can manually create the lot via POST /lots
+          // afterwards using the receive's stockMovementId.
+          logger.error('inbound receive: lot capture failed (stock movement kept)', {
+            stockMovementId,
+            lotNumber: upd.lotNumber,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
     }
 
     const itemUpdate: Prisma.InboundShipmentItemUpdateInput = {
