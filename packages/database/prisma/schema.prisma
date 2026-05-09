@@ -5557,6 +5557,34 @@ model AiUsageLog {
 }
 
 // ── In-app notifications (H.8) ────────────────────────────────────────
+// DO.30 — operator-set targets (revenue, orders, AOV, units, new
+// customers) per period (daily / weekly / monthly / quarterly /
+// yearly). The dashboard overview reads ACTIVE goals + computes
+// progress against window bounds so the operator can track "MTD
+// €X / €Y target" without leaving /dashboard/overview.
+//
+// `targetValue` semantics are driven by `type`:
+//   revenue / aov  → currency amount in `currency` (EUR if null)
+//   orders / units / newCustomers → count
+//
+// Single-user pre-auth: userId='default-user'. When real auth
+// lands the existing rows scope cleanly to the right user.
+model Goal {
+  id          String   @id @default(cuid())
+  userId      String   @default("default-user")
+  type        String   // revenue | orders | aov | units | newCustomers
+  period      String   // daily | weekly | monthly | quarterly | yearly
+  targetValue Decimal  @db.Decimal(14, 2)
+  currency    String?  // only meaningful for revenue / aov goals
+  label       String?  // optional friendly name shown in the UI
+  status      String   @default("ACTIVE") // ACTIVE | ARCHIVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([period])
+}
+
 // Generic per-user notification inbox. Saved-view alerts write here
 // today; future surfaces (sync failures, low-stock, AI-job-complete)
 // will write through the same shape so the topnav bell renders one

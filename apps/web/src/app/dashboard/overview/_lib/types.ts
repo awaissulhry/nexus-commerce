@@ -109,6 +109,21 @@ export interface OverviewPayload {
   >
   sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
+  // DO.30 — operator-set Goal rows with current progress. Empty
+  // until the operator (or a future admin UI) inserts a Goal
+  // record. The UI hides the panel when no goals exist.
+  goals: Array<{
+    id: string
+    type: string // revenue | orders | aov | units | newCustomers
+    period: string // daily | weekly | monthly | quarterly | yearly
+    label: string | null
+    currency: string
+    target: number
+    current: number
+    pct: number
+    periodFrom: string
+    periodTo: string
+  }>
   // DO.31 — predictive insights from the forecast cron. Empty
   // when no ReplenishmentForecast rows exist; UI hides the panel
   // until the cron has produced data.

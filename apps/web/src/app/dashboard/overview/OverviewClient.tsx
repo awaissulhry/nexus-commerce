@@ -24,6 +24,7 @@ import AlertsPanel from './_components/AlertsPanel'
 import CatalogSnapshot from './_components/CatalogSnapshot'
 import CustomerPanel from './_components/CustomerPanel'
 import FinancialPanel from './_components/FinancialPanel'
+import GoalsPanel from './_components/GoalsPanel'
 import PredictivePanel from './_components/PredictivePanel'
 import OverviewSkeleton from './_components/OverviewSkeleton'
 import ActivityFeed from './_components/ActivityFeed'
@@ -277,6 +278,7 @@ export default function OverviewClient() {
                   alerts={data.alerts}
                   catalog={data.catalog}
                 />
+                <GoalsPanel t={t} goals={data.goals} />
                 <CustomerPanel
                   t={t}
                   customers={data.customers}

@@ -1092,6 +1092,150 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       // we already computed those, just sum them up. Done after
       // byChannel is built.
 
+      // ── DO.30 — goal tracking ─────────────────────────────────────
+      //
+      // Read every ACTIVE Goal for the operator (default-user pre-
+      // auth) and compute current progress against the goal's
+      // period bounds. Period bounds use the same Europe/Rome
+      // zoning as the headline window (DO.2) so daily / weekly /
+      // monthly windows align with the operator's calendar.
+      //
+      // Progress numerators come from existing data:
+      //   revenue          → SUM(Order.totalPrice) in primary currency
+      //   orders           → COUNT(Order)
+      //   aov              → revenue / orders
+      //   units            → SUM(OrderItem.quantity)
+      //   newCustomers     → COUNT(Customer firstOrderAt in period)
+      //
+      // Currency goals filter on goal.currency (or primary as
+      // fallback when goal.currency is null).
+      const goals = await prisma.goal
+        .findMany({
+          where: { userId: 'default-user', status: 'ACTIVE' },
+          orderBy: { createdAt: 'desc' },
+          take: 6,
+        })
+        .catch(() => [] as Array<{
+          id: string
+          type: string
+          period: string
+          targetValue: unknown
+          currency: string | null
+          label: string | null
+        }>)
+
+      const goalProgress = await Promise.all(
+        goals.map(async (g) => {
+          const now = new Date()
+          let pFrom: Date
+          const pTo = now
+          switch (g.period) {
+            case 'daily':
+              pFrom = zonedStartOfDay(now, OPERATOR_TIMEZONE)
+              break
+            case 'weekly': {
+              // Week starts Monday in Italy.
+              const day = zonedStartOfDay(now, OPERATOR_TIMEZONE)
+              const dow = (day.getUTCDay() + 6) % 7 // Mon=0
+              pFrom = new Date(day.getTime() - dow * 24 * 60 * 60 * 1000)
+              break
+            }
+            case 'monthly': {
+              const fmt = new Intl.DateTimeFormat('en-CA', {
+                timeZone: OPERATOR_TIMEZONE,
+                year: 'numeric',
+                month: '2-digit',
+              })
+              const [y, m] = fmt.format(now).split('-').map(Number)
+              pFrom = zonedStartOfDay(
+                new Date(Date.UTC(y, m - 1, 1, 12)),
+                OPERATOR_TIMEZONE,
+              )
+              break
+            }
+            case 'quarterly': {
+              const fmt = new Intl.DateTimeFormat('en-CA', {
+                timeZone: OPERATOR_TIMEZONE,
+                year: 'numeric',
+                month: '2-digit',
+              })
+              const [y, m] = fmt.format(now).split('-').map(Number)
+              const qStartMonth = Math.floor((m - 1) / 3) * 3
+              pFrom = zonedStartOfDay(
+                new Date(Date.UTC(y, qStartMonth, 1, 12)),
+                OPERATOR_TIMEZONE,
+              )
+              break
+            }
+            case 'yearly':
+            default:
+              pFrom = zonedStartOfYear(now, OPERATOR_TIMEZONE)
+              break
+          }
+
+          const goalCurrency = g.currency ?? primaryCurrency
+          let current = 0
+          try {
+            if (g.type === 'revenue' || g.type === 'aov') {
+              const rows = await prisma.order.findMany({
+                where: {
+                  createdAt: { gte: pFrom, lte: pTo },
+                  currencyCode: goalCurrency,
+                },
+                select: { totalPrice: true },
+              })
+              const sum = rows.reduce(
+                (s, r) => s + Number((r.totalPrice as unknown as number) || 0),
+                0,
+              )
+              if (g.type === 'revenue') current = sum
+              else current = rows.length > 0 ? sum / rows.length : 0
+            } else if (g.type === 'orders') {
+              current = await prisma.order.count({
+                where: {
+                  createdAt: { gte: pFrom, lte: pTo },
+                  currencyCode: goalCurrency,
+                },
+              })
+            } else if (g.type === 'units') {
+              const r = await prisma.$queryRawUnsafe<Array<{ u: bigint }>>(
+                `SELECT COALESCE(SUM(oi.quantity), 0)::bigint AS u
+                 FROM "OrderItem" oi
+                 JOIN "Order" o ON o.id = oi."orderId"
+                 WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+                   AND COALESCE(o."currencyCode", 'EUR') = $3`,
+                pFrom,
+                pTo,
+                goalCurrency,
+              )
+              current = Number(r[0]?.u ?? 0n)
+            } else if (g.type === 'newCustomers') {
+              current = await prisma.customer.count({
+                where: { firstOrderAt: { gte: pFrom, lte: pTo } },
+              })
+            }
+          } catch {
+            current = 0
+          }
+
+          const target = Number((g.targetValue as unknown as number) || 0)
+          const pct = target > 0 ? (current / target) * 100 : 0
+
+          return {
+            id: g.id,
+            type: g.type,
+            period: g.period,
+            label: g.label,
+            currency: goalCurrency,
+            target,
+            current,
+            pct,
+            periodFrom: pFrom.toISOString(),
+            periodTo: pTo.toISOString(),
+          }
+        }),
+      )
+
       // ── DO.31 — predictive insights ───────────────────────────────
       //
       // Surface the daily forecast cron's ReplenishmentForecast
@@ -1464,6 +1608,9 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // DO.31 — forecast cron output: 7d / 30d unit forecasts +
         // stock-out-at-risk SKU count.
         predictive,
+        // DO.30 — operator-set goals + computed progress against
+        // each goal's period bounds.
+        goals: goalProgress,
         catalog: {
           totalProducts,
           totalParents,
