@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ChevronLeft,
@@ -12,6 +12,8 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
 import VariationsTab from './tabs/VariationsTab'
@@ -75,49 +77,79 @@ export default function ProductEditClient({
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslations()
+  const confirm = useConfirm()
   // U.30 — read initial tab from `?tab=<x>`. HierarchyLens deep-links
   // to /products/${id}/edit?tab=variations; pre-fix the link silently
-  // landed on master. Accepts master / variations / channel keys
-  // (AMAZON / EBAY / SHOPIFY_GLOBAL etc.); anything else falls back
-  // to master.
+  // landed on master.
   const [topTab, setTopTab] = useState<TopTab>(() => {
     const initial = searchParams?.get('tab')
     return (initial as TopTab) || 'master'
   })
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
-  const [unsavedChanges, setUnsavedChanges] = useState(false)
-  // PP — bridge banner from /products/new. The wizard redirects with
-  // ?created=1; we show a one-time success card with a "List on
-  // channel" CTA so the user can flow straight into the existing
-  // listing wizard without hunting for the dropdown.
+
+  // W1.1 — accurate dirty tracking. Each tab reports its own count of
+  // unsaved fields via onDirtyChange; the header badge shows the
+  // aggregate. Replaces the old single boolean which never cleared
+  // after the first edit (B1) and made "Discard" a lie because there
+  // was no signal to actually revert tab state (B2).
+  const [dirtyByTab, setDirtyByTab] = useState<Record<string, number>>({})
+  const totalDirty = useMemo(
+    () => Object.values(dirtyByTab).reduce((a, b) => a + b, 0),
+    [dirtyByTab],
+  )
+  const isDirty = totalDirty > 0
+  const setTabDirty = useCallback((tabKey: string, count: number) => {
+    setDirtyByTab((prev) => (prev[tabKey] === count ? prev : { ...prev, [tabKey]: count }))
+  }, [])
+  // Bumped by Discard. Tabs watch this prop; on change they cancel
+  // pending debounce timers, drop their dirty set, and reseed values
+  // from the freshly-fetched product. Channel tabs additionally hard-
+  // remount via key so any in-progress side-effects unwind cleanly.
+  const [discardSignal, setDiscardSignal] = useState(0)
   const [showCreatedBanner, setShowCreatedBanner] = useState(
     () => searchParams?.get('created') === '1',
   )
 
   // NN.3 — beforeunload guard so closing the tab / hitting back
-  // doesn't silently drop unsaved edits. Only attached when the
-  // dirty flag is set so users without pending changes don't see
-  // the browser's "Leave site?" prompt every navigation.
+  // doesn't silently drop unsaved edits.
   useEffect(() => {
-    if (!unsavedChanges) return
+    if (!isDirty) return
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault()
-      // Most browsers ignore the custom message and show their own
-      // localized prompt; we set returnValue for older Safari.
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [unsavedChanges])
+  }, [isDirty])
 
-  // Push this product onto the sidebar's "Recently viewed" list
   useTrackRecentlyViewed({
     id: product.id,
     label: product.sku,
     href: `/products/${product.id}/edit`,
     type: 'product',
   })
+
+  const handleDiscard = async () => {
+    if (!isDirty) {
+      router.refresh()
+      return
+    }
+    const ok = await confirm({
+      title:
+        totalDirty === 1
+          ? t('products.edit.discardConfirmOne')
+          : t('products.edit.discardConfirmMany', { count: totalDirty }),
+      description: t('products.edit.discardBody'),
+      confirmLabel: t('products.edit.discardCta'),
+      tone: 'warning',
+    })
+    if (!ok) return
+    setDiscardSignal((s) => s + 1)
+    setDirtyByTab({})
+    router.refresh()
+  }
 
   const orderedChannels = CHANNEL_ORDER.filter((c) => marketplaces[c]?.length)
 
@@ -127,8 +159,6 @@ export default function ProductEditClient({
   const getListing = (channel: string, marketplace: string) =>
     listings[channel]?.find((l) => l.marketplace === marketplace)
 
-  // When switching to a channel, default-select the first marketplace that
-  // already has a listing, otherwise the first available one.
   const ensureMarketSelected = (channel: string): string => {
     const existing = marketSelection[channel]
     if (existing) return existing
@@ -149,7 +179,7 @@ export default function ProductEditClient({
           <div className="flex items-center gap-3 min-w-0">
             <IconButton
               onClick={() => router.push('/products')}
-              aria-label="Back"
+              aria-label={t('products.edit.back')}
               size="md"
               className="-m-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
             >
@@ -161,12 +191,16 @@ export default function ProductEditClient({
                   {product.name}
                 </h1>
                 {product.isParent && (
-                  <Badge variant="info">{childrenList.length} variants</Badge>
+                  <Badge variant="info">
+                    {t('products.edit.variantsBadge', { count: childrenList.length })}
+                  </Badge>
                 )}
-                {unsavedChanges && (
+                {isDirty && (
                   <Badge variant="warning">
                     <AlertCircle className="w-3 h-3" />
-                    Unsaved
+                    {totalDirty === 1
+                      ? t('products.edit.unsaved')
+                      : t('products.edit.unsavedCount', { count: totalDirty })}
                   </Badge>
                 )}
               </div>
@@ -181,14 +215,23 @@ export default function ProductEditClient({
               variant="ghost"
               size="sm"
               onClick={() => router.push(`/products/${product.id}/edit/bulk`)}
-              title="Open the spreadsheet view to edit master fields across this product and its variants"
+              title={t('products.edit.bulkEditTooltip')}
             >
               <TableProperties className="w-3.5 h-3.5 mr-1.5" />
-              Bulk edit
+              {t('products.edit.bulkEdit')}
             </Button>
             <ListOnChannelDropdown productId={product.id} />
-            <Button variant="ghost" size="sm" onClick={() => router.refresh()}>
-              Discard
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDiscard}
+              title={
+                isDirty
+                  ? t('products.edit.discardCta')
+                  : t('products.edit.discardEmpty')
+              }
+            >
+              {t('products.edit.discard')}
             </Button>
           </div>
         </div>
@@ -204,7 +247,7 @@ export default function ProductEditClient({
               active={topTab === 'master'}
               onClick={() => setTopTab('master')}
             >
-              Master Data
+              {t('products.edit.tab.master')}
             </TopTabButton>
             {product.isParent && (
               <TopTabButton
@@ -212,7 +255,7 @@ export default function ProductEditClient({
                 onClick={() => setTopTab('variations')}
                 count={childrenList.length}
               >
-                Variations
+                {t('products.edit.tab.variations')}
               </TopTabButton>
             )}
             {orderedChannels.map((channel) => {
@@ -242,28 +285,23 @@ export default function ProductEditClient({
 
       {/* ── Body ───────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-6 py-6">
-        {/* PP — post-create bridge banner. Surfaces immediately after
-            the create wizard redirects here so the user can hop into
-            the listing wizard without hunting for the dropdown. */}
+        {/* PP — post-create bridge banner */}
         {showCreatedBanner && (
           <div className="mb-4 border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
             <div className="flex items-start gap-2 min-w-0">
               <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
               <div className="min-w-0">
                 <div className="text-md font-semibold text-emerald-900 dark:text-emerald-200">
-                  {product.sku} created
+                  {t('products.edit.createdBanner.title', { sku: product.sku })}
                 </div>
                 <div className="text-sm text-emerald-800 dark:text-emerald-300 mt-0.5">
-                  Master data is saved. Use the <strong>List on Channel</strong>{' '}
-                  dropdown above to publish to Amazon, eBay, Shopify or
-                  WooCommerce — the wizard handles per-channel attributes,
-                  pricing and submit.
+                  {t('products.edit.createdBanner.body')}
                 </div>
               </div>
             </div>
             <IconButton
               onClick={() => setShowCreatedBanner(false)}
-              aria-label="Dismiss"
+              aria-label={t('products.edit.createdBanner.dismiss')}
               size="sm"
               className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 flex-shrink-0"
             >
@@ -272,15 +310,15 @@ export default function ProductEditClient({
           </div>
         )}
         {topTab === 'master' && (
-          <MasterDataTab product={product} onChange={() => setUnsavedChanges(true)} />
+          <MasterDataTab
+            product={product}
+            discardSignal={discardSignal}
+            onDirtyChange={(count) => setTabDirty('master', count)}
+          />
         )}
 
         {topTab === 'variations' && product.isParent && (
-          <VariationsTab
-            parent={product}
-            childrenList={childrenList}
-            onChange={() => setUnsavedChanges(true)}
-          />
+          <VariationsTab parent={product} childrenList={childrenList} />
         )}
 
         {orderedChannels.includes(topTab) && (() => {
@@ -294,11 +332,12 @@ export default function ProductEditClient({
           if (!marketInfo) {
             return (
               <div className="text-md text-slate-500 dark:text-slate-400">
-                No marketplaces configured for {channel}.
+                {t('products.edit.noMarkets', { channel })}
               </div>
             )
           }
 
+          const tabKey = `channel:${channel}:${selectedMarket}`
           return (
             <div className={cn('grid gap-6', !isSingleStore && 'grid-cols-[200px_1fr]')}>
               {!isSingleStore && (
@@ -313,17 +352,18 @@ export default function ProductEditClient({
                 />
               )}
               <ChannelListingTab
-                key={`${channel}_${selectedMarket}`}
+                /* W1.1 — discardSignal in the key forces a fresh remount
+                 * when the user discards: cleanup effects fire, debounce
+                 * timers cancel, and the editor reseeds from server data
+                 * via its own fetch chain. */
+                key={`${channel}_${selectedMarket}_${discardSignal}`}
                 product={product}
                 channel={channel}
                 marketplace={selectedMarket}
                 marketInfo={marketInfo}
                 listing={listing}
-                onChange={() => setUnsavedChanges(true)}
-                onSave={() => {
-                  setUnsavedChanges(false)
-                  router.refresh()
-                }}
+                onDirtyChange={(count) => setTabDirty(tabKey, count)}
+                onSave={() => router.refresh()}
               />
             </div>
           )
@@ -344,9 +384,6 @@ function TopTabButton({
   children: React.ReactNode
   count?: number
 }) {
-  // NN.15 — accessibility. role=tab + aria-selected pairs with the
-  // wrapping nav's role=tablist (added on the parent container) so
-  // screen readers announce 'tab N of M, selected'.
   return (
     <button
       type="button"
@@ -391,11 +428,12 @@ function MarketplaceSidebar({
   hasListing: (channel: string, marketplace: string) => boolean
   onSelect: (code: string) => void
 }) {
+  const { t } = useTranslations()
   return (
     <aside className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden h-fit sticky top-[7.5rem]">
       <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
         <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-          Markets
+          {t('products.edit.markets')}
         </h3>
       </div>
       <ul className="py-1">
@@ -431,7 +469,7 @@ function MarketplaceSidebar({
                     'flex-shrink-0 w-1.5 h-1.5 rounded-full',
                     listed ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'
                   )}
-                  title={listed ? 'Listing exists' : 'Not listed'}
+                  title={listed ? t('products.edit.listingExists') : t('products.edit.notListed')}
                 />
               </button>
             </li>

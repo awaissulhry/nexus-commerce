@@ -48,6 +48,12 @@ interface Props {
    *  bits of state (status bar, etc.) that depend on the listing
    *  having a row. */
   onSaved?: (listing: any) => void
+  /** W1.1 — total count of dirty fields across base attributes,
+   *  per-variant overrides and setup keys. ProductEditClient sums
+   *  this with other tabs to drive the header's "{n} unsaved" badge.
+   *  Called whenever any dirty ref changes, including after a
+   *  successful flush which clears it back to zero. */
+  onDirtyChange?: (count: number) => void
 }
 
 /** Maps schema field ids to the master product columns they inherit
@@ -122,6 +128,7 @@ export default function ChannelFieldEditor({
   marketplace,
   product,
   onSaved,
+  onDirtyChange,
 }: Props) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
@@ -195,6 +202,18 @@ export default function ChannelFieldEditor({
   const saveTimer = useRef<number | null>(null)
 
   const channelKey = `${channel}:${marketplace}`.toUpperCase()
+
+  // W1.1 — single source of truth for how many fields are unsaved
+  // across the three dirty refs. Called from every mutation site so
+  // ProductEditClient's "{n} unsaved" badge stays honest.
+  const reportDirty = useCallback(() => {
+    if (!onDirtyChange) return
+    let n = dirtyRef.current.size + setupDirtyRef.current.size
+    for (const set of dirtyVariantsRef.current.values()) {
+      n += set.size
+    }
+    onDirtyChange(n)
+  }, [onDirtyChange])
 
   // ── Fetch the schema manifest ────────────────────────────────
   useEffect(() => {
@@ -384,6 +403,7 @@ export default function ChannelFieldEditor({
       }
       const updated = await res.json()
       dirtyRef.current = new Set()
+      reportDirty()
       setStatus('saved')
       setStatusMsg(null)
       onSaved?.(updated)
@@ -394,12 +414,13 @@ export default function ChannelFieldEditor({
       setStatus('error')
       setStatusMsg(e instanceof Error ? e.message : String(e))
     }
-  }, [productId, channel, marketplace, values, onSaved])
+  }, [productId, channel, marketplace, values, onSaved, reportDirty])
 
   const setBase = useCallback(
     (id: string, value: Primitive) => {
       setValues((prev) => ({ ...prev, [id]: value }))
       dirtyRef.current.add(id)
+      reportDirty()
       setStatus('saving')
       setStatusMsg(null)
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
@@ -407,7 +428,7 @@ export default function ChannelFieldEditor({
         void flush()
       }, SAVE_DEBOUNCE_MS)
     },
-    [flush],
+    [flush, reportDirty],
   )
 
   // Q.5 — debounced flush for the listing-setup card. PUTs only the
@@ -435,6 +456,7 @@ export default function ChannelFieldEditor({
       const updated = await res.json()
       const productTypeChanged = dirty.has('productType')
       setupDirtyRef.current = new Set()
+      reportDirty()
       onSaved?.(updated)
       if (productTypeChanged) {
         // Refresh the schema since the productType drives the field
@@ -445,12 +467,13 @@ export default function ChannelFieldEditor({
       setStatus('error')
       setStatusMsg(e instanceof Error ? e.message : String(e))
     }
-  }, [productId, channel, marketplace, setupValues, onSaved])
+  }, [productId, channel, marketplace, setupValues, onSaved, reportDirty])
 
   const setSetup = useCallback(
     (key: 'productType' | 'variationTheme', value: string) => {
       setSetupValues((prev) => ({ ...prev, [key]: value }))
       setupDirtyRef.current.add(key)
+      reportDirty()
       setStatus('saving')
       setStatusMsg(null)
       if (setupSaveTimer.current) window.clearTimeout(setupSaveTimer.current)
@@ -469,7 +492,7 @@ export default function ChannelFieldEditor({
         })
       }, SAVE_DEBOUNCE_MS)
     },
-    [flushSetup],
+    [flushSetup, reportDirty],
   )
 
   // Q.4 — debounced flush for variant overrides. Mirrors the base
@@ -506,12 +529,13 @@ export default function ChannelFieldEditor({
       }
       const updated = await res.json()
       dirtyVariantsRef.current = new Map()
+      reportDirty()
       onSaved?.(updated)
     } catch (e) {
       setStatus('error')
       setStatusMsg(e instanceof Error ? e.message : String(e))
     }
-  }, [productId, channel, marketplace, variantAttrs, onSaved])
+  }, [productId, channel, marketplace, variantAttrs, onSaved, reportDirty])
 
   const setVariant = useCallback(
     (variationId: string, fieldId: string, value: Primitive | undefined) => {
@@ -528,6 +552,7 @@ export default function ChannelFieldEditor({
       const set = dirtyVariantsRef.current.get(variationId) ?? new Set<string>()
       set.add(fieldId)
       dirtyVariantsRef.current.set(variationId, set)
+      reportDirty()
       setStatus('saving')
       setStatusMsg(null)
       if (variantSaveTimer.current) window.clearTimeout(variantSaveTimer.current)
@@ -545,7 +570,7 @@ export default function ChannelFieldEditor({
         })
       }, SAVE_DEBOUNCE_MS)
     },
-    [flushVariants],
+    [flushVariants, reportDirty],
   )
 
   // Flush on unmount so a pending debounce doesn't drop the last edit.

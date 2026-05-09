@@ -68,10 +68,14 @@ interface VariantRow {
 interface Props {
   parent: { id: string; sku: string; variationAxes?: string[] | null; variationTheme?: string | null }
   childrenList: VariantRow[]
-  onChange: () => void
 }
 
-export default function VariationsTab({ parent, childrenList, onChange }: Props) {
+// W1.1 — VariationsTab does not contribute to the parent's "unsaved"
+// counter. Every CRUD mutation here persists immediately
+// (POST/PATCH/DELETE), so there is never a draft state to discard.
+// The previous onChange→setUnsavedChanges(true) wiring was a false
+// signal that contributed to the "Unsaved badge never clears" bug.
+export default function VariationsTab({ parent, childrenList }: Props) {
   const router = useRouter()
   const [rows, setRows] = useState<VariantRow[]>(childrenList)
   const [createOpen, setCreateOpen] = useState(false)
@@ -192,10 +196,9 @@ export default function VariationsTab({ parent, childrenList, onChange }: Props)
   // update) AND router.refresh() (so the page-level server fetch
   // re-runs and any other tab on the same page sees the change).
   const refresh = useCallback(async () => {
-    onChange()
     await refetch()
     router.refresh()
-  }, [onChange, refetch, router])
+  }, [refetch, router])
 
   return (
     <div className="space-y-4">

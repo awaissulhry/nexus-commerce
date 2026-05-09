@@ -43,7 +43,9 @@ interface Props {
   marketplace: string
   marketInfo: MarketInfo
   listing: Listing | undefined
-  onChange: () => void
+  /** W1.1 — number of unsaved fields in the schema-driven editor.
+   *  Bubbles to ProductEditClient's per-tab dirty aggregation. */
+  onDirtyChange: (count: number) => void
   onSave: (updated: Listing) => void
 }
 
@@ -53,7 +55,7 @@ export default function ChannelListingTab({
   marketplace,
   marketInfo,
   listing,
-  onChange,
+  onDirtyChange,
   onSave,
 }: Props) {
   const [pulling, setPulling] = useState(false)
@@ -278,8 +280,8 @@ export default function ChannelListingTab({
         channel={channel}
         marketplace={marketplace}
         product={product}
+        onDirtyChange={onDirtyChange}
         onSaved={(updated) => {
-          onChange()
           onSave(updated as Listing)
         }}
       />

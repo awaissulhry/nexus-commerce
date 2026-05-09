@@ -6,11 +6,16 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 interface Props {
   product: any
-  onChange: () => void
+  onDirtyChange: (count: number) => void
+  /** W1.1 — bumped by parent's "Discard" handler. On change we cancel
+   *  any pending debounced save, drop the dirty set without flushing,
+   *  and reseed local state from the freshly-fetched product prop. */
+  discardSignal: number
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -53,30 +58,42 @@ const NUMERIC_FIELDS: ReadonlySet<string> = new Set([
   'maxPrice',
 ])
 
-export default function MasterDataTab({ product, onChange }: Props) {
-  const [data, setData] = useState<Record<MasterField, string>>(() => {
-    const seed = {} as Record<MasterField, string>
-    for (const f of MASTER_FIELDS) {
-      const v = product[f]
-      seed[f] = v == null ? '' : String(v)
-    }
-    if (!seed.weightUnit) seed.weightUnit = 'kg'
-    if (!seed.dimUnit) seed.dimUnit = 'cm'
-    return seed
-  })
+function seedFromProduct(product: any): Record<MasterField, string> {
+  const seed = {} as Record<MasterField, string>
+  for (const f of MASTER_FIELDS) {
+    const v = product[f]
+    seed[f] = v == null ? '' : String(v)
+  }
+  if (!seed.weightUnit) seed.weightUnit = 'kg'
+  if (!seed.dimUnit) seed.dimUnit = 'cm'
+  return seed
+}
+
+export default function MasterDataTab({
+  product,
+  onDirtyChange,
+  discardSignal,
+}: Props) {
+  const { t } = useTranslations()
+  const [data, setData] = useState<Record<MasterField, string>>(() =>
+    seedFromProduct(product),
+  )
 
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   // Track which fields have been touched since the last successful
-  // save — only those flush in the next PATCH so we don't write back
-  // unchanged values.
+  // save — only those flush in the next PATCH.
   const dirtyRef = useRef<Set<MasterField>>(new Set())
   const saveTimer = useRef<number | null>(null)
+  // W1.1 — onDirtyChange is invoked whenever dirty cardinality
+  // changes. The parent aggregates per-tab counts to drive the
+  // header's accurate "{n} unsaved" badge.
+  const reportDirty = () => onDirtyChange(dirtyRef.current.size)
 
   const update = (field: MasterField, value: string) => {
     setData((prev) => ({ ...prev, [field]: value }))
     dirtyRef.current.add(field)
-    onChange()
+    reportDirty()
     setStatus('saving')
     setError(null)
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
@@ -112,21 +129,15 @@ export default function MasterDataTab({ product, onChange }: Props) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error ?? `HTTP ${res.status}`)
       }
-      // Only clear the dirty set on success — keep entries on error so
-      // the next save attempt retries the same fields.
       const flushedFields = Array.from(dirtyRef.current)
       dirtyRef.current = new Set()
+      reportDirty()
       setStatus('saved')
       window.setTimeout(() => {
         setStatus((s) => (s === 'saved' ? 'idle' : s))
       }, 1500)
       // Phase 10/F11 — broadcast so /products grid + /bulk-operations
-      // refresh within ~200ms. MasterDataTab edits identity / physical /
-      // pricing-floor fields (sku, name, brand, weight, costPrice,
-      // minMargin, etc.) — none of these cascade to ChannelListing,
-      // so we only emit product.updated. basePrice + totalStock edits
-      // happen via the inline grid PATCH /api/products/:id (which
-      // emits its own listing.updated).
+      // refresh within ~200ms.
       emitInvalidation({
         type: 'product.updated',
         id: product.id,
@@ -140,7 +151,9 @@ export default function MasterDataTab({ product, onChange }: Props) {
   }
 
   // Flush on unmount so an in-flight debounce doesn't drop the last
-  // edit when the user switches tabs.
+  // edit when the user switches tabs. Discard path clears dirtyRef
+  // first, so this becomes a no-op when the user explicitly chose
+  // to throw away pending edits.
   useEffect(() => {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
@@ -149,9 +162,27 @@ export default function MasterDataTab({ product, onChange }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // W1.1 — react to parent Discard. Skip the initial mount so
+  // discardSignal=0 doesn't trigger a no-op reset on every render.
+  const discardSeen = useRef(discardSignal)
+  useEffect(() => {
+    if (discardSignal === discardSeen.current) return
+    discardSeen.current = discardSignal
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    dirtyRef.current = new Set()
+    setData(seedFromProduct(product))
+    setStatus('idle')
+    setError(null)
+    reportDirty()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discardSignal, product])
+
   return (
     <div className="space-y-4">
-      <SaveStatusBar status={status} error={error} />
+      <SaveStatusBar status={status} error={error} t={t} />
 
       <Card title="Identity" description="Core information shared across all channels">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
@@ -282,9 +313,11 @@ export default function MasterDataTab({ product, onChange }: Props) {
 function SaveStatusBar({
   status,
   error,
+  t,
 }: {
   status: SaveStatus
   error: string | null
+  t: (key: string, vars?: Record<string, string | number>) => string
 }) {
   if (status === 'idle') return null
   return (
@@ -299,8 +332,8 @@ function SaveStatusBar({
       {status === 'saving' && <Loader2 className="w-3 h-3 animate-spin" />}
       {status === 'saved' && <CheckCircle2 className="w-3 h-3" />}
       {status === 'error' && <AlertCircle className="w-3 h-3" />}
-      {status === 'saving' && 'Saving…'}
-      {status === 'saved' && 'Saved'}
+      {status === 'saving' && t('products.edit.savingFlag')}
+      {status === 'saved' && t('products.edit.savedFlag')}
       {status === 'error' && (error ?? 'Save failed')}
     </div>
   )
