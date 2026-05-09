@@ -14,12 +14,20 @@ import type {
   ProductVariation,
 } from '@prisma/client';
 import { logger } from '../utils/logger.js';
-import { amazonProvider } from '../providers/amazon.provider.js';
-import { ebayProvider } from '../providers/ebay.provider.js';
-import type { MarketplaceProvider } from '../providers/types.js';
 import { MasterPriceService } from './master-price.service.js';
 import { MasterStatusService } from './master-status.service.js';
 import { applyStockMovement } from './stock-movement.service.js';
+// W1.8 — ATTRIBUTE_UPDATE helpers lifted into a focused module. Pure
+// functions, no `this.`, no Prisma. Adding a new attribute path
+// (variantAttributes, channelMetadata, …) is one diff to that file
+// rather than navigating the full bulk-action service.
+import {
+  ATTRIBUTE_SCALAR_ALLOWLIST,
+  CATEGORY_ATTRIBUTES_PREFIX,
+  VARIANT_ATTRIBUTES_PREFIX,
+  readProductAttribute,
+  type ProductLike,
+} from './bulk-action/attribute-helpers.js';
 
 // (Removed: a stubbed Decimal mock class whose `.plus()` returned
 // `this`, breaking every PRICING_UPDATE math op silently. Phase B-3
@@ -74,93 +82,6 @@ export const KNOWN_BULK_ACTION_TYPES: ReadonlySet<BulkActionType> = new Set([
 export function isKnownBulkActionType(t: string): t is BulkActionType {
   return KNOWN_BULK_ACTION_TYPES.has(t as BulkActionType);
 }
-
-/**
- * C.9 — strict allowlist for ATTRIBUTE_UPDATE scalar Product columns.
- * Anything else in the attributeName payload is interpreted as a
- * one-level dot-path inside categoryAttributes (e.g.
- * `categoryAttributes.material`). FK columns / IDs / version /
- * status / pricing fields are intentionally excluded — those have
- * dedicated action types (STATUS_UPDATE, PRICING_UPDATE, …) or are
- * not safe for bulk write.
- */
-const ATTRIBUTE_SCALAR_ALLOWLIST: ReadonlySet<string> = new Set([
-  'name',
-  'brand',
-  'manufacturer',
-  'productType',
-  'hsCode',
-  'countryOfOrigin',
-  'fulfillmentMethod',
-  'weightValue',
-  'weightUnit',
-  'dimLength',
-  'dimWidth',
-  'dimHeight',
-  'dimUnit',
-])
-
-const CATEGORY_ATTRIBUTES_PREFIX = 'categoryAttributes.'
-// P1 #52 — variantAttributes path lets bulk ATTRIBUTE_UPDATE write
-// per-child-row variant values (e.g., Color, Size) on Product child
-// rows. Same shape as categoryAttributes but on a different JSON
-// column. Use `variantAttributes.Color` etc. as the attributeName.
-const VARIANT_ATTRIBUTES_PREFIX = 'variantAttributes.'
-
-type ProductLike = {
-  categoryAttributes?: unknown
-  variantAttributes?: unknown
-  [key: string]: unknown
-}
-
-/**
- * Read the current value of the attribute referenced by attributeName.
- * Returns kind='unsupported' for keys outside the allowlist + the
- * categoryAttributes / variantAttributes prefixes so callers can
- * surface a clear preview skip without writing.
- */
-function readProductAttribute(
-  product: ProductLike,
-  attributeName: string,
-): {
-  currentValue: unknown
-  kind: 'scalar' | 'categoryAttribute' | 'variantAttribute' | 'unsupported'
-  /** When kind is a JSON-path variant, the inner key (after the prefix). */
-  jsonKey?: string
-} {
-  if (ATTRIBUTE_SCALAR_ALLOWLIST.has(attributeName)) {
-    return {
-      currentValue: product[attributeName] ?? null,
-      kind: 'scalar',
-    }
-  }
-  if (attributeName.startsWith(CATEGORY_ATTRIBUTES_PREFIX)) {
-    const jsonKey = attributeName.slice(CATEGORY_ATTRIBUTES_PREFIX.length)
-    if (jsonKey.length === 0) {
-      return { currentValue: null, kind: 'unsupported' }
-    }
-    const raw = product.categoryAttributes
-    const obj =
-      raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : {}
-    return { currentValue: obj[jsonKey] ?? null, kind: 'categoryAttribute', jsonKey }
-  }
-  if (attributeName.startsWith(VARIANT_ATTRIBUTES_PREFIX)) {
-    const jsonKey = attributeName.slice(VARIANT_ATTRIBUTES_PREFIX.length)
-    if (jsonKey.length === 0) {
-      return { currentValue: null, kind: 'unsupported' }
-    }
-    const raw = product.variantAttributes
-    const obj =
-      raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : {}
-    return { currentValue: obj[jsonKey] ?? null, kind: 'variantAttribute', jsonKey }
-  }
-  return { currentValue: null, kind: 'unsupported' }
-}
-
 /**
  * Which Prisma entity each action type operates on. Keeps
  * getItemsForJob honest — STATUS lives on Product, everything
@@ -2535,159 +2456,6 @@ export class BulkActionService {
 
     return { status: 'processed' }
   }
-
-  /**
-   * Sync price to marketplace
-   * Handles rate limiting and retries
-   */
-  private async syncPriceToMarketplace(
-    sku: string,
-    price: any,
-    channel: string
-  ): Promise<void> {
-    try {
-      const provider = this.getMarketplaceProvider(channel);
-      if (!provider) {
-        logger.warn(`No provider configured for channel: ${channel}`);
-        return;
-      }
-
-      const response = await provider.updatePrice({
-        sku,
-        price: typeof price === 'number' ? price : parseFloat(String(price)),
-      });
-
-      if (!response.success) {
-        if (response.retryable) {
-          logger.warn(`Retryable error syncing price to ${channel}`, {
-            sku,
-            error: response.error,
-          });
-        } else {
-          logger.error(`Failed to sync price to ${channel}`, {
-            sku,
-            error: response.error,
-          });
-        }
-      } else {
-        logger.info(`Price synced to ${channel}`, { sku, price });
-      }
-    } catch (error) {
-      logger.error(`Error syncing price to marketplace`, {
-        sku,
-        channel,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  /**
-   * Sync stock to marketplace
-   * Handles rate limiting and retries
-   */
-  private async syncStockToMarketplace(
-    sku: string,
-    quantity: number,
-    channel: string
-  ): Promise<void> {
-    try {
-      const provider = this.getMarketplaceProvider(channel);
-      if (!provider) {
-        logger.warn(`No provider configured for channel: ${channel}`);
-        return;
-      }
-
-      const response = await provider.updateStock({
-        sku,
-        quantity,
-      });
-
-      if (!response.success) {
-        if (response.retryable) {
-          logger.warn(`Retryable error syncing stock to ${channel}`, {
-            sku,
-            error: response.error,
-          });
-        } else {
-          logger.error(`Failed to sync stock to ${channel}`, {
-            sku,
-            error: response.error,
-          });
-        }
-      } else {
-        logger.info(`Stock synced to ${channel}`, { sku, quantity });
-      }
-    } catch (error) {
-      logger.error(`Error syncing stock to marketplace`, {
-        sku,
-        channel,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  /**
-   * Sync complete listing to marketplace
-   */
-  private async syncListingToMarketplace(
-    item: any,
-    channel: string
-  ): Promise<void> {
-    try {
-      const provider = this.getMarketplaceProvider(channel);
-      if (!provider) {
-        logger.warn(`No provider configured for channel: ${channel}`);
-        return;
-      }
-
-      const response = await provider.syncListing({
-        sku: item.sku,
-        title: item.name || '',
-        description: item.description || '',
-        price: typeof item.price === 'number' ? item.price : parseFloat(String(item.price)),
-        quantity: item.stock || 0,
-        imageUrls: item.imageUrl ? [item.imageUrl] : [],
-        attributes: item.marketplaceMetadata || {},
-      });
-
-      if (!response.success) {
-        if (response.retryable) {
-          logger.warn(`Retryable error syncing listing to ${channel}`, {
-            sku: item.sku,
-            error: response.error,
-          });
-        } else {
-          logger.error(`Failed to sync listing to ${channel}`, {
-            sku: item.sku,
-            error: response.error,
-          });
-        }
-      } else {
-        logger.info(`Listing synced to ${channel}`, { sku: item.sku });
-      }
-    } catch (error) {
-      logger.error(`Error syncing listing to marketplace`, {
-        sku: item.sku,
-        channel,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  /**
-   * Get marketplace provider by channel
-   */
-  private getMarketplaceProvider(channel: string): MarketplaceProvider | null {
-    switch (channel?.toLowerCase()) {
-      case 'amazon':
-        return amazonProvider.isConfigured() ? amazonProvider : null;
-      case 'ebay':
-        return ebayProvider.isConfigured() ? ebayProvider : null;
-      default:
-        return null;
-    }
-  }
-
   /**
    * Count items matching the given ScopeFilters, scoped to the
    * action's target entity. Used by createJob to populate totalItems
