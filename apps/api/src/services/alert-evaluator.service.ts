@@ -27,6 +27,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { sendEmail } from './email/transport.js'
 
 type Operator = 'gt' | 'gte' | 'lt' | 'lte'
 
@@ -146,12 +147,113 @@ async function dispatch(
     }
   }
 
-  // Stubs — wire when notification infrastructure exists.
-  if (channel.startsWith('email:') || channel.startsWith('slack:')) {
-    return {
-      channel,
-      ok: false,
-      error: `${channel.split(':')[0]} dispatch not wired yet`,
+  // L.18.0 — email dispatch via the existing Resend transport.
+  // dryRun mode (default when NEXUS_ENABLE_OUTBOUND_EMAILS≠'true' or
+  // RESEND_API_KEY is unset) logs to stdout and returns ok=true.
+  if (channel.startsWith('email:')) {
+    const to = channel.slice('email:'.length)
+    const valueStr =
+      rule.metric === 'errorRate'
+        ? `${(value * 100).toFixed(2)}%`
+        : rule.metric === 'latencyP95'
+          ? `${Math.round(value)}ms`
+          : String(Math.round(value))
+    const thresholdStr =
+      rule.metric === 'errorRate'
+        ? `${(rule.threshold * 100).toFixed(2)}%`
+        : String(rule.threshold)
+    try {
+      const r = await sendEmail({
+        to,
+        subject: `[Nexus alert] ${rule.name}: ${rule.metric} ${valueStr}`,
+        text: [
+          `Alert "${rule.name}" fired.`,
+          ``,
+          `Metric:     ${rule.metric}`,
+          `Value:      ${valueStr}`,
+          `Threshold:  ${thresholdStr}`,
+          ``,
+          `Open the hub: /sync-logs/alerts`,
+        ].join('\n'),
+        html: `<p>Alert <strong>"${rule.name}"</strong> fired.</p>
+<table cellpadding="4" style="font-family:Inter,sans-serif;font-size:13px;color:#0f172a;">
+  <tr><td>Metric</td><td><code>${rule.metric}</code></td></tr>
+  <tr><td>Value</td><td><strong style="color:#dc2626;">${valueStr}</strong></td></tr>
+  <tr><td>Threshold</td><td>${thresholdStr}</td></tr>
+</table>
+<p><a href="/sync-logs/alerts">Open the alerts view →</a></p>`,
+        tag: `alert-${rule.id}`,
+      })
+      if (r.ok) return { channel, ok: true }
+      return { channel, ok: false, error: r.error ?? 'email send failed' }
+    } catch (e) {
+      return {
+        channel,
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  }
+
+  // L.18.0 — Slack incoming-webhook dispatch.
+  // The 'slack:' prefix takes a channel hint that's only used in the
+  // message text — the actual delivery target comes from
+  // NEXUS_SLACK_WEBHOOK_URL. This is the standard Slack incoming-webhook
+  // pattern: one webhook URL per Slack channel; you pre-create them in
+  // Slack and stash the URL in env.
+  if (channel.startsWith('slack:')) {
+    const slackChannelHint = channel.slice('slack:'.length)
+    const url = process.env.NEXUS_SLACK_WEBHOOK_URL
+    if (!url) {
+      return {
+        channel,
+        ok: false,
+        error: 'NEXUS_SLACK_WEBHOOK_URL not configured',
+      }
+    }
+    const valueStr =
+      rule.metric === 'errorRate'
+        ? `${(value * 100).toFixed(2)}%`
+        : rule.metric === 'latencyP95'
+          ? `${Math.round(value)}ms`
+          : String(Math.round(value))
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // Slack incoming-webhooks accept channel override only on
+          // legacy webhooks; modern ones ignore it. Keeping it makes
+          // the rule readable in the UI either way.
+          channel: slackChannelHint || undefined,
+          text: `:rotating_light: *Alert fired:* ${rule.name}`,
+          attachments: [
+            {
+              color: '#dc2626',
+              fields: [
+                { title: 'Metric', value: rule.metric, short: true },
+                { title: 'Value', value: valueStr, short: true },
+                {
+                  title: 'Threshold',
+                  value:
+                    rule.metric === 'errorRate'
+                      ? `${(rule.threshold * 100).toFixed(2)}%`
+                      : String(rule.threshold),
+                  short: true,
+                },
+              ],
+            },
+          ],
+        }),
+      })
+      if (!r.ok) return { channel, ok: false, error: `HTTP ${r.status}` }
+      return { channel, ok: true }
+    } catch (e) {
+      return {
+        channel,
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }
     }
   }
 
