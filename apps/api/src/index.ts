@@ -119,6 +119,7 @@ import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
 import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
+import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
@@ -752,6 +753,15 @@ async function start() {
     // Default-on; opt out via NEXUS_ENABLE_YEAR_END_SNAPSHOT_CRON=0.
     if (process.env.NEXUS_ENABLE_YEAR_END_SNAPSHOT_CRON !== '0') {
       startYearEndSnapshotCron();
+    }
+
+    // L.8 — Lot expiry alert. Daily 06:30 UTC, scans for lots with
+    // expiresAt within NEXUS_LOT_EXPIRY_HORIZON_DAYS (default 30) so
+    // the operator's morning observability log surfaces what needs
+    // selling-down or disposal. Default-on; opt out via
+    // NEXUS_ENABLE_LOT_EXPIRY_ALERT_CRON=0.
+    if (process.env.NEXUS_ENABLE_LOT_EXPIRY_ALERT_CRON !== '0') {
+      startLotExpiryAlertCron();
     }
 
     // F.3 — scheduled product changes worker. Every minute, picks up
