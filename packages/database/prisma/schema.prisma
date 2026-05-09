@@ -5217,6 +5217,37 @@ model SyncLogErrorGroup {
   @@index([lastSeen])
 }
 
+// ── L.15.0: Saved-search filter sets for the /sync-logs hub ──────
+//
+// Operators triaging recurring incidents end up with a small library
+// of useful filter combinations: "Amazon throttling last 24h",
+// "Failed eBay orders this week", etc. SyncLogSavedSearch lets them
+// pin those combinations once and re-apply with one click rather than
+// rebuilding the filter chips each time.
+//
+// surface scopes the search to a sub-route ('api-calls' | 'errors' |
+// 'webhooks') so the dropdown on each page only shows searches that
+// make sense there. filters is a JSON blob matching the URL query
+// shape for that surface.
+
+model SyncLogSavedSearch {
+  id String @id @default(cuid())
+
+  name    String
+  surface String // 'api-calls' | 'errors' | 'webhooks'
+  filters Json // {channel?, errorType?, success?, operation?, since?, ...}
+
+  // No real auth/session today; stash the operator label here when
+  // an identity becomes available so multi-user instances can
+  // distinguish their saved searches.
+  createdBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([surface, name])
+}
+
 // ── R.17: Substitution-aware demand ───────────────────────────────
 // One-way link: when `primary` is out of stock, customers buy
 // `substitute`. substitutionFraction (0-1) is what portion of

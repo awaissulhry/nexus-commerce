@@ -209,6 +209,83 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * L.15.0 — saved searches.
+   *
+   * GET    /api/sync-logs/saved-searches?surface=api-calls
+   * POST   /api/sync-logs/saved-searches
+   *           Body: { name, surface, filters, createdBy? }
+   * DELETE /api/sync-logs/saved-searches/:id
+   *
+   * Operators pin their useful filter combinations and re-apply
+   * with one click. surface scopes the search to a sub-route so the
+   * dropdown on each surface only shows relevant entries.
+   */
+  fastify.get<{
+    Querystring: { surface?: string }
+  }>('/sync-logs/saved-searches', async (request, reply) => {
+    try {
+      const where: Prisma.SyncLogSavedSearchWhereInput = {}
+      if (request.query.surface) where.surface = request.query.surface
+      const items = await prisma.syncLogSavedSearch.findMany({
+        where,
+        orderBy: [{ surface: 'asc' }, { name: 'asc' }],
+      })
+      return reply.send({ items })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/saved-searches] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  fastify.post<{
+    Body: {
+      name: string
+      surface: string
+      filters: Record<string, unknown>
+      createdBy?: string
+    }
+  }>('/sync-logs/saved-searches', async (request, reply) => {
+    try {
+      const { name, surface, filters, createdBy } = request.body
+      if (!name || !surface || !filters) {
+        return reply
+          .code(400)
+          .send({ error: 'name, surface, filters are required' })
+      }
+      if (!['api-calls', 'errors', 'webhooks'].includes(surface)) {
+        return reply
+          .code(400)
+          .send({ error: 'surface must be api-calls | errors | webhooks' })
+      }
+      const row = await prisma.syncLogSavedSearch.create({
+        data: { name, surface, filters: filters as never, createdBy },
+      })
+      return reply.code(201).send(row)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/saved-searches POST] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/sync-logs/saved-searches/:id',
+    async (request, reply) => {
+      try {
+        await prisma.syncLogSavedSearch.delete({
+          where: { id: request.params.id },
+        })
+        return reply.code(204).send()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[sync-logs/saved-searches DELETE] failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
+
+  /**
    * L.14.0 — manual cron trigger.
    *
    * GET /api/sync-logs/cron/registry
