@@ -64,6 +64,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
@@ -223,6 +224,7 @@ export default function ReplenishmentWorkspace() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { t } = useTranslations()
 
   const filter = (searchParams.get('filter') ??
     'NEEDS_REORDER') as 'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REORDER'
@@ -710,11 +712,11 @@ export default function ReplenishmentWorkspace() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Smart Replenishment"
-        description="Forecast-driven reorder suggestions. Click a row to see its 90-day forecast, signals, and inbound shipments."
+        title={t('replenishment.title')}
+        description={t('replenishment.description')}
         breadcrumbs={[
-          { label: 'Fulfillment', href: '/fulfillment' },
-          { label: 'Replenishment' },
+          { label: t('replenishment.breadcrumb.fulfillment'), href: '/fulfillment' },
+          { label: t('replenishment.breadcrumb.self') },
         ]}
       />
 
@@ -753,25 +755,25 @@ export default function ReplenishmentWorkspace() {
       {data && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <UrgencyTile
-            label="Critical"
+            label={t('replenishment.urgency.critical')}
             value={data.counts.critical}
             tone="CRITICAL"
             onClick={() => setFilter('CRITICAL')}
           />
           <UrgencyTile
-            label="High"
+            label={t('replenishment.urgency.high')}
             value={data.counts.high}
             tone="HIGH"
             onClick={() => setFilter('HIGH')}
           />
           <UrgencyTile
-            label="Medium"
+            label={t('replenishment.urgency.medium')}
             value={data.counts.medium}
             tone="MEDIUM"
             onClick={() => setFilter('MEDIUM')}
           />
           <UrgencyTile
-            label="Low / OK"
+            label={t('replenishment.urgency.lowOk')}
             value={data.counts.low}
             tone="LOW"
             onClick={() => setFilter('ALL')}
@@ -2247,6 +2249,7 @@ interface PipelineHealth {
 
 function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => void }) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [health, setHealth] = useState<PipelineHealth | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
@@ -2287,21 +2290,33 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
         const failed = (json.steps ?? []).filter((s: { ok: boolean }) => !s.ok)
         toast.error(
           failed.length
-            ? `Pipeline run had ${failed.length} failed step(s): ${failed.map((s: { step: string }) => s.step).join(', ')}`
-            : 'Pipeline run failed',
+            ? t('replenishment.pipeline.toast.failedSteps', {
+                n: failed.length,
+                steps: failed.map((s: { step: string }) => s.step).join(', '),
+              })
+            : t('replenishment.pipeline.toast.failed'),
         )
       } else {
-        const ms = Math.round((json.totalDurationMs ?? 0) / 100) / 10
-        toast.success(`Pipeline run complete in ${ms}s — ${json.steps.length} steps`)
+        const seconds = Math.round((json.totalDurationMs ?? 0) / 100) / 10
+        toast.success(
+          t('replenishment.pipeline.toast.success', {
+            seconds,
+            n: json.steps.length,
+          }),
+        )
       }
       await fetchHealth()
       onRefreshPageData()
     } catch (err) {
-      toast.error(`Pipeline run failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(
+        t('replenishment.pipeline.toast.error', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      )
     } finally {
       setRunning(false)
     }
-  }, [fetchHealth, onRefreshPageData, toast])
+  }, [fetchHealth, onRefreshPageData, toast, t])
 
   function ageBadge(iso: string | null): { text: string; tone: 'green' | 'amber' | 'red' | 'slate' } {
     if (!iso) return { text: '—', tone: 'slate' }
@@ -2329,14 +2344,14 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
   if (loading && !health) {
     return (
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
-        Loading pipeline health…
+        {t('replenishment.pipeline.loading')}
       </div>
     )
   }
   if (!health) {
     return (
       <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-md px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
-        Pipeline health unavailable.
+        {t('replenishment.pipeline.unavailable')}
       </div>
     )
   }
@@ -2350,17 +2365,17 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
   const dsaAge = ageBadge(dsa.updatedAt)
   const fcAge = ageBadge(fc.lastGeneratedAt)
 
-  const cronChips: Array<{ key: keyof PipelineHealth['crons']; label: string }> = [
-    { key: 'forecast', label: 'forecast' },
-    { key: 'forecast-accuracy', label: 'accuracy' },
-    { key: 'abc-classification', label: 'abc' },
+  const cronChips: Array<{ key: keyof PipelineHealth['crons']; labelKey: string }> = [
+    { key: 'forecast', labelKey: 'replenishment.pipeline.cron.forecast' },
+    { key: 'forecast-accuracy', labelKey: 'replenishment.pipeline.cron.accuracy' },
+    { key: 'abc-classification', labelKey: 'replenishment.pipeline.cron.abc' },
   ]
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">
-          Pipeline
+          {t('replenishment.pipeline.label')}
         </span>
 
         <span
@@ -2368,9 +2383,14 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
             'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
             TONE_CLASSES[dsaTone],
           )}
-          title={`DailySalesAggregate · ${dsa.rows} rows · oldest ${dsa.oldest ?? '—'} · newest ${dsa.newest ?? '—'}`}
+          title={t('replenishment.pipeline.tooltip.salesAgg', {
+            rows: dsa.rows,
+            oldest: dsa.oldest ?? '—',
+            newest: dsa.newest ?? '—',
+          })}
         >
-          Sales agg: {dsa.rows.toLocaleString()} <span className="opacity-70">· {dsaAge.text}</span>
+          {t('replenishment.pipeline.salesAgg')}: {dsa.rows.toLocaleString()}{' '}
+          <span className="opacity-70">· {dsaAge.text}</span>
         </span>
 
         <span
@@ -2378,9 +2398,13 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
             'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
             TONE_CLASSES[fcTone],
           )}
-          title={`ReplenishmentForecast · ${fc.rows} rows · latest horizon ${fc.latestHorizon ?? '—'}`}
+          title={t('replenishment.pipeline.tooltip.forecast', {
+            rows: fc.rows,
+            latest: fc.latestHorizon ?? '—',
+          })}
         >
-          Forecast: {fc.rows.toLocaleString()} <span className="opacity-70">· {fcAge.text}</span>
+          {t('replenishment.pipeline.forecast')}: {fc.rows.toLocaleString()}{' '}
+          <span className="opacity-70">· {fcAge.text}</span>
         </span>
 
         <span
@@ -2388,15 +2412,20 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
             'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
             TONE_CLASSES[faTone],
           )}
-          title={`ForecastAccuracy · ${fa.rows} rows · avg %err ${fa.avgPercentError != null ? fa.avgPercentError.toFixed(1) + '%' : '—'} · within band ${fa.withinBandCount}`}
+          title={t('replenishment.pipeline.tooltip.mape', {
+            rows: fa.rows,
+            pct: fa.avgPercentError != null ? fa.avgPercentError.toFixed(1) + '%' : '—',
+            band: fa.withinBandCount,
+          })}
         >
-          MAPE: {fa.rows > 0 && fa.avgPercentError != null ? `${fa.avgPercentError.toFixed(1)}%` : '—'}{' '}
+          {t('replenishment.pipeline.mape')}:{' '}
+          {fa.rows > 0 && fa.avgPercentError != null ? `${fa.avgPercentError.toFixed(1)}%` : '—'}{' '}
           <span className="opacity-70">· {fa.rows.toLocaleString()} obs</span>
         </span>
 
         <span className="mx-1 text-slate-300 dark:text-slate-700">|</span>
 
-        {cronChips.map(({ key, label }) => {
+        {cronChips.map(({ key, labelKey }) => {
           const c = health.crons[key]
           const tone: 'green' | 'amber' | 'red' | 'slate' = !c.enabledFlag
             ? 'slate'
@@ -2405,11 +2434,11 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
               : c.lastRun?.status === 'FAILED'
                 ? 'red'
                 : 'amber'
-          const last = c.lastRun
+          const detail = c.lastRun
             ? `${c.lastRun.status} · ${ageBadge(c.lastRun.startedAt).text}${c.lastRun.outputSummary ? ' · ' + c.lastRun.outputSummary : ''}`
             : c.enabledFlag
-              ? 'no runs'
-              : 'disabled'
+              ? t('replenishment.pipeline.noRuns')
+              : t('replenishment.pipeline.disabled')
           return (
             <span
               key={key}
@@ -2417,9 +2446,9 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
                 'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
                 TONE_CLASSES[tone],
               )}
-              title={`Cron ${key} · ${last}`}
+              title={t('replenishment.pipeline.tooltip.cron', { name: key, detail })}
             >
-              {label}: {!c.enabledFlag ? 'off' : c.lastRun?.status ?? '—'}
+              {t(labelKey)}: {!c.enabledFlag ? t('replenishment.pipeline.cronOff') : c.lastRun?.status ?? '—'}
             </span>
           )
         })}
@@ -2430,15 +2459,15 @@ function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => v
             onClick={() => void runPipeline()}
             disabled={running}
             className="text-xs px-2 py-1 rounded ring-1 ring-inset bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-            title="Run refresh-aggregates → forecast → accuracy → abc"
-            aria-label="Run replenishment pipeline now"
+            title={t('replenishment.pipeline.runTooltip')}
+            aria-label={t('replenishment.pipeline.runAriaLabel')}
           >
             {running ? (
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             ) : (
               <RefreshCw className="h-3 w-3" aria-hidden="true" />
             )}
-            {running ? 'Running…' : 'Run pipeline'}
+            {running ? t('replenishment.pipeline.runningButton') : t('replenishment.pipeline.runButton')}
           </button>
         </div>
       </div>
