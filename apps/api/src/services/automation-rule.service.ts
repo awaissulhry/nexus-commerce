@@ -454,8 +454,17 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
     }
   }
 
-  const conditions = (rule.conditions ?? []) as unknown as Condition[]
-  const matched = matchesAllConditions(conditions, args.context)
+  // W7.3 — accept either the legacy flat-list shape OR a tree node
+  // (and / or / not / leaf). evaluateConditions auto-detects and
+  // dispatches. Backwards compatible: every existing rule keeps
+  // evaluating exactly as before.
+  const { evaluateConditions } = await import(
+    './automation/conditions-tree.js'
+  )
+  const matched = evaluateConditions(
+    (rule.conditions ?? null) as never,
+    args.context,
+  )
 
   // Always increment evaluationCount, even on no-match. Helps the UI
   // surface "this rule fires every X minutes but never matches".
