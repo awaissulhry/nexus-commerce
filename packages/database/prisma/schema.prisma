@@ -3855,6 +3855,39 @@ model StockCostLayer {
   @@index([stockMovementId])
 }
 
+// T.8 part 2 — Year-end inventory valuation snapshot ("rimanenze
+// finali"). Materialised by the year-end-snapshot cron (Jan 1 UTC,
+// snapshotting the prior year close) or manually via POST endpoint.
+//
+// One row per (year). Idempotent upserts. The breakdown JSON columns
+// match the GET /api/stock/year-end-valuation response shape so the
+// endpoint can return the snapshot verbatim when historical year is
+// requested — no recomputation needed, and no risk of drift if
+// later movements rewrite the live cost-layer state.
+//
+// asOf is the actual cutoff timestamp the snapshot represents (e.g.
+// 2025-12-31T23:59:59Z). snapshotAt is when the cron actually ran.
+// They differ if the operator manually replays a missed year.
+model YearEndSnapshot {
+  id             String   @id @default(cuid())
+  year           Int      @unique
+  asOf           DateTime
+  snapshotAt     DateTime @default(now())
+  totalUnits     Int
+  totalValueEurCents Int
+  layerCount     Int
+  // JSON aggregates — same shape as the year-end-valuation endpoint.
+  byLocation     Json
+  byMethod       Json
+  byCurrency     Json
+  vatTreatment   Json
+  // Optional commentary the cron / operator captures (e.g.
+  // "manually replayed 2024 after late ECB rate update").
+  notes          String?
+
+  @@index([year])
+}
+
 // S.25 — Pan-EU FBA per-FC inventory detail. Read-only snapshot
 // populated by the daily fba-pan-eu-sync cron from SP-API
 // getInventoryDetails. NOT a StockLocation: Amazon owns Pan-EU

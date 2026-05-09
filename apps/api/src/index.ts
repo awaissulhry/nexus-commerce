@@ -118,6 +118,7 @@ import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startCycleCountSchedulerCron } from "./jobs/cycle-count-scheduler.job.js";
+import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
@@ -743,6 +744,14 @@ async function start() {
     // NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER=0.
     if (process.env.NEXUS_ENABLE_CYCLE_COUNT_SCHEDULER !== '0') {
       startCycleCountSchedulerCron();
+    }
+
+    // T.8 part 2 — Year-end inventory snapshot. Jan 1 00:00 UTC,
+    // snapshots the prior year close ("rimanenze finali") for
+    // Italian fiscal filing. Idempotent so re-runs are safe.
+    // Default-on; opt out via NEXUS_ENABLE_YEAR_END_SNAPSHOT_CRON=0.
+    if (process.env.NEXUS_ENABLE_YEAR_END_SNAPSHOT_CRON !== '0') {
+      startYearEndSnapshotCron();
     }
 
     // F.3 — scheduled product changes worker. Every minute, picks up

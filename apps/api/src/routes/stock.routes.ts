@@ -12,6 +12,11 @@ import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 import * as abcService from '../services/abc-classification.service.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
+import {
+  computeYearEndValuation,
+  readYearEndSnapshot,
+  snapshotYearEndValuation,
+} from '../services/year-end-snapshot.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
 import {
@@ -1515,136 +1520,55 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/stock/year-end-valuation', async (request, reply) => {
     try {
       const q = request.query as any
-      const year = Math.floor(safeNum(q.year, new Date().getUTCFullYear()) ?? new Date().getUTCFullYear())
+      const currentYear = new Date().getUTCFullYear()
+      const year = Math.floor(safeNum(q.year, currentYear) ?? currentYear)
       const locationFilter = typeof q.locationId === 'string' && q.locationId.length > 0
         ? q.locationId
         : null
 
-      const layers = await prisma.stockCostLayer.findMany({
-        where: {
-          unitsRemaining: { gt: 0 },
-          ...(locationFilter ? { locationId: locationFilter } : {}),
-        },
-        select: {
-          id: true, productId: true, locationId: true,
-          unitsRemaining: true, unitCost: true,
-          costCurrency: true, exchangeRateOnReceive: true,
-          unitCostVatExcluded: true, vatRate: true,
-          freightCents: true, dutyCents: true,
-          insuranceCents: true, brokerCents: true,
-          product: {
-            select: {
-              id: true, sku: true, name: true,
-              costingMethod: true,
-            },
-          },
-          location: { select: { id: true, code: true, name: true, type: true } },
-        },
-      })
-
-      let totalValueEurCents = 0
-      let totalUnits = 0
-      const byLocation = new Map<string, {
-        locationId: string | null
-        locationCode: string
-        locationName: string
-        units: number
-        valueEurCents: number
-      }>()
-      const byMethod: Record<string, { units: number; valueEurCents: number }> = {
-        FIFO: { units: 0, valueEurCents: 0 },
-        LIFO: { units: 0, valueEurCents: 0 },
-        WAC: { units: 0, valueEurCents: 0 },
-      }
-      const byCurrency = new Map<string, { units: number; originalValueCents: number; valueEurCents: number }>()
-      const vatBuckets = {
-        netCapitalised: { units: 0, valueEurCents: 0 },
-        grossCapitalised: { units: 0, valueEurCents: 0 },
-        unknownVat: { units: 0, valueEurCents: 0 },
+      // T.8 part 2 — when the operator queries a closed year, prefer
+      // the persisted snapshot (point-in-time fixity for tax filings).
+      // Fall back to live compute only when no snapshot exists.
+      // Location filter forces live compute since snapshots are
+      // captured at the all-locations level.
+      if (year < currentYear && !locationFilter) {
+        const snapshot = await readYearEndSnapshot(year)
+        if (snapshot) return snapshot
       }
 
-      for (const layer of layers) {
-        const unitCostNum = Number(layer.unitCost)
-        // unitCost is already EUR for default (EUR/no rate) layers.
-        // When currency != EUR with a rate, unitCost was stored
-        // EUR-converted at receive time (per receiveLayerInTx).
-        const valueEurNum = unitCostNum * layer.unitsRemaining
-        const valueEurCents = Math.round(valueEurNum * 100)
-
-        totalUnits += layer.unitsRemaining
-        totalValueEurCents += valueEurCents
-
-        // by location
-        const locId = layer.locationId ?? '__unassigned__'
-        const cur = byLocation.get(locId) ?? {
-          locationId: layer.locationId,
-          locationCode: layer.location?.code ?? '(unassigned)',
-          locationName: layer.location?.name ?? 'Unassigned',
-          units: 0,
-          valueEurCents: 0,
-        }
-        cur.units += layer.unitsRemaining
-        cur.valueEurCents += valueEurCents
-        byLocation.set(locId, cur)
-
-        // by method
-        const method = (layer.product?.costingMethod ?? 'WAC') as 'FIFO' | 'LIFO' | 'WAC'
-        const m = byMethod[method] ?? byMethod.WAC
-        m.units += layer.unitsRemaining
-        m.valueEurCents += valueEurCents
-
-        // by currency
-        const ccy = layer.costCurrency ?? 'EUR'
-        const c = byCurrency.get(ccy) ?? { units: 0, originalValueCents: 0, valueEurCents: 0 }
-        c.units += layer.unitsRemaining
-        // Original currency value: if rate is present, back-out to original
-        const rate = layer.exchangeRateOnReceive ? Number(layer.exchangeRateOnReceive) : null
-        const originalCents = rate && rate > 0
-          ? Math.round((unitCostNum / rate) * layer.unitsRemaining * 100)
-          : valueEurCents
-        c.originalValueCents += originalCents
-        c.valueEurCents += valueEurCents
-        byCurrency.set(ccy, c)
-
-        // VAT bucket
-        if (layer.vatRate == null) {
-          vatBuckets.unknownVat.units += layer.unitsRemaining
-          vatBuckets.unknownVat.valueEurCents += valueEurCents
-        } else if (layer.unitCostVatExcluded) {
-          vatBuckets.netCapitalised.units += layer.unitsRemaining
-          vatBuckets.netCapitalised.valueEurCents += valueEurCents
-        } else {
-          vatBuckets.grossCapitalised.units += layer.unitsRemaining
-          vatBuckets.grossCapitalised.valueEurCents += valueEurCents
-        }
-      }
-
-      return {
+      const live = await computeYearEndValuation({
         year,
-        asOf: new Date().toISOString(),
-        scope: locationFilter ? { locationId: locationFilter } : { all: true },
-        total: {
-          units: totalUnits,
-          valueEurCents: totalValueEurCents,
-        },
-        byLocation: Array.from(byLocation.values()).sort(
-          (a, b) => b.valueEurCents - a.valueEurCents,
-        ),
-        byMethod,
-        byCurrency: Array.from(byCurrency.entries()).map(([currency, v]) => ({
-          currency, ...v,
-        })),
-        vatTreatment: vatBuckets,
-        layerCount: layers.length,
-        // Disclosure for the accountant: this is current state, not
-        // historical. Historical asOf requires a YearEndSnapshot job.
-        notes: {
-          asOfPolicy: 'current-state',
-          futureWork: 'YearEndSnapshot cron on Dec 31 will give fixed historical valuation',
-        },
-      }
+        asOf: new Date(),
+        locationId: locationFilter ?? undefined,
+      })
+      return live
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/year-end-valuation] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── POST /api/stock/year-end-valuation/snapshot ──────────────────
+  // T.8 part 2 — manual trigger for the year-end snapshot. Body:
+  //   { year: number, notes?: string }
+  // Idempotent: re-running for the same year overwrites the prior
+  // snapshot (snapshotAt updates, asOf stays Dec 31 23:59:59 UTC of
+  // the year). Operators use this to backfill missed years or to
+  // refresh a snapshot after a late ECB rate correction.
+  fastify.post<{
+    Body: { year?: number; notes?: string | null }
+  }>('/stock/year-end-valuation/snapshot', async (request, reply) => {
+    try {
+      const body = request.body ?? {}
+      const currentYear = new Date().getUTCFullYear()
+      const year = Math.floor(safeNum(body.year, currentYear) ?? currentYear)
+      if (!Number.isFinite(year) || year < 2000 || year > currentYear + 1) {
+        return reply.code(400).send({ error: `year must be in [2000, ${currentYear + 1}]` })
+      }
+      const result = await snapshotYearEndValuation(year, { notes: body.notes ?? null })
+      return result
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/year-end-valuation/snapshot] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
