@@ -160,6 +160,7 @@ export async function cancelOnEbay(
   ebayOrderId: string,
   reason: string | undefined,
   connectionId: string,
+  orderId?: string,
 ): Promise<ChannelCancelResult> {
   if (!isEbayReal()) {
     return {
@@ -184,6 +185,7 @@ export async function cancelOnEbay(
         method: 'POST',
         connectionId,
         triggeredBy: 'manual',
+        orderId,
       },
       async () => {
         const res = await fetch(url, {

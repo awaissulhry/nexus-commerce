@@ -522,6 +522,7 @@ export async function ordersRoutes(app: FastifyInstance) {
                   existing.channelOrderId,
                   reason,
                   conn.id,
+                  id,
                 )
               } else {
                 channelAck = {

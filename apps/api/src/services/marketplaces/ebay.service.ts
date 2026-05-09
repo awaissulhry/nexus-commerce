@@ -108,7 +108,7 @@ export class EbayService {
   /**
    * Updates the available quantity for an existing inventory item on eBay.
    */
-  async updateInventory(sku: string, quantity: number): Promise<void> {
+  async updateInventory(sku: string, quantity: number, productId?: string): Promise<void> {
     const token = await this.getAccessToken();
     const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
 
@@ -127,6 +127,7 @@ export class EbayService {
             method: 'GET',
             marketplace: EBAY_MARKETPLACE_ID,
             triggeredBy: 'api',
+            productId,
           },
           async () => {
             const getResponse = await fetch(url, {
@@ -171,6 +172,7 @@ export class EbayService {
           method: 'PUT',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const putResponse = await fetch(url, {
@@ -211,7 +213,7 @@ export class EbayService {
    * Updates the price of an existing eBay offer for a given SKU.
    * Finds the active offer by SKU, then updates its pricing.
    */
-  async updatePrice(sku: string, newPrice: number): Promise<void> {
+  async updatePrice(sku: string, newPrice: number, productId?: string): Promise<void> {
     const token = await this.getAccessToken();
 
     try {
@@ -226,6 +228,7 @@ export class EbayService {
           method: 'GET',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const offersResponse = await fetch(offersUrl, {
@@ -280,6 +283,7 @@ export class EbayService {
           method: 'PUT',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const updateResponse = await fetch(updateUrl, {
@@ -328,7 +332,8 @@ export class EbayService {
     sku: string,
     ebayData: EbayListingData,
     price: number,
-    quantity: number
+    quantity: number,
+    productId?: string
   ): Promise<string> {
     const token = await this.getAccessToken();
 
@@ -336,13 +341,13 @@ export class EbayService {
     await this.ensureMerchantLocation();
 
     // Step 1: Create / update the Inventory Item
-    await this.createInventoryItem(token, sku, ebayData, quantity);
+    await this.createInventoryItem(token, sku, ebayData, quantity, productId);
 
     // Step 2: Create the Offer
-    const offerId = await this.createOffer(token, sku, ebayData, price, quantity);
+    const offerId = await this.createOffer(token, sku, ebayData, price, quantity, productId);
 
     // Step 3: Publish the Offer
-    const listingId = await this.publishOffer(token, offerId);
+    const listingId = await this.publishOffer(token, offerId, productId);
 
     console.log(
       `[EbayService] Listing published: SKU=${sku}, offerId=${offerId}, listingId=${listingId}`
@@ -358,7 +363,8 @@ export class EbayService {
     token: string,
     sku: string,
     ebayData: EbayListingData,
-    quantity: number
+    quantity: number,
+    productId?: string
   ): Promise<void> {
     const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
 
@@ -391,6 +397,7 @@ export class EbayService {
           method: 'PUT',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const response = await fetch(url, {
@@ -434,7 +441,8 @@ export class EbayService {
     sku: string,
     ebayData: EbayListingData,
     price: number,
-    quantity: number
+    quantity: number,
+    productId?: string
   ): Promise<string> {
     const url = `${EBAY_API_BASE}/sell/inventory/v1/offer`;
 
@@ -468,6 +476,7 @@ export class EbayService {
           method: 'POST',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const response = await fetch(url, {
@@ -586,7 +595,7 @@ export class EbayService {
    * @param variantSku The SKU of the variant to update
    * @param newPrice The new price to set
    */
-  async updateVariantPrice(variantSku: string, newPrice: number): Promise<void> {
+  async updateVariantPrice(variantSku: string, newPrice: number, productId?: string): Promise<void> {
     try {
       const accessToken = await this.getAccessToken();
 
@@ -642,6 +651,7 @@ export class EbayService {
           method: 'GET',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const offersResponse = await fetch(
@@ -683,6 +693,7 @@ export class EbayService {
           method: 'PATCH',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const updateResponse = await fetch(
@@ -730,7 +741,8 @@ export class EbayService {
 
   private async publishOffer(
     token: string,
-    offerId: string
+    offerId: string,
+    productId?: string
   ): Promise<string> {
     const url = `${EBAY_API_BASE}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`;
 
@@ -743,6 +755,7 @@ export class EbayService {
           method: 'POST',
           marketplace: EBAY_MARKETPLACE_ID,
           triggeredBy: 'api',
+          productId,
         },
         async () => {
           const response = await fetch(url, {

@@ -61,7 +61,8 @@ export class EbayPublishService {
         htmlDescription: draft.htmlDescription,
       },
       finalPrice,
-      draft.product.totalStock
+      draft.product.totalStock,
+      draft.productId,
     );
 
     const listingUrl = `https://www.ebay.com/itm/${listingId}`;

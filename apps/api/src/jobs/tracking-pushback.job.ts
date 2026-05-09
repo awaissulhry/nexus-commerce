@@ -167,7 +167,12 @@ async function processOne(rowId: string): Promise<'SUCCESS' | 'FAILED' | 'DEAD_L
         outcome = { success: false, error: 'eBay input or connection unavailable', code: 'INPUT_INCOMPLETE' }
       } else {
         try {
-          const result = await ebaySubmit(built.input, built.connectionId)
+          // Resolve internal Order.id for OutboundApiCallLog scoping.
+          const shipment = await prisma.shipment.findUnique({
+            where: { id: row.shipmentId },
+            select: { orderId: true },
+          })
+          const result = await ebaySubmit(built.input, built.connectionId, shipment?.orderId ?? undefined)
           outcome = { success: true, response: result }
         } catch (e: any) {
           if (e instanceof EbayPushbackError) outcome = { success: false, error: e.message, code: e.code }

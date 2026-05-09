@@ -267,7 +267,8 @@ async function syncNewListings(): Promise<void> {
         product.sku,
         ebayData,
         Number(product.basePrice),
-        product.totalStock
+        product.totalStock,
+        product.id
       );
 
       // Step 4: Update the product with eBay data
@@ -461,7 +462,7 @@ async function syncPriceParity(): Promise<void> {
           // Call marketplace API to update price
           try {
             if (listing.channelId === "EBAY" && variant.sku) {
-              await ebay.updateVariantPrice(variant.sku, variantPrice);
+              await ebay.updateVariantPrice(variant.sku, variantPrice, product.id);
             } else if (listing.channelId === "AMAZON" && variant.amazonAsin) {
               await amazon.updateVariantPrice(variant.amazonAsin, variantPrice);
             }

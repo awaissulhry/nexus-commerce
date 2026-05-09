@@ -95,6 +95,7 @@ function isReal(): boolean {
 export async function submitShippingFulfillment(
   input: ShippingFulfillmentInput,
   connectionId: string,
+  orderId?: string,
 ): Promise<FulfillmentResult> {
   if (!isReal()) {
     return {
@@ -134,6 +135,7 @@ export async function submitShippingFulfillment(
       method: 'POST',
       connectionId,
       triggeredBy: 'api',
+      orderId,
     },
     async () => {
       const res = await fetch(url, {
