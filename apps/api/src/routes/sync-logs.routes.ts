@@ -31,6 +31,12 @@ import {
   subscribeSyncLogEvents,
   type SyncLogEvent,
 } from '../services/sync-logs-events.service.js'
+import {
+  CRON_REGISTRY,
+  isKnownCron,
+  listKnownCrons,
+} from '../jobs/cron-registry.js'
+import { recordCronRun } from '../utils/cron-observability.js'
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -199,6 +205,56 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.log.error({ err }, '[sync-logs/api-calls] failed')
         return reply.code(500).send({ error: message })
       }
+    },
+  )
+
+  /**
+   * L.14.0 — manual cron trigger.
+   *
+   * GET /api/sync-logs/cron/registry
+   *   List of all triggerable jobNames so the UI can validate
+   *   before showing the trigger button.
+   *
+   * POST /api/sync-logs/cron/:jobName/trigger
+   *   Looks up the registry entry, wraps the call in
+   *   recordCronRun(triggeredBy='manual'), and fires it.
+   *   Returns 202 Accepted (the run might take a while; the row
+   *   in CronRun will reflect status as it progresses).
+   *
+   * Errors out with 404 if the jobName is unknown — the registry
+   * is the source of truth for what's triggerable from the hub.
+   */
+  fastify.get('/sync-logs/cron/registry', async (_request, reply) => {
+    return reply.send({ jobs: listKnownCrons() })
+  })
+
+  fastify.post<{ Params: { jobName: string } }>(
+    '/sync-logs/cron/:jobName/trigger',
+    async (request, reply) => {
+      const { jobName } = request.params
+      if (!isKnownCron(jobName)) {
+        return reply.code(404).send({
+          error: `Unknown cron jobName '${jobName}'. See GET /sync-logs/cron/registry for the list.`,
+        })
+      }
+      const handler = CRON_REGISTRY[jobName]
+      // Fire-and-forget so the HTTP response returns immediately.
+      // recordCronRun will write a CronRun row that the hub picks
+      // up on its next 30s poll.
+      void recordCronRun(
+        jobName,
+        async () => {
+          await handler()
+          return 'manual trigger'
+        },
+        { triggeredBy: 'manual' },
+      ).catch((err) => {
+        fastify.log.error(
+          { err, jobName },
+          '[sync-logs/cron/trigger] handler threw',
+        )
+      })
+      return reply.code(202).send({ jobName, status: 'started' })
     },
   )
 

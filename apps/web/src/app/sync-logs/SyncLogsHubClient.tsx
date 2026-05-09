@@ -38,9 +38,11 @@ import {
   ExternalLink,
   History,
   Loader2,
+  Play,
   RefreshCw,
   Timer,
 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -245,6 +247,9 @@ export default function SyncLogsHubClient({
   )
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [triggeringJob, setTriggeringJob] = useState<string | null>(null)
+  const [knownCrons, setKnownCrons] = useState<Set<string>>(new Set())
+  const { toast } = useToast()
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -279,6 +284,48 @@ export default function SyncLogsHubClient({
       setRefreshing(false)
     }
   }, [])
+
+  // L.14.0 — fetch the cron registry once so the Trigger button only
+  // shows for jobs the backend can actually invoke (jobs that aren't
+  // in the registry, e.g. wizard-cleanup with its 4-step pipeline,
+  // hide the button rather than 404 on click).
+  useEffect(() => {
+    const ctrl = new AbortController()
+    fetch(`${getBackendUrl()}/api/sync-logs/cron/registry`, {
+      signal: ctrl.signal,
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { jobs: string[] } | null) => {
+        if (j) setKnownCrons(new Set(j.jobs))
+      })
+      .catch(() => {})
+    return () => ctrl.abort()
+  }, [])
+
+  const triggerCron = useCallback(
+    async (jobName: string) => {
+      setTriggeringJob(jobName)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/sync-logs/cron/${encodeURIComponent(jobName)}/trigger`,
+          { method: 'POST' },
+        )
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        toast.success(`Triggered ${jobName}`)
+        // Wait a tick then refresh so the operator sees status='RUNNING'.
+        setTimeout(() => void refresh(), 500)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e))
+      } finally {
+        setTriggeringJob(null)
+      }
+    },
+    [refresh, toast],
+  )
 
   useEffect(() => {
     const id = setInterval(() => void refresh(), POLL_MS)
@@ -636,6 +683,30 @@ export default function SyncLogsHubClient({
                           </div>
                         )}
                       </div>
+                      {/* L.14.0 — manual trigger button. Hidden if
+                          the registry doesn't expose this job. */}
+                      {knownCrons.has(j.jobName) && (
+                        <button
+                          type="button"
+                          onClick={() => void triggerCron(j.jobName)}
+                          disabled={
+                            triggeringJob === j.jobName || j.status === 'RUNNING'
+                          }
+                          title={
+                            j.status === 'RUNNING'
+                              ? 'Already running'
+                              : 'Trigger this cron now'
+                          }
+                          className="flex-shrink-0 h-6 px-2 text-xs font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {triggeringJob === j.jobName ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Play className="w-3 h-3" />
+                          )}
+                          Run
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
