@@ -235,6 +235,16 @@ await c.connect()
     exists ? `still present at ${shadowPath}` : null)
 }
 
+// 16. T.4: StockMovement.locationId CHECK constraint is present
+{
+  const r = await c.query(`
+    SELECT count(*)::int n FROM pg_constraint
+    WHERE conname = 'StockMovement_locationId_required'
+  `)
+  record('T.4: StockMovement_locationId_required CHECK constraint present', r.rows[0].n === 1,
+    r.rows[0].n === 0 ? 'constraint dropped — invariant #6 lost its DB-level enforcement' : null)
+}
+
 await c.end()
 
 const failed = checks.filter((c) => !c.pass).length
