@@ -27,6 +27,16 @@ import {
   getRecall,
   releaseReservationsForRecall,
 } from '../services/lot.service.js'
+import {
+  createSerial,
+  bulkCreateSerials,
+  reserveSerial,
+  shipSerial,
+  returnSerial,
+  restoreSerial,
+  disposeSerial,
+  traceSerial,
+} from '../services/serial.service.js'
 import * as shopifyLocations from '../services/shopify-locations.service.js'
 import { ShopifyService } from '../services/marketplaces/shopify.service.js'
 import {
@@ -1714,6 +1724,128 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       }
       fastify.log.error({ err: error }, '[stock/lots POST] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  // ── GET /api/stock/serials ───────────────────────────────────────
+  // SR.3 — list with filters: productId, status, lotId, locationId, search
+  fastify.get('/stock/serials', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const limit = Math.min(500, Math.max(1, Math.floor(safeNum(q.limit, 100) ?? 100)))
+      const where: any = {}
+      if (typeof q.productId === 'string') where.productId = q.productId
+      if (typeof q.status === 'string' && q.status !== 'ALL') where.status = q.status
+      if (typeof q.lotId === 'string') where.lotId = q.lotId
+      if (typeof q.locationId === 'string') where.locationId = q.locationId
+      if (typeof q.search === 'string' && q.search.trim()) {
+        where.serialNumber = { contains: q.search.trim(), mode: 'insensitive' }
+      }
+      const items = await prisma.serialNumber.findMany({
+        where, take: limit,
+        orderBy: [{ status: 'asc' }, { receivedAt: 'desc' }],
+        include: {
+          product: { select: { id: true, sku: true, name: true } },
+          lot: { select: { id: true, lotNumber: true } },
+          location: { select: { id: true, code: true, name: true } },
+        },
+      })
+      return { items, total: items.length, limit }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/serials] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.get<{ Params: { id: string } }>('/stock/serials/:id/trace', async (request, reply) => {
+    try {
+      const trace = await traceSerial(request.params.id)
+      if (!trace) return reply.code(404).send({ error: 'Serial not found' })
+      return trace
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/serials/:id/trace] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post<{
+    Body: {
+      productId: string
+      variationId?: string | null
+      serialNumber?: string
+      serialNumbers?: string[]
+      lotId?: string | null
+      locationId?: string | null
+      manufacturerRef?: string | null
+      notes?: string | null
+    }
+  }>('/stock/serials', async (request, reply) => {
+    try {
+      const b = request.body
+      if (!b?.productId) return reply.code(400).send({ error: 'productId required' })
+
+      // Bulk path: array of serials in one call (typical at receive)
+      if (b.serialNumbers && Array.isArray(b.serialNumbers)) {
+        if (b.serialNumbers.length === 0) {
+          return reply.code(400).send({ error: 'serialNumbers cannot be empty' })
+        }
+        const r = await bulkCreateSerials({
+          productId: b.productId,
+          variationId: b.variationId ?? null,
+          serialNumbers: b.serialNumbers,
+          lotId: b.lotId ?? null,
+          locationId: b.locationId ?? null,
+          manufacturerRef: b.manufacturerRef ?? null,
+        })
+        return r
+      }
+
+      // Single path
+      if (!b.serialNumber?.trim()) {
+        return reply.code(400).send({ error: 'serialNumber or serialNumbers required' })
+      }
+      const created = await createSerial({
+        productId: b.productId,
+        variationId: b.variationId ?? null,
+        serialNumber: b.serialNumber,
+        lotId: b.lotId ?? null,
+        locationId: b.locationId ?? null,
+        manufacturerRef: b.manufacturerRef ?? null,
+        notes: b.notes ?? null,
+      })
+      return created
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        return reply.code(409).send({ error: 'Serial number already exists for this product' })
+      }
+      fastify.log.error({ err: error }, '[stock/serials POST] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
+  fastify.post<{
+    Params: { id: string }
+    Body: { action: 'reserve' | 'ship' | 'return' | 'restore' | 'dispose'; orderId?: string; shipmentId?: string; returnId?: string; notes?: string }
+  }>('/stock/serials/:id/transition', async (request, reply) => {
+    try {
+      const { action, ...args } = request.body
+      let result
+      switch (action) {
+        case 'reserve': result = await reserveSerial(request.params.id, args); break
+        case 'ship': result = await shipSerial(request.params.id, args); break
+        case 'return': result = await returnSerial(request.params.id, args); break
+        case 'restore': result = await restoreSerial(request.params.id); break
+        case 'dispose': result = await disposeSerial(request.params.id, args); break
+        default:
+          return reply.code(400).send({ error: `Unknown action: ${action}` })
+      }
+      return result
+    } catch (error: any) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('not found')) return reply.code(404).send({ error: msg })
+      if (msg.includes('cannot transition')) return reply.code(409).send({ error: msg })
+      fastify.log.error({ err: error }, '[stock/serials/:id/transition] failed')
+      return reply.code(500).send({ error: msg })
     }
   })
 
