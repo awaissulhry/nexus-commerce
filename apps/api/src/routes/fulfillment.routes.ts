@@ -129,6 +129,10 @@ import {
   TEMPLATES as AUTOMATION_RULE_TEMPLATES,
 } from '../services/automation-rule-templates.service.js'
 import {
+  runAutomationRuleEvaluatorOnce,
+  getAutomationRuleCronStatus,
+} from '../jobs/automation-rule-evaluator.job.js'
+import {
   transitionPo,
   getPoAuditTrail,
   type WorkflowTransition,
@@ -8199,6 +8203,40 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send(result)
       }
       return result
+    },
+  )
+
+  // W4.8 — Manual evaluator run. Fires the same logic the W4.6 cron
+  // does on its 15-minute schedule, but on demand from the workspace.
+  // Returns a summary string so the UI can toast "evals=8 matches=3
+  // (rec_gen=8 stockout=0 cron_tick=0)".
+  fastify.post(
+    '/fulfillment/replenishment/automation/run',
+    async (_request, reply) => {
+      try {
+        const summary = await runAutomationRuleEvaluatorOnce()
+        return { ok: true, summary }
+      } catch (err) {
+        fastify.log.error({ err }, '[automation/run] failed')
+        return reply.code(500).send({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
+  // W4.8 — Cron status for the automation evaluator. Mirrors the
+  // shape of the other cron status getters so the workspace can
+  // render a "next tick at HH:MM, last ran X ago" hint without a
+  // separate query.
+  fastify.get(
+    '/fulfillment/replenishment/automation/cron-status',
+    async () => {
+      return {
+        ...getAutomationRuleCronStatus(),
+        enabledFlag: process.env.NEXUS_ENABLE_AUTOMATION_RULE_CRON === '1',
+      }
     },
   )
 

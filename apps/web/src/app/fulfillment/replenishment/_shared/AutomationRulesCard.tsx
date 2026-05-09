@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sparkles, Play, Pause, Loader2, Trash2, AlertOctagon } from 'lucide-react'
+import { Sparkles, Play, Pause, Loader2, Trash2, AlertOctagon, Zap } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -56,6 +56,7 @@ export function AutomationRulesCard() {
   const [rules, setRules] = useState<AutomationRule[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [seeding, setSeeding] = useState(false)
+  const [running, setRunning] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
@@ -80,6 +81,35 @@ export function AutomationRulesCard() {
   useEffect(() => {
     void fetchRules()
   }, [fetchRules])
+
+  const runEvaluatorNow = useCallback(async () => {
+    setRunning(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/fulfillment/replenishment/automation/run`,
+        { method: 'POST', cache: 'no-store' },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) {
+        toast.error(t('replenishment.automation.toast.runFailed'))
+      } else {
+        toast.success(
+          t('replenishment.automation.toast.runSuccess', {
+            summary: json.summary ?? '',
+          }),
+        )
+        await fetchRules()
+      }
+    } catch (err) {
+      toast.error(
+        t('replenishment.automation.toast.runError', {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    } finally {
+      setRunning(false)
+    }
+  }, [fetchRules, t, toast])
 
   const emergencyDisableAll = useCallback(async () => {
     const ok = await askConfirm({
@@ -302,6 +332,25 @@ export function AutomationRulesCard() {
             )}
             {t('replenishment.automation.header.reseedButton')}
           </button>
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => void runEvaluatorNow()}
+              disabled={running}
+              className="text-xs px-2 py-1 rounded ring-1 ring-inset bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600 disabled:opacity-50 inline-flex items-center gap-1"
+              title={t('replenishment.automation.runNowTooltip')}
+              aria-label={t('replenishment.automation.runNowAriaLabel')}
+            >
+              {running ? (
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+              ) : (
+                <Zap className="h-3 w-3" aria-hidden="true" />
+              )}
+              {running
+                ? t('replenishment.automation.runningNow')
+                : t('replenishment.automation.runNowButton')}
+            </button>
+          )}
           {activeCount > 0 && (
             <button
               type="button"
