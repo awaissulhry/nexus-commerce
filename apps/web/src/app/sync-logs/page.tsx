@@ -31,6 +31,7 @@ import SyncLogsHubClient, {
   type AuditRollup,
   type ApiCallsRollup,
   type ErrorGroupsRollup,
+  type AlertsRollup,
 } from './SyncLogsHubClient'
 
 export const dynamic = 'force-dynamic'
@@ -42,11 +43,18 @@ async function fetchInitial(): Promise<{
   audit: AuditRollup | null
   apiCalls: ApiCallsRollup | null
   errorGroups: ErrorGroupsRollup | null
+  alerts: AlertsRollup | null
 }> {
   const backend = getBackendUrl()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const [healthRes, cronsRes, auditRes, apiCallsRes, errorGroupsRes] =
-    await Promise.all([
+  const [
+    healthRes,
+    cronsRes,
+    auditRes,
+    apiCallsRes,
+    errorGroupsRes,
+    alertsRes,
+  ] = await Promise.all([
       fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }).catch(
         () => null,
       ),
@@ -67,6 +75,11 @@ async function fetchInitial(): Promise<{
         `${backend}/api/sync-logs/error-groups?status=ACTIVE&limit=1`,
         { cache: 'no-store' },
       ).catch(() => null),
+      // L.16.2 — active alert events for the firing banner.
+      fetch(
+        `${backend}/api/sync-logs/alerts/events?status=TRIGGERED&limit=10`,
+        { cache: 'no-store' },
+      ).catch(() => null),
     ])
 
   const health =
@@ -83,8 +96,12 @@ async function fetchInitial(): Promise<{
     errorGroupsRes && errorGroupsRes.ok
       ? ((await errorGroupsRes.json()) as ErrorGroupsRollup)
       : null
+  const alerts =
+    alertsRes && alertsRes.ok
+      ? ((await alertsRes.json()) as AlertsRollup)
+      : null
 
-  return { health, crons, audit, apiCalls, errorGroups }
+  return { health, crons, audit, apiCalls, errorGroups, alerts }
 }
 
 export default async function SyncLogsHubPage() {

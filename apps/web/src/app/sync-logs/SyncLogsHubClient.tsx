@@ -186,12 +186,24 @@ export interface ErrorGroupsRollup {
   totals: Array<{ status: string; count: number }>
 }
 
+export interface AlertsRollup {
+  items: Array<{
+    id: string
+    ruleId: string
+    rule: { id: string; name: string; metric: string }
+    value: number
+    status: 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+    triggeredAt: string
+  }>
+}
+
 interface InitialPayload {
   health: HealthRollup | null
   crons: CronRunsRollup | null
   audit: AuditRollup | null
   apiCalls: ApiCallsRollup | null
   errorGroups: ErrorGroupsRollup | null
+  alerts: AlertsRollup | null
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -245,6 +257,7 @@ export default function SyncLogsHubClient({
   const [errorGroups, setErrorGroups] = useState<ErrorGroupsRollup | null>(
     initial.errorGroups,
   )
+  const [alerts, setAlerts] = useState<AlertsRollup | null>(initial.alerts)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null)
@@ -257,7 +270,7 @@ export default function SyncLogsHubClient({
     try {
       const backend = getBackendUrl()
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const [hRes, cRes, aRes, apiRes, egRes] = await Promise.all([
+      const [hRes, cRes, aRes, apiRes, egRes, alRes] = await Promise.all([
         fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }),
         fetch(`${backend}/api/dashboard/cron-runs`, { cache: 'no-store' }),
         fetch(
@@ -272,12 +285,17 @@ export default function SyncLogsHubClient({
           `${backend}/api/sync-logs/error-groups?status=ACTIVE&limit=1`,
           { cache: 'no-store' },
         ),
+        fetch(
+          `${backend}/api/sync-logs/alerts/events?status=TRIGGERED&limit=10`,
+          { cache: 'no-store' },
+        ),
       ])
       if (hRes.ok) setHealth(await hRes.json())
       if (cRes.ok) setCrons(await cRes.json())
       if (aRes.ok) setAudit(await aRes.json())
       if (apiRes.ok) setApiCalls(await apiRes.json())
       if (egRes.ok) setErrorGroups(await egRes.json())
+      if (alRes.ok) setAlerts(await alRes.json())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -504,6 +522,38 @@ export default function SyncLogsHubClient({
               }
             />
           </section>
+
+          {/* L.16.2 — firing alerts banner. Pulses while there's an
+              unresolved triggered event. Distinct from the error-group
+              banner: an alert can fire for non-error metrics too
+              (latency p95, queue depth, stale crons). */}
+          {alerts && alerts.items.length > 0 && (
+            <Link
+              href="/sync-logs/alerts"
+              className="block border border-rose-300 dark:border-rose-800 bg-rose-100 dark:bg-rose-950/60 rounded-md px-4 py-2 hover:bg-rose-200 dark:hover:bg-rose-950 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-3 w-3 flex-shrink-0">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75 animate-ping"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-base font-semibold text-rose-900 dark:text-rose-100">
+                    {alerts.items.length} alert
+                    {alerts.items.length === 1 ? ' is' : 's are'} firing now
+                  </div>
+                  <div className="text-xs text-rose-800 dark:text-rose-300 mt-0.5 truncate font-mono">
+                    {alerts.items
+                      .slice(0, 3)
+                      .map((a) => a.rule.name)
+                      .join(' · ')}
+                    {alerts.items.length > 3 && ` · +${alerts.items.length - 3} more`}
+                  </div>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-rose-700 dark:text-rose-300 flex-shrink-0" />
+              </div>
+            </Link>
+          )}
 
           {/* L.13.1 — active error-group banner. Distinct from "24h errors"
               (which counts occurrences) — this is the count of unique
