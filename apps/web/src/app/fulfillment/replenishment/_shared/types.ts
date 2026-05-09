@@ -107,3 +107,95 @@ export interface Suggestion {
   unitCostCents?: number | null
   servicePercentEffective?: number
 }
+
+/**
+ * W9.6e — Detail-drawer wire shape. Pulled by the per-product
+ * ForecastDetailDrawer + every nested panel (ReorderMathPanel,
+ * SubstitutionPanel, etc). Centralized so each extracted panel
+ * imports the same view of the response.
+ */
+export interface DetailResponse {
+  product: { id: string; sku: string; name: string; currentStock: number }
+  atp: {
+    leadTimeDays: number
+    leadTimeSource: string
+    inboundWithinLeadTime: number
+    totalOpenInbound: number
+    openShipments: OpenShipmentRef[]
+    // R.2 — multi-location additions
+    byLocation?: Array<{
+      locationId: string
+      locationCode: string
+      locationName: string
+      locationType: string
+      servesMarketplaces: string[]
+      quantity: number
+      reserved: number
+      available: number
+    }>
+    totalQuantity?: number
+    totalAvailable?: number
+    stockSource?: string
+  } | null
+  // R.2 — per-channel cover breakdown
+  channelCover?: Array<{
+    channel: string
+    marketplace: string
+    velocityPerDay: number
+    available: number
+    locationCode: string | null
+    source: string
+    daysOfCover: number | null
+  }>
+  // R.4 — math snapshot from the latest ACTIVE recommendation
+  recommendation?: {
+    id: string
+    urgency: string
+    reorderPoint: number
+    reorderQuantity: number
+    safetyStockUnits: number | null
+    eoqUnits: number | null
+    constraintsApplied: string[]
+    unitCostCents: number | null
+    velocity: number | string
+    generatedAt: string
+    // R.14 — urgency provenance
+    urgencySource?: string | null
+    worstChannelKey?: string | null
+    worstChannelDaysOfCover?: number | null
+    // R.11 — σ_LT applied
+    leadTimeStdDevDays?: number | string | null
+    // R.15 — FX context
+    unitCostCurrency?: string | null
+    fxRateUsed?: number | string | null
+    // R.17 — substitution audit
+    rawVelocity?: number | string | null
+    substitutionAdjustedDelta?: number | string | null
+    // R.19 — landed-cost audit
+    freightCostPerUnitCents?: number | null
+    landedCostPerUnitCents?: number | null
+    // R.8 — Amazon FBA Restock cross-check audit
+    amazonRecommendedQty?: number | null
+    amazonDeltaPct?: number | string | null
+    amazonReportAsOf?: string | null
+  } | null
+  model: string | null
+  generationTag: string | null
+  signals: unknown
+  series: Array<{
+    day: string
+    actual: number | null
+    forecast: number | null
+    lower80: number | null
+    upper80: number | null
+  }>
+  // R.17 — substitution links visible from this product (either side).
+  substitutions?: Array<{
+    id: string
+    primaryProductId: string
+    substituteProductId: string
+    substitutionFraction: number | string
+    primary?: { id: string; sku: string; name: string } | null
+    substitute?: { id: string; sku: string; name: string } | null
+  }>
+}

@@ -73,9 +73,11 @@ import { CannibalizationCard } from './_shared/CannibalizationCard'
 
 // W9.6c — Suggestion + Urgency + OpenShipmentRef moved to
 // _shared/types.ts so the extracted shared cards pull the same shape.
-import type { OpenShipmentRef, Suggestion } from './_shared/types'
+import type { Suggestion } from './_shared/types'
 import { MobileSuggestionCard } from './_shared/MobileSuggestionCard'
 import { SuggestionRow } from './_shared/SuggestionRow'
+import { ReorderMathPanel } from './_shared/ReorderMathPanel'
+import type { DetailResponse } from './_shared/types'
 
 interface ContainerFillEntry {
   supplierId: string
@@ -1148,91 +1150,6 @@ function exportSuggestionsCsv(suggestions: Suggestion[]): void {
 }
 
 
-interface DetailResponse {
-  product: { id: string; sku: string; name: string; currentStock: number }
-  atp: {
-    leadTimeDays: number
-    leadTimeSource: string
-    inboundWithinLeadTime: number
-    totalOpenInbound: number
-    openShipments: OpenShipmentRef[]
-    // R.2 — multi-location additions
-    byLocation?: Array<{
-      locationId: string
-      locationCode: string
-      locationName: string
-      locationType: string
-      servesMarketplaces: string[]
-      quantity: number
-      reserved: number
-      available: number
-    }>
-    totalQuantity?: number
-    totalAvailable?: number
-    stockSource?: string
-  } | null
-  // R.2 — per-channel cover breakdown
-  channelCover?: Array<{
-    channel: string
-    marketplace: string
-    velocityPerDay: number
-    available: number
-    locationCode: string | null
-    source: string
-    daysOfCover: number | null
-  }>
-  // R.4 — math snapshot from the latest ACTIVE recommendation
-  recommendation?: {
-    id: string
-    urgency: string
-    reorderPoint: number
-    reorderQuantity: number
-    safetyStockUnits: number | null
-    eoqUnits: number | null
-    constraintsApplied: string[]
-    unitCostCents: number | null
-    velocity: number | string
-    generatedAt: string
-    // R.14 — urgency provenance
-    urgencySource?: string | null
-    worstChannelKey?: string | null
-    worstChannelDaysOfCover?: number | null
-    // R.11 — σ_LT applied
-    leadTimeStdDevDays?: number | string | null
-    // R.15 — FX context
-    unitCostCurrency?: string | null
-    fxRateUsed?: number | string | null
-    // R.17 — substitution audit
-    rawVelocity?: number | string | null
-    substitutionAdjustedDelta?: number | string | null
-    // R.19 — landed-cost audit
-    freightCostPerUnitCents?: number | null
-    landedCostPerUnitCents?: number | null
-    // R.8 — Amazon FBA Restock cross-check audit
-    amazonRecommendedQty?: number | null
-    amazonDeltaPct?: number | string | null
-    amazonReportAsOf?: string | null
-  } | null
-  model: string | null
-  generationTag: string | null
-  signals: any
-  series: Array<{
-    day: string
-    actual: number | null
-    forecast: number | null
-    lower80: number | null
-    upper80: number | null
-  }>
-  // R.17 — substitution links visible from this product (either side).
-  substitutions?: Array<{
-    id: string
-    primaryProductId: string
-    substituteProductId: string
-    substitutionFraction: number | string
-    primary?: { id: string; sku: string; name: string } | null
-    substitute?: { id: string; sku: string; name: string } | null
-  }>
-}
 
 function ForecastDetailDrawer({
   productId,
@@ -2859,107 +2776,8 @@ function ContainerFillCard({ entries }: { entries: ContainerFillEntry[] }) {
   )
 }
 
-// R.4 — Reorder math snapshot panel. Shows the four primitives
-// (EOQ, safety stock, reorder point, recommended qty) plus the
-// constraint annotations explaining why the final qty is what it
-// is. Pulled from the latest ACTIVE ReplenishmentRecommendation.
-function ReorderMathPanel({ rec }: { rec: NonNullable<DetailResponse['recommendation']> }) {
-  const constraints = rec.constraintsApplied ?? []
-  const hasMoq = constraints.includes('MOQ_APPLIED')
-  const hasCasePack = constraints.includes('CASE_PACK_ROUNDED_UP')
-  const hasEoqBelowMoq = constraints.includes('EOQ_BELOW_MOQ')
-
-  return (
-    <div className="border border-slate-200 rounded p-3 bg-slate-50/50">
-      <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">
-        Reorder math
-      </div>
-      <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-base">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">EOQ</span>
-          <span className="tabular-nums font-semibold text-slate-900">
-            {rec.eoqUnits != null ? rec.eoqUnits : '—'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Safety stock</span>
-          <span className="tabular-nums font-semibold text-slate-900">
-            {rec.safetyStockUnits != null ? rec.safetyStockUnits : '—'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Reorder point</span>
-          <span className="tabular-nums font-semibold text-slate-900">
-            {rec.reorderPoint}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-slate-500">Recommended qty</span>
-          <span className="tabular-nums font-bold text-slate-900">
-            {rec.reorderQuantity}
-          </span>
-        </div>
-      </div>
-      {(hasMoq || hasCasePack || hasEoqBelowMoq) && (
-        <ul className="mt-2 pt-2 border-t border-slate-200 space-y-0.5 text-sm text-slate-600">
-          {hasEoqBelowMoq && (
-            <li>↑ EOQ was below supplier MOQ — ordering more than the math optimum</li>
-          )}
-          {hasMoq && <li>↑ rounded up to supplier MOQ</li>}
-          {hasCasePack && <li>↑ rounded up to case-pack multiple</li>}
-        </ul>
-      )}
-      {rec.unitCostCents != null && (
-        <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500">
-          {/* R.15 — show native currency + EUR conversion when supplier
-              quotes in something other than EUR. */}
-          {rec.unitCostCurrency && rec.unitCostCurrency !== 'EUR' && rec.fxRateUsed ? (
-            <>
-              Cost basis: <span className="font-mono">
-                {(rec.unitCostCents / 100).toFixed(2)} {rec.unitCostCurrency}/unit
-              </span>
-              <span className="text-slate-400 ml-1">
-                (≈{(rec.unitCostCents / 100 / Number(rec.fxRateUsed)).toFixed(2)} EUR
-                @ 1 EUR = {Number(rec.fxRateUsed).toFixed(4)} {rec.unitCostCurrency})
-              </span>
-            </>
-          ) : (
-            <>
-              Cost basis: <span className="font-mono">
-                {(rec.unitCostCents / 100).toFixed(2)} EUR/unit
-              </span>
-            </>
-          )}
-          {/* R.19 — landed cost (unit + freight) when a supplier
-              shipping profile produced a freight allocation. Both
-              already in EUR cents post-FX. */}
-          {rec.freightCostPerUnitCents != null && rec.landedCostPerUnitCents != null && (
-            <div className="mt-1">
-              <span className="text-slate-500">Landed: </span>
-              <span className="font-mono text-slate-700">
-                {(rec.landedCostPerUnitCents / 100).toFixed(2)} EUR/unit
-              </span>
-              <span className="text-slate-400 ml-1">
-                (= {(rec.unitCostCents / 100).toFixed(2)} unit
-                + {(rec.freightCostPerUnitCents / 100).toFixed(2)} freight)
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* R.11 — supplier lead-time variance applied. Renders only when
-          σ_LT > 0 (the supplier has ≥3 PO observations); otherwise the
-          formula collapses to deterministic-LT and there's nothing to
-          show. */}
-      {rec.leadTimeStdDevDays != null && Number(rec.leadTimeStdDevDays) > 0 && (
-        <div className="mt-1 text-xs text-slate-500">
-          Lead-time variance: <span className="font-mono">σ_LT = {Number(rec.leadTimeStdDevDays).toFixed(2)}d</span>
-          <span className="text-slate-400"> · safety stock includes σ_LT term</span>
-        </div>
-      )}
-    </div>
-  )
-}
+// W9.6e — ReorderMathPanel (R.4) moved to _shared/ReorderMathPanel.tsx
+// (imported at the top of this file).
 
 // R.17 — Substitution panel. Shows raw vs adjusted velocity and the
 // list of products this SKU substitutes for (or is substituted by),
