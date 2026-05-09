@@ -123,6 +123,7 @@ import {
   runAbcCronOnce,
   getAbcClassificationCronStatus,
 } from '../jobs/abc-classification.job.js'
+import { evaluateRule } from '../services/automation-rule.service.js'
 import {
   transitionPo,
   getPoAuditTrail,
@@ -7922,6 +7923,171 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       },
     }
   })
+
+  // ── W4.3 — Automation rules CRUD + test ─────────────────────────
+  // Surface for the rule-builder UI (W4.5). All routes scoped under
+  // /fulfillment/replenishment/automation/rules so the page-level
+  // permission check works against a single prefix.
+
+  fastify.get(
+    '/fulfillment/replenishment/automation/rules',
+    async (request) => {
+      const q = (request.query ?? {}) as {
+        domain?: string
+        trigger?: string
+        enabled?: string
+      }
+      const where: Record<string, unknown> = {
+        domain: q.domain ?? 'replenishment',
+      }
+      if (q.trigger) where.trigger = q.trigger
+      if (q.enabled === 'true') where.enabled = true
+      if (q.enabled === 'false') where.enabled = false
+      const rules = await prisma.automationRule.findMany({
+        where,
+        orderBy: [{ enabled: 'desc' }, { updatedAt: 'desc' }],
+      })
+      return { rules }
+    },
+  )
+
+  fastify.post(
+    '/fulfillment/replenishment/automation/rules',
+    async (request, reply) => {
+      const body = (request.body ?? {}) as {
+        name?: string
+        description?: string
+        domain?: string
+        trigger?: string
+        conditions?: unknown
+        actions?: unknown
+        enabled?: boolean
+        dryRun?: boolean
+        maxExecutionsPerDay?: number | null
+        maxValueCentsEur?: number | null
+        createdBy?: string
+      }
+      if (!body.name || !body.trigger) {
+        return reply.code(400).send({ error: 'name + trigger required' })
+      }
+      const rule = await prisma.automationRule.create({
+        data: {
+          name: body.name,
+          description: body.description ?? null,
+          domain: body.domain ?? 'replenishment',
+          trigger: body.trigger,
+          conditions: (body.conditions ?? []) as object,
+          actions: (body.actions ?? []) as object,
+          enabled: body.enabled ?? false,
+          dryRun: body.dryRun ?? true,
+          maxExecutionsPerDay: body.maxExecutionsPerDay ?? 100,
+          maxValueCentsEur: body.maxValueCentsEur ?? null,
+          createdBy: body.createdBy ?? null,
+        },
+      })
+      return reply.code(201).send({ rule })
+    },
+  )
+
+  fastify.get(
+    '/fulfillment/replenishment/automation/rules/:id',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const rule = await prisma.automationRule.findUnique({ where: { id } })
+      if (!rule) return reply.code(404).send({ error: 'Rule not found' })
+      return { rule }
+    },
+  )
+
+  fastify.patch(
+    '/fulfillment/replenishment/automation/rules/:id',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as Record<string, unknown>
+      // Whitelist: counters + audit timestamps are engine-managed
+      // and must not be settable from the wire.
+      const data: Record<string, unknown> = {}
+      const writable: Array<keyof typeof body> = [
+        'name',
+        'description',
+        'domain',
+        'trigger',
+        'conditions',
+        'actions',
+        'enabled',
+        'dryRun',
+        'maxExecutionsPerDay',
+        'maxValueCentsEur',
+      ]
+      for (const k of writable) {
+        if (body[k] !== undefined) data[k] = body[k]
+      }
+      try {
+        const rule = await prisma.automationRule.update({
+          where: { id },
+          data,
+        })
+        return { rule }
+      } catch (err) {
+        return reply.code(404).send({
+          error: err instanceof Error ? err.message : 'Rule not found',
+        })
+      }
+    },
+  )
+
+  fastify.delete(
+    '/fulfillment/replenishment/automation/rules/:id',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      try {
+        await prisma.automationRule.delete({ where: { id } })
+        return reply.code(204).send()
+      } catch (err) {
+        return reply.code(404).send({
+          error: err instanceof Error ? err.message : 'Rule not found',
+        })
+      }
+    },
+  )
+
+  // W4.3 — Test a rule against an operator-supplied context payload.
+  // forceDryRun=true so even a rule with dryRun=false on the row
+  // doesn't fire side effects from the test button. This is the
+  // "Test rule" button in the W4.5 rule builder.
+  fastify.post(
+    '/fulfillment/replenishment/automation/rules/:id/test',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const body = (request.body ?? {}) as { context?: unknown }
+      const result = await evaluateRule({
+        ruleId: id,
+        context: body.context ?? {},
+        forceDryRun: true,
+      })
+      if (result.status === 'FAILED' && result.errorMessage === 'Rule not found') {
+        return reply.code(404).send(result)
+      }
+      return result
+    },
+  )
+
+  // W4.3 — Execution history for one rule. Limit-controlled, newest
+  // first. Powers the "Recent runs" panel in the rule drawer.
+  fastify.get(
+    '/fulfillment/replenishment/automation/rules/:id/executions',
+    async (request) => {
+      const { id } = request.params as { id: string }
+      const q = (request.query ?? {}) as { limit?: string }
+      const limit = Math.max(1, Math.min(parseInt(q.limit ?? '50', 10) || 50, 200))
+      const executions = await prisma.automationRuleExecution.findMany({
+        where: { ruleId: id },
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+      })
+      return { executions }
+    },
+  )
 
   // R.11 — manual lead-time stats recompute. Useful at deploy time
   // before the 06:00 UTC cron fires, or when debugging "why is σ_LT
