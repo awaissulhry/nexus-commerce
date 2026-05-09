@@ -1664,6 +1664,9 @@
   "overview.alerts.variants": "Varianti",
 
   "overview.exportPdf": "Scarica snapshot PDF",
+  "overview.exportPdf.daily": "Snapshot di oggi",
+  "overview.exportPdf.weekly": "Ultimi 7 giorni",
+  "overview.exportPdf.monthly": "Ultimi 30 giorni",
 
   "overview.reports.heading": "Report email programmati",
   "overview.reports.empty": "Nessun report programmato.",

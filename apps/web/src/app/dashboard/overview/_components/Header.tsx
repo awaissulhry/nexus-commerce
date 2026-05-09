@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { CircleDot, Download, RefreshCw, Settings2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -219,26 +220,11 @@ export default function Header({
           >
             {t('overview.refresh')}
           </Button>
-          {/* DO.41 — download current dashboard as PDF. Anchor with
-              download attribute so the browser saves directly
-              without a tab open. */}
-          <a
-            href={`${getBackendUrl()}/api/dashboard/export/pdf?frequency=daily`}
-            download
-            title={t('overview.exportPdf')}
-            aria-label={t('overview.exportPdf')}
-            className={cn(
-              'inline-flex items-center justify-center h-7 w-7 rounded-md border',
-              'border-slate-200 dark:border-slate-700',
-              'bg-white dark:bg-slate-900',
-              'text-slate-500 dark:text-slate-400',
-              'hover:bg-slate-50 dark:hover:bg-slate-800',
-              'hover:text-slate-700 dark:hover:text-slate-200',
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-            )}
-          >
-            <Download className="w-3.5 h-3.5" />
-          </a>
+          {/* DO.41 / DO.48 — PDF download with frequency picker.
+              Click the icon → menu opens with daily / weekly /
+              monthly choices. Each option is an anchor with the
+              `download` attribute so the browser saves directly. */}
+          <PdfExportMenu t={t} />
           {/* DO.32 — customise (icon-only on narrow viewports). */}
           <button
             type="button"
@@ -261,5 +247,72 @@ export default function Header({
         </>
       }
     />
+  )
+}
+
+function PdfExportMenu({ t }: { t: T }) {
+  const [open, setOpen] = useState(false)
+  const items = [
+    { id: 'daily', labelKey: 'overview.exportPdf.daily' },
+    { id: 'weekly', labelKey: 'overview.exportPdf.weekly' },
+    { id: 'monthly', labelKey: 'overview.exportPdf.monthly' },
+  ] as const
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={(e) => {
+          // Close when focus leaves the menu container.
+          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) {
+            setTimeout(() => setOpen(false), 100)
+          }
+        }}
+        title={t('overview.exportPdf')}
+        aria-label={t('overview.exportPdf')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={cn(
+          'inline-flex items-center justify-center h-7 w-7 rounded-md border',
+          'border-slate-200 dark:border-slate-700',
+          'bg-white dark:bg-slate-900',
+          'text-slate-500 dark:text-slate-400',
+          'hover:bg-slate-50 dark:hover:bg-slate-800',
+          'hover:text-slate-700 dark:hover:text-slate-200',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+        )}
+      >
+        <Download className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <ul
+          role="menu"
+          className={cn(
+            'absolute right-0 top-full mt-1 z-30 min-w-[160px] py-1 rounded-md border shadow-lg',
+            'border-slate-200 dark:border-slate-700',
+            'bg-white dark:bg-slate-900',
+          )}
+        >
+          {items.map((it) => (
+            <li key={it.id} role="none">
+              <a
+                role="menuitem"
+                href={`${getBackendUrl()}/api/dashboard/export/pdf?frequency=${it.id}`}
+                download
+                onClick={() => setOpen(false)}
+                className={cn(
+                  'block px-3 py-1.5 text-sm',
+                  'text-slate-700 dark:text-slate-300',
+                  'hover:bg-slate-50 dark:hover:bg-slate-800',
+                  'focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-800',
+                )}
+              >
+                {t(it.labelKey)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
