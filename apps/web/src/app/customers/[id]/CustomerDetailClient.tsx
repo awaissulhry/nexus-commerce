@@ -108,12 +108,12 @@ type CustomerDetail = {
 }
 
 const CHANNEL_TONE: Record<string, string> = {
-  AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
-  EBAY: 'bg-blue-50 text-blue-700 border-blue-200',
-  SHOPIFY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  WOOCOMMERCE: 'bg-violet-50 text-violet-700 border-violet-200',
-  ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
-  MANUAL: 'bg-slate-50 text-slate-700 border-slate-200',
+  AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
+  EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+  SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
+  ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
 }
 
 const STATUS_VARIANT: Record<
@@ -355,7 +355,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         actions={
           <button
             onClick={refreshCache}
-            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             title={t('customers.cache.refreshTitle')}
           >
             <RefreshCw size={12} /> {t('customers.cache.refresh')}
@@ -367,7 +367,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           sidebar (addresses + fiscal data) stay always-visible —
           orientation context shouldn't disappear when an operator
           clicks a tab. Tabs gate only the main-column workspace. */}
-      <div role="tablist" aria-label="Customer detail sections" className="inline-flex items-center bg-slate-100 rounded-md p-0.5 flex-wrap gap-0.5">
+      <div role="tablist" aria-label="Customer detail sections" className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 flex-wrap gap-0.5">
         {([
           { key: 'orders', label: t('customers.detail.tabs.orders'), icon: ShoppingCart },
           { key: 'notes',  label: t('customers.detail.tabs.notes'),  icon: StickyNote },
@@ -380,8 +380,8 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
             onClick={() => setTab(tab.key)}
             className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
               tabParam === tab.key
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             <tab.icon size={12} aria-hidden="true" />
@@ -396,46 +396,46 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('customers.detail.totalOrders')}
             </div>
-            <div className="text-[24px] font-semibold tabular-nums text-slate-900">
+            <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
               {customer.totalOrders}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('customers.detail.ltv')}
             </div>
-            <div className="text-[24px] font-semibold tabular-nums text-slate-900">
+            <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
               {fmtMoney(customer.totalSpentCents)}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('customers.detail.firstOrder')}
             </div>
-            <div className="text-md text-slate-700">
+            <div className="text-md text-slate-700 dark:text-slate-300">
               {fmtDate(customer.firstOrderAt)}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('customers.detail.lastOrder')}
             </div>
-            <div className="text-md text-slate-700">
+            <div className="text-md text-slate-700 dark:text-slate-300">
               {fmtDate(customer.lastOrderAt)}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('customers.detail.channels')}
             </div>
             <div className="flex items-center gap-1 flex-wrap mt-0.5">
               {Object.entries(customer.channelOrderCounts ?? {}).map(([ch, n]) => (
                 <span
                   key={ch}
-                  className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}
+                  className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
                 >
                   {ch} {n}
                 </span>
@@ -445,7 +445,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
         </div>
 
         {(customer.riskFlag || customer.manualReviewState) && (
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
             {customer.riskFlag && (
               <Badge
                 variant={
@@ -468,19 +468,19 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
             <div className="flex items-center gap-1 ml-auto">
               <button
                 onClick={() => setManualReview('APPROVED')}
-                className="h-7 px-2 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+                className="h-7 px-2 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
               >
                 {t('customers.risk.markApproved')}
               </button>
               <button
                 onClick={() => setManualReview('REJECTED')}
-                className="h-7 px-2 text-sm bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100"
+                className="h-7 px-2 text-sm bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60"
               >
                 {t('customers.risk.markRejected')}
               </button>
               <button
                 onClick={recomputeRisk}
-                className="h-7 px-2 text-sm border border-slate-200 rounded hover:bg-slate-50"
+                className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 {t('customers.risk.recompute')}
               </button>
@@ -488,8 +488,8 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           </div>
         )}
 
-        <div className="mt-3 pt-3 border-t border-slate-100">
-          <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
             {t('customers.tags.label')}
           </div>
           <div className="flex items-center gap-2">
@@ -497,11 +497,11 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               placeholder={t('customers.tags.placeholder')}
-              className="flex-1 max-w-md h-8 px-2 text-base border border-slate-200 rounded"
+              className="flex-1 max-w-md h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
             />
             <button
               onClick={saveTags}
-              className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800"
+              className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800"
             >
               {t('common.save')}
             </button>
@@ -514,36 +514,36 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           {/* AU.2 — Orders tab (default) */}
           {tabParam === 'orders' && (
           <Card noPadding>
-            <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
-              <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
                 <ShoppingCart size={12} /> {t('customers.detail.ordersTitle')}
               </div>
-              <span className="text-sm text-slate-500 tabular-nums">
+              <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
                 {customer.orders.length} / {customer.totalOrders}
               </span>
             </div>
             {customer.orders.length === 0 ? (
-              <div className="px-3 py-6 text-center text-md text-slate-500">
+              <div className="px-3 py-6 text-center text-md text-slate-500 dark:text-slate-400">
                 {t('customers.detail.noOrders')}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-md">
-                  <thead className="bg-slate-50 border-b border-slate-200">
+                  <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                     <tr>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">
                         {t('orders.table.header.channel')}
                       </th>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">
                         {t('orders.table.header.order')}
                       </th>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">
                         Date
                       </th>
-                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700">
+                      <th className="px-3 py-2 text-left text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">
                         {t('orders.table.header.status')}
                       </th>
-                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700">
+                      <th className="px-3 py-2 text-right text-sm font-semibold uppercase text-slate-700 dark:text-slate-300">
                         Total
                       </th>
                     </tr>
@@ -552,16 +552,16 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                     {customer.orders.map((o) => (
                       <tr
                         key={o.id}
-                        className="border-b border-slate-100 hover:bg-slate-50"
+                        className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                       >
                         <td className="px-3 py-2">
                           <span
-                            className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}
+                            className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${CHANNEL_TONE[o.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
                           >
                             {o.channel}
                           </span>
                           {o.marketplace && (
-                            <span className="text-xs text-slate-500 font-mono ml-1">
+                            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono ml-1">
                               {o.marketplace}
                             </span>
                           )}
@@ -569,12 +569,12 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                         <td className="px-3 py-2">
                           <Link
                             href={`/orders/${o.id}`}
-                            className="font-mono text-base text-blue-600 hover:underline"
+                            className="font-mono text-base text-blue-600 dark:text-blue-400 hover:underline"
                           >
                             {o.channelOrderId}
                           </Link>
                         </td>
-                        <td className="px-3 py-2 text-sm text-slate-500">
+                        <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                           {fmtDate(o.purchaseDate ?? o.createdAt)}
                         </td>
                         <td className="px-3 py-2">
@@ -590,8 +590,8 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                                 title={o.riskScore.reasons.join(' · ')}
                                 className={`inline-block text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${
                                   o.riskScore.flag === 'HIGH'
-                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
+                                    : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
                                 }`}
                               >
                                 {o.riskScore.flag} {o.riskScore.score}
@@ -599,7 +599,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
                           {fmtOrderTotal(o.totalPrice, o.currencyCode)}
                         </td>
                       </tr>
@@ -618,7 +618,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               evidence behind that flag. */}
           {tabParam === 'risk' && (
           <Card>
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2 inline-flex items-center gap-1.5">
               <Shield size={12} /> Risk breakdown
             </div>
             {(() => {
@@ -627,7 +627,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               )
               if (flagged.length === 0) {
                 return (
-                  <div className="text-md text-slate-500 text-center py-3">
+                  <div className="text-md text-slate-500 dark:text-slate-400 text-center py-3">
                     No flagged orders. {customer.riskFlag === null
                       ? 'Customer is unscored — first order will trigger the engine.'
                       : `Current rollup: ${customer.riskFlag}.`}
@@ -641,29 +641,29 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       key={o.id}
                       className={`border rounded p-3 ${
                         o.riskScore.flag === 'HIGH'
-                          ? 'border-rose-200 bg-rose-50'
-                          : 'border-amber-200 bg-amber-50'
+                          ? 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40'
+                          : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <Link
                           href={`/orders/${o.id}`}
-                          className="font-mono text-base text-blue-600 hover:underline"
+                          className="font-mono text-base text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           {o.channelOrderId}
                         </Link>
                         <span
                           className={`text-xs font-semibold uppercase px-1.5 py-0.5 border rounded ${
                             o.riskScore.flag === 'HIGH'
-                              ? 'bg-rose-100 text-rose-700 border-rose-300'
-                              : 'bg-amber-100 text-amber-700 border-amber-300'
+                              ? 'bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300 border-rose-300'
+                              : 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border-amber-300'
                           }`}
                         >
                           {o.riskScore.flag} {o.riskScore.score}
                         </span>
                       </div>
                       {o.riskScore.reasons?.length > 0 && (
-                        <ul className="mt-1.5 space-y-0.5 text-sm text-slate-700">
+                        <ul className="mt-1.5 space-y-0.5 text-sm text-slate-700 dark:text-slate-300">
                           {o.riskScore.reasons.map((r: string, i: number) => (
                             <li key={i}>· {r}</li>
                           ))}
@@ -682,7 +682,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
               a synced mini-view. */}
           {tabParam === 'notes' && (
           <Card>
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2 inline-flex items-center gap-1.5">
               <User size={12} /> {t('customers.detail.notesTitle')}
             </div>
             <div className="space-y-2">
@@ -691,18 +691,18 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                   placeholder={t('customers.notes.placeholder')}
-                  className="flex-1 h-32 px-2 py-1.5 text-base border border-slate-200 rounded"
+                  className="flex-1 h-32 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
                 />
                 <button
                   onClick={addNote}
                   disabled={!noteDraft.trim()}
-                  className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <Plus size={12} /> {t('common.save')}
                 </button>
               </div>
               {customer.notes.length === 0 ? (
-                <div className="text-md text-slate-500 text-center py-3">
+                <div className="text-md text-slate-500 dark:text-slate-400 text-center py-3">
                   {t('customers.notes.empty')}
                 </div>
               ) : (
@@ -712,12 +712,12 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       key={n.id}
                       className={`text-sm border rounded p-2 ${
                         n.pinned
-                          ? 'border-amber-200 bg-amber-50'
-                          : 'border-slate-200'
+                          ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
+                          : 'border-slate-200 dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-slate-800 whitespace-pre-wrap flex-1">
+                        <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap flex-1">
                           {n.body}
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
@@ -729,7 +729,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                           </IconButton>
                         </div>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                         {n.authorEmail ?? 'system'} ·{' '}
                         {new Date(n.createdAt).toLocaleString(dateLocale)}
                       </div>
@@ -749,11 +749,11 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           <FiscalDataCard customer={customer} onSaved={refresh} />
 
           <Card>
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2 inline-flex items-center gap-1.5">
               <MapPin size={12} /> {t('customers.detail.addressesTitle')}
             </div>
             {customer.addresses.length === 0 ? (
-              <div className="text-md text-slate-500">
+              <div className="text-md text-slate-500 dark:text-slate-400">
                 {t('customers.detail.noAddresses')}
               </div>
             ) : (
@@ -761,7 +761,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                 {customer.addresses.map((a) => (
                   <li
                     key={a.id}
-                    className="text-sm text-slate-700 border border-slate-200 rounded p-2"
+                    className="text-sm text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded p-2"
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       <Badge variant="default" size="sm">
@@ -774,7 +774,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       )}
                     </div>
                     {a.recipient && (
-                      <div className="font-medium text-slate-900">
+                      <div className="font-medium text-slate-900 dark:text-slate-100">
                         {a.recipient}
                       </div>
                     )}
@@ -784,9 +784,9 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       {a.postalCode} {a.city}
                       {a.state ? `, ${a.state}` : ''}
                     </div>
-                    <div className="text-slate-500">{a.country}</div>
+                    <div className="text-slate-500 dark:text-slate-400">{a.country}</div>
                     {a.phone && (
-                      <div className="text-slate-500">{a.phone}</div>
+                      <div className="text-slate-500 dark:text-slate-400">{a.phone}</div>
                     )}
                   </li>
                 ))}
@@ -795,7 +795,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
           </Card>
 
           <Card>
-            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+            <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2 inline-flex items-center gap-1.5">
               <User size={12} /> {t('customers.detail.notesTitle')}
             </div>
             <div className="space-y-2">
@@ -804,18 +804,18 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                   placeholder={t('customers.notes.placeholder')}
-                  className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 rounded"
+                  className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
                 />
                 <button
                   onClick={addNote}
                   disabled={!noteDraft.trim()}
-                  className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <Plus size={12} /> {t('common.save')}
                 </button>
               </div>
               {customer.notes.length === 0 ? (
-                <div className="text-md text-slate-500 text-center py-3">
+                <div className="text-md text-slate-500 dark:text-slate-400 text-center py-3">
                   {t('customers.notes.empty')}
                 </div>
               ) : (
@@ -825,12 +825,12 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                       key={n.id}
                       className={`text-sm border rounded p-2 ${
                         n.pinned
-                          ? 'border-amber-200 bg-amber-50'
-                          : 'border-slate-200'
+                          ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40'
+                          : 'border-slate-200 dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-slate-800 whitespace-pre-wrap">
+                        <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
                           {n.body}
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
@@ -857,7 +857,7 @@ export default function CustomerDetailClient({ customerId }: { customerId: strin
                           </IconButton>
                         </div>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                         {n.authorEmail ?? 'system'} ·{' '}
                         {new Date(n.createdAt).toLocaleString(dateLocale)}
                       </div>
@@ -950,18 +950,18 @@ function FiscalDataCard({
     return (
       <Card>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">
+          <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
             Dati fiscali
           </div>
           <button
             onClick={() => setEditing(true)}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
             {hasAny ? 'Modifica' : 'Aggiungi'}
           </button>
         </div>
         {!hasAny ? (
-          <div className="text-md text-slate-500">
+          <div className="text-md text-slate-500 dark:text-slate-400">
             Nessun dato fiscale. Aggiungi codice fiscale o partita IVA per
             generare fatture italiane.
           </div>
@@ -969,7 +969,7 @@ function FiscalDataCard({
           <dl className="text-sm space-y-1">
             {customer.fiscalKind && (
               <div className="flex items-center gap-2">
-                <dt className="text-slate-500 w-32">Tipo:</dt>
+                <dt className="text-slate-500 dark:text-slate-400 w-32">Tipo:</dt>
                 <dd>
                   <Badge variant={customer.fiscalKind === 'B2B' ? 'info' : 'default'} size="sm">
                     {customer.fiscalKind}
@@ -979,26 +979,26 @@ function FiscalDataCard({
             )}
             {customer.codiceFiscale && (
               <div className="flex items-center gap-2">
-                <dt className="text-slate-500 w-32">Codice fiscale:</dt>
-                <dd className="font-mono text-slate-800">{customer.codiceFiscale}</dd>
+                <dt className="text-slate-500 dark:text-slate-400 w-32">Codice fiscale:</dt>
+                <dd className="font-mono text-slate-800 dark:text-slate-200">{customer.codiceFiscale}</dd>
               </div>
             )}
             {customer.partitaIva && (
               <div className="flex items-center gap-2">
-                <dt className="text-slate-500 w-32">Partita IVA:</dt>
-                <dd className="font-mono text-slate-800">IT{customer.partitaIva}</dd>
+                <dt className="text-slate-500 dark:text-slate-400 w-32">Partita IVA:</dt>
+                <dd className="font-mono text-slate-800 dark:text-slate-200">IT{customer.partitaIva}</dd>
               </div>
             )}
             {customer.pecEmail && (
               <div className="flex items-center gap-2">
-                <dt className="text-slate-500 w-32">PEC:</dt>
-                <dd className="text-slate-800 truncate">{customer.pecEmail}</dd>
+                <dt className="text-slate-500 dark:text-slate-400 w-32">PEC:</dt>
+                <dd className="text-slate-800 dark:text-slate-200 truncate">{customer.pecEmail}</dd>
               </div>
             )}
             {customer.codiceDestinatario && (
               <div className="flex items-center gap-2">
-                <dt className="text-slate-500 w-32">Cod. destinatario:</dt>
-                <dd className="font-mono text-slate-800">{customer.codiceDestinatario}</dd>
+                <dt className="text-slate-500 dark:text-slate-400 w-32">Cod. destinatario:</dt>
+                <dd className="font-mono text-slate-800 dark:text-slate-200">{customer.codiceDestinatario}</dd>
               </div>
             )}
           </dl>
@@ -1011,19 +1011,19 @@ function FiscalDataCard({
   return (
     <Card>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
           Dati fiscali
         </div>
       </div>
       <div className="space-y-2">
         <div>
-          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">
             Tipo cliente
           </label>
           <select
             value={fiscalKind}
             onChange={(e) => setFiscalKind(e.target.value as '' | 'B2B' | 'B2C')}
-            className="w-full h-8 px-2 text-base border border-slate-200 rounded"
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
           >
             <option value="">— Non specificato</option>
             <option value="B2B">B2B (azienda con P. IVA)</option>
@@ -1031,7 +1031,7 @@ function FiscalDataCard({
           </select>
         </div>
         <div>
-          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">
             Codice fiscale
           </label>
           <input
@@ -1039,11 +1039,11 @@ function FiscalDataCard({
             onChange={(e) => setCodiceFiscale(e.target.value.toUpperCase())}
             placeholder="16 caratteri alfanumerici"
             maxLength={16}
-            className="w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
           />
         </div>
         <div>
-          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">
             Partita IVA
           </label>
           <input
@@ -1051,11 +1051,11 @@ function FiscalDataCard({
             onChange={(e) => setPartitaIva(e.target.value.replace(/\D/g, '').slice(0, 11))}
             placeholder="11 cifre"
             inputMode="numeric"
-            className="w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
           />
         </div>
         <div>
-          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">
             PEC
           </label>
           <input
@@ -1063,11 +1063,11 @@ function FiscalDataCard({
             onChange={(e) => setPecEmail(e.target.value)}
             placeholder="indirizzo@pec.it (per fallback SDI)"
             type="email"
-            className="w-full h-8 px-2 text-base border border-slate-200 rounded"
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded"
           />
         </div>
         <div>
-          <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold block mb-0.5">
+          <label className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold block mb-0.5">
             Codice destinatario
           </label>
           <input
@@ -1075,21 +1075,21 @@ function FiscalDataCard({
             onChange={(e) => setCodiceDestinatario(e.target.value.toUpperCase().slice(0, 7))}
             placeholder="7 caratteri (vuoto = SDI usa PEC)"
             maxLength={7}
-            className="w-full h-8 px-2 text-base border border-slate-200 rounded font-mono"
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded font-mono"
           />
         </div>
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           <button
             onClick={save}
             disabled={busy}
-            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50"
           >
             Salva
           </button>
           <button
             onClick={() => setEditing(false)}
             disabled={busy}
-            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             Annulla
           </button>

@@ -18,12 +18,12 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { deepLinkForOrder } from '../_lib/deep-links'
 
 const CHANNEL_TONE: Record<string, string> = {
-  AMAZON: 'bg-orange-50 text-orange-700 border-orange-200',
-  EBAY: 'bg-blue-50 text-blue-700 border-blue-200',
-  SHOPIFY: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  WOOCOMMERCE: 'bg-violet-50 text-violet-700 border-violet-200',
-  ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
-  MANUAL: 'bg-slate-50 text-slate-700 border-slate-200',
+  AMAZON: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900',
+  EBAY: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
+  SHOPIFY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  WOOCOMMERCE: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
+  ETSY: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+  MANUAL: 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
 }
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'info'> = {
   PENDING: 'warning', SHIPPED: 'info', DELIVERED: 'success', CANCELLED: 'default',
@@ -107,7 +107,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
       </div>
     )
   }
-  if (!order) return <div className="p-5"><Card><div className="text-md text-rose-600 py-8 text-center">Order not found.</div></Card></div>
+  if (!order) return <div className="p-5"><Card><div className="text-md text-rose-600 dark:text-rose-400 py-8 text-center">Order not found.</div></Card></div>
 
   const addr = order.shippingAddress ?? {}
   const lastReview = order.reviewRequests?.[0]
@@ -133,7 +133,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   title={link.label}
-                  className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+                  className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
                 >
                   <ExternalLink size={12} /> {link.label}
                 </a>
@@ -143,7 +143,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
               onClick={requestReviewNow}
               disabled={reviewBusy || !order.deliveredAt}
               title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request now (4-30d window)'}
-              className="h-8 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 rounded hover:bg-amber-100 dark:hover:bg-amber-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
             >
               <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request review
             </button>
@@ -154,7 +154,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <a
               href={`/sync-logs/api-calls?orderId=${encodeURIComponent(order.id)}`}
               title="View every channel API call recorded for this order"
-              className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <ExternalLink size={12} /> Sync activity
             </a>
@@ -164,7 +164,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
             {order.marketplace === 'IT' && (
               <FiscalActions order={order} />
             )}
-            <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
           </div>
@@ -174,7 +174,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
       {/* AU.1 — tab nav. Summary is default; others gate their
           content blocks. URL-backed via ?tab= so deep-links work
           (e.g. /orders/123?tab=fulfillment from a notification). */}
-      <div role="tablist" aria-label="Order detail sections" className="inline-flex items-center bg-slate-100 rounded-md p-0.5 flex-wrap gap-0.5">
+      <div role="tablist" aria-label="Order detail sections" className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 flex-wrap gap-0.5">
         {([
           { key: 'summary', label: 'Summary', icon: FileText },
           { key: 'fulfillment', label: 'Fulfillment', icon: Truck },
@@ -190,8 +190,8 @@ export default function OrderDetailClient({ id }: { id: string }) {
             onClick={() => setTab(t.key)}
             className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
               tabParam === t.key
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
             }`}
           >
             <t.icon size={12} aria-hidden="true" />
@@ -209,17 +209,17 @@ export default function OrderDetailClient({ id }: { id: string }) {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[order.channel]}`}>{order.channel}</span>
-                  {order.marketplace && <span className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{order.marketplace}</span>}
+                  {order.marketplace && <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">{order.marketplace}</span>}
                   <Badge variant={STATUS_VARIANT[order.status] ?? 'default'} size="sm">{order.status}</Badge>
                   {order.fulfillmentMethod && <Badge variant={order.fulfillmentMethod === 'FBA' ? 'warning' : 'info'} size="sm">{order.fulfillmentMethod}</Badge>}
                 </div>
-                <div className="text-sm text-slate-500">
+                <div className="text-sm text-slate-500 dark:text-slate-400">
                   Placed {order.purchaseDate ? new Date(order.purchaseDate).toLocaleString() : new Date(order.createdAt).toLocaleString()}
                 </div>
               </div>
               <div className="ml-auto text-right">
-                <div className="text-sm uppercase tracking-wider text-slate-500 font-semibold">Total</div>
-                <div className="text-[24px] font-semibold tabular-nums text-slate-900">{order.currencyCode === 'EUR' || !order.currencyCode ? '€' : ''}{Number(order.totalPrice).toFixed(2)}{order.currencyCode && order.currencyCode !== 'EUR' ? ` ${order.currencyCode}` : ''}</div>
+                <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Total</div>
+                <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">{order.currencyCode === 'EUR' || !order.currencyCode ? '€' : ''}{Number(order.totalPrice).toFixed(2)}{order.currencyCode && order.currencyCode !== 'EUR' ? ` ${order.currencyCode}` : ''}</div>
               </div>
             </div>
           </Card>
@@ -229,23 +229,23 @@ export default function OrderDetailClient({ id }: { id: string }) {
           <Card title="Items" description={`${order.items.length} line${order.items.length === 1 ? '' : 's'}`}>
             <div className="divide-y divide-slate-100">
               {order.items.map((it: any) => (
-                <div key={it.id} className="flex items-center gap-3 py-2 -mx-3 px-3 hover:bg-slate-50">
+                <div key={it.id} className="flex items-center gap-3 py-2 -mx-3 px-3 hover:bg-slate-50 dark:hover:bg-slate-800">
                   {it.product?.thumbnailUrl ? (
-                    <img src={it.product.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover bg-slate-100" />
+                    <img src={it.product.thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800" />
                   ) : (
-                    <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center text-slate-400">
+                    <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
                       <Package size={14} />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
                     {it.product ? (
-                      <Link href={`/products/${it.productId}/edit`} className="text-md text-slate-900 hover:text-blue-600 truncate block">
+                      <Link href={`/products/${it.productId}/edit`} className="text-md text-slate-900 dark:text-slate-100 hover:text-blue-600 truncate block">
                         {it.product.name}
                       </Link>
                     ) : (
-                      <div className="text-md text-slate-700 truncate">{it.sku}</div>
+                      <div className="text-md text-slate-700 dark:text-slate-300 truncate">{it.sku}</div>
                     )}
-                    <div className="text-sm text-slate-500 font-mono">{it.sku}</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{it.sku}</div>
                   </div>
                   {/* FU.1 — per-line VAT override (IT marketplace only) */}
                   {order.marketplace === 'IT' && (
@@ -271,7 +271,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
                         }
                       }}
                       title="Italian VAT rate for this line"
-                      className="h-7 px-1.5 text-sm border border-slate-200 rounded tabular-nums"
+                      className="h-7 px-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded tabular-nums"
                     >
                       <option value="">— %</option>
                       <option value="22">22%</option>
@@ -281,11 +281,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
                     </select>
                   )}
                   <div className="text-right">
-                    <div className="text-md tabular-nums text-slate-700">×{it.quantity}</div>
-                    <div className="text-sm tabular-nums text-slate-500">€{it.price.toFixed(2)}</div>
+                    <div className="text-md tabular-nums text-slate-700 dark:text-slate-300">×{it.quantity}</div>
+                    <div className="text-sm tabular-nums text-slate-500 dark:text-slate-400">€{it.price.toFixed(2)}</div>
                   </div>
                   {it.productId && (
-                    <Link href={`/listings?search=${encodeURIComponent(it.sku)}`} className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1">
+                    <Link href={`/listings?search=${encodeURIComponent(it.sku)}`} className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
                       Listings <ExternalLink size={10} />
                     </Link>
                   )}
@@ -299,18 +299,18 @@ export default function OrderDetailClient({ id }: { id: string }) {
           {tabParam === 'activity' && (
           <Card title="Timeline" description="Lifecycle events for this order">
             {timeline.length === 0 ? (
-              <div className="text-base text-slate-400 text-center py-4">No events yet</div>
+              <div className="text-base text-slate-400 dark:text-slate-500 text-center py-4">No events yet</div>
             ) : (
-              <ol className="relative border-l border-slate-200 ml-2 space-y-3">
+              <ol className="relative border-l border-slate-200 dark:border-slate-700 ml-2 space-y-3">
                 {timeline.map((ev, i) => {
                   const Icon = TIMELINE_ICON[ev.kind] ?? Clock
                   return (
                     <li key={i} className="ml-4">
-                      <div className="absolute -left-[8px] mt-0.5 w-4 h-4 rounded-full bg-white border border-slate-300 inline-flex items-center justify-center">
-                        <Icon size={9} className="text-slate-500" />
+                      <div className="absolute -left-[8px] mt-0.5 w-4 h-4 rounded-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 inline-flex items-center justify-center">
+                        <Icon size={9} className="text-slate-500 dark:text-slate-400" />
                       </div>
-                      <div className="text-base font-medium text-slate-900">{ev.label}</div>
-                      <div className="text-xs text-slate-500">{new Date(ev.at).toLocaleString()}</div>
+                      <div className="text-base font-medium text-slate-900 dark:text-slate-100">{ev.label}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{new Date(ev.at).toLocaleString()}</div>
                     </li>
                   )
                 })}
@@ -342,14 +342,14 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <Card title="Shipments" description={`${order.shipments.length} shipment${order.shipments.length === 1 ? '' : 's'}`}>
               <div className="space-y-2">
                 {order.shipments.map((s: any) => (
-                  <div key={s.id} className="border border-slate-200 rounded p-3 hover:bg-slate-50">
+                  <div key={s.id} className="border border-slate-200 dark:border-slate-700 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div className="flex items-center justify-between">
                       <Link href={`/fulfillment/outbound?id=${s.id}`} className="flex-1 block">
-                        <div className="text-base font-semibold text-slate-900 inline-flex items-center gap-1.5">
+                        <div className="text-base font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
                           <Truck size={12} /> {s.carrierCode}
-                          {s.trackingNumber && <span className="font-mono text-blue-600">{s.trackingNumber}</span>}
+                          {s.trackingNumber && <span className="font-mono text-blue-600 dark:text-blue-400">{s.trackingNumber}</span>}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           {s.warehouse?.code ?? '—'} · {s.items.length} items
                           {s.shippedAt && ` · shipped ${new Date(s.shippedAt).toLocaleDateString('en-GB')}`}
                           {s.deliveredAt && ` · delivered ${new Date(s.deliveredAt).toLocaleDateString('en-GB')}`}
@@ -365,7 +365,7 @@ export default function OrderDetailClient({ id }: { id: string }) {
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           title="Pack slip (apre in nuova scheda)"
-                          className="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1"
+                          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
                         >
                           <ExternalLink size={11} /> Pack slip
                         </a>
@@ -383,13 +383,13 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <Card title="Returns" description={`${order.returns.length} return${order.returns.length === 1 ? '' : 's'}`}>
               <div className="space-y-2">
                 {order.returns.map((r: any) => (
-                  <Link key={r.id} href={`/fulfillment/returns?id=${r.id}`} className="block border border-slate-200 rounded p-3 hover:bg-slate-50">
+                  <Link key={r.id} href={`/fulfillment/returns?id=${r.id}`} className="block border border-slate-200 dark:border-slate-700 rounded p-3 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-base font-semibold text-slate-900 inline-flex items-center gap-1.5">
+                        <div className="text-base font-semibold text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5">
                           <Undo2 size={12} /> {r.rmaNumber ?? '—'}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">{r.reason ?? 'No reason given'}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{r.reason ?? 'No reason given'}</div>
                       </div>
                       <Badge variant="warning" size="sm">{r.status.replace(/_/g, ' ')}</Badge>
                     </div>
@@ -412,15 +412,15 @@ export default function OrderDetailClient({ id }: { id: string }) {
                 <FinTile label="Fees" value={financials.rollup.fees} tone="danger" />
                 <FinTile label="Net" value={financials.rollup.net} tone="success" />
               </div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5">Transactions</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold mb-1.5">Transactions</div>
               <div className="space-y-1">
                 {financials.transactions.map((tx: any) => (
-                  <div key={tx.id} className="flex items-center justify-between text-sm border-b border-slate-100 py-1">
+                  <div key={tx.id} className="flex items-center justify-between text-sm border-b border-slate-100 dark:border-slate-800 py-1">
                     <div>
-                      <span className="font-mono text-slate-700">{tx.transactionType}</span>
-                      <span className="text-slate-500 ml-2">{new Date(tx.transactionDate).toLocaleDateString('en-GB')}</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">{tx.transactionType}</span>
+                      <span className="text-slate-500 dark:text-slate-400 ml-2">{new Date(tx.transactionDate).toLocaleDateString('en-GB')}</span>
                     </div>
-                    <div className="tabular-nums font-mono text-slate-900">€{Number(tx.amount).toFixed(2)}</div>
+                    <div className="tabular-nums font-mono text-slate-900 dark:text-slate-100">€{Number(tx.amount).toFixed(2)}</div>
                   </div>
                 ))}
               </div>
@@ -432,15 +432,15 @@ export default function OrderDetailClient({ id }: { id: string }) {
         <div className="space-y-4">
           <Card title="Customer">
             <div className="space-y-2">
-              <div className="text-md font-semibold text-slate-900">{order.customerName}</div>
-              <div className="text-sm text-slate-500 inline-flex items-center gap-1.5"><Mail size={11} /> {order.customerEmail}</div>
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100">{order.customerName}</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5"><Mail size={11} /> {order.customerEmail}</div>
               {addr && (
-                <div className="text-sm text-slate-600 mt-1.5 inline-flex items-start gap-1.5">
+                <div className="text-sm text-slate-600 dark:text-slate-400 mt-1.5 inline-flex items-start gap-1.5">
                   <MapPin size={11} className="mt-0.5 flex-shrink-0" />
                   <span>{[addr.street, addr.city, addr.postalCode, addr.state, addr.country].filter(Boolean).join(', ')}</span>
                 </div>
               )}
-              <Link href={`/orders?customerEmail=${encodeURIComponent(order.customerEmail)}`} className="block mt-2 text-sm text-blue-600 hover:underline">
+              <Link href={`/orders?customerEmail=${encodeURIComponent(order.customerEmail)}`} className="block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
                 All orders from this customer →
               </Link>
             </div>
@@ -451,14 +451,14 @@ export default function OrderDetailClient({ id }: { id: string }) {
               <ul className="space-y-1">
                 {order.customerHistory.slice(0, 8).map((h: any) => (
                   <li key={h.id}>
-                    <Link href={`/orders/${h.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5 -mx-2 rounded hover:bg-slate-50">
+                    <Link href={`/orders/${h.id}`} className="flex items-center justify-between gap-2 px-2 py-1.5 -mx-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
                       <div className="min-w-0">
-                        <div className="text-sm font-mono text-slate-700 truncate">{h.channelOrderId}</div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">{h.channelOrderId}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
                           {h.purchaseDate ? new Date(h.purchaseDate).toLocaleDateString('en-GB') : new Date(h.createdAt).toLocaleDateString('en-GB')}
                         </div>
                       </div>
-                      <div className="text-sm tabular-nums text-slate-900 flex-shrink-0">€{Number(h.totalPrice).toFixed(2)}</div>
+                      <div className="text-sm tabular-nums text-slate-900 dark:text-slate-100 flex-shrink-0">€{Number(h.totalPrice).toFixed(2)}</div>
                     </Link>
                   </li>
                 ))}
@@ -468,16 +468,16 @@ export default function OrderDetailClient({ id }: { id: string }) {
 
           <Card title="Review request" description="Amazon Solicitations">
             {!lastReview ? (
-              <div className="text-base text-slate-500">No request yet.</div>
+              <div className="text-base text-slate-500 dark:text-slate-400">No request yet.</div>
             ) : (
               <div className="space-y-1">
                 <Badge variant="info" size="sm">{lastReview.status}</Badge>
-                {lastReview.sentAt && <div className="text-xs text-slate-500">Sent {new Date(lastReview.sentAt).toLocaleString()}</div>}
-                {lastReview.errorMessage && <div className="text-xs text-rose-600">{lastReview.errorMessage}</div>}
-                {lastReview.suppressedReason && <div className="text-xs text-slate-500">{lastReview.suppressedReason}</div>}
+                {lastReview.sentAt && <div className="text-xs text-slate-500 dark:text-slate-400">Sent {new Date(lastReview.sentAt).toLocaleString()}</div>}
+                {lastReview.errorMessage && <div className="text-xs text-rose-600 dark:text-rose-400">{lastReview.errorMessage}</div>}
+                {lastReview.suppressedReason && <div className="text-xs text-slate-500 dark:text-slate-400">{lastReview.suppressedReason}</div>}
               </div>
             )}
-            <div className="mt-3 text-xs text-slate-500">
+            <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
               {!order.deliveredAt
                 ? 'Wait until order is delivered before requesting.'
                 : 'Amazon allows one request per order, between 4–30 days post-delivery, with no custom message.'}
@@ -590,18 +590,18 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Add a note for this order…"
-            className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 rounded"
+            className="flex-1 h-16 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-700 rounded"
           />
           <button
             onClick={add}
             disabled={!draft.trim()}
-            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 disabled:opacity-50"
+            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50"
           >
             Save
           </button>
         </div>
         {notes.length === 0 ? (
-          <div className="text-md text-slate-500 text-center py-2">
+          <div className="text-md text-slate-500 dark:text-slate-400 text-center py-2">
             No notes yet.
           </div>
         ) : (
@@ -610,11 +610,11 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
               <li
                 key={n.id}
                 className={`text-sm border rounded p-2 ${
-                  n.pinned ? 'border-amber-200 bg-amber-50' : 'border-slate-200'
+                  n.pinned ? 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40' : 'border-slate-200 dark:border-slate-700'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="text-slate-800 whitespace-pre-wrap flex-1">
+                  <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap flex-1">
                     {n.body}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
@@ -642,7 +642,7 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
                     </IconButton>
                   </div>
                 </div>
-                <div className="text-xs text-slate-500 mt-1">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   {n.authorEmail ?? 'system'} ·{' '}
                   {new Date(n.createdAt).toLocaleString()}
                 </div>
@@ -656,10 +656,10 @@ function OrderNotesCard({ orderId }: { orderId: string }) {
 }
 
 function FinTile({ label, value, tone }: { label: string; value: number; tone: 'default' | 'success' | 'danger' }) {
-  const cls = { default: 'text-slate-900', success: 'text-emerald-600', danger: 'text-rose-600' }[tone]
+  const cls = { default: 'text-slate-900 dark:text-slate-100', success: 'text-emerald-600 dark:text-emerald-400', danger: 'text-rose-600 dark:text-rose-400' }[tone]
   return (
     <div>
-      <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
       <div className={`text-2xl font-semibold tabular-nums ${cls}`}>€{value.toFixed(2)}</div>
     </div>
   )
@@ -752,11 +752,11 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
   return (
     <Card>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
           <Truck size={12} /> Amazon Buy Shipping
         </div>
         {source === 'dryRun' && (
-          <span className="text-xs font-semibold uppercase px-1.5 py-0.5 border rounded bg-amber-50 text-amber-700 border-amber-200">
+          <span className="text-xs font-semibold uppercase px-1.5 py-0.5 border rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900">
             dryRun
           </span>
         )}
@@ -764,14 +764,14 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
 
       {phase === 'idle' && (
         <div className="space-y-2">
-          <p className="text-base text-slate-600">
+          <p className="text-base text-slate-600 dark:text-slate-400">
             Quote SP-API Merchant Fulfillment rates for this order.
             Buy Shipping rates are usually 5–15% cheaper than retail
             and auto-credit VTR.
           </p>
           <button
             onClick={getQuotes}
-            className="h-8 px-3 text-base bg-slate-900 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5"
           >
             <RefreshCw size={12} /> Get rates
           </button>
@@ -779,7 +779,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
       )}
 
       {phase === 'quoting' && (
-        <div className="text-md text-slate-500 py-3 text-center">
+        <div className="text-md text-slate-500 dark:text-slate-400 py-3 text-center">
           Fetching rates…
         </div>
       )}
@@ -787,12 +787,12 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
       {phase === 'rates' && (
         <div className="space-y-2">
           {message && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+            <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded p-2">
               {message}
             </div>
           )}
           {rates.length === 0 ? (
-            <div className="text-md text-slate-500 py-2">
+            <div className="text-md text-slate-500 dark:text-slate-400 py-2">
               No eligible rates returned for this order.
             </div>
           ) : (
@@ -800,25 +800,25 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
               {rates.map((r) => (
                 <li
                   key={r.serviceId}
-                  className="flex items-center justify-between gap-2 border border-slate-200 rounded p-2"
+                  className="flex items-center justify-between gap-2 border border-slate-200 dark:border-slate-700 rounded p-2"
                 >
                   <div className="min-w-0">
-                    <div className="text-md text-slate-900">
+                    <div className="text-md text-slate-900 dark:text-slate-100">
                       {r.carrierName} — {r.serviceName}
                       {r.guaranteedDelivery && (
-                        <span className="ml-1.5 text-xs font-semibold uppercase px-1.5 py-0.5 border rounded bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <span className="ml-1.5 text-xs font-semibold uppercase px-1.5 py-0.5 border rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
                           guaranteed
                         </span>
                       )}
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
                       {r.estimatedTransitDays}d transit · {r.totalCharge.currencyCode}{' '}
                       {r.totalCharge.amount.toFixed(2)}
                     </div>
                   </div>
                   <button
                     onClick={() => buyRate(r.serviceId)}
-                    className="h-7 px-3 text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100"
+                    className="h-7 px-3 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60"
                   >
                     Buy
                   </button>
@@ -828,7 +828,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
           )}
           <button
             onClick={() => setPhase('idle')}
-            className="text-sm text-slate-500 hover:text-slate-900"
+            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
           >
             ← Back
           </button>
@@ -836,7 +836,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
       )}
 
       {phase === 'buying' && (
-        <div className="text-md text-slate-500 py-3 text-center">
+        <div className="text-md text-slate-500 dark:text-slate-400 py-3 text-center">
           Purchasing label…
         </div>
       )}
@@ -844,19 +844,19 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
       {phase === 'bought' && purchase && (
         <div className="space-y-2">
           {message && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+            <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded p-2">
               {message}
             </div>
           )}
-          <div className="border border-emerald-200 bg-emerald-50 rounded p-3 space-y-1">
-            <div className="text-md font-semibold text-emerald-900">
+          <div className="border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 rounded p-3 space-y-1">
+            <div className="text-md font-semibold text-emerald-900 dark:text-emerald-100">
               Label ready
             </div>
-            <div className="text-sm text-slate-700">
+            <div className="text-sm text-slate-700 dark:text-slate-300">
               Tracking:{' '}
               <span className="font-mono">{purchase.trackingNumber}</span>
             </div>
-            <div className="text-sm text-slate-700">
+            <div className="text-sm text-slate-700 dark:text-slate-300">
               Charged: {purchase.totalCharge.currencyCode}{' '}
               {purchase.totalCharge.amount.toFixed(2)}
             </div>
@@ -865,7 +865,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
                 href={purchase.labelUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
               >
                 Download label PDF <ExternalLink size={11} />
               </a>
@@ -876,7 +876,7 @@ function BuyShippingCard({ orderId }: { orderId: string }) {
               setPhase('idle')
               setPurchase(null)
             }}
-            className="text-sm text-slate-500 hover:text-slate-900"
+            className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
           >
             ← Back
           </button>
@@ -935,7 +935,7 @@ function FiscalActions({ order }: { order: any }) {
         target="_blank"
         rel="noopener noreferrer"
         title="Stampa fattura (apre in nuova scheda — usa Cmd+P per salvare in PDF)"
-        className="h-8 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 inline-flex items-center gap-1.5"
+        className="h-8 px-3 text-base bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5"
       >
         <DollarSign size={12} /> Fattura
       </a>
@@ -944,7 +944,7 @@ function FiscalActions({ order }: { order: any }) {
           <a
             href={`${getBackendUrl()}/api/orders/${order.id}/fattura-pa.xml`}
             title="Download FatturaPA XML for manual SDI upload"
-            className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             download
           >
             <ExternalLink size={12} /> XML SDI
@@ -952,7 +952,7 @@ function FiscalActions({ order }: { order: any }) {
           <button
             onClick={dispatchSdi}
             title="Dispatch invoice to SDI (env-gated — set NEXUS_ENABLE_SDI_DISPATCH=true to flip from dryRun)"
-            className="h-8 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 inline-flex items-center gap-1.5"
+            className="h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5"
           >
             <CheckCircle2 size={12} /> Invia SDI
           </button>
@@ -1019,17 +1019,17 @@ function AmazonShipByImpactCard({ order }: { order: any }) {
   }
 
   const tone = {
-    'on-time': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'at-risk': 'bg-amber-50 text-amber-700 border-amber-200',
-    overdue: 'bg-rose-50 text-rose-700 border-rose-200',
-    late: 'bg-rose-50 text-rose-700 border-rose-200',
-    'no-track': 'bg-rose-50 text-rose-700 border-rose-200',
+    'on-time': 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+    'at-risk': 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+    overdue: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+    late: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+    'no-track': 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
   }[tier]
 
   return (
     <Card>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
           <Clock size={12} /> Amazon ship-by impact
         </div>
         <span
@@ -1038,8 +1038,8 @@ function AmazonShipByImpactCard({ order }: { order: any }) {
           {tier.replace('-', ' ')}
         </span>
       </div>
-      <div className="text-base text-slate-700">{reason}</div>
-      <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500 grid grid-cols-2 gap-x-4 gap-y-1">
+      <div className="text-base text-slate-700 dark:text-slate-300">{reason}</div>
+      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 grid grid-cols-2 gap-x-4 gap-y-1">
         <div>
           ship-by:{' '}
           {shipBy ? shipBy.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
@@ -1086,27 +1086,27 @@ function EbayMessagingCard({
   return (
     <Card>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 inline-flex items-center gap-1.5">
+        <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
           <Mail size={12} /> eBay messages
         </div>
         <a
           href={`https://www.ebay.com/mesh/msg/inbox?buyerUsername=${encodeURIComponent(buyerUsername ?? '')}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
         >
           Open inbox <ExternalLink size={11} />
         </a>
       </div>
       {checkoutNotes ? (
-        <div className="text-base text-slate-800 whitespace-pre-wrap border-l-2 border-blue-300 pl-3 py-1">
+        <div className="text-base text-slate-800 dark:text-slate-200 whitespace-pre-wrap border-l-2 border-blue-300 pl-3 py-1">
           {checkoutNotes}
-          <div className="text-xs text-slate-500 mt-1">
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             — {buyerUsername ?? 'buyer'}, at checkout
           </div>
         </div>
       ) : (
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-slate-500 dark:text-slate-400">
           No checkout note from{' '}
           <span className="font-mono">{buyerUsername ?? 'the buyer'}</span>.
           Live message threads land here once the Messaging API is wired
@@ -1114,7 +1114,7 @@ function EbayMessagingCard({
           + grant the messaging OAuth scope on your eBay connection).
         </div>
       )}
-      <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+      <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
         Order {channelOrderId} ·{' '}
         {meta?.lastModifiedDate
           ? `updated ${new Date(meta.lastModifiedDate).toLocaleString()}`
@@ -1162,24 +1162,24 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
 
   return (
     <Card>
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 mb-2 inline-flex items-center gap-1.5">
+      <div className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2 inline-flex items-center gap-1.5">
         <DollarSign size={12} /> Shopify promotions
       </div>
       <div className="space-y-2 text-sm">
         {discountCodes.length > 0 && (
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
               Discount codes
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {discountCodes.map((d, i) => (
                 <span
                   key={`${d.code}-${i}`}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 text-sm font-mono rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-sm font-mono rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900"
                 >
                   {d.code}
                   {d.amount && (
-                    <span className="text-xs text-emerald-600">
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400">
                       −{d.type === 'percentage' ? `${d.amount}%` : `€${Number(d.amount).toFixed(2)}`}
                     </span>
                   )}
@@ -1190,15 +1190,15 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
         )}
         {appliedDiscounts.length > 0 && (
           <div>
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">
+            <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
               Automatic discounts
             </div>
             <ul className="space-y-1">
               {appliedDiscounts.map((a, i) => (
-                <li key={i} className="text-slate-700">
+                <li key={i} className="text-slate-700 dark:text-slate-300">
                   {a.title || a.description || 'Automatic discount'}
                   {a.value && (
-                    <span className="text-slate-500 ml-1">
+                    <span className="text-slate-500 dark:text-slate-400 ml-1">
                       ({a.value_type === 'percentage' ? `${a.value}%` : `€${Number(a.value).toFixed(2)}`})
                     </span>
                   )}
@@ -1208,7 +1208,7 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
           </div>
         )}
         {totalDiscounts > 0 && (
-          <div className="text-slate-700">
+          <div className="text-slate-700 dark:text-slate-300">
             Total discount:{' '}
             <span className="font-semibold tabular-nums">
               €{totalDiscounts.toFixed(2)}
@@ -1216,8 +1216,8 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
           </div>
         )}
         {usedGiftCard && (
-          <div className="inline-flex items-center gap-1.5 text-slate-700">
-            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase rounded bg-amber-50 text-amber-700 border border-amber-200">
+          <div className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
               Gift card used
             </span>
             {giftCardAmount > 0 && (
