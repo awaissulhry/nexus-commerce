@@ -145,6 +145,60 @@ export interface ChannelSuggestion {
   reason: string
 }
 
+// AI-4.6 — per-channel pricing recommendation returned by
+// suggestPricing() for the Step 7 "AI: recommend prices" CTA.
+export interface PricingRecommendation {
+  platform: string
+  marketplace: string
+  recommendedPrice: number
+  currency: string
+  /** Recommended compare-at price (strikethrough on the listing).
+   *  Optional; AI omits when no anchor pricing makes sense. */
+  compareAtPrice?: number
+  reasoning: string
+  /** Margin estimate when cost is supplied. Null otherwise. */
+  marginPercent: number | null
+}
+export interface SuggestPricingParams {
+  product: ProductContext
+  /** Per-channel context the AI uses to anchor recommendations. */
+  channels: Array<{
+    platform: string
+    marketplace: string
+    currency: string
+    /** Operator's current price on this channel, if any. */
+    currentPrice?: number | null
+    /** Approximate referral / FBA fee fraction (0–1). */
+    referralFee?: number | null
+    fulfillmentFee?: number | null
+  }>
+  /** Master cost for margin math. Optional — when missing, AI
+   *  omits margin numbers and reasons stay strategic only. */
+  costPrice?: number | null
+  /** Master price floor (MAP). When set, AI never recommends below. */
+  minPrice?: number | null
+  /** Operator's target margin as a fraction (0.30 = 30%). When set,
+   *  AI optimises around it. */
+  targetMargin?: number | null
+  budgetScope?: BudgetCheckScope
+  provider?: string | null
+}
+export interface SuggestPricingResult {
+  recommendations: PricingRecommendation[]
+  /** 1–3 sentence overall strategy summary for the operator. */
+  strategy: string
+  usage: ProviderUsage
+  redactions: RedactionCount[]
+  redactionTotal: number
+  metadata: {
+    productSku: string
+    model: string
+    provider: ProviderName
+    elapsedMs: number
+    generatedAt: string
+  }
+}
+
 // AI-4.4 — variation theme recommendation. Returned by
 // suggestVariationTheme() for the Step 4 "AI: pick the right theme"
 // CTA.
@@ -552,6 +606,227 @@ export class ListingContentService {
         generatedAt: new Date().toISOString(),
       },
     }
+  }
+
+  /**
+   * AI-4.6 — recommend per-channel prices for the wizard's Step 7
+   * "AI: recommend prices" CTA. Single AI call per request.
+   *
+   * v1 is category-norm + brand-context driven — no competitor-data
+   * lookups (which would need a separate scraping / API integration).
+   * The reasoning is therefore strategic ("luxury brand → Amazon US
+   * accepts 15% premium over master") rather than data-driven
+   * ("undercut Buy Box by 2%"). Subsequent commits can fold in
+   * BuyBoxOffers when that data path lands.
+   *
+   * Honours kill-switch + budget gate + outbound sanitiser. Margin
+   * percent is only populated when cost is supplied; otherwise null.
+   */
+  async suggestPricing(
+    params: SuggestPricingParams,
+  ): Promise<SuggestPricingResult> {
+    if (isAiKillSwitchOn()) {
+      throw new Error(
+        'AI is temporarily disabled (NEXUS_AI_KILL_SWITCH is on). Contact an admin to re-enable.',
+      )
+    }
+    const provider = getProvider(params.provider)
+    if (!provider) {
+      throw new Error(
+        'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
+      )
+    }
+    if (params.channels.length === 0) {
+      throw new Error('No channels supplied — nothing to price.')
+    }
+
+    const prompt = this.suggestPricingPrompt(params)
+
+    if (params.budgetScope) {
+      const estimateUSD = estimateCallCostUSD({
+        prompt,
+        maxOutputTokens: 4096,
+        provider: provider.name,
+        model: provider.defaultModel,
+      })
+      const verdict = await checkBudget(estimateUSD, params.budgetScope)
+      if (!verdict.allowed) {
+        throw new BudgetExceededError(
+          verdict.reason ?? 'per_call',
+          verdict.message ??
+            'Pricing suggestion refused — budget ceiling reached.',
+        )
+      }
+    }
+
+    const start = Date.now()
+    const { text, usage, redactions } = await this.runOne(provider, prompt, 0)
+    const parsed = this.parsePricingRecommendations(text, params)
+    const redactionTotal = totalRedactions(redactions)
+    return {
+      recommendations: parsed.recommendations,
+      strategy: parsed.strategy,
+      usage,
+      redactions,
+      redactionTotal,
+      metadata: {
+        productSku: params.product.sku,
+        model: usage.model,
+        provider: usage.provider,
+        elapsedMs: Date.now() - start,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  }
+
+  private suggestPricingPrompt(params: SuggestPricingParams): string {
+    const channelsList = params.channels
+      .map((c) => {
+        const fee = typeof c.referralFee === 'number'
+          ? `${(c.referralFee * 100).toFixed(1)}% referral`
+          : 'fee unknown'
+        const fulfil = typeof c.fulfillmentFee === 'number'
+          ? `${c.fulfillmentFee.toFixed(2)} ${c.currency} fulfilment`
+          : 'no fulfilment fee'
+        const current = typeof c.currentPrice === 'number'
+          ? `current=${c.currentPrice.toFixed(2)} ${c.currency}`
+          : 'no current price'
+        return `- ${c.platform}:${c.marketplace} [${c.currency}] · ${current} · ${fee} · ${fulfil}`
+      })
+      .join('\n')
+    const costLine = typeof params.costPrice === 'number'
+      ? `Master cost: ${params.costPrice.toFixed(2)}`
+      : 'Master cost: not supplied (omit margin numbers; reasoning stays strategic)'
+    const floorLine = typeof params.minPrice === 'number'
+      ? `Floor (MAP): never recommend below ${params.minPrice.toFixed(2)}`
+      : 'Floor: none'
+    const targetLine = typeof params.targetMargin === 'number'
+      ? `Target margin: ${(params.targetMargin * 100).toFixed(0)}% (optimise around this where possible)`
+      : 'Target margin: not supplied'
+
+    return `You are an e-commerce pricing strategist. Recommend per-channel prices for this product across the operator's selected channels. v1 — no competitor-data lookups available; reason from category norms + brand context.
+
+Product:
+${this.contextBlock(params.product)}
+
+${costLine}
+${floorLine}
+${targetLine}
+
+Channels:
+${channelsList}
+
+Rules:
+- Recommend in EACH channel's currency (don't re-quote everything in EUR).
+- Account for the channel's fee structure when targeting margin.
+- Higher prices on D2C (Shopify) are reasonable when brand storytelling is the value prop; marketplace channels (Amazon, eBay) usually need to be more competitive.
+- compareAtPrice (strike-through anchor) is OPTIONAL — include only when it's a credible MSRP, not a fake markdown.
+- 1–2 sentence reasoning per channel — specific to THIS product, not generic platform advice.
+
+Return JSON only — no markdown, no commentary, no surrounding text:
+{
+  "strategy": "1–3 sentence overall strategy across the channels — why this product positions where it does",
+  "recommendations": [
+    {
+      "platform": "AMAZON",
+      "marketplace": "IT",
+      "recommendedPrice": 99.00,
+      "currency": "EUR",
+      "compareAtPrice": 119.00,
+      "reasoning": "1–2 sentences specific to this product on this channel"
+    }
+  ]
+}
+
+Return one entry per channel. Prices as numbers (not strings). Skip compareAtPrice when no anchor makes sense.`
+  }
+
+  private parsePricingRecommendations(
+    raw: string,
+    params: SuggestPricingParams,
+  ): { recommendations: PricingRecommendation[]; strategy: string } {
+    const j = this.parseJson<{
+      strategy?: unknown
+      recommendations?: unknown
+    }>(raw, 'pricing')
+    const strategy = typeof j.strategy === 'string'
+      ? j.strategy.trim().slice(0, 600)
+      : ''
+    const allowed = new Set(
+      params.channels.map(
+        (c) => `${c.platform.toUpperCase()}:${c.marketplace.toUpperCase()}`,
+      ),
+    )
+    const channelByKey = new Map(
+      params.channels.map((c) => [
+        `${c.platform.toUpperCase()}:${c.marketplace.toUpperCase()}`,
+        c,
+      ]),
+    )
+    const out: PricingRecommendation[] = []
+    if (!Array.isArray(j.recommendations)) {
+      return { recommendations: out, strategy }
+    }
+    for (const r of j.recommendations) {
+      if (!r || typeof r !== 'object') continue
+      const rec = r as Record<string, unknown>
+      const platform = typeof rec.platform === 'string'
+        ? rec.platform.toUpperCase()
+        : null
+      const marketplace = typeof rec.marketplace === 'string'
+        ? rec.marketplace.toUpperCase()
+        : null
+      if (!platform || !marketplace) continue
+      const channelKey = `${platform}:${marketplace}`
+      if (!allowed.has(channelKey)) continue
+      const channelCtx = channelByKey.get(channelKey)
+      const recommendedPrice = typeof rec.recommendedPrice === 'number'
+        && Number.isFinite(rec.recommendedPrice)
+        && rec.recommendedPrice > 0
+        ? rec.recommendedPrice
+        : null
+      if (recommendedPrice == null) continue
+      // Honour the MAP floor server-side too, in case AI ignored it.
+      if (
+        typeof params.minPrice === 'number' &&
+        recommendedPrice < params.minPrice
+      ) {
+        continue
+      }
+      const currency = typeof rec.currency === 'string'
+        ? rec.currency.toUpperCase().slice(0, 4)
+        : (channelCtx?.currency ?? 'USD')
+      const compareAtPrice = typeof rec.compareAtPrice === 'number'
+        && Number.isFinite(rec.compareAtPrice)
+        && rec.compareAtPrice > recommendedPrice
+        ? rec.compareAtPrice
+        : undefined
+      const reasoning = typeof rec.reasoning === 'string'
+        ? rec.reasoning.trim().slice(0, 500)
+        : ''
+      // Margin = (price - cost - fees) / price × 100
+      let marginPercent: number | null = null
+      if (typeof params.costPrice === 'number' && params.costPrice > 0) {
+        const referral = typeof channelCtx?.referralFee === 'number'
+          ? channelCtx.referralFee * recommendedPrice
+          : 0
+        const fulfil = typeof channelCtx?.fulfillmentFee === 'number'
+          ? channelCtx.fulfillmentFee
+          : 0
+        const net = recommendedPrice - params.costPrice - referral - fulfil
+        marginPercent = (net / recommendedPrice) * 100
+      }
+      out.push({
+        platform,
+        marketplace,
+        recommendedPrice,
+        currency,
+        compareAtPrice,
+        reasoning,
+        marginPercent,
+      })
+    }
+    return { recommendations: out, strategy }
   }
 
   /**

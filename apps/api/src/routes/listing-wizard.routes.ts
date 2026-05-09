@@ -3846,6 +3846,200 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── AI-4.6 — Step 7 pricing suggester ──────────────────────────
+  //
+  // POST /api/listing-wizard/:id/suggest-pricing
+  // Body: {
+  //   channels: [{platform, marketplace, currency, currentPrice?,
+  //               referralFee?, fulfillmentFee?}],
+  //   costPrice?, minPrice?, targetMargin?, provider?
+  // }
+  //
+  // Single AI call. Caller passes per-channel context (currency +
+  // current price + fee structure) so the route doesn't have to
+  // reconstruct it. Server reads product context, calls AI, returns
+  // per-channel recommended prices + reasoning + overall strategy.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      channels?: Array<{
+        platform?: string
+        marketplace?: string
+        currency?: string
+        currentPrice?: number
+        referralFee?: number
+        fulfillmentFee?: number
+      }>
+      costPrice?: number
+      minPrice?: number
+      targetMargin?: number
+      provider?: string
+    }
+  }>(
+    '/listing-wizard/:id/suggest-pricing',
+    {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      if (!listingContentService.isConfigured()) {
+        return reply.code(503).send({
+          error:
+            'AI provider not configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY on the API server.',
+        })
+      }
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const channels = Array.isArray(request.body?.channels)
+        ? request.body!.channels!
+            .filter(
+              (c): c is {
+                platform: string
+                marketplace: string
+                currency: string
+              } & {
+                currentPrice?: number
+                referralFee?: number
+                fulfillmentFee?: number
+              } =>
+                !!c &&
+                typeof c.platform === 'string' &&
+                typeof c.marketplace === 'string' &&
+                typeof c.currency === 'string',
+            )
+            .map((c) => ({
+              platform: c.platform.toUpperCase(),
+              marketplace: c.marketplace.toUpperCase(),
+              currency: c.currency.toUpperCase(),
+              currentPrice:
+                typeof c.currentPrice === 'number' ? c.currentPrice : null,
+              referralFee:
+                typeof c.referralFee === 'number' ? c.referralFee : null,
+              fulfillmentFee:
+                typeof c.fulfillmentFee === 'number'
+                  ? c.fulfillmentFee
+                  : null,
+            }))
+        : []
+      if (channels.length === 0) {
+        return reply.code(400).send({
+          error:
+            'channels is required and must contain at least one {platform, marketplace, currency} entry.',
+        })
+      }
+
+      try {
+        const result = await listingContentService.suggestPricing({
+          product: {
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            brand: product.brand,
+            description: product.description,
+            bulletPoints: product.bulletPoints,
+            keywords: product.keywords,
+            weightValue: product.weightValue
+              ? Number(product.weightValue)
+              : null,
+            weightUnit: product.weightUnit,
+            dimLength: product.dimLength ? Number(product.dimLength) : null,
+            dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+            dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+            dimUnit: product.dimUnit,
+            productType: product.productType,
+            variantAttributes: product.variantAttributes,
+            categoryAttributes: product.categoryAttributes,
+          },
+          channels,
+          costPrice:
+            typeof request.body?.costPrice === 'number'
+              ? request.body.costPrice
+              : null,
+          minPrice:
+            typeof request.body?.minPrice === 'number'
+              ? request.body.minPrice
+              : null,
+          targetMargin:
+            typeof request.body?.targetMargin === 'number'
+              ? request.body.targetMargin
+              : null,
+          provider: request.body?.provider ?? null,
+          budgetScope: {
+            feature: 'listing-wizard',
+            wizardId: wizard.id,
+          },
+        })
+
+        logUsage({
+          provider: result.usage.provider,
+          model: result.usage.model,
+          feature: 'listing-wizard.suggest-pricing',
+          entityType: 'ListingWizard',
+          entityId: wizard.id,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          costUSD: result.usage.costUSD,
+          latencyMs: result.metadata.elapsedMs,
+          ok: true,
+          metadata: {
+            productId: product.id,
+            channelCount: channels.length,
+            recommendedCount: result.recommendations.length,
+            redactionTotal: result.redactionTotal,
+          },
+        })
+
+        return {
+          wizard: { id: wizard.id, productId: wizard.productId },
+          recommendations: result.recommendations,
+          strategy: result.strategy,
+          usage: result.usage,
+          redactionTotal: result.redactionTotal,
+          metadata: result.metadata,
+        }
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          fastify.log.warn(
+            { reason: err.reason },
+            '[suggest-pricing] refused by budget',
+          )
+          return reply.code(402).send({
+            error: err.message,
+            budget: { reason: err.reason },
+          })
+        }
+        fastify.log.error({ err }, '[suggest-pricing] failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // ── AI-4.4 — Step 4 variation theme suggester ──────────────────
   //
   // POST /api/listing-wizard/:id/suggest-variation-theme
