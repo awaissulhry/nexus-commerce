@@ -135,6 +135,7 @@ import {
 import { executeScenarioRun } from '../services/scenario-planner.service.js'
 import { detectPanEuImbalances } from '../services/pan-eu-distribution.service.js'
 import { estimateNewListingDemand } from '../services/new-listing-demand.service.js'
+import { detectCannibalization } from '../services/cannibalization-detector.service.js'
 import {
   transitionPo,
   getPoAuditTrail,
@@ -8717,6 +8718,47 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           calibrated: results.filter((r) => r.direction === 'CALIBRATED').length,
         },
         skus: results,
+      }
+    },
+  )
+
+  // W8.3 — Cannibalization detection. Inverse of R.17 substitution:
+  // when a new SKU launches, related SKUs (same productType/brand)
+  // often see velocity drop because shoppers substitute the new
+  // option. The forecast layer just sees declining velocity and
+  // trims reorders — correct on the surface but obscures cause.
+  // This endpoint surfaces the link.
+  //
+  // Returns one finding per recently-launched SKU that has at
+  // least one cannibalization candidate. Operator decides whether
+  // to phase out the older SKU, reposition pricing, or treat the
+  // drop as healthy substitution. Read-only; no engine writes.
+  fastify.get(
+    '/fulfillment/replenishment/cannibalization',
+    async (request, reply) => {
+      const q = (request.query ?? {}) as {
+        windowDays?: string
+        recentLaunchWindowDays?: string
+        thresholdPct?: string
+        minSamples?: string
+        maxNewSkus?: string
+      }
+      const findings = await detectCannibalization({
+        windowDays: q.windowDays ? parseInt(q.windowDays, 10) : undefined,
+        recentLaunchWindowDays: q.recentLaunchWindowDays
+          ? parseInt(q.recentLaunchWindowDays, 10)
+          : undefined,
+        thresholdPct: q.thresholdPct ? parseFloat(q.thresholdPct) : undefined,
+        minSamples: q.minSamples ? parseInt(q.minSamples, 10) : undefined,
+        maxNewSkus: q.maxNewSkus ? parseInt(q.maxNewSkus, 10) : undefined,
+      })
+      reply.header('Cache-Control', 'private, max-age=120')
+      return {
+        totals: {
+          newSkusFlagged: findings.length,
+          totalCandidates: findings.reduce((s, f) => s + f.candidates.length, 0),
+        },
+        findings,
       }
     },
   )
