@@ -23,6 +23,7 @@ import TopProducts from './_components/TopProducts'
 import AlertsPanel from './_components/AlertsPanel'
 import CatalogSnapshot from './_components/CatalogSnapshot'
 import CustomerPanel from './_components/CustomerPanel'
+import FinancialPanel from './_components/FinancialPanel'
 import ActivityFeed from './_components/ActivityFeed'
 import QuickActions from './_components/QuickActions'
 import type {
@@ -244,6 +245,11 @@ export default function OverviewClient() {
                 <MarketplaceMatrix
                   t={t}
                   matrix={data.byMarketplace}
+                  currency={data.currency.primary}
+                />
+                <FinancialPanel
+                  t={t}
+                  financial={data.financial}
                   currency={data.currency.primary}
                 />
                 <TopProducts

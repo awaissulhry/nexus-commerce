@@ -109,6 +109,19 @@ export interface OverviewPayload {
   >
   sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
+  // DO.29 — financial overview: gross margin estimate, refund
+  // count, tax collected. Margin lives or dies on costPrice
+  // coverage; costCoveragePct lets the UI flag low-coverage
+  // estimates as best-effort.
+  financial: {
+    grossRevenue: number
+    cogs: number
+    margin: number
+    marginPct: number
+    costCoveragePct: number
+    refundCount: number
+    taxCollected: number
+  }
   // DO.27 — customer intelligence. New vs returning in the active
   // window plus the lifetime top-5 by LTV and the top countries
   // by order volume in the window. Empty when the Customer table

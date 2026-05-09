@@ -1079,6 +1079,94 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       // we already computed those, just sum them up. Done after
       // byChannel is built.
 
+      // ── DO.29 — financial overview ─────────────────────────────────
+      //
+      // Three signals beyond the KPI strip:
+      //   - gross margin estimate: revenue − Σ(qty × costPrice).
+      //     Costs are partial today — Xavia is mid-rollout on
+      //     Product.costPrice — so margin is rendered as a "best
+      //     estimate" with a coverage ratio.
+      //   - refund count (vs the existing refund value KPI)
+      //   - tax collected aggregate from OrderItem.vatRate
+      //
+      // Italian VAT compliance reporting lives at /reports/business +
+      // /reports/corrispettivi; the panel here only summarises so
+      // the operator sees the headline tax owed without leaving the
+      // Command Center.
+      const [marginRow, refundCountCurrent, taxRow] = await Promise.all([
+        prisma.$queryRawUnsafe(
+          `SELECT
+             COALESCE(SUM(oi."price" * oi."quantity"), 0)::float AS gross,
+             COALESCE(SUM(p."costPrice" * oi."quantity"), 0)::float AS cogs,
+             COUNT(*) FILTER (WHERE p."costPrice" IS NOT NULL)::bigint AS items_with_cost,
+             COUNT(*)::bigint AS items_total
+           FROM "OrderItem" oi
+           JOIN "Order" o ON o.id = oi."orderId"
+           LEFT JOIN "Product" p ON p.id = oi."productId"
+           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+             AND COALESCE(o."currencyCode", 'EUR') = $3`,
+          from,
+          to,
+          primaryCurrency,
+        )
+          .then(
+            (r) =>
+              (r as Array<{
+                gross: number
+                cogs: number
+                items_with_cost: bigint
+                items_total: bigint
+              }>)[0] ?? { gross: 0, cogs: 0, items_with_cost: 0n, items_total: 0n },
+          )
+          .catch(() => ({
+            gross: 0,
+            cogs: 0,
+            items_with_cost: 0n,
+            items_total: 0n,
+          })),
+        prisma.refund
+          .count({
+            where: {
+              createdAt: { gte: from, lte: to },
+              currencyCode: primaryCurrency,
+            },
+          })
+          .catch(() => 0),
+        prisma.$queryRawUnsafe(
+          `SELECT COALESCE(SUM(oi."price" * oi."quantity" * oi."vatRate" / 100), 0)::float AS tax
+           FROM "OrderItem" oi
+           JOIN "Order" o ON o.id = oi."orderId"
+           WHERE o."createdAt" >= $1 AND o."createdAt" <= $2
+             AND COALESCE(o."currencyCode", 'EUR') = $3
+             AND oi."vatRate" IS NOT NULL`,
+          from,
+          to,
+          primaryCurrency,
+        )
+          .then((r) => (r as Array<{ tax: number }>)[0]?.tax ?? 0)
+          .catch(() => 0),
+      ])
+
+      const itemsWithCost = Number(marginRow.items_with_cost)
+      const itemsTotal = Number(marginRow.items_total)
+      const financial = {
+        grossRevenue: marginRow.gross,
+        cogs: marginRow.cogs,
+        margin: marginRow.gross - marginRow.cogs,
+        marginPct:
+          marginRow.gross > 0
+            ? ((marginRow.gross - marginRow.cogs) / marginRow.gross) * 100
+            : 0,
+        // Cost coverage = % of order-items that have a costPrice on
+        // file. Renders as a "n% of items have cost data" caveat so
+        // the operator doesn't trust the margin number more than it
+        // deserves while costPrice rollout is in progress.
+        costCoveragePct:
+          itemsTotal > 0 ? (itemsWithCost / itemsTotal) * 100 : 0,
+        refundCount: refundCountCurrent,
+        taxCollected: taxRow,
+      }
+
       // ── DO.27 — customer intelligence ─────────────────────────────
       //
       // Three signals operators ask for daily:
@@ -1287,6 +1375,11 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         recentActivity,
         // DO.27 — customer intelligence block.
         customers,
+        // DO.29 — financial overview (margin estimate + refund count
+        // + tax collected). Costs are partial today; costCoveragePct
+        // tells the operator how much of the underlying data is on
+        // file.
+        financial,
         catalog: {
           totalProducts,
           totalParents,
