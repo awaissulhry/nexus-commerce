@@ -12,6 +12,7 @@
  * checkbox area, divider, and the SKU/name lines).
  */
 
+import Link from 'next/link'
 import { Factory, ShoppingCart, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { URGENCY_TONE } from './UrgencyTiles'
@@ -56,7 +57,20 @@ export function MobileSuggestionCard({
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{s.sku}</span>
+            {/* W2.5 — tap-through to product edit page (desktop parity). */}
+            <Link
+              href={`/products/${s.productId}/edit`}
+              className="font-mono text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              {s.sku}
+            </Link>
+            {s.isManufactured && (
+              <Factory
+                size={11}
+                className="text-violet-600 dark:text-violet-400"
+                aria-label="Manufactured"
+              />
+            )}
             <span
               className={cn(
                 'text-xs uppercase tracking-wider px-1.5 py-0.5 rounded border',
@@ -71,10 +85,19 @@ export function MobileSuggestionCard({
                 · {s.worstChannelKey.replace(':', '·')}
               </span>
             )}
+            {/* R.13 — event-driven urgency badge (mobile parity). */}
+            {s.urgencySource === 'EVENT' && s.prepEvent && (
+              <span className="text-xs uppercase tracking-wider text-violet-600 dark:text-violet-400 font-mono">
+                · {s.prepEvent.name.toUpperCase().slice(0, 12)}
+              </span>
+            )}
           </div>
-          <div className="text-base text-slate-900 dark:text-slate-100 truncate mt-0.5">
+          <Link
+            href={`/products/${s.productId}/edit`}
+            className="block text-base text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 truncate mt-0.5"
+          >
             {s.name}
-          </div>
+          </Link>
         </div>
       </div>
 
@@ -85,6 +108,11 @@ export function MobileSuggestionCard({
           </div>
           <div className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
             {s.effectiveStock}
+            {s.inboundWithinLeadTime > 0 && (
+              <span className="ml-1 text-xs font-normal text-emerald-700 dark:text-emerald-400">
+                +{s.inboundWithinLeadTime}
+              </span>
+            )}
           </div>
         </div>
         <div>
@@ -101,6 +129,34 @@ export function MobileSuggestionCard({
           </div>
           <div className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
             {s.reorderQuantity}
+          </div>
+        </div>
+      </div>
+
+      {/* W2.5 — velocity + lead-time row (desktop parity). */}
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
+            Velocity
+          </div>
+          <div className="tabular-nums text-slate-700 dark:text-slate-300">
+            {s.velocity}/d
+            {s.forecastSource === 'TRAILING_VELOCITY' && (
+              <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">
+                trailing
+              </span>
+            )}
+          </div>
+        </div>
+        <div>
+          <div className="uppercase tracking-wider text-xs text-slate-500 dark:text-slate-400 font-semibold">
+            Lead time
+          </div>
+          <div
+            className="tabular-nums text-slate-700 dark:text-slate-300"
+            title={`source: ${s.leadTimeSource.toLowerCase().replace(/_/g, ' ')}`}
+          >
+            {s.leadTimeDays}d
           </div>
         </div>
       </div>
