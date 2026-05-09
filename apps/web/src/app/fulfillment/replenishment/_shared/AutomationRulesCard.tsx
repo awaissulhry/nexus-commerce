@@ -97,6 +97,12 @@ export function AutomationRulesCard() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
+  const [cronStatus, setCronStatus] = useState<{
+    scheduled: boolean
+    lastRunAt: string | null
+    lastSummary: string | null
+    enabledFlag: boolean
+  } | null>(null)
 
   const fetchRules = useCallback(async () => {
     setLoading(true)
@@ -119,6 +125,27 @@ export function AutomationRulesCard() {
   useEffect(() => {
     void fetchRules()
   }, [fetchRules])
+
+  // W3.3 — surface the evaluator cron status in the header. Operator
+  // sees "Cron: scheduled · last ran 4m ago · evals=7 matches=2"
+  // without leaving the workspace.
+  useEffect(() => {
+    let cancelled = false
+    fetch(
+      `${getBackendUrl()}/api/fulfillment/replenishment/automation/cron-status`,
+      { cache: 'no-store' },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!cancelled) setCronStatus(json)
+      })
+      .catch(() => {
+        if (!cancelled) setCronStatus(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const runEvaluatorNow = useCallback(async () => {
     setRunning(true)
@@ -356,6 +383,33 @@ export function AutomationRulesCard() {
             dryRun: dryRunCount,
           })}
         </div>
+        {cronStatus && (
+          <span
+            className={cn(
+              'text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset font-medium',
+              !cronStatus.enabledFlag
+                ? 'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
+                : cronStatus.scheduled
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900'
+                  : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
+            )}
+            title={
+              cronStatus.lastSummary
+                ? t('replenishment.automation.header.cronTooltip', {
+                    summary: cronStatus.lastSummary,
+                  })
+                : t('replenishment.automation.header.cronNoRuns')
+            }
+          >
+            {!cronStatus.enabledFlag
+              ? t('replenishment.automation.header.cronOff')
+              : cronStatus.lastRunAt
+                ? t('replenishment.automation.header.cronLastRun', {
+                    ago: relativeTime(cronStatus.lastRunAt),
+                  })
+                : t('replenishment.automation.header.cronWaiting')}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
