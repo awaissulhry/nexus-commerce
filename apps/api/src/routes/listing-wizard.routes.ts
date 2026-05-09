@@ -44,6 +44,7 @@ import {
 import { ImageResolutionService } from '../services/listing-images/image-resolution.service.js'
 import { validateForPlatform } from '../services/listing-images/validation.service.js'
 import {
+  BudgetExceededError,
   ListingContentService,
   type ContentField,
 } from '../services/ai/listing-content.service.js'
@@ -2269,23 +2270,38 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             // env-default + first-configured if missing/unsupported;
             // see getProvider() resolution rules.
             provider: request.body?.provider ?? null,
+            // AI-1.3 — pre-call budget gate. The wizard is the heaviest
+            // AI surface (one call per language:platform group * up to
+            // 4 fields per call), so per-wizard / per-day / per-month
+            // ceilings get checked before any vendor call lands.
+            budgetScope: {
+              feature: 'listing-wizard',
+              wizardId: wizard.id,
+            },
           })
           // H.7 — log per-field cost telemetry. Wizard groups are the
           // most expensive AI surface (one call per channel-language
           // group), so attributing them is high-leverage.
+          //
+          // AI-1.3 — entityType is now 'ListingWizard' (was 'Product')
+          // so AiBudgetService.checkBudget()'s per-wizard horizon read
+          // can find these rows. Product id moves to metadata.productId
+          // for the existing analytics paths that still want to roll up
+          // by product.
           for (const u of result.usage) {
             logUsage({
               provider: u.provider,
               model: u.model,
               feature: 'listing-wizard',
-              entityType: 'Product',
-              entityId: product.id,
+              entityType: 'ListingWizard',
+              entityId: wizard.id,
               inputTokens: u.inputTokens,
               outputTokens: u.outputTokens,
               costUSD: u.costUSD,
               latencyMs: result.metadata.elapsedMs,
               ok: true,
               metadata: {
+                productId: product.id,
                 marketplace: representativeMarketplace,
                 fields: requested,
                 groupKey,
@@ -2301,6 +2317,24 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             result,
           })
         } catch (err) {
+          // AI-1.3 — budget refusals are first-class. Bail the whole
+          // request (not just this group) since each subsequent group
+          // would re-read the same budget and refuse with the same
+          // reason; processing N groups in a row when N-1 will refuse
+          // burns N DB reads to no end. 402 Payment Required is the
+          // closest semantic HTTP code; the body carries reason so the
+          // UI can map to "wait for the per-day window to roll over"
+          // vs "ask an admin for a higher per-wizard cap".
+          if (err instanceof BudgetExceededError) {
+            fastify.log.warn(
+              { groupKey, reason: err.reason },
+              '[listing-wizard] generate-content refused by budget',
+            )
+            return reply.code(402).send({
+              error: err.message,
+              budget: { reason: err.reason },
+            })
+          }
           fastify.log.error(
             { err, groupKey },
             '[listing-wizard] generate-content group failed',
@@ -2326,6 +2360,26 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // AI-1.3 — surface the highest-priority budget warning across
+      // groups. Per-wizard wins over per-day wins over per-month, so
+      // the UI can render one banner with the most-relevant horizon.
+      const warnRank: Record<string, number> = {
+        per_wizard: 3,
+        per_day: 2,
+        per_month: 1,
+      }
+      let topBudgetWarn: 'per_wizard' | 'per_day' | 'per_month' | undefined
+      for (const g of groupResults) {
+        const w = g.result?.budgetWarn
+        if (!w) continue
+        if (
+          !topBudgetWarn ||
+          (warnRank[w] ?? 0) > (warnRank[topBudgetWarn] ?? 0)
+        ) {
+          topBudgetWarn = w
+        }
+      }
+
       return {
         groups: groupResults,
         byChannel,
@@ -2333,6 +2387,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           channelCount: channels.length,
           groupCount: groups.size,
         },
+        budgetWarn: topBudgetWarn,
       }
     },
   )

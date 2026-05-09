@@ -3,14 +3,15 @@
  * generateContent. Exists so callers can depend on `LLMProvider`
  * without seeing the SDK shape.
  *
- * Pricing (as of 2026-05): gemini-2.0-flash is $0.075 / 1M input
- * tokens, $0.30 / 1M output. gemini-2.5-pro is $1.25 / 1M input,
- * $5.00 / 1M output. Update RATE_CARD when Google revises these —
- * AiUsageLog.cost is computed at write time, not lazy-evaluated, so
- * historical rows reflect what was charged at the time they ran.
+ * AI-1.3: rate card moved to ../rate-cards.ts so the budget service
+ * can estimate cost pre-call against the same source of truth.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import {
+  GEMINI_DEFAULT_MODEL,
+  priceFor as priceForShared,
+} from '../rate-cards.js'
 import type {
   GenerateOptions,
   GenerateResult,
@@ -18,26 +19,10 @@ import type {
   ProviderUsage,
 } from './types.js'
 
-const DEFAULT_MODEL = 'gemini-2.0-flash'
-
-interface RateCard {
-  /** USD per 1M input tokens. */
-  inputPer1M: number
-  /** USD per 1M output tokens. */
-  outputPer1M: number
-}
-const RATE_CARD: Record<string, RateCard> = {
-  'gemini-2.0-flash': { inputPer1M: 0.075, outputPer1M: 0.3 },
-  'gemini-2.5-flash': { inputPer1M: 0.075, outputPer1M: 0.3 },
-  'gemini-2.5-pro': { inputPer1M: 1.25, outputPer1M: 5.0 },
-}
+const DEFAULT_MODEL = GEMINI_DEFAULT_MODEL
 
 function priceFor(model: string, inputTokens: number, outputTokens: number) {
-  const rate = RATE_CARD[model] ?? RATE_CARD[DEFAULT_MODEL]
-  return (
-    (inputTokens / 1_000_000) * rate.inputPer1M +
-    (outputTokens / 1_000_000) * rate.outputPer1M
-  )
+  return priceForShared('gemini', model, inputTokens, outputTokens)
 }
 
 export class GeminiProvider implements LLMProvider {

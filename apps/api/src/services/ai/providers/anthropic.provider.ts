@@ -7,11 +7,6 @@
  * that wrapping it here is cleaner than carrying another transitive
  * tree.
  *
- * Pricing (as of 2026-05): claude-haiku-4-5 is $0.25 / 1M input,
- * $1.25 / 1M output. claude-sonnet-4-6 is $3.00 / 1M input, $15.00
- * / 1M output. Update RATE_CARD when Anthropic revises pricing —
- * AiUsageLog.cost is committed at write time and never recomputed.
- *
  * Default model: Haiku for content generation. It's fast, cheap,
  * and the listing-content prompts don't need Opus-grade reasoning.
  * Callers can override via options.model.
@@ -20,8 +15,16 @@
  * Gemini. We append a system instruction asking for JSON-only output
  * and rely on the parser in ListingContentService to strip any
  * markdown fences.
+ *
+ * AI-1.3: rate card moved to ../rate-cards.ts (shared with the budget
+ * service for pre-call estimation). The date-suffix-stripping fallback
+ * lives in rate-cards.ts now.
  */
 
+import {
+  ANTHROPIC_DEFAULT_MODEL,
+  priceFor as priceForShared,
+} from '../rate-cards.js'
 import type {
   GenerateOptions,
   GenerateResult,
@@ -29,30 +32,12 @@ import type {
   ProviderUsage,
 } from './types.js'
 
-const DEFAULT_MODEL = 'claude-haiku-4-5-20251001'
+const DEFAULT_MODEL = ANTHROPIC_DEFAULT_MODEL
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
 
-interface RateCard {
-  inputPer1M: number
-  outputPer1M: number
-}
-const RATE_CARD: Record<string, RateCard> = {
-  'claude-haiku-4-5-20251001': { inputPer1M: 0.25, outputPer1M: 1.25 },
-  'claude-haiku-4-5': { inputPer1M: 0.25, outputPer1M: 1.25 },
-  'claude-sonnet-4-6': { inputPer1M: 3.0, outputPer1M: 15.0 },
-  'claude-opus-4-7': { inputPer1M: 15.0, outputPer1M: 75.0 },
-}
-
 function priceFor(model: string, inputTokens: number, outputTokens: number) {
-  // Strip the date suffix for matching: "claude-haiku-4-5-20251001" →
-  // "claude-haiku-4-5". Date-suffixed and bare names share the rate.
-  const bare = model.replace(/-\d{8}$/, '')
-  const rate = RATE_CARD[model] ?? RATE_CARD[bare] ?? RATE_CARD[DEFAULT_MODEL]
-  return (
-    (inputTokens / 1_000_000) * rate.inputPer1M +
-    (outputTokens / 1_000_000) * rate.outputPer1M
-  )
+  return priceForShared('anthropic', model, inputTokens, outputTokens)
 }
 
 interface AnthropicMessage {

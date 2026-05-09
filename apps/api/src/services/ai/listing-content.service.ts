@@ -13,12 +13,37 @@
  * call so the route can persist AiUsageLog rows.
  */
 
+import {
+  checkBudget,
+  estimateCallCostUSD,
+  type BudgetCheckScope,
+} from './budget.service.js'
 import { getProvider, isAiKillSwitchOn } from './providers/index.js'
 import type {
   LLMProvider,
   ProviderName,
   ProviderUsage,
 } from './providers/types.js'
+
+/**
+ * AI-1.3 — thrown when AiBudgetService refuses an outgoing AI call
+ * because one of the four spend horizons (per-call / per-wizard /
+ * per-day / per-month) would be exceeded. Distinguishable from
+ * generic Errors so the route can map it to a specific HTTP code
+ * (402 Payment Required is the closest semantic match) and the UI
+ * can surface a budget-specific banner.
+ */
+export class BudgetExceededError extends Error {
+  readonly reason: 'per_call' | 'per_wizard' | 'per_day' | 'per_month'
+  constructor(
+    reason: 'per_call' | 'per_wizard' | 'per_day' | 'per_month',
+    message: string,
+  ) {
+    super(message)
+    this.name = 'BudgetExceededError'
+    this.reason = reason
+  }
+}
 
 const LANGUAGE_FOR_MARKETPLACE: Record<string, string> = {
   IT: 'Italian',
@@ -74,6 +99,11 @@ export interface GenerationParams {
   /** H.7 — caller-chosen provider. Falls back to AI_PROVIDER env or
    *  the first configured provider. */
   provider?: string | null
+  /** AI-1.3 — budget scope. When set, AiBudgetService is consulted
+   *  before each underlying vendor call; the call is refused (with a
+   *  BudgetExceededError) when one of the four spend horizons would
+   *  be crossed. When unset, no budget check runs (legacy / dev). */
+  budgetScope?: BudgetCheckScope
 }
 
 export interface TitleResult {
@@ -108,6 +138,12 @@ export interface GenerationResult {
   /** H.7 — per-field token + cost ledger. The route flushes these to
    *  AiUsageLog so the settings page can render 7-day rollups. */
   usage: ProviderUsage[]
+  /** AI-1.3 — soft signal: spend on one of the budget horizons is
+   *  ≥90% of the configured ceiling. Caller can render a "you've
+   *  used 90% of today's budget" banner without blocking. Undefined
+   *  when no budget scope was provided OR no horizon is in the warn
+   *  zone. */
+  budgetWarn?: 'per_wizard' | 'per_day' | 'per_month'
   metadata: {
     productSku: string
     marketplace: string
@@ -143,6 +179,46 @@ export class ListingContentService {
       throw new Error(
         'No AI provider configured — set GEMINI_API_KEY or ANTHROPIC_API_KEY',
       )
+    }
+
+    // AI-1.3 — pre-call budget check. Sum estimated cost across every
+    // requested field, run a single AiBudgetService.checkBudget() with
+    // the total. Single read instead of N (one per field) — the budget
+    // service hits AiUsageLog three times per call, so a 4-field
+    // generate would otherwise burn 12 DB reads for one user click.
+    let budgetWarn: BudgetCheckScope extends never ? never : ('per_wizard' | 'per_day' | 'per_month' | undefined) =
+      undefined as never
+    if (params.budgetScope) {
+      const language =
+        LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
+      let totalEstimateUSD = 0
+      for (const f of params.fields) {
+        const prompt =
+          f === 'title'
+            ? this.titlePrompt(params, language)
+            : f === 'bullets'
+              ? this.bulletsPrompt(params, language)
+              : f === 'description'
+                ? this.descriptionPrompt(params, language)
+                : this.keywordsPrompt(params, language)
+        totalEstimateUSD += estimateCallCostUSD({
+          prompt,
+          // Mirror the cap used in runOne — hardcoded 4096 in the
+          // provider call. Update if the cap changes there.
+          maxOutputTokens: 4096,
+          provider: provider.name,
+          model: provider.defaultModel,
+        })
+      }
+      const verdict = await checkBudget(totalEstimateUSD, params.budgetScope)
+      if (!verdict.allowed) {
+        throw new BudgetExceededError(
+          verdict.reason ?? 'per_call',
+          verdict.message ??
+            'AI call refused — budget ceiling reached. Adjust limits or wait for the window to roll over.',
+        )
+      }
+      budgetWarn = (verdict.hitWarn ?? undefined) as never
     }
 
     const start = Date.now()
@@ -203,6 +279,7 @@ export class ListingContentService {
     const usageList = settled.map((s) => s.usage)
     const result: GenerationResult = {
       usage: usageList,
+      budgetWarn: budgetWarn === undefined ? undefined : budgetWarn,
       metadata: {
         productSku: params.product.sku,
         marketplace: params.marketplace,
