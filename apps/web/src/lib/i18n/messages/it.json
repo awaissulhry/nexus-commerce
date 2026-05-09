@@ -4083,5 +4083,14 @@
   "listWizard.aiSuggestTheme.appliedShort": "Applicato",
   "listWizard.aiSuggestTheme.applied": "Tema IA applicato: {theme}",
   "listWizard.aiSuggestTheme.alternativesLabel": "Alternative:",
-  "listWizard.aiSuggestTheme.error": "Impossibile ottenere un suggerimento"
+  "listWizard.aiSuggestTheme.error": "Impossibile ottenere un suggerimento",
+
+  "listWizard.aiSuggestPricing.button": "IA: consiglia prezzi",
+  "listWizard.aiSuggestPricing.busy": "Sto chiedendo all'IA…",
+  "listWizard.aiSuggestPricing.title": "Suggerimenti di prezzo IA",
+  "listWizard.aiSuggestPricing.applyButton": "Applica",
+  "listWizard.aiSuggestPricing.applyAll": "Applica tutto",
+  "listWizard.aiSuggestPricing.applied": "Applicato {price} {currency} su {channel}",
+  "listWizard.aiSuggestPricing.appliedAll": "Applicat{plural} {n} suggeriment{plural} di prezzo",
+  "listWizard.aiSuggestPricing.error": "Impossibile ottenere suggerimenti di prezzo"
 }

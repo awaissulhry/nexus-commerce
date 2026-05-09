@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  Loader2,
+  Sparkles,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
@@ -12,6 +14,8 @@ import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import ChannelGroupsManager, {
   type ChannelGroup,
 } from '../components/ChannelGroupsManager'
@@ -53,6 +57,17 @@ interface ChannelPricingSlice {
 
 const SAVE_DEBOUNCE_MS = 600
 
+// AI-6.3 — pricing recommendation shape returned by /suggest-pricing.
+interface AiPricingRecommendation {
+  platform: string
+  marketplace: string
+  recommendedPrice: number
+  currency: string
+  compareAtPrice?: number
+  reasoning: string
+  marginPercent: number | null
+}
+
 export default function Step8Pricing({
   wizardState,
   updateWizardState,
@@ -61,6 +76,8 @@ export default function Step8Pricing({
   reportValidity,
   setJumpToBlocker,
 }: StepProps) {
+  const { t } = useTranslations()
+  const { toast } = useToast()
   const baseSlice = (wizardState.pricing ?? {}) as BasePricingSlice
   const channelGroups = (wizardState.channelGroups ?? []) as ChannelGroup[]
   const onChannelGroupsChange = useCallback(
@@ -98,6 +115,16 @@ export default function Step8Pricing({
   // Per-channel overrides — only set when the user actually overrides.
   // String values for input control; parsed to numbers on save +
   // computation.
+  // AI-6.3 — pricing suggester state. Click "AI: recommend prices"
+  // → POST /suggest-pricing with current channel context, get
+  // per-channel recommendations + a strategy summary.
+  const [aiPricingBusy, setAiPricingBusy] = useState(false)
+  const [aiPricingError, setAiPricingError] = useState<string | null>(null)
+  const [aiPricingRecs, setAiPricingRecs] = useState<
+    AiPricingRecommendation[]
+  >([])
+  const [aiPricingStrategy, setAiPricingStrategy] = useState<string>('')
+
   const [overrides, setOverrides] = useState<
     Record<string, Record<keyof ChannelPricingSlice, string>>
   >(() => {
@@ -398,16 +425,268 @@ export default function Step8Pricing({
     )
   }
 
+  const askAiToPrice = useCallback(async () => {
+    if (!ctx) return
+    setAiPricingBusy(true)
+    setAiPricingError(null)
+    try {
+      const channelsPayload = ctx.channels.map((c) => {
+        const ovr = overrides[c.channelKey]
+        const currentPriceStr = ovr?.marketplacePrice ?? ''
+        const currentPrice =
+          currentPriceStr !== '' && Number.isFinite(Number(currentPriceStr))
+            ? Number(currentPriceStr)
+            : undefined
+        return {
+          platform: c.platform,
+          marketplace: c.marketplace,
+          currency: c.currency,
+          currentPrice,
+          referralFee:
+            typeof c.defaultFees?.referralPercent === 'number'
+              ? c.defaultFees.referralPercent / 100
+              : undefined,
+          fulfillmentFee:
+            typeof c.defaultFees?.fulfillmentFee === 'number'
+              ? c.defaultFees.fulfillmentFee
+              : undefined,
+        }
+      })
+      // targetMargin is not yet wired through the UI; AI prompt
+      // omits it when undefined so reasoning stays strategic only.
+      const targetMargin: number | undefined = undefined
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}/suggest-pricing`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channels: channelsPayload,
+            costPrice: ctx.product.costPrice ?? undefined,
+            minPrice: ctx.product.minPrice ?? undefined,
+            targetMargin,
+          }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+      setAiPricingRecs(
+        Array.isArray(json?.recommendations) ? json.recommendations : [],
+      )
+      setAiPricingStrategy(typeof json?.strategy === 'string' ? json.strategy : '')
+    } catch (err) {
+      setAiPricingError(err instanceof Error ? err.message : String(err))
+      setAiPricingRecs([])
+    } finally {
+      setAiPricingBusy(false)
+    }
+    // base.basePrice is read defensively above so don't list it in
+    // the deps; aiPricing* are setters, not reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx, overrides, wizardId])
+
+  const applyAiPricing = useCallback(
+    (rec: AiPricingRecommendation) => {
+      const channelKey = `${rec.platform}:${rec.marketplace}`
+      setOverrides((prev) => ({
+        ...prev,
+        [channelKey]: {
+          ...(prev[channelKey] ?? {
+            marketplacePrice: '',
+            minPrice: '',
+            maxPrice: '',
+            referralPercent: '',
+            fulfillmentFee: '',
+          }),
+          marketplacePrice: rec.recommendedPrice.toFixed(2),
+        },
+      }))
+      toast({
+        tone: 'success',
+        title: t('listWizard.aiSuggestPricing.applied', {
+          channel: channelKey,
+          price: rec.recommendedPrice.toFixed(2),
+          currency: rec.currency,
+        }),
+        durationMs: 2400,
+      })
+    },
+    [toast, t],
+  )
+
+  const applyAllAiPricing = useCallback(() => {
+    if (aiPricingRecs.length === 0) return
+    setOverrides((prev) => {
+      const next = { ...prev }
+      for (const rec of aiPricingRecs) {
+        const channelKey = `${rec.platform}:${rec.marketplace}`
+        next[channelKey] = {
+          ...(next[channelKey] ?? {
+            marketplacePrice: '',
+            minPrice: '',
+            maxPrice: '',
+            referralPercent: '',
+            fulfillmentFee: '',
+          }),
+          marketplacePrice: rec.recommendedPrice.toFixed(2),
+        }
+      }
+      return next
+    })
+    toast({
+      tone: 'success',
+      title: t('listWizard.aiSuggestPricing.appliedAll', {
+        n: aiPricingRecs.length,
+      }),
+      durationMs: 2400,
+    })
+  }, [aiPricingRecs, toast, t])
+
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Pricing</h2>
-        <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
-          Set a base price; every channel inherits it. Override per
-          marketplace when local fees, currency, or competitive pressure
-          calls for a different number.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Pricing</h2>
+          <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
+            Set a base price; every channel inherits it. Override per
+            marketplace when local fees, currency, or competitive pressure
+            calls for a different number.
+          </p>
+        </div>
+        {/* AI-6.3 — pricing suggester. Disabled until ctx is loaded
+            (no channels to price) or while a call is in flight. */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={askAiToPrice}
+          disabled={!ctx || aiPricingBusy}
+          className="flex-shrink-0 inline-flex items-center gap-1.5"
+        >
+          {aiPricingBusy ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          )}
+          {t('listWizard.aiSuggestPricing.button')}
+        </Button>
       </div>
+
+      {/* AI-6.3 — recommendations panel. Renders below the title row
+          when the operator clicks the button. Strategy summary +
+          per-channel rows with Apply CTAs + "Apply all" header. */}
+      {(aiPricingRecs.length > 0 || aiPricingError || aiPricingBusy) && (
+        <div className="mb-5 border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-purple-100 dark:border-purple-900 flex items-center justify-between gap-2 bg-purple-50 dark:bg-purple-950/40">
+            <div className="text-md font-semibold text-purple-900 dark:text-purple-100 inline-flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              {t('listWizard.aiSuggestPricing.title')}
+            </div>
+            {aiPricingRecs.length > 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={applyAllAiPricing}
+                className="inline-flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3" />
+                {t('listWizard.aiSuggestPricing.applyAll')} ({aiPricingRecs.length})
+              </Button>
+            )}
+          </div>
+          <div className="px-4 py-3 space-y-2">
+            {aiPricingBusy && (
+              <div className="flex items-center gap-2 text-base text-purple-700 dark:text-purple-300">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t('listWizard.aiSuggestPricing.busy')}
+              </div>
+            )}
+            {aiPricingError && !aiPricingBusy && (
+              <div className="flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-medium">
+                    {t('listWizard.aiSuggestPricing.error')}
+                  </div>
+                  <div className="text-sm opacity-90 mt-0.5">{aiPricingError}</div>
+                </div>
+              </div>
+            )}
+            {!aiPricingBusy && !aiPricingError && aiPricingStrategy && (
+              <p className="text-sm text-slate-600 dark:text-slate-400 italic">
+                {aiPricingStrategy}
+              </p>
+            )}
+            {!aiPricingBusy && !aiPricingError && aiPricingRecs.length > 0 && (
+              <ul className="space-y-1.5">
+                {aiPricingRecs.map((rec) => {
+                  const channelKey = `${rec.platform}:${rec.marketplace}`
+                  const currentPrice =
+                    overrides[channelKey]?.marketplacePrice ?? ''
+                  const alreadyApplied =
+                    currentPrice !== '' &&
+                    Math.abs(Number(currentPrice) - rec.recommendedPrice) <
+                      0.01
+                  return (
+                    <li
+                      key={channelKey}
+                      className="flex items-start justify-between gap-3 py-1.5 px-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
+                            {channelKey}
+                          </span>
+                          <span className="text-md font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                            {rec.recommendedPrice.toFixed(2)} {rec.currency}
+                          </span>
+                          {rec.compareAtPrice !== undefined && (
+                            <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums line-through">
+                              {rec.compareAtPrice.toFixed(2)} {rec.currency}
+                            </span>
+                          )}
+                          {rec.marginPercent !== null && (
+                            <span
+                              className={cn(
+                                'text-xs font-medium tabular-nums px-1.5 py-0.5 rounded border',
+                                rec.marginPercent >= 30
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
+                                  : rec.marginPercent >= 0
+                                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+                                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+                              )}
+                            >
+                              {rec.marginPercent.toFixed(1)}% margin
+                            </span>
+                          )}
+                          {alreadyApplied && (
+                            <span className="inline-flex items-center gap-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+                              <CheckCircle2 className="w-3 h-3" />
+                              applied
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 leading-snug">
+                          {rec.reasoning}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => applyAiPricing(rec)}
+                          disabled={alreadyApplied}
+                        >
+                          {t('listWizard.aiSuggestPricing.applyButton')}
+                        </Button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div

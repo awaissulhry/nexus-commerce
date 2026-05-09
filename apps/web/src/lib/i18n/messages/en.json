@@ -4032,5 +4032,14 @@
   "listWizard.aiSuggestTheme.appliedShort": "Applied",
   "listWizard.aiSuggestTheme.applied": "Applied AI theme: {theme}",
   "listWizard.aiSuggestTheme.alternativesLabel": "Alternatives:",
-  "listWizard.aiSuggestTheme.error": "Couldn't get a recommendation"
+  "listWizard.aiSuggestTheme.error": "Couldn't get a recommendation",
+
+  "listWizard.aiSuggestPricing.button": "AI: recommend prices",
+  "listWizard.aiSuggestPricing.busy": "Asking AI…",
+  "listWizard.aiSuggestPricing.title": "AI pricing recommendations",
+  "listWizard.aiSuggestPricing.applyButton": "Apply",
+  "listWizard.aiSuggestPricing.applyAll": "Apply all",
+  "listWizard.aiSuggestPricing.applied": "Applied {price} {currency} to {channel}",
+  "listWizard.aiSuggestPricing.appliedAll": "Applied {n} AI pricing pick{plural}",
+  "listWizard.aiSuggestPricing.error": "Couldn't get pricing recommendations"
 }
