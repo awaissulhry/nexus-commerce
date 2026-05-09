@@ -52,14 +52,20 @@ export interface ToggleableWidget {
 }
 
 export const TOGGLEABLE_WIDGETS: ToggleableWidget[] = [
-  // Left column (charts + lists)
+  // Left column (charts + lists). Order matters when the operator
+  // hasn't saved a custom widgetOrder — these positions become the
+  // default rendering order. Affinity grouping:
+  //   1. Time-series charts (sparkline → channelTrend → heatmap)
+  //   2. Per-channel views (channelGrid → marketplaceMatrix)
+  //   3. Money-shaped panels (financial → predictive)
+  //   4. Lists (topProducts)
   { id: 'sparkline', labelKey: 'overview.customize.widget.sparkline', column: 'left' },
   { id: 'channelTrend', labelKey: 'overview.customize.widget.channelTrend', column: 'left' },
+  { id: 'heatmap', labelKey: 'overview.customize.widget.heatmap', column: 'left' },
   { id: 'channelGrid', labelKey: 'overview.customize.widget.channelGrid', column: 'left' },
   { id: 'marketplaceMatrix', labelKey: 'overview.customize.widget.marketplaceMatrix', column: 'left' },
   { id: 'financial', labelKey: 'overview.customize.widget.financial', column: 'left' },
   { id: 'predictive', labelKey: 'overview.customize.widget.predictive', column: 'left' },
-  { id: 'heatmap', labelKey: 'overview.customize.widget.heatmap', column: 'left' },
   { id: 'topProducts', labelKey: 'overview.customize.widget.topProducts', column: 'left' },
   // Right column (panels)
   { id: 'goals', labelKey: 'overview.customize.widget.goals', column: 'right' },
