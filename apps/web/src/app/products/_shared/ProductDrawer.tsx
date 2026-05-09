@@ -66,6 +66,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
+import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
 // U.1 — focusable-element selector for the drawer's a11y focus trap.
@@ -568,6 +569,7 @@ export default function ProductDrawer({
           )}
           {data && tab === 'pricing' && (
             <PricingTab
+              productId={data.id}
               sku={data.sku}
               basePrice={data.basePrice}
               channelListings={data.channelListings ?? []}
@@ -2510,10 +2512,12 @@ function ImagesTab({
  * elsewhere first.
  */
 function PricingTab({
+  productId,
   sku,
   basePrice,
   channelListings,
 }: {
+  productId: string
   sku: string
   basePrice: string | number | null
   channelListings: NonNullable<ProductDetail['channelListings']>
@@ -2631,7 +2635,586 @@ function PricingTab({
         differs from this product's basePrice. Push / explain / clamp
         rules live in the full pricing matrix.
       </div>
+      {/* W4.9 — Repricing rules per (channel, marketplace) for this
+          product. Sub-section, not a separate drawer tab, because
+          repricing is part of the pricing story. Tier pricing
+          surfaces in W4.13 alongside this. */}
+      <RepricingRulesSection
+        productId={productId}
+        channelListings={channelListings}
+      />
     </div>
+  )
+}
+
+/**
+ * W4.9 — Repricing rules section.
+ *
+ * Sub-component of PricingTab. Lists per-(channel, marketplace)
+ * RepricingRule rows for this product, lets the operator add/edit/
+ * delete + opens a recent-decisions popover so they can answer "why
+ * did my price drop yesterday at 14:00?".
+ *
+ * Strategy params (beatPct, beatAmount, schedule) are inline-edited
+ * via a small form per rule. Channel + marketplace are immutable
+ * once a rule is created (they're the @@unique key) — to "move" a
+ * rule the operator deletes + creates.
+ */
+interface RepricingRuleSnapshot {
+  id: string
+  channel: string
+  marketplace: string | null
+  enabled: boolean
+  minPrice: string
+  maxPrice: string
+  strategy: string
+  beatPct: string | null
+  beatAmount: string | null
+  activeFromHour: number | null
+  activeToHour: number | null
+  activeDays: number[]
+  notes: string | null
+  lastEvaluatedAt: string | null
+  lastDecisionPrice: string | null
+  lastDecisionReason: string | null
+}
+
+const STRATEGY_LABELS: Record<string, string> = {
+  match_buy_box: 'Match buy-box',
+  beat_lowest_by_pct: 'Beat lowest by %',
+  beat_lowest_by_amount: 'Beat lowest by amount',
+  fixed_to_buy_box_minus: 'Buy-box minus fixed',
+  manual: 'Manual (engine off)',
+}
+
+function RepricingRulesSection({
+  productId,
+  channelListings,
+}: {
+  productId: string
+  channelListings: NonNullable<ProductDetail['channelListings']>
+}) {
+  const [rules, setRules] = useState<RepricingRuleSnapshot[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [decisionsOpenFor, setDecisionsOpenFor] = useState<string | null>(null)
+  const { toast } = useToast()
+  const confirm = useConfirm()
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/repricing-rules`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as { rules?: RepricingRuleSnapshot[] }
+      setRules(data.rules ?? [])
+      setError(null)
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+    }
+  }, [productId])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const onDelete = async (rule: RepricingRuleSnapshot) => {
+    const ok = await confirm({
+      title: `Delete repricing rule for ${rule.channel}${rule.marketplace ? ` ${rule.marketplace}` : ''}?`,
+      description:
+        'Decision history is cascade-deleted. The product price stays where it is — engine just stops moving it.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/repricing-rules/${rule.id}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast.success('Rule deleted')
+      refresh()
+    } catch (e: any) {
+      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
+    }
+  }
+
+  const onToggleEnabled = async (rule: RepricingRuleSnapshot) => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/repricing-rules/${rule.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: !rule.enabled }),
+        },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      refresh()
+    } catch (e: any) {
+      toast.error(`Toggle failed: ${e?.message ?? String(e)}`)
+    }
+  }
+
+  return (
+    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm uppercase tracking-wider font-semibold text-slate-700 dark:text-slate-300">
+          Repricing rules
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Plus className="w-3 h-3" />}
+          onClick={() => setAdding(true)}
+        >
+          Add rule
+        </Button>
+      </div>
+
+      {error && (
+        <div className="text-sm text-rose-700 dark:text-rose-300">{error}</div>
+      )}
+
+      {rules === null ? (
+        <div className="text-sm italic text-slate-500 dark:text-slate-400">
+          Loading rules…
+        </div>
+      ) : rules.length === 0 ? (
+        <div className="text-sm italic text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded p-4 text-center">
+          No repricing rules yet. Add one to track the buy-box or undercut competitors automatically.
+        </div>
+      ) : (
+        <table className="w-full text-sm border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <thead className="bg-slate-50 dark:bg-slate-900">
+            <tr className="text-left">
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Channel · MP</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Strategy</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Floor / Ceiling</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Last decision</th>
+              <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-center">Enabled</th>
+              <th className="px-1 w-6" />
+            </tr>
+          </thead>
+          <tbody>
+            {rules.map((r) => (
+              <tr
+                key={r.id}
+                className="border-t border-slate-100 dark:border-slate-800"
+              >
+                <td className="px-2 py-1.5 font-mono text-xs">
+                  <span className="text-slate-900 dark:text-slate-100">{r.channel}</span>
+                  {r.marketplace && (
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {' · '}{r.marketplace}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5">
+                  <div className="text-slate-900 dark:text-slate-100">
+                    {STRATEGY_LABELS[r.strategy] ?? r.strategy}
+                  </div>
+                  {(r.beatPct || r.beatAmount) && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                      {r.beatPct ? `${r.beatPct}%` : `€${r.beatAmount}`}
+                    </div>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                  €{Number(r.minPrice).toFixed(2)} / €{Number(r.maxPrice).toFixed(2)}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums">
+                  {r.lastDecisionPrice ? (
+                    <button
+                      type="button"
+                      onClick={() => setDecisionsOpenFor(r.id)}
+                      className="text-blue-700 dark:text-blue-300 hover:underline"
+                      title={r.lastDecisionReason ?? 'View decision history'}
+                    >
+                      €{Number(r.lastDecisionPrice).toFixed(2)}
+                    </button>
+                  ) : (
+                    <span className="text-xs italic text-slate-400 dark:text-slate-500">never</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={r.enabled}
+                    onChange={() => onToggleEnabled(r)}
+                    title={r.enabled ? 'Engine evaluating' : 'Paused'}
+                  />
+                </td>
+                <td className="px-1 py-1.5">
+                  <IconButton
+                    aria-label="Delete rule"
+                    size="sm"
+                    tone="danger"
+                    onClick={() => onDelete(r)}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </IconButton>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {adding && (
+        <AddRepricingRuleForm
+          productId={productId}
+          channelListings={channelListings}
+          onClose={() => setAdding(false)}
+          onCreated={() => {
+            setAdding(false)
+            refresh()
+          }}
+        />
+      )}
+      {decisionsOpenFor && (
+        <DecisionsModal
+          ruleId={decisionsOpenFor}
+          onClose={() => setDecisionsOpenFor(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddRepricingRuleForm({
+  productId,
+  channelListings,
+  onClose,
+  onCreated,
+}: {
+  productId: string
+  channelListings: NonNullable<ProductDetail['channelListings']>
+  onClose: () => void
+  onCreated: () => void
+}) {
+  // Pre-populate channel + marketplace options from the product's
+  // existing listings so the operator picks from a real list.
+  const channelOpts = useMemo(() => {
+    const seen = new Set<string>()
+    const opts: Array<{ channel: string; marketplace: string | null; key: string }> = []
+    for (const cl of channelListings) {
+      const key = `${cl.channel}|${cl.marketplace}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      opts.push({ channel: cl.channel, marketplace: cl.marketplace, key })
+    }
+    if (opts.length === 0) {
+      // Fallback: hardcoded major channels.
+      return [
+        { channel: 'AMAZON', marketplace: null, key: 'AMAZON|' },
+        { channel: 'EBAY', marketplace: null, key: 'EBAY|' },
+        { channel: 'SHOPIFY', marketplace: null, key: 'SHOPIFY|' },
+      ]
+    }
+    return opts
+  }, [channelListings])
+
+  const [channelKey, setChannelKey] = useState(channelOpts[0]?.key ?? '')
+  const [strategy, setStrategy] = useState<string>('match_buy_box')
+  const [minPrice, setMinPrice] = useState('')
+  const [maxPrice, setMaxPrice] = useState('')
+  const [beatPct, setBeatPct] = useState('')
+  const [beatAmount, setBeatAmount] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  const needsPct = strategy === 'beat_lowest_by_pct'
+  const needsAmount =
+    strategy === 'beat_lowest_by_amount' || strategy === 'fixed_to_buy_box_minus'
+
+  const submit = async () => {
+    setErr(null)
+    setSubmitting(true)
+    const opt = channelOpts.find((o) => o.key === channelKey)
+    if (!opt) {
+      setErr('pick a channel')
+      setSubmitting(false)
+      return
+    }
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/repricing-rules`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: opt.channel,
+            marketplace: opt.marketplace,
+            strategy,
+            minPrice: Number(minPrice),
+            maxPrice: Number(maxPrice),
+            beatPct: needsPct && beatPct ? Number(beatPct) : null,
+            beatAmount: needsAmount && beatAmount ? Number(beatAmount) : null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      toast.success('Rule created')
+      onCreated()
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissOnBackdrop={!submitting}
+      dismissOnEscape={!submitting}
+      size="lg"
+      title="New repricing rule"
+      description="One rule per (channel, marketplace). The engine evaluates active rules on each tick + writes a decision row regardless of whether the price actually changed."
+    >
+      <div className="p-5 space-y-3">
+        <div className="space-y-1">
+          <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+            Channel · marketplace
+          </label>
+          <select
+            value={channelKey}
+            onChange={(e) => setChannelKey(e.target.value)}
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          >
+            {channelOpts.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.channel}
+                {o.marketplace ? ` · ${o.marketplace}` : ' · all marketplaces'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+            Strategy
+          </label>
+          <select
+            value={strategy}
+            onChange={(e) => setStrategy(e.target.value)}
+            className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
+          >
+            {Object.entries(STRATEGY_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+              Floor (min €)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={minPrice}
+              onChange={(e) => setMinPrice(e.target.value)}
+              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+              Ceiling (max €)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+              className="w-full h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            />
+          </div>
+        </div>
+
+        {needsPct && (
+          <div className="space-y-1">
+            <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+              Beat by (%)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={beatPct}
+              onChange={(e) => setBeatPct(e.target.value)}
+              placeholder="e.g. 2.5"
+              className="w-32 h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            />
+          </div>
+        )}
+        {needsAmount && (
+          <div className="space-y-1">
+            <label className="text-sm uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 block">
+              Beat by (€)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={beatAmount}
+              onChange={(e) => setBeatAmount(e.target.value)}
+              placeholder="e.g. 2.00"
+              className="w-32 h-9 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100 tabular-nums"
+            />
+          </div>
+        )}
+
+        {err && (
+          <div className="border border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 rounded px-3 py-2 text-base text-rose-700 dark:text-rose-300">
+            {err}
+          </div>
+        )}
+      </div>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={submit}
+          disabled={
+            submitting ||
+            !minPrice ||
+            !maxPrice ||
+            (needsPct && !beatPct) ||
+            (needsAmount && !beatAmount)
+          }
+          loading={submitting}
+        >
+          Create
+        </Button>
+      </ModalFooter>
+    </Modal>
+  )
+}
+
+function DecisionsModal({
+  ruleId,
+  onClose,
+}: {
+  ruleId: string
+  onClose: () => void
+}) {
+  const [decisions, setDecisions] = useState<
+    | Array<{
+        id: string
+        oldPrice: string
+        newPrice: string
+        reason: string
+        applied: boolean
+        capped: string | null
+        buyBoxPrice: string | null
+        lowestCompPrice: string | null
+        createdAt: string
+      }>
+    | null
+  >(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`${getBackendUrl()}/api/repricing-rules/${ruleId}/decisions?limit=50`, {
+      cache: 'no-store',
+    })
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)),
+      )
+      .then((data) => setDecisions(data.decisions ?? []))
+      .catch((e) => setErr(e?.message ?? String(e)))
+  }, [ruleId])
+
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      size="2xl"
+      title="Recent repricing decisions"
+      description="Append-only log of every engine evaluation. `applied=false` means the engine considered the move but didn't push (typically because the price was unchanged from the previous tick)."
+    >
+      <div className="p-5 space-y-2 max-h-[60vh] overflow-y-auto">
+        {err && (
+          <div className="text-sm text-rose-700 dark:text-rose-300">{err}</div>
+        )}
+        {decisions === null ? (
+          <div className="text-base text-slate-500 dark:text-slate-400">
+            Loading…
+          </div>
+        ) : decisions.length === 0 ? (
+          <div className="text-base italic text-slate-500 dark:text-slate-400">
+            No decisions yet — this rule hasn't been evaluated.
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+              <tr className="text-left">
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">When</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-right">Old → New</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">Reason</th>
+                <th className="px-2 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 text-center">Applied</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decisions.map((d) => (
+                <tr
+                  key={d.id}
+                  className="border-t border-slate-100 dark:border-slate-800"
+                >
+                  <td className="px-2 py-1.5 text-xs tabular-nums text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                    {new Date(d.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    €{Number(d.oldPrice).toFixed(2)} → €{Number(d.newPrice).toFixed(2)}
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-700 dark:text-slate-300">
+                    {d.reason}
+                    {d.capped && (
+                      <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">
+                        ({d.capped})
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 text-center text-xs">
+                    {d.applied ? (
+                      <span className="text-emerald-700 dark:text-emerald-300">
+                        ✓
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 dark:text-slate-500">
+                        —
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>
+          Close
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
