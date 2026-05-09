@@ -113,6 +113,20 @@ export function coercePasteValue(
     }
     return { value: trimmed }
   }
+  // W2.1 — boolean. Operators paste 'true' / 'false' / '1' / '0' /
+  // 'yes' / 'no' from spreadsheet exports; coerce against a known
+  // vocabulary and reject anything else with a clear error.
+  if (field.type === 'boolean') {
+    const lower = trimmed.toLowerCase()
+    if (['true', '1', 'yes', 'y', 'on'].includes(lower))
+      return { value: true }
+    if (['false', '0', 'no', 'n', 'off'].includes(lower))
+      return { value: false }
+    return {
+      value: null,
+      error: `Must be true/false / 1/0 / yes/no (got "${trimmed}")`,
+    }
+  }
   return { value: trimmed }
 }
 

@@ -35,7 +35,21 @@ export function editKey(rowId: string, columnId: string) {
   return `${rowId}:${columnId}`
 }
 
-export type FieldType = 'text' | 'number' | 'select'
+/**
+ * Cell editor type system. The bulk-ops audit (2026-05-09) flagged
+ * EditableCell as supporting only 3 of Airtable's 16 cell types;
+ * Wave 2 expands this union one type per commit. All rendering
+ * branches off `meta.fieldType`.
+ */
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'select'
+  /**
+   * W2.1 — boolean toggle. Display shows ✓ / ✗; edit mode renders a
+   * checkbox. Coerces 'true'/'false'/'1'/'0' on paste.
+   */
+  | 'boolean'
 
 export interface EditableMeta {
   editable: true
@@ -45,6 +59,25 @@ export interface EditableMeta {
   prefix?: string
   parse?: (raw: string) => unknown
   format?: (v: unknown) => string
+}
+
+/**
+ * Coerce arbitrary input (string from paste, value from initialValue,
+ * etc.) into a real boolean for the boolean cell type. Falsy strings
+ * ('', '0', 'false', 'no', 'off') → false; everything else truthy is
+ * true. null / undefined → null (cell shows the empty-state dash).
+ */
+export function coerceBoolean(v: unknown): boolean | null {
+  if (v === null || v === undefined || v === '') return null
+  if (typeof v === 'boolean') return v
+  if (typeof v === 'number') return v !== 0
+  const s = String(v).trim().toLowerCase()
+  if (s === 'true' || s === '1' || s === 'yes' || s === 'y' || s === 'on')
+    return true
+  if (s === 'false' || s === '0' || s === 'no' || s === 'n' || s === 'off')
+    return false
+  // Anything else falls back to truthiness of the string itself.
+  return s.length > 0
 }
 
 interface Props {
@@ -249,6 +282,35 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.1 — boolean edit: a single checkbox the operator clicks.
+      // Enter / Tab commit + navigate (Excel semantics); Space toggles
+      // when the input owns focus; Escape reverts. Render is wrapped
+      // in a flex container so the checkbox sits visually centred and
+      // the Excel-style ring still highlights the cell.
+      if (meta.fieldType === 'boolean') {
+        return (
+          <div
+            className={cn(
+              'w-full h-full flex items-center justify-center bg-white ring-2 ring-blue-500',
+            )}
+          >
+            <input
+              ref={(el) => {
+                inputRef.current = el as unknown as HTMLInputElement
+              }}
+              type="checkbox"
+              checked={coerceBoolean(draftValue) === true}
+              onChange={(e) => setDraftValue(e.target.checked)}
+              onBlur={handleBlur}
+              onKeyDown={
+                handleKeyDown as unknown as React.KeyboardEventHandler<HTMLInputElement>
+              }
+              className="w-4 h-4 cursor-pointer"
+              aria-label="Toggle"
+            />
+          </div>
+        )
+      }
       return (
         <input
           ref={(el) => {
@@ -271,6 +333,36 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.1 — boolean display: ✓ / ✗ glyph, centred, click-or-dblclick
+    // toggles into edit mode (operators expect a single click on a
+    // checkbox to flip; pressing Space inside a focused checkbox
+    // toggles natively). Falls through to the generic rendering for
+    // every other type.
+    if (meta.fieldType === 'boolean') {
+      const b = coerceBoolean(draftValue)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          onClick={() => enterEdit()}
+          title={cellError ?? (cellCascading && isDirty ? 'Will cascade to children' : undefined)}
+          className={cn(
+            'w-full h-full px-2 flex items-center justify-center text-md cursor-pointer',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {b === true ? (
+            <span className="text-emerald-600 font-semibold" aria-label="True">✓</span>
+          ) : b === false ? (
+            <span className="text-slate-400 font-semibold" aria-label="False">✗</span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       )
     }
 

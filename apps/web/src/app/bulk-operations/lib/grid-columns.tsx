@@ -101,6 +101,17 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
       options: field.options ?? [],
     }
   }
+  // W2.1 — boolean field. Renderer is a checkbox in edit mode, ✓/✗
+  // glyph in display mode. Registry entries with type='boolean' get
+  // this automatically; if the registry hasn't been updated yet for
+  // a field that's actually boolean in DB, fieldToMeta still falls
+  // through to text below — same behaviour as before.
+  if (field.type === 'boolean') {
+    return {
+      editable: true,
+      fieldType: 'boolean',
+    }
+  }
   // Weight + dimension fields are typed as 'number' in the registry
   // but rendered as text inputs so the user can type "5kg" or "60cm".
   // The smart-parsing in handleCommit splits the unit suffix into the
