@@ -52,6 +52,12 @@ export interface ReceiveLayerArgs {
   /** Rate from costCurrency to base (EUR) at receivedAt. Required
    *  when costCurrency != 'EUR' (DB CHECK enforces). */
   exchangeRate?: number
+  /** T.7 — true when unitCostCents is net of VAT (IT fiscal default).
+   *  Set false only when capitalising a gross-of-VAT amount. */
+  unitCostVatExcluded?: boolean
+  /** T.7 — applicable VAT rate at receive (0..1, e.g. 0.22 for IT
+   *  22% IVA). NULL when not known / N/A (e.g. EU reverse-charge). */
+  vatRate?: number
   inboundShipmentId?: string
   stockMovementId?: string
   notes?: string
@@ -109,6 +115,8 @@ export async function receiveLayerInTx(tx: Tx, args: ReceiveLayerArgs): Promise<
       brokerCents: args.brokerCents ?? null,
       costCurrency,
       exchangeRateOnReceive: args.exchangeRate ?? null,
+      unitCostVatExcluded: args.unitCostVatExcluded ?? true,
+      vatRate: args.vatRate ?? null,
       inboundShipmentId: inboundShipmentId ?? null,
       stockMovementId: stockMovementId ?? null,
       notes: notes ?? null,

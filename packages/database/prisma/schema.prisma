@@ -3832,6 +3832,13 @@ model StockCostLayer {
   // receivedAt — required when costCurrency != 'EUR' (DB CHECK).
   costCurrency           String   @default("EUR")
   exchangeRateOnReceive  Decimal? @db.Decimal(14, 8)
+  // T.7 — VAT (IVA) treatment. Italian fiscal law requires
+  // inventory to exclude VAT (DPR 633/72 Art. 19). Default true
+  // because the receive path is convention-net. vatRate is the
+  // applicable rate at receive time (e.g. 0.2200 for IT 22%); CHECK
+  // keeps it in [0, 1).
+  unitCostVatExcluded    Boolean  @default(true)
+  vatRate                Decimal? @db.Decimal(5, 4)
   // Source linkage.
   inboundShipmentId String?
   stockMovementId   String?
