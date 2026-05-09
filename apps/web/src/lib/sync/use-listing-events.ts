@@ -15,14 +15,17 @@
 // about. Sharper cadence for free.
 //
 // Mapping:
-//   listing.synced  → invalidation 'listing.updated' (refresh state)
-//   listing.syncing → invalidation 'listing.updated' (cells flip amber)
-//   listing.updated → invalidation 'listing.updated'
-//   listing.created → invalidation 'listing.created'
-//   listing.deleted → invalidation 'listing.deleted'
-//   bulk.progress   → invalidation 'bulk-job.completed' (debounced upstream)
-//   bulk.completed  → invalidation 'bulk-job.completed'
-//   ping            → no-op (just confirms liveness)
+//   listing.synced   → invalidation 'listing.updated' (refresh state)
+//   listing.syncing  → invalidation 'listing.updated' (cells flip amber)
+//   listing.updated  → invalidation 'listing.updated'
+//   listing.created  → invalidation 'listing.created'
+//   listing.deleted  → invalidation 'listing.deleted'
+//   wizard.submitted → invalidation 'wizard.submitted' (DR-C.3 — closes
+//                       the closed-source-tab gap when the operator
+//                       leaves /products/[id]/list-wizard mid-submit)
+//   bulk.progress    → invalidation 'bulk-job.completed' (debounced upstream)
+//   bulk.completed   → invalidation 'bulk-job.completed'
+//   ping             → no-op (just confirms liveness)
 
 'use client'
 
@@ -78,6 +81,16 @@ export function useListingEvents(): UseListingEventsResult {
           emitInvalidation({ type: 'listing.created', id: parsed.listingId, meta: { source: 'sse' } })
         } else if (parsed.type === 'listing.deleted') {
           emitInvalidation({ type: 'listing.deleted', id: parsed.listingId, meta: { source: 'sse' } })
+        } else if (parsed.type === 'wizard.submitted') {
+          // DR-C.3 — fan out wizard.submitted from the SSE bus into
+          // the cross-tab invalidation channel so /products/drafts,
+          // ProductsWorkspace, and the listings workspaces all
+          // refresh even when the source wizard tab has been closed.
+          emitInvalidation({
+            type: 'wizard.submitted',
+            id: parsed.wizardId,
+            meta: { source: 'sse', productId: parsed.productId, status: parsed.status },
+          })
         } else if (parsed.type === 'bulk.progress' || parsed.type === 'bulk.completed') {
           emitInvalidation({
             type: 'bulk-job.completed',
@@ -100,6 +113,7 @@ export function useListingEvents(): UseListingEventsResult {
       'listing.updated',
       'listing.created',
       'listing.deleted',
+      'wizard.submitted',
       'bulk.progress',
       'bulk.completed',
       'ping',

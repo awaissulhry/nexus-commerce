@@ -23,6 +23,12 @@ export type ListingEvent =
   | { type: 'listing.updated'; listingId: string; reason?: string; ts: number }
   | { type: 'listing.created'; listingId: string; ts: number }
   | { type: 'listing.deleted'; listingId: string; ts: number }
+  // DR-C.3 — wizard.submitted fires when ListingWizard.status leaves
+  // DRAFT (→ SUBMITTED/LIVE/FAILED). Step10Submit also broadcasts the
+  // same event over BroadcastChannel for same-browser tabs, but if
+  // the operator closes the source tab mid-submit those tabs never
+  // hear about it — only the SSE path closes that gap.
+  | { type: 'wizard.submitted'; wizardId: string; productId: string; status: 'SUBMITTED' | 'LIVE' | 'FAILED'; ts: number }
   | { type: 'bulk.progress'; jobId: string; processed: number; total: number; succeeded: number; failed: number; ts: number }
   | { type: 'bulk.completed'; jobId: string; status: string; ts: number }
   | { type: 'ping'; ts: number }

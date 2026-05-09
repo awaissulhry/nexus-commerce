@@ -2187,6 +2187,28 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
+      // DR-C.3 — server-side wizard.submitted emit. Step10Submit
+      // already broadcasts this on its end so same-browser tabs
+      // refresh in <200ms; the SSE path closes the closed-source-tab
+      // gap (operator clicks Submit, closes the wizard tab before
+      // it polls, no other tab learns about the status flip until
+      // its 30s polling tick). Only fires on the DRAFT → terminal
+      // transition; idempotent re-submits don't re-flip status.
+      if (
+        wizard.status === 'DRAFT' &&
+        (overallStatus === 'SUBMITTED' ||
+          overallStatus === 'LIVE' ||
+          overallStatus === 'FAILED')
+      ) {
+        publishListingEvent({
+          type: 'wizard.submitted',
+          wizardId: wizard.id,
+          productId: wizard.productId,
+          status: overallStatus,
+          ts: Date.now(),
+        })
+      }
+
       // C.1 — emit `listing.created` per submission that produced a
       // real channel listing. Today every adapter returns
       // NOT_IMPLEMENTED so this loop fires zero events; once C.6
@@ -2362,6 +2384,27 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               : wizard.completedAt,
         },
       })
+
+      // DR-C.3 — same DRAFT → terminal guard as /submit. /poll can
+      // legitimately flip a SUBMITTED → LIVE on its own; we only emit
+      // when the status leaves DRAFT (covers the case where the
+      // initial /submit returned NOT_IMPLEMENTED for every channel,
+      // leaving the wizard.status as DRAFT, and a later /poll lifts
+      // one channel into SUBMITTED-with-id).
+      if (
+        wizard.status === 'DRAFT' &&
+        (overallStatus === 'SUBMITTED' ||
+          overallStatus === 'LIVE' ||
+          overallStatus === 'FAILED')
+      ) {
+        publishListingEvent({
+          type: 'wizard.submitted',
+          wizardId: wizard.id,
+          productId: wizard.productId,
+          status: overallStatus,
+          ts: Date.now(),
+        })
+      }
 
       // C.1 — emit `listing.created` for entries that newly transitioned
       // into an acknowledged state during this poll cycle. Today the
