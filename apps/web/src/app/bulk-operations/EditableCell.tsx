@@ -92,6 +92,13 @@ export type FieldType =
    * the cell stays single-line at common widths.
    */
   | 'phone'
+  /**
+   * W2.5 — color. Edit mode renders <input type="color"> alongside
+   * a hex text input so operators can paste #RRGGBB or pick from
+   * the OS picker. Display shows a swatch + hex code. Stored as
+   * lowercase '#rrggbb'.
+   */
+  | 'color'
 
 export interface EditableMeta {
   editable: true
@@ -257,6 +264,56 @@ export function formatDateTime(
   } catch {
     return iso
   }
+}
+
+/**
+ * W2.5 — coerce arbitrary input to a canonical lowercase '#rrggbb'.
+ * Accepts:
+ *   - '#abc' / 'abc'      → expanded to '#aabbcc'
+ *   - '#aabbcc' / 'aabbcc'
+ *   - 'rgb(170, 187, 204)' / 'rgb(170 187 204)'
+ *   - CSS named colors (a small allowlist for common ones)
+ * Returns null when nothing matches.
+ */
+const NAMED_COLORS: Record<string, string> = {
+  black: '#000000',
+  white: '#ffffff',
+  red: '#ff0000',
+  green: '#008000',
+  blue: '#0000ff',
+  yellow: '#ffff00',
+  orange: '#ffa500',
+  purple: '#800080',
+  pink: '#ffc0cb',
+  brown: '#a52a2a',
+  gray: '#808080',
+  grey: '#808080',
+  silver: '#c0c0c0',
+}
+
+export function coerceColor(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  const s = String(v).trim().toLowerCase()
+  if (!s) return null
+  // #rrggbb / rrggbb
+  const long = s.match(/^#?([0-9a-f]{6})$/)
+  if (long) return `#${long[1]}`
+  // #rgb / rgb (3-digit shorthand)
+  const short = s.match(/^#?([0-9a-f])([0-9a-f])([0-9a-f])$/)
+  if (short) {
+    return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`
+  }
+  // rgb(r,g,b) / rgb(r g b)
+  const rgb = s.match(/^rgba?\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)/)
+  if (rgb) {
+    const [r, g, b] = [rgb[1], rgb[2], rgb[3]].map((x) =>
+      Math.max(0, Math.min(255, parseInt(x, 10))),
+    )
+    const hex = (n: number) => n.toString(16).padStart(2, '0')
+    return `#${hex(r)}${hex(g)}${hex(b)}`
+  }
+  if (NAMED_COLORS[s]) return NAMED_COLORS[s]
+  return null
 }
 
 // W2.4 — URL / email / phone validators. Deliberately permissive —
@@ -531,6 +588,40 @@ export const EditableCell = memo(
           </select>
         )
       }
+      // W2.5 — color edit: native <input type="color"> + a parallel
+      // hex text input so operators can either pick visually or paste
+      // a hex value. Both are bound to draftValue; whichever changes
+      // wins until blur.
+      if (meta.fieldType === 'color') {
+        const hex = coerceColor(draftValue) ?? '#000000'
+        const rawText = draftValue === null || draftValue === undefined
+          ? ''
+          : String(draftValue)
+        return (
+          <div className="w-full h-full flex items-stretch bg-white ring-2 ring-blue-500">
+            <input
+              type="color"
+              value={hex}
+              onChange={(e) => setDraftValue(e.target.value.toLowerCase())}
+              onBlur={handleBlur}
+              className="w-7 border-r border-slate-200 cursor-pointer"
+              aria-label="Pick color"
+            />
+            <input
+              ref={(el) => {
+                inputRef.current = el
+              }}
+              type="text"
+              value={rawText}
+              onChange={(e) => setDraftValue(e.target.value || null)}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              placeholder="#rrggbb"
+              className="flex-1 px-2 outline-none text-md tabular-nums"
+            />
+          </div>
+        )
+      }
       // W2.4 — URL / email / phone edit: plain text inputs with the
       // right `type` so mobile keyboards switch glyphs (.com key for
       // url, @ key for email, dial pad for phone). Validation is
@@ -687,6 +778,46 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.5 — color display: 16×16 swatch + canonical hex. Invalid
+    // raw values render with the amber tint so they're spotted.
+    if (meta.fieldType === 'color') {
+      const raw = draftValue === null || draftValue === undefined
+        ? ''
+        : String(draftValue)
+      const normalised = coerceColor(raw)
+      return (
+        <div
+          onDoubleClick={() => enterEdit()}
+          title={cellError ?? raw}
+          className={cn(
+            'w-full h-full px-2 flex items-center gap-2 text-md cursor-cell',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {normalised ? (
+            <>
+              <span
+                className="w-4 h-4 rounded border border-slate-300 flex-shrink-0"
+                style={{ backgroundColor: normalised }}
+                aria-label={`Color swatch ${normalised}`}
+              />
+              <span className="truncate tabular-nums text-slate-700">
+                {normalised}
+              </span>
+            </>
+          ) : raw ? (
+            <span className="truncate text-amber-700" title="Invalid color">
+              {raw}
+            </span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       )
     }
 

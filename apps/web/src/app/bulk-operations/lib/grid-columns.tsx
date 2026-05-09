@@ -135,6 +135,8 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
   if (field.type === 'url') return { editable: true, fieldType: 'url' }
   if (field.type === 'email') return { editable: true, fieldType: 'email' }
   if (field.type === 'phone') return { editable: true, fieldType: 'phone' }
+  // W2.5 — color: hex / rgb() / named-color paste, swatch display.
+  if (field.type === 'color') return { editable: true, fieldType: 'color' }
   // Weight + dimension fields are typed as 'number' in the registry
   // but rendered as text inputs so the user can type "5kg" or "60cm".
   // The smart-parsing in handleCommit splits the unit suffix into the

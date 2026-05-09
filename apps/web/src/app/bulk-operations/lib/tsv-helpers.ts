@@ -186,6 +186,27 @@ export function coercePasteValue(
     if (/^\+?\d{4,15}$/.test(cleaned)) return { value: cleaned }
     return { value: null, error: 'Use a phone number with optional + prefix' }
   }
+  // W2.5 — color: accepts #rrggbb, #rgb, rgb(), or a named color.
+  if (field.type === 'color') {
+    const lower = trimmed.toLowerCase()
+    const long = lower.match(/^#?([0-9a-f]{6})$/)
+    if (long) return { value: `#${long[1]}` }
+    const short = lower.match(/^#?([0-9a-f])([0-9a-f])([0-9a-f])$/)
+    if (short) {
+      return {
+        value: `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`,
+      }
+    }
+    const rgb = lower.match(/^rgba?\(\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)/)
+    if (rgb) {
+      const [r, g, b] = [rgb[1], rgb[2], rgb[3]].map((x) =>
+        Math.max(0, Math.min(255, parseInt(x, 10))),
+      )
+      const hex = (n: number) => n.toString(16).padStart(2, '0')
+      return { value: `#${hex(r)}${hex(g)}${hex(b)}` }
+    }
+    return { value: null, error: 'Use #rrggbb, #rgb, rgb(r,g,b) or a named color' }
+  }
   return { value: trimmed }
 }
 
