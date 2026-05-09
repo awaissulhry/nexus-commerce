@@ -29,6 +29,7 @@ import {
   Globe,
   ShieldAlert,
   Package,
+  Cable,
 } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -40,9 +41,13 @@ interface StockSubNavProps {
    *  the Recalls tab so the operator sees compliance issues
    *  immediately on every stock surface. */
   recallsOpen?: number
+  /** CS.3 — Number of OPEN ChannelStockEvent rows (PENDING +
+   *  REVIEW_NEEDED). Surfaces as an amber badge so the operator
+   *  sees pending channel drift from any stock surface. */
+  channelDriftOpen?: number
 }
 
-export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0 }: StockSubNavProps) {
+export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0, channelDriftOpen = 0 }: StockSubNavProps) {
   const pathname = usePathname()
   const { t } = useTranslations()
 
@@ -55,6 +60,7 @@ export function StockSubNav({ cycleCountActive = 0, recallsOpen = 0 }: StockSubN
     { href: '/fulfillment/stock/stockouts', labelKey: 'stock.stockouts.title', icon: AlertTriangle },
     { href: '/fulfillment/stock/lots', labelKey: 'stock.lots.subnav', icon: Package },
     { href: '/fulfillment/stock/recalls', labelKey: 'stock.recalls.title', icon: ShieldAlert, badge: recallsOpen, badgeTone: 'rose' as const },
+    { href: '/fulfillment/stock/channel-drift', labelKey: 'channelDrift.subnav', icon: Cable, badge: channelDriftOpen, badgeTone: 'amber' as const },
     { href: '/fulfillment/stock/import', labelKey: 'stock.import.title', icon: Upload },
     { href: '/fulfillment/stock/shopify-locations', labelKey: 'stock.shopifyLocations.title', icon: Store },
     { href: '/fulfillment/stock/mcf', labelKey: 'stock.mcf.title', icon: Truck },
