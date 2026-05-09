@@ -68,6 +68,7 @@ import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { AutomationRulesCard } from './_shared/AutomationRulesCard'
 
 type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -779,6 +780,11 @@ export default function ReplenishmentWorkspace() {
           counts + cron status + a "Run pipeline now" button so silent
           failures of the forecast layer become visible at a glance. */}
       <PipelineHealthStrip onRefreshPageData={fetchData} />
+
+      {/* W4.5 — automation rules card. Empty by default; once seeded
+          shows the 8 templates with enable/disable toggles + dry-run
+          badges + per-rule counters. */}
+      <AutomationRulesCard />
 
       {/* Upcoming-events banner — surfaces the next ≤3 events with prep deadlines */}
       {events && events.length > 0 && (
