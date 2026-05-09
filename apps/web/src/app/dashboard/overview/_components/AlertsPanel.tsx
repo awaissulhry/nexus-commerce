@@ -82,6 +82,45 @@ export default function AlertsPanel({
       href: '/orders',
       tone: 'amber',
     })
+  // DO.21 — operational categories. Order matters: most-urgent first
+  // (P0 risks at the top, P1/P2 below).
+  if (alerts.lateShipments > 0)
+    items.push({
+      label: t('overview.alerts.lateShipments'),
+      count: alerts.lateShipments,
+      href: '/fulfillment/outbound',
+      tone: 'rose',
+    })
+  if (alerts.suppressions > 0)
+    items.push({
+      label: t('overview.alerts.suppressions'),
+      count: alerts.suppressions,
+      // Suppressions live across Amazon listings; the master view
+      // filtered to suppressed status is the right drill-down.
+      href: '/listings/amazon?suppressed=true',
+      tone: 'rose',
+    })
+  if (alerts.returnsBacklog > 0)
+    items.push({
+      label: t('overview.alerts.returnsBacklog'),
+      count: alerts.returnsBacklog,
+      href: '/fulfillment/returns',
+      tone: 'amber',
+    })
+  if (alerts.syncFailures24h > 0)
+    items.push({
+      label: t('overview.alerts.syncFailures24h'),
+      count: alerts.syncFailures24h,
+      href: '/sync-logs',
+      tone: 'rose',
+    })
+  if (alerts.rateLimitHits1h > 0)
+    items.push({
+      label: t('overview.alerts.rateLimitHits1h'),
+      count: alerts.rateLimitHits1h,
+      href: '/sync-logs/api-calls',
+      tone: 'amber',
+    })
   // DO.20 — local dismissal: marking a notification read on the
   // server is a fire-and-forget action; we hide it from the UI
   // immediately so the operator gets the satisfying acknowledgment

@@ -899,6 +899,53 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         .count({ where: { status: 'PENDING' } })
         .catch(() => 0)
 
+      // ── DO.21 — additional operational alerts ────────────────────
+      //
+      // Five new categories surfaced as count-based alert rows:
+      //
+      //  1. Late shipments — overlaps DO.12's KPI but rendering as an
+      //     alert too gives the operator a one-click drill-down from
+      //     the panel where action lives. Same data, different surface.
+      //  2. Suppressions — sum of Amazon unresolved AmazonSuppression
+      //     rows (already computed for DO.17, reused here).
+      //  3. Returns awaiting inspection — Return rows in REQUESTED /
+      //     AUTHORIZED / IN_TRANSIT / RECEIVED status; haven't been
+      //     processed past inspection.
+      //  4. Sync failures channel-wide — channels with errors24h > 0
+      //     count, fed by the same SyncError + SyncLog signal as
+      //     DO.17.
+      //  5. API rate-limit hits — OutboundApiCallLog rows with
+      //     statusCode=429 OR errorType='RATE_LIMIT' in the last
+      //     hour. A burst here means SP-API throttling — operator
+      //     should slow the cron cadence.
+      const since1h = new Date(Date.now() - 60 * 60 * 1000)
+      const [
+        returnsBacklog,
+        rateLimitHits1h,
+      ] = await Promise.all([
+        prisma.return
+          .count({
+            where: {
+              status: {
+                in: ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED'],
+              },
+            },
+          })
+          .catch(() => 0),
+        prisma.outboundApiCallLog
+          .count({
+            where: {
+              createdAt: { gte: since1h },
+              OR: [{ statusCode: 429 }, { errorType: 'RATE_LIMIT' }],
+            },
+          })
+          .catch(() => 0),
+      ])
+
+      // Sync-fail signal is the sum of byChannel.health.errors24h —
+      // we already computed those, just sum them up. Done after
+      // byChannel is built.
+
       // ── DO.20 — recent unread notifications ───────────────────────
       //
       // Surface up to 8 most recent unread Notification rows in the
@@ -1028,6 +1075,15 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           failedListings,
           draftListings,
           pendingOrders,
+          // DO.21 — operational rows.
+          lateShipments: lateShipmentsCount,
+          suppressions: suppressionsActive,
+          returnsBacklog,
+          syncFailures24h: byChannel.reduce(
+            (s, c) => s + (c.health?.errors24h ?? 0),
+            0,
+          ),
+          rateLimitHits1h,
           ebayConnected: ebayActive > 0,
           channelConnections: channelConnections.map((c) => ({
             channelType: c.channelType,

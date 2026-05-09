@@ -114,6 +114,12 @@ export interface OverviewPayload {
     failedListings: number
     draftListings: number
     pendingOrders: number
+    // DO.21 — operational alerts beyond catalog state.
+    lateShipments: number
+    suppressions: number
+    returnsBacklog: number
+    syncFailures24h: number
+    rateLimitHits1h: number
     ebayConnected: boolean
     channelConnections: Array<{
       channelType: string
