@@ -35,6 +35,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { evaluateAllRulesForTrigger } from '../services/automation-rule.service.js'
+import { detectDemandSpikes } from '../services/demand-spike-detector.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -134,11 +135,13 @@ export async function runAutomationRuleEvaluatorOnce(): Promise<string> {
     recommendation_generated: 0,
     stockout_imminent: 0,
     cron_tick: 0,
+    demand_spike_detected: 0,
   }
   const matched = {
     recommendation_generated: 0,
     stockout_imminent: 0,
     cron_tick: 0,
+    demand_spike_detected: 0,
   }
 
   // ── recommendation_generated ────────────────────────────────────
@@ -268,12 +271,38 @@ export async function runAutomationRuleEvaluatorOnce(): Promise<string> {
     }
   }
 
+  // ── demand_spike_detected ────────────────────────────────────────
+  // Only run the detector if at least one spike rule is enabled —
+  // a full DailySalesAggregate scan per tick is wasted when nothing
+  // can match.
+  const spikeRuleCount = await prisma.automationRule.count({
+    where: { domain: 'replenishment', trigger: 'demand_spike_detected', enabled: true },
+  })
+  if (spikeRuleCount > 0) {
+    const spikes = await detectDemandSpikes()
+    for (const spikeCtx of spikes) {
+      const results = await evaluateAllRulesForTrigger({
+        domain: 'replenishment',
+        trigger: 'demand_spike_detected',
+        context: spikeCtx,
+      })
+      counts.demand_spike_detected += results.length
+      matched.demand_spike_detected += results.filter((r) => r.matched).length
+    }
+  }
+
   lastRunAt = new Date()
   const totalEvals =
-    counts.recommendation_generated + counts.stockout_imminent + counts.cron_tick
+    counts.recommendation_generated +
+    counts.stockout_imminent +
+    counts.cron_tick +
+    counts.demand_spike_detected
   const totalMatches =
-    matched.recommendation_generated + matched.stockout_imminent + matched.cron_tick
-  const summary = `evals=${totalEvals} matches=${totalMatches} (rec_gen=${counts.recommendation_generated} stockout=${counts.stockout_imminent} cron_tick=${counts.cron_tick}) durationMs=${Date.now() - startedAt}`
+    matched.recommendation_generated +
+    matched.stockout_imminent +
+    matched.cron_tick +
+    matched.demand_spike_detected
+  const summary = `evals=${totalEvals} matches=${totalMatches} (rec_gen=${counts.recommendation_generated} stockout=${counts.stockout_imminent} cron_tick=${counts.cron_tick} spike=${counts.demand_spike_detected}) durationMs=${Date.now() - startedAt}`
   lastSummary = summary
   return summary
 }
