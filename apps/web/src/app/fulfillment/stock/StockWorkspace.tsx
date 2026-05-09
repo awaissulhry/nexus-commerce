@@ -39,6 +39,8 @@ type StockRow = {
   reserved: number
   available: number
   reorderThreshold: number | null
+  /** T.32 — EOQ surfaced inline next to threshold for at-reorder rows. */
+  reorderQuantity: number | null
   syncStatus: string
   lastUpdatedAt: string
   lastSyncedAt: string | null
@@ -2796,7 +2798,19 @@ function TableView({
                   {visible('onHand')    && <td className={`px-3 ${padY} text-right tabular-nums font-semibold ${stockTone}`}>{it.quantity}</td>}
                   {visible('reserved')  && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>{it.reserved}</td>}
                   {visible('available') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-700 dark:text-slate-300`}>{it.available}</td>}
-                  {visible('threshold') && <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>{threshold}</td>}
+                  {visible('threshold') && (
+                    <td className={`px-3 ${padY} text-right tabular-nums text-slate-500 dark:text-slate-400`}>
+                      {/* T.32 — at-reorder rows show "12 · +50" so the
+                          operator sees ROP and EOQ inline; otherwise
+                          just the threshold value. */}
+                      {threshold}
+                      {it.quantity <= threshold && it.reorderQuantity != null && (
+                        <span className="ml-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                          · +{it.reorderQuantity}
+                        </span>
+                      )}
+                    </td>
+                  )}
                   {visible('cost') && (
                     <td className={`px-3 ${padY} text-right tabular-nums text-slate-600`}>
                       {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}

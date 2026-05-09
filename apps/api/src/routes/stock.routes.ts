@@ -136,6 +136,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           reserved: r.reserved,
           available: r.available,
           reorderThreshold: r.reorderThreshold,
+          // T.32 — surface EOQ alongside threshold so at-reorder rows
+          // show "ROP 12 · +50" inline; operator can decide before
+          // opening the drawer.
+          reorderQuantity: r.reorderQuantity,
           syncStatus: r.syncStatus,
           lastUpdatedAt: r.lastUpdatedAt,
           lastSyncedAt: r.lastSyncedAt,
