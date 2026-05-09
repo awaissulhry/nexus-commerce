@@ -13,6 +13,13 @@
  * gets at most one abandoned event before it's eventually cleaned
  * up at the 30d mark. Distinct from cleanup so analytics can
  * distinguish "abandoned but not yet GC'd" from "deleted".
+ *
+ * DR.4 — orphan-wizard cleanup. The schema has productId NOT NULL
+ * but no FK constraint, so when a Product is deleted its DRAFT
+ * wizards survive and surface in /products/drafts as Untitled
+ * rows that can't actually resume. The orphan pass deletes those
+ * before the expiresAt sweep, independent of expiresAt (which can
+ * legitimately be NULL on pre-NN.14 rows).
  */
 
 import prisma from '../db.js'
@@ -67,9 +74,56 @@ export async function markAbandonedWizards(): Promise<{ marked: number }> {
   return { marked: newlyAbandoned.length }
 }
 
+/**
+ * DR.4 — delete DRAFT wizards whose productId no longer resolves
+ * to a Product row. There's no FK constraint enforcing this at
+ * the DB level, so a Product delete leaves orphans behind. They
+ * surface in /products/drafts as Untitled rows that 404 on resume.
+ *
+ * Independent of expiresAt — a recently-created orphan with a
+ * 30-day-future expiresAt would otherwise stay around for the
+ * full month before the regular sweep gets to it.
+ */
+export async function cleanupOrphanWizards(): Promise<{ deleted: number }> {
+  const orphans = await prisma.$queryRaw<
+    Array<{ id: string; productId: string; createdAt: Date }>
+  >`
+    SELECT lw."id", lw."productId", lw."createdAt"
+    FROM "ListingWizard" lw
+    LEFT JOIN "Product" p ON p."id" = lw."productId"
+    WHERE lw."status" = 'DRAFT' AND p."id" IS NULL
+  `
+  if (orphans.length === 0) return { deleted: 0 }
+
+  const now = new Date()
+  await prisma.listingWizard.deleteMany({
+    where: { id: { in: orphans.map((o) => o.id) } },
+  })
+
+  await auditLogService.writeMany(
+    orphans.map((o) => ({
+      userId: null,
+      ip: null,
+      entityType: 'ListingWizard',
+      entityId: o.id,
+      action: 'delete',
+      metadata: {
+        reason: 'orphan_cleanup',
+        productId: o.productId,
+        ageDays: Math.floor(
+          (now.getTime() - o.createdAt.getTime()) / (24 * 60 * 60 * 1000),
+        ),
+      },
+    })),
+  )
+
+  return { deleted: orphans.length }
+}
+
 export async function cleanupAbandonedWizards(): Promise<{
   deleted: number
   marked: number
+  orphansDeleted: number
 }> {
   // C.0 / B9 — emit wizard_abandoned for newly-inactive drafts
   // BEFORE the cleanup pass, so the analytics event is written
@@ -77,6 +131,12 @@ export async function cleanupAbandonedWizards(): Promise<{
   // (the cascade-on-delete eats step events, but the abandoned
   // marker landing first preserves the funnel signal).
   const { marked } = await markAbandonedWizards()
+
+  // DR.4 — sweep orphans before the expiresAt sweep. Skipping
+  // wizard_abandoned telemetry for orphans on purpose: there's no
+  // operator to "abandon" a wizard whose product was deleted
+  // out from under it; the right signal is just the audit log.
+  const { deleted: orphansDeleted } = await cleanupOrphanWizards()
 
   const now = new Date()
   // Find candidates first so we can audit-log each one before delete.
@@ -87,7 +147,8 @@ export async function cleanupAbandonedWizards(): Promise<{
     },
     select: { id: true, productId: true, createdAt: true },
   })
-  if (candidates.length === 0) return { deleted: 0, marked }
+  if (candidates.length === 0)
+    return { deleted: 0, marked, orphansDeleted }
 
   await prisma.listingWizard.deleteMany({
     where: { id: { in: candidates.map((c) => c.id) } },
@@ -110,7 +171,7 @@ export async function cleanupAbandonedWizards(): Promise<{
     })),
   )
 
-  return { deleted: candidates.length, marked }
+  return { deleted: candidates.length, marked, orphansDeleted }
 }
 
 let cleanupTimer: NodeJS.Timeout | null = null
