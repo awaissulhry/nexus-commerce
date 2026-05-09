@@ -241,6 +241,124 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * L.8.1 — Sentry-tier error groups list.
+   *
+   * GET /api/sync-logs/error-groups
+   *
+   * Query:
+   *   ?status=ACTIVE|RESOLVED|MUTED|IGNORED   (default: ACTIVE)
+   *   ?channel=AMAZON                         (optional)
+   *   ?since=ISO                              (default: last 7d)
+   *   ?limit=50&cursor=<id>                   (cursor pagination)
+   *
+   * The default status=ACTIVE filter is what the hub's red panel
+   * shows — once an operator marks a group RESOLVED it disappears
+   * unless it re-fires (regression detection in
+   * recordErrorOccurrence flips it back).
+   */
+  fastify.get<{
+    Querystring: {
+      status?: string
+      channel?: string
+      since?: string
+      limit?: string
+      cursor?: string
+    }
+  }>('/sync-logs/error-groups', async (request, reply) => {
+    try {
+      reply.header('Cache-Control', 'private, max-age=15')
+      const q = request.query
+      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
+      const status = q.status ?? 'ACTIVE'
+      const since = q.since
+        ? new Date(q.since)
+        : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+      const where: Prisma.SyncLogErrorGroupWhereInput = {
+        lastSeen: { gte: since },
+      }
+      if (status !== 'ALL') where.resolutionStatus = status
+      if (q.channel) where.channel = q.channel
+
+      const [rows, totals] = await Promise.all([
+        prisma.syncLogErrorGroup.findMany({
+          where,
+          orderBy: { lastSeen: 'desc' },
+          take: limit + 1,
+          ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
+        }),
+        // Counts per resolution status for the filter chip badges.
+        prisma.syncLogErrorGroup.groupBy({
+          by: ['resolutionStatus'],
+          where: { lastSeen: { gte: since } },
+          _count: { _all: true },
+        }),
+      ])
+      const hasNext = rows.length > limit
+      const items = hasNext ? rows.slice(0, limit) : rows
+      const nextCursor = hasNext ? items[items.length - 1].id : null
+
+      return reply.send({
+        items,
+        nextCursor,
+        totals: totals.map((t) => ({
+          status: t.resolutionStatus,
+          count: t._count._all,
+        })),
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/error-groups] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  /**
+   * Resolution workflow.
+   *
+   * POST /api/sync-logs/error-groups/:id/resolve
+   *   Body: { status: 'RESOLVED' | 'MUTED' | 'IGNORED' | 'ACTIVE',
+   *           notes?: string, resolvedBy?: string }
+   *
+   * Operator-initiated. The server doesn't track session/user yet
+   * (auth is env-managed) so resolvedBy is taken from the body to
+   * preserve the audit trail when a real user identity exists.
+   */
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      status: 'RESOLVED' | 'MUTED' | 'IGNORED' | 'ACTIVE'
+      notes?: string
+      resolvedBy?: string
+    }
+  }>('/sync-logs/error-groups/:id/resolve', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const { status, notes, resolvedBy } = request.body
+      const validStatuses = ['ACTIVE', 'RESOLVED', 'MUTED', 'IGNORED']
+      if (!validStatuses.includes(status)) {
+        return reply.code(400).send({
+          error: `status must be one of ${validStatuses.join(', ')}`,
+        })
+      }
+      const updated = await prisma.syncLogErrorGroup.update({
+        where: { id },
+        data: {
+          resolutionStatus: status,
+          resolvedAt: status === 'RESOLVED' ? new Date() : null,
+          resolvedBy: status === 'RESOLVED' ? resolvedBy ?? null : null,
+          notes: notes ?? undefined,
+        },
+      })
+      return reply.send(updated)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/error-groups/:id/resolve] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  /**
    * Paginated recent calls list with filters. Used by the hub's
    * dedicated /sync-logs/api-calls sub-route (Phase L2).
    */

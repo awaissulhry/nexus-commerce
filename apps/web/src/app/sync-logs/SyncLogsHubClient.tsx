@@ -293,6 +293,12 @@ export default function SyncLogsHubClient({
               Outbound queue
             </Button>
           </Link>
+          <Link href="/sync-logs/errors">
+            <Button variant="secondary" size="sm">
+              <AlertCircle className="w-3.5 h-3.5" />
+              Error groups
+            </Button>
+          </Link>
           <Link href="/dashboard/health">
             <Button variant="secondary" size="sm">
               <Activity className="w-3.5 h-3.5" />
