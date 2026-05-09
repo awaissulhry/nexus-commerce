@@ -534,6 +534,7 @@ export default function ProductEditClient({
               tabKey="master"
               active={topTab === 'master'}
               onClick={() => goToTab('master')}
+              dirty={dirtyByTab.master}
             >
               {t('products.edit.tab.master')}
             </TopTabButton>
@@ -555,6 +556,7 @@ export default function ProductEditClient({
               tabKey="locales"
               active={topTab === 'locales'}
               onClick={() => goToTab('locales')}
+              dirty={dirtyByTab.locales}
             >
               {t('products.edit.tab.locales')}
             </TopTabButton>
@@ -593,6 +595,13 @@ export default function ProductEditClient({
               const isActive = topTab === channel
               const channelListings = listings[channel] ?? []
               const readiness = channelReadiness(channelListings)
+              // W14.5 — sum dirty across every per-channel-marketplace
+              // tab key so the channel button reflects unsaved across
+              // all its markets, not just the active one.
+              let channelDirty = 0
+              for (const [k, n] of Object.entries(dirtyByTab)) {
+                if (k.startsWith(`channel:${channel}:`)) channelDirty += n
+              }
               return (
                 <TopTabButton
                   key={channel}
@@ -608,6 +617,7 @@ export default function ProductEditClient({
                   }}
                   count={channelListings.length || undefined}
                   readiness={readiness}
+                  dirty={channelDirty}
                 >
                   {LABEL_CASE[channel] ?? channel}
                 </TopTabButton>
@@ -798,6 +808,7 @@ function TopTabButton({
   children,
   count,
   readiness,
+  dirty,
 }: {
   /** W14.3 — stable id for ARIA tabpanel pairing + keyboard focus
    *  routing. Must match the panel's `aria-labelledby` and the
@@ -808,6 +819,11 @@ function TopTabButton({
   children: React.ReactNode
   count?: number
   readiness?: number | null
+  /** W14.5 — number of unsaved fields on this tab. Surfaces a small
+   *  amber dot so the operator switching tabs can see at a glance
+   *  which still has pending edits without checking the header
+   *  aggregate. 0 / undefined → no dot. */
+  dirty?: number
 }) {
   // W5.1 — readiness pill colour-codes the channel: rose for empty,
   // amber while the operator is still filling fields, emerald once
@@ -864,6 +880,13 @@ function TopTabButton({
         >
           {readiness}%
         </span>
+      )}
+      {dirty != null && dirty > 0 && (
+        <span
+          aria-label={`${dirty} unsaved field${dirty === 1 ? '' : 's'}`}
+          title={`${dirty} unsaved field${dirty === 1 ? '' : 's'}`}
+          className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400"
+        />
       )}
     </button>
   )
