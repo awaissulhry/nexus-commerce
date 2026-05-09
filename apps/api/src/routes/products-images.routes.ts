@@ -225,6 +225,51 @@ const productsImagesRoutes: FastifyPluginAsync = async (fastify) => {
         select: { id: true, url: true, type: true, createdAt: true },
       })
 
+      // W4.11b — tee into DigitalAsset + AssetUsage so the W4.4
+      // DAM library starts populating organically. Wrapped in
+      // try/catch: ProductImage is still the legacy source of
+      // truth; a DAM-side failure must NOT break the legacy upload
+      // path. Once W4.12 backfills history + W4.7 cuts over, the
+      // ProductImage write becomes optional.
+      try {
+        const mimeType = uploaded.format
+          ? `image/${uploaded.format}`
+          : 'image/jpeg'
+        const asset = await prisma.digitalAsset.create({
+          data: {
+            label: filename,
+            type: 'image',
+            mimeType,
+            sizeBytes: uploaded.bytes,
+            storageProvider: 'cloudinary',
+            storageId: uploaded.publicId,
+            url: uploaded.url,
+            originalFilename: filename,
+            metadata: {
+              width: uploaded.width,
+              height: uploaded.height,
+              productImageId: created.id,
+            },
+          },
+          select: { id: true },
+        })
+        await prisma.assetUsage.create({
+          data: {
+            assetId: asset.id,
+            scope: 'product',
+            productId: product.id,
+            role: type.toLowerCase(), // 'main' | 'alt' | 'lifestyle'
+            sortOrder: position,
+          },
+        })
+      } catch (err) {
+        // Log + continue — DAM is best-effort on the legacy path.
+        fastify.log.warn(
+          { err, productId: product.id, filename, source: 'W4.11b-dam-tee' },
+          'DAM tee failed; ProductImage still wrote successfully',
+        )
+      }
+
       auditLogService.write({
         userId: 'default-user',
         entityType: 'Product',
