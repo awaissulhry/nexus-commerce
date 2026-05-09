@@ -4,10 +4,17 @@ import PageHeader from '@/components/layout/PageHeader'
 export const dynamic = 'force-dynamic'
 
 export default async function FeedbackPage() {
-  const feedbacks = await prisma.sellerFeedback.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-  })
+  // U.61 — defensive try/catch. See /catalog/drafts for context.
+  let feedbacks: any[] = []
+  try {
+    feedbacks = await prisma.sellerFeedback.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    })
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[performance/feedback] prisma error:', err)
+  }
 
   // Compute stats
   const totalFeedback = feedbacks.length

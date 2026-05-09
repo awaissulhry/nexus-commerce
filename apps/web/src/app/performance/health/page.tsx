@@ -13,27 +13,38 @@ interface HealthMetric {
 }
 
 export default async function AccountHealthPage() {
-  // Gather real data to derive health metrics
-  const [
-    totalOrders,
-    returnCount,
-    pendingReturns,
-    lowStockCount,
-    unlinkedListings,
-    recentFailedSyncs,
-  ] = await Promise.all([
-    prisma.order.count(),
-    (prisma as any)['return'].count(),
-    (prisma as any)['return'].count({ where: { status: 'REQUESTED' } }),
-    prisma.product.count({ where: { totalStock: { lte: 5 } } }),
-    prisma.listing.count({ where: { productId: null } }),
-    prisma.marketplaceSync.count({
-      where: {
-        lastSyncStatus: 'FAILED',
-        lastSyncAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      },
-    }),
-  ])
+  // U.61 — defensive try/catch. See /catalog/drafts for context.
+  let totalOrders = 0
+  let returnCount = 0
+  let pendingReturns = 0
+  let lowStockCount = 0
+  let unlinkedListings = 0
+  let recentFailedSyncs = 0
+  try {
+    ;[
+      totalOrders,
+      returnCount,
+      pendingReturns,
+      lowStockCount,
+      unlinkedListings,
+      recentFailedSyncs,
+    ] = await Promise.all([
+      prisma.order.count(),
+      (prisma as any)['return'].count(),
+      (prisma as any)['return'].count({ where: { status: 'REQUESTED' } }),
+      prisma.product.count({ where: { totalStock: { lte: 5 } } }),
+      prisma.listing.count({ where: { productId: null } }),
+      prisma.marketplaceSync.count({
+        where: {
+          lastSyncStatus: 'FAILED',
+          lastSyncAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        },
+      }),
+    ])
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[performance/health] prisma error:', err)
+  }
 
   // Derive health metrics
   const returnRate = totalOrders > 0 ? (returnCount / totalOrders) * 100 : 0

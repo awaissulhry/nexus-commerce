@@ -20,7 +20,14 @@ const DEFAULT_PREFS: NotificationPref[] = [
 ]
 
 export default async function NotificationsPage() {
-  const saved = await (prisma as any).notificationPreference.findMany()
+  // U.61 — defensive try/catch. See /catalog/drafts for context.
+  let saved: any[] = []
+  try {
+    saved = await (prisma as any).notificationPreference.findMany()
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[settings/notifications] prisma error:', err)
+  }
 
   const prefs: NotificationPref[] = DEFAULT_PREFS.map((def) => {
     const found = saved.find((s: any) => s.eventType === def.eventType)

@@ -8,22 +8,30 @@ export default async function BusinessReportsPage() {
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-  const [orders, products] = await Promise.all([
-    prisma.order.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
-      include: { items: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.product.findMany({
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-        totalStock: true,
-        basePrice: true,
-      },
-    }),
-  ])
+  // U.61 — defensive try/catch. See /catalog/drafts for context.
+  let orders: any[] = []
+  let products: any[] = []
+  try {
+    ;[orders, products] = await Promise.all([
+      prisma.order.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        include: { items: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.product.findMany({
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          totalStock: true,
+          basePrice: true,
+        },
+      }),
+    ])
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[reports/business] prisma error:', err)
+  }
 
   // Build daily sales data
   const byDate = new Map<string, { revenue: number; orders: number; units: number }>()

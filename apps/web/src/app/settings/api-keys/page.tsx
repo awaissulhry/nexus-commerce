@@ -14,9 +14,16 @@ export interface ApiKeyRow {
 }
 
 export default async function ApiKeysPage() {
-  const keys = await (prisma as any).apiKey.findMany({
-    orderBy: { createdAt: 'desc' },
-  })
+  // U.61 — defensive try/catch. See /catalog/drafts for context.
+  let keys: any[] = []
+  try {
+    keys = await (prisma as any).apiKey.findMany({
+      orderBy: { createdAt: 'desc' },
+    })
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[settings/api-keys] prisma error:', err)
+  }
 
   const apiKeys: ApiKeyRow[] = keys.map((k: any) => ({
     id: k.id,

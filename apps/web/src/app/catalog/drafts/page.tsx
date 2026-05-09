@@ -8,14 +8,24 @@ export const dynamic = "force-dynamic";
  * Complete Your Drafts — shows products with missing required fields.
  */
 export default async function DraftsPage() {
-  // Find products that are missing key fields (brand, images, bullet points, etc.)
-  const products = await prisma.product.findMany({
-    include: {
-      images: true,
-      variations: true,
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+  // U.61 — defensive try/catch. Web-side prisma direct calls fail on
+  // Vercel because the web project has no DATABASE_URL (architecture
+  // routes data through the API). Falling back to an empty list keeps
+  // the page renderable; the real fix is migrating to API fetch, which
+  // is out of scope here.
+  let products: any[] = [];
+  try {
+    products = await prisma.product.findMany({
+      include: {
+        images: true,
+        variations: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[catalog/drafts] prisma error:", err);
+  }
 
   // Determine which products are "drafts" (missing important data)
   const drafts = products.filter((p: any) => {

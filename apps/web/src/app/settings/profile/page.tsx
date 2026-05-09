@@ -5,7 +5,14 @@ import ProfileClient from './ProfileClient'
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage() {
-  const profile = await (prisma as any).userProfile.findFirst()
+  // U.61 — defensive try/catch. See /catalog/drafts for context.
+  let profile: any = null
+  try {
+    profile = await (prisma as any).userProfile.findFirst()
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[settings/profile] prisma error:', err)
+  }
 
   return (
     <div>
