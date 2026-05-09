@@ -133,6 +133,7 @@ import {
   getAutomationRuleCronStatus,
 } from '../jobs/automation-rule-evaluator.job.js'
 import { executeScenarioRun } from '../services/scenario-planner.service.js'
+import { detectPanEuImbalances } from '../services/pan-eu-distribution.service.js'
 import {
   transitionPo,
   getPoAuditTrail,
@@ -8421,6 +8422,48 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         productId: product.id,
         sku: product.sku,
       }
+    },
+  )
+
+  // W7.1 — Pan-EU FBA distribution recommender. Aggregates
+  // FbaInventoryDetail by (sku, marketplaceId), cross-references
+  // 30d AMAZON DailySalesAggregate for per-marketplace velocity,
+  // and surfaces redistribution candidates: SKUs where one EU
+  // marketplace has surplus (>60d cover) while another runs low
+  // (<7d cover with active sales).
+  //
+  // Pure analytical surface — operator decides whether to act via
+  // /fulfillment/inbound (multi-FC reshipment) or by reducing the
+  // surplus market's outbound to organically rebalance.
+  //
+  // 30s cache.
+  fastify.get(
+    '/fulfillment/replenishment/pan-eu/imbalances',
+    async (request, reply) => {
+      const q = (request.query ?? {}) as {
+        shortageDaysCover?: string
+        surplusDaysCover?: string
+        targetDaysCover?: string
+        velocityWindowDays?: string
+        limit?: string
+      }
+      const result = await detectPanEuImbalances({
+        shortageDaysCover: q.shortageDaysCover
+          ? parseInt(q.shortageDaysCover, 10)
+          : undefined,
+        surplusDaysCover: q.surplusDaysCover
+          ? parseInt(q.surplusDaysCover, 10)
+          : undefined,
+        targetDaysCover: q.targetDaysCover
+          ? parseInt(q.targetDaysCover, 10)
+          : undefined,
+        velocityWindowDays: q.velocityWindowDays
+          ? parseInt(q.velocityWindowDays, 10)
+          : undefined,
+        limit: q.limit ? parseInt(q.limit, 10) : undefined,
+      })
+      reply.header('Cache-Control', 'private, max-age=30')
+      return result
     },
   )
 
