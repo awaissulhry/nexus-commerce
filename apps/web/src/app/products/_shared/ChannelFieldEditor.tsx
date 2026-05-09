@@ -65,6 +65,15 @@ interface Props {
       | (() => Promise<{ translated: number; skipped: number }>)
       | null,
   ) => void
+  /** W5.2 — schema-driven channel readiness. Fires after the manifest
+   *  loads (and on every value change) with the count of required
+   *  fields that currently have a value. The parent surfaces this in
+   *  the per-listing ReadinessChecklist alongside the 5 baseline
+   *  dimensions. Falls back to null when the schema can't load (no
+   *  product type set, etc.) so the hero shows only the baseline. */
+  onSchemaReadiness?: (
+    score: { required: number; complete: number } | null,
+  ) => void
 }
 
 /** Maps schema field ids to the master product columns they inherit
@@ -141,6 +150,7 @@ export default function ChannelFieldEditor({
   onSaved,
   onDirtyChange,
   bindTranslateAll,
+  onSchemaReadiness,
 }: Props) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
@@ -866,6 +876,30 @@ export default function ChannelFieldEditor({
     bindTranslateAll(translateAllFields)
     return () => bindTranslateAll(null)
   }, [bindTranslateAll, manifest, translateAllFields])
+
+  // ── W5.2 schema-driven readiness ─────────────────────────────
+  // Counts manifest fields with `required=true` and reports how many
+  // currently have a non-empty value. Fires whenever the manifest
+  // OR the values change so the parent's hero card stays live as
+  // the operator types. null when the schema can't be loaded (no
+  // productType set, channel not yet supported, etc.) so the hero
+  // shows only the 5 baseline dimensions.
+  useEffect(() => {
+    if (!onSchemaReadiness) return
+    if (!manifest) {
+      onSchemaReadiness(null)
+      return
+    }
+    let required = 0
+    let complete = 0
+    for (const f of manifest.fields) {
+      if (!f.required) continue
+      required += 1
+      const v = values[f.id]
+      if (!isEmpty(v)) complete += 1
+    }
+    onSchemaReadiness({ required, complete })
+  }, [manifest, values, onSchemaReadiness])
 
   // ── AI generate (master-level fill, used by the per-field
   //     "AI generate" button on the FieldCard) ───────────────────

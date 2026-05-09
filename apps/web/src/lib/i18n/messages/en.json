@@ -3390,6 +3390,8 @@
   "products.edit.readiness.price": "Price set",
   "products.edit.readiness.quantity": "Quantity set",
   "products.edit.readiness.quantityHint": "Zero is fine (sold out / pre-order); only null / negative blocks readiness.",
+  "products.edit.readiness.schema": "Required attributes",
+  "products.edit.readiness.schemaHint": "{done} of {total} marketplace-required attributes set",
   "products.edit.tab.pricing": "Pricing",
   "products.edit.pricing.basePriceLabel": "Base price",
   "products.edit.pricing.basePriceHint": "Set on Master Data alongside cost / min margin / floor / ceiling. This tab adds tier discounts and scheduled changes on top of that.",

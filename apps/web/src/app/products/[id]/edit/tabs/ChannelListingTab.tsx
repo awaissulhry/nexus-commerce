@@ -472,10 +472,16 @@ function ReadinessChecklist({
                 'inline-flex items-center justify-center w-4 h-4 rounded-full flex-shrink-0 mt-0.5 text-xs font-mono',
                 item.done
                   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
+                  : 'partial' in item && item.partial
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
               )}
             >
-              {item.done ? '✓' : ' '}
+              {item.done
+                ? '✓'
+                : 'partial' in item && item.partial
+                  ? '·'
+                  : ' '}
             </span>
             <div className="flex-1 min-w-0">
               <div

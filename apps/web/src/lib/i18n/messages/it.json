@@ -3394,6 +3394,8 @@
   "products.edit.readiness.price": "Prezzo impostato",
   "products.edit.readiness.quantity": "Quantità impostata",
   "products.edit.readiness.quantityHint": "Zero va bene (esaurito / pre-ordine); solo null / negativo blocca la pubblicazione.",
+  "products.edit.readiness.schema": "Attributi richiesti",
+  "products.edit.readiness.schemaHint": "{done} di {total} attributi richiesti dal marketplace impostati",
   "products.edit.tab.pricing": "Prezzi",
   "products.edit.pricing.basePriceLabel": "Prezzo base",
   "products.edit.pricing.basePriceHint": "Impostato in Dati Master insieme a costo / margine min / pavimento / soffitto. Questa scheda aggiunge sconti per fasce e modifiche programmate.",
