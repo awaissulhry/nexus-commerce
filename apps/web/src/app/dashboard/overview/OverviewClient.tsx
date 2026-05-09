@@ -42,6 +42,15 @@ import { cn } from '@/lib/utils'
 
 interface OverviewPayload {
   window: { from: string; to: string; label: string; key: string }
+  // DO.1 — backend reports the primary currency (highest-revenue
+  // currency in the window, EUR fallback) plus a per-currency
+  // breakdown. The KPI strip renders headline numbers in `primary`
+  // and surfaces a secondary line when more than one currency
+  // contributed real revenue.
+  currency: {
+    primary: string
+    breakdown: Array<{ code: string; current: number; previous: number }>
+  }
   totals: {
     revenue: TotalEntry
     orders: TotalEntry
@@ -126,19 +135,34 @@ const CHANNEL_LABELS: Record<string, string> = {
   ETSY: 'Etsy',
 }
 
-const CURRENCY_FMT = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
-const PCT_FMT = new Intl.NumberFormat('en-US', {
+// DO.1 — currency formatting is now driven by the active currency
+// code. Italian locale ('it-IT') is the default operator locale —
+// gives "€936" instead of "$936" for the Xavia / Amazon-IT case and
+// the right thousand/decimal separator regardless of currency.
+//
+// Cache one formatter per currency code to avoid the per-render
+// Intl.NumberFormat allocation cost when the dashboard re-renders.
+const PCT_FMT = new Intl.NumberFormat('it-IT', {
   style: 'percent',
   maximumFractionDigits: 1,
 })
-const NUM_FMT = new Intl.NumberFormat('en-US')
+const NUM_FMT = new Intl.NumberFormat('it-IT')
 
-function formatCurrency(n: number): string {
-  return CURRENCY_FMT.format(Math.round(n))
+const currencyFormatters = new Map<string, Intl.NumberFormat>()
+function currencyFormatter(code: string): Intl.NumberFormat {
+  const cached = currencyFormatters.get(code)
+  if (cached) return cached
+  const fresh = new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    currency: code,
+    maximumFractionDigits: 0,
+  })
+  currencyFormatters.set(code, fresh)
+  return fresh
+}
+
+function formatCurrency(n: number, code: string): string {
+  return currencyFormatter(code).format(Math.round(n))
 }
 
 function formatDelta(pct: number | null): {
@@ -241,13 +265,22 @@ export default function OverviewClient() {
 
       {data && (
         <>
-          <KpiGrid totals={data.totals} />
+          <KpiGrid totals={data.totals} currency={data.currency} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
-              <Sparkline points={data.sparkline} />
-              <ChannelGrid byChannel={data.byChannel} />
+              <Sparkline
+                points={data.sparkline}
+                currency={data.currency.primary}
+              />
+              <ChannelGrid
+                byChannel={data.byChannel}
+                currency={data.currency.primary}
+              />
               <MarketplaceMatrix matrix={data.byMarketplace} />
-              <TopProducts items={data.topProducts} />
+              <TopProducts
+                items={data.topProducts}
+                currency={data.currency.primary}
+              />
             </div>
             <div className="space-y-4">
               <AlertsPanel alerts={data.alerts} catalog={data.catalog} />
@@ -326,33 +359,64 @@ function Header({
 
 // ── KPI grid ─────────────────────────────────────────────────────────
 
-function KpiGrid({ totals }: { totals: OverviewPayload['totals'] }) {
+function KpiGrid({
+  totals,
+  currency,
+}: {
+  totals: OverviewPayload['totals']
+  currency: OverviewPayload['currency']
+}) {
+  // DO.1 — render the headline KPI in the primary currency. If
+  // multiple currencies contributed real revenue (>0.5 / 1 / 1
+  // depending on smallest unit), show a "+ $X USD · £Y GBP"
+  // secondary line so the operator sees the breakdown without
+  // losing the headline glanceability.
+  const primary = currency.primary
+  const secondaries = currency.breakdown.filter(
+    (b) => b.code !== primary && b.current >= 1,
+  )
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <KpiCard
-        label="Revenue"
-        value={formatCurrency(totals.revenue.current)}
-        delta={formatDelta(totals.revenue.deltaPct)}
-        prevValue={formatCurrency(totals.revenue.previous)}
-      />
-      <KpiCard
-        label="Orders"
-        value={NUM_FMT.format(totals.orders.current)}
-        delta={formatDelta(totals.orders.deltaPct)}
-        prevValue={NUM_FMT.format(totals.orders.previous)}
-      />
-      <KpiCard
-        label="AOV"
-        value={formatCurrency(totals.aov.current)}
-        delta={formatDelta(totals.aov.deltaPct)}
-        prevValue={formatCurrency(totals.aov.previous)}
-      />
-      <KpiCard
-        label="Units sold"
-        value={NUM_FMT.format(totals.units.current)}
-        delta={formatDelta(totals.units.deltaPct)}
-        prevValue={NUM_FMT.format(totals.units.previous)}
-      />
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          label="Revenue"
+          value={formatCurrency(totals.revenue.current, primary)}
+          delta={formatDelta(totals.revenue.deltaPct)}
+          prevValue={formatCurrency(totals.revenue.previous, primary)}
+        />
+        <KpiCard
+          label="Orders"
+          value={NUM_FMT.format(totals.orders.current)}
+          delta={formatDelta(totals.orders.deltaPct)}
+          prevValue={NUM_FMT.format(totals.orders.previous)}
+        />
+        <KpiCard
+          label="AOV"
+          value={formatCurrency(totals.aov.current, primary)}
+          delta={formatDelta(totals.aov.deltaPct)}
+          prevValue={formatCurrency(totals.aov.previous, primary)}
+        />
+        <KpiCard
+          label="Units sold"
+          value={NUM_FMT.format(totals.units.current)}
+          delta={formatDelta(totals.units.deltaPct)}
+          prevValue={NUM_FMT.format(totals.units.previous)}
+        />
+      </div>
+      {secondaries.length > 0 && (
+        <div className="text-xs text-slate-500 pl-1">
+          incl.{' '}
+          {secondaries.map((s, i) => (
+            <span key={s.code}>
+              {i > 0 && ' · '}
+              <span className="tabular-nums">
+                {formatCurrency(s.current, s.code)}
+              </span>{' '}
+              {s.code}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -418,7 +482,13 @@ function DeltaPill({
 
 // ── Sparkline ────────────────────────────────────────────────────────
 
-function Sparkline({ points }: { points: OverviewPayload['sparkline'] }) {
+function Sparkline({
+  points,
+  currency,
+}: {
+  points: OverviewPayload['sparkline']
+  currency: string
+}) {
   const totalRev = points.reduce((s, p) => s + p.revenue, 0)
   const totalOrders = points.reduce((s, p) => s + p.orders, 0)
   return (
@@ -428,7 +498,8 @@ function Sparkline({ points }: { points: OverviewPayload['sparkline'] }) {
           30-day trend
         </h2>
         <div className="text-sm text-slate-500 tabular-nums">
-          {formatCurrency(totalRev)} · {NUM_FMT.format(totalOrders)} orders
+          {formatCurrency(totalRev, currency)} ·{' '}
+          {NUM_FMT.format(totalOrders)} orders
         </div>
       </div>
       <SvgLineChart points={points} />
@@ -500,8 +571,10 @@ function SvgLineChart({ points }: { points: OverviewPayload['sparkline'] }) {
 
 function ChannelGrid({
   byChannel,
+  currency,
 }: {
   byChannel: OverviewPayload['byChannel']
+  currency: string
 }) {
   const visible = byChannel.filter(
     (c) => c.orders > 0 || c.listings.total > 0,
@@ -548,12 +621,12 @@ function ChannelGrid({
               </div>
               <div className="mt-1 flex items-baseline gap-3 flex-wrap">
                 <div className="text-2xl font-semibold text-slate-900 tabular-nums">
-                  {formatCurrency(c.revenue)}
+                  {formatCurrency(c.revenue, currency)}
                 </div>
                 <div className="text-sm text-slate-600 tabular-nums">
                   {NUM_FMT.format(c.orders)} order
                   {c.orders === 1 ? '' : 's'} · AOV{' '}
-                  {formatCurrency(c.aov)}
+                  {formatCurrency(c.aov, currency)}
                 </div>
               </div>
               <div className="mt-1.5 flex items-center gap-2 text-xs">
@@ -666,7 +739,13 @@ function MarketplaceMatrix({
 
 // ── Top products ─────────────────────────────────────────────────────
 
-function TopProducts({ items }: { items: OverviewPayload['topProducts'] }) {
+function TopProducts({
+  items,
+  currency,
+}: {
+  items: OverviewPayload['topProducts']
+  currency: string
+}) {
   if (items.length === 0) return null
   const max = Math.max(1, ...items.map((i) => i.revenue))
   return (
@@ -702,7 +781,7 @@ function TopProducts({ items }: { items: OverviewPayload['topProducts'] }) {
                     {NUM_FMT.format(it.units)} units
                   </span>
                   <span className="text-base font-semibold text-slate-900 tabular-nums">
-                    {formatCurrency(it.revenue)}
+                    {formatCurrency(it.revenue, currency)}
                   </span>
                 </div>
               </div>

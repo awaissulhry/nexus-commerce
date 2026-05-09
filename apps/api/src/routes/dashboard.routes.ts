@@ -95,6 +95,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
             id: true,
             channel: true,
             totalPrice: true,
+            currencyCode: true,
             status: true,
             createdAt: true,
             amazonMetadata: true,
@@ -103,7 +104,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         }),
         prisma.order.findMany({
           where: { createdAt: { gte: prevFrom, lt: prevTo } },
-          select: { totalPrice: true },
+          select: { totalPrice: true, currencyCode: true },
         }),
         prisma.orderItem.findMany({
           where: { order: { createdAt: { gte: from, lte: to } } },
@@ -115,22 +116,70 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ])
 
-      const sumDecimal = (rows: Array<{ totalPrice: unknown }>) =>
+      // DO.1 — multi-currency aware aggregation.
+      //
+      // Orders carry currencyCode (EUR, USD, GBP, …). Naively summing
+      // totalPrice across currencies produces a meaningless blended
+      // number; the previous code did exactly that and rendered the
+      // result with a hardcoded $ symbol. The Italian operator on
+      // mostly-EUR markets saw the wrong glyph on the wrong number.
+      //
+      // Now: bucket revenue by currency, pick a primary (highest-
+      // revenue currency in the current window — falls back to EUR
+      // when there are no orders), and report it alongside the full
+      // breakdown so the client can show a secondary "incl. $X USD"
+      // hint when multi-currency mixing is real.
+      type CurrencyTotals = { current: number; previous: number }
+      const byCurrency = new Map<string, CurrencyTotals>()
+      const slotFor = (code: string): CurrencyTotals => {
+        const ex = byCurrency.get(code)
+        if (ex) return ex
+        const fresh = { current: 0, previous: 0 }
+        byCurrency.set(code, fresh)
+        return fresh
+      }
+      for (const o of currentOrders) {
+        const code = (o.currencyCode ?? 'EUR') || 'EUR'
+        slotFor(code).current += Number((o.totalPrice as unknown as number) || 0)
+      }
+      for (const o of previousOrders) {
+        const code = (o.currencyCode ?? 'EUR') || 'EUR'
+        slotFor(code).previous += Number((o.totalPrice as unknown as number) || 0)
+      }
+
+      // Primary = currency with highest current-period revenue. With
+      // ties or no data, fall back to EUR — Xavia's home market.
+      let primaryCurrency = 'EUR'
+      let topRevenue = -1
+      for (const [code, totals] of byCurrency.entries()) {
+        if (totals.current > topRevenue) {
+          topRevenue = totals.current
+          primaryCurrency = code
+        }
+      }
+
+      const primaryTotals =
+        byCurrency.get(primaryCurrency) ?? { current: 0, previous: 0 }
+
+      const ordersInCurrency = (
+        rows: Array<{ currencyCode: string | null }>,
+        code: string,
+      ): number =>
         rows.reduce(
-          (acc, r) =>
-            acc + Number(((r.totalPrice ?? 0) as number) || 0),
+          (acc, r) => acc + ((r.currencyCode ?? 'EUR') === code ? 1 : 0),
           0,
         )
+
       const sumQty = (rows: Array<{ quantity: number | null }>) =>
         rows.reduce((acc, r) => acc + (r.quantity ?? 0), 0)
 
       const revenue = {
-        current: sumDecimal(currentOrders),
-        previous: sumDecimal(previousOrders),
+        current: primaryTotals.current,
+        previous: primaryTotals.previous,
       }
       const orderCounts = {
-        current: currentOrders.length,
-        previous: previousOrders.length,
+        current: ordersInCurrency(currentOrders, primaryCurrency),
+        previous: ordersInCurrency(previousOrders, primaryCurrency),
       }
       const units = {
         current: sumQty(currentItems),
@@ -423,6 +472,19 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
           to: to.toISOString(),
           label,
           key: window,
+        },
+        currency: {
+          primary: primaryCurrency,
+          // Sorted desc by current-period revenue so the client can
+          // render "incl. $X USD" lines in priority order without
+          // re-sorting.
+          breakdown: Array.from(byCurrency.entries())
+            .map(([code, totals]) => ({
+              code,
+              current: totals.current,
+              previous: totals.previous,
+            }))
+            .sort((a, b) => b.current - a.current),
         },
         totals: {
           revenue: {
