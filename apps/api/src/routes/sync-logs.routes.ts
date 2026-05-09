@@ -201,6 +201,115 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * L.13.0 — CSV / JSON export for filtered API calls.
+   *
+   * GET /api/sync-logs/api-calls/export?format=csv|json
+   *   Same filter set as /recent (channel, operation, success,
+   *   errorType, since, until). Hard cap of 50k rows per export
+   *   to bound memory; if the operator needs more they should
+   *   tighten the filter or split by date.
+   *
+   * CSV format mirrors the Stripe payment export style: one column
+   * per scalar field, stable column order so spreadsheets stay
+   * importable across versions. Payload columns are stringified.
+   */
+  fastify.get<{
+    Querystring: CallsQuery & { format?: string }
+  }>('/sync-logs/api-calls/export', async (request, reply) => {
+    try {
+      const q = request.query
+      const format = (q.format ?? 'csv').toLowerCase()
+      if (format !== 'csv' && format !== 'json') {
+        return reply.code(400).send({
+          error: 'format must be csv or json',
+        })
+      }
+      const range = parseWindow(q)
+      const where = buildWhere(q, range)
+
+      const rows = await prisma.outboundApiCallLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 50_000,
+      })
+
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `nexus-api-calls-${stamp}.${format}`
+
+      if (format === 'json') {
+        reply.header('Content-Type', 'application/json')
+        reply.header(
+          'Content-Disposition',
+          `attachment; filename="${filename}"`,
+        )
+        return reply.send({
+          generatedAt: new Date().toISOString(),
+          window: range,
+          count: rows.length,
+          rows,
+        })
+      }
+
+      // CSV: stable column order. Payload columns are JSON-stringified
+      // (CSV-escaped) so spreadsheet imports get one cell per row.
+      const columns = [
+        'createdAt',
+        'channel',
+        'marketplace',
+        'operation',
+        'endpoint',
+        'method',
+        'statusCode',
+        'success',
+        'latencyMs',
+        'errorType',
+        'errorCode',
+        'errorMessage',
+        'requestId',
+        'triggeredBy',
+        'productId',
+        'listingId',
+        'orderId',
+      ] as const
+
+      const escape = (v: unknown): string => {
+        if (v === null || v === undefined) return ''
+        const s =
+          typeof v === 'string'
+            ? v
+            : v instanceof Date
+              ? v.toISOString()
+              : typeof v === 'object'
+                ? JSON.stringify(v)
+                : String(v)
+        if (/[",\n\r]/.test(s)) {
+          return `"${s.replace(/"/g, '""')}"`
+        }
+        return s
+      }
+
+      const lines: string[] = []
+      lines.push(columns.join(','))
+      for (const r of rows) {
+        const row = r as unknown as Record<string, unknown>
+        lines.push(columns.map((c) => escape(row[c])).join(','))
+      }
+      const body = lines.join('\n') + '\n'
+
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="${filename}"`,
+      )
+      return reply.send(body)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[sync-logs/api-calls/export] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  /**
    * L.11.0 — bucketed time-series for the API calls chart.
    *
    * GET /api/sync-logs/api-calls/timeseries

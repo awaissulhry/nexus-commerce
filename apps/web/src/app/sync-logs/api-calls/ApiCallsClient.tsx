@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
+  Download,
   Filter,
   Loader2,
   Pause,
@@ -412,6 +413,25 @@ export default function ApiCallsClient() {
               />
             )}
           </button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              const since = new Date(Date.now() - sinceMs).toISOString()
+              const params = new URLSearchParams({ since, format: 'csv' })
+              if (urlChannel) params.set('channel', urlChannel)
+              if (urlErrorType) params.set('errorType', urlErrorType)
+              if (urlSuccess) params.set('success', urlSuccess)
+              window.open(
+                `${getBackendUrl()}/api/sync-logs/api-calls/export?${params.toString()}`,
+                '_blank',
+              )
+            }}
+            title="Export filtered rows as CSV (50k row cap)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            CSV
+          </Button>
           <Button
             variant="secondary"
             size="sm"
