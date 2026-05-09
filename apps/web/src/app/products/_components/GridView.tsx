@@ -442,7 +442,7 @@ export function VirtualizedGrid({
                       }}
                     >
                       <span className="inline-flex items-center gap-1">
-                        {col.label}
+                        {col.labelKey ? t(col.labelKey) : col.label}
                         {isActive ? (
                           <span
                             className="text-slate-400"

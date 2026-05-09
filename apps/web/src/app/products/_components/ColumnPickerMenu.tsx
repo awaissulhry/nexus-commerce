@@ -96,7 +96,7 @@ export function ColumnPickerMenu({
             checked
             onChange={() => setVisible(visible.filter((k) => k !== c.key))}
           />
-          <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
+          <span className="text-slate-700 dark:text-slate-300">{c.labelKey ? t(c.labelKey) : c.label}</span>
         </div>
       ))}
       {hiddenTogglable.length > 0 && (
@@ -115,7 +115,7 @@ export function ColumnPickerMenu({
                 checked={false}
                 onChange={() => setVisible([...visible, c.key])}
               />
-              <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
+              <span className="text-slate-700 dark:text-slate-300">{c.labelKey ? t(c.labelKey) : c.label}</span>
             </label>
           ))}
         </>
