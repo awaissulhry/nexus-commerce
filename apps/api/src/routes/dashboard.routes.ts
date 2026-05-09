@@ -1318,10 +1318,19 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       const today = zonedStartOfDay(new Date(), OPERATOR_TIMEZONE)
       const next7d = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
       const next30d = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+      // DO.47 — fold all four predictive queries into one Promise.all
+      // so they run in parallel. The previous shape ran three in
+      // parallel and then a fourth (`findFirst` for generatedAt)
+      // sequentially after — adding ~50-100ms of round-trip
+      // latency. Server-Timing on prod showed the predictive phase
+      // at 217ms before this change. Indexes were already optimal
+      // (`@@index([sku, horizonDay])`, `@@index([horizonDay])`);
+      // the slow path was the unparallelised await.
       const [
         forecast7dRow,
         forecast30dRow,
         stockoutRiskRow,
+        generatedAtRow,
       ] = await Promise.all([
         prisma.$queryRawUnsafe(
           `SELECT COALESCE(SUM("forecastUnits"), 0)::float AS units
@@ -1353,21 +1362,20 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         )
           .then((r) => (r as Array<{ n: bigint }>).length)
           .catch(() => 0),
-      ])
-
-      const predictive = {
-        forecastUnits7d: forecast7dRow,
-        forecastUnits30d: forecast30dRow,
-        stockoutRisk7d: stockoutRiskRow,
-        // generatedAt = the freshest forecast row's generatedAt;
-        // null when the table is empty (forecast cron hasn't run).
-        generatedAt: await prisma.replenishmentForecast
+        prisma.replenishmentForecast
           .findFirst({
             orderBy: { generatedAt: 'desc' },
             select: { generatedAt: true },
           })
           .then((r) => (r ? r.generatedAt.toISOString() : null))
           .catch(() => null),
+      ])
+
+      const predictive = {
+        forecastUnits7d: forecast7dRow,
+        forecastUnits30d: forecast30dRow,
+        stockoutRisk7d: stockoutRiskRow,
+        generatedAt: generatedAtRow,
       }
 
       // ── DO.29 — financial overview ─────────────────────────────────
