@@ -78,6 +78,13 @@
   "drafts.kpi.expiringHelp": "≤7d to expiry",
   "drafts.kpi.oldest": "Oldest",
   "drafts.kpi.oldestHelp": "in DRAFT",
+  "drafts.factor.name": "name",
+  "drafts.factor.price": "price",
+  "drafts.factor.brand": "brand",
+  "drafts.factor.type": "type",
+  "drafts.factor.description": "desc",
+  "drafts.factor.gtin": "GTIN",
+  "drafts.factor.image": "image",
 
   "organize.title": "Catalog Organization",
   "organize.description": "Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout.",

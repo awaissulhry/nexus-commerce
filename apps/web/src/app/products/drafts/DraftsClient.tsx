@@ -137,9 +137,18 @@ function selectionKey(d: Draft): string {
 
 // DR-S.2 — product-data completeness badge. Colour-codes by bucket
 // so the operator can scan a list and immediately see which drafts
-// are nearly-publishable vs. stub-only. Tooltip lists the missing
-// factors so the operator knows exactly what's holding it back.
-function CompletenessBadge({ pct }: { pct: number }) {
+// are nearly-publishable vs. stub-only.
+//
+// DR-S.3 — paired with up to 2 missing-factor chips so the operator
+// can see at a glance what's holding the draft back. Tooltip on the
+// badge lists the full set of missing factors when there are >2.
+function CompletenessBadge({
+  pct,
+  missing,
+}: {
+  pct: number
+  missing?: string[]
+}) {
   let toneClasses: string
   if (pct >= 100)
     toneClasses =
@@ -159,9 +168,64 @@ function CompletenessBadge({ pct }: { pct: number }) {
         'inline-flex items-center h-4 px-1.5 rounded text-xs font-semibold tabular-nums self-start',
         toneClasses,
       )}
+      title={
+        missing && missing.length > 0
+          ? `Missing: ${missing.join(', ')}`
+          : undefined
+      }
     >
       {pct}%
     </span>
+  )
+}
+
+// DR-S.3 — labels for the 7 completeness factors. Italian translations
+// pulled from the i18n bundle; the keys themselves stay stable
+// (drafts.factor.<key>) so future factors plug in without touching
+// the rendering code.
+const FACTOR_LABEL_KEYS: Record<string, string> = {
+  name: 'drafts.factor.name',
+  price: 'drafts.factor.price',
+  brand: 'drafts.factor.brand',
+  type: 'drafts.factor.type',
+  description: 'drafts.factor.description',
+  gtin: 'drafts.factor.gtin',
+  image: 'drafts.factor.image',
+}
+
+function MissingFactorChips({
+  missing,
+  t,
+}: {
+  missing: string[]
+  t: (key: string, vars?: Record<string, string | number>) => string
+}) {
+  if (missing.length === 0) return null
+  // Show the top 2 most-impactful factors inline; fold the rest
+  // into a "+N" pill that summarises them. Order matches the
+  // server-side scoring sequence so the same fields surface
+  // consistently across rows.
+  const visible = missing.slice(0, 2)
+  const overflow = missing.length - visible.length
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {visible.map((f) => (
+        <span
+          key={f}
+          className="inline-flex items-center h-4 px-1.5 rounded text-xs font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+        >
+          {t(FACTOR_LABEL_KEYS[f] ?? `drafts.factor.${f}`)}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span
+          className="inline-flex items-center h-4 px-1.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+          title={missing.slice(2).map((f) => t(FACTOR_LABEL_KEYS[f] ?? `drafts.factor.${f}`)).join(', ')}
+        >
+          +{overflow}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -351,15 +415,29 @@ const DraftRow = memo(function DraftRow({
               />
             </div>
             {/* DR-S.2 — product-data completeness, separate signal
-                from wizard step progress. */}
-            <CompletenessBadge pct={d.completenessPct} />
+                from wizard step progress. DR-S.3 — top missing
+                factors inline so the operator knows what's blocking
+                this draft from being publishable. */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <CompletenessBadge
+                pct={d.completenessPct}
+                missing={d.missingFactors}
+              />
+              <MissingFactorChips missing={d.missingFactors} t={t} />
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-1 min-w-[140px]">
             <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold uppercase tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 self-start">
               Product · DRAFT
             </span>
-            <CompletenessBadge pct={d.completenessPct} />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <CompletenessBadge
+                pct={d.completenessPct}
+                missing={d.missingFactors}
+              />
+              <MissingFactorChips missing={d.missingFactors} t={t} />
+            </div>
           </div>
         )}
       </td>
