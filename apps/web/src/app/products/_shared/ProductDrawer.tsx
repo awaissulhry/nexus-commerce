@@ -405,8 +405,12 @@ export default function ProductDrawer({
           </IconButton>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5">
+        {/* Tabs — U.60: 9 tabs in a narrow drawer overflowed. Container
+            now scrolls horizontally; tabs themselves get whitespace-nowrap
+            + flex-shrink-0 below so labels never wrap and the row stays
+            scannable. Right-edge fade gradient hints at hidden tabs. */}
+        <div className="relative">
+          <div className="flex items-center border-b border-slate-200 dark:border-slate-800 px-5 overflow-x-auto scroll-smooth [scrollbar-width:thin]">
           <DrawerTab active={tab === 'details'} onClick={() => setTab('details')}>
             <Edit3 className="w-3 h-3" /> Details
           </DrawerTab>
@@ -483,6 +487,10 @@ export default function ProductDrawer({
           >
             <Calendar className="w-3 h-3" /> Schedule
           </DrawerTab>
+          </div>
+          {/* Right-edge fade hints at scrollable overflow without
+              competing for click space (pointer-events-none). */}
+          <div className="pointer-events-none absolute top-0 bottom-px right-0 w-8 bg-gradient-to-l from-white dark:from-slate-900 to-transparent" />
         </div>
 
         {/* Body */}
@@ -616,7 +624,12 @@ function DrawerTab({
       role="tab"
       aria-selected={active}
       className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors',
+        // U.60 — whitespace-nowrap stops labels like "Translations"
+        // wrapping to two lines when the drawer is at min width;
+        // flex-shrink-0 keeps each tab's intrinsic width so the row
+        // pushes into the parent's overflow-x-auto instead of
+        // squishing.
+        'inline-flex items-center gap-1.5 px-3 py-2.5 text-base font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex-shrink-0',
         active
           ? 'border-blue-500 text-blue-700'
           : 'border-transparent text-slate-600 hover:text-slate-900',

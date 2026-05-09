@@ -512,25 +512,32 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     { key: 'returns', label: t('orders.lens.returns'), icon: Undo2 },
     { key: 'reviews', label: t('orders.lens.reviews'), icon: Star },
   ]
+  // U.60 — was a single `inline-flex` row with no overflow handling, so
+  // adding lenses pushed the row past its container and clipped silently.
+  // Wrapper now allows horizontal scroll; pill row keeps its rounded look
+  // via inline-flex + flex-shrink-0 on items so each lens stays a fixed
+  // pill instead of squishing.
   return (
-    <div
-      role="tablist"
-      aria-label="Order lenses"
-      className="inline-flex items-center bg-slate-100 rounded-md p-0.5"
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          role="tab"
-          aria-selected={current === tab.key}
-          aria-controls={`orders-lens-${tab.key}`}
-          onClick={() => onChange(tab.key)}
-          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-        >
-          <tab.icon size={12} aria-hidden="true" />
-          {tab.label}
-        </button>
-      ))}
+    <div className="max-w-full overflow-x-auto [scrollbar-width:thin]">
+      <div
+        role="tablist"
+        aria-label="Order lenses"
+        className="inline-flex items-center bg-slate-100 rounded-md p-0.5"
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={current === tab.key}
+            aria-controls={`orders-lens-${tab.key}`}
+            onClick={() => onChange(tab.key)}
+            className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors whitespace-nowrap flex-shrink-0 ${current === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            <tab.icon size={12} aria-hidden="true" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

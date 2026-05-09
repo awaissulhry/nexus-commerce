@@ -34,7 +34,9 @@ export function Tabs({ tabs, activeTab, onChange, trailing, className }: TabsPro
             onClick={() => !tab.disabled && onChange(tab.id)}
             disabled={tab.disabled}
             className={cn(
-              'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap',
+              // U.60 — flex-shrink-0 belt-and-braces with whitespace-nowrap
+              // so a tab never squishes into a constrained parent.
+              'flex items-center gap-1.5 h-10 px-4 text-md font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30',
               isActive
                 ? 'border-blue-600 text-blue-600'
