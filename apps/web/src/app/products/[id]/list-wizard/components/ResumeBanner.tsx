@@ -16,7 +16,10 @@
 import { useEffect, useState } from 'react'
 import { History, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { STEPS, findStep } from '../lib/steps'
+
+type Translator = ReturnType<typeof useTranslations>['t']
 
 interface Props {
   currentStep: number
@@ -31,17 +34,43 @@ interface Props {
 const FIVE_MINUTES_MS = 5 * 60 * 1000
 const EIGHT_SECONDS_MS = 8 * 1000
 
-function formatRelative(deltaMs: number): string {
+function formatRelative(t: Translator, deltaMs: number): string {
   const seconds = Math.floor(deltaMs / 1000)
-  if (seconds < 60) return 'just now'
+  if (seconds < 60) return t('listWizard.resume.justNow')
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  if (minutes < 60) {
+    return t(
+      minutes === 1
+        ? 'listWizard.resume.minuteOne'
+        : 'listWizard.resume.minuteOther',
+      { n: minutes },
+    )
+  }
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  if (hours < 24) {
+    return t(
+      hours === 1
+        ? 'listWizard.resume.hourOne'
+        : 'listWizard.resume.hourOther',
+      { n: hours },
+    )
+  }
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
+  if (days < 7) {
+    return t(
+      days === 1
+        ? 'listWizard.resume.dayOne'
+        : 'listWizard.resume.dayOther',
+      { n: days },
+    )
+  }
   const weeks = Math.floor(days / 7)
-  return `${weeks} week${weeks === 1 ? '' : 's'} ago`
+  return t(
+    weeks === 1
+      ? 'listWizard.resume.weekOne'
+      : 'listWizard.resume.weekOther',
+    { n: weeks },
+  )
 }
 
 export default function ResumeBanner({
@@ -50,6 +79,7 @@ export default function ResumeBanner({
   staleThresholdMs = FIVE_MINUTES_MS,
   autoDismissMs = EIGHT_SECONDS_MS,
 }: Props) {
+  const { t } = useTranslations()
   // Compute once on mount — banner shouldn't reappear if the user
   // actively edits and updatedAt refreshes.
   const [shouldShow] = useState(() => {
@@ -72,7 +102,7 @@ export default function ResumeBanner({
   const lastDelta = updatedAt
     ? Date.now() - new Date(updatedAt).getTime()
     : 0
-  const relative = formatRelative(lastDelta)
+  const relative = formatRelative(t, lastDelta)
 
   return (
     <div
@@ -87,20 +117,26 @@ export default function ResumeBanner({
     >
       <History className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0 text-base">
-        <span className="font-semibold">Resuming</span>
-        {' from '}
-        <span className="font-mono">Step {step.id}</span>
+        <span className="font-semibold">
+          {t('listWizard.resume.resuming')}
+        </span>
+        {' '}
+        {t('listWizard.resume.fromConnector')}
+        {' '}
+        <span className="font-mono">
+          {t('listWizard.resume.stepLabel', { n: step.id })}
+        </span>
         {' — '}
         <span className="text-blue-700 dark:text-blue-300">{step.title}</span>
         <span className="mx-1.5 text-blue-700 dark:text-blue-300">·</span>
         <span className="text-blue-700 dark:text-blue-300">
-          last edited {relative}
+          {t('listWizard.resume.lastEdited', { when: relative })}
         </span>
       </div>
       <button
         type="button"
         onClick={() => setDismissed(true)}
-        aria-label="Dismiss resume banner"
+        aria-label={t('listWizard.resume.dismiss')}
         className={cn(
           'flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded',
           'text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900',

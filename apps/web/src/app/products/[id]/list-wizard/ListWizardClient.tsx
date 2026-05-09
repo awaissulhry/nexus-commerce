@@ -22,6 +22,7 @@ import { STEPS, findStep } from './lib/steps'
 import { postWizardEvent } from './lib/telemetry'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
 export interface ChannelTuple {
@@ -121,6 +122,7 @@ export default function ListWizardClient({
   isNew,
 }: Props) {
   const router = useRouter()
+  const { t } = useTranslations()
 
   const [wizardId] = useState(initialWizard.id)
   const [currentStep, setCurrentStep] = useState(initialWizard.currentStep)
@@ -286,10 +288,9 @@ export default function ListWizardClient({
   const { toast } = useToast()
   const handleDiscard = useCallback(async () => {
     const ok = await confirm({
-      title: 'Discard this draft?',
-      description:
-        'The wizard’s progress on this product will be removed. This can’t be undone.',
-      confirmLabel: 'Discard draft',
+      title: t('listWizard.client.discardConfirmTitle'),
+      description: t('listWizard.client.discardConfirmDesc'),
+      confirmLabel: t('listWizard.client.discardConfirmAction'),
       tone: 'danger',
     })
     if (!ok) return
@@ -304,7 +305,7 @@ export default function ListWizardClient({
         }
         toast({
           tone: 'error',
-          title: 'Could not discard',
+          title: t('listWizard.client.discardErrorTitle'),
           description: json.error ?? `HTTP ${res.status}`,
         })
         return
@@ -318,11 +319,11 @@ export default function ListWizardClient({
     } catch (err) {
       toast({
         tone: 'error',
-        title: 'Could not discard',
+        title: t('listWizard.client.discardErrorTitle'),
         description: err instanceof Error ? err.message : String(err),
       })
     }
-  }, [confirm, toast, wizardId, product.id, router])
+  }, [confirm, t, toast, wizardId, product.id, router])
 
   // C.0 — steps call this to report their validity. We compare to
   // the previous record before bumping state to avoid render loops
@@ -600,16 +601,17 @@ export default function ListWizardClient({
             className="sticky top-0 z-20 px-6 py-3 bg-rose-50 border-b border-rose-200 flex items-center justify-between gap-3 dark:bg-rose-950 dark:border-rose-800"
           >
             <div className="text-base text-rose-800 dark:text-rose-200">
-              <span className="font-semibold">Someone else edited this wizard.</span>{' '}
-              Your most recent change wasn't saved. Refresh to load
-              the latest state — your in-progress edits will be lost.
+              <span className="font-semibold">
+                {t('listWizard.client.conflictTitle')}
+              </span>{' '}
+              {t('listWizard.client.conflictDesc')}
             </div>
             <button
               type="button"
               onClick={() => window.location.reload()}
               className="flex-shrink-0 h-8 px-3 rounded-md bg-rose-600 text-white text-base font-medium hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-400"
             >
-              Refresh now
+              {t('listWizard.client.conflictRefresh')}
             </button>
           </div>
         )}
@@ -695,23 +697,22 @@ function NeedsChannelsBlock({
 }: {
   onPickChannels: () => void
 }) {
+  const { t } = useTranslations()
   return (
     <div className="max-w-xl mx-auto py-12 px-6">
       <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-4 text-center">
         <h3 className="text-lg font-semibold text-amber-900">
-          Pick channels first
+          {t('listWizard.client.needsChannelsTitle')}
         </h3>
         <p className="mt-1 text-base text-amber-800">
-          The rest of the wizard adapts to your channel selection. Head
-          back to Step 1 and pick at least one (platform, marketplace)
-          to keep going.
+          {t('listWizard.client.needsChannelsDesc')}
         </p>
         <button
           type="button"
           onClick={onPickChannels}
           className="mt-3 h-8 px-3 rounded-md bg-amber-600 text-white text-base font-medium hover:bg-amber-700"
         >
-          Go to Step 1
+          {t('listWizard.client.needsChannelsAction')}
         </button>
       </div>
     </div>

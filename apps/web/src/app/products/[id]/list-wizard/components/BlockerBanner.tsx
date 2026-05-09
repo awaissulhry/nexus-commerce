@@ -24,6 +24,7 @@
 
 import { Target, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface Props {
   blockerCount: number
@@ -41,9 +42,22 @@ export default function BlockerBanner({
   onJump,
   sticky = true,
 }: Props) {
+  const { t } = useTranslations()
   if (blockerCount <= 0) return null
   const top = reasons.slice(0, 3)
   const more = reasons.length > top.length ? reasons.length - top.length : 0
+  const countText = t(
+    blockerCount === 1
+      ? 'listWizard.blocker.countOne'
+      : 'listWizard.blocker.countOther',
+    { n: blockerCount },
+  )
+  const jumpLabel = t(
+    blockerCount === 1
+      ? 'listWizard.blocker.jumpAriaOne'
+      : 'listWizard.blocker.jumpAriaOther',
+    { n: blockerCount },
+  )
   return (
     <div
       role="status"
@@ -57,9 +71,7 @@ export default function BlockerBanner({
     >
       <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0 text-base">
-        <span className="font-semibold tabular-nums">
-          {blockerCount} blocker{blockerCount === 1 ? '' : 's'}
-        </span>
+        <span className="font-semibold tabular-nums">{countText}</span>
         {top.length > 0 && (
           <>
             <span className="mx-1.5">·</span>
@@ -67,8 +79,7 @@ export default function BlockerBanner({
               {top.join('; ')}
               {more > 0 && (
                 <span className="text-amber-700 dark:text-amber-300">
-                  {' '}
-                  and {more} more
+                  {t('listWizard.blocker.andMore', { n: more })}
                 </span>
               )}
             </span>
@@ -78,7 +89,7 @@ export default function BlockerBanner({
       <button
         type="button"
         onClick={onJump}
-        aria-label={`Jump to first of ${blockerCount} blocker${blockerCount === 1 ? '' : 's'}`}
+        aria-label={jumpLabel}
         className={cn(
           'inline-flex items-center gap-1 h-7 px-2 text-sm font-medium rounded',
           'border border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
@@ -87,7 +98,7 @@ export default function BlockerBanner({
         )}
       >
         <Target className="w-3 h-3" aria-hidden="true" />
-        Show me
+        {t('listWizard.blocker.showMe')}
         <kbd className="ml-1 px-1 py-px text-xs bg-amber-100 border border-amber-200 rounded font-mono dark:bg-amber-950 dark:border-amber-800">
           ⌘G
         </kbd>
