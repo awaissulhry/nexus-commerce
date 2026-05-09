@@ -19,17 +19,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronRight,
+  History as HistoryIcon,
   Loader2,
   Pause,
   Play,
   Plus,
   Save,
+  ShieldAlert,
   Sparkles,
   TestTube,
   Trash2,
   Wand2,
   X,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -143,6 +147,104 @@ export default function AutomationClient() {
     }>
   } | null>(null)
   const [dryRunBusy, setDryRunBusy] = useState(false)
+
+  // W7.8 — execution history for the active rule. Refreshed when
+  // the operator picks a rule + after Save / Activate so the panel
+  // shows the latest runs.
+  const [executions, setExecutions] = useState<Array<{
+    id: string
+    status: string
+    dryRun: boolean
+    triggerData: unknown
+    actionResults: unknown
+    errorMessage: string | null
+    startedAt: string
+    finishedAt: string | null
+    durationMs: number | null
+  }>>([])
+  const [executionsLoading, setExecutionsLoading] = useState(false)
+
+  const fetchExecutions = useCallback(async (ruleId: string) => {
+    setExecutionsLoading(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-automation-rules/${ruleId}/executions?limit=50`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const j = await res.json()
+      setExecutions(Array.isArray(j.executions) ? j.executions : [])
+    } catch (err) {
+      // non-fatal — leave previous list visible
+    } finally {
+      setExecutionsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (editingId) fetchExecutions(editingId)
+    else setExecutions([])
+  }, [editingId, fetchExecutions])
+
+  // W7.8 — approval queue (workspace-wide).
+  const [approvals, setApprovals] = useState<Array<{
+    id: string
+    ruleId: string
+    ruleName: string
+    threshold: string
+    estimatedValueCentsEur: number | null
+    status: string
+    expiresAt: string
+    createdAt: string
+    approvedBy: string | null
+    rejectedReason: string | null
+  }>>([])
+
+  const fetchApprovals = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-automation-approvals?status=PENDING&limit=50`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) return
+      const j = await res.json()
+      setApprovals(Array.isArray(j.approvals) ? j.approvals : [])
+    } catch {
+      // non-fatal
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchApprovals()
+    const id = setInterval(fetchApprovals, 30_000)
+    return () => clearInterval(id)
+  }, [fetchApprovals])
+
+  const decideApproval = async (
+    id: string,
+    action: 'approve' | 'reject',
+  ) => {
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/bulk-automation-approvals/${id}/${action}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            action === 'approve' ? {} : { reason: 'manual reject' },
+          ),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      await fetchApprovals()
+      if (editingId) await fetchExecutions(editingId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   const runSavedDryRun = async () => {
     if (!editingId) return
@@ -792,6 +894,138 @@ export default function AutomationClient() {
                       <pre className="mt-0.5 text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono overflow-x-auto">
                         {JSON.stringify(a.output, null, 2)}
                       </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* W7.8 — Approval queue. Workspace-wide PENDING approvals
+            are surfaced at the top of the right column for any rule
+            so operators don't miss gated runs. Refreshes every 30s. */}
+        {approvals.length > 0 && (
+          <section className="border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 rounded p-2 space-y-1.5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
+              <ShieldAlert className="w-3 h-3" />
+              Pending approvals · {approvals.length}
+            </div>
+            {approvals.map((a) => (
+              <div
+                key={a.id}
+                className="border border-amber-200 dark:border-amber-900 bg-white dark:bg-slate-900 rounded p-1.5 flex items-center gap-1.5"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                    {a.ruleName}
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    threshold: {a.threshold}
+                    {a.estimatedValueCentsEur != null && (
+                      <>
+                        {' · €'}
+                        {(a.estimatedValueCentsEur / 100).toFixed(2)}
+                      </>
+                    )}
+                    {' · expires '}
+                    {new Date(a.expiresAt).toLocaleString()}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => decideApproval(a.id, 'approve')}
+                  className="h-7 px-2 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-300 dark:border-emerald-800 rounded inline-flex items-center gap-1"
+                >
+                  <CheckCircle2 className="w-3 h-3" />
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => decideApproval(a.id, 'reject')}
+                  className="h-7 px-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1"
+                >
+                  <XCircle className="w-3 h-3" />
+                  Reject
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* W7.8 — Execution history for the active rule. */}
+        {editingId && (
+          <section className="border border-slate-200 dark:border-slate-800 rounded p-2 space-y-1.5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 inline-flex items-center gap-1.5 justify-between">
+              <span className="inline-flex items-center gap-1.5">
+                <HistoryIcon className="w-3 h-3" />
+                6. Execution history
+                {executionsLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+              </span>
+              <button
+                type="button"
+                onClick={() => fetchExecutions(editingId)}
+                className="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 hover:underline"
+              >
+                Reload
+              </button>
+            </div>
+            {executions.length === 0 ? (
+              <div className="text-xs text-slate-500">
+                No executions yet. Save the rule, enable it, and trigger
+                the corresponding event — runs land here as the engine
+                processes them.
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-64 overflow-auto">
+                {executions.map((e) => (
+                  <div
+                    key={e.id}
+                    className={cn(
+                      'text-xs border rounded p-1.5 flex items-center gap-1.5',
+                      e.status === 'SUCCESS' &&
+                        'border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20',
+                      e.status === 'FAILED' &&
+                        'border-red-200 dark:border-red-900 bg-red-50/40 dark:bg-red-950/20',
+                      e.status === 'DRY_RUN' &&
+                        'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20',
+                      (e.status === 'NO_MATCH' ||
+                        e.status === 'CAP_EXCEEDED' ||
+                        e.status === 'PARTIAL') &&
+                        'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full flex-shrink-0',
+                        e.status === 'SUCCESS' && 'bg-emerald-500',
+                        e.status === 'FAILED' && 'bg-red-500',
+                        e.status === 'DRY_RUN' && 'bg-amber-500',
+                        (e.status === 'NO_MATCH' ||
+                          e.status === 'CAP_EXCEEDED' ||
+                          e.status === 'PARTIAL') &&
+                          'bg-slate-400',
+                      )}
+                    />
+                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+                      {e.status}
+                    </span>
+                    {e.dryRun && (
+                      <Badge variant="warning" size="sm">
+                        Dry-run
+                      </Badge>
+                    )}
+                    <span className="text-[10px] text-slate-500 ml-auto tabular-nums">
+                      {new Date(e.startedAt).toLocaleString()}
+                      {e.durationMs != null && ` · ${e.durationMs}ms`}
+                    </span>
+                    {e.errorMessage && (
+                      <span
+                        className="text-[10px] text-red-600 dark:text-red-400 truncate max-w-[200px]"
+                        title={e.errorMessage}
+                      >
+                        {e.errorMessage}
+                      </span>
                     )}
                   </div>
                 ))}

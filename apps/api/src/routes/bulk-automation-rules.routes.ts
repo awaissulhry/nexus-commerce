@@ -277,6 +277,42 @@ const bulkAutomationRulesRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   /**
+   * GET /api/bulk-automation-rules/:id/executions
+   *
+   * List AutomationRuleExecution rows for a bulk-ops rule, newest
+   * first. Powers the W7.8 history surface — operators drill into a
+   * rule and see what fired, when, in what mode, with what outcome.
+   */
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { status?: string; limit?: string }
+  }>(
+    '/bulk-automation-rules/:id/executions',
+    async (request, reply) => {
+      const rule = await prisma.automationRule.findUnique({
+        where: { id: request.params.id },
+        select: { domain: true },
+      })
+      if (!rule || rule.domain !== DOMAIN) {
+        return reply
+          .code(404)
+          .send({ success: false, error: 'Rule not found' })
+      }
+      const where: any = { ruleId: request.params.id }
+      if (request.query.status) where.status = request.query.status
+      const executions = await prisma.automationRuleExecution.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        take: Math.min(
+          Math.max(request.query.limit ? Number(request.query.limit) : 100, 1),
+          500,
+        ),
+      })
+      return reply.send({ success: true, executions })
+    },
+  )
+
+  /**
    * POST /api/bulk-automation-rules/dry-run-inline
    *
    * Evaluate an unsaved rule shape against a context. Used by the
