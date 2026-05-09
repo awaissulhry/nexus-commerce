@@ -1779,6 +1779,7 @@ const SLA_TONE: Record<string, string> = {
 }
 
 function WorkflowTab({ productId }: { productId: string }) {
+  const { t } = useTranslations()
   const [snap, setSnap] = useState<WorkflowSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -1833,9 +1834,9 @@ function WorkflowTab({ productId }: { productId: string }) {
       setMoveTo('')
       setMoveComment('')
       await refresh()
-      toast.success('Stage moved')
+      toast.success(t('products.drawer.workflow.toast.moved'))
     } catch (e: any) {
-      toast.error(`Move failed: ${e?.message ?? String(e)}`)
+      toast.error(t('products.drawer.workflow.toast.moveFailed', { msg: e?.message ?? String(e) }))
     } finally {
       setMoving(false)
     }
@@ -1863,7 +1864,7 @@ function WorkflowTab({ productId }: { productId: string }) {
       setCommentBody('')
       await refresh()
     } catch (e: any) {
-      toast.error(`Comment failed: ${e?.message ?? String(e)}`)
+      toast.error(t('products.drawer.workflow.toast.commentFailed', { msg: e?.message ?? String(e) }))
     } finally {
       setCommenting(false)
     }
@@ -1872,7 +1873,7 @@ function WorkflowTab({ productId }: { productId: string }) {
   if (loading) {
     return (
       <div className="p-4 text-base text-slate-500 dark:text-slate-400">
-        Loading workflow…
+        {t('products.drawer.workflow.loading')}
       </div>
     )
   }
@@ -1886,12 +1887,10 @@ function WorkflowTab({ productId }: { productId: string }) {
       <div className="p-6 text-center">
         <GitBranch className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
         <div className="text-md text-slate-700 dark:text-slate-300">
-          No workflow attached.
+          {t('products.drawer.workflow.empty.title')}
         </div>
         <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-          Attach a family that has a workflow, or use the bulk
-          attach-workflow flow when it lands. Workflow lives in
-          /settings/pim/workflows.
+          {t('products.drawer.workflow.empty.body')}
         </div>
       </div>
     )
@@ -1905,35 +1904,35 @@ function WorkflowTab({ productId }: { productId: string }) {
       {/* Current stage card */}
       <div className="border border-slate-200 dark:border-slate-800 rounded-md p-3 bg-slate-50/50 dark:bg-slate-900/40">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
-          Current stage · {stage.workflow.label}
+          {t('products.drawer.workflow.currentStage')} · {stage.workflow.label}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 text-base font-medium bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded">
             {stage.label}
           </span>
           {stage.isInitial && (
-            <span className="text-xs text-slate-500 dark:text-slate-400 italic">initial</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 italic">{t('products.drawer.workflow.tag.initial')}</span>
           )}
           {stage.isTerminal && (
-            <span className="text-xs text-emerald-700 dark:text-emerald-300 italic">terminal</span>
+            <span className="text-xs text-emerald-700 dark:text-emerald-300 italic">{t('products.drawer.workflow.tag.terminal')}</span>
           )}
           {stage.isPublishable && (
-            <span className="text-xs text-amber-700 dark:text-amber-300 italic">publishable</span>
+            <span className="text-xs text-amber-700 dark:text-amber-300 italic">{t('products.drawer.workflow.tag.publishable')}</span>
           )}
           {snap.sla && (
             <span
               className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded font-medium ${SLA_TONE[snap.sla.state]}`}
               title={
                 snap.sla.dueAt
-                  ? `Due ${new Date(snap.sla.dueAt).toLocaleString()}`
-                  : 'No SLA on this stage'
+                  ? t('products.drawer.workflow.sla.due', { when: new Date(snap.sla.dueAt).toLocaleString() })
+                  : t('products.drawer.workflow.sla.none')
               }
             >
               {snap.sla.state === 'no_sla'
-                ? 'no SLA'
+                ? t('products.drawer.workflow.sla.noSla')
                 : snap.sla.state === 'overdue'
-                ? `overdue ${Math.abs(Math.round(snap.sla.hoursRemaining ?? 0))}h`
-                : `${Math.round(snap.sla.hoursRemaining ?? 0)}h left`}
+                ? t('products.drawer.workflow.sla.overdue', { hours: Math.abs(Math.round(snap.sla.hoursRemaining ?? 0)) })
+                : t('products.drawer.workflow.sla.left', { hours: Math.round(snap.sla.hoursRemaining ?? 0) })}
             </span>
           )}
         </div>
@@ -1943,7 +1942,7 @@ function WorkflowTab({ productId }: { productId: string }) {
       {otherStages.length > 0 && (
         <div className="space-y-2">
           <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-            Move to
+            {t('products.drawer.workflow.moveTo')}
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -1951,15 +1950,15 @@ function WorkflowTab({ productId }: { productId: string }) {
               onChange={(e) => setMoveTo(e.target.value)}
               className="flex-1 h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
             >
-              <option value="">— pick a stage —</option>
+              <option value="">{t('products.drawer.workflow.movePicker')}</option>
               {otherStages
                 .slice()
                 .sort((a, b) => a.sortOrder - b.sortOrder)
                 .map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
-                    {s.isTerminal ? ' (terminal)' : ''}
-                    {s.isPublishable ? ' · publishable' : ''}
+                    {s.isTerminal ? t('products.drawer.workflow.moveSuffix.terminal') : ''}
+                    {s.isPublishable ? t('products.drawer.workflow.moveSuffix.publishable') : ''}
                   </option>
                 ))}
             </select>
@@ -1971,14 +1970,14 @@ function WorkflowTab({ productId }: { productId: string }) {
               loading={moving}
               icon={<Send className="w-3 h-3" />}
             >
-              Move
+              {t('products.drawer.workflow.move')}
             </Button>
           </div>
           <input
             type="text"
             value={moveComment}
             onChange={(e) => setMoveComment(e.target.value)}
-            placeholder="Optional reason / note for the audit log"
+            placeholder={t('products.drawer.workflow.movePlaceholder')}
             className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
@@ -1987,7 +1986,7 @@ function WorkflowTab({ productId }: { productId: string }) {
       {/* Comment thread (current stage) */}
       <div className="space-y-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-          Comments on {stage.label}
+          {t('products.drawer.workflow.commentsOn', { stage: stage.label })}
         </div>
         <div className="space-y-1.5">
           {snap.comments
@@ -2006,7 +2005,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             ))}
           {snap.comments.filter((c) => c.stage.id === stage.id).length === 0 && (
             <div className="text-sm italic text-slate-500 dark:text-slate-400">
-              No comments on this stage yet.
+              {t('products.drawer.workflow.commentsEmpty')}
             </div>
           )}
         </div>
@@ -2015,7 +2014,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             value={commentBody}
             onChange={(e) => setCommentBody(e.target.value)}
             rows={2}
-            placeholder="Add a comment for this stage…"
+            placeholder={t('products.drawer.workflow.commentPlaceholder')}
             className="flex-1 px-2 py-1.5 text-base border border-slate-200 dark:border-slate-800 rounded dark:bg-slate-900 dark:text-slate-100"
           />
           <Button
@@ -2025,7 +2024,7 @@ function WorkflowTab({ productId }: { productId: string }) {
             disabled={!commentBody.trim()}
             loading={commenting}
           >
-            Post
+            {t('products.drawer.workflow.post')}
           </Button>
         </div>
       </div>
@@ -2033,35 +2032,35 @@ function WorkflowTab({ productId }: { productId: string }) {
       {/* Transition history */}
       <div className="space-y-2">
         <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-          Transition history
+          {t('products.drawer.workflow.history')}
         </div>
         {snap.transitions.length === 0 ? (
           <div className="text-sm italic text-slate-500 dark:text-slate-400">
-            No transitions recorded.
+            {t('products.drawer.workflow.historyEmpty')}
           </div>
         ) : (
           <ul className="space-y-1">
-            {snap.transitions.slice(0, 10).map((t) => (
+            {snap.transitions.slice(0, 10).map((tr) => (
               <li
-                key={t.id}
+                key={tr.id}
                 className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
               >
                 <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums w-32 flex-shrink-0">
-                  {new Date(t.createdAt).toLocaleString()}
+                  {new Date(tr.createdAt).toLocaleString()}
                 </span>
                 <span className="truncate">
-                  {t.fromStage ? (
+                  {tr.fromStage ? (
                     <>
-                      <span className="text-slate-500 dark:text-slate-400">{t.fromStage.label}</span>
+                      <span className="text-slate-500 dark:text-slate-400">{tr.fromStage.label}</span>
                       <span className="mx-1 text-slate-400 dark:text-slate-500">→</span>
                     </>
                   ) : (
-                    <span className="text-slate-400 dark:text-slate-500 italic mr-1">entry →</span>
+                    <span className="text-slate-500 dark:text-slate-400 italic mr-1">{t('products.drawer.workflow.entry')}</span>
                   )}
-                  <span className="text-slate-900 dark:text-slate-100">{t.toStage.label}</span>
-                  {t.comment && (
+                  <span className="text-slate-900 dark:text-slate-100">{tr.toStage.label}</span>
+                  {tr.comment && (
                     <span className="ml-2 text-slate-500 dark:text-slate-400 italic">
-                      "{t.comment}"
+                      "{tr.comment}"
                     </span>
                   )}
                 </span>
