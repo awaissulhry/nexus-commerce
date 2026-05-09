@@ -975,7 +975,10 @@ export default function ReplenishmentWorkspace() {
         </div>
         <Card noPadding className="hidden lg:block">
           <div className="overflow-x-auto">
-            <table className="w-full text-md">
+            <table
+              className="w-full text-md"
+              aria-label="Replenishment recommendations"
+            >
               <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
                 <tr>
                   <th className="px-3 py-2 text-left w-9">

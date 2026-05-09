@@ -165,14 +165,19 @@ export function MobileSuggestionCard({
         <button
           onClick={onDraftPo}
           className="flex-1 h-8 text-sm bg-slate-900 dark:bg-slate-700 text-white rounded hover:bg-slate-800 dark:hover:bg-slate-600 inline-flex items-center justify-center gap-1"
+          aria-label={
+            s.isManufactured
+              ? `Create work order for ${s.sku}`
+              : `Create draft purchase order for ${s.sku}`
+          }
         >
           {s.isManufactured ? (
             <>
-              <Factory size={11} /> WO
+              <Factory size={11} aria-hidden="true" /> WO
             </>
           ) : (
             <>
-              <ShoppingCart size={11} /> PO
+              <ShoppingCart size={11} aria-hidden="true" /> PO
             </>
           )}
         </button>
@@ -180,14 +185,16 @@ export function MobileSuggestionCard({
           onClick={() => onDismiss()}
           className="h-8 px-2 text-sm border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/30 inline-flex items-center gap-1"
           title="Dismiss this recommendation"
+          aria-label={`Dismiss recommendation for ${s.sku}`}
         >
-          <X size={11} />
+          <X size={11} aria-hidden="true" />
         </button>
         <button
           onClick={onOpenDrawer}
           className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+          aria-label={`Open detail for ${s.sku}`}
         >
-          Details <ChevronRight size={11} />
+          Details <ChevronRight size={11} aria-hidden="true" />
         </button>
       </div>
     </div>

@@ -183,14 +183,19 @@ export function SuggestionRow({
               onClick={onDraftPo}
               className="h-7 px-2 text-sm bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-950/60 inline-flex items-center gap-1"
               title={s.isManufactured ? 'Create work order' : 'Create draft PO'}
+              aria-label={
+                s.isManufactured
+                  ? `Create work order for ${s.sku}`
+                  : `Create draft purchase order for ${s.sku}`
+              }
             >
               {s.isManufactured ? (
                 <>
-                  <Factory size={11} /> WO
+                  <Factory size={11} aria-hidden="true" /> WO
                 </>
               ) : (
                 <>
-                  <ShoppingCart size={11} /> PO
+                  <ShoppingCart size={11} aria-hidden="true" /> PO
                 </>
               )}
             </button>
@@ -211,9 +216,9 @@ export function SuggestionRow({
         <button
           onClick={onOpenDrawer}
           className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-          aria-label="Open detail"
+          aria-label={`Open detail for ${s.sku}`}
         >
-          <ChevronRight size={14} />
+          <ChevronRight size={14} aria-hidden="true" />
         </button>
       </td>
     </tr>

@@ -42,12 +42,24 @@ export function SortableTh({
   children: ReactNode
 }) {
   const active = current === sortKey
+  // W2.6 — aria-sort belongs on the <th> per WAI-ARIA, not on the
+  // <button> inside it. Screen readers announce sort state with the
+  // header cell, then activate sorting via the inner button. Button
+  // gets an aria-label spelling out the sort target + current state.
+  const ariaSort = active
+    ? dir === 'asc'
+      ? 'ascending'
+      : 'descending'
+    : 'none'
+  const buttonLabel = active
+    ? `Sort ${dir === 'asc' ? 'descending' : 'ascending'} (currently ${ariaSort})`
+    : 'Sort ascending'
   return (
-    <th className={className}>
+    <th className={className} aria-sort={ariaSort}>
       <button
         onClick={() => onSort(sortKey)}
         className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-slate-100"
-        aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        aria-label={buttonLabel}
       >
         {children}
         {active && (dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
