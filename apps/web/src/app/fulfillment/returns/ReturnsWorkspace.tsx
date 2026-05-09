@@ -13,6 +13,10 @@ import {
   Camera, Image as ImageIcon, Save,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Barcode128 } from '@/components/ui/Barcode128'
@@ -174,7 +178,7 @@ const CHANNEL_TONE: Record<string, string> = {
   ETSY: 'bg-rose-50 text-rose-700 border-rose-200',
 }
 
-const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
+// CHANNELS retired in U.67 — now sourced from ACTIVE_CHANNELS_OPTIONS.
 const STATUSES = ['ALL', 'REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIVED', 'INSPECTING', 'RESTOCKED', 'REFUNDED', 'REJECTED', 'SCRAPPED'] as const
 
 type SavedView = {
@@ -721,24 +725,18 @@ export default function ReturnsWorkspace() {
               </button>
             ))}
           </div>
-          <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold ml-2">Channel</span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setFilters({ channel: null, page: '1' })}
-              className={`h-7 px-2 text-sm border rounded ${!channelFilter ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-            >
-              All
-            </button>
-            {CHANNELS.map((c) => (
-              <button
-                key={c}
-                onClick={() => setFilters({ channel: c, page: '1' })}
-                className={`h-7 px-2 text-sm border rounded ${channelFilter === c ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
+          {/* U.67 — channel filter migrated to the shared MultiSelectChips
+              primitive. Single-select because the returns backend filters
+              on a single channel column. */}
+          <MultiSelectChips
+            label="Channel"
+            mode="single"
+            options={ACTIVE_CHANNELS_OPTIONS}
+            value={channelFilter ? [channelFilter] : []}
+            onChange={(next) =>
+              setFilters({ channel: next[0] ?? null, page: '1' })
+            }
+          />
         </div>
       </div>
 

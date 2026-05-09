@@ -53,6 +53,11 @@ import {
   CartesianGrid,
 } from 'recharts'
 import PageHeader from '@/components/layout/PageHeader'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+  ACTIVE_MARKETPLACES_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -712,6 +717,27 @@ export default function ReplenishmentWorkspace() {
           { label: 'Replenishment' },
         ]}
       />
+
+      {/* U.67 — quick-filters strip. Single-select per dimension because
+          the velocity backend does per-channel attribution math; an [All]
+          chip + per-channel single-select keeps the UX consistent with
+          /products and /listings. */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
+        <MultiSelectChips
+          label="Channel"
+          mode="single"
+          options={ACTIVE_CHANNELS_OPTIONS}
+          value={channelFilter ? [channelFilter] : []}
+          onChange={(next) => setChannelFilter(next[0] ?? '')}
+        />
+        <MultiSelectChips
+          label="Market"
+          mode="single"
+          options={ACTIVE_MARKETPLACES_OPTIONS}
+          value={marketplaceFilter ? [marketplaceFilter] : []}
+          onChange={(next) => setMarketplaceFilter(next[0] ?? '')}
+        />
+      </div>
 
       {/* Upcoming-events banner — surfaces the next ≤3 events with prep deadlines */}
       {events && events.length > 0 && (

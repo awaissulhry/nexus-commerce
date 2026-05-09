@@ -18,6 +18,11 @@ import { ChevronDown, Filter, Search, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { COUNTRY_NAMES } from '@/lib/country-names'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+  ACTIVE_MARKETPLACES_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
 type Facet = { value: string; count: number }
@@ -72,6 +77,33 @@ export function FilterBar(props: FilterBarProps) {
   return (
     <Card>
       <div className="space-y-3">
+        {/* U.67 — quick-filters strip. Always-visible Channel + Market
+            multi-select with [All] shortcut. The accordion below still
+            holds advanced dimensions (status, fulfillment, review). */}
+        <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pb-3 border-b border-slate-100 dark:border-slate-800">
+          <MultiSelectChips
+            label={t('orders.filter.group.channel')}
+            options={ACTIVE_CHANNELS_OPTIONS}
+            value={channelFilters}
+            onChange={(next) =>
+              updateUrl({
+                channel: next.join(',') || undefined,
+                page: undefined,
+              })
+            }
+          />
+          <MultiSelectChips
+            label={t('orders.filter.group.marketplace')}
+            options={ACTIVE_MARKETPLACES_OPTIONS}
+            value={marketplaceFilters}
+            onChange={(next) =>
+              updateUrl({
+                marketplace: next.join(',') || undefined,
+                page: undefined,
+              })
+            }
+          />
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex-1 min-w-[240px] max-w-md relative">
             <Search

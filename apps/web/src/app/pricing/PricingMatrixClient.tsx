@@ -33,6 +33,11 @@ import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody } from '@/components/ui/Modal'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+  ACTIVE_MARKETPLACES_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import RepricerStatusBanner from './_components/RepricerStatusBanner'
@@ -273,38 +278,30 @@ export default function PricingMatrixClient() {
               className="pl-7"
             />
           </div>
-          <select
-            value={channel}
-            onChange={(e) => {
-              setChannel(e.target.value)
+          {/* U.67 — channel + marketplace filters migrated from native
+              <select> to the shared MultiSelectChips primitive. Single
+              mode because the pricing matrix backend filters on a
+              single (channel, marketplace) pair per request. */}
+          <MultiSelectChips
+            label="Channel"
+            mode="single"
+            options={ACTIVE_CHANNELS_OPTIONS}
+            value={channel ? [channel] : []}
+            onChange={(next) => {
+              setChannel(next[0] ?? '')
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
-          >
-            <option value="">{t('pricing.filter.allChannels')}</option>
-            <option value="AMAZON">Amazon</option>
-            <option value="EBAY">eBay</option>
-            <option value="SHOPIFY">Shopify</option>
-            <option value="WOOCOMMERCE">WooCommerce</option>
-            <option value="ETSY">Etsy</option>
-          </select>
-          <select
-            value={marketplace}
-            onChange={(e) => {
-              setMarketplace(e.target.value)
+          />
+          <MultiSelectChips
+            label="Market"
+            mode="single"
+            options={ACTIVE_MARKETPLACES_OPTIONS}
+            value={marketplace ? [marketplace] : []}
+            onChange={(next) => {
+              setMarketplace(next[0] ?? '')
               setPage(0)
             }}
-            className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
-          >
-            <option value="">{t('pricing.filter.allMarketplaces')}</option>
-            <option value="IT">IT</option>
-            <option value="DE">DE</option>
-            <option value="FR">FR</option>
-            <option value="ES">ES</option>
-            <option value="UK">UK</option>
-            <option value="US">US</option>
-            <option value="GLOBAL">GLOBAL</option>
-          </select>
+          />
           <select
             value={sourceFilter}
             onChange={(e) => {

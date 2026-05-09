@@ -16,6 +16,11 @@ import {
   Download, FilterX, AlertCircle, Activity, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+  ACTIVE_MARKETPLACES_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -574,6 +579,41 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         description={description}
         breadcrumbs={breadcrumbs}
       />
+
+      {/* U.67 — quick-filters strip. Channel + Market multi-select with
+          [All] shortcut. Channel is hidden when this workspace is
+          locked to a specific channel (/listings/amazon, etc.); same
+          for Market on lockMarketplace pages. */}
+      {(!lockChannel || !lockMarketplace) && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
+          {!lockChannel && (
+            <MultiSelectChips
+              label="Channel"
+              options={ACTIVE_CHANNELS_OPTIONS}
+              value={channelFilters}
+              onChange={(next) =>
+                updateUrl({
+                  channel: next.join(',') || undefined,
+                  page: undefined,
+                })
+              }
+            />
+          )}
+          {!lockMarketplace && (
+            <MultiSelectChips
+              label="Market"
+              options={ACTIVE_MARKETPLACES_OPTIONS}
+              value={marketplaceFilters}
+              onChange={(next) =>
+                updateUrl({
+                  marketplace: next.join(',') || undefined,
+                  page: undefined,
+                })
+              }
+            />
+          )}
+        </div>
+      )}
 
       {/* Lens switcher + saved views menu + global stats strip */}
       <div className="flex items-center gap-2 flex-wrap">

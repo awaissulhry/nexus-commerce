@@ -13,29 +13,22 @@
  * recycle-bin scope (deleted rows aren't actionable for daily
  * filtering) and on non-grid lenses (those have their own UIs).
  *
- * Active-channel + active-marketplace lists mirror the FilterBar
- * fallbacks (per project memory: Amazon + eBay + Shopify only;
- * Xavia EU set IT/DE/FR/ES/UK).
+ * U.67 — migrated to the shared MultiSelectChips primitive so the
+ * [All]-chip-clears-all pattern matches every other workspace.
  */
 
 import { Filter } from 'lucide-react'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+  ACTIVE_MARKETPLACES_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 
-const ACTIVE_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
-const ACTIVE_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
-
-const MARKETPLACE_LABELS: Record<string, string> = {
-  IT: 'Italy',
-  DE: 'Germany',
-  FR: 'France',
-  ES: 'Spain',
-  UK: 'United Kingdom',
-}
-
-const CHANNEL_LABELS: Record<string, string> = {
-  AMAZON: 'Amazon',
-  EBAY: 'eBay',
-  SHOPIFY: 'Shopify',
-}
+const STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'INACTIVE', label: 'Inactive' },
+]
 
 interface QuickFiltersProps {
   statusFilters: string[]
@@ -43,10 +36,6 @@ interface QuickFiltersProps {
   marketplaceFilters: string[]
   channelFilters: string[]
   updateUrl: (params: Record<string, string | undefined>) => void
-}
-
-function toggleArr(arr: string[], v: string) {
-  return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
 }
 
 export function QuickFilters({
@@ -58,103 +47,52 @@ export function QuickFilters({
 }: QuickFiltersProps) {
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 flex items-center gap-x-5 gap-y-2 flex-wrap">
-      {/* Status — multi-select toggle chips. Matches the accordion's
-          Status group; this surface just makes it always visible. */}
-      <FilterPair label="Status">
-        {(['ACTIVE', 'DRAFT', 'INACTIVE'] as const).map((s) => {
-          const active = statusFilters.includes(s)
-          return (
-            <Chip
-              key={s}
-              active={active}
-              onClick={() =>
-                updateUrl({
-                  status: toggleArr(statusFilters, s).join(',') || undefined,
-                  page: undefined,
-                })
-              }
-            >
-              {s.charAt(0) + s.slice(1).toLowerCase()}
-            </Chip>
-          )
-        })}
-      </FilterPair>
+      <MultiSelectChips
+        label="Status"
+        options={STATUS_OPTIONS}
+        value={statusFilters}
+        onChange={(next) =>
+          updateUrl({
+            status: next.join(',') || undefined,
+            page: undefined,
+          })
+        }
+      />
 
       {/* Stock — single-select segmented (matches the existing
-          stockLevel single-mode behavior). */}
-      <FilterPair label="Stock">
-        {(
-          [
-            { value: 'in', label: 'In' },
-            { value: 'low', label: 'Low' },
-            { value: 'out', label: 'Out' },
-          ] as const
-        ).map((opt) => {
-          const active = stockLevel === opt.value
-          return (
-            <Chip
-              key={opt.value}
-              active={active}
-              onClick={() =>
-                updateUrl({
-                  stockLevel: active ? undefined : opt.value,
-                  page: undefined,
-                })
-              }
-            >
-              {opt.label}
-            </Chip>
-          )
-        })}
-      </FilterPair>
+          stockLevel single-mode behaviour). Implemented inline because
+          MultiSelectChips is multi-select; stock has no [All] equivalent
+          (empty already means "any stock"). */}
+      <StockSingleSelect
+        value={stockLevel}
+        onChange={(v) =>
+          updateUrl({ stockLevel: v || undefined, page: undefined })
+        }
+      />
 
-      {/* Marketplace — multi-select toggle chips. Static list from
-          ACTIVE_MARKETPLACES; FilterBar accordion still merges in
-          per-listing facet counts when available. */}
-      <FilterPair label="Market">
-        {ACTIVE_MARKETPLACES.map((m) => {
-          const active = marketplaceFilters.includes(m)
-          return (
-            <Chip
-              key={m}
-              active={active}
-              title={MARKETPLACE_LABELS[m] ?? m}
-              onClick={() =>
-                updateUrl({
-                  marketplaces:
-                    toggleArr(marketplaceFilters, m).join(',') || undefined,
-                  page: undefined,
-                })
-              }
-            >
-              {m}
-            </Chip>
-          )
-        })}
-      </FilterPair>
+      <MultiSelectChips
+        label="Market"
+        options={ACTIVE_MARKETPLACES_OPTIONS}
+        value={marketplaceFilters}
+        onChange={(next) =>
+          updateUrl({
+            marketplaces: next.join(',') || undefined,
+            page: undefined,
+          })
+        }
+      />
 
-      {/* Channel — multi-select toggle chips. */}
-      <FilterPair label="Channel">
-        {ACTIVE_CHANNELS.map((c) => {
-          const active = channelFilters.includes(c)
-          return (
-            <Chip
-              key={c}
-              active={active}
-              title={CHANNEL_LABELS[c] ?? c}
-              onClick={() =>
-                updateUrl({
-                  channels:
-                    toggleArr(channelFilters, c).join(',') || undefined,
-                  page: undefined,
-                })
-              }
-            >
-              {CHANNEL_LABELS[c] ?? c}
-            </Chip>
-          )
-        })}
-      </FilterPair>
+      <MultiSelectChips
+        label="Channel"
+        options={ACTIVE_CHANNELS_OPTIONS}
+        value={channelFilters}
+        onChange={(next) =>
+          updateUrl({
+            channels: next.join(',') || undefined,
+            page: undefined,
+          })
+        }
+      />
 
       {/* Hint that more filters live in the accordion below. */}
       <div className="ml-auto text-xs text-slate-400 dark:text-slate-500 inline-flex items-center gap-1">
@@ -164,24 +102,49 @@ export function QuickFilters({
   )
 }
 
-function FilterPair({
-  label,
-  children,
+function StockSingleSelect({
+  value,
+  onChange,
 }: {
-  label: string
-  children: React.ReactNode
+  value: string
+  onChange: (v: string) => void
 }) {
+  const opts = [
+    { value: 'in', label: 'In' },
+    { value: 'low', label: 'Low' },
+    { value: 'out', label: 'Out' },
+  ]
   return (
     <div className="inline-flex items-center gap-2">
       <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-        {label}
+        Stock
       </span>
-      <div className="inline-flex items-center gap-1 flex-wrap">{children}</div>
+      <div className="inline-flex items-center gap-1 flex-wrap">
+        <Pill
+          active={!value}
+          onClick={() => onChange('')}
+          title="Any stock level"
+        >
+          All
+        </Pill>
+        {opts.map((opt) => {
+          const active = value === opt.value
+          return (
+            <Pill
+              key={opt.value}
+              active={active}
+              onClick={() => onChange(active ? '' : opt.value)}
+            >
+              {opt.label}
+            </Pill>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-function Chip({
+function Pill({
   active,
   title,
   onClick,
