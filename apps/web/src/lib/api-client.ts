@@ -39,51 +39,6 @@ export interface PaginatedResponse<T = any> extends ApiResponse<T[]> {
 }
 
 // ============================================================================
-// Sync Health Types
-// ============================================================================
-
-export interface ChannelHealthScore {
-  channel: string;
-  healthScore: number;
-  totalErrors: number;
-  criticalErrors: number;
-  unresolvedConflicts: number;
-  duplicateVariations: number;
-  successRate: number;
-  lastUpdated: string;
-}
-
-export interface UnresolvedConflict {
-  id: string;
-  channel: string;
-  errorType: string;
-  conflictType?: string;
-  message: string;
-  severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
-  productId?: string;
-  variationId?: string;
-  createdAt: string;
-  conflictData?: Record<string, any>;
-}
-
-export interface SyncError {
-  id: string;
-  channel: string;
-  errorType: string;
-  severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
-  errorMessage: string;
-  productId?: string;
-  variationId?: string;
-  createdAt: string;
-  errorDetails?: Record<string, any>;
-}
-
-export interface ResolveConflictPayload {
-  status: 'AUTO_RESOLVED' | 'MANUAL_RESOLVED' | 'IGNORED';
-  notes?: string;
-}
-
-// ============================================================================
 // Bulk Action Types
 // ============================================================================
 
@@ -202,60 +157,6 @@ class ApiClient {
   async delete<T>(url: string): Promise<T> {
     const response = await this.client.delete<ApiResponse<T>>(url);
     return response.data as T;
-  }
-
-  // ========================================================================
-  // Sync Health Endpoints
-  // ========================================================================
-
-  /**
-   * Get health score for a specific channel
-   */
-  async getHealthScore(channel: string, hoursBack: number = 24): Promise<ChannelHealthScore> {
-    return this.get<ChannelHealthScore>(`/sync-health/${channel}/score`, { hoursBack });
-  }
-
-  /**
-   * Get all unresolved conflicts
-   */
-  async getConflicts(channel?: string): Promise<UnresolvedConflict[]> {
-    return this.get<UnresolvedConflict[]>('/sync-health/conflicts', { channel });
-  }
-
-  /**
-   * Get recent errors for a channel
-   */
-  async getErrors(channel: string, limit: number = 50, hoursBack: number = 24): Promise<SyncError[]> {
-    return this.get<SyncError[]>(`/sync-health/errors/${channel}`, { limit, hoursBack });
-  }
-
-  /**
-   * Resolve a conflict
-   */
-  async resolveConflict(logId: string, payload: ResolveConflictPayload): Promise<SyncError> {
-    return this.post<SyncError>(`/sync-health/conflicts/${logId}/resolve`, payload);
-  }
-
-  /**
-   * Log a new error
-   */
-  async logError(data: {
-    errorType: string;
-    severity: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
-    channel: string;
-    message: string;
-    productId?: string;
-    variationId?: string;
-    errorDetails?: Record<string, any>;
-  }): Promise<SyncError> {
-    return this.post<SyncError>('/sync-health/log', data);
-  }
-
-  /**
-   * Get health scores for all channels
-   */
-  async getAllHealthScores(hoursBack: number = 24): Promise<ChannelHealthScore[]> {
-    return this.get<ChannelHealthScore[]>('/sync-health/summary', { hoursBack });
   }
 
   // ========================================================================
