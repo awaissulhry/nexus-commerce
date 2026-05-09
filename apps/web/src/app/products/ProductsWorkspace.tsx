@@ -43,6 +43,7 @@ import { DraftsLens } from './_lenses/DraftsLens'
 import { CoverageLens } from './_lenses/CoverageLens'
 import { PricingLens } from './_lenses/PricingLens'
 import { WorkflowLens } from './_lenses/WorkflowLens'
+import { ReadinessLens } from './_lenses/ReadinessLens'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { FilterBar } from './_components/FilterBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
@@ -77,7 +78,7 @@ const BulkImageUploadModal = dynamic(
 import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow'
+type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness'
 
 // ProductRow + Tag types moved to ./_types.ts (P.1f) so GridView and
 // the workspace share a canonical shape.
@@ -1236,6 +1237,7 @@ export default function ProductsWorkspace() {
       {lens === 'health' && <HealthLens />}
       {lens === 'drafts' && <DraftsLens />}
       {lens === 'workflow' && <WorkflowLens />}
+      {lens === 'readiness' && <ReadinessLens products={products} loading={loading} />}
 
       {tagEditorProductId && (
         <TagEditor
@@ -1302,6 +1304,10 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     // exist (operator gets an actionable EmptyState pointing at
     // /settings/pim/workflows).
     { key: 'workflow', label: 'Workflow', icon: GitBranch },
+    // W3.11 — Salsify channel-readiness matrix. Per-product per-
+    // channel score + missing-fields tooltip. Reuses the FilterBar
+    // products[] so filters compose cleanly.
+    { key: 'readiness', label: 'Readiness', icon: AlertTriangle },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">

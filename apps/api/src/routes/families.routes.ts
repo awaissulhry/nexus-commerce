@@ -283,6 +283,34 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/products/channel-readiness/bulk { productIds: [...] }
+  //
+  // Bulk readiness for the lens (W3.11). Capped at 200 ids per call.
+  // Sequential per-product so each gets its own resolver call —
+  // running these in parallel would multiply Prisma connections;
+  // 50 products × ~30ms each is well under a second.
+  fastify.post('/products/channel-readiness/bulk', async (request, reply) => {
+    const body = request.body as { productIds?: string[] }
+    if (!Array.isArray(body.productIds) || body.productIds.length === 0)
+      return reply
+        .code(400)
+        .send({ error: 'productIds must be a non-empty array' })
+    if (body.productIds.length > 200)
+      return reply
+        .code(400)
+        .send({ error: 'productIds cannot exceed 200 per call' })
+
+    const results: Record<string, unknown> = {}
+    for (const id of body.productIds) {
+      try {
+        results[id] = await channelReadinessService.compute(id)
+      } catch (err: any) {
+        results[id] = { error: err?.message ?? String(err) }
+      }
+    }
+    return { results }
+  })
+
   // ── W2.7 — FamilyAttribute attach/detach ────────────────────────
   //
   // The cornerstone parent-wins write-time enforcement. POST refuses
