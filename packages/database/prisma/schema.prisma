@@ -278,6 +278,15 @@ model Product {
   @@index([deletedAt])
 }
 
+/// @deprecated Wave 2 PIM rebuild — superseded by Product self-relation
+/// (parent → children via Product.parentId). Writes were disabled in B.1
+/// (stock-mirror) and broadened in C.9. Production rows: 0 as of 2026-05-09.
+///
+/// Reads remain across ~30 API call sites as a defensive legacy-SKU
+/// fallback (submission, fulfillment, repricer, webhooks, pricing-snapshot,
+/// import). Removal is scheduled as a Wave 2 prep commit after the
+/// AttributeSet/Family schema lands and any straggler rows are migrated.
+/// Do not add new reads or writes to this model.
 model ProductVariation {
   id        String  @id @default(cuid())
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
