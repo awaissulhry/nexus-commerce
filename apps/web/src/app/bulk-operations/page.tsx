@@ -6,6 +6,7 @@
 import Link from 'next/link'
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
+import BulkOperationsClient from './BulkOperationsClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,10 +14,11 @@ export default function BulkOperationsPage() {
   return (
     <div className="space-y-3">
       <PageHeader
-        title="Bulk Operations (BISECT 1 — U.50)"
-        description="Adds ActiveJobsStrip back on top of U.49 stub. Click any link."
+        title="Bulk Operations (BISECT 2 — U.51)"
+        description="BulkOps hooks load but JSX render is stubbed. Click any link."
       />
       <ActiveJobsStrip />
+      <BulkOperationsClient />
       <div className="rounded-lg border border-amber-300 bg-amber-50 p-6 dark:bg-amber-900/20 dark:border-amber-700">
         <p className="text-base text-amber-900 dark:text-amber-200">
           BulkOperationsClient + ActiveJobsStrip are temporarily disabled
