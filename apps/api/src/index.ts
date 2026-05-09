@@ -479,6 +479,27 @@ async function start() {
     // job sitting on the active-jobs strip and confusing operators.
     startOrphanBulkJobCleanupCron();
 
+    // W5.4 — seed built-in BulkActionTemplate rows. Idempotent —
+    // keyed by (userId='__builtin', name) so re-running on every
+    // boot picks up seed list changes without duplicating rows.
+    // Best-effort: a failure (e.g., DB up but the migration hasn't
+    // landed yet on this replica) logs and continues.
+    try {
+      const { seedBulkActionTemplates } = await import(
+        './services/bulk-action-template-seeds.js'
+      );
+      const result = await seedBulkActionTemplates(
+        (await import('./db.js')).default,
+      );
+      logger.info(
+        `[boot] bulk-action-template seeds: ${result.created} created, ${result.updated} updated`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[boot] bulk-action-template seeds skipped: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     // L.16.0 — alert evaluator. Polls every minute against AlertRule
     // and fires AlertEvent + dispatches notifications when conditions
     // cross thresholds. Default-ON.
