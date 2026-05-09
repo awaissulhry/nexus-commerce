@@ -292,6 +292,27 @@ await c.connect()
     skipRisk ? 'AMAZON_FBA_PAN_EU_LIVE=1 but adapter still stub — daily cron skips silently' : null)
 }
 
+// 20. L.1 — Lot integrity CHECKs are present
+{
+  const r = await c.query(`
+    SELECT count(*)::int n FROM pg_constraint
+    WHERE conname IN ('Lot_unitsRemaining_nonneg', 'Lot_unitsRemaining_le_received')
+  `)
+  record('L.1: Lot unitsRemaining CHECK constraints present', r.rows[0].n === 2,
+    r.rows[0].n < 2 ? `${r.rows[0].n}/2 lot CHECKs present — recall traceability at risk` : null)
+}
+
+// 21. L.2 — Lot consume integrity: zero lots with negative or
+//     over-received unitsRemaining (CHECK should prevent but verify).
+{
+  const r = await c.query(`
+    SELECT count(*)::int n FROM "Lot"
+    WHERE "unitsRemaining" < 0 OR "unitsRemaining" > "unitsReceived"
+  `)
+  record('L.2: zero lots with broken unitsRemaining', r.rows[0].n === 0,
+    r.rows[0].n > 0 ? `${r.rows[0].n} lots have unitsRemaining out of [0, unitsReceived]` : null)
+}
+
 await c.end()
 
 const failed = checks.filter((c) => !c.pass).length

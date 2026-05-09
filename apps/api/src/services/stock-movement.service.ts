@@ -106,6 +106,12 @@ export type StockMovementInput = {
   shipmentId?: string
   returnId?: string
   reservationId?: string
+  /** L.2: lot reference. When set on a consume (change < 0), the
+   *  lot's unitsRemaining is decremented atomically. When set on a
+   *  receive (change > 0), the StockMovement row carries the lotId
+   *  but the lot's unitsRemaining is NOT incremented (lots track
+   *  receives separately via createLot). */
+  lotId?: string
   /**
    * P0/B4 — caller's outer transaction. When set, the stock write,
    * StockLevel ledger update, totalStock recompute, ChannelListing
@@ -202,6 +208,7 @@ export async function applyStockMovement(input: StockMovementInput) {
     shipmentId,
     returnId,
     reservationId,
+    lotId,
     tx: outerTx,
   } = input
   if (change === 0) throw new Error('applyStockMovement: change must be non-zero')
@@ -330,8 +337,22 @@ export async function applyStockMovement(input: StockMovementInput) {
         returnId: returnId ?? null,
         reservationId: reservationId ?? null,
         cogsCents,
+        // L.2 — lot linkage on the audit row. When change < 0 we ALSO
+        // decrement the lot's unitsRemaining below (atomic with the
+        // movement insert).
+        lotId: lotId ?? null,
       },
     })
+
+    // L.2 — when a consume movement carries a lotId, decrement that
+    // lot's unitsRemaining inside the same tx. Throws (rolling back
+    // the movement) if the decrement would breach the CHECK or exceed
+    // remaining. Receives don't decrement — the lot is created
+    // separately via createLot which sets unitsRemaining = unitsReceived.
+    if (lotId && change < 0) {
+      const { decrementLotInTx } = await import('./lot.service.js')
+      await decrementLotInTx(tx, lotId, Math.abs(change))
+    }
 
     // S.20 — receive auto-layer. Fires after the movement row
     // exists so the layer can carry the stockMovementId backref.
