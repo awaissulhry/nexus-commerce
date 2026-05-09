@@ -214,6 +214,21 @@ export function coercePasteValue(
     }
     return { value: parts }
   }
+  // W2.8 — formula / lookup: read-only types. A paste targeting one
+  // of these is silently dropped (the cell can't accept input). The
+  // paste-preview already filters out !field.editable cells, so this
+  // mostly catches the vestigial 'edited via paste of computed
+  // value' case where the operator copies from one column and tries
+  // to paste into a formula column.
+  if (field.type === 'formula' || field.type === 'lookup') {
+    return { value: null, error: 'Read-only — computed' }
+  }
+  // W2.8 — link: paste a raw id. Validation against a known set of
+  // ids belongs at the API boundary, not the grid cell. Empty string
+  // → null (clears the link).
+  if (field.type === 'link') {
+    return { value: trimmed }
+  }
   // W2.7 — image: any string the URL constructor accepts (with a
   // protocol; W11 will add an upload-from-paste path for local
   // images). Same coercion as 'url' minus the prefix-completion since

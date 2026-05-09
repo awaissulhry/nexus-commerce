@@ -150,6 +150,15 @@ export function fieldToMeta(field: FieldDef): EditableMeta {
   // URL today; W11 image-upload pipeline will wrap this in an upload
   // shim so paste of a local file works too.
   if (field.type === 'image') return { editable: true, fieldType: 'image' }
+  // W2.8 — link to record. v0 is read-only display ('→ label'); the
+  // W6 relation-picker work will wire up the in-cell typeahead.
+  if (field.type === 'link') return { editable: true, fieldType: 'link' }
+  // W2.8 — formula + lookup: read-only computed types. Operators can
+  // see the value (locale-formatted via the field's optional format
+  // hook) but the cell never enters edit mode — caller is responsible
+  // for keeping the value fresh through normal data flow.
+  if (field.type === 'formula') return { editable: true, fieldType: 'formula' }
+  if (field.type === 'lookup') return { editable: true, fieldType: 'lookup' }
   // Weight + dimension fields are typed as 'number' in the registry
   // but rendered as text inputs so the user can type "5kg" or "60cm".
   // The smart-parsing in handleCommit splits the unit suffix into the

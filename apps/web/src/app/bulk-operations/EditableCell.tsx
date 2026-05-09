@@ -114,6 +114,31 @@ export type FieldType =
    * placeholder so a 404'd CDN doesn't blank the cell.
    */
   | 'image'
+  /**
+   * W2.8 — link to record. Stores a single string id (or [] for
+   * many-to-many in a later iteration). Display renders the related
+   * record's `displayLabel` resolved via meta.linkResolve callback,
+   * with an arrow icon. Edit pops a typeahead picker. The picker
+   * itself is a placeholder modal in v0 — meta.linkResolve gives the
+   * caller full control of how IDs are turned into labels (e.g.,
+   * SKU → product name lookup against the prefetched grid rows).
+   */
+  | 'link'
+  /**
+   * W2.8 — formula. Read-only computed value. Cells with this type
+   * never enter edit mode; double-click is a no-op. The renderer
+   * shows the result alongside an fx hint so operators understand
+   * why they can't edit. Compute lives in the caller — the cell
+   * just receives the result through `initialValue`.
+   */
+  | 'formula'
+  /**
+   * W2.8 — lookup. Read-only value pulled from a related record
+   * (e.g., supplier name shown on each product row). Same edit
+   * disabled / fx-hint contract as formula but with a chain-link
+   * icon instead so operators can tell the two apart.
+   */
+  | 'lookup'
 
 export interface EditableMeta {
   editable: true
@@ -135,6 +160,18 @@ export interface EditableMeta {
    * of the app does.
    */
   locale?: string
+  /**
+   * W2.8 — link cell: resolve an ID to a human label. Receives the
+   * raw cell value and returns the display string. Null → cell shows
+   * the raw ID with an amber tint so unresolved links stand out.
+   */
+  linkResolve?: (id: unknown) => string | null
+  /**
+   * W2.8 — link cell: callback the picker fires when the operator
+   * picks a target. v0 shipped without an in-cell picker; this hook
+   * is reserved for the W6 relation-picker work.
+   */
+  linkPick?: (current: unknown) => Promise<unknown>
 }
 
 /**
@@ -540,6 +577,17 @@ export const EditableCell = memo(
     //     the typed character with the cursor at the end.
     const enterEdit = useCallback(
       (prefill?: string) => {
+        // W2.8 — formula / lookup are read-only computed types; the
+        // cell renders the value but never enters edit mode. Click /
+        // type-to-replace are silently ignored. link is read-only in
+        // v0 too — full picker lands in W6.
+        if (
+          meta.fieldType === 'formula' ||
+          meta.fieldType === 'lookup' ||
+          meta.fieldType === 'link'
+        ) {
+          return
+        }
         if (prefill !== undefined) {
           setDraftValue(prefill)
         }
@@ -561,7 +609,7 @@ export const EditableCell = memo(
           }
         })
       },
-      [],
+      [meta.fieldType],
     )
 
     // Register/unregister the imperative edit handlers so the parent
@@ -905,6 +953,73 @@ export const EditableCell = memo(
           onKeyDown={handleKeyDown}
           className={cn(baseInputClass, meta.numeric && 'tabular-nums text-right')}
         />
+      )
+    }
+
+    // W2.8 — link display: resolves the raw id through meta.linkResolve
+    // (operator-supplied lookup) and renders 'label →' with an arrow.
+    // Unresolved ids render with the amber tint so a stale FK is
+    // visible. Editing is disabled in v0 — picker UI lands in W6.
+    if (meta.fieldType === 'link') {
+      const raw = draftValue === null || draftValue === undefined
+        ? ''
+        : String(draftValue)
+      const label = meta.linkResolve ? meta.linkResolve(draftValue) : null
+      return (
+        <div
+          title={cellError ?? `Link → ${raw || 'empty'}`}
+          className={cn(
+            'w-full h-full px-2 flex items-center gap-1 text-md cursor-default',
+            isDirty && !cellError && !cellCascading && 'bg-yellow-50',
+            isDirty && !cellError && cellCascading && 'bg-orange-50 ring-1 ring-inset ring-orange-300',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          {raw ? (
+            label ? (
+              <span className="truncate text-blue-700">→ {label}</span>
+            ) : (
+              <span
+                className="truncate text-amber-700"
+                title="Linked record not found"
+              >
+                → {raw}
+              </span>
+            )
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
+      )
+    }
+
+    // W2.8 — formula / lookup display: read-only computed values.
+    // Distinct icons (fx vs ↗) so operators can tell the source apart.
+    // The cursor is `default` (not `cell`) and there's no double-click
+    // handler — both signal that editing isn't on the table.
+    if (meta.fieldType === 'formula' || meta.fieldType === 'lookup') {
+      const display = meta.format
+        ? meta.format(draftValue)
+        : defaultFormat(draftValue)
+      const icon = meta.fieldType === 'formula' ? 'fx' : '↗'
+      return (
+        <div
+          title={cellError ?? `${meta.fieldType === 'formula' ? 'Computed' : 'Lookup from related record'} (read-only)`}
+          className={cn(
+            'w-full h-full px-2 flex items-center gap-1 text-md cursor-default bg-slate-50/40',
+            cellError && 'bg-red-50 ring-1 ring-inset ring-red-400',
+          )}
+        >
+          <span
+            className="text-[10px] text-slate-400 font-mono select-none flex-shrink-0"
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+          <span className="truncate text-slate-700">
+            {display || <span className="text-slate-300">—</span>}
+          </span>
+        </div>
       )
     }
 
