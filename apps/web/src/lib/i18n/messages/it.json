@@ -4008,5 +4008,9 @@
   "listWizard.steps.8.description": "Riepilogo multi-canale prima dell'invio",
   "listWizard.steps.9.title": "Invio",
   "listWizard.steps.9.shortLabel": "Invio",
-  "listWizard.steps.9.description": "Pubblicazione parallela con ritentativo solo dei falliti"
+  "listWizard.steps.9.description": "Pubblicazione parallela con ritentativo solo dei falliti",
+  "products.edit.matrix": "Matrice",
+  "products.edit.matrixTooltip": "Apri vista matrice varianti",
+  "products.edit.datasheet": "Scheda tecnica",
+  "products.edit.datasheetTooltip": "Apri scheda tecnica prodotto"
 }

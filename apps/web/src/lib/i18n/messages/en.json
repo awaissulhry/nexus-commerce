@@ -3284,6 +3284,10 @@
   "products.edit.back": "Back to products",
   "products.edit.bulkEdit": "Bulk edit",
   "products.edit.bulkEditTooltip": "Open the spreadsheet view to edit master fields across this product and its variants",
+  "products.edit.matrix": "Matrix",
+  "products.edit.matrixTooltip": "Open the variant matrix editor for this parent product",
+  "products.edit.datasheet": "Datasheet",
+  "products.edit.datasheetTooltip": "Open the printable spec sheet (CE/customs/dimensions) for this product",
   "products.edit.discard": "Discard",
   "products.edit.discardEmptyTitle": "Refresh from server",
   "products.edit.discardEmpty": "Reload product from the database. Useful if another tab made changes.",
@@ -3957,5 +3961,9 @@
   "listWizard.steps.8.description": "Multi-channel summary before submit",
   "listWizard.steps.9.title": "Submit",
   "listWizard.steps.9.shortLabel": "Submit",
-  "listWizard.steps.9.description": "Parallel publish with retry-failed-only"
+  "listWizard.steps.9.description": "Parallel publish with retry-failed-only",
+  "products.edit.matrix": "Matrix",
+  "products.edit.matrixTooltip": "Open variant matrix view",
+  "products.edit.datasheet": "Datasheet",
+  "products.edit.datasheetTooltip": "Open product datasheet"
 }
