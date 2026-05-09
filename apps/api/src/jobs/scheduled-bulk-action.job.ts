@@ -92,6 +92,26 @@ export async function runScheduledBulkActionTickOnce(): Promise<TickSummary> {
         jobId: job.id,
         status: 'SUCCESS',
       })
+      // W7.2 — fire the schedule_fired automation trigger.
+      // Lazy-imported to break a cycle with the trigger module's
+      // own use of the schedule service via prisma. Best-effort.
+      try {
+        const { emitScheduleFired } = await import(
+          '../services/automation/bulk-ops-triggers.js'
+        )
+        emitScheduleFired({
+          scheduleId: row.id,
+          name: row.name,
+          actionType: row.actionType,
+          runCount: row.runCount + 1,
+          cronExpression: row.cronExpression,
+          jobId: job.id,
+        })
+      } catch (emitErr) {
+        logger.warn(
+          `[scheduled-bulk-action] emit schedule_fired failed: ${emitErr instanceof Error ? emitErr.message : String(emitErr)}`,
+        )
+      }
       fired++
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

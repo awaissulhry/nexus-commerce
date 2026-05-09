@@ -93,6 +93,7 @@ import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
+import { startBulkAutomationTickCron } from "./jobs/bulk-automation-tick.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
@@ -502,6 +503,12 @@ async function start() {
         `[boot] bulk-ops automation actions skipped: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+
+    // W7.2 — bulk-ops automation cron tick. Fires the
+    // `bulk_cron_tick` trigger every 15 min so scheduled hygiene
+    // rules (auto-pause on failure burst, periodic re-syncs, etc.)
+    // can run on a deterministic clock. No-op when no rules exist.
+    startBulkAutomationTickCron();
 
     // W5.4 — seed built-in BulkActionTemplate rows. Idempotent —
     // keyed by (userId='__builtin', name) so re-running on every

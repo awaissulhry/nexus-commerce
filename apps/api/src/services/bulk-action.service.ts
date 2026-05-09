@@ -551,6 +551,36 @@ export class BulkActionService {
         totalItems: job.totalItems
       });
 
+      // W7.2 — emit the automation trigger. Lazy-imported to avoid
+      // a circular dep with the automation engine + to keep this
+      // service usable in tests that don't boot the automation
+      // module. Best-effort: a failing emit must never affect the
+      // job's terminal state.
+      try {
+        const { emitBulkJobCompleted } = await import(
+          './automation/bulk-ops-triggers.js'
+        );
+        emitBulkJobCompleted({
+          jobId,
+          jobName: completedJob.jobName,
+          actionType: completedJob.actionType,
+          channel: completedJob.channel,
+          status: completedJob.status,
+          totalItems: completedJob.totalItems,
+          processedItems: completedJob.processedItems,
+          failedItems: completedJob.failedItems,
+          skippedItems: completedJob.skippedItems,
+          progressPercent: completedJob.progressPercent,
+          startedAt: completedJob.startedAt,
+          completedAt: completedJob.completedAt,
+          createdBy: completedJob.createdBy,
+        });
+      } catch (emitErr) {
+        logger.warn(
+          `[bulk-action] emitBulkJobCompleted failed for ${jobId}: ${emitErr instanceof Error ? emitErr.message : String(emitErr)}`,
+        );
+      }
+
       return {
         jobId,
         status: finalStatus,
