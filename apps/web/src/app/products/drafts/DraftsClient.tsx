@@ -386,6 +386,16 @@ function canAiSuggest(d: Draft): boolean {
   return !d.missingFactors.includes('name')
 }
 
+// DR-AI-MP — pick the marketplace that AI fill should generate
+// content for. The wizard's first targeted marketplace is the
+// strongest signal (Awa's `it.json` flow lands AMAZON:IT first
+// for most flows, but multi-channel wizards include DE/FR/UK).
+// Fall back to 'IT' when the row has no channels yet (a Product
+// DRAFT or a wizard still on Step 1).
+function marketplaceForAi(d: Draft): string {
+  return d.channels[0]?.marketplace?.toUpperCase() || 'IT'
+}
+
 // E.18 — memoized draft row. Was a 150-line inline `<tr>` inside
 // drafts.map(...) which re-rendered every row on every parent state
 // change (selection, search-typing, filter changes). Now extracted
@@ -962,10 +972,11 @@ export default function DraftsClient() {
             body: JSON.stringify({
               productIds: [d.productId],
               fields: AI_FILL_FIELDS,
-              // Awa's primary marketplace; future commit can let the
-              // operator pick when wizard.channels[].marketplace
-              // diverges from IT.
-              marketplace: 'IT',
+              // DR-AI-MP — derive from the wizard's first
+              // targeted marketplace so the AI-generated content
+              // lands in the right language. Defaults to 'IT'
+              // for product-only rows or step-1 wizards.
+              marketplace: marketplaceForAi(d),
             }),
           },
         )
@@ -1217,57 +1228,89 @@ export default function DraftsClient() {
       for (const r of eligible) next.add(r.productId)
       return next
     })
+    // DR-AI-MP — group eligible rows by their derived marketplace
+    // and fire one bulk-generate request per group. Each group's
+    // content lands in the right language for that channel; a
+    // mixed selection (e.g. 5 IT + 3 DE) becomes 2 sequential
+    // round-trips. Sequential, not parallel, to stay inside the
+    // endpoint's 5-req/min rate limit.
+    const groupsMap = new Map<string, Draft[]>()
+    for (const r of eligible) {
+      const mp = marketplaceForAi(r)
+      const existing = groupsMap.get(mp)
+      if (existing) existing.push(r)
+      else groupsMap.set(mp, [r])
+    }
+    const allResults: Array<{
+      productId: string
+      ok: boolean
+      error?: string
+    }> = []
+    let earlyExit: 'unavailable' | 'rate_limited' | null = null
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/products/ai/bulk-generate`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productIds: eligible.map((d) => d.productId),
-            fields: AI_FILL_FIELDS,
-            marketplace: 'IT',
-          }),
-        },
-      )
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string }
-        if (res.status === 503) {
-          toast({
-            tone: 'error',
-            title: t('drafts.aiFillUnavailable'),
-            description: json.error,
-          })
-        } else if (res.status === 429) {
-          toast({ tone: 'warning', title: t('drafts.aiFillRateLimited') })
-        } else {
-          toast({
-            tone: 'error',
-            title: t('drafts.aiFillFailed'),
-            description: json.error ?? `HTTP ${res.status}`,
-          })
+      for (const [marketplace, group] of groupsMap.entries()) {
+        const res = await fetch(
+          `${getBackendUrl()}/api/products/ai/bulk-generate`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productIds: group.map((d) => d.productId),
+              fields: AI_FILL_FIELDS,
+              marketplace,
+            }),
+          },
+        )
+        if (!res.ok) {
+          const json = (await res.json().catch(() => ({}))) as { error?: string }
+          if (res.status === 503) {
+            earlyExit = 'unavailable'
+            toast({
+              tone: 'error',
+              title: t('drafts.aiFillUnavailable'),
+              description: json.error,
+            })
+            break
+          } else if (res.status === 429) {
+            earlyExit = 'rate_limited'
+            toast({ tone: 'warning', title: t('drafts.aiFillRateLimited') })
+            break
+          } else {
+            // Per-group failure; record an error per product so the
+            // summary toast still tells the truth, then continue with
+            // the next group.
+            for (const d of group)
+              allResults.push({
+                productId: d.productId,
+                ok: false,
+                error: json.error ?? `HTTP ${res.status}`,
+              })
+            continue
+          }
         }
-        return
+        const json = (await res.json()) as {
+          results?: Array<{ productId: string; ok: boolean; error?: string }>
+        }
+        for (const r of json.results ?? []) allResults.push(r)
       }
-      const json = (await res.json()) as {
-        results?: Array<{ productId: string; ok: boolean; error?: string }>
-      }
-      const results = json.results ?? []
-      const okCount = results.filter((r) => r.ok).length
-      const failCount = results.length - okCount
+      if (earlyExit) return
+      const okCount = allResults.filter((r) => r.ok).length
+      const failCount = allResults.length - okCount
       toast({
         tone: failCount === 0 ? 'success' : 'warning',
         title: t('drafts.aiFillBulkDone', { ok: okCount, fail: failCount }),
         description:
           failCount > 0
-            ? results
+            ? allResults
                 .filter((r) => !r.ok)
                 .slice(0, 3)
                 .map((r) => `${r.productId}: ${r.error ?? '?'}`)
                 .join('; ')
-            : undefined,
+            : groupsMap.size > 1
+              ? Array.from(groupsMap.keys()).join(', ')
+              : undefined,
       })
-      for (const r of results) {
+      for (const r of allResults) {
         if (r.ok) emitInvalidation({ type: 'product.updated', id: r.productId })
       }
       await refetch()
