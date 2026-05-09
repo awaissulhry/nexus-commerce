@@ -16,6 +16,7 @@ import {
   DollarSign, Download,
   AlignJustify, Menu as MenuIcon, Equal,
   Trash2,
+  GitBranch,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -41,6 +42,7 @@ import { HealthLens } from './_lenses/HealthLens'
 import { DraftsLens } from './_lenses/DraftsLens'
 import { CoverageLens } from './_lenses/CoverageLens'
 import { PricingLens } from './_lenses/PricingLens'
+import { WorkflowLens } from './_lenses/WorkflowLens'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { FilterBar } from './_components/FilterBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
@@ -75,7 +77,7 @@ const BulkImageUploadModal = dynamic(
 import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing'
+type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow'
 
 // ProductRow + Tag types moved to ./_types.ts (P.1f) so GridView and
 // the workspace share a canonical shape.
@@ -1220,6 +1222,7 @@ export default function ProductsWorkspace() {
       {lens === 'pricing' && <PricingLens products={products} loading={loading} />}
       {lens === 'health' && <HealthLens />}
       {lens === 'drafts' && <DraftsLens />}
+      {lens === 'workflow' && <WorkflowLens />}
 
       {tagEditorProductId && (
         <TagEditor
@@ -1281,6 +1284,11 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     // to push + uncovered products on the selected channel. The
     // URL key stays `lens=drafts` for bookmark stability.
     { key: 'drafts', label: 'Channel coverage', icon: Sparkles },
+    // W3.7 — Wave 3 workflow lens. Pipeline view: per-stage product
+    // count + sample products + SLA hints. Empty when no workflows
+    // exist (operator gets an actionable EmptyState pointing at
+    // /settings/pim/workflows).
+    { key: 'workflow', label: 'Workflow', icon: GitBranch },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">

@@ -350,6 +350,76 @@ const workflowsRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  // ── W3.7 — Pipeline aggregation ───────────────────────────────
+  //
+  // GET /api/workflows/:id/pipeline?sampleSize=10
+  //
+  // Returns the workflow's stages with per-stage product count +
+  // a sample of the first N products in each stage (for the
+  // /products workflow lens). Empty stages are still included so
+  // the operator sees the full pipeline shape, not just the busy
+  // bits.
+  fastify.get('/workflows/:id/pipeline', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as { sampleSize?: string }
+    const sampleSize = Math.min(
+      Math.max(parseInt(q.sampleSize ?? '10', 10) || 10, 1),
+      50,
+    )
+
+    const workflow = await prisma.productWorkflow.findUnique({
+      where: { id },
+      include: {
+        stages: {
+          orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+          select: {
+            id: true,
+            code: true,
+            label: true,
+            sortOrder: true,
+            slaHours: true,
+            isPublishable: true,
+            isInitial: true,
+            isTerminal: true,
+          },
+        },
+      },
+    })
+    if (!workflow)
+      return reply.code(404).send({ error: 'workflow not found' })
+
+    // Per-stage count + sample. One findMany per stage — fine at the
+    // typical 4-6 stages a workflow carries; if pipelines balloon
+    // past ~20 stages this should pivot to a single groupBy +
+    // separate sample query.
+    const enriched = await Promise.all(
+      workflow.stages.map(async (s) => {
+        const [count, sampleProducts] = await Promise.all([
+          prisma.product.count({
+            where: { workflowStageId: s.id, deletedAt: null },
+          }),
+          prisma.product.findMany({
+            where: { workflowStageId: s.id, deletedAt: null },
+            select: { id: true, sku: true, name: true, brand: true, status: true },
+            orderBy: { updatedAt: 'desc' },
+            take: sampleSize,
+          }),
+        ])
+        return { ...s, count, sampleProducts }
+      }),
+    )
+
+    return {
+      workflow: {
+        id: workflow.id,
+        code: workflow.code,
+        label: workflow.label,
+        description: workflow.description,
+      },
+      stages: enriched,
+    }
+  })
 }
 
 export default workflowsRoutes
