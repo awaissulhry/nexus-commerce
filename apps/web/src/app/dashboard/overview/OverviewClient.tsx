@@ -80,9 +80,12 @@ export default function OverviewClient() {
           params.set('from', customRange.from)
           params.set('to', customRange.to)
         }
+        // DO.37 — explicit refresh bypasses cache; silent /
+        // polling refresh honors the 30s server Cache-Control so a
+        // burst of polling tabs collapses into one DB hit.
         const res = await fetch(
           `${getBackendUrl()}/api/dashboard/overview?${params.toString()}`,
-          { cache: 'no-store' },
+          opts.silent ? undefined : { cache: 'no-store' },
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const json = (await res.json()) as OverviewPayload

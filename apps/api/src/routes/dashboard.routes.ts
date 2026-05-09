@@ -190,6 +190,19 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       to?: string
     }
   }>('/dashboard/overview', async (request, reply) => {
+      // DO.37 — short server-side cache. The endpoint runs ~20
+      // queries per request; with multiple browser tabs + the
+      // 60s polling pulse + Live Mode (DO.16) re-fetch on every
+      // SSE event, cache-less responses pile up. 30s Cache-Control
+      // is safe because the SSE stream invalidates the visible UI
+      // independently of HTTP caching — operator sees real
+      // mutations within ~2s via the live channel, while the
+      // background poll re-issues every 30s. Stale-while-revalidate
+      // keeps the response feeling instant on repeat hits.
+      reply.header(
+        'Cache-Control',
+        'private, max-age=30, stale-while-revalidate=60',
+      )
       const rawWindow = request.query?.window ?? '30d'
       const window: Window =
         rawWindow === 'today' ||
