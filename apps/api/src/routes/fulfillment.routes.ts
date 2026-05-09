@@ -132,6 +132,7 @@ import {
   runAutomationRuleEvaluatorOnce,
   getAutomationRuleCronStatus,
 } from '../jobs/automation-rule-evaluator.job.js'
+import { executeScenarioRun } from '../services/scenario-planner.service.js'
 import {
   transitionPo,
   getPoAuditTrail,
@@ -7931,6 +7932,182 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       },
     }
   })
+
+  // ── W5.3 — Scenarios CRUD + run ────────────────────────────────
+  // What-if planning surface. Pure read/write against the W5.1
+  // schema; planner work happens in scenario-planner.service.
+
+  fastify.get(
+    '/fulfillment/replenishment/scenarios',
+    async (request) => {
+      const q = (request.query ?? {}) as {
+        savedOnly?: string
+        kind?: string
+      }
+      const where: { isSaved?: boolean; kind?: string } = {}
+      if (q.savedOnly === 'true') where.isSaved = true
+      if (q.kind) where.kind = q.kind
+      const scenarios = await prisma.scenario.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          runs: {
+            select: {
+              id: true,
+              status: true,
+              recsAffected: true,
+              totalUnitsDelta: true,
+              totalCostDeltaCents: true,
+              startedAt: true,
+              durationMs: true,
+            },
+            orderBy: { startedAt: 'desc' },
+            take: 1,
+          },
+        },
+      })
+      return { scenarios }
+    },
+  )
+
+  fastify.post(
+    '/fulfillment/replenishment/scenarios',
+    async (request, reply) => {
+      const body = (request.body ?? {}) as {
+        name?: string
+        description?: string
+        kind?: string
+        params?: unknown
+        horizonDays?: number
+        isSaved?: boolean
+        createdBy?: string
+      }
+      if (!body.name || !body.kind) {
+        return reply.code(400).send({ error: 'name + kind required' })
+      }
+      const allowedKinds = [
+        'PROMOTIONAL_UPLIFT',
+        'LEAD_TIME_DISRUPTION',
+        'SUPPLIER_SWAP',
+      ]
+      if (!allowedKinds.includes(body.kind)) {
+        return reply.code(400).send({
+          error: `kind must be one of ${allowedKinds.join(', ')}`,
+        })
+      }
+      const scenario = await prisma.scenario.create({
+        data: {
+          name: body.name,
+          description: body.description ?? null,
+          kind: body.kind,
+          params: (body.params ?? {}) as object,
+          horizonDays: body.horizonDays ?? 90,
+          isSaved: body.isSaved ?? false,
+          createdBy: body.createdBy ?? null,
+        },
+      })
+      return reply.code(201).send({ scenario })
+    },
+  )
+
+  fastify.get(
+    '/fulfillment/replenishment/scenarios/:id',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const scenario = await prisma.scenario.findUnique({
+        where: { id },
+        include: {
+          runs: {
+            select: {
+              id: true,
+              status: true,
+              recsAffected: true,
+              totalUnitsDelta: true,
+              totalCostDeltaCents: true,
+              startedAt: true,
+              finishedAt: true,
+              durationMs: true,
+              errorMessage: true,
+            },
+            orderBy: { startedAt: 'desc' },
+            take: 20,
+          },
+        },
+      })
+      if (!scenario) return reply.code(404).send({ error: 'Scenario not found' })
+      return { scenario }
+    },
+  )
+
+  fastify.delete(
+    '/fulfillment/replenishment/scenarios/:id',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      try {
+        await prisma.scenario.delete({ where: { id } })
+        return reply.code(204).send()
+      } catch (err) {
+        return reply.code(404).send({
+          error: err instanceof Error ? err.message : 'Scenario not found',
+        })
+      }
+    },
+  )
+
+  // W5.3 — Execute the scenario against current state. Always
+  // creates a fresh ScenarioRun row; never modifies any
+  // ReplenishmentRecommendation. Returns the new runId + status +
+  // output so the UI can render the deltas inline without a
+  // follow-up GET.
+  fastify.post(
+    '/fulfillment/replenishment/scenarios/:id/run',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const result = await executeScenarioRun({ scenarioId: id })
+      if (result.status === 'FAILED' && result.errorMessage === 'Scenario not found') {
+        return reply.code(404).send(result)
+      }
+      return result
+    },
+  )
+
+  fastify.get(
+    '/fulfillment/replenishment/scenarios/:id/runs',
+    async (request) => {
+      const { id } = request.params as { id: string }
+      const q = (request.query ?? {}) as { limit?: string }
+      const limit = Math.max(1, Math.min(parseInt(q.limit ?? '20', 10) || 20, 100))
+      const runs = await prisma.scenarioRun.findMany({
+        where: { scenarioId: id },
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          status: true,
+          recsAffected: true,
+          totalUnitsDelta: true,
+          totalCostDeltaCents: true,
+          startedAt: true,
+          finishedAt: true,
+          durationMs: true,
+          errorMessage: true,
+        },
+      })
+      return { runs }
+    },
+  )
+
+  fastify.get(
+    '/fulfillment/replenishment/scenarios/:id/runs/:runId',
+    async (request, reply) => {
+      const { id, runId } = request.params as { id: string; runId: string }
+      const run = await prisma.scenarioRun.findFirst({
+        where: { id: runId, scenarioId: id },
+      })
+      if (!run) return reply.code(404).send({ error: 'Run not found' })
+      return { run }
+    },
+  )
 
   // W3.1 — Operator command-center KPIs. The "what should I do
   // today?" view, distinct from the W1.4 pipeline-health (which
