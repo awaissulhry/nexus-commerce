@@ -109,11 +109,19 @@ export interface OverviewPayload {
   >
   sparklineChannels: string[]
   recentActivity: Array<{ type: string; ts: string; summary: string }>
-  // DO.32 / DO.33 — per-user layout.
+  // DO.32 / DO.33 / DO.39 — per-user layout + saved-view roster.
   //   hiddenWidgets — deny-list of widget IDs not to render (empty
   //                   = show all)
   //   widgetOrder   — operator-defined ordering (empty = canonical)
-  layout: { hiddenWidgets: string[]; widgetOrder: string[] }
+  //   activeViewId  — pointer to the saved view whose settings were
+  //                   last applied; null = no saved view active
+  //   views         — roster of named saves (DashboardView rows)
+  layout: {
+    hiddenWidgets: string[]
+    widgetOrder: string[]
+    activeViewId: string | null
+    views: Array<{ id: string; name: string; isDefault: boolean }>
+  }
   // DO.30 — operator-set Goal rows with current progress. Empty
   // until the operator (or a future admin UI) inserts a Goal
   // record. The UI hides the panel when no goals exist.

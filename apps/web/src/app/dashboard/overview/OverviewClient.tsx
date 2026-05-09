@@ -66,12 +66,16 @@ export default function OverviewClient() {
   // than a few extra fetches.
   const [liveMode, setLiveMode] = useState(true)
   const [customizeOpen, setCustomizeOpen] = useState(false)
-  // DO.32 / DO.33 — local mirror of layout (hidden + order) so a
-  // successful save updates the UI immediately, before the next
+  // DO.32 / DO.33 / DO.39 — local mirror of layout state so saves
+  // and view-switches update the UI immediately, before the next
   // dashboard refetch round-trips. Initialised from the server
   // payload on first render and on every fresh fetch.
   const [hiddenWidgets, setHiddenWidgets] = useState<string[]>([])
   const [widgetOrder, setWidgetOrder] = useState<string[]>([])
+  const [activeViewId, setActiveViewId] = useState<string | null>(null)
+  const [savedViews, setSavedViews] = useState<
+    Array<{ id: string; name: string; isDefault: boolean }>
+  >([])
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -107,6 +111,8 @@ export default function OverviewClient() {
         // propagate.
         setHiddenWidgets(json.layout?.hiddenWidgets ?? [])
         setWidgetOrder(json.layout?.widgetOrder ?? [])
+        setActiveViewId(json.layout?.activeViewId ?? null)
+        setSavedViews(json.layout?.views ?? [])
         setLastRefreshed(Date.now())
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -220,6 +226,53 @@ export default function OverviewClient() {
         refreshing={refreshing}
         onRefresh={() => void fetchPayload({ silent: true })}
         onCustomize={() => setCustomizeOpen(true)}
+        views={savedViews}
+        activeViewId={activeViewId}
+        onApplyView={async (id) => {
+          // DO.39 — apply view: server-side copy of view → live
+          // layout. Re-fetch on success so the dashboard reflects
+          // the new state. "__live__" un-pins by clearing the
+          // pointer (no settings change — the operator's current
+          // live state stays).
+          if (id === '__live__') {
+            try {
+              await fetch(`${getBackendUrl()}/api/dashboard/layout`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  hiddenWidgets,
+                  widgetOrder,
+                }),
+              })
+              setActiveViewId(null)
+            } catch {
+              /* network — next refetch resyncs */
+            }
+            return
+          }
+          try {
+            const res = await fetch(
+              `${getBackendUrl()}/api/dashboard/views/${id}/apply`,
+              { method: 'POST' },
+            )
+            if (!res.ok) return
+            const json = (await res.json()) as {
+              ok: boolean
+              layout?: {
+                hiddenWidgets: string[]
+                widgetOrder: string[]
+                activeViewId: string | null
+              }
+            }
+            if (json.layout) {
+              setHiddenWidgets(json.layout.hiddenWidgets)
+              setWidgetOrder(json.layout.widgetOrder)
+              setActiveViewId(json.layout.activeViewId)
+            }
+          } catch {
+            /* ignore — next refetch resyncs */
+          }
+        }}
       />
       <CustomizeSheet
         t={t}
@@ -230,6 +283,9 @@ export default function OverviewClient() {
         onSaved={(next) => {
           setHiddenWidgets(next.hiddenWidgets)
           setWidgetOrder(next.widgetOrder)
+          // DO.39 — refetch so newly saved views appear in the
+          // header switcher without a hard reload.
+          void fetchPayload({ silent: true })
         }}
       />
 

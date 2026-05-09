@@ -1481,13 +1481,34 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       }
 
-      // ── DO.32 / DO.33 — per-user layout (hide + reorder) ─────────
-      const layout = await prisma.dashboardLayout
-        .findUnique({
-          where: { userId: 'default-user' },
-          select: { hiddenWidgets: true, widgetOrder: true },
-        })
-        .catch(() => null)
+      // ── DO.32 / DO.33 / DO.39 — layout + saved-view roster ────────
+      const [layout, savedViews] = await Promise.all([
+        prisma.dashboardLayout
+          .findUnique({
+            where: { userId: 'default-user' },
+            select: {
+              hiddenWidgets: true,
+              widgetOrder: true,
+              activeViewId: true,
+            },
+          })
+          .catch(() => null),
+        prisma.dashboardView
+          .findMany({
+            where: { userId: 'default-user' },
+            orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+            select: {
+              id: true,
+              name: true,
+              isDefault: true,
+            },
+          })
+          .catch(() => [] as Array<{
+            id: string
+            name: string
+            isDefault: boolean
+          }>),
+      ])
 
       // ── DO.20 — recent unread notifications ───────────────────────
       //
@@ -1619,12 +1640,12 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         // DO.30 — operator-set goals + computed progress against
         // each goal's period bounds.
         goals: goalProgress,
-        // DO.32 / DO.33 — per-user layout: hidden widget deny-list
-        // + operator-defined ordering. Empty arrays when no row
-        // exists yet (defaults: show all, canonical order).
+        // DO.32 / DO.33 / DO.39 — layout + saved-view roster.
         layout: {
           hiddenWidgets: layout?.hiddenWidgets ?? [],
           widgetOrder: layout?.widgetOrder ?? [],
+          activeViewId: layout?.activeViewId ?? null,
+          views: savedViews,
         },
         catalog: {
           totalProducts,
@@ -2322,6 +2343,160 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   // no order field, no validation against a known widget id list
   // (operator can stash unknown ids and they're ignored by the
   // renderer until a matching widget exists).
+  // DO.39 — saved view CRUD.
+  //
+  //   POST   /dashboard/views          — create from current layout
+  //   POST   /dashboard/views/:id/apply — copy view → live layout
+  //   PUT    /dashboard/views/:id       — rename / overwrite
+  //   DELETE /dashboard/views/:id       — drop view
+  //
+  // Switch behaviour: applying a view copies its hiddenWidgets +
+  // widgetOrder into the singleton DashboardLayout row and points
+  // activeViewId at the source. The dashboard renderer reads the
+  // copy, so a half-finished customise session can never poison
+  // the saved view.
+  fastify.post<{
+    Body: { name?: string; hiddenWidgets?: unknown; widgetOrder?: unknown }
+  }>('/dashboard/views', async (request, reply) => {
+    const name = String(request.body?.name ?? '').trim().slice(0, 80)
+    if (!name) return reply.code(400).send({ error: 'name required' })
+    const sanitiseList = (raw: unknown): string[] =>
+      Array.isArray(raw)
+        ? raw.filter((v): v is string => typeof v === 'string').slice(0, 50)
+        : []
+    const hidden = sanitiseList(request.body?.hiddenWidgets)
+    const order = sanitiseList(request.body?.widgetOrder)
+    try {
+      // Auto-default if this is the first view for the operator.
+      const existingCount = await prisma.dashboardView.count({
+        where: { userId: 'default-user' },
+      })
+      const view = await prisma.dashboardView.create({
+        data: {
+          userId: 'default-user',
+          name,
+          hiddenWidgets: hidden,
+          widgetOrder: order,
+          isDefault: existingCount === 0,
+        },
+      })
+      return { ok: true, view }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // P2002 = unique violation on (userId, name).
+      if (message.includes('Unique constraint')) {
+        return reply.code(409).send({ error: 'name already exists' })
+      }
+      fastify.log.error({ err }, '[dashboard/views] create failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  fastify.post<{ Params: { id: string } }>(
+    '/dashboard/views/:id/apply',
+    async (request, reply) => {
+      const { id } = request.params
+      try {
+        const view = await prisma.dashboardView.findFirst({
+          where: { id, userId: 'default-user' },
+          select: { id: true, hiddenWidgets: true, widgetOrder: true },
+        })
+        if (!view) return reply.code(404).send({ error: 'view not found' })
+        const row = await prisma.dashboardLayout.upsert({
+          where: { userId: 'default-user' },
+          create: {
+            userId: 'default-user',
+            hiddenWidgets: view.hiddenWidgets,
+            widgetOrder: view.widgetOrder,
+            activeViewId: view.id,
+          },
+          update: {
+            hiddenWidgets: view.hiddenWidgets,
+            widgetOrder: view.widgetOrder,
+            activeViewId: view.id,
+          },
+          select: {
+            hiddenWidgets: true,
+            widgetOrder: true,
+            activeViewId: true,
+          },
+        })
+        return { ok: true, layout: row }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[dashboard/views/:id/apply] failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
+
+  fastify.put<{
+    Params: { id: string }
+    Body: { name?: string; hiddenWidgets?: unknown; widgetOrder?: unknown }
+  }>('/dashboard/views/:id', async (request, reply) => {
+    const { id } = request.params
+    const data: {
+      name?: string
+      hiddenWidgets?: string[]
+      widgetOrder?: string[]
+    } = {}
+    if (typeof request.body?.name === 'string') {
+      data.name = request.body.name.trim().slice(0, 80)
+      if (!data.name) return reply.code(400).send({ error: 'name required' })
+    }
+    if (Array.isArray(request.body?.hiddenWidgets)) {
+      data.hiddenWidgets = request.body!.hiddenWidgets!
+        .filter((v): v is string => typeof v === 'string')
+        .slice(0, 50)
+    }
+    if (Array.isArray(request.body?.widgetOrder)) {
+      data.widgetOrder = request.body!.widgetOrder!
+        .filter((v): v is string => typeof v === 'string')
+        .slice(0, 50)
+    }
+    try {
+      const view = await prisma.dashboardView.update({
+        where: { id, userId: 'default-user' } as { id: string; userId?: string },
+        data,
+      })
+      return { ok: true, view }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Unique constraint')) {
+        return reply.code(409).send({ error: 'name already exists' })
+      }
+      if (message.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'view not found' })
+      }
+      fastify.log.error({ err }, '[dashboard/views/:id] update failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/dashboard/views/:id',
+    async (request, reply) => {
+      const { id } = request.params
+      try {
+        // Clear activeViewId if pointing at the deleted row.
+        await prisma.dashboardLayout.updateMany({
+          where: { userId: 'default-user', activeViewId: id },
+          data: { activeViewId: null },
+        })
+        const result = await prisma.dashboardView.deleteMany({
+          where: { id, userId: 'default-user' },
+        })
+        if (result.count === 0)
+          return reply.code(404).send({ error: 'view not found' })
+        return { ok: true, deleted: result.count }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[dashboard/views/:id] delete failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
+
   fastify.put<{
     Body: { hiddenWidgets?: unknown; widgetOrder?: unknown }
   }>('/dashboard/layout', async (request, reply) => {

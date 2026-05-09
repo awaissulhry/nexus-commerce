@@ -38,6 +38,9 @@ export default function Header({
   refreshing,
   onRefresh,
   onCustomize,
+  views,
+  activeViewId,
+  onApplyView,
 }: {
   t: T
   currentWindow: WindowKey
@@ -52,6 +55,9 @@ export default function Header({
   refreshing: boolean
   onRefresh: () => void
   onCustomize: () => void
+  views: Array<{ id: string; name: string; isDefault: boolean }>
+  activeViewId: string | null
+  onApplyView: (id: string | '__live__') => void
 }) {
   return (
     <PageHeader
@@ -127,6 +133,32 @@ export default function Header({
                 )}
               />
             </div>
+          )}
+          {/* DO.39 — saved-view picker. Renders only when the
+              operator has at least one named view. "__live__"
+              represents "no view active, layout is whatever the
+              operator currently has set". */}
+          {views.length > 0 && (
+            <select
+              aria-label={t('overview.views.aria')}
+              value={activeViewId ?? '__live__'}
+              onChange={(e) => onApplyView(e.target.value as string | '__live__')}
+              className={cn(
+                'h-7 pl-2 pr-7 text-sm rounded-md border bg-white dark:bg-slate-900',
+                'border-slate-200 dark:border-slate-700',
+                'text-slate-700 dark:text-slate-300',
+                'hover:bg-slate-50 dark:hover:bg-slate-800',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+              )}
+            >
+              <option value="__live__">{t('overview.views.live')}</option>
+              {views.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.isDefault ? ' ★' : ''}
+                </option>
+              ))}
+            </select>
           )}
           {/* DO.11 — comparison-period dropdown. Native <select> is
               the right primitive here: it wears the platform's

@@ -1662,6 +1662,13 @@
   "overview.alerts.disconnected": "disconnesso",
   "overview.alerts.liveListings": "Annunci attivi",
   "overview.alerts.variants": "Varianti",
+
+  "overview.views.aria": "Vista salvata",
+  "overview.views.live": "Live (nessuna vista)",
+  "overview.views.saveLabel": "Salva l'attuale come nuova vista",
+  "overview.views.savePlaceholder": "Nome vista",
+  "overview.views.saveAs": "Salva vista",
+
   "overview.customize.title": "Personalizza dashboard",
   "overview.customize.description": "Mostra, nascondi o riordina le sezioni. KPI e Avvisi sono sempre visibili. Trascina la maniglia per riordinare entro la colonna.",
   "overview.customize.column.left": "Colonna principale",

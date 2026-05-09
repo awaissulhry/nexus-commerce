@@ -224,15 +224,112 @@ export default function CustomizeSheet({
           </div>
         )}
       </div>
-      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-          {t('common.cancel')}
-        </Button>
-        <Button variant="primary" size="sm" onClick={save} loading={saving}>
-          {t('common.save')}
-        </Button>
+      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+        {/* DO.39 — save current draft as a named view. Inline
+            single-input form rather than a separate modal — the
+            roster fits in a header dropdown and the operator
+            already has the customise context open. */}
+        <SaveAsView
+          t={t}
+          hiddenWidgets={Array.from(draftHidden)}
+          widgetOrder={draftOrder}
+          onSaved={() => {
+            // Bubble up so the parent refetches and the new view
+            // appears in the header switcher.
+            onSaved({
+              hiddenWidgets: Array.from(draftHidden),
+              widgetOrder: draftOrder,
+            })
+          }}
+        />
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={save} loading={saving}>
+            {t('common.save')}
+          </Button>
+        </div>
       </div>
     </Modal>
+  )
+}
+
+function SaveAsView({
+  t,
+  hiddenWidgets,
+  widgetOrder,
+  onSaved,
+}: {
+  t: T
+  hiddenWidgets: string[]
+  widgetOrder: string[]
+  onSaved: () => void
+}) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setBusy(true)
+    setErr(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/dashboard/views`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          hiddenWidgets,
+          widgetOrder,
+        }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json?.error ?? `HTTP ${res.status}`)
+      }
+      setName('')
+      onSaved()
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : String(e2))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form
+      onSubmit={submit}
+      className="inline-flex items-center gap-1.5 flex-wrap"
+    >
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={t('overview.views.savePlaceholder')}
+        maxLength={80}
+        aria-label={t('overview.views.saveLabel')}
+        className={cn(
+          'h-7 px-2 text-sm rounded-md border tabular-nums w-44',
+          'border-slate-200 dark:border-slate-700',
+          'bg-white dark:bg-slate-900',
+          'text-slate-700 dark:text-slate-300',
+          'placeholder:text-slate-400 dark:placeholder:text-slate-500',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+        )}
+      />
+      <Button
+        variant="secondary"
+        size="sm"
+        type="submit"
+        loading={busy}
+        disabled={!name.trim()}
+      >
+        {t('overview.views.saveAs')}
+      </Button>
+      {err && (
+        <span className="text-xs text-rose-600 dark:text-rose-400">{err}</span>
+      )}
+    </form>
   )
 }
 

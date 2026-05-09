@@ -1674,6 +1674,13 @@
   "overview.alerts.disconnected": "disconnected",
   "overview.alerts.liveListings": "Live listings",
   "overview.alerts.variants": "Variants",
+
+  "overview.views.aria": "Saved view",
+  "overview.views.live": "Live (no view)",
+  "overview.views.saveLabel": "Save current as a new view",
+  "overview.views.savePlaceholder": "View name",
+  "overview.views.saveAs": "Save as view",
+
   "overview.customize.title": "Customise dashboard",
   "overview.customize.description": "Show, hide, or reorder individual sections. KPI strip and Alerts panel are always visible. Drag the grip handle to reorder within a column.",
   "overview.customize.column.left": "Main column",

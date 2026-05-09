@@ -5606,8 +5606,45 @@ model DashboardLayout {
   // not yet in the array fall through to the canonical position so
   // adding a widget doesn't require updating every operator's row.
   widgetOrder   String[] @default([])
+  // DO.39 — pointer to the active named view, when one is in use.
+  // null = the layout columns above are the live state (no saved
+  // view active). Apply-from-view flow copies the view's
+  // hiddenWidgets + widgetOrder into the columns above and sets
+  // this pointer.
+  activeViewId  String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// DO.39 — named saved dashboard configurations.
+//
+// Single-user pre-auth means real per-role views aren't on the
+// table yet (no Role / Permission model). The operator-aligned
+// substitute is "saved views": pick a name, freeze the current
+// hidden + order config under that name, switch between them
+// from the dashboard header. When real auth + roles ship, a
+// future migration can add `roleId` and `isShared` columns
+// without breaking the existing rows.
+//
+// Apply-from-view copies hiddenWidgets + widgetOrder into the
+// singleton DashboardLayout row; switching back to "Default"
+// resets DashboardLayout from the most-recent live state. We
+// don't try to live-bind so a half-finished customise session
+// doesn't accidentally overwrite a saved view.
+model DashboardView {
+  id            String   @id @default(cuid())
+  userId        String   @default("default-user")
+  name          String
+  hiddenWidgets String[] @default([])
+  widgetOrder   String[] @default([])
+  // The first view created auto-flags isDefault=true so the
+  // dashboard always has a "fall back to" target after deletes.
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 // Generic per-user notification inbox. Saved-view alerts write here
