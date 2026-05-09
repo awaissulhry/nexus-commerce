@@ -1,10 +1,12 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import PageHeader from '@/components/layout/PageHeader'
+import { getServerT } from '@/lib/i18n/server'
 import FamiliesClient, { type FamilyRow } from './FamiliesClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function FamiliesSettingsPage() {
+  const t = await getServerT()
   const backend = getBackendUrl()
   let initial: FamilyRow[] = []
   let loadError: string | null = null
@@ -23,12 +25,12 @@ export default async function FamiliesSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Product families"
-        subtitle="Akeneo-style PIM templates. A family declares which attribute groups + attributes apply to a product type, with required-vs-optional + per-channel rules. Children inherit from parents (additive — children can ADD but never remove or downgrade)."
+        title={t('pim.families.title')}
+        subtitle={t('pim.families.subtitle')}
         breadcrumbs={[
           { label: 'Settings', href: '/settings/account' },
           { label: 'PIM', href: '/settings/pim/families' },
-          { label: 'Families' },
+          { label: t('pim.families.title') },
         ]}
       />
       <FamiliesClient initial={initial} initialError={loadError} />

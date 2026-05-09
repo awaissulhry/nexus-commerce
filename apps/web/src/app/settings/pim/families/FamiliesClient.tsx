@@ -32,6 +32,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface FamilyRow {
@@ -63,6 +64,7 @@ export default function FamiliesClient({ initial, initialError }: Props) {
   const [busy, setBusy] = useState<string | null>(null) // family id being mutated
   const confirm = useConfirm()
   const { toast } = useToast()
+  const { t } = useTranslations()
 
   const refresh = useCallback(async () => {
     try {
@@ -140,7 +142,12 @@ export default function FamiliesClient({ initial, initialError }: Props) {
 
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-500 dark:text-slate-400">
-          {families.length} famil{families.length === 1 ? 'y' : 'ies'}
+          {t(
+            families.length === 1
+              ? 'pim.families.count.one'
+              : 'pim.families.count.other',
+            { count: families.length },
+          )}
         </div>
         <Button
           variant="primary"
@@ -148,7 +155,7 @@ export default function FamiliesClient({ initial, initialError }: Props) {
           icon={<Plus className="w-3 h-3" />}
           onClick={() => setCreating(true)}
         >
-          New family
+          {t('pim.families.new')}
         </Button>
       </div>
 
@@ -156,12 +163,10 @@ export default function FamiliesClient({ initial, initialError }: Props) {
         <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-12 text-center">
           <Folder className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
           <div className="text-md text-slate-700 dark:text-slate-300">
-            No families yet.
+            {t('pim.families.empty.title')}
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-            Start with a root family (e.g. "Apparel"), then add children
-            ("Motorcycle Jacket", "Motorcycle Pants") that inherit from
-            it.
+            {t('pim.families.empty.body')}
           </div>
         </div>
       ) : (
@@ -169,12 +174,12 @@ export default function FamiliesClient({ initial, initialError }: Props) {
           <table className="w-full text-base">
             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
               <tr className="text-left">
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Code</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Label</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Parent</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Attrs</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Products</th>
-                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">Children</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.families.col.code')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.families.col.label')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{t('pim.families.col.parent')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.families.col.attrs')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.families.col.products')}</th>
+                <th className="px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 text-right">{t('pim.families.col.children')}</th>
                 <th className="px-3 py-2 w-8" aria-label="Actions" />
               </tr>
             </thead>
@@ -212,7 +217,7 @@ export default function FamiliesClient({ initial, initialError }: Props) {
                         </span>
                       ) : (
                         <span className="text-slate-400 dark:text-slate-500 italic text-sm">
-                          root
+                          {t('pim.families.parent.root')}
                         </span>
                       )}
                     </td>
