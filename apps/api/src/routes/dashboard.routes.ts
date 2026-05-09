@@ -2343,6 +2343,186 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
   // no order field, no validation against a known widget id list
   // (operator can stash unknown ids and they're ignored by the
   // renderer until a matching widget exists).
+  // DO.40 — scheduled report CRUD + manual run.
+  //
+  //   GET    /dashboard/reports        — list operator's reports
+  //   POST   /dashboard/reports        — create
+  //   PUT    /dashboard/reports/:id    — update
+  //   DELETE /dashboard/reports/:id    — drop
+  //   POST   /dashboard/digest/run     — fire all due rows now (test)
+  //   POST   /dashboard/digest/preview — render + send to one address
+  //                                      without persisting
+  fastify.get('/dashboard/reports', async () => {
+    try {
+      const rows = await prisma.scheduledReport.findMany({
+        where: { userId: 'default-user' },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { rows }
+    } catch {
+      return { rows: [] }
+    }
+  })
+
+  fastify.post<{
+    Body: {
+      email?: string
+      frequency?: string
+      hourLocal?: number
+      viewId?: string | null
+      isActive?: boolean
+    }
+  }>('/dashboard/reports', async (request, reply) => {
+    const email = String(request.body?.email ?? '').trim().slice(0, 500)
+    const frequency = request.body?.frequency
+    const hourLocalRaw = request.body?.hourLocal
+    if (!email) return reply.code(400).send({ error: 'email required' })
+    if (frequency !== 'daily' && frequency !== 'weekly' && frequency !== 'monthly') {
+      return reply.code(400).send({ error: 'frequency invalid' })
+    }
+    const hourLocal =
+      typeof hourLocalRaw === 'number' && hourLocalRaw >= 0 && hourLocalRaw < 24
+        ? Math.floor(hourLocalRaw)
+        : 8
+    try {
+      const row = await prisma.scheduledReport.create({
+        data: {
+          userId: 'default-user',
+          email,
+          frequency,
+          hourLocal,
+          viewId: request.body?.viewId ?? null,
+          isActive: request.body?.isActive !== false,
+        },
+      })
+      return { ok: true, row }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/reports] create failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  fastify.put<{
+    Params: { id: string }
+    Body: Partial<{
+      email: string
+      frequency: string
+      hourLocal: number
+      viewId: string | null
+      isActive: boolean
+    }>
+  }>('/dashboard/reports/:id', async (request, reply) => {
+    const data: Record<string, unknown> = {}
+    if (typeof request.body?.email === 'string') {
+      data.email = request.body.email.trim().slice(0, 500)
+      if (!data.email) return reply.code(400).send({ error: 'email empty' })
+    }
+    if (typeof request.body?.frequency === 'string') {
+      const f = request.body.frequency
+      if (f !== 'daily' && f !== 'weekly' && f !== 'monthly')
+        return reply.code(400).send({ error: 'frequency invalid' })
+      data.frequency = f
+    }
+    if (typeof request.body?.hourLocal === 'number') {
+      const h = Math.floor(request.body.hourLocal)
+      if (h < 0 || h >= 24)
+        return reply.code(400).send({ error: 'hourLocal out of range' })
+      data.hourLocal = h
+    }
+    if (request.body && 'viewId' in request.body) {
+      data.viewId = request.body.viewId
+    }
+    if (typeof request.body?.isActive === 'boolean') {
+      data.isActive = request.body.isActive
+    }
+    try {
+      const row = await prisma.scheduledReport.update({
+        where: { id: request.params.id, userId: 'default-user' } as {
+          id: string
+          userId?: string
+        },
+        data,
+      })
+      return { ok: true, row }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Record to update not found')) {
+        return reply.code(404).send({ error: 'report not found' })
+      }
+      fastify.log.error({ err }, '[dashboard/reports/:id] update failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/dashboard/reports/:id',
+    async (request, reply) => {
+      try {
+        const result = await prisma.scheduledReport.deleteMany({
+          where: { id: request.params.id, userId: 'default-user' },
+        })
+        if (result.count === 0)
+          return reply.code(404).send({ error: 'report not found' })
+        return { ok: true }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        fastify.log.error({ err }, '[dashboard/reports/:id] delete failed')
+        return reply.code(500).send({ error: message })
+      }
+    },
+  )
+
+  // Manual fire: run the same logic the hourly cron runs. Useful
+  // during dry-run testing — combined with NEXUS_ENABLE_OUTBOUND_EMAILS=
+  // false the operator can verify the row would have fired without
+  // actually sending an email.
+  fastify.post('/dashboard/digest/run', async (_request, reply) => {
+    try {
+      const { runDigestTick } = await import(
+        '../jobs/dashboard-digest.job.js'
+      )
+      const result = await runDigestTick()
+      return { ok: true, result }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/digest/run] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
+  // Preview: build the digest for `frequency` and send a single
+  // copy to `to`. Doesn't touch ScheduledReport rows. Operator's
+  // "Test send" button calls this before saving a config.
+  fastify.post<{
+    Body: { to?: string; frequency?: string }
+  }>('/dashboard/digest/preview', async (request, reply) => {
+    const to = String(request.body?.to ?? '').trim()
+    const frequency = request.body?.frequency
+    if (!to) return reply.code(400).send({ error: 'to required' })
+    if (
+      frequency !== 'daily' &&
+      frequency !== 'weekly' &&
+      frequency !== 'monthly'
+    ) {
+      return reply.code(400).send({ error: 'frequency invalid' })
+    }
+    try {
+      const { sendDigest } = await import(
+        '../services/dashboard-digest.service.js'
+      )
+      const send = await sendDigest({
+        recipients: to.split(',').map((s) => s.trim()).filter(Boolean),
+        frequency,
+      })
+      return { ok: send.ok, send }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.error({ err }, '[dashboard/digest/preview] failed')
+      return reply.code(500).send({ error: message })
+    }
+  })
+
   // DO.39 — saved view CRUD.
   //
   //   POST   /dashboard/views          — create from current layout

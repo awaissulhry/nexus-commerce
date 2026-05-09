@@ -23,6 +23,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import ScheduledReportsSection from './ScheduledReportsSection'
 import type { T } from '../_lib/types'
 
 /**
@@ -223,6 +224,12 @@ export default function CustomizeSheet({
             {error}
           </div>
         )}
+        {/* DO.40 — scheduled email digest config tucked under the
+            same Customise modal. Operator manages layout + report
+            subscriptions in one place. */}
+        <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
+          <ScheduledReportsSection t={t} />
+        </div>
       </div>
       <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
         {/* DO.39 — save current draft as a named view. Inline

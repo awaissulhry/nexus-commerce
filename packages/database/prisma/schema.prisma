@@ -5647,6 +5647,39 @@ model DashboardView {
   @@index([userId])
 }
 
+// DO.40 — operator-scheduled email digest of the Command Center.
+//
+// Operators want "give me yesterday's recap at 8am" without keeping
+// the dashboard open. ScheduledReport rows are read by an hourly
+// cron that fires the digest email at the right local time, then
+// stamps lastSentAt so the same row doesn't double-fire.
+//
+// Frequency:
+//   daily   — fires every day at hourLocal
+//   weekly  — fires on Monday at hourLocal
+//   monthly — fires on the 1st at hourLocal
+//
+// `email` is a free-form recipient list — the operator may want
+// multiple stakeholders (CFO, ops manager) on the same digest.
+// Comma-separated addresses are normalised at send time.
+model ScheduledReport {
+  id         String   @id @default(cuid())
+  userId     String   @default("default-user")
+  email      String   // single recipient or comma-separated list
+  frequency  String   // daily | weekly | monthly
+  hourLocal  Int      @default(8) // 0-23, Europe/Rome local hour
+  // Optional saved-view pointer to scope the digest's section
+  // selection — if null, the operator's current live layout is used.
+  viewId     String?
+  isActive   Boolean  @default(true)
+  lastSentAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isActive, frequency])
+}
+
 // Generic per-user notification inbox. Saved-view alerts write here
 // today; future surfaces (sync failures, low-stock, AI-job-complete)
 // will write through the same shape so the topnav bell renders one
