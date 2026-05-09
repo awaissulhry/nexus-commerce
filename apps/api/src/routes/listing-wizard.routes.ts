@@ -48,6 +48,7 @@ import {
   ListingContentService,
   type ContentField,
 } from '../services/ai/listing-content.service.js'
+import { readBudgetLimits } from '../services/ai/budget.service.js'
 import { logUsage } from '../services/ai/usage-logger.service.js'
 import {
   channelsHash,
@@ -3841,6 +3842,267 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           durationMs: Date.now() - orchestrationStart,
         },
         budgetWarn: topBudgetWarn,
+      }
+    },
+  )
+
+  // ── AI-4.2 — pre-flight estimate for the orchestrator ──────────
+  //
+  // POST /api/listing-wizard/:id/ai-complete-all/estimate
+  //
+  // Dry-run cost forecast for /ai-complete-all. Walks the same
+  // per-step logic but calls listingContentService.previewCost()
+  // (no vendor calls) instead of generate(). Returns a forecast +
+  // current budget posture so the UI can render a "this will cost
+  // ~$X — confirm?" gate before firing. Read-only — never logs
+  // AiUsageLog rows, never moves the budget needles.
+  fastify.post<{
+    Params: { id: string }
+    Body: { provider?: string; steps?: number[] }
+  }>(
+    '/listing-wizard/:id/ai-complete-all/estimate',
+    {
+      // Lighter rate-limit than /ai-complete-all — estimating is
+      // cheap (no vendor traffic) so we can afford a higher cap.
+      // Still capped so a runaway client can't loop estimating.
+      config: { rateLimit: { max: 200, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      const channels = normalizeChannels(wizard.channels)
+      if (channels.length === 0) {
+        return reply.code(409).send({
+          error: 'Pick channels in Step 1 first.',
+        })
+      }
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          brand: true,
+          description: true,
+          bulletPoints: true,
+          keywords: true,
+          weightValue: true,
+          weightUnit: true,
+          dimLength: true,
+          dimWidth: true,
+          dimHeight: true,
+          dimUnit: true,
+          productType: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      const requestedSteps = Array.isArray(request.body?.steps)
+        ? request.body!.steps!.filter(
+            (n): n is number => Number.isInteger(n) && n >= 1 && n <= 9,
+          )
+        : [5]
+
+      const provider = request.body?.provider ?? null
+
+      type StepEstimate = {
+        stepId: number
+        action: string
+        wired: boolean
+        estimatedCostUSD: number
+        estimatedAiCalls: number
+        details?: Record<string, unknown>
+      }
+      const steps: StepEstimate[] = []
+      let totalCostUSD = 0
+      let totalCalls = 0
+
+      // Step 5 — content generation forecast.
+      if (requestedSteps.includes(5)) {
+        const groups = new Map<
+          string,
+          { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
+        >()
+        for (const c of channels) {
+          const key = contentGroupKey(c.platform, c.marketplace)
+          const channelKey = `${c.platform}:${c.marketplace}`
+          if (!groups.has(key)) {
+            groups.set(key, {
+              language: languageForMarketplace(c.marketplace),
+              platform: c.platform,
+              marketplaces: [c.marketplace],
+              channelKeys: [channelKey],
+            })
+          } else {
+            const g = groups.get(key)!
+            if (!g.marketplaces.includes(c.marketplace)) {
+              g.marketplaces.push(c.marketplace)
+            }
+            g.channelKeys.push(channelKey)
+          }
+        }
+        for (const g of groups.values()) {
+          g.marketplaces.sort()
+          g.channelKeys.sort()
+        }
+
+        const allFields: ContentField[] = [
+          'title',
+          'bullets',
+          'description',
+          'keywords',
+        ]
+
+        const groupForecasts: Array<{
+          groupKey: string
+          platform: string
+          language: string
+          marketplaces: string[]
+          channelKeys: string[]
+          estimatedCostUSD: number
+          callCount: number
+        }> = []
+        let stepCostUSD = 0
+        let stepCalls = 0
+
+        for (const [groupKey, g] of groups) {
+          const representativeMarketplace = g.marketplaces[0]!
+          const preview = listingContentService.previewCost({
+            product: {
+              id: product.id,
+              sku: product.sku,
+              name: product.name,
+              brand: product.brand,
+              description: product.description,
+              bulletPoints: product.bulletPoints,
+              keywords: product.keywords,
+              weightValue: product.weightValue
+                ? Number(product.weightValue)
+                : null,
+              weightUnit: product.weightUnit,
+              dimLength: product.dimLength
+                ? Number(product.dimLength)
+                : null,
+              dimWidth: product.dimWidth ? Number(product.dimWidth) : null,
+              dimHeight: product.dimHeight ? Number(product.dimHeight) : null,
+              dimUnit: product.dimUnit,
+              productType: product.productType,
+              variantAttributes: product.variantAttributes,
+              categoryAttributes: product.categoryAttributes,
+            },
+            marketplace: representativeMarketplace,
+            fields: allFields,
+            provider,
+          })
+          groupForecasts.push({
+            groupKey,
+            platform: g.platform,
+            language: g.language,
+            marketplaces: g.marketplaces,
+            channelKeys: g.channelKeys,
+            estimatedCostUSD: preview.estimatedCostUSD,
+            callCount: preview.callCount,
+          })
+          stepCostUSD += preview.estimatedCostUSD
+          stepCalls += preview.callCount
+        }
+
+        steps.push({
+          stepId: 5,
+          action: 'generate-content',
+          wired: true,
+          estimatedCostUSD: stepCostUSD,
+          estimatedAiCalls: stepCalls,
+          details: { groups: groupForecasts },
+        })
+        totalCostUSD += stepCostUSD
+        totalCalls += stepCalls
+      }
+
+      // Steps 2 / 4 / 7 / 8 — placeholders. Same as /ai-complete-all
+      // skipped entries so the UI can render "this step has no AI
+      // yet" rather than silently omitting them.
+      for (const stepId of requestedSteps) {
+        if (stepId === 5) continue
+        steps.push({
+          stepId,
+          action: 'noop',
+          wired: false,
+          estimatedCostUSD: 0,
+          estimatedAiCalls: 0,
+          details: {
+            reason: 'AI for this step not yet wired (Wave AI-4 in progress).',
+          },
+        })
+      }
+
+      // Surface current budget posture so the UI can pair the
+      // forecast with "you have $X / $Y left today" without a
+      // separate /budget-posture round-trip. AiBudgetService reads
+      // the env-driven limits + AiUsageLog 24h/30d sums.
+      const limits = readBudgetLimits()
+      const now = new Date()
+      const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      const wizardSpendStart = new Date(0) // all time for this wizard
+      const [dayRow, monthRow, wizardRow] = await Promise.all([
+        prisma.aiUsageLog.aggregate({
+          where: { createdAt: { gte: dayAgo } },
+          _sum: { costUSD: true },
+        }),
+        prisma.aiUsageLog.aggregate({
+          where: { createdAt: { gte: monthAgo } },
+          _sum: { costUSD: true },
+        }),
+        prisma.aiUsageLog.aggregate({
+          where: {
+            entityType: 'ListingWizard',
+            entityId: wizard.id,
+            createdAt: { gte: wizardSpendStart },
+          },
+          _sum: { costUSD: true },
+        }),
+      ])
+      const perDay = Number(dayRow._sum.costUSD ?? 0)
+      const perMonth = Number(monthRow._sum.costUSD ?? 0)
+      const perWizard = Number(wizardRow._sum.costUSD ?? 0)
+
+      // Forecast vs limits — UI can render "this estimate would
+      // push wizard spend to $X.XX of $Y.YY cap" inline.
+      const projectedDay = perDay + totalCostUSD
+      const projectedMonth = perMonth + totalCostUSD
+      const projectedWizard = perWizard + totalCostUSD
+      const wouldRefuse =
+        (limits.perCallUSD > 0 && totalCostUSD > limits.perCallUSD) ||
+        (limits.perWizardUSD > 0 && projectedWizard > limits.perWizardUSD) ||
+        (limits.perDayUSD > 0 && projectedDay > limits.perDayUSD) ||
+        (limits.perMonthUSD > 0 && projectedMonth > limits.perMonthUSD)
+
+      return {
+        wizard: {
+          id: wizard.id,
+          status: wizard.status,
+          currentStep: wizard.currentStep,
+        },
+        steps,
+        totals: {
+          estimatedCostUSD: totalCostUSD,
+          estimatedAiCalls: totalCalls,
+        },
+        budget: {
+          limits,
+          current: { perDay, perMonth, perWizard },
+          projected: {
+            perDay: projectedDay,
+            perMonth: projectedMonth,
+            perWizard: projectedWizard,
+          },
+          wouldRefuse,
+        },
       }
     },
   )

@@ -171,6 +171,76 @@ export class ListingContentService {
     return getProvider() != null
   }
 
+  /**
+   * AI-4.2 — return a cost forecast for what generate() WOULD charge
+   * without actually calling the vendor. Same per-field estimation
+   * the AI-1.3 budget pre-check uses, exposed for the orchestrator's
+   * pre-flight estimate endpoint so the operator can see "this will
+   * cost ~$X" before clicking Confirm.
+   *
+   * Returns zero-cost rows when the kill switch is on or no provider
+   * is configured — the estimator is read-only and never throws.
+   * Token estimation skews over for non-English content (4 chars/
+   * token heuristic), which is the safe direction for pre-flight
+   * forecasting.
+   */
+  previewCost(params: GenerationParams): {
+    estimatedCostUSD: number
+    callCount: number
+    provider: ProviderName | null
+    model: string | null
+    perField: Array<{ field: ContentField; estimatedCostUSD: number }>
+  } {
+    if (isAiKillSwitchOn()) {
+      return {
+        estimatedCostUSD: 0,
+        callCount: 0,
+        provider: null,
+        model: null,
+        perField: [],
+      }
+    }
+    const provider = getProvider(params.provider)
+    if (!provider) {
+      return {
+        estimatedCostUSD: 0,
+        callCount: 0,
+        provider: null,
+        model: null,
+        perField: [],
+      }
+    }
+    const language =
+      LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
+    let total = 0
+    const perField: Array<{ field: ContentField; estimatedCostUSD: number }> = []
+    for (const f of params.fields) {
+      const prompt =
+        f === 'title'
+          ? this.titlePrompt(params, language)
+          : f === 'bullets'
+            ? this.bulletsPrompt(params, language)
+            : f === 'description'
+              ? this.descriptionPrompt(params, language)
+              : this.keywordsPrompt(params, language)
+      const cost = estimateCallCostUSD({
+        prompt,
+        maxOutputTokens: 4096,
+        provider: provider.name,
+        model: provider.defaultModel,
+      })
+      perField.push({ field: f, estimatedCostUSD: cost })
+      total += cost
+    }
+    return {
+      estimatedCostUSD: total,
+      callCount: params.fields.length,
+      provider: provider.name,
+      model: provider.defaultModel,
+      perField,
+    }
+  }
+
   async generate(params: GenerationParams): Promise<GenerationResult> {
     const language =
       LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
