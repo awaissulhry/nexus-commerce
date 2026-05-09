@@ -16,6 +16,7 @@ import { CheckCircle2, Tag as TagIcon } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 export interface TagShape {
   id: string
@@ -38,6 +39,7 @@ export function TagEditor({
   allTags,
 }: TagEditorProps) {
   const { toast } = useToast()
+  const { t } = useTranslations()
   const [productTags, setProductTags] = useState<TagShape[]>([])
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#3b82f6')
@@ -61,12 +63,12 @@ export function TagEditor({
       // U.22 — surface fetch failures via toast instead of leaving the
       // operator with a blank list and no signal.
       toast.error(
-        `Failed to load tags: ${e instanceof Error ? e.message : String(e)}`,
+        t('products.tags.failed.load', { msg: e instanceof Error ? e.message : String(e) }),
       )
     } finally {
       setLoading(false)
     }
-  }, [productId, toast])
+  }, [productId, toast, t])
 
   useEffect(() => {
     refresh()
@@ -93,7 +95,12 @@ export function TagEditor({
       onChanged()
     } catch (e) {
       toast.error(
-        `${has ? 'Remove' : 'Attach'} tag failed: ${e instanceof Error ? e.message : String(e)}`,
+        t(
+          has
+            ? 'products.tags.failed.remove'
+            : 'products.tags.failed.attach',
+          { msg: e instanceof Error ? e.message : String(e) },
+        ),
       )
     }
   }
@@ -117,7 +124,7 @@ export function TagEditor({
       refresh()
     } else {
       const err = await res.json()
-      toast.error(err.error ?? 'Failed to create tag')
+      toast.error(err.error ?? t('products.tags.failed.create'))
     }
   }
 
@@ -128,17 +135,17 @@ export function TagEditor({
       placement="drawer-right"
       title={
         <span className="inline-flex items-center gap-1.5">
-          <TagIcon size={14} /> Tags
+          <TagIcon size={14} /> {t('products.tags.title')}
         </span>
       }
     >
         <div className="p-5 space-y-4 overflow-y-auto">
           <div>
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-2">
-              Available tags
+              {t('products.tags.available')}
             </div>
             {loading ? (
-              <div className="text-base text-slate-500 dark:text-slate-400">Loading…</div>
+              <div className="text-base text-slate-500 dark:text-slate-400">{t('products.tags.loading')}</div>
             ) : (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {allTags.map((t) => {
@@ -174,8 +181,8 @@ export function TagEditor({
                   )
                 })}
                 {allTags.length === 0 && (
-                  <span className="text-base text-slate-400 dark:text-slate-500">
-                    No tags yet — create one below.
+                  <span className="text-base text-slate-500 dark:text-slate-400">
+                    {t('products.tags.empty')}
                   </span>
                 )}
               </div>
@@ -183,14 +190,14 @@ export function TagEditor({
           </div>
           <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
             <div className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-              Create new tag
+              {t('products.tags.createSection')}
             </div>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
-                placeholder="Tag name"
+                placeholder={t('products.tags.namePlaceholder')}
                 className="flex-1 h-8 px-2 text-md border border-slate-200 rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
               />
               <input
@@ -203,7 +210,7 @@ export function TagEditor({
                 onClick={createTag}
                 className="h-8 px-3 text-base bg-slate-900 text-white rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
               >
-                Add
+                {t('products.tags.add')}
               </button>
             </div>
           </div>

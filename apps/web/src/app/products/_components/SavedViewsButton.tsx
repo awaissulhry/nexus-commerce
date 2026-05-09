@@ -17,6 +17,7 @@ import { Bell, Bookmark, BookmarkPlus, ChevronDown, Star, Trash2 } from 'lucide-
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 export type SavedView = {
   id: string
@@ -53,6 +54,7 @@ export function SavedViewsButton({
   onAlerts,
 }: SavedViewsButtonProps) {
   const askConfirm = useConfirm()
+  const { t } = useTranslations()
   const [saveMode, setSaveMode] = useState(false)
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
@@ -72,18 +74,18 @@ export function SavedViewsButton({
         onClick={() => setOpen(!open)}
         icon={<Bookmark size={12} />}
       >
-        Views <ChevronDown size={12} />
+        {t('products.savedViews.button')} <ChevronDown size={12} />
       </Button>
       {open && (
         <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2 dark:bg-slate-900 dark:border-slate-800">
           {!saveMode ? (
             <>
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
-                Saved views
+                {t('products.savedViews.header')}
               </div>
               {views.length === 0 ? (
-                <div className="px-2 py-3 text-base text-slate-400 dark:text-slate-500 text-center">
-                  No saved views yet
+                <div className="px-2 py-3 text-base text-slate-500 dark:text-slate-400 text-center">
+                  {t('products.savedViews.empty')}
                 </div>
               ) : (
                 <ul className="space-y-0.5">
@@ -113,10 +115,20 @@ export function SavedViewsButton({
                           onClick={() => onAlerts?.(v)}
                           title={
                             alertCount === 0
-                              ? 'Add alerts'
+                              ? t('products.savedViews.alerts.add')
                               : firedRecently
-                                ? `${alertCount} alert${alertCount === 1 ? '' : 's'} — fired in last 24h`
-                                : `${alertCount} alert${alertCount === 1 ? '' : 's'} attached`
+                                ? t(
+                                    alertCount === 1
+                                      ? 'products.savedViews.alerts.fired.one'
+                                      : 'products.savedViews.alerts.fired.other',
+                                    { count: alertCount },
+                                  )
+                                : t(
+                                    alertCount === 1
+                                      ? 'products.savedViews.alerts.attached.one'
+                                      : 'products.savedViews.alerts.attached.other',
+                                    { count: alertCount },
+                                  )
                           }
                           className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 sm:h-6 sm:px-1 inline-flex items-center justify-center gap-0.5 ${bellColor}`}
                         >
@@ -129,8 +141,8 @@ export function SavedViewsButton({
                         </button>
                         <IconButton
                           onClick={() => onSetDefault(v.id)}
-                          title="Set as default"
-                          aria-label={`Set "${v.name}" as default view`}
+                          title={t('products.savedViews.setDefault')}
+                          aria-label={t('products.savedViews.setDefaultAria', { name: v.name })}
                           size="sm"
                           className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-amber-500 dark:text-slate-500 dark:hover:text-amber-400"
                         >
@@ -140,17 +152,17 @@ export function SavedViewsButton({
                           onClick={async () => {
                             if (
                               await askConfirm({
-                                title: `Delete view "${v.name}"?`,
-                                description: 'This view + its alerts will be removed permanently.',
-                                confirmLabel: 'Delete',
+                                title: t('products.savedViews.deleteTitle', { name: v.name }),
+                                description: t('products.savedViews.deleteBody'),
+                                confirmLabel: t('products.savedViews.deleteLabel'),
                                 tone: 'danger',
                               })
                             ) {
                               onDelete(v.id)
                             }
                           }}
-                          title="Delete"
-                          aria-label={`Delete saved view "${v.name}"`}
+                          title={t('products.savedViews.deleteLabel')}
+                          aria-label={t('products.savedViews.deleteAria', { name: v.name })}
                           size="sm"
                           className="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400"
                         >
@@ -166,18 +178,18 @@ export function SavedViewsButton({
                 className="w-full mt-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-900/40"
                 icon={<BookmarkPlus size={12} />}
               >
-                Save current view
+                {t('products.savedViews.saveCurrent')}
               </Button>
             </>
           ) : (
             <div className="space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1">
-                Save current view
+                {t('products.savedViews.saveCurrent')}
               </div>
               <input
                 autoFocus
                 type="text"
-                placeholder="View name"
+                placeholder={t('products.savedViews.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full h-8 px-2 text-md border border-slate-200 rounded dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
@@ -188,7 +200,7 @@ export function SavedViewsButton({
                   checked={isDefault}
                   onChange={(e) => setIsDefault(e.target.checked)}
                 />
-                Use as default on page load
+                {t('products.savedViews.useAsDefault')}
               </label>
               <div className="flex items-center gap-2">
                 <Button
@@ -204,7 +216,7 @@ export function SavedViewsButton({
                   }}
                   className="flex-1 bg-slate-900 text-white border-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200"
                 >
-                  Save
+                  {t('products.savedViews.save')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -214,7 +226,7 @@ export function SavedViewsButton({
                   }}
                   className="flex-1"
                 >
-                  Cancel
+                  {t('products.savedViews.cancel')}
                 </Button>
               </div>
             </div>

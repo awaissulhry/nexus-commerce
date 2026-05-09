@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ALL_COLUMNS, DEFAULT_VISIBLE } from '../_columns'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 interface ColumnPickerMenuProps {
   visible: string[]
@@ -25,6 +26,7 @@ export function ColumnPickerMenu({
   setVisible,
   onClose,
 }: ColumnPickerMenuProps) {
+  const { t } = useTranslations()
   const ref = useRef<HTMLDivElement>(null)
   const [dragKey, setDragKey] = useState<string | null>(null)
   useEffect(() => {
@@ -77,7 +79,7 @@ export function ColumnPickerMenu({
       className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
     >
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 flex items-center justify-between">
-        <span>Visible (drag to reorder)</span>
+        <span>{t('products.colPicker.visibleHeader')}</span>
       </div>
       {visibleTogglable.map((c) => (
         <div
@@ -100,7 +102,7 @@ export function ColumnPickerMenu({
       {hiddenTogglable.length > 0 && (
         <>
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 mt-1">
-            Hidden
+            {t('products.colPicker.hiddenHeader')}
           </div>
           {hiddenTogglable.map((c) => (
             <label
@@ -123,13 +125,13 @@ export function ColumnPickerMenu({
           onClick={() => setVisible(DEFAULT_VISIBLE)}
           className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
-          Reset order
+          {t('products.colPicker.reset')}
         </button>
         <button
           onClick={onClose}
           className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
         >
-          Close
+          {t('products.colPicker.close')}
         </button>
       </div>
     </div>
