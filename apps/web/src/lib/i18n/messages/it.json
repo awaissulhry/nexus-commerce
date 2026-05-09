@@ -4075,5 +4075,13 @@
   "listWizard.aiSuggestChannels.applyButton": "Applica",
   "listWizard.aiSuggestChannels.applyAll": "Applica scelte ad affinità alta",
   "listWizard.aiSuggestChannels.error": "Impossibile ottenere suggerimenti",
-  "listWizard.aiSuggestChannels.toastApplied": "Applicat{plural} {n} suggeriment{plural}"
+  "listWizard.aiSuggestChannels.toastApplied": "Applicat{plural} {n} suggeriment{plural}",
+
+  "listWizard.aiSuggestTheme.button": "IA: scegli un tema",
+  "listWizard.aiSuggestTheme.recommends": "L'IA consiglia:",
+  "listWizard.aiSuggestTheme.applyButton": "Applica",
+  "listWizard.aiSuggestTheme.appliedShort": "Applicato",
+  "listWizard.aiSuggestTheme.applied": "Tema IA applicato: {theme}",
+  "listWizard.aiSuggestTheme.alternativesLabel": "Alternative:",
+  "listWizard.aiSuggestTheme.error": "Impossibile ottenere un suggerimento"
 }

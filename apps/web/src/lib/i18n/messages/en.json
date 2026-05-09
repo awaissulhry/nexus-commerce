@@ -4024,5 +4024,13 @@
   "listWizard.aiSuggestChannels.applyButton": "Apply",
   "listWizard.aiSuggestChannels.applyAll": "Apply high-fit picks",
   "listWizard.aiSuggestChannels.error": "Couldn't get recommendations",
-  "listWizard.aiSuggestChannels.toastApplied": "Applied {n} AI pick{plural}"
+  "listWizard.aiSuggestChannels.toastApplied": "Applied {n} AI pick{plural}",
+
+  "listWizard.aiSuggestTheme.button": "AI: pick a theme",
+  "listWizard.aiSuggestTheme.recommends": "AI recommends:",
+  "listWizard.aiSuggestTheme.applyButton": "Apply",
+  "listWizard.aiSuggestTheme.appliedShort": "Applied",
+  "listWizard.aiSuggestTheme.applied": "Applied AI theme: {theme}",
+  "listWizard.aiSuggestTheme.alternativesLabel": "Alternatives:",
+  "listWizard.aiSuggestTheme.error": "Couldn't get a recommendation"
 }

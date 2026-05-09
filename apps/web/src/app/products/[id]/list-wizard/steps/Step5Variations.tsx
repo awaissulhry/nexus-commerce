@@ -10,6 +10,7 @@ import {
   PackageOpen,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -18,6 +19,8 @@ import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useToast } from '@/components/ui/Toast'
+import { useTranslations } from '@/lib/i18n/use-translations'
 
 // Mirrors backend types from variations.service.ts.
 interface ThemeOption {
@@ -68,6 +71,13 @@ const CUSTOM_PREFIX = 'CUSTOM__'
 
 const SAVE_DEBOUNCE_MS = 600
 
+// AI-6.2 — recommendation shape returned by /suggest-variation-theme.
+interface AiThemeRecommendation {
+  themeId: string
+  reason: string
+  alternatives: Array<{ themeId: string; reason: string }>
+}
+
 export default function Step5Variations({
   wizardState,
   updateWizardState,
@@ -76,7 +86,19 @@ export default function Step5Variations({
   reportValidity,
   setJumpToBlocker,
 }: StepProps) {
+  const { t } = useTranslations()
+  const { toast } = useToast()
   const slice = (wizardState.variations ?? {}) as VariationsSlice
+
+  // AI-6.2 — variation theme suggester state. Click "AI: pick a
+  // theme" → POST /suggest-variation-theme with available common
+  // themes + presentAttributes from the loaded payload. Backend
+  // returns one primary + up to 3 alternatives.
+  const [aiThemeBusy, setAiThemeBusy] = useState(false)
+  const [aiThemeError, setAiThemeError] = useState<string | null>(null)
+  const [aiThemeRec, setAiThemeRec] = useState<AiThemeRecommendation | null>(
+    null,
+  )
 
   const [payload, setPayload] = useState<MultiChannelVariationsPayload | null>(
     null,
@@ -430,12 +452,154 @@ export default function Step5Variations({
               <label className="text-base font-medium text-slate-700 dark:text-slate-300">
                 Common theme (applies to every selected channel)
               </label>
-              {payload.commonThemes.length === 0 && (
-                <span className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                  No theme common to all channels
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {payload.commonThemes.length === 0 && (
+                  <span className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    No theme common to all channels
+                  </span>
+                )}
+                {/* AI-6.2 — variation theme suggester. Disabled when
+                    no themes are available (nothing to recommend) or
+                    when an AI call is already in flight. */}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    if (payload.commonThemes.length === 0) return
+                    setAiThemeBusy(true)
+                    setAiThemeError(null)
+                    setAiThemeRec(null)
+                    try {
+                      const res = await fetch(
+                        `${getBackendUrl()}/api/listing-wizard/${wizardId}/suggest-variation-theme`,
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            presentAttributes: payload.presentAttributes,
+                            availableThemes: payload.commonThemes.map((th) => ({
+                              id: th.id,
+                              label: th.label,
+                              requiredAttributes: th.requiredAttributes,
+                            })),
+                          }),
+                        },
+                      )
+                      const json = await res.json()
+                      if (!res.ok) {
+                        throw new Error(json?.error ?? `HTTP ${res.status}`)
+                      }
+                      const r = json?.recommendation as
+                        | AiThemeRecommendation
+                        | undefined
+                      if (!r) throw new Error('Empty recommendation')
+                      setAiThemeRec(r)
+                    } catch (err) {
+                      setAiThemeError(
+                        err instanceof Error ? err.message : String(err),
+                      )
+                    } finally {
+                      setAiThemeBusy(false)
+                    }
+                  }}
+                  disabled={
+                    aiThemeBusy || payload.commonThemes.length === 0
+                  }
+                  className="inline-flex items-center gap-1.5"
+                >
+                  {aiThemeBusy ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  )}
+                  {t('listWizard.aiSuggestTheme.button')}
+                </Button>
+              </div>
             </div>
+            {/* AI-6.2 — recommendation banner. Apply sets commonTheme
+                to the AI's pick; alternatives render as quick-toggle
+                links so the operator can compare without firing a
+                second AI call. */}
+            {(aiThemeRec || aiThemeError) && (
+              <div className="mb-2 border border-purple-200 dark:border-purple-900 bg-purple-50/60 dark:bg-purple-950/20 rounded-md px-3 py-2">
+                {aiThemeError ? (
+                  <div className="flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="font-medium">
+                        {t('listWizard.aiSuggestTheme.error')}
+                      </div>
+                      <div className="text-sm opacity-90 mt-0.5">
+                        {aiThemeError}
+                      </div>
+                    </div>
+                  </div>
+                ) : aiThemeRec ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                      <span className="text-sm text-purple-700 dark:text-purple-300">
+                        {t('listWizard.aiSuggestTheme.recommends')}
+                      </span>
+                      <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {payload.commonThemes.find(
+                          (th) => th.id === aiThemeRec.themeId,
+                        )?.label ?? aiThemeRec.themeId}
+                      </span>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          setCommonTheme(aiThemeRec.themeId)
+                          toast({
+                            tone: 'success',
+                            title: t('listWizard.aiSuggestTheme.applied', {
+                              theme: aiThemeRec.themeId,
+                            }),
+                            durationMs: 2400,
+                          })
+                        }}
+                        disabled={commonTheme === aiThemeRec.themeId}
+                      >
+                        {commonTheme === aiThemeRec.themeId
+                          ? t('listWizard.aiSuggestTheme.appliedShort')
+                          : t('listWizard.aiSuggestTheme.applyButton')}
+                      </Button>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-snug">
+                      {aiThemeRec.reason}
+                    </p>
+                    {aiThemeRec.alternatives.length > 0 && (
+                      <div className="text-sm text-slate-500 dark:text-slate-400">
+                        {t('listWizard.aiSuggestTheme.alternativesLabel')}{' '}
+                        {aiThemeRec.alternatives.map((alt, i) => (
+                          <span key={alt.themeId}>
+                            {i > 0 && ' · '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCommonTheme(alt.themeId)
+                                toast({
+                                  tone: 'success',
+                                  title: t('listWizard.aiSuggestTheme.applied', {
+                                    theme: alt.themeId,
+                                  }),
+                                  durationMs: 2400,
+                                })
+                              }}
+                              className="underline hover:text-slate-700 dark:hover:text-slate-300 font-mono"
+                              title={alt.reason}
+                            >
+                              {alt.themeId}
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
             <select
               value={commonTheme ?? ''}
               onChange={(e) => setCommonTheme(e.target.value || null)}
