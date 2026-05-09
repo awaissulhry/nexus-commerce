@@ -106,6 +106,7 @@ import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.jo
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
+import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import pricingRoutes from "./routes/pricing.routes.js";
 import pricingRulesRoutes from "./routes/pricing-rules.routes.js";
 // BullMQ worker bootstrapping is gated behind ENABLE_QUEUE_WORKERS=1.
@@ -413,6 +414,12 @@ async function start() {
     if (process.env.NEXUS_ENABLE_WIZARD_CLEANUP === '1') {
       startWizardCleanupCron();
     }
+
+    // L.4.0 — observability retention. Trims OutboundApiCallLog +
+    // CronRun to a 90-day rolling window so the high-volume tables
+    // don't grow unbounded. Default-ON; opt out with
+    // NEXUS_DISABLE_OBSERVABILITY_RETENTION=1 (e.g. during forensics).
+    startObservabilityRetentionCron();
 
     // F.3 — Nightly Amazon Sales & Traffic ingest. Gated behind an env
     // flag so dev/test environments without SP-API credentials don't
