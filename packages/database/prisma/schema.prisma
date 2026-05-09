@@ -6829,3 +6829,92 @@ model ScheduledProductChange {
   // Drawer / list view per product — one query for "what's queued".
   @@index([productId, status])
 }
+
+// W4.1 — AutomationRule + AutomationRuleExecution.
+//
+// The replenishment platform has hardcoded auto-PO logic (R.6) that
+// fires nightly with env-var ceilings. The audit revealed this is
+// the CORNERSTONE feature gap: operators want to compose their own
+// rules (auto-approve below €500, emergency reorder on stockout,
+// alert on demand spike, etc.) without a code change.
+//
+// Domain-tagged so the engine can extend beyond replenishment later
+// (pricing, inbound, returns) without a migration.
+//
+// Defense-in-depth defaults:
+//   - enabled=false   new rules don't fire until explicitly turned on
+//   - dryRun=true     opt-in to write-side actions
+//   - maxExecutionsPerDay=100   runaway-loop protection
+//   - maxValueCentsEur=null     caller-set ceiling on actions that spend
+//
+// Conditions DSL (JSON):
+//   [{ field: 'recommendation.totalCents', op: 'lt', value: 50000 },
+//    { field: 'supplier.onTimeRate', op: 'gte', value: 0.95 }]
+// Operators: eq | ne | lt | lte | gt | gte | in | contains | exists.
+// All conditions AND together. For OR semantics, create multiple rules
+// sharing the same trigger.
+//
+// Actions DSL (JSON):
+//   [{ type: 'auto_approve_recommendation' },
+//    { type: 'create_po' },
+//    { type: 'notify', target: 'operator', message: '...' }]
+// Action types are domain-specific and registered at the evaluator.
+model AutomationRule {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  domain  String @default("replenishment")
+  trigger String
+
+  conditions Json @default("[]")
+  actions    Json @default("[]")
+
+  enabled Boolean @default(false)
+  dryRun  Boolean @default(true)
+
+  maxExecutionsPerDay Int? @default(100)
+  maxValueCentsEur    Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  evaluationCount Int       @default(0)
+  matchCount      Int       @default(0)
+  executionCount  Int       @default(0)
+  lastEvaluatedAt DateTime?
+  lastMatchedAt   DateTime?
+  lastExecutedAt  DateTime?
+
+  executions AutomationRuleExecution[]
+
+  @@index([domain, enabled])
+  @@index([trigger])
+}
+
+model AutomationRuleExecution {
+  id     String         @id @default(cuid())
+  ruleId String
+  rule   AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  // The trigger payload that the rule matched against. Frozen at
+  // execution time so post-hoc audits show what the engine saw.
+  triggerData Json
+
+  // Per-action outcomes. Shape:
+  //   [{ type: 'auto_approve', ok: true, output: {...} },
+  //    { type: 'create_po',    ok: false, error: 'MOQ exceeded' }]
+  actionResults Json
+
+  dryRun       Boolean
+  status       String  // SUCCESS | PARTIAL | FAILED | DRY_RUN
+  errorMessage String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+
+  @@index([ruleId, startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+}
