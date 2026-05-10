@@ -45,6 +45,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  GitCompare,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -678,6 +679,12 @@ export default function AppSidebar() {
             icon={Boxes}
             label="Outbound Queue"
             active={pathname === '/outbound'}
+          />
+          <NavItem
+            href="/reconciliation"
+            icon={GitCompare}
+            label="Reconciliation"
+            active={pathname.startsWith('/reconciliation')}
           />
         </NavGroup>
 

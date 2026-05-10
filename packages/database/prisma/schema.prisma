@@ -8790,3 +8790,58 @@ model ScenarioRun {
   @@index([scenarioId, startedAt(sort: Desc)])
   @@index([status, startedAt(sort: Desc)])
 }
+
+// ── Channel Listing Reconciliation (Phase RECON) ──────────────────────────
+//
+// Holds every Amazon/eBay listing discovered during a reconciliation run and
+// its match status against Nexus products. Operator must CONFIRM every row
+// before Nexus writes back externalListingId to ChannelListing.
+//
+// Lifecycle:
+//   PENDING      — freshly ingested, awaiting operator review
+//   CONFIRMED    — operator approved; externalListingId written to ChannelListing
+//   CONFLICT     — operator flagged a match dispute for manual resolution
+//   CREATE_NEW   — operator decided to create a new Nexus product for this listing
+//   IGNORE       — listing exists on channel but Nexus should not manage it
+//
+// One row per (channel, marketplace, externalSku). Re-running a reconciliation
+// upserts on this key so historical decisions are preserved.
+
+model ListingReconciliation {
+  id        String @id @default(cuid())
+  channel   String // 'AMAZON' | 'EBAY'
+  marketplace String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK' ...
+
+  // ── Channel-side data ─────────────────────────────────────────────────
+  externalSku       String  // SKU on the channel (Amazon seller SKU / eBay custom label)
+  externalListingId String? // ASIN for Amazon, offerId for eBay
+  parentAsin        String? // Amazon parent ASIN (if variation)
+  title             String?
+  channelPrice      Decimal? @db.Decimal(10, 2)
+  channelQuantity   Int?
+  channelStatus     String?  // e.g. 'Active', 'Inactive', 'Incomplete'
+
+  // ── Match result ──────────────────────────────────────────────────────
+  // null = unmatched. Set after auto-match runs.
+  matchedProductId    String?
+  matchedVariationId  String?
+  matchMethod         String? // 'SKU' | 'PARENT_SKU' | 'ASIN' | 'GTIN' | 'MANUAL' | 'UNMATCHED'
+  matchConfidence     Float?  // 0.0 – 1.0
+
+  // ── Operator decision ─────────────────────────────────────────────────
+  reconciliationStatus String @default("PENDING")
+  conflictNotes        String?
+  reviewedBy           String?
+  reviewedAt           DateTime?
+
+  // ── Import tracking ───────────────────────────────────────────────────
+  runId      String   // Groups rows from one reconciliation run
+  importedAt DateTime?  // Set when CONFIRMED and ChannelListing updated
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([channel, marketplace, externalSku])
+  @@index([channel, marketplace, reconciliationStatus])
+  @@index([runId])
+  @@index([matchedProductId])
+}
