@@ -147,6 +147,8 @@ export default function AssetLibrary({
         if (currentFilter.missingAlt) url.searchParams.set('missingAlt', '1')
         if (currentFilter.dateRange)
           url.searchParams.set('dateRange', currentFilter.dateRange)
+        if (currentFilter.tagIds.length)
+          url.searchParams.set('tagIds', currentFilter.tagIds.join(','))
         const res = await fetch(url.toString(), { cache: 'no-store' })
         if (!res.ok)
           throw new Error(`Library API returned ${res.status}`)

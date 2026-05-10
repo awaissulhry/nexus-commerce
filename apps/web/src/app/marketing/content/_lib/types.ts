@@ -56,6 +56,12 @@ export interface AssetUsage {
   productName: string | null
 }
 
+export interface AssetTagRef {
+  id: string
+  name: string
+  color: string | null
+}
+
 export interface AssetDetail {
   id: string
   source: AssetSource
@@ -69,6 +75,11 @@ export interface AssetDetail {
   height: number | null
   alt: string | null
   caption: string | null
+  /// Operator-set tags via the AssetTag join table (MC.2.1).
+  /// Persistent + filterable from the sidebar.
+  assetTags: AssetTagRef[]
+  /// Free-text tags from DigitalAsset.metadata.tags. Typically AI-
+  /// suggested; promoted to assetTags via the picker.
   tags: string[]
   originalFilename: string | null
   storageProvider: string

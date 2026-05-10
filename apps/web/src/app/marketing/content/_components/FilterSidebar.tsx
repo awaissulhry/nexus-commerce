@@ -18,6 +18,7 @@
 // they need taxonomy + AssetUsage scope expansion that doesn't exist
 // yet.
 
+import { useEffect, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import type { AssetSource } from '../_lib/types'
@@ -31,6 +32,7 @@ export interface FilterState {
   usage: UsageFilter
   missingAlt: boolean
   dateRange: DateFilter
+  tagIds: string[]
 }
 
 export const EMPTY_FILTER: FilterState = {
@@ -39,6 +41,7 @@ export const EMPTY_FILTER: FilterState = {
   usage: null,
   missingAlt: false,
   dateRange: null,
+  tagIds: [],
 }
 
 export function activeFilterCount(filter: FilterState): number {
@@ -47,14 +50,23 @@ export function activeFilterCount(filter: FilterState): number {
     filter.sources.length +
     (filter.usage ? 1 : 0) +
     (filter.missingAlt ? 1 : 0) +
-    (filter.dateRange ? 1 : 0)
+    (filter.dateRange ? 1 : 0) +
+    filter.tagIds.length
   )
+}
+
+interface AvailableTag {
+  id: string
+  name: string
+  color: string | null
+  _count?: { assets?: number }
 }
 
 interface Props {
   filter: FilterState
   onChange: (next: FilterState) => void
   onClose: () => void
+  apiBase: string
 }
 
 interface CheckboxRowProps {
@@ -106,8 +118,37 @@ function Section({ title, count, children, defaultOpen = true }: SectionProps) {
   )
 }
 
-export default function FilterSidebar({ filter, onChange, onClose }: Props) {
+export default function FilterSidebar({
+  filter,
+  onChange,
+  onClose,
+  apiBase,
+}: Props) {
   const { t } = useTranslations()
+  const [tags, setTags] = useState<AvailableTag[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${apiBase}/api/asset-tags`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { tags: [] }))
+      .then((data: { tags: AvailableTag[] }) => {
+        if (!cancelled) setTags(data.tags ?? [])
+      })
+      .catch(() => {
+        /* silent — empty section is fine */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [apiBase])
+
+  const toggleTag = (id: string) =>
+    onChange({
+      ...filter,
+      tagIds: filter.tagIds.includes(id)
+        ? filter.tagIds.filter((x) => x !== id)
+        : [...filter.tagIds, id],
+    })
 
   const toggleType = (v: string) =>
     onChange({
@@ -239,6 +280,25 @@ export default function FilterSidebar({ filter, onChange, onClose }: Props) {
             }
           />
         </Section>
+
+        {tags.length > 0 && (
+          <Section
+            title={t('marketingContent.filters.tags.title')}
+            count={filter.tagIds.length}
+          >
+            {tags
+              .filter((tag) => (tag._count?.assets ?? 0) > 0 || filter.tagIds.includes(tag.id))
+              .slice(0, 50)
+              .map((tag) => (
+                <CheckboxRow
+                  key={tag.id}
+                  label={`${tag.name}${tag._count?.assets ? ` (${tag._count.assets})` : ''}`}
+                  checked={filter.tagIds.includes(tag.id)}
+                  onChange={() => toggleTag(tag.id)}
+                />
+              ))}
+          </Section>
+        )}
 
         <Section
           title={t('marketingContent.filters.date.title')}

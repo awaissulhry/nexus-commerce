@@ -132,6 +132,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       usage?: string // 'in_use' | 'orphaned'
       missingAlt?: string // '1' / 'true' to filter
       dateRange?: string // 'today' | 'last_7d' | 'last_30d'
+      tagIds?: string // comma-separated, narrows DigitalAssets to those with ALL named tags
       search?: string
       page?: string
       pageSize?: string
@@ -166,6 +167,13 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       q.usage === 'in_use' || q.usage === 'orphaned' ? q.usage : null
     const missingAlt = q.missingAlt === '1' || q.missingAlt === 'true'
 
+    const tagIds = q.tagIds
+      ? q.tagIds
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : []
+
     let dateFrom: Date | null = null
     if (q.dateRange) {
       const now = Date.now()
@@ -195,14 +203,27 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     const typeAllowsProductImage =
       !typeFilter || typeFilter.includes('image')
     const includeDigitalAssets = sourceAllowsDigitalAsset && !missingAlt
+    // Tag filter is DigitalAsset-only (ProductImage isn't taggable
+    // until W4.7 migration cuts master gallery into the canonical
+    // model). Active tag filter implicitly excludes ProductImage.
     const includeProductImages =
-      sourceAllowsProductImage && typeAllowsProductImage
+      sourceAllowsProductImage && typeAllowsProductImage && tagIds.length === 0
 
     const daWhere: Record<string, unknown> = {}
     if (typeFilter) daWhere.type = { in: typeFilter }
     if (dateFrom) daWhere.createdAt = { gte: dateFrom }
     if (usageFilter === 'in_use') daWhere.usages = { some: {} }
     if (usageFilter === 'orphaned') daWhere.usages = { none: {} }
+    if (tagIds.length > 0) {
+      // AND-style: asset must carry every tag in the filter set.
+      // Doing this with a single `tags: { every: ... }` filter is
+      // tempting but `every` against a join model with no rows
+      // matches everything, so spell it out as N AND'd `some`
+      // clauses.
+      daWhere.AND = tagIds.map((tagId) => ({
+        tags: { some: { tagId } },
+      }))
+    }
     if (search) {
       // MC.1.4 — match the structured fields plus JSON-path captures
       // for caption and alt living under metadata. Prisma's
@@ -387,6 +408,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             },
             orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }],
           },
+          tags: {
+            include: { tag: true },
+          },
         },
       })
       if (!asset) return reply.code(404).send({ error: 'asset not found' })
@@ -406,6 +430,16 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           height: typeof meta.height === 'number' ? meta.height : null,
           alt: typeof meta.alt === 'string' ? meta.alt : null,
           caption: typeof meta.caption === 'string' ? meta.caption : null,
+          // MC.2.1 — surface AssetTag rows alongside metadata.tags
+          // (the JSON freeform field). Operator-set tags via the
+          // picker live in AssetTag; AI-suggested tags go into
+          // metadata.tags until reviewed and promoted. Here we
+          // return both — typed (`assetTags`) and legacy (`tags`).
+          assetTags: asset.tags.map((at) => ({
+            id: at.tag.id,
+            name: at.tag.name,
+            color: at.tag.color,
+          })),
           tags: Array.isArray(meta.tags)
             ? (meta.tags.filter((t) => typeof t === 'string') as string[])
             : [],
@@ -449,6 +483,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           height: null,
           alt: row.alt,
           caption: null,
+          // ProductImage rows can't be tagged today (legacy gallery,
+          // not the W4.5 canonical model). Returning empty arrays
+          // keeps the drawer's render branch source-agnostic.
+          assetTags: [] as Array<{
+            id: string
+            name: string
+            color: string | null
+          }>,
           tags: [],
           originalFilename: null,
           storageProvider: row.publicId ? 'cloudinary' : 'external',
@@ -740,6 +782,88 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'asset-usage not found' })
       throw err
     }
+  })
+
+  // ── MC.2.1 — AssetTag CRUD ─────────────────────────────────
+
+  // List all tags. Includes asset count alongside the existing
+  // product/order counts so the operator can see which tags are
+  // actually used by the DAM. This duplicates a thin slice of the
+  // /tags endpoint that already exists elsewhere; consolidating is a
+  // follow-up. Returning here keeps /marketing/content's network
+  // surface contained.
+  fastify.get('/asset-tags', async () => {
+    const tags = await prisma.tag.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: { assets: true, products: true, orders: true },
+        },
+      },
+    })
+    return { tags }
+  })
+
+  // Replace the tag set on a DigitalAsset. Body is { tagIds: [...] }
+  // or { tagNames: [...] } — name form auto-creates tags that don't
+  // yet exist (operator-friendly; common-case is "type a new tag in
+  // the picker"). Returns the updated tag list so the drawer can
+  // render without re-fetching.
+  fastify.put('/assets/:id/tags', async (request, reply) => {
+    const { id: assetId } = request.params as { id: string }
+    const body = request.body as {
+      tagIds?: string[]
+      tagNames?: string[]
+    }
+    const asset = await prisma.digitalAsset.findUnique({
+      where: { id: assetId },
+      select: { id: true },
+    })
+    if (!asset)
+      return reply.code(404).send({ error: 'asset not found' })
+
+    const idSet = new Set(body.tagIds ?? [])
+
+    // Resolve names → ids, creating any that don't exist. createMany
+    // with skipDuplicates would be cleaner but doesn't return rows;
+    // upsert one-by-one is fine here because the picker shouldn't
+    // routinely create more than a handful.
+    if (body.tagNames?.length) {
+      for (const rawName of body.tagNames) {
+        const name = rawName.trim()
+        if (!name) continue
+        const existing = await prisma.tag.findUnique({ where: { name } })
+        if (existing) {
+          idSet.add(existing.id)
+        } else {
+          const created = await prisma.tag.create({ data: { name } })
+          idSet.add(created.id)
+        }
+      }
+    }
+
+    const tagIds = [...idSet]
+
+    // Replace strategy — drop existing rows then create the new set.
+    // Wrapped in a transaction so partial failures roll back; the
+    // operator sees either the old set or the new, never a mix.
+    await prisma.$transaction([
+      prisma.assetTag.deleteMany({ where: { assetId } }),
+      ...(tagIds.length
+        ? [
+            prisma.assetTag.createMany({
+              data: tagIds.map((tagId) => ({ assetId, tagId })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ])
+
+    const tags = await prisma.tag.findMany({
+      where: { id: { in: tagIds } },
+      orderBy: { name: 'asc' },
+    })
+    return { tags }
   })
 }
 

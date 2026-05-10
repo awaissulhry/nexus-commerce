@@ -187,6 +187,7 @@ export default function ContentHubClient({
             filter={filter}
             onChange={setFilter}
             onClose={() => setFiltersOpen(false)}
+            apiBase={apiBase}
           />
         )}
         <AssetLibrary

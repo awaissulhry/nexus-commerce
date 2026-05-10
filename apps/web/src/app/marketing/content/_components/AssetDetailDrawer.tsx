@@ -31,7 +31,13 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatBytes } from '../_lib/format'
-import type { AssetDetail, AssetDetailResponse, LibraryItem } from '../_lib/types'
+import AssetTagPicker from './AssetTagPicker'
+import type {
+  AssetDetail,
+  AssetDetailResponse,
+  AssetTagRef,
+  LibraryItem,
+} from '../_lib/types'
 
 interface Props {
   selected: LibraryItem | null
@@ -254,14 +260,37 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                 </dl>
               </section>
 
-              {/* Tags */}
-              {detail.tags.length > 0 && (
+              {/* MC.2.1 — interactive tag picker (DigitalAsset only). */}
+              {detail.source === 'digital_asset' && (
                 <section
                   aria-label={t('marketingContent.detail.tagsLabel')}
                   className="space-y-2"
                 >
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     {t('marketingContent.detail.tags')}
+                  </h3>
+                  <AssetTagPicker
+                    assetId={detail.id}
+                    rawAssetId={detail.id.startsWith('da_') ? detail.id.slice(3) : detail.id}
+                    apiBase={apiBase}
+                    current={detail.assetTags}
+                    onChange={(next: AssetTagRef[]) =>
+                      setDetail((prev) =>
+                        prev ? { ...prev, assetTags: next } : prev,
+                      )
+                    }
+                  />
+                </section>
+              )}
+
+              {/* AI-suggested / freeform tags (read-only legacy field). */}
+              {detail.tags.length > 0 && (
+                <section
+                  aria-label={t('marketingContent.detail.aiTagsLabel')}
+                  className="space-y-2"
+                >
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    {t('marketingContent.detail.aiTags')}
                   </h3>
                   <div className="flex flex-wrap gap-1.5">
                     {detail.tags.map((tag) => (
