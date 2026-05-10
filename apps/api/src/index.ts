@@ -150,6 +150,9 @@ import { startAutomationRuleEvaluatorCron } from "./jobs/automation-rule-evaluat
 // rows to render. DRAFT status keeps live AI calls on the inline
 // path until operators promote.
 import { seedPromptTemplateDefaults } from "./services/ai/prompt-template.service.js";
+// SP.3 (list-wizard) — scheduled wizard publish cron. Default-OFF;
+// opt in via NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1.
+import { startScheduledWizardPublishCron } from "./jobs/scheduled-wizard-publish.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
@@ -866,6 +869,12 @@ async function start() {
         err instanceof Error ? err.message : err,
       );
     });
+
+    // SP.3 (list-wizard) — scheduled wizard publish cron. No-op
+    // unless NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1. Tick interval
+    // 60s; cap 25 PENDING rows per tick so a backlog can't pin the
+    // worker.
+    startScheduledWizardPublishCron();
 
     // S.17 — daily ABC-driven cycle-count scheduler. 02:30 UTC.
     // Picks up products whose cadence has elapsed (A=7d, B=30d,
