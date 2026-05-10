@@ -154,6 +154,98 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/categories/suggestions?channel=AMAZON&marketplace=IT&keyword=moto+jacket
+  //
+  // Mirrors Amazon Seller Central's "Choose product type" search: returns a
+  // deduplicated list of { productType, pathParts[], browseNodes[] } sorted by
+  // relevance (number of times that path appeared in catalog results).
+  //
+  // Implementation: searchCatalogItems with the keyword, pull classifications
+  // from each result, deduplicate by the leaf classificationId, and return up
+  // to 20 unique paths. Client renders them as selectable category cards.
+  fastify.get('/categories/suggestions', async (request, reply) => {
+    const q = request.query as {
+      channel?: string
+      marketplace?: string
+      keyword?: string
+    }
+    if (!q.keyword?.trim()) {
+      return reply.code(400).send({ error: 'keyword is required' })
+    }
+    if ((q.channel ?? 'AMAZON').toUpperCase() !== 'AMAZON') {
+      return reply.send({ suggestions: [] })
+    }
+    if (!amazon.isConfigured()) {
+      return reply.code(503).send({ error: 'Amazon SP-API not configured' })
+    }
+
+    try {
+      const { amazonMarketplaceId } = await import('../services/categories/marketplace-ids.js')
+      const mpId = amazonMarketplaceId(q.marketplace ?? 'IT')
+      const sp = await (amazon as any).getClient()
+
+      const res: any = await (sp as any).callAPI({
+        operation: 'searchCatalogItems',
+        endpoint: 'catalogItems',
+        version: '2022-04-01',
+        query: {
+          keywords: q.keyword.trim(),
+          marketplaceIds: [mpId],
+          includedData: ['summaries', 'classifications'],
+          pageSize: 20,
+        },
+      })
+
+      const items: any[] = res?.items ?? []
+
+      // Build a deduplicated map of leaf classificationId → suggestion
+      const byLeafId = new Map<string, {
+        productType: string
+        pathParts: string[]
+        browseNodes: number[]
+        count: number
+      }>()
+
+      for (const item of items) {
+        const summaries: any[] = item.summaries ?? []
+        const classifications: any[] = item.classifications ?? []
+        if (!classifications.length) continue
+
+        // Product type from summaries
+        const rawPt = summaries[0]?.productTypes?.[0]?.productTypeId
+          ?? summaries[0]?.productTypes?.[0]?.productType
+          ?? null
+        const productType = typeof rawPt === 'string' ? rawPt : 'UNKNOWN'
+
+        // Build path from classifications (walk parent chain per classification)
+        for (const cls of classifications) {
+          const { pathParts, browseNodes } = buildPath(cls)
+          if (!pathParts.length) continue
+
+          const leafId = browseNodes[browseNodes.length - 1]?.toString()
+            ?? pathParts.join('|')
+
+          const existing = byLeafId.get(leafId)
+          if (existing) {
+            existing.count++
+          } else {
+            byLeafId.set(leafId, { productType, pathParts, browseNodes, count: 1 })
+          }
+        }
+      }
+
+      // Sort by frequency (most common paths first), cap at 20
+      const suggestions = Array.from(byLeafId.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20)
+
+      return reply.send({ suggestions, keyword: q.keyword.trim() })
+    } catch (err: any) {
+      fastify.log.error({ err }, '[categories/suggestions] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // GET /api/categories/changes?channel=AMAZON&marketplace=IT&productType=OUTERWEAR&since=ISO
   //
   // Surfaces the SchemaChange log for a given (channel, marketplace,
@@ -189,3 +281,24 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
 }
 
 export default categoriesRoutes
+
+/** Walk a classification node and its parent chain to produce an
+ *  ordered path (root → leaf) and a list of browse node IDs. */
+function buildPath(node: any): { pathParts: string[]; browseNodes: number[] } {
+  const parts: string[] = []
+  const nodes: number[] = []
+
+  function walk(n: any, depth = 0) {
+    if (!n || depth > 15) return
+    if (n.parent) walk(n.parent, depth + 1) // walk to root first
+    if (typeof n.displayName === 'string' && n.displayName) parts.push(n.displayName)
+    const id = n.classificationId ?? n.id
+    if (id != null) {
+      const num = typeof id === 'number' ? id : parseInt(String(id), 10)
+      if (!isNaN(num)) nodes.push(num)
+    }
+  }
+
+  walk(node)
+  return { pathParts: parts, browseNodes: nodes }
+}
