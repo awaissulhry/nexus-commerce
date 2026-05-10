@@ -25,6 +25,7 @@ import FilterSidebar, {
   activeFilterCount,
   type FilterState,
 } from './_components/FilterSidebar'
+import FolderTree, { type FolderSelection } from './_components/FolderTree'
 import { formatBytes, formatCount } from './_lib/format'
 import type { LibraryItem, OverviewPayload } from './_lib/types'
 
@@ -44,6 +45,9 @@ export default function ContentHubClient({
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [foldersOpen, setFoldersOpen] = useState(false)
+  const [folderSelection, setFolderSelection] =
+    useState<FolderSelection>('all')
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [selected, setSelected] = useState<LibraryItem | null>(null)
   // MC.2.3 — bulk-selection set, keyed by item.id ("da_..." | "pi_...").
@@ -168,6 +172,9 @@ export default function ContentHubClient({
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen((prev) => !prev)}
         activeFilterCount={filterCount}
+        foldersOpen={foldersOpen}
+        onToggleFolders={() => setFoldersOpen((prev) => !prev)}
+        folderActive={folderSelection !== 'all'}
         filter={filter}
         onApplyView={(s, f) => {
           setSearch(s)
@@ -176,12 +183,23 @@ export default function ContentHubClient({
       />
 
       <div
-        className={
-          filtersOpen
-            ? 'grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]'
-            : 'block'
-        }
+        className={`grid grid-cols-1 gap-3 ${
+          foldersOpen && filtersOpen
+            ? 'lg:grid-cols-[220px_240px_minmax(0,1fr)]'
+            : foldersOpen
+              ? 'lg:grid-cols-[220px_minmax(0,1fr)]'
+              : filtersOpen
+                ? 'lg:grid-cols-[260px_minmax(0,1fr)]'
+                : ''
+        }`}
       >
+        {foldersOpen && (
+          <FolderTree
+            apiBase={apiBase}
+            selected={folderSelection}
+            onSelect={setFolderSelection}
+          />
+        )}
         {filtersOpen && (
           <FilterSidebar
             filter={filter}
@@ -194,6 +212,7 @@ export default function ContentHubClient({
           view={view}
           search={search}
           filter={filter}
+          folderSelection={folderSelection}
           apiBase={apiBase}
           onSelect={(item) => setSelected(item)}
           selectedId={selected?.id ?? null}

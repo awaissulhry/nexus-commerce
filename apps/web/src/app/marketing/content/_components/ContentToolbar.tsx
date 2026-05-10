@@ -6,7 +6,7 @@
 // fire toasts in this commit; MC.1.2/1.3/1.4 wire each control to a
 // real surface.
 
-import { Filter, LayoutGrid, List, Calendar, Upload, Sparkles } from 'lucide-react'
+import { Filter, LayoutGrid, List, Calendar, Folder, Upload, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
@@ -24,6 +24,9 @@ interface Props {
   filtersOpen: boolean
   onToggleFilters: () => void
   activeFilterCount?: number
+  foldersOpen: boolean
+  onToggleFolders: () => void
+  folderActive?: boolean
   filter: FilterState
   onApplyView: (search: string, filter: FilterState) => void
 }
@@ -36,6 +39,9 @@ export default function ContentToolbar({
   filtersOpen,
   onToggleFilters,
   activeFilterCount = 0,
+  foldersOpen,
+  onToggleFolders,
+  folderActive = false,
   filter,
   onApplyView,
 }: Props) {
@@ -47,6 +53,20 @@ export default function ContentToolbar({
       <SearchInput value={search} onChange={onSearchChange} />
 
       <div className="flex items-center gap-2 flex-wrap">
+        {/* MC.2.2 — folders */}
+        <Button
+          variant={foldersOpen || folderActive ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={onToggleFolders}
+          aria-pressed={foldersOpen}
+          aria-label={t('marketingContent.toolbar.folders')}
+        >
+          <Folder className="w-4 h-4" />
+          <span className="hidden sm:inline ml-1">
+            {t('marketingContent.toolbar.folders')}
+          </span>
+        </Button>
+
         {/* Filter toggle */}
         <Button
           variant={filtersOpen || activeFilterCount > 0 ? 'primary' : 'secondary'}

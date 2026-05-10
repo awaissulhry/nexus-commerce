@@ -874,10 +874,42 @@ model DigitalAsset {
   // Tag model rather than introducing an asset-only taxonomy).
   tags   AssetTag[]
 
+  // MC.2.2 — optional AssetFolder. NULL means "unfiled" (the
+  // default — operators can drag assets into a folder later).
+  folderId String?
+  folder   AssetFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([type])
+  @@index([folderId])
+}
+
+/// MC.2.2 — AssetFolder (DAM hierarchy).
+///
+/// Self-referential parentId for unbounded depth. A NULL parentId
+/// is a root folder. SetNull on parent delete promotes orphaned
+/// children to roots — the alternative (cascade) would silently
+/// drop assets with the parent and that's an awful UX. Operators
+/// who genuinely want to delete a tree should clear children
+/// explicitly first.
+///
+/// `order` is per-parent display order (siblings sorted ascending).
+/// Drag-reorder writes a fresh sequence on commit, same pattern as
+/// ProductImage.sortOrder (W8.1).
+model AssetFolder {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    AssetFolder?  @relation("AssetFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  AssetFolder[] @relation("AssetFolderTree")
+  assets    DigitalAsset[]
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId, order])
 }
 
 /// W4.4 — AssetUsage (DAM join layer).

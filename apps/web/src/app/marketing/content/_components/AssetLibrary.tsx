@@ -29,6 +29,7 @@ import {
 } from '../_lib/timeline'
 import type { LibraryItem, LibraryResponse } from '../_lib/types'
 import type { FilterState } from './FilterSidebar'
+import type { FolderSelection } from './FolderTree'
 
 function MatchedFields({
   item,
@@ -61,6 +62,7 @@ interface Props {
   view: ViewMode
   search: string
   filter: FilterState
+  folderSelection?: FolderSelection
   apiBase: string
   onSelect?: (item: LibraryItem) => void
   selectedId?: string | null
@@ -107,6 +109,7 @@ export default function AssetLibrary({
   view,
   search,
   filter,
+  folderSelection = 'all',
   apiBase,
   onSelect,
   selectedId,
@@ -129,6 +132,7 @@ export default function AssetLibrary({
       replace: boolean,
       currentSearch: string,
       currentFilter: FilterState,
+      currentFolder: FolderSelection,
     ) => {
       const seq = ++requestSeq.current
       setLoading(true)
@@ -149,6 +153,8 @@ export default function AssetLibrary({
           url.searchParams.set('dateRange', currentFilter.dateRange)
         if (currentFilter.tagIds.length)
           url.searchParams.set('tagIds', currentFilter.tagIds.join(','))
+        if (currentFolder !== 'all')
+          url.searchParams.set('folderId', currentFolder)
         const res = await fetch(url.toString(), { cache: 'no-store' })
         if (!res.ok)
           throw new Error(`Library API returned ${res.status}`)
@@ -177,17 +183,17 @@ export default function AssetLibrary({
       setItems([])
       setPage(1)
       setHasMore(false)
-      void fetchPage(1, true, search, filter)
+      void fetchPage(1, true, search, filter, folderSelection)
     }, 250)
     return () => clearTimeout(handle)
-  }, [search, filter, fetchPage])
+  }, [search, filter, folderSelection, fetchPage])
 
   // MC.2.3 — refresh when caller bumps the key (e.g. after bulk
   // delete). Does not debounce because the operator just clicked
   // delete and expects the row to disappear immediately.
   useEffect(() => {
     if (refreshKey === 0) return
-    void fetchPage(1, true, search, filter)
+    void fetchPage(1, true, search, filter, folderSelection)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
@@ -236,7 +242,7 @@ export default function AssetLibrary({
     const last = virtualItems[virtualItems.length - 1]
     if (!last) return
     if (hasMore && !loading && !error && last.index >= rowCount - 4) {
-      void fetchPage(page + 1, false, search, filter)
+      void fetchPage(page + 1, false, search, filter, folderSelection)
     }
   }, [
     virtualizer,
@@ -247,6 +253,7 @@ export default function AssetLibrary({
     page,
     search,
     filter,
+    folderSelection,
     fetchPage,
   ])
 
@@ -261,7 +268,7 @@ export default function AssetLibrary({
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => fetchPage(1, true, search, filter)}
+          onClick={() => fetchPage(1, true, search, filter, folderSelection)}
         >
           <RefreshCw className="w-4 h-4 mr-1" />
           {t('marketingContent.library.retry')}

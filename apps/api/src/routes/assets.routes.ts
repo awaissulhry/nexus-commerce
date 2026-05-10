@@ -133,6 +133,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       missingAlt?: string // '1' / 'true' to filter
       dateRange?: string // 'today' | 'last_7d' | 'last_30d'
       tagIds?: string // comma-separated, narrows DigitalAssets to those with ALL named tags
+      folderId?: string // 'unfiled' for null, '*' / unset for any, otherwise the folder id
       search?: string
       page?: string
       pageSize?: string
@@ -174,6 +175,15 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           .filter(Boolean)
       : []
 
+    // folderId: 'unfiled' filters to NULL (assets with no folder),
+    // any other non-empty value narrows to that folder. Unset means
+    // "every folder including unfiled".
+    const folderFilter: 'unfiled' | string | null = q.folderId
+      ? q.folderId === 'unfiled'
+        ? 'unfiled'
+        : q.folderId
+      : null
+
     let dateFrom: Date | null = null
     if (q.dateRange) {
       const now = Date.now()
@@ -207,7 +217,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     // until W4.7 migration cuts master gallery into the canonical
     // model). Active tag filter implicitly excludes ProductImage.
     const includeProductImages =
-      sourceAllowsProductImage && typeAllowsProductImage && tagIds.length === 0
+      sourceAllowsProductImage &&
+      typeAllowsProductImage &&
+      tagIds.length === 0 &&
+      // Folder filter is DigitalAsset-only; any active folder
+      // filter (including "unfiled") implicitly excludes ProductImage.
+      folderFilter === null
 
     const daWhere: Record<string, unknown> = {}
     if (typeFilter) daWhere.type = { in: typeFilter }
@@ -224,6 +239,8 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         tags: { some: { tagId } },
       }))
     }
+    if (folderFilter === 'unfiled') daWhere.folderId = null
+    else if (folderFilter) daWhere.folderId = folderFilter
     if (search) {
       // MC.1.4 — match the structured fields plus JSON-path captures
       // for caption and alt living under metadata. Prisma's
@@ -864,6 +881,147 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { name: 'asc' },
     })
     return { tags }
+  })
+
+  // ── MC.2.2 — AssetFolder CRUD + tree ───────────────────────
+
+  // Returns the entire folder tree as a flat list with parentId. The
+  // operator's tree usually fits in a single response (< 1k folders
+  // even at large catalogs), and the client renders the tree
+  // structure off the parentId pointers. If the workspace ever
+  // outgrows that, MC.2-followup paginates by depth.
+  fastify.get('/asset-folders', async () => {
+    const folders = await prisma.assetFolder.findMany({
+      orderBy: [{ parentId: 'asc' }, { order: 'asc' }, { name: 'asc' }],
+      include: {
+        _count: { select: { assets: true, children: true } },
+      },
+    })
+    return { folders }
+  })
+
+  fastify.post('/asset-folders', async (request, reply) => {
+    const body = request.body as {
+      name?: string
+      parentId?: string | null
+      order?: number
+    }
+    if (!body.name?.trim())
+      return reply.code(400).send({ error: 'name is required' })
+
+    if (body.parentId) {
+      const parent = await prisma.assetFolder.findUnique({
+        where: { id: body.parentId },
+        select: { id: true },
+      })
+      if (!parent)
+        return reply.code(400).send({ error: 'parentId does not exist' })
+    }
+
+    const folder = await prisma.assetFolder.create({
+      data: {
+        name: body.name.trim(),
+        parentId: body.parentId ?? null,
+        order: typeof body.order === 'number' ? body.order : 0,
+      },
+    })
+    return reply.code(201).send({ folder })
+  })
+
+  fastify.patch('/asset-folders/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as {
+      name?: string
+      parentId?: string | null
+      order?: number
+    }
+    const data: Record<string, unknown> = {}
+    if (body.name !== undefined) {
+      if (!body.name.trim())
+        return reply.code(400).send({ error: 'name cannot be empty' })
+      data.name = body.name.trim()
+    }
+    if (body.parentId !== undefined) {
+      // Prevent cycles — a folder can't be its own ancestor. Walk
+      // up the requested parent's chain; if we hit `id` first, the
+      // move would create a cycle.
+      if (body.parentId === id)
+        return reply
+          .code(400)
+          .send({ error: 'cannot make a folder its own parent' })
+      if (body.parentId) {
+        let cursor: string | null = body.parentId
+        for (let i = 0; i < 32 && cursor; i++) {
+          if (cursor === id)
+            return reply.code(400).send({
+              error:
+                'cycle detected — moving here would put a folder inside its own subtree',
+            })
+          const parent = await prisma.assetFolder.findUnique({
+            where: { id: cursor },
+            select: { parentId: true },
+          })
+          if (!parent) break
+          cursor = parent.parentId
+        }
+      }
+      data.parentId = body.parentId ?? null
+    }
+    if (body.order !== undefined) data.order = body.order
+    if (Object.keys(data).length === 0)
+      return reply.code(400).send({ error: 'no mutable fields supplied' })
+    try {
+      const folder = await prisma.assetFolder.update({
+        where: { id },
+        data,
+      })
+      return { folder }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'folder not found' })
+      throw err
+    }
+  })
+
+  fastify.delete('/asset-folders/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.assetFolder.delete({ where: { id } })
+      return { ok: true, id }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'folder not found' })
+      throw err
+    }
+  })
+
+  // Move a set of assets to a folder (or to "unfiled" via folderId
+  // null). Used by the bulk Move action; also handles single-asset
+  // moves from the detail drawer.
+  fastify.post('/assets/move', async (request, reply) => {
+    const body = request.body as {
+      assetIds?: string[]
+      folderId?: string | null
+    }
+    if (!Array.isArray(body.assetIds) || body.assetIds.length === 0)
+      return reply
+        .code(400)
+        .send({ error: 'assetIds array is required (1+ ids)' })
+
+    if (body.folderId) {
+      const folder = await prisma.assetFolder.findUnique({
+        where: { id: body.folderId },
+        select: { id: true },
+      })
+      if (!folder)
+        return reply.code(400).send({ error: 'folderId does not exist' })
+    }
+
+    const updated = await prisma.digitalAsset.updateMany({
+      where: { id: { in: body.assetIds } },
+      data: { folderId: body.folderId ?? null },
+    })
+    return { moved: updated.count, folderId: body.folderId ?? null }
   })
 }
 
