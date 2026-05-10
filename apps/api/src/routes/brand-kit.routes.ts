@@ -16,6 +16,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { checkBrandConsistency } from '../services/brand-consistency.service.js'
 
 const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/brand-kits', async () => {
@@ -239,6 +240,17 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  // ── MC.10.4 — Consistency monitoring ─────────────────────
+
+  fastify.get(
+    '/brand-kits/:brand/consistency',
+    async (request) => {
+      const { brand } = request.params as { brand: string }
+      const result = await checkBrandConsistency(brand)
+      return { result }
+    },
+  )
 
   // List the catalogue's brand labels — feeds the create-kit
   // dropdown so operators pick existing brand values rather than

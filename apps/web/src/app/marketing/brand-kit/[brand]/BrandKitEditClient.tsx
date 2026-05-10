@@ -37,6 +37,7 @@ import {
   type LogoRole,
 } from '../_lib/types'
 import WatermarksSection from './WatermarksSection'
+import ConsistencySection from './ConsistencySection'
 
 interface Props {
   brand: string
@@ -120,6 +121,9 @@ export default function BrandKitEditClient({
           </p>
         )}
       </div>
+
+      {/* MC.10.4 — Consistency monitoring (only for existing kits) */}
+      {!isNew && <ConsistencySection brand={brand} apiBase={apiBase} />}
 
       {/* Identity section */}
       <Section

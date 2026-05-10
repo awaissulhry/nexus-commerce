@@ -4682,5 +4682,13 @@
   "brandKit.watermarks.field.text": "Text",
   "brandKit.watermarks.field.color": "Color",
   "brandKit.watermarks.field.fontSize": "Font size",
-  "brandKit.watermarks.field.angle": "Angle"
+  "brandKit.watermarks.field.angle": "Angle",
+  "brandKit.consistency.title": "Brand consistency",
+  "brandKit.consistency.runCta": "Re-run check",
+  "brandKit.consistency.running": "Running consistency check…",
+  "brandKit.consistency.notRun": "Run a check to surface drift between Brand Kit, A+ Content, and Brand Story documents.",
+  "brandKit.consistency.runError": "Couldn't run the consistency check — try again",
+  "brandKit.consistency.allClear": "No issues — Brand Kit, A+ Content, and Brand Story are aligned.",
+  "brandKit.consistency.openLink": "Open",
+  "brandKit.consistency.lastRun": "Last run {when}"
 }

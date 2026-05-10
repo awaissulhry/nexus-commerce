@@ -4733,5 +4733,13 @@
   "brandKit.watermarks.field.text": "Testo",
   "brandKit.watermarks.field.color": "Colore",
   "brandKit.watermarks.field.fontSize": "Dimensione font",
-  "brandKit.watermarks.field.angle": "Angolo"
+  "brandKit.watermarks.field.angle": "Angolo",
+  "brandKit.consistency.title": "Coerenza brand",
+  "brandKit.consistency.runCta": "Riesegui controllo",
+  "brandKit.consistency.running": "Esecuzione controllo coerenza…",
+  "brandKit.consistency.notRun": "Esegui un controllo per evidenziare scostamenti tra Brand Kit, A+ Content e Brand Story.",
+  "brandKit.consistency.runError": "Impossibile eseguire il controllo — riprova",
+  "brandKit.consistency.allClear": "Nessun problema — Brand Kit, A+ Content e Brand Story sono allineati.",
+  "brandKit.consistency.openLink": "Apri",
+  "brandKit.consistency.lastRun": "Ultima esecuzione {when}"
 }
