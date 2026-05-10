@@ -32,6 +32,7 @@ import {
 } from '../services/ai/providers/index.js'
 import {
   listPromptTemplates,
+  recordPromptTemplateEdit,
   type PromptTemplateStatus,
 } from '../services/ai/prompt-template.service.js'
 
@@ -230,6 +231,58 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
         lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
       })),
     }
+  })
+
+  // AET.1 (list-wizard) — record an operator's accept-or-edit
+  // decision after AI-generated content is saved. The wizard fires
+  // this from Step 5 (and any other AI-generated-text save site)
+  // with the {feature, scope, aiText, finalText} that produced the
+  // generation. Server re-derives which template was used (AB.3
+  // stickiness via stableSeed=productId) and bumps the right
+  // counter on PromptTemplate. Best-effort; logging failures don't
+  // 500 the operator's save.
+  //
+  // POST /api/ai/prompt-templates/record-edit
+  //   body: {
+  //     feature: string,
+  //     language?: string,
+  //     marketplace?: string,
+  //     productId?: string,    // used as stableSeed
+  //     aiText: string,
+  //     finalText: string,
+  //   }
+  fastify.post<{
+    Body: {
+      feature?: string
+      language?: string
+      marketplace?: string
+      productId?: string
+      aiText?: string
+      finalText?: string
+    }
+  }>('/ai/prompt-templates/record-edit', async (request, reply) => {
+    const body = request.body ?? {}
+    if (
+      typeof body.feature !== 'string' ||
+      body.feature.length === 0 ||
+      typeof body.aiText !== 'string' ||
+      typeof body.finalText !== 'string'
+    ) {
+      return reply
+        .code(400)
+        .send({ error: 'feature, aiText, finalText are required' })
+    }
+    const result = await recordPromptTemplateEdit(prisma, {
+      feature: body.feature,
+      scope: {
+        language: body.language ?? null,
+        marketplace: body.marketplace ?? null,
+        stableSeed: body.productId ?? null,
+      },
+      aiText: body.aiText,
+      finalText: body.finalText,
+    })
+    return { result }
   })
 
   fastify.get('/ai/providers', async () => {

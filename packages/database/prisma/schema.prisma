@@ -7565,6 +7565,17 @@ model PromptTemplate {
   callCount  Int       @default(0)
   lastUsedAt DateTime?
 
+  // AET.1 — operator acceptance telemetry. When the wizard saves
+  // AI-generated content, the API records whether the saved text
+  // matches the AI output (acceptedCount) or differs (editedCount),
+  // plus the cumulative edit distance (totalEditChars; mean = total
+  // / editedCount). Accept-as-is rate (acceptedCount / (acceptedCount +
+  // editedCount)) is the headline metric for A/B winner selection
+  // when traffic isn't enough to settle by callCount alone.
+  acceptedCount  Int @default(0)
+  editedCount    Int @default(0)
+  totalEditChars Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   createdBy String?

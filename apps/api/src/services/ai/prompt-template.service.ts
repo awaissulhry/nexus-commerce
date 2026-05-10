@@ -63,12 +63,71 @@ export interface PromptScope {
 
 /**
  * Resolve the most-specific ACTIVE PromptTemplate for a feature +
+ * scope, WITHOUT side-effects. Used by both findActivePromptTemplate
+ * (which adds PR.3 callCount telemetry on top) and the AET.1 record-
+ * edit helper (which needs the same template the generation call
+ * landed on, but must NOT double-count it as a fresh call).
+ */
+async function matchPromptTemplate(
+  prisma: PrismaClient,
+  feature: string,
+  scope: PromptScope,
+): Promise<PromptTemplateRow | null> {
+  const language = scope.language?.toLowerCase() ?? null
+  const marketplace = scope.marketplace?.toUpperCase() ?? null
+  const rows = await prisma.promptTemplate.findMany({
+    where: { feature, status: 'ACTIVE' },
+    orderBy: [{ updatedAt: 'desc' }],
+  })
+  if (rows.length === 0) return null
+  const exactRows = rows.filter(
+    (r) =>
+      r.language?.toLowerCase() === language &&
+      r.marketplace?.toUpperCase() === marketplace,
+  )
+  const langOnlyRows = rows.filter(
+    (r) => r.language?.toLowerCase() === language && r.marketplace == null,
+  )
+  const marketOnlyRows = rows.filter(
+    (r) => r.language == null && r.marketplace?.toUpperCase() === marketplace,
+  )
+  const globalRows = rows.filter(
+    (r) => r.language == null && r.marketplace == null,
+  )
+  const seed = scope.stableSeed?.trim() || null
+  const pickFromTier = <T,>(tier: T[]): T | undefined => {
+    if (tier.length === 0) return undefined
+    if (tier.length === 1) return tier[0]
+    if (seed) {
+      let h = 5381
+      for (let i = 0; i < seed.length; i += 1) {
+        h = ((h << 5) + h + seed.charCodeAt(i)) | 0
+      }
+      return tier[Math.abs(h) % tier.length]
+    }
+    return tier[Math.floor(Math.random() * tier.length)]
+  }
+  const picked =
+    pickFromTier(exactRows) ??
+    pickFromTier(langOnlyRows) ??
+    pickFromTier(marketOnlyRows) ??
+    pickFromTier(globalRows) ??
+    null
+  return (picked as PromptTemplateRow | null) ?? null
+}
+
+/**
+ * Resolve the most-specific ACTIVE PromptTemplate for a feature +
  * scope. Preference order:
  *   1. exact (language + marketplace) match
  *   2. language-only match
  *   3. marketplace-only match
  *   4. global (both null)
  * Returns null when nothing matches — caller falls back to inline.
+ *
+ * Side-effect: increments callCount + lastUsedAt on the matched row
+ * (PR.3). Use matchPromptTemplate directly when you need the result
+ * without the increment (AET.1 re-derivation).
  */
 export async function findActivePromptTemplate(
   prisma: PrismaClient,
@@ -76,93 +135,142 @@ export async function findActivePromptTemplate(
   scope: PromptScope = {},
 ): Promise<PromptTemplateRow | null> {
   try {
-    const language = scope.language?.toLowerCase() ?? null
-    const marketplace = scope.marketplace?.toUpperCase() ?? null
-    // Pull every ACTIVE row for the feature in one query, then pick
-    // the most-specific match in code. Cheaper than four sequential
-    // queries against an indexed table.
-    const rows = await prisma.promptTemplate.findMany({
-      where: { feature, status: 'ACTIVE' },
-      orderBy: [{ updatedAt: 'desc' }],
-    })
-    if (rows.length === 0) return null
-    // AB.1 — A/B routing: when an operator promotes multiple ACTIVE
-    // rows at the same specificity tier (same feature + language +
-    // marketplace), evenly split traffic between them. Operators get
-    // A/B without a schema change — two ACTIVE rows at the same
-    // scope counts as a 50/50; three is 33/33/33. callCount on each
-    // row tracks observed split so the admin UI shows real numbers.
-    //
-    // We bucket per tier and pick one per tier; the existing fall-
-    // through (exact → lang → market → global) still applies, so
-    // an exact-tier A/B doesn't get diluted by a global fallback.
-    const exactRows = rows.filter(
-      (r) =>
-        r.language?.toLowerCase() === language &&
-        r.marketplace?.toUpperCase() === marketplace,
-    )
-    const langOnlyRows = rows.filter(
-      (r) => r.language?.toLowerCase() === language && r.marketplace == null,
-    )
-    const marketOnlyRows = rows.filter(
-      (r) => r.language == null && r.marketplace?.toUpperCase() === marketplace,
-    )
-    const globalRows = rows.filter(
-      (r) => r.language == null && r.marketplace == null,
-    )
-    const seed = scope.stableSeed?.trim() || null
-    const pickFromTier = <T,>(tier: T[]): T | undefined => {
-      if (tier.length === 0) return undefined
-      if (tier.length === 1) return tier[0]
-      if (seed) {
-        // AB.3 — deterministic stickiness. djb2 over the seed gives
-        // the same wizard / product the same variant across calls,
-        // so per-listing observability isn't muddied by a wizard
-        // bouncing between A and B per field.
-        let h = 5381
-        for (let i = 0; i < seed.length; i += 1) {
-          h = ((h << 5) + h + seed.charCodeAt(i)) | 0
-        }
-        return tier[Math.abs(h) % tier.length]
-      }
-      // No seed — fall back to even random. Over many calls the
-      // split converges to 1/N.
-      return tier[Math.floor(Math.random() * tier.length)]
-    }
-    const picked =
-      pickFromTier(exactRows) ??
-      pickFromTier(langOnlyRows) ??
-      pickFromTier(marketOnlyRows) ??
-      pickFromTier(globalRows) ??
-      null
+    const picked = await matchPromptTemplate(prisma, feature, scope)
+    if (picked === null) return null
 
     // PR.3 — increment usage telemetry on the picked row. Fire-and-
     // forget: the AI call is already running, the operator is
     // waiting on the response, so we don't make them wait on a DB
     // round-trip. Failures swallowed (the matcher's job is matching;
     // counter drift is a tolerable cost vs blocking generation).
-    if (picked) {
-      void prisma.promptTemplate
-        .update({
-          where: { id: picked.id },
-          data: {
-            callCount: { increment: 1 },
-            lastUsedAt: new Date(),
-          },
-        })
-        .catch((err) => {
-          logger.warn(
-            'prompt-template-service: usage telemetry update failed',
-            { err: err instanceof Error ? err.message : String(err), id: picked.id },
-          )
-        })
-    }
+    void prisma.promptTemplate
+      .update({
+        where: { id: picked.id },
+        data: {
+          callCount: { increment: 1 },
+          lastUsedAt: new Date(),
+        },
+      })
+      .catch((err) => {
+        logger.warn(
+          'prompt-template-service: usage telemetry update failed',
+          { err: err instanceof Error ? err.message : String(err), id: picked.id },
+        )
+      })
 
-    return picked as PromptTemplateRow | null
+    return picked
   } catch (err) {
     logger.warn('prompt-template-service: findActive failed (returning null)', {
       err: err instanceof Error ? err.message : String(err),
       feature,
+    })
+    return null
+  }
+}
+
+/**
+ * AET.1 — record an operator's accept-or-edit decision on AI-generated
+ * content. Caller supplies the same scope they generated under
+ * (feature + language + marketplace + stableSeed); the matcher re-
+ * derives which template was used (deterministic via AB.3 stickiness)
+ * and increments acceptedCount / editedCount + totalEditChars.
+ *
+ * Levenshtein distance via a dynamic-programming row swap. Capped at
+ * MAX_LEN inputs (8 KB each) to keep wall time bounded — beyond that
+ * the operator clearly did substantial rewriting and the actual
+ * distance number stops being useful past O(thousands).
+ *
+ * Best-effort: failures swallow + return null. The save the operator
+ * just did is already committed; counter drift is acceptable.
+ */
+const MAX_LEN_FOR_DISTANCE = 8 * 1024
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  if (a.length === 0) return b.length
+  if (b.length === 0) return a.length
+  // Hard cap inputs so an enormous description doesn't burn a CPU
+  // tick. Operators editing >8KB strings get an upper-bound estimate
+  // (counts the cap-truncated diff). Editing anywhere near this size
+  // already classifies as "edited", which is the only outcome that
+  // matters for the counter.
+  const ax = a.length > MAX_LEN_FOR_DISTANCE ? a.slice(0, MAX_LEN_FOR_DISTANCE) : a
+  const bx = b.length > MAX_LEN_FOR_DISTANCE ? b.slice(0, MAX_LEN_FOR_DISTANCE) : b
+  const m = ax.length
+  const n = bx.length
+  let prev = new Array<number>(n + 1)
+  let curr = new Array<number>(n + 1)
+  for (let j = 0; j <= n; j += 1) prev[j] = j
+  for (let i = 1; i <= m; i += 1) {
+    curr[0] = i
+    for (let j = 1; j <= n; j += 1) {
+      const cost = ax.charCodeAt(i - 1) === bx.charCodeAt(j - 1) ? 0 : 1
+      curr[j] = Math.min(
+        curr[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost,
+      )
+    }
+    const swap = prev
+    prev = curr
+    curr = swap
+  }
+  return prev[n]
+}
+
+export interface RecordEditInput {
+  feature: string
+  scope?: PromptScope
+  aiText: string
+  finalText: string
+}
+export interface RecordEditResult {
+  templateId: string | null
+  acceptedAsIs: boolean
+  editDistance: number
+}
+export async function recordPromptTemplateEdit(
+  prisma: PrismaClient,
+  input: RecordEditInput,
+): Promise<RecordEditResult | null> {
+  try {
+    // matchPromptTemplate (not findActivePromptTemplate) — recordEdit
+    // must NOT increment callCount; the generation that produced
+    // aiText already did (PR.3).
+    const picked = await matchPromptTemplate(
+      prisma,
+      input.feature,
+      input.scope ?? {},
+    )
+    const acceptedAsIs = input.aiText === input.finalText
+    const editDistance = acceptedAsIs
+      ? 0
+      : levenshtein(input.aiText, input.finalText)
+    if (!picked) {
+      // No DB-backed template was used (caller fell through to the
+      // inline static prompt). Don't increment anything; just report
+      // the decision back so the caller can store it elsewhere if it
+      // wants.
+      return { templateId: null, acceptedAsIs, editDistance }
+    }
+    if (acceptedAsIs) {
+      await prisma.promptTemplate.update({
+        where: { id: picked.id },
+        data: { acceptedCount: { increment: 1 } },
+      })
+    } else {
+      await prisma.promptTemplate.update({
+        where: { id: picked.id },
+        data: {
+          editedCount: { increment: 1 },
+          totalEditChars: { increment: editDistance },
+        },
+      })
+    }
+    return { templateId: picked.id, acceptedAsIs, editDistance }
+  } catch (err) {
+    logger.warn('prompt-template-service: recordEdit failed', {
+      err: err instanceof Error ? err.message : String(err),
+      feature: input.feature,
     })
     return null
   }
