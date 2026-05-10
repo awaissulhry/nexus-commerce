@@ -870,6 +870,9 @@ model DigitalAsset {
 
   // Back-relation to usages.
   usages AssetUsage[]
+  // MC.2.1 — back-relation for AssetTag join (reuses the existing
+  // Tag model rather than introducing an asset-only taxonomy).
+  tags   AssetTag[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4225,13 +4228,71 @@ model ListingWizard {
   // simple WHERE clause.
   expiresAt DateTime?
 
-  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  stepEvents WizardStepEvent[] // C.0: per-step telemetry
+  product            Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stepEvents         WizardStepEvent[] // C.0: per-step telemetry
+  scheduledPublishes ScheduledWizardPublish[] // SP.1: future-dated publishes
 
   @@unique([productId, channelsHash, status])
   @@index([productId])
   @@index([status])
   @@index([expiresAt])
+}
+
+// ── SP.1 (list-wizard): scheduled wizard publish ──────────────────────
+// Operator picks a future date/time to fire the wizard's submit
+// instead of clicking Submit immediately. Useful for Black Friday /
+// season-launch timing where the channel listings shouldn't be live
+// before midnight.
+//
+// Cron picks PENDING rows where scheduledFor <= now, calls the same
+// orchestrator path /submit hits, captures the result + flips status
+// to FIRED (or FAILED on a thrown adapter error). Mirrors the
+// ScheduledProductChange pattern (kind=STATUS|PRICE) the
+// products/[id]/edit surface already uses for deferred mutations.
+//
+// CANCELLED is a separate terminal state operators set via the UI
+// before the cron fires. Cancelled rows are kept (not hard-deleted)
+// so the audit trail of "we were going to publish at X but
+// cancelled" survives.
+model ScheduledWizardPublish {
+  id String @id @default(cuid())
+
+  wizardId String
+  wizard   ListingWizard @relation(fields: [wizardId], references: [id], onDelete: Cascade)
+
+  /// When to fire the publish. Cron compares against now() in the
+  /// same TZ Postgres reports.
+  scheduledFor DateTime
+
+  /// Lifecycle.
+  ///   PENDING   queued; cron will pick when scheduledFor <= now
+  ///   FIRED     cron called /submit; fireResult / fireError holds
+  ///             whatever came back
+  ///   FAILED    cron threw before completion (network, adapter
+  ///             exception); operator can re-schedule
+  ///   CANCELLED operator dismissed before fire
+  status String @default("PENDING")
+
+  /// Audit timestamps for the lifecycle transitions. NULL until set.
+  firedAt     DateTime?
+  cancelledAt DateTime?
+
+  /// What the orchestrator returned. Same shape as /submit response —
+  /// { wizard, submissions[], validation }. Trimmed by the cron writer
+  /// if the payload exceeds 4 KB to keep the row narrow.
+  fireResult Json?
+  /// Human-readable error when the cron fire threw. Up to 500 chars.
+  fireError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  /// Cron picker — most selective filter is (status, scheduledFor)
+  /// so the worker scans PENDING in time order without a Seq Scan.
+  @@index([status, scheduledFor])
+  /// Per-wizard list — operators viewing a single wizard's history.
+  @@index([wizardId])
 }
 
 // C.0 — append-only step-level telemetry for the listing wizard.
@@ -7174,6 +7235,29 @@ model Tag {
 
   products ProductTag[]
   orders   OrderTag[]
+  // MC.2.1 — assets reuse the same Tag pool. Operator-set tags like
+  // "hero", "product-on-white", "lifestyle", "racing-line" can apply
+  // to either products, orders, or assets without divergent vocab.
+  assets   AssetTag[]
+}
+
+/// MC.2.1 — AssetTag join table.
+///
+/// Same shape as ProductTag / OrderTag — composite PK + cascade.
+/// Cascading both sides means deleting a tag cleans up the
+/// attachments without manual maintenance, and deleting an asset
+/// (DigitalAsset) drops its tag rows.
+model AssetTag {
+  assetId   String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  asset DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  tag   Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([assetId, tagId])
+  @@index([assetId])
+  @@index([tagId])
 }
 
 model ProductTag {
