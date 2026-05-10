@@ -54,6 +54,12 @@ export interface PromptTemplateRow {
   marketplace: string | null
   callCount: number
   lastUsedAt: string | null
+  // AET.1 — operator acceptance counters. Backed by 0 defaults on
+  // existing rows, so the admin UI can read them as numbers without
+  // a migration backfill.
+  acceptedCount: number
+  editedCount: number
+  totalEditChars: number
   createdAt: string
   updatedAt: string
   createdBy: string | null
@@ -494,6 +500,50 @@ export default function AiPromptsClient({ initialRows }: Props) {
                                   ? ` · last ${fmtRelative(row.lastUsedAt)}`
                                   : ''}
                               </span>
+                              {(() => {
+                                // AET.3 — operator acceptance metrics.
+                                // Only renders once at least one
+                                // record-edit has fired; pre-AET rows
+                                // (and unused templates) keep the
+                                // chrome clean. Acceptance rate =
+                                // accepted / (accepted + edited);
+                                // avg edit distance = total / edited.
+                                const accepted = row.acceptedCount ?? 0
+                                const edited = row.editedCount ?? 0
+                                const sample = accepted + edited
+                                if (sample === 0) return null
+                                const acceptPct = Math.round(
+                                  (accepted / sample) * 100,
+                                )
+                                const avgChars =
+                                  edited > 0
+                                    ? Math.round(
+                                        (row.totalEditChars ?? 0) / edited,
+                                      )
+                                    : 0
+                                const tone =
+                                  acceptPct >= 70
+                                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                                    : acceptPct >= 40
+                                      ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                      : 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
+                                return (
+                                  <span
+                                    className={cn(
+                                      'text-xs px-1.5 py-0.5 rounded tabular-nums font-medium',
+                                      tone,
+                                    )}
+                                    title={`${accepted} accepted / ${edited} edited (n=${sample})${
+                                      edited > 0
+                                        ? ` · avg edit distance ~${avgChars} chars`
+                                        : ''
+                                    }`}
+                                  >
+                                    {acceptPct}% accepted
+                                    {edited > 0 ? ` · ~${avgChars}c` : ''}
+                                  </span>
+                                )
+                              })()}
                               {(() => {
                                 // AB.4 — show realised traffic share
                                 // when this row is part of an A/B
