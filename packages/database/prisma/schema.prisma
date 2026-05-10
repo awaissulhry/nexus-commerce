@@ -1802,6 +1802,42 @@ model TerminologyPreference {
   @@index([marketplace])
 }
 
+/// BV.1 (list-wizard) — brand voice guidance injected into AI prompts
+/// as the {brandVoiceBlock} placeholder.
+///
+/// Operators write natural-language style instructions ("Terse bullets.
+/// No emojis. Technical tone. Imperative voice.") and the renderer in
+/// listing-content.service.ts threads them into every Step 5 AI call.
+/// Sister to TerminologyPreference: terminology covers WORD choice,
+/// brand voice covers TONE / STRUCTURE / STYLE.
+///
+/// Scope keys (brand, marketplace, language) follow the PromptTemplate
+/// matcher pattern — most-specific match wins, null = applies to all.
+/// Brand "Xavia" + marketplace "IT" + language "it" beats just brand
+/// "Xavia"; brand "Xavia" beats global (all null).
+model BrandVoice {
+  id          String  @id @default(cuid())
+  brand       String?
+  marketplace String?
+  language    String?
+
+  /// The prompt-block body. Inlined into the AI prompt verbatim as
+  /// the {brandVoiceBlock} substitution; renderer wraps it in a
+  /// "Brand voice:" prefix so the AI knows what it is.
+  body  String
+  /// Operator-only memo. Never surfaced to the AI — useful for
+  /// "why did I write it this way" notes.
+  notes String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([brand, marketplace, language, isActive])
+  @@index([isActive])
+}
+
 model MarketplaceSync {
   id             String   @id @default(cuid())
   product        Product  @relation(fields: [productId], references: [id])
