@@ -285,6 +285,83 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── MC.9.3 — Localization sibling cloning ───────────────
+
+  fastify.post(
+    '/brand-stories/:id/localize',
+    async (request, reply) => {
+      const { id: sourceId } = request.params as { id: string }
+      const body = request.body as {
+        marketplace?: string
+        locale?: string
+        nameSuffix?: string
+      }
+      if (!body.marketplace?.trim())
+        return reply
+          .code(400)
+          .send({ error: 'marketplace is required' })
+      if (!body.locale?.trim())
+        return reply.code(400).send({ error: 'locale is required' })
+
+      const source = await prisma.brandStory.findUnique({
+        where: { id: sourceId },
+        include: { modules: { orderBy: { position: 'asc' } } },
+      })
+      if (!source)
+        return reply
+          .code(404)
+          .send({ error: 'source Brand Story not found' })
+      if (source.masterStoryId)
+        return reply.code(400).send({
+          error:
+            'localizations can only branch from a master row, not from a sibling',
+        })
+
+      // Idempotent — if a sibling for this brand+marketplace+locale
+      // already exists, return it. Brand+marketplace+locale is the
+      // unique key on BrandStory itself.
+      const existing = await prisma.brandStory.findUnique({
+        where: {
+          brand_marketplace_locale: {
+            brand: source.brand,
+            marketplace: body.marketplace,
+            locale: body.locale,
+          },
+        },
+      })
+      if (existing)
+        return reply
+          .code(200)
+          .send({ story: existing, alreadyExisted: true })
+
+      const cloned = await prisma.$transaction(async (tx) => {
+        const created = await tx.brandStory.create({
+          data: {
+            name: `${source.name}${body.nameSuffix ? ` — ${body.nameSuffix}` : ` (${body.locale})`}`,
+            brand: source.brand,
+            marketplace: body.marketplace!,
+            locale: body.locale!,
+            masterStoryId: source.id,
+            status: 'DRAFT',
+          },
+        })
+        if (source.modules.length > 0) {
+          await tx.brandStoryModule.createMany({
+            data: source.modules.map((m) => ({
+              storyId: created.id,
+              type: m.type,
+              position: m.position,
+              payload: JSON.parse(JSON.stringify(m.payload)),
+            })),
+          })
+        }
+        return created
+      })
+
+      return reply.code(201).send({ story: cloned, alreadyExisted: false })
+    },
+  )
+
   fastify.post(
     '/brand-stories/:id/modules/reorder',
     async (request, reply) => {

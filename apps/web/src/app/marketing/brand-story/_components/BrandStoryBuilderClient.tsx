@@ -39,6 +39,7 @@ import {
   type BrandStoryModuleRow,
   type BrandStoryStatus,
 } from '../_lib/types'
+import BrandStoryLocalizationsPanel from './BrandStoryLocalizationsPanel'
 
 interface Props {
   initial: BrandStoryDetail
@@ -299,6 +300,8 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
           {busy && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
         </div>
       </div>
+
+      <BrandStoryLocalizationsPanel document={initial} apiBase={apiBase} />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         <ModulePalette
