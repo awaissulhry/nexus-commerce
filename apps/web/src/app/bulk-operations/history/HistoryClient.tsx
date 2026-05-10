@@ -20,6 +20,7 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -60,8 +61,19 @@ interface ItemRow {
   afterState: Record<string, unknown> | null
   createdAt: string
   completedAt: string | null
+  durationMs: number | null
   sku: string | null
   channelLabel: string | null
+}
+
+/** W10.3 — short ms label for the per-item duration column. */
+function formatDurationMs(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms)) return '—'
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  const min = Math.floor(ms / 60_000)
+  const sec = Math.round((ms % 60_000) / 1000)
+  return `${min}m ${sec}s`
 }
 
 // ── Filter chips ───────────────────────────────────────────────────
@@ -194,6 +206,8 @@ function ItemsPanel({ jobId }: { jobId: string }) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [retrying, setRetrying] = useState(false)
   const [retryNotice, setRetryNotice] = useState<string | null>(null)
+  // W10.3 — selected item for the diff drawer. null = drawer closed.
+  const [drawerItem, setDrawerItem] = useState<ItemRow | null>(null)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -367,7 +381,9 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                 <th className="text-left font-medium px-3 py-2 w-32">Status</th>
                 <th className="text-left font-medium px-3 py-2">Target</th>
                 <th className="text-left font-medium px-3 py-2">Before → After</th>
+                <th className="text-right font-medium px-3 py-2 w-20">Duration</th>
                 <th className="text-left font-medium px-3 py-2 w-32">When</th>
+                <th className="text-right font-medium px-3 py-2 w-12"></th>
               </tr>
             </thead>
             <tbody>
@@ -421,8 +437,21 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                         </div>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-sm text-right tabular-nums text-slate-500 dark:text-slate-400">
+                      {formatDurationMs(it.durationMs)}
+                    </td>
                     <td className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
                       {relativeTime(it.completedAt ?? it.createdAt)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setDrawerItem(it)}
+                        title="View full payload"
+                        className="text-blue-700 dark:text-blue-300 hover:underline text-sm"
+                      >
+                        View
+                      </button>
                     </td>
                   </tr>
                 )
@@ -431,7 +460,108 @@ function ItemsPanel({ jobId }: { jobId: string }) {
           </table>
         </div>
       )}
+
+      <ItemDiffDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
     </div>
+  )
+}
+
+// ── Per-item diff drawer ──────────────────────────────────────────
+//
+// W10.3 — side panel showing the full beforeState / afterState
+// JSON for a single BulkActionItem, plus its metadata (target,
+// status, durationMs, error). The inline table only shows changed
+// keys — operators that need to inspect the complete payload (eg.
+// to confirm a missing key wasn't touched) open this drawer.
+
+function ItemDiffDrawer({
+  item,
+  onClose,
+}: {
+  item: ItemRow | null
+  onClose: () => void
+}) {
+  return (
+    <Modal
+      open={item !== null}
+      onClose={onClose}
+      placement="drawer-right"
+      size="2xl"
+      title={item ? `Item — ${item.sku ?? '(deleted)'}` : ''}
+    >
+      {item && (
+        <div className="space-y-4 p-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Status
+              </div>
+              <div className="mt-1">
+                <Badge variant={statusVariant(item.status)} size="sm">
+                  <StatusIcon status={item.status} className="w-3 h-3" />
+                  {item.status}
+                </Badge>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Duration
+              </div>
+              <div className="mt-1 font-mono text-slate-800 dark:text-slate-200 tabular-nums">
+                {formatDurationMs(item.durationMs)}
+              </div>
+            </div>
+            <div className="col-span-2">
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Target
+              </div>
+              <div className="mt-1 font-mono text-slate-800 dark:text-slate-200">
+                {item.sku ?? '(deleted)'}
+                {item.channelLabel && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
+                    {item.channelLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {item.errorMessage && (
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded p-3">
+              <div className="text-xs uppercase tracking-wide text-red-700 dark:text-red-300 mb-1">
+                Error
+              </div>
+              <pre className="text-sm font-mono text-red-700 dark:text-red-300 whitespace-pre-wrap break-words">
+                {item.errorMessage}
+              </pre>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                Before
+              </div>
+              <pre className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 text-xs font-mono whitespace-pre-wrap break-words max-h-[60vh] overflow-auto">
+                {item.beforeState
+                  ? JSON.stringify(item.beforeState, null, 2)
+                  : '(empty)'}
+              </pre>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                After
+              </div>
+              <pre className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 text-xs font-mono whitespace-pre-wrap break-words max-h-[60vh] overflow-auto">
+                {item.afterState
+                  ? JSON.stringify(item.afterState, null, 2)
+                  : '(empty)'}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }
 

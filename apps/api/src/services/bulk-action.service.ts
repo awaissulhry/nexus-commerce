@@ -1174,6 +1174,9 @@ export class BulkActionService {
       afterState: any;
       createdAt: Date;
       completedAt: Date | null;
+      // W10.2 — wall-clock per-handler time. Populated by the
+      // bulk-action processor; null on rows from earlier waves.
+      durationMs: number | null;
       // Human-readable target info (joined client-side for the audit
       // history pattern — no FK exists on the polymorphic columns).
       sku: string | null;
@@ -1281,6 +1284,7 @@ export class BulkActionService {
         afterState: r.afterState,
         createdAt: r.createdAt,
         completedAt: r.completedAt,
+        durationMs: r.durationMs ?? null,
         sku,
         channelLabel,
       };
