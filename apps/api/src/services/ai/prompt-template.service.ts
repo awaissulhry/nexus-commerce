@@ -80,19 +80,44 @@ export async function findActivePromptTemplate(
       orderBy: [{ updatedAt: 'desc' }],
     })
     if (rows.length === 0) return null
-    const exact = rows.find(
+    // AB.1 — A/B routing: when an operator promotes multiple ACTIVE
+    // rows at the same specificity tier (same feature + language +
+    // marketplace), evenly split traffic between them. Operators get
+    // A/B without a schema change — two ACTIVE rows at the same
+    // scope counts as a 50/50; three is 33/33/33. callCount on each
+    // row tracks observed split so the admin UI shows real numbers.
+    //
+    // We bucket per tier and pick one per tier; the existing fall-
+    // through (exact → lang → market → global) still applies, so
+    // an exact-tier A/B doesn't get diluted by a global fallback.
+    const exactRows = rows.filter(
       (r) =>
         r.language?.toLowerCase() === language &&
         r.marketplace?.toUpperCase() === marketplace,
     )
-    const langOnly = rows.find(
+    const langOnlyRows = rows.filter(
       (r) => r.language?.toLowerCase() === language && r.marketplace == null,
     )
-    const marketOnly = rows.find(
+    const marketOnlyRows = rows.filter(
       (r) => r.language == null && r.marketplace?.toUpperCase() === marketplace,
     )
-    const global = rows.find((r) => r.language == null && r.marketplace == null)
-    const picked = exact ?? langOnly ?? marketOnly ?? global ?? null
+    const globalRows = rows.filter(
+      (r) => r.language == null && r.marketplace == null,
+    )
+    const pickFromTier = <T,>(tier: T[]): T | undefined => {
+      if (tier.length === 0) return undefined
+      if (tier.length === 1) return tier[0]
+      // Math.random keeps it simple — over many calls the split
+      // converges to 1/N. Per-call stickiness (same wizard always
+      // hits the same variant) lands later if needed.
+      return tier[Math.floor(Math.random() * tier.length)]
+    }
+    const picked =
+      pickFromTier(exactRows) ??
+      pickFromTier(langOnlyRows) ??
+      pickFromTier(marketOnlyRows) ??
+      pickFromTier(globalRows) ??
+      null
 
     // PR.3 — increment usage telemetry on the picked row. Fire-and-
     // forget: the AI call is already running, the operator is
