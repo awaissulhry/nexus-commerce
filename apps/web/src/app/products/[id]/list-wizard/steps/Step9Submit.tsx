@@ -1195,6 +1195,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<SchedulePublishRow[]>([])
+  const [cronEnabled, setCronEnabled] = useState<boolean | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
   const refresh = useCallback(async () => {
@@ -1206,6 +1207,9 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
       if (res.ok) {
         const json = await res.json()
         setPending(Array.isArray(json?.rows) ? json.rows : [])
+        if (typeof json?.cronEnabled === 'boolean') {
+          setCronEnabled(json.cronEnabled)
+        }
       }
     } finally {
       setRefreshing(false)
@@ -1339,6 +1343,16 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
             same publish flow as Submit. Cancel a pending schedule
             below before it fires.
           </p>
+          {cronEnabled === false && (
+            <div className="text-sm text-amber-700 dark:text-amber-300 inline-flex items-start gap-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span>
+                Heads up — scheduled-publish cron is disabled on this
+                deploy. Rows will queue but won&apos;t fire until an
+                operator sets <code>NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1</code>.
+              </span>
+            </div>
+          )}
         </div>
       )}
 

@@ -4370,7 +4370,15 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: [{ scheduledFor: 'desc' }],
         take: 50,
       })
+      // SP.5 — surface cron-enabled status so the UI can warn the
+      // operator if PENDING rows won't fire on this deploy. Cron is
+      // default-OFF (NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1 to opt
+      // in); without the warning, scheduled publishes silently sit
+      // in PENDING forever.
+      const cronEnabled =
+        process.env.NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH === '1'
       return {
+        cronEnabled,
         rows: rows.map((r) => ({
           ...r,
           scheduledFor: r.scheduledFor.toISOString(),
