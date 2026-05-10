@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Power,
   Play,
+  LayoutTemplate,
 } from 'lucide-react'
 // Power is used by the editor's trigger Section icon — keep it imported
 // even though the eslint linter won't see usage in the parent component.
@@ -39,6 +40,7 @@ import {
   type RuleRow,
   type SharedRuleRow,
 } from './_lib/types'
+import PresetsModal from './_components/PresetsModal'
 
 interface Props {
   rules: RuleRow[]
@@ -57,6 +59,7 @@ export default function AutomationListClient({
   const [rules, setRules] = useState<RuleRow[]>(initialRules)
   const [editing, setEditing] = useState<RuleRow | null>(null)
   const [creating, setCreating] = useState(false)
+  const [presetsOpen, setPresetsOpen] = useState(false)
 
   useEffect(() => {
     setRules(initialRules)
@@ -130,6 +133,14 @@ export default function AutomationListClient({
             >
               <RefreshCw className="w-4 h-4 mr-1" />
               {t('common.refresh')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPresetsOpen(true)}
+            >
+              <LayoutTemplate className="w-4 h-4 mr-1" />
+              {t('automation.presetsBtn')}
             </Button>
             <Button
               variant="primary"
@@ -213,6 +224,16 @@ export default function AutomationListClient({
           }}
         />
       )}
+
+      <PresetsModal
+        open={presetsOpen}
+        onClose={() => setPresetsOpen(false)}
+        apiBase={apiBase}
+        onApplied={async () => {
+          setPresetsOpen(false)
+          await refresh()
+        }}
+      />
     </div>
   )
 }

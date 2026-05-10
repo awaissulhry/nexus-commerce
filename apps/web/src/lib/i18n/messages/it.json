@@ -4772,5 +4772,13 @@
   "automation.aiActionWarning": "L'integrazione AI è in pausa — la regola si salva ma l'executor registra status='deferred' invece di eseguire. Riprenderà automaticamente quando arriva MC.4.",
   "automation.nameRequired": "Il nome della regola è obbligatorio",
   "automation.saved": "Regola salvata",
-  "automation.saveError": "Impossibile salvare la regola — riprova"
+  "automation.saveError": "Impossibile salvare la regola — riprova",
+  "automation.presetsBtn": "Preset",
+  "automation.presets.title": "Preset di regole",
+  "automation.presets.intro": "Coppie trigger+azione curate per il catalogo Xavia. Applica crea la regola disattivata + in dry-run per la revisione. I preset AI registrano status='deferred' finché non arriva MC.4.",
+  "automation.presets.applyCta": "Applica",
+  "automation.presets.applied": "\"{name}\" aggiunta — rivedi e attiva dalla lista regole",
+  "automation.presets.appliedNeedsEdit": "\"{name}\" aggiunta — modifica i campi segnaposto, poi attiva",
+  "automation.presets.applyError": "Impossibile applicare il preset — riprova",
+  "automation.presets.needsEditBadge": "Da modificare"
 }

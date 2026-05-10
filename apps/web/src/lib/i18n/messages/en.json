@@ -4721,5 +4721,13 @@
   "automation.aiActionWarning": "AI integration is paused — this rule saves but the executor logs status='deferred' instead of running. Will auto-resume when MC.4 ships.",
   "automation.nameRequired": "Rule name is required",
   "automation.saved": "Rule saved",
-  "automation.saveError": "Couldn't save the rule — try again"
+  "automation.saveError": "Couldn't save the rule — try again",
+  "automation.presetsBtn": "Presets",
+  "automation.presets.title": "Starter rule presets",
+  "automation.presets.intro": "Curated trigger+action pairs anchored on the Xavia motorcycle-gear catalog. Apply creates the rule disabled + in dry-run so you can review before flipping it on. AI presets log status='deferred' until MC.4 ships.",
+  "automation.presets.applyCta": "Apply",
+  "automation.presets.applied": "\"{name}\" added — review and enable from the rule list",
+  "automation.presets.appliedNeedsEdit": "\"{name}\" added — edit the placeholder fields, then enable",
+  "automation.presets.applyError": "Couldn't apply the preset — try again",
+  "automation.presets.needsEditBadge": "Needs edit"
 }
