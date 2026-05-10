@@ -53,6 +53,12 @@ export interface PromptTemplateRow {
 export interface PromptScope {
   language?: string | null
   marketplace?: string | null
+  /** AB.3 — stable seed for A/B variant assignment. When set and a
+   *  tier has 2+ ACTIVE rows, the matcher hashes this seed and picks
+   *  deterministically instead of Math.random. Same seed → same
+   *  variant across calls. Pass productId or wizardId. Without a
+   *  seed, the matcher falls back to even random split. */
+  stableSeed?: string | null
 }
 
 /**
@@ -104,12 +110,23 @@ export async function findActivePromptTemplate(
     const globalRows = rows.filter(
       (r) => r.language == null && r.marketplace == null,
     )
+    const seed = scope.stableSeed?.trim() || null
     const pickFromTier = <T,>(tier: T[]): T | undefined => {
       if (tier.length === 0) return undefined
       if (tier.length === 1) return tier[0]
-      // Math.random keeps it simple — over many calls the split
-      // converges to 1/N. Per-call stickiness (same wizard always
-      // hits the same variant) lands later if needed.
+      if (seed) {
+        // AB.3 — deterministic stickiness. djb2 over the seed gives
+        // the same wizard / product the same variant across calls,
+        // so per-listing observability isn't muddied by a wizard
+        // bouncing between A and B per field.
+        let h = 5381
+        for (let i = 0; i < seed.length; i += 1) {
+          h = ((h << 5) + h + seed.charCodeAt(i)) | 0
+        }
+        return tier[Math.abs(h) % tier.length]
+      }
+      // No seed — fall back to even random. Over many calls the
+      // split converges to 1/N.
       return tier[Math.floor(Math.random() * tier.length)]
     }
     const picked =

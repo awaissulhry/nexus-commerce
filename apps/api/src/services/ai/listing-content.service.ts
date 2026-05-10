@@ -479,6 +479,10 @@ export class ListingContentService {
       const active = await findActivePromptTemplate(prisma, promptFeatureMap[f], {
         language: language.toLowerCase(),
         marketplace: params.marketplace,
+        // AB.3 — same product → same variant across fields and
+        // regenerations, so per-listing A/B observability stays
+        // clean.
+        stableSeed: params.product.id,
       })
       if (active) {
         return renderPromptBody(active.body, {
