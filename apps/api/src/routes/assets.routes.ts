@@ -43,6 +43,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import JSZip from 'jszip'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import {
@@ -81,6 +82,20 @@ const UPLOAD_IMAGE_MIME_TYPES = new Set([
 // env if a workspace needs more.
 const MAX_UPLOAD_BYTES = parseInt(
   process.env.MC_MAX_UPLOAD_BYTES ?? `${25 * 1024 * 1024}`,
+  10,
+)
+
+// MC.3.2 — separate cap for ZIP uploads. Larger because a 200 MB
+// archive of 5 MB JPEGs is realistic for a Xavia photo-shoot drop.
+// Per-file caps inside the archive still apply (MAX_UPLOAD_BYTES).
+const MAX_ZIP_BYTES = parseInt(
+  process.env.MC_MAX_ZIP_BYTES ?? `${500 * 1024 * 1024}`,
+  10,
+)
+// Hard cap on entries inside a single archive — guards against zip-
+// bombs even though our size cap already does most of the work.
+const MAX_ZIP_ENTRIES = parseInt(
+  process.env.MC_MAX_ZIP_ENTRIES ?? '5000',
   10,
 )
 
@@ -1340,6 +1355,247 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return reply.code(201).send({ asset })
+  })
+
+  // ── MC.3.2 — bulk ZIP upload (folder-preserving) ───────────
+
+  fastify.post('/assets/upload-zip', async (request, reply) => {
+    if (!isCloudinaryConfigured())
+      return reply.code(503).send({ error: 'Storage is not configured.' })
+
+    const part = await request.file({ limits: { fileSize: MAX_ZIP_BYTES } })
+    if (!part) return reply.code(400).send({ error: 'no file uploaded' })
+
+    if (
+      part.mimetype !== 'application/zip' &&
+      part.mimetype !== 'application/x-zip-compressed' &&
+      !part.filename?.toLowerCase().endsWith('.zip')
+    )
+      return reply
+        .code(400)
+        .send({ error: 'expected a .zip archive' })
+
+    const fields = part.fields as Record<
+      string,
+      { value: string } | undefined
+    >
+    const rootFolderId = fields?.rootFolderId?.value || null
+
+    if (rootFolderId) {
+      const root = await prisma.assetFolder.findUnique({
+        where: { id: rootFolderId },
+        select: { id: true },
+      })
+      if (!root)
+        return reply
+          .code(400)
+          .send({ error: 'rootFolderId does not exist' })
+    }
+
+    let zipBuffer: Buffer
+    try {
+      zipBuffer = await part.toBuffer()
+    } catch (err) {
+      return reply.code(413).send({
+        error: 'archive exceeds the size limit',
+        detail: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+    if (zipBuffer.length > MAX_ZIP_BYTES)
+      return reply
+        .code(413)
+        .send({ error: `archive exceeds the ${MAX_ZIP_BYTES} byte limit` })
+
+    let zip: JSZip
+    try {
+      zip = await JSZip.loadAsync(zipBuffer)
+    } catch (err) {
+      return reply.code(400).send({
+        error: 'archive could not be opened',
+        detail: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+
+    // Walk entries: collect file rows (skip directory entries).
+    interface ZipFileEntry {
+      path: string
+      filename: string
+      folderPath: string[] // segments excluding the filename
+      file: JSZip.JSZipObject
+    }
+    const entries: ZipFileEntry[] = []
+    let entryCount = 0
+    zip.forEach((path, zipObj) => {
+      entryCount += 1
+      if (zipObj.dir) return
+      // Skip macOS junk + hidden files. The operator wouldn't expect
+      // ".DS_Store" to land in their library.
+      if (
+        path.startsWith('__MACOSX/') ||
+        path.split('/').some((seg) => seg.startsWith('.'))
+      )
+        return
+      const segments = path.split('/').filter(Boolean)
+      const filename = segments.pop() ?? path
+      entries.push({
+        path,
+        filename,
+        folderPath: segments,
+        file: zipObj,
+      })
+    })
+
+    if (entryCount > MAX_ZIP_ENTRIES)
+      return reply.code(413).send({
+        error: `archive has ${entryCount} entries — over the ${MAX_ZIP_ENTRIES} cap`,
+      })
+
+    // Resolve folder paths to AssetFolder ids. We cache (parentId,
+    // segment) → id so each unique path only hits the DB once.
+    type FolderKey = string
+    const folderCache = new Map<FolderKey, string>()
+    const keyOf = (parentId: string | null, segment: string) =>
+      `${parentId ?? 'root'}::${segment}`
+
+    const ensureFolder = async (
+      segments: string[],
+    ): Promise<string | null> => {
+      let parentId: string | null = rootFolderId
+      for (const segment of segments) {
+        const cleanSegment = segment.trim()
+        if (!cleanSegment) continue
+        const key = keyOf(parentId, cleanSegment)
+        const cached = folderCache.get(key)
+        if (cached) {
+          parentId = cached
+          continue
+        }
+        // Look up an existing sibling first; create if missing.
+        const existing = await prisma.assetFolder.findFirst({
+          where: { parentId, name: cleanSegment },
+          select: { id: true },
+        })
+        if (existing) {
+          folderCache.set(key, existing.id)
+          parentId = existing.id
+          continue
+        }
+        const created = await prisma.assetFolder.create({
+          data: { name: cleanSegment, parentId },
+        })
+        folderCache.set(key, created.id)
+        parentId = created.id
+      }
+      return parentId
+    }
+
+    const summary = {
+      total: entries.length,
+      uploaded: 0,
+      deduped: 0,
+      skipped: 0,
+      errors: [] as Array<{ path: string; error: string }>,
+    }
+
+    for (const entry of entries) {
+      const ext = entry.filename.toLowerCase().split('.').pop()
+      const mime =
+        ext === 'jpg' || ext === 'jpeg'
+          ? 'image/jpeg'
+          : ext === 'png'
+            ? 'image/png'
+            : ext === 'webp'
+              ? 'image/webp'
+              : ext === 'gif'
+                ? 'image/gif'
+                : ext === 'avif'
+                  ? 'image/avif'
+                  : ext === 'tif' || ext === 'tiff'
+                    ? 'image/tiff'
+                    : null
+      if (!mime || !UPLOAD_IMAGE_MIME_TYPES.has(mime)) {
+        summary.skipped += 1
+        continue
+      }
+
+      const buffer = await entry.file.async('nodebuffer')
+      if (buffer.length > MAX_UPLOAD_BYTES) {
+        summary.errors.push({
+          path: entry.path,
+          error: `file exceeds the ${MAX_UPLOAD_BYTES} byte per-file cap`,
+        })
+        continue
+      }
+
+      // Dedup short-circuit (MC.3.3 path).
+      const contentHash = sha256Hex(buffer)
+      const existing = await prisma.digitalAsset.findUnique({
+        where: { contentHash },
+        select: { id: true },
+      })
+      if (existing) {
+        summary.deduped += 1
+        continue
+      }
+
+      let folderId: string | null = rootFolderId
+      try {
+        folderId = await ensureFolder(entry.folderPath)
+      } catch (err) {
+        summary.errors.push({
+          path: entry.path,
+          error:
+            err instanceof Error ? err.message : 'folder creation failed',
+        })
+        continue
+      }
+
+      const cloudFolder = folderId
+        ? `marketing-content/${folderId}`
+        : 'marketing-content/unfiled'
+
+      try {
+        const cloudResult = await uploadBufferToCloudinary(buffer, {
+          folder: cloudFolder,
+        })
+        const qualityWarnings = checkAssetQuality({
+          width: cloudResult.width,
+          height: cloudResult.height,
+          mimeType: mime,
+          sizeBytes: cloudResult.bytes,
+        })
+        await prisma.digitalAsset.create({
+          data: {
+            label: entry.filename,
+            type: 'image',
+            mimeType: mime,
+            sizeBytes: cloudResult.bytes,
+            storageProvider: 'cloudinary',
+            storageId: cloudResult.publicId,
+            url: cloudResult.url,
+            originalFilename: entry.filename,
+            contentHash,
+            folderId,
+            metadata: {
+              width: cloudResult.width,
+              height: cloudResult.height,
+              format: cloudResult.format,
+              source: 'zip_import',
+              zipPath: entry.path,
+              qualityWarnings: qualityWarnings as unknown as object[],
+            },
+          },
+        })
+        summary.uploaded += 1
+      } catch (err) {
+        summary.errors.push({
+          path: entry.path,
+          error: err instanceof Error ? err.message : 'upload failed',
+        })
+      }
+    }
+
+    return reply.code(200).send({ summary })
   })
 
   // Move a set of assets to a folder (or to "unfiled" via folderId

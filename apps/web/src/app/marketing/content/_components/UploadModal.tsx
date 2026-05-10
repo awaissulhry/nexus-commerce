@@ -45,11 +45,22 @@ type QueueItemStatus = 'queued' | 'uploading' | 'done' | 'duplicate' | 'error'
 
 interface QueueItem {
   id: string
-  source: 'file' | 'url'
+  // MC.3.2 — 'zip' source posts the whole archive to /upload-zip;
+  // server unpacks + creates folders + uploads each file.
+  source: 'file' | 'url' | 'zip'
   filename: string
   size: number | null
   status: QueueItemStatus
   error?: string
+  // MC.3.2 — populated for ZIP uploads; rendered as a per-archive
+  // summary line under the row when the upload completes.
+  zipSummary?: {
+    total: number
+    uploaded: number
+    deduped: number
+    skipped: number
+    errors: number
+  }
   // MC.3.3 — when status is 'duplicate', captures whether the
   // server also re-filed the existing asset into a new folder.
   refiled?: boolean
@@ -74,6 +85,17 @@ const ACCEPTED_MIME = new Set([
   'image/avif',
   'image/tiff',
 ])
+
+// MC.3.2 — ZIP uploads go through their own endpoint. Some browsers
+// report ZIPs as application/x-zip-compressed; the .zip extension is
+// the canonical fallback.
+function isZipFile(file: File): boolean {
+  return (
+    file.type === 'application/zip' ||
+    file.type === 'application/x-zip-compressed' ||
+    file.name.toLowerCase().endsWith('.zip')
+  )
+}
 
 const MAX_BYTES = 25 * 1024 * 1024
 
@@ -140,6 +162,22 @@ export default function UploadModal({
   const addFiles = (files: File[]) => {
     const additions: QueueItem[] = []
     for (const file of files) {
+      // MC.3.2 — recognise ZIP archives and queue them as a single
+      // 'zip' item. The whole archive posts to /upload-zip server-
+      // side; we don't unpack on the client because JSZip-in-browser
+      // would double the memory pressure and the server already
+      // does it well.
+      if (isZipFile(file)) {
+        additions.push({
+          id: nextId(),
+          source: 'zip',
+          filename: file.name,
+          size: file.size,
+          status: 'queued',
+          file,
+        })
+        continue
+      }
       if (!ACCEPTED_MIME.has(file.type)) {
         toast({
           title: t('marketingContent.upload.rejectedMime', {
@@ -249,6 +287,42 @@ export default function UploadModal({
         }
         body = (await res.json()) as typeof body
         onProgress(100)
+      } else if (item.source === 'zip' && item.file) {
+        // MC.3.2 — single archive POST, server unpacks. Returns a
+        // summary instead of a single asset.
+        const fd = new FormData()
+        fd.append('file', item.file, item.filename)
+        if (folderId) fd.append('rootFolderId', folderId)
+        const res = await xhrUpload({
+          url: `${apiBase}/api/assets/upload-zip`,
+          body: fd,
+          onProgress,
+        })
+        if (!res.ok) {
+          const err = (res.body ?? {}) as { error?: string }
+          throw new Error(err.error ?? `ZIP upload failed (${res.status})`)
+        }
+        const zipBody = res.body as {
+          summary: {
+            total: number
+            uploaded: number
+            deduped: number
+            skipped: number
+            errors: Array<{ path: string; error: string }>
+          }
+        }
+        return {
+          ...item,
+          status: 'done',
+          progress: 100,
+          zipSummary: {
+            total: zipBody.summary.total,
+            uploaded: zipBody.summary.uploaded,
+            deduped: zipBody.summary.deduped,
+            skipped: zipBody.summary.skipped,
+            errors: zipBody.summary.errors.length,
+          },
+        }
       } else {
         throw new Error('Invalid queue item')
       }
@@ -466,7 +540,7 @@ export default function UploadModal({
               ref={fileInputRef}
               type="file"
               multiple
-              accept={[...ACCEPTED_MIME].join(',')}
+              accept={[...ACCEPTED_MIME, 'application/zip', '.zip'].join(',')}
               className="hidden"
               onChange={(e) => {
                 const files = [...(e.target.files ?? [])]
@@ -584,6 +658,16 @@ export default function UploadModal({
                           style={{ width: `${item.progress ?? 0}%` }}
                         />
                       </div>
+                    )}
+                    {item.zipSummary && (
+                      <p className="mt-1 ml-6 text-xs text-slate-600 dark:text-slate-400">
+                        {t('marketingContent.upload.zipSummary', {
+                          uploaded: item.zipSummary.uploaded.toString(),
+                          deduped: item.zipSummary.deduped.toString(),
+                          skipped: item.zipSummary.skipped.toString(),
+                          errors: item.zipSummary.errors.toString(),
+                        })}
+                      </p>
                     )}
                   </li>
                 ))}
