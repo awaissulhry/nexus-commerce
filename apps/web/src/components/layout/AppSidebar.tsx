@@ -37,6 +37,7 @@ import {
   BadgeCheck,
   BookOpen,
   Palette,
+  Zap,
   ShoppingCart,
   Cable,
   Sun,
@@ -568,6 +569,12 @@ export default function AppSidebar() {
             icon={Palette}
             label="Brand Kit"
             active={pathname.startsWith('/marketing/brand-kit')}
+          />
+          <NavItem
+            href="/marketing/automation"
+            icon={Zap}
+            label="Automation"
+            active={pathname.startsWith('/marketing/automation')}
           />
           <NavItem
             href="/marketing/reviews"

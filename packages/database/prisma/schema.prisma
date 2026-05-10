@@ -4835,6 +4835,13 @@ model BrandWatermarkTemplate {
   @@index([brand, enabled])
 }
 
+// MC.11.1 — Automation rules schema (AutomationRule +
+// AutomationRuleExecution) lives later in this file under the
+// replenishment-led automation engagement. Marketing-content rules
+// reuse the same model with `domain = 'marketing_content'`. See
+// the spec library at apps/web/.../automation/_lib/rules.ts for
+// the per-domain trigger/action shapes.
+
 // Phase A: per-listing image set with multi-scope and variation-aware
 // targeting. ProductImage stays as the master gallery (source of truth);
 // ListingImage entries either reference a master image (via
