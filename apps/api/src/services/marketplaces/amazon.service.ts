@@ -1227,28 +1227,32 @@ export class AmazonService {
   }
 
   /**
-   * Detect the real Amazon product type and variation theme for a SKU by
-   * calling getListingsItem. Used by the "Detect from Amazon" button in the
-   * channel listing editor so sellers don't have to guess the type — they
-   * just look up one existing live SKU and Nexus pre-fills both fields.
-   *
-   * Returns null for each field that isn't present in the API response.
+   * Shared return type for listing/catalog detection calls.
+   */
+  private _emptyDetectResult() {
+    return {
+      productType: null as string | null,
+      variationTheme: null as string | null,
+      browseNodes: null as number[] | null,
+      categoryPath: null as string | null,
+      asin: null as string | null,
+      title: null as string | null,
+    }
+  }
+
+  /**
+   * Detect the real Amazon product type, variation theme, and browse nodes
+   * for a SKU by calling getListingsItem + searchCatalogItems for
+   * classifications. Used by the "Detect from my live listing" button.
    */
   async detectProductTypeFromSku(
     sku: string,
     marketplaceId: string,
-  ): Promise<{
-    productType: string | null
-    variationTheme: string | null
-    asin: string | null
-    title: string | null
-  }> {
+  ): Promise<ReturnType<typeof this._emptyDetectResult>> {
     const sellerId =
       process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
     if (!sellerId) {
-      throw new Error(
-        'AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set.',
-      )
+      throw new Error('AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set.')
     }
     const sp = await this.getClient()
     const res: any = await sp.callAPI({
@@ -1261,70 +1265,100 @@ export class AmazonService {
       },
     })
 
-    const summary =
-      Array.isArray(res?.summaries) && res.summaries.length > 0
-        ? res.summaries[0]
-        : null
+    const summary = Array.isArray(res?.summaries) && res.summaries.length > 0
+      ? res.summaries[0] : null
 
-    // Amazon productType is on summaries[0].productType
-    const productType =
-      typeof summary?.productType === 'string' ? summary.productType : null
-
-    // Variation theme is in attributes.variation_theme[0].name
+    const productType = typeof summary?.productType === 'string' ? summary.productType : null
     const vtArr = res?.attributes?.variation_theme
-    const variationTheme =
-      Array.isArray(vtArr) && vtArr.length > 0 && typeof vtArr[0]?.name === 'string'
-        ? vtArr[0].name
-        : null
+    const variationTheme = Array.isArray(vtArr) && vtArr.length > 0 && typeof vtArr[0]?.name === 'string'
+      ? vtArr[0].name : null
+    const detectedAsin = typeof res?.asin === 'string' ? res.asin : null
 
-    return {
-      productType,
-      variationTheme,
-      asin: typeof res?.asin === 'string' ? res.asin : null,
-      title: typeof summary?.itemName === 'string' ? summary.itemName : null,
+    // Fetch browse nodes via the catalog search using the ASIN we just got
+    let browseNodes: number[] | null = null
+    let categoryPath: string | null = null
+    if (detectedAsin) {
+      try {
+        const { browseNodes: bn, categoryPath: cp } =
+          await this._detectBrowseNodesFromAsin(detectedAsin, marketplaceId, sp)
+        browseNodes = bn
+        categoryPath = cp
+      } catch { /* non-fatal */ }
     }
+
+    return { productType, variationTheme, browseNodes, categoryPath,
+      asin: detectedAsin, title: typeof summary?.itemName === 'string' ? summary.itemName : null }
   }
 
   /**
-   * Same detection via getCatalogItem for when we have an ASIN but no SKU
-   * (e.g. the user enters a reference ASIN from a competitor or a sibling
-   * listing). Returns productType from summaries[0].productTypes[0].productTypeId.
+   * Detect productType, browse nodes, and category path from any ASIN
+   * (competitor or reference) using searchCatalogItems.
+   *
+   * Uses searchCatalogItems (not getCatalogItem) because the search endpoint
+   * works for any public ASIN on the marketplace without requiring the caller
+   * to own the item — getCatalogItem returns "Access denied" for ASINs the
+   * seller doesn't have a listing for.
    */
   async detectProductTypeFromAsin(
     asin: string,
     marketplaceId: string,
-  ): Promise<{
-    productType: string | null
-    title: string | null
-  }> {
+  ): Promise<ReturnType<typeof this._emptyDetectResult>> {
     const sp = await this.getClient()
     const res: any = await (sp as any).callAPI({
-      operation: 'getCatalogItem',
+      operation: 'searchCatalogItems',
       endpoint: 'catalogItems',
       version: '2022-04-01',
-      path: { asin },
       query: {
         marketplaceIds: [marketplaceId],
-        includedData: ['summaries'],
+        identifiers: [asin],
+        identifiersType: 'ASIN',
+        includedData: ['summaries', 'classifications'],
       },
     })
 
-    const summary =
-      Array.isArray(res?.summaries) && res.summaries.length > 0
-        ? res.summaries[0]
-        : null
+    const item = Array.isArray(res?.items) && res.items.length > 0 ? res.items[0] : null
+    const summary = Array.isArray(item?.summaries) && item.summaries.length > 0
+      ? item.summaries[0] : null
 
-    // v2022 shape: summaries[0].productTypes[0].productTypeId
-    const productTypes = summary?.productTypes
-    const productType =
-      Array.isArray(productTypes) && productTypes.length > 0
-        ? (productTypes[0].productTypeId ?? productTypes[0].productType ?? null)
-        : null
+    // productType from summaries[0].productTypes[0]
+    const pts = summary?.productTypes
+    const rawPt = Array.isArray(pts) && pts.length > 0
+      ? (pts[0].productTypeId ?? pts[0].productType ?? null) : null
+    const productType = typeof rawPt === 'string' ? rawPt : null
+
+    // browse nodes + category path from classifications
+    const { browseNodes, categoryPath } = extractClassifications(item?.classifications)
 
     return {
-      productType: typeof productType === 'string' ? productType : null,
+      productType,
+      variationTheme: null, // not available without seller credentials
+      browseNodes,
+      categoryPath,
+      asin,
       title: typeof summary?.itemName === 'string' ? summary.itemName : null,
     }
+  }
+
+  /** Internal helper: fetch classifications for a known ASIN using
+   *  searchCatalogItems (avoids the getCatalogItem access restriction). */
+  private async _detectBrowseNodesFromAsin(
+    asin: string,
+    marketplaceId: string,
+    sp: any,
+  ): Promise<{ browseNodes: number[] | null; categoryPath: string | null }> {
+    const res: any = await (sp as any).callAPI({
+      operation: 'searchCatalogItems',
+      endpoint: 'catalogItems',
+      version: '2022-04-01',
+      query: {
+        marketplaceIds: [marketplaceId],
+        identifiers: [asin],
+        identifiersType: 'ASIN',
+        includedData: ['classifications'],
+      },
+    })
+    const item = Array.isArray(res?.items) && res.items.length > 0 ? res.items[0] : null
+    return extractClassifications(item?.classifications)
   }
 
   /**
@@ -1637,5 +1671,51 @@ export class AmazonService {
       console.warn('[amazon] fetchFinancialEventsByOrderId failed', amazonOrderId, err instanceof Error ? err.message : String(err))
       return null
     }
+  }
+}
+
+// ── Module-level helpers ────────────────────────────────────────────────
+
+/**
+ * Extract browse node IDs and a human-readable category path from the
+ * `classifications` array returned by searchCatalogItems.
+ *
+ * Amazon classifications shape (2022-04-01):
+ *   [{ classificationId: "12345678", displayName: "Clothing", parent: {...} }]
+ *
+ * We walk the parent chain to build the full path (leaf → root) and collect
+ * all classificationId values as browse nodes.
+ */
+function extractClassifications(
+  classifications: any[] | null | undefined,
+): { browseNodes: number[] | null; categoryPath: string | null } {
+  if (!Array.isArray(classifications) || classifications.length === 0) {
+    return { browseNodes: null, categoryPath: null }
+  }
+
+  const nodes: number[] = []
+  const pathParts: string[] = []
+
+  // Walk each top-level classification and its parent chain
+  function walk(node: any, depth = 0) {
+    if (!node || depth > 10) return
+    const id = node.classificationId ?? node.id
+    if (id) {
+      const numId = typeof id === 'number' ? id : parseInt(String(id), 10)
+      if (!isNaN(numId) && !nodes.includes(numId)) nodes.push(numId)
+    }
+    if (typeof node.displayName === 'string' && node.displayName) {
+      pathParts.unshift(node.displayName) // parent first
+    }
+    if (node.parent) walk(node.parent, depth + 1)
+  }
+
+  for (const cls of classifications) {
+    walk(cls)
+  }
+
+  return {
+    browseNodes: nodes.length > 0 ? nodes : null,
+    categoryPath: pathParts.length > 0 ? pathParts.join(' › ') : null,
   }
 }

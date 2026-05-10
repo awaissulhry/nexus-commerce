@@ -615,14 +615,12 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // GET /api/products/:id/listings/AMAZON/:marketplace/detect-type
+  // GET /api/products/:id/listings/AMAZON/:marketplace/detect-type
   //
-  // Calls getListingsItem on the product's master SKU (or a user-supplied
-  // reference SKU) and returns the real Amazon productType + variationTheme.
-  // Also accepts ?asin= to look up via getCatalogItem instead.
-  //
-  // This powers the "Detect from Amazon" button in the channel listing editor
-  // so the operator doesn't have to guess the product type — they pull it from
-  // an existing live listing.
+  // Returns { productType, variationTheme, browseNodes, categoryPath, asin, title, source }.
+  // ASIN path uses searchCatalogItems (public catalog, works for any ASIN including
+  // competitors) — fixes "Access denied" that getCatalogItem returned for ASINs the
+  // seller doesn't own.
   fastify.get<{
     Params: { id: string; channel: string; marketplace: string }
     Querystring: { sku?: string; asin?: string }
@@ -635,24 +633,23 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       if (channel.toUpperCase() !== 'AMAZON') {
         return reply.code(400).send({ error: 'detect-type is only supported for AMAZON' })
       }
-
       if (!amazonService.isConfigured()) {
         return reply.code(503).send({ error: 'Amazon SP-API not configured' })
       }
 
       const mpId = amazonMarketplaceId(marketplace)
 
-      // ASIN path — user explicitly provided one (e.g. a reference/sibling)
+      // ASIN path — competitor or reference listing (searchCatalogItems, no seller auth needed)
       if (qAsin) {
         try {
           const result = await amazonService.detectProductTypeFromAsin(qAsin, mpId)
-          return reply.send({ ...result, source: 'catalog_api', asin: qAsin })
+          return reply.send({ ...result, source: 'catalog_search', asin: qAsin })
         } catch (err: any) {
           return reply.code(500).send({ error: err?.message ?? String(err) })
         }
       }
 
-      // SKU path — use provided SKU or fall back to master product SKU
+      // SKU path — own listing via getListingsItem
       let sku = qSku
       if (!sku) {
         const product = await prisma.product.findUnique({ where: { id }, select: { sku: true } })
@@ -664,8 +661,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         const result = await amazonService.detectProductTypeFromSku(sku, mpId)
         return reply.send({ ...result, source: 'listings_api', sku })
       } catch (err: any) {
-        // If the master SKU isn't listed on this marketplace, try finding a
-        // variation SKU that is (first child variation of this product)
+        // Fall back to first child variation if master SKU isn't on this marketplace
         try {
           const firstVariation = await prisma.productVariation.findFirst({
             where: { productId: id },
@@ -676,11 +672,62 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await amazonService.detectProductTypeFromSku(firstVariation.sku, mpId)
             return reply.send({ ...result, source: 'listings_api', sku: firstVariation.sku })
           }
-        } catch {
-          // ignore inner error, return original
-        }
+        } catch { /* ignore */ }
         return reply.code(500).send({ error: err?.message ?? String(err) })
       }
+    }
+  )
+
+  // POST /api/products/:id/listings/:channel/:marketplace/save-browse-nodes
+  //
+  // Persists browse nodes (and optionally category path) for a channel listing.
+  // Merges into platformAttributes.attributes.recommended_browse_nodes.
+  fastify.post<{
+    Params: { id: string; channel: string; marketplace: string }
+    Body: { browseNodes?: number[]; categoryPath?: string }
+  }>(
+    '/products/:id/listings/:channel/:marketplace/save-browse-nodes',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+      const { browseNodes, categoryPath } = request.body ?? {}
+
+      const existing = await prisma.channelListing.findFirst({
+        where: { productId: id, channel, marketplace },
+      })
+      const existingPA = (existing?.platformAttributes as Record<string, any> | null) ?? {}
+      const existingAttrs = typeof existingPA.attributes === 'object' && existingPA.attributes
+        ? (existingPA.attributes as Record<string, unknown>) : {}
+
+      const nextAttrs: Record<string, unknown> = { ...existingAttrs }
+      if (browseNodes !== undefined) {
+        nextAttrs.recommended_browse_nodes = browseNodes
+      }
+
+      const nextPA: Record<string, any> = { ...existingPA, attributes: nextAttrs }
+      if (categoryPath !== undefined) nextPA.detectedCategoryPath = categoryPath
+
+      const mp = await prisma.marketplace.findUnique({
+        where: { channel_code: { channel, code: marketplace } },
+      })
+      if (!mp) return reply.code(400).send({ error: `Marketplace ${channel}/${marketplace} not configured` })
+
+      let listing
+      if (existing) {
+        listing = await prisma.channelListing.update({
+          where: { id: existing.id },
+          data: { platformAttributes: nextPA },
+        })
+      } else {
+        listing = await prisma.channelListing.create({
+          data: {
+            productId: id, channel, marketplace,
+            channelMarket: `${channel}_${marketplace}`,
+            region: marketplace,
+            platformAttributes: nextPA,
+          },
+        })
+      }
+      return listing
     }
   )
 }
