@@ -48,6 +48,8 @@ export type FieldKind =
   | 'number'
   | 'boolean'
   | 'string_array'
+  | 'measurement'
+  | 'json_object'
   | 'unsupported'
 
 export interface RenderableField {
@@ -76,6 +78,11 @@ export interface RenderableField {
   /** L.2 — for kind='string_array', the maximum number of entries
    *  the field accepts. bullet_point on Amazon is up to 5. */
   maxItems?: number
+  /** For kind='measurement': allowed unit values (e.g. ["grams","kilograms"]). */
+  unitOptions?: string[]
+  /** For kind='json_object': a JSON-stringified sample showing the
+   *  expected shape, derived from the schema's properties. */
+  jsonHint?: string
   /** Human reason this field couldn't be rendered. Populated when
    *  kind === 'unsupported'. */
   unsupportedReason?: string
@@ -714,6 +721,37 @@ function parseProperty(fieldId: string, prop: any): RenderableField {
     }
   }
 
+  // Measurement pattern: object with value (number) + unit (enum string).
+  // Also handles array→object→{value,unit} when value property exists but
+  // we want to expose the unit dropdown too.
+  // Shapes: { type:'object', properties: { value:{type:'number'}, unit:{type:'string',enum:[...]} } }
+  //      or: { type:'array', items:{ type:'object', properties:{value:..., unit:{...enum}} } }
+  const measurementItems =
+    prop?.type === 'object'
+      ? prop
+      : prop?.type === 'array' && prop?.items?.type === 'object'
+        ? prop.items
+        : null
+  if (
+    measurementItems?.properties?.value &&
+    measurementItems?.properties?.unit
+  ) {
+    const unitProp = measurementItems.properties.unit
+    const unitOptions: string[] = Array.isArray(unitProp?.enum)
+      ? unitProp.enum.map(String)
+      : []
+    return {
+      id: fieldId,
+      label,
+      description,
+      kind: 'measurement',
+      required: true,
+      wrapped: prop?.type === 'array',
+      examples,
+      unitOptions: unitOptions.length > 0 ? unitOptions : undefined,
+    }
+  }
+
   // Plain leaf at the top level (rare in Amazon, common elsewhere).
   if (
     prop?.type === 'string' ||
@@ -740,15 +778,48 @@ function parseProperty(fieldId: string, prop: any): RenderableField {
     }
   }
 
+  // Fallback: render as a JSON textarea so the operator can still supply
+  // a value instead of seeing an error. Derive a hint from the schema
+  // so they know the expected shape.
+  const jsonHint = deriveJsonHint(prop)
   return {
     id: fieldId,
     label,
     description,
-    kind: 'unsupported',
+    kind: 'json_object',
     required: true,
     wrapped: false,
     examples,
-    unsupportedReason: 'Complex shape — not yet renderable',
+    jsonHint,
+  }
+}
+
+/** Build a compact example JSON string from a schema node so the
+ *  json_object textarea can show the user the expected shape. */
+function deriveJsonHint(prop: any): string | undefined {
+  try {
+    if (!prop) return undefined
+    const items = prop?.items ?? prop
+    if (items?.type === 'object' && items?.properties) {
+      const shape: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(items.properties as Record<string, any>)) {
+        if (v?.enum && Array.isArray(v.enum) && v.enum.length > 0) {
+          shape[k] = v.enum[0]
+        } else if (v?.type === 'number' || v?.type === 'integer') {
+          shape[k] = 0
+        } else if (v?.type === 'boolean') {
+          shape[k] = false
+        } else {
+          shape[k] = ''
+        }
+      }
+      return prop?.type === 'array'
+        ? JSON.stringify([shape])
+        : JSON.stringify(shape)
+    }
+    return undefined
+  } catch {
+    return undefined
   }
 }
 

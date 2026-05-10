@@ -22,6 +22,8 @@ export type FieldKind =
   | 'number'
   | 'boolean'
   | 'string_array'
+  | 'measurement'
+  | 'json_object'
   | 'unsupported'
 
 /** L.2 — string_array values are stored as JSON-encoded string[]
@@ -43,6 +45,8 @@ export interface UnionField {
   minLength?: number
   unsupportedReason?: string
   maxItems?: number
+  unitOptions?: string[]
+  jsonHint?: string
   requiredFor: string[]
   optionalFor: string[]
   notUsedIn: string[]
@@ -915,6 +919,85 @@ export function FieldInput({
       <div className="text-base text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded px-3 py-2">
         Can't render this field automatically yet.
         {field.unsupportedReason ? ` (${field.unsupportedReason})` : ''}
+      </div>
+    )
+  }
+
+  // Measurement: { value: number, unit: enum } — two side-by-side inputs.
+  // Value stored as JSON: '{"value":1.5,"unit":"kilograms"}'.
+  if (field.kind === 'measurement') {
+    let parsed: { value?: string; unit?: string } = {}
+    try {
+      if (typeof value === 'string' && value.startsWith('{')) {
+        parsed = JSON.parse(value)
+      }
+    } catch {}
+    const numVal = parsed.value ?? ''
+    const unitVal = parsed.unit ?? (field.unitOptions?.[0] ?? '')
+    function emit(v: string, u: string) {
+      if (!v && !u) { onChange(''); return }
+      onChange(JSON.stringify({ value: v === '' ? undefined : Number(v), unit: u || undefined }))
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          step="any"
+          value={numVal}
+          placeholder={placeholder ?? '0'}
+          onChange={(e) => emit(e.target.value, unitVal)}
+          className={cn(
+            'flex-1 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+            compact ? 'h-7' : 'h-8',
+          )}
+        />
+        {field.unitOptions && field.unitOptions.length > 0 ? (
+          <select
+            value={unitVal}
+            onChange={(e) => emit(numVal, e.target.value)}
+            className={cn(
+              'px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900',
+              compact ? 'h-7' : 'h-8',
+            )}
+          >
+            {field.unitOptions.map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={unitVal}
+            placeholder="unit"
+            onChange={(e) => emit(numVal, e.target.value)}
+            className={cn(
+              'w-28 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
+              compact ? 'h-7' : 'h-8',
+            )}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // JSON object: render as a compact textarea. Used for complex nested
+  // shapes that can't be decomposed into simpler inputs automatically.
+  if (field.kind === 'json_object') {
+    const raw = (value ?? '') as string
+    return (
+      <div className="space-y-1">
+        <textarea
+          value={raw}
+          onChange={(e) => onChange(e.target.value)}
+          rows={compact ? 2 : 3}
+          placeholder={
+            field.jsonHint
+              ? `Expected shape: ${field.jsonHint}`
+              : (placeholder ?? 'Enter JSON value…')
+          }
+          spellCheck={false}
+          className="w-full px-2 py-1.5 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
       </div>
     )
   }
