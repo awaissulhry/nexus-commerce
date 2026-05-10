@@ -180,7 +180,7 @@ export default function ReconciliationClient({
         const data = await res.json()
         if (data.allMarkets) {
           const perMarket = (data.markets ?? []).map((m: any) =>
-            `${m.marketplace}: ${m.totalDiscovered}${m.fetchMethod === 'listings-api' ? ' (API)' : m.fetchMethod === 'empty' ? ' (none)' : ''}`
+            `${m.marketplace}: ${m.totalDiscovered}${m.fetchMethod === 'listings-api' ? ' (API)' : m.fetchMethod === 'empty' ? ' (none)' : ''}${m.enriched ? ` ✓${m.enriched}` : ''}`
           ).join(' · ')
           const errors = data.errors ?? []
           const errStr = errors.length > 0 ? ` ⚠ ${errors.map((e: any) => `${e.marketplace}: ${e.error.slice(0, 60)}`).join('; ')}` : ''

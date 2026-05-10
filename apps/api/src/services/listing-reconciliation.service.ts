@@ -40,6 +40,7 @@ export interface ReconRunSummary {
   skipped: number // rows that were already CONFIRMED — not re-evaluated
   durationMs: number
   fetchMethod?: 'report' | 'listings-api' | 'empty' // how the catalog was fetched
+  enriched?: number // products updated with full Amazon listing data
 }
 
 interface MatchResult {
@@ -146,6 +147,113 @@ function resolveMatch(
     matchedVariationId: null,
     matchMethod: 'UNMATCHED',
     matchConfidence: 0,
+  }
+}
+
+/**
+ * Fetch full Amazon listing data for a single SKU and write it into
+ * Product + ProductVariation + ProductImage.
+ *
+ * Maps:
+ *   Product.name              ← listing title
+ *   Product.description       ← product_description attribute (HTML)
+ *   Product.bulletPoints      ← bullet_point attributes
+ *   Product.keywords          ← generic_keyword / search_terms
+ *   Product.brand             ← brand (summaries or attribute)
+ *   Product.manufacturer      ← manufacturer attribute
+ *   Product.ean / .upc        ← identifiers
+ *   Product.weightValue/Unit  ← item_package_weight attribute
+ *   Product.dimL/W/H/Unit     ← item_package_dimensions attribute
+ *   Product.categoryAttributes← full raw Amazon attributes JSON (every
+ *                                field Amazon returns, verbatim)
+ *   ProductVariation.price    ← offer price for the child SKU
+ *   ProductVariation.ean/upc  ← child-level identifiers
+ *   ProductImage              ← all images (MAIN + ALTs); existing
+ *                                Amazon-sourced images are replaced
+ */
+async function enrichProductFromAmazon(
+  sku: string,
+  mpId: string,
+  amazonService: AmazonService,
+  skuMap: Map<string, { productId: string; variationId: string | null; isVariation: boolean }>,
+  asinMap: Map<string, string>,
+): Promise<void> {
+  const match = skuMap.get(sku)
+  if (!match) return
+
+  const details = await amazonService.fetchProductDetails(sku, mpId)
+
+  // ── Product update ─────────────────────────────────────────────────────
+  // Only set fields that Amazon actually returned — don't blank out
+  // existing data if Amazon returned nothing for a field.
+  const productUpdate: Record<string, unknown> = {}
+  if (details.title) productUpdate.name = details.title
+  if (details.description) productUpdate.description = details.description
+  if (details.bulletPoints.length > 0) productUpdate.bulletPoints = details.bulletPoints
+  if (details.keywords.length > 0) productUpdate.keywords = details.keywords
+  if (details.brand) productUpdate.brand = details.brand
+  if (details.manufacturer) productUpdate.manufacturer = details.manufacturer
+  if (details.ean) productUpdate.ean = details.ean
+  if (details.upc) productUpdate.upc = details.upc
+  if (details.weightValue != null) productUpdate.weightValue = details.weightValue
+  if (details.weightUnit) productUpdate.weightUnit = details.weightUnit
+  if (details.dimLength != null) productUpdate.dimLength = details.dimLength
+  if (details.dimWidth != null) productUpdate.dimWidth = details.dimWidth
+  if (details.dimHeight != null) productUpdate.dimHeight = details.dimHeight
+  if (details.dimUnit) productUpdate.dimUnit = details.dimUnit
+
+  // Raw Amazon attributes — stored as-is so nothing is lost.
+  // Keys like bullet_point, color, size, material, apparel_size_system,
+  // outer_material, gender, closure_type, etc. are all preserved.
+  if (Object.keys(details.rawAttributes).length > 0) {
+    productUpdate.categoryAttributes = details.rawAttributes
+  }
+
+  if (Object.keys(productUpdate).length > 0) {
+    await prisma.product.update({
+      where: { id: match.productId },
+      data: productUpdate as any,
+    })
+  }
+
+  // ── ProductVariation update (price + identifiers) ──────────────────────
+  if (match.variationId && (details.price != null || details.ean || details.upc)) {
+    const varUpdate: Record<string, unknown> = {}
+    if (details.price != null) varUpdate.price = details.price
+    if (details.ean) varUpdate.ean = details.ean
+    if (details.upc) varUpdate.upc = details.upc
+    if (details.ean || details.upc) varUpdate.gtin = details.ean ?? details.upc
+
+    await prisma.productVariation.update({
+      where: { id: match.variationId },
+      data: varUpdate as any,
+    })
+  }
+
+  // ── ProductImage upsert ────────────────────────────────────────────────
+  // Replace existing Amazon-sourced images (identified by amazon.com in URL)
+  // but preserve Cloudinary / manually-uploaded images (publicId set).
+  if (details.images.length > 0) {
+    await prisma.productImage.deleteMany({
+      where: {
+        productId: match.productId,
+        publicId: null,
+        url: { contains: 'amazon.com' },
+      },
+    })
+
+    await prisma.productImage.createMany({
+      data: details.images
+        .filter(img => !!img.url)
+        .map((img, idx) => ({
+          productId: match.productId,
+          url: img.url,
+          alt: img.alt ?? null,
+          type: img.type,
+          sortOrder: idx,
+        })),
+      skipDuplicates: true,
+    })
   }
 }
 
@@ -285,6 +393,38 @@ export async function runAmazonReconciliation(
     await prisma.$transaction(ops.slice(i, i + BATCH))
   }
 
+  // ── Enrich matched products with full Amazon listing data ─────────────
+  // For every matched product, call fetchProductDetails to pull bullets,
+  // description, images, dimensions, EAN/UPC, raw attributes, and write
+  // them directly to Product + ProductVariation + ProductImage.
+  // Runs sequentially; SP client's auto_request_throttled handles rate limits.
+  // Deduplicated by productId so a product with 8 size variations is only
+  // enriched once (parent data is the same for all children).
+  let enriched = 0
+  const seenProductIds = new Set<string>()
+  const enrichQueue: Array<{ sku: string }> = []
+
+  for (const item of toProcess) {
+    const m = skuMap.get(item.sku) ?? null
+    if (!m) continue
+    if (seenProductIds.has(m.productId)) continue
+    seenProductIds.add(m.productId)
+    enrichQueue.push({ sku: item.sku })
+  }
+
+  logger.info('[recon] Starting enrichment', { count: enrichQueue.length, marketplace })
+
+  for (const { sku } of enrichQueue) {
+    try {
+      await enrichProductFromAmazon(sku, mpId, amazonService, skuMap, asinMap)
+      enriched++
+    } catch (err) {
+      logger.warn('[recon] Enrichment failed', { sku, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  logger.info('[recon] Enrichment complete', { enriched, total: enrichQueue.length, marketplace })
+
   const summary: ReconRunSummary = {
     runId,
     channel: 'AMAZON',
@@ -295,6 +435,7 @@ export async function runAmazonReconciliation(
     skipped,
     durationMs: Date.now() - t0,
     fetchMethod,
+    enriched,
   }
 
   logger.info('[recon] Amazon reconciliation complete', summary)

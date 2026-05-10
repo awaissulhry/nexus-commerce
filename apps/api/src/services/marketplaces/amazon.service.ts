@@ -203,6 +203,11 @@ export interface ProductDetails {
   keywords: string[];
   price: number | null;
   quantity: number | null;
+  /** Raw Amazon attributes blob — every key/value pair returned by
+   *  getListingsItem. Stored verbatim in Product.categoryAttributes
+   *  so no data is ever discarded. Values are always arrays of
+   *  { value, language_tag?, marketplace_id? } objects per SP-API. */
+  rawAttributes: Record<string, unknown>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -492,11 +497,10 @@ export class AmazonService {
    * Items API and the Catalog Items API, then maps the result to
    * our Prisma-aligned {@link ProductDetails} shape.
    */
-  async fetchProductDetails(sku: string): Promise<ProductDetails> {
+  async fetchProductDetails(sku: string, marketplaceId?: string): Promise<ProductDetails> {
     const sellerId =
       process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
-    const marketplaceId =
-      process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4";
+    const mpId = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4";
 
     let title: string = "";
     let brand: string | null = null;
@@ -516,6 +520,7 @@ export class AmazonService {
     let price: number | null = null;
     let quantity: number | null = null;
     let asin: string = "";
+    let rawAttributes: Record<string, unknown> = {};
 
     const sp = await this.getClient();
 
@@ -531,7 +536,7 @@ export class AmazonService {
           sku,
         },
         query: {
-          marketplaceIds: [marketplaceId],
+          marketplaceIds: [mpId],
           includedData: [
             "summaries",
             "attributes",
@@ -552,6 +557,9 @@ export class AmazonService {
         title = summary?.itemName ?? "";
         brand = summary?.brand ?? null;
       }
+
+      // ── Raw attributes — store the full blob for categoryAttributes ──
+      rawAttributes = listingRes?.attributes ?? {};
 
       // ── Attributes (bullet points, description, manufacturer) ──
       const attrs = listingRes?.attributes;
@@ -696,7 +704,7 @@ export class AmazonService {
           version: "2022-04-01",
           path: { asin },
           query: {
-            marketplaceIds: [marketplaceId],
+            marketplaceIds: [mpId],
             includedData: [
               "summaries",
               "attributes",
@@ -815,6 +823,7 @@ export class AmazonService {
       keywords,
       price,
       quantity,
+      rawAttributes,
     };
   }
 
