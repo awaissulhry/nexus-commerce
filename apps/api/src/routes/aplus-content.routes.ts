@@ -303,6 +303,90 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── MC.8.6 — Localization sibling cloning ────────────────
+
+  // POST /aplus-content/:id/localize — clone the master document
+  // (and every module) into a new sibling row at a different
+  // marketplace + locale. The new row's masterContentId points
+  // back to the source so the localizations relation surfaces it
+  // alongside the master.
+  fastify.post(
+    '/aplus-content/:id/localize',
+    async (request, reply) => {
+      const { id: sourceId } = request.params as { id: string }
+      const body = request.body as {
+        marketplace?: string
+        locale?: string
+        nameSuffix?: string
+      }
+      if (!body.marketplace?.trim())
+        return reply
+          .code(400)
+          .send({ error: 'marketplace is required' })
+      if (!body.locale?.trim())
+        return reply.code(400).send({ error: 'locale is required' })
+
+      const source = await prisma.aPlusContent.findUnique({
+        where: { id: sourceId },
+        include: { modules: { orderBy: { position: 'asc' } } },
+      })
+      if (!source)
+        return reply
+          .code(404)
+          .send({ error: 'source A+ content not found' })
+      if (source.masterContentId)
+        return reply.code(400).send({
+          error:
+            'localizations can only branch from a master row, not from a sibling',
+        })
+
+      // If a sibling for this marketplace+locale already exists,
+      // return it instead of creating a duplicate. Operator likely
+      // clicked twice; idempotency is friendlier than a 409.
+      const existing = await prisma.aPlusContent.findFirst({
+        where: {
+          masterContentId: sourceId,
+          marketplace: body.marketplace,
+          locale: body.locale,
+        },
+      })
+      if (existing)
+        return reply
+          .code(200)
+          .send({ content: existing, alreadyExisted: true })
+
+      const cloned = await prisma.$transaction(async (tx) => {
+        const created = await tx.aPlusContent.create({
+          data: {
+            name: `${source.name}${body.nameSuffix ? ` — ${body.nameSuffix}` : ` (${body.locale})`}`,
+            brand: source.brand,
+            marketplace: body.marketplace!,
+            locale: body.locale!,
+            masterContentId: source.id,
+            status: 'DRAFT',
+          },
+        })
+        if (source.modules.length > 0) {
+          await tx.aPlusModule.createMany({
+            data: source.modules.map((m) => ({
+              contentId: created.id,
+              type: m.type,
+              position: m.position,
+              // Deep-copy the JSON payload so future edits to the
+              // master don't propagate to the sibling. Operator
+              // explicitly drives translation via the per-module
+              // editor (or the deferred AI-translate flow).
+              payload: JSON.parse(JSON.stringify(m.payload)),
+            })),
+          })
+        }
+        return created
+      })
+
+      return reply.code(201).send({ content: cloned, alreadyExisted: false })
+    },
+  )
+
   // Bulk reorder. Body: { order: [{ id, position }] }. Caller sends
   // the complete new sequence (matches ProductImage reorder pattern
   // from W8.1). Server validates that every id belongs to the

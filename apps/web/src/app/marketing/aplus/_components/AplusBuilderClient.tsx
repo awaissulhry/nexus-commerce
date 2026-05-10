@@ -27,6 +27,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import ModulePalette from './ModulePalette'
 import ModuleCanvas from './ModuleCanvas'
 import ModuleEditor from './ModuleEditor'
+import LocalizationsPanel from './LocalizationsPanel'
 import {
   getModuleSpec,
   validateModulePayload,
@@ -304,6 +305,8 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
           )}
         </div>
       </div>
+
+      <LocalizationsPanel document={initial} apiBase={apiBase} />
 
       {/* Three-pane layout. Below lg the panes stack; the canvas stays
           dominant by being the middle column on desktop and the
