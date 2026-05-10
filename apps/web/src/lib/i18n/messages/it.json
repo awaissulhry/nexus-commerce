@@ -4278,6 +4278,8 @@
   "marketingContent.detail.code": "Codice",
   "marketingContent.detail.dimensions": "Dimensioni",
   "marketingContent.detail.size": "Dimensione file",
+  "marketingContent.detail.duration": "Durata",
+  "marketingContent.detail.format": "Formato",
   "marketingContent.detail.uploaded": "Caricato",
   "marketingContent.detail.alt": "Testo alternativo",
   "marketingContent.detail.caption": "Didascalia",

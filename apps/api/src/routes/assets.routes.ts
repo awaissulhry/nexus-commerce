@@ -632,6 +632,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
                 message: string
               }>)
             : [],
+          // MC.7.6 — surface video metadata so the drawer can render
+          // duration + format without re-probing Cloudinary.
+          durationSeconds:
+            typeof meta.durationSeconds === 'number'
+              ? (meta.durationSeconds as number)
+              : null,
+          format:
+            typeof meta.format === 'string' ? (meta.format as string) : null,
           // MC.6.1 — per-channel variant URLs computed from the
           // Cloudinary master. No physical copies; transformations
           // happen on-demand via Cloudinary's image-upload URL
@@ -696,6 +704,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             channel: string | null
             message: string
           }>,
+          // ProductImage rows are image-only; no video metadata.
+          durationSeconds: null,
+          format: null,
           // MC.6.1 — ProductImage rows aren't always Cloudinary-backed
           // (some come from external sync URLs); buildAllVariants
           // handles that by returning null url's for non-cloudinary

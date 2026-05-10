@@ -4227,6 +4227,8 @@
   "marketingContent.detail.code": "Code",
   "marketingContent.detail.dimensions": "Dimensions",
   "marketingContent.detail.size": "Size",
+  "marketingContent.detail.duration": "Duration",
+  "marketingContent.detail.format": "Format",
   "marketingContent.detail.uploaded": "Uploaded",
   "marketingContent.detail.alt": "Alt text",
   "marketingContent.detail.caption": "Caption",

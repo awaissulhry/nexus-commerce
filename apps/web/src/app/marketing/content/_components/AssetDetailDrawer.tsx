@@ -262,6 +262,28 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                       value={formatBytes(detail.sizeBytes)}
                     />
                   )}
+                  {/* MC.7.6 — video duration + format. Captured at
+                       upload time from Cloudinary's metadata so this
+                       row renders without an extra probe call. */}
+                  {detail.durationSeconds != null && (
+                    <DetailRow
+                      icon={Hash}
+                      label={t('marketingContent.detail.duration')}
+                      value={(() => {
+                        const total = Math.round(detail.durationSeconds!)
+                        const m = Math.floor(total / 60)
+                        const s = total - m * 60
+                        return `${m}:${s.toString().padStart(2, '0')}`
+                      })()}
+                    />
+                  )}
+                  {detail.format && (
+                    <DetailRow
+                      icon={Hash}
+                      label={t('marketingContent.detail.format')}
+                      value={detail.format}
+                    />
+                  )}
                   <DetailRow
                     icon={Calendar}
                     label={t('marketingContent.detail.uploaded')}

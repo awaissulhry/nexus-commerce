@@ -119,6 +119,12 @@ export interface AssetDetail {
   tags: string[]
   /// MC.3.4 — quality warnings persisted at upload time.
   qualityWarnings: QualityWarning[]
+  /// MC.7.6 — video metadata captured at upload time. Null on
+  /// non-video assets.
+  durationSeconds?: number | null
+  /// MC.7.6 — Cloudinary's reported format (e.g., 'mp4', 'webm',
+  /// 'jpg', 'png'). Surfaces in the detail drawer next to mimeType.
+  format?: string | null
   /// MC.6.1 — per-channel variant URLs (Amazon hero/standard/thumb,
   /// eBay zoom/standard/thumb, Shopify product/grid/cart, Instagram
   /// feed/story/portrait, OG card). Built from the Cloudinary master
