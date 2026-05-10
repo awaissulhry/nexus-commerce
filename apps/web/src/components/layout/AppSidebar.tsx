@@ -556,63 +556,72 @@ export default function AppSidebar() {
             label="Advertising"
             active={pathname === '/marketing/advertising'}
           />
-          <NavItem
+          <NavParentItem
+            storageKey="marketing.content"
             href="/marketing/content"
             icon={ImageIcon}
             label="Content Hub"
-            active={pathname.startsWith('/marketing/content')}
-          />
-          {/* MC.14.5 — surface the most-trafficked Content Hub
-              sub-routes so the sidebar doesn't go quiet when an
-              operator is deep in publish/analytics. */}
-          {pathname.startsWith('/marketing/content') && (
-            <>
-              <NavItem
-                href="/marketing/content/publish"
-                icon={Send}
-                label="Channel publish"
-                nested
-                active={pathname === '/marketing/content/publish'}
-              />
-              <NavItem
-                href="/marketing/content/analytics"
-                icon={BarChart3}
-                label="Storage analytics"
-                nested
-                active={pathname === '/marketing/content/analytics'}
-              />
-            </>
-          )}
-          <NavItem
-            href="/marketing/aplus"
-            icon={BadgeCheck}
-            label="A+ Content"
-            active={pathname.startsWith('/marketing/aplus')}
-          />
-          <NavItem
-            href="/marketing/brand-story"
-            icon={BookOpen}
-            label="Brand Story"
-            active={pathname.startsWith('/marketing/brand-story')}
-          />
-          <NavItem
-            href="/marketing/brand-kit"
-            icon={Palette}
-            label="Brand Kit"
-            active={pathname.startsWith('/marketing/brand-kit')}
-          />
-          <NavItem
-            href="/marketing/automation"
-            icon={Zap}
-            label="Automation"
-            active={pathname.startsWith('/marketing/automation')}
-          />
-          <NavItem
-            href="/marketing/templates"
-            icon={LayoutTemplate}
-            label="Templates"
-            active={pathname.startsWith('/marketing/templates')}
-          />
+            active={pathname === '/marketing/content'}
+            childRoutes={[
+              '/marketing/content/publish',
+              '/marketing/content/analytics',
+              '/marketing/aplus',
+              '/marketing/brand-story',
+              '/marketing/brand-kit',
+              '/marketing/automation',
+              '/marketing/templates',
+            ]}
+          >
+            <NavItem
+              href="/marketing/content/publish"
+              icon={Send}
+              label="Channel publish"
+              nested
+              active={pathname === '/marketing/content/publish'}
+            />
+            <NavItem
+              href="/marketing/content/analytics"
+              icon={BarChart3}
+              label="Storage analytics"
+              nested
+              active={pathname === '/marketing/content/analytics'}
+            />
+            <NavItem
+              href="/marketing/aplus"
+              icon={BadgeCheck}
+              label="A+ Content"
+              nested
+              active={pathname.startsWith('/marketing/aplus')}
+            />
+            <NavItem
+              href="/marketing/brand-story"
+              icon={BookOpen}
+              label="Brand Story"
+              nested
+              active={pathname.startsWith('/marketing/brand-story')}
+            />
+            <NavItem
+              href="/marketing/brand-kit"
+              icon={Palette}
+              label="Brand Kit"
+              nested
+              active={pathname.startsWith('/marketing/brand-kit')}
+            />
+            <NavItem
+              href="/marketing/automation"
+              icon={Zap}
+              label="Automation"
+              nested
+              active={pathname.startsWith('/marketing/automation')}
+            />
+            <NavItem
+              href="/marketing/templates"
+              icon={LayoutTemplate}
+              label="Templates"
+              nested
+              active={pathname.startsWith('/marketing/templates')}
+            />
+          </NavParentItem>
           <NavItem
             href="/marketing/reviews"
             icon={Star}
