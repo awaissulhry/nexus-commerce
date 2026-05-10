@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { GitBranch } from 'lucide-react'
+import { ArrowUpRight, GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface FamilySibling {
@@ -66,15 +66,19 @@ export function VariationFamilyBanner({
         <span className="text-slate-500 dark:text-slate-400 flex-shrink-0 text-xs">
           Variant of
         </span>
-        <Link
-          href={`/products/${parentProduct.id}/edit`}
-          className="font-semibold text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-        >
+        <span className="font-semibold text-slate-800 dark:text-slate-200">
           {parentProduct.name}
-        </Link>
+        </span>
         <span className="font-mono text-slate-400 dark:text-slate-500 text-xs">
           {parentProduct.sku}
         </span>
+        <Link
+          href={`/products/${parentProduct.id}/edit`}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-blue-300 hover:text-blue-600 dark:hover:border-blue-500 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+        >
+          <ArrowUpRight className="w-3 h-3" />
+          Go to parent
+        </Link>
 
         {/* Channel parent ID badges */}
         {currentParentAsin && (
