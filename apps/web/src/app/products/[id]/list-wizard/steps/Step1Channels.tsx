@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Globe,
+  Layers,
   Loader2,
   ShoppingBag,
   Sparkles,
@@ -107,6 +108,20 @@ interface AiChannelRecommendation {
   reason: string
 }
 
+// WT.3 — template row shape returned by /api/wizard-templates.
+interface WizardTemplateRow {
+  id: string
+  name: string
+  description: string | null
+  channels: ChannelTuple[]
+  defaults: Record<string, unknown>
+  builtIn: boolean
+  categoryHint: string | null
+  usageCount: number
+  lastUsedAt: string | null
+  createdAt: string
+}
+
 export default function Step1Channels({
   channels: initialChannels,
   wizardState,
@@ -158,6 +173,17 @@ export default function Step1Channels({
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiRecs, setAiRecs] = useState<AiChannelRecommendation[]>([])
   const [aiPanelOpen, setAiPanelOpen] = useState(false)
+
+  // WT.3 — wizard template picker state. Click "Apply template" →
+  // fetches /api/wizard-templates lazily + opens the inline panel.
+  // Apply per-row → POSTs /api/wizard-templates/:id/apply with the
+  // wizardId; on success the page reloads so ListWizardClient picks
+  // up the patched initialWizard (channels + state).
+  const [templates, setTemplates] = useState<WizardTemplateRow[]>([])
+  const [templatesBusy, setTemplatesBusy] = useState(false)
+  const [templatesError, setTemplatesError] = useState<string | null>(null)
+  const [templatesPanelOpen, setTemplatesPanelOpen] = useState(false)
+  const [templateApplyingId, setTemplateApplyingId] = useState<string | null>(null)
 
   // C.0 — gate the chrome's Continue on at least one channel picked.
   // Mirrors the in-step "Continue" affordance which already requires
@@ -339,6 +365,78 @@ export default function Step1Channels({
     [toast, t],
   )
 
+  // WT.3 — fetch templates on first panel open. Cached in state so
+  // re-opening doesn't re-fetch unless the operator hits Refresh.
+  const openTemplatesPanel = useCallback(async () => {
+    setTemplatesPanelOpen(true)
+    if (templates.length > 0) return
+    setTemplatesBusy(true)
+    setTemplatesError(null)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/wizard-templates`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+      setTemplates(Array.isArray(json?.rows) ? json.rows : [])
+    } catch (err) {
+      setTemplatesError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setTemplatesBusy(false)
+    }
+  }, [templates.length])
+
+  // WT.3 — apply a template. Confirms before firing because the apply
+  // OVERWRITES the wizard's channels (operator's intent is "use this
+  // template", not "merge"). State defaults are merged caller-wins
+  // server-side, so an already-edited skuStrategy doesn't get
+  // clobbered. After PATCH lands, reload so ListWizardClient picks
+  // up the fresh initialWizard.
+  const applyTemplate = useCallback(
+    async (tmpl: WizardTemplateRow) => {
+      const ok = await confirm({
+        title: `Apply "${tmpl.name}"?`,
+        description: `${tmpl.channels.length} channel${tmpl.channels.length === 1 ? '' : 's'} will replace your current selection. Operator-edited fields (SKU strategy, themes, prices already set) are kept.`,
+        confirmLabel: 'Apply template',
+        tone: 'warning',
+      })
+      if (!ok) return
+      setTemplateApplyingId(tmpl.id)
+      setTemplatesError(null)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/wizard-templates/${tmpl.id}/apply`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wizardId }),
+          },
+        )
+        const json = await res.json()
+        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+        toast({
+          tone: 'success',
+          title: `Applied "${tmpl.name}"`,
+          description: `${tmpl.channels.length} channel${tmpl.channels.length === 1 ? '' : 's'} pre-selected. Reloading wizard…`,
+          durationMs: 2400,
+        })
+        // Soft reload so the wizard re-fetches initialWizard with the
+        // patched channels + state. Brutal but reliable; a soft-refresh
+        // pathway lands later if the cross-tab broadcast surface grows.
+        window.setTimeout(() => window.location.reload(), 600)
+      } catch (err) {
+        setTemplatesError(err instanceof Error ? err.message : String(err))
+        toast({
+          tone: 'error',
+          title: 'Template apply failed',
+          description: err instanceof Error ? err.message : String(err),
+          durationMs: 6000,
+        })
+      } finally {
+        setTemplateApplyingId(null)
+      }
+    },
+    [confirm, toast, wizardId],
+  )
+
   // AI-6.1 — apply every high-fit recommendation in one click. Caps
   // at the channels currently in the connected list (the AI prompt
   // already filters but defense in depth — never add a channel the
@@ -427,26 +525,52 @@ export default function Step1Channels({
             per-marketplace pricing.
           </p>
         </div>
-        {/* AI-6.1 — Step 1 channel suggester trigger. Fires
-            /suggest-channels and opens the recommendations panel
-            below. Disabled while the AI call is in flight. */}
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={askAiToSuggest}
-          disabled={aiBusy}
-          className="flex-shrink-0 inline-flex items-center gap-1.5"
-        >
-          {aiBusy ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-          )}
-          {aiBusy
-            ? t('listWizard.aiSuggestChannels.busy')
-            : t('listWizard.aiSuggestChannels.button')}
-        </Button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* WT.3 — apply template trigger. Lazy-loads the template
+              list on first click, opens an inline panel below. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void openTemplatesPanel()}
+            disabled={templatesBusy}
+            className="inline-flex items-center gap-1.5"
+            title="Apply a saved template — pre-selects channels + defaults"
+          >
+            <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            Apply template
+          </Button>
+          {/* AI-6.1 — Step 1 channel suggester trigger. Fires
+              /suggest-channels and opens the recommendations panel
+              below. Disabled while the AI call is in flight. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={askAiToSuggest}
+            disabled={aiBusy}
+            className="inline-flex items-center gap-1.5"
+          >
+            {aiBusy ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            )}
+            {aiBusy
+              ? t('listWizard.aiSuggestChannels.busy')
+              : t('listWizard.aiSuggestChannels.button')}
+          </Button>
+        </div>
       </div>
+
+      {templatesPanelOpen && (
+        <TemplatePickerPanel
+          busy={templatesBusy}
+          error={templatesError}
+          rows={templates}
+          applyingId={templateApplyingId}
+          onApply={applyTemplate}
+          onClose={() => setTemplatesPanelOpen(false)}
+        />
+      )}
 
       {aiPanelOpen && (
         <AiSuggestionsPanel
@@ -791,6 +915,144 @@ function ConnectionBadge({ connected }: { connected: boolean }) {
     <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
       <XCircle className="w-3 h-3" /> Not connected
     </span>
+  )
+}
+
+// WT.3 — wizard template picker panel. Renders inline on Step 1.
+// Built-in seeds first (sorted by usageCount desc), operator
+// templates next. Each row shows name + description + channel chips
+// + Apply button.
+function TemplatePickerPanel({
+  busy,
+  error,
+  rows,
+  applyingId,
+  onApply,
+  onClose,
+}: {
+  busy: boolean
+  error: string | null
+  rows: WizardTemplateRow[]
+  applyingId: string | null
+  onApply: (tmpl: WizardTemplateRow) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="mb-5 border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-blue-100 dark:border-blue-900 flex items-center justify-between gap-2 bg-blue-50 dark:bg-blue-950/40">
+        <div className="min-w-0">
+          <div className="text-md font-semibold text-blue-900 dark:text-blue-100 inline-flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5" />
+            Wizard templates
+          </div>
+          <div className="text-sm text-blue-700 dark:text-blue-300 mt-0.5">
+            Pre-built channel + state combos. Apply replaces channels;
+            existing field edits stay.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-100"
+        >
+          <XCircle className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="px-4 py-3">
+        {busy && (
+          <div className="flex items-center gap-2 text-base text-blue-700 dark:text-blue-300">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Loading templates…
+          </div>
+        )}
+        {error && !busy && (
+          <div className="flex items-start gap-2 text-base text-rose-700 dark:text-rose-300">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="font-medium">Couldn&apos;t load templates</div>
+              <div className="text-sm opacity-90 mt-0.5">{error}</div>
+            </div>
+          </div>
+        )}
+        {!busy && !error && rows.length === 0 && (
+          <div className="text-base text-slate-500 dark:text-slate-400 italic">
+            No templates yet. Save the current wizard from Step 9 to
+            create one.
+          </div>
+        )}
+        {!busy && !error && rows.length > 0 && (
+          <ul className="space-y-2">
+            {rows.map((tmpl) => {
+              const isApplying = applyingId === tmpl.id
+              return (
+                <li
+                  key={tmpl.id}
+                  className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 px-3 py-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+                          {tmpl.name}
+                        </span>
+                        {tmpl.builtIn && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                            built-in
+                          </span>
+                        )}
+                        {tmpl.usageCount > 0 && (
+                          <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                            used {tmpl.usageCount}×
+                          </span>
+                        )}
+                      </div>
+                      {tmpl.description && (
+                        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400 leading-snug">
+                          {tmpl.description}
+                        </p>
+                      )}
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {tmpl.channels.map((c, i) => (
+                          <span
+                            key={`${c.platform}:${c.marketplace}:${i}`}
+                            className="inline-flex items-center h-5 px-1.5 rounded text-xs font-mono font-medium border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                          >
+                            {c.platform}
+                            {c.marketplace !== 'GLOBAL' && (
+                              <>
+                                <span className="opacity-50 mx-0.5">·</span>
+                                <span>{c.marketplace}</span>
+                              </>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => onApply(tmpl)}
+                        disabled={isApplying}
+                      >
+                        {isApplying ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Layers className="w-3 h-3" />
+                        )}
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
 
