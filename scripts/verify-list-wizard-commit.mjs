@@ -147,6 +147,9 @@ check('GET response exposes cronEnabled (SP.5)',
 check('cron job present + default-OFF guarded',
   scheduledJob.length > 0 &&
     /NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH/.test(scheduledJob))
+check('cron emits Notification on fire (SP.7)',
+  /emitScheduleNotification/.test(scheduledJob) &&
+    /prisma\.notification\.create/.test(scheduledJob))
 
 console.log('\nCase 13: AB series — A/B routing')
 const promptSvc = read('apps/api/src/services/ai/prompt-template.service.ts')
