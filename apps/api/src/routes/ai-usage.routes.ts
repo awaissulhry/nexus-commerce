@@ -35,6 +35,7 @@ import {
   recordPromptTemplateEdit,
   type PromptTemplateStatus,
 } from '../services/ai/prompt-template.service.js'
+import { listBrandVoices } from '../services/ai/brand-voice.service.js'
 
 const MAX_DAYS = 90
 
@@ -284,6 +285,120 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
     })
     return { result }
   })
+
+  // BV.3 (list-wizard) — BrandVoice CRUD for /settings/ai admin.
+  //
+  // GET    /api/ai/brand-voices             — list (active + inactive)
+  // POST   /api/ai/brand-voices             — create
+  // PATCH  /api/ai/brand-voices/:id         — edit body / scope / isActive
+  // DELETE /api/ai/brand-voices/:id         — hard delete
+  //
+  // The matcher in renderBrandVoiceBlock picks the most-specific
+  // ACTIVE row at AI call time; this admin surface lets the operator
+  // create / promote / archive without going through SQL.
+  fastify.get('/ai/brand-voices', async () => {
+    const rows = await listBrandVoices(prisma, {})
+    return {
+      rows: rows.map((r) => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+      })),
+    }
+  })
+
+  fastify.post<{
+    Body: {
+      brand?: string | null
+      marketplace?: string | null
+      language?: string | null
+      body?: string
+      notes?: string | null
+      isActive?: boolean
+    }
+  }>('/ai/brand-voices', async (request, reply) => {
+    const b = request.body ?? {}
+    if (typeof b.body !== 'string' || b.body.trim().length === 0) {
+      return reply.code(400).send({ error: 'body is required' })
+    }
+    const row = await prisma.brandVoice.create({
+      data: {
+        brand: b.brand?.trim() || null,
+        marketplace: b.marketplace?.trim().toUpperCase() || null,
+        language: b.language?.trim().toLowerCase() || null,
+        body: b.body.trim(),
+        notes: b.notes?.trim() || null,
+        isActive: typeof b.isActive === 'boolean' ? b.isActive : true,
+        createdBy: 'default-user',
+      },
+    })
+    return {
+      row: {
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      },
+    }
+  })
+
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      brand?: string | null
+      marketplace?: string | null
+      language?: string | null
+      body?: string
+      notes?: string | null
+      isActive?: boolean
+    }
+  }>('/ai/brand-voices/:id', async (request, reply) => {
+    const b = request.body ?? {}
+    const data: Record<string, unknown> = {}
+    if (b.brand !== undefined) data.brand = b.brand?.trim() || null
+    if (b.marketplace !== undefined)
+      data.marketplace = b.marketplace?.trim().toUpperCase() || null
+    if (b.language !== undefined)
+      data.language = b.language?.trim().toLowerCase() || null
+    if (b.body !== undefined) {
+      if (typeof b.body !== 'string' || b.body.trim().length === 0) {
+        return reply.code(400).send({ error: 'body cannot be blank' })
+      }
+      data.body = b.body.trim()
+    }
+    if (b.notes !== undefined) data.notes = b.notes?.trim() || null
+    if (b.isActive !== undefined) data.isActive = !!b.isActive
+    try {
+      const row = await prisma.brandVoice.update({
+        where: { id: request.params.id },
+        data,
+      })
+      return {
+        row: {
+          ...row,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        },
+      }
+    } catch (err) {
+      return reply.code(404).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/ai/brand-voices/:id',
+    async (request, reply) => {
+      try {
+        await prisma.brandVoice.delete({ where: { id: request.params.id } })
+        return { ok: true }
+      } catch (err) {
+        return reply.code(404).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
 
   fastify.get('/ai/providers', async () => {
     // AI-1.2: response shape is { killSwitch, providers: [...] } so the

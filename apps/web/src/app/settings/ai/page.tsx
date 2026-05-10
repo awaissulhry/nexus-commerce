@@ -12,6 +12,9 @@ import AiPromptsClient, { type PromptTemplateRow } from './AiPromptsClient'
 import AiWizardTemplatesClient, {
   type WizardTemplateRow,
 } from './AiWizardTemplatesClient'
+import AiBrandVoicesClient, {
+  type BrandVoiceRow,
+} from './AiBrandVoicesClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -31,6 +34,7 @@ export default async function AiSettingsPage() {
     topWizardsRes,
     promptsRes,
     wizardTemplatesRes,
+    brandVoicesRes,
   ] = await Promise.all([
     fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
     fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
@@ -42,6 +46,7 @@ export default async function AiSettingsPage() {
     }),
     fetch(`${backend}/api/ai/prompt-templates`, { cache: 'no-store' }),
     fetch(`${backend}/api/wizard-templates`, { cache: 'no-store' }),
+    fetch(`${backend}/api/ai/brand-voices`, { cache: 'no-store' }),
   ])
 
   const providersJson = providersRes.ok ? await providersRes.json() : null
@@ -60,6 +65,9 @@ export default async function AiSettingsPage() {
   const wizardTemplates: WizardTemplateRow[] = wizardTemplatesRes.ok
     ? ((await wizardTemplatesRes.json()).rows ?? [])
     : []
+  const brandVoices: BrandVoiceRow[] = brandVoicesRes.ok
+    ? ((await brandVoicesRes.json()).rows ?? [])
+    : []
 
   return (
     <div className="space-y-6">
@@ -73,6 +81,7 @@ export default async function AiSettingsPage() {
         topWizards={topWizards}
       />
       <AiPromptsClient initialRows={prompts} />
+      <AiBrandVoicesClient initialRows={brandVoices} />
       <AiWizardTemplatesClient initialRows={wizardTemplates} />
     </div>
   )
