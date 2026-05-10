@@ -3234,6 +3234,46 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               .catch(() => []),
           ])
           const channelKey = `${upperChannel}:${marketplace.toUpperCase()}`
+
+          // Universal eBay listing fields — always required regardless of
+          // category. The taxonomy API never returns these; they map to
+          // ChannelListing columns via the same fieldId→column aliases that
+          // the Amazon editor uses (item_name→title, etc.) so the existing
+          // flush() save path works unchanged.
+          const ebayBaseField = (
+            id: string,
+            label: string,
+            kind: string,
+            opts: { required?: boolean; maxLength?: number; maxItems?: number } = {},
+          ) => ({
+            id,
+            label,
+            kind,
+            required: opts.required ?? true,
+            wrapped: false,
+            maxLength: opts.maxLength,
+            maxItems: opts.maxItems,
+            requiredFor: (opts.required ?? true) ? [channelKey] : [],
+            optionalFor: (opts.required ?? true) ? [] : [channelKey],
+            notUsedIn: [],
+            currentValue: (() => {
+              const v = baseAttributes[id]
+              return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
+                ? v : undefined
+            })(),
+            overrides: {},
+            variantEligible: false,
+          })
+
+          const baseFields = [
+            ebayBaseField('item_name', 'Title', 'text', { maxLength: 80 }),
+            ebayBaseField('product_description', 'Description', 'longtext'),
+            ebayBaseField('bullet_point', 'Key features (bullet points)', 'string_array', {
+              required: false,
+              maxItems: 5,
+            }),
+          ]
+
           const aspectFields = ebayAspectsToUnionFields(
             aspects,
             baseAttributes,
@@ -3265,7 +3305,13 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
                   },
                 ]
               : []
-          const fields = [...conditionField, ...aspectFields]
+
+          // Deduplicate: if an aspect happens to have the same id as a base
+          // field (rare but possible), the base field wins.
+          const baseIds = new Set(baseFields.map((f) => f.id))
+          const filteredAspects = aspectFields.filter((f) => !baseIds.has(f.id))
+
+          const fields = [...baseFields, ...conditionField, ...filteredAspects]
           return {
             channels: [
               { platform: upperChannel, marketplace, productType },
