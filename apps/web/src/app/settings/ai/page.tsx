@@ -9,6 +9,9 @@
 import { getBackendUrl } from '@/lib/backend-url'
 import AiUsageClient from './AiUsageClient'
 import AiPromptsClient, { type PromptTemplateRow } from './AiPromptsClient'
+import AiWizardTemplatesClient, {
+  type WizardTemplateRow,
+} from './AiWizardTemplatesClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -16,9 +19,9 @@ export const revalidate = 0
 export default async function AiSettingsPage() {
   const backend = getBackendUrl()
 
-  // AI-1.7 + AI-1.8 + AI-2.5 — providers + budget posture + per-wizard
-  // ROI + prompt templates round-trip together. First paint renders
-  // every card without a client spinner.
+  // AI-1.7 + AI-1.8 + AI-2.5 + WT.5 — providers + budget posture +
+  // per-wizard ROI + prompt templates + wizard templates round-trip
+  // together. First paint renders every card without a client spinner.
   const [
     providersRes,
     summary7Res,
@@ -27,6 +30,7 @@ export default async function AiSettingsPage() {
     postureRes,
     topWizardsRes,
     promptsRes,
+    wizardTemplatesRes,
   ] = await Promise.all([
     fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
     fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
@@ -37,6 +41,7 @@ export default async function AiSettingsPage() {
       cache: 'no-store',
     }),
     fetch(`${backend}/api/ai/prompt-templates`, { cache: 'no-store' }),
+    fetch(`${backend}/api/wizard-templates`, { cache: 'no-store' }),
   ])
 
   const providersJson = providersRes.ok ? await providersRes.json() : null
@@ -52,6 +57,9 @@ export default async function AiSettingsPage() {
   const prompts: PromptTemplateRow[] = promptsRes.ok
     ? ((await promptsRes.json()).rows ?? [])
     : []
+  const wizardTemplates: WizardTemplateRow[] = wizardTemplatesRes.ok
+    ? ((await wizardTemplatesRes.json()).rows ?? [])
+    : []
 
   return (
     <div className="space-y-6">
@@ -65,6 +73,7 @@ export default async function AiSettingsPage() {
         topWizards={topWizards}
       />
       <AiPromptsClient initialRows={prompts} />
+      <AiWizardTemplatesClient initialRows={wizardTemplates} />
     </div>
   )
 }

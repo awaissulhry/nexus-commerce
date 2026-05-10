@@ -302,6 +302,77 @@ const wizardTemplateRoutes: FastifyPluginAsync = async (fastify) => {
       return null
     },
   )
+
+  // WT.5a — patch a non-builtIn template's display fields. Channels +
+  // defaults stay fixed at create time (re-shaping a template would
+  // surprise operators who applied it last week); for that an
+  // operator deletes + re-saves from a fresh wizard.
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      name?: string
+      description?: string
+      categoryHint?: string
+    }
+  }>(
+    '/wizard-templates/:id',
+    async (request, reply) => {
+      const tmpl = await prisma.wizardTemplate.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, builtIn: true },
+      })
+      if (!tmpl) return reply.code(404).send({ error: 'Template not found' })
+      if (tmpl.builtIn) {
+        return reply.code(409).send({
+          error:
+            'Built-in templates are read-only. Save your own to override.',
+        })
+      }
+
+      const data: Record<string, unknown> = {}
+      if (typeof request.body?.name === 'string') {
+        const n = request.body.name.trim()
+        if (n.length === 0) {
+          return reply.code(400).send({ error: 'name cannot be empty' })
+        }
+        data.name = n.slice(0, 120)
+      }
+      if (typeof request.body?.description === 'string') {
+        const d = request.body.description.trim()
+        data.description = d.length > 0 ? d.slice(0, 500) : null
+      }
+      if (typeof request.body?.categoryHint === 'string') {
+        const c = request.body.categoryHint.trim()
+        data.categoryHint = c.length > 0 ? c.slice(0, 60) : null
+      }
+      if (Object.keys(data).length === 0) {
+        return reply.code(400).send({
+          error: 'no recognised fields — pass name / description / categoryHint',
+        })
+      }
+      try {
+        const updated = await prisma.wizardTemplate.update({
+          where: { id: request.params.id },
+          data,
+        })
+        return {
+          row: {
+            ...updated,
+            createdAt: updated.createdAt.toISOString(),
+            updatedAt: updated.updatedAt.toISOString(),
+            lastUsedAt: updated.lastUsedAt
+              ? updated.lastUsedAt.toISOString()
+              : null,
+          },
+        }
+      } catch (err) {
+        fastify.log.error({ err }, '[wizard-templates] patch failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
 }
 
 export default wizardTemplateRoutes
