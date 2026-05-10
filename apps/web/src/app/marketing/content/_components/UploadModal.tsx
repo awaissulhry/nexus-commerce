@@ -23,11 +23,23 @@ import {
   Loader2,
   FileImage,
   Paperclip,
+  RefreshCw,
 } from 'lucide-react'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
+import { xhrUpload } from '../_lib/xhr-upload'
+
+// MC.3.5 — concurrent uploads. Cloudinary recommends ≤4 streams per
+// credential; we go conservative at 3 so the operator's other API
+// traffic isn't starved during a big batch.
+const CONCURRENCY = 3
+// MC.3.5 — auto-retry budget. Network blips on a single file
+// shouldn't fail the whole batch — give each item up to two retries
+// with exponential backoff before surfacing as a hard failure that
+// needs operator attention.
+const MAX_AUTO_RETRIES = 2
 
 type QueueItemStatus = 'queued' | 'uploading' | 'done' | 'duplicate' | 'error'
 
@@ -41,6 +53,13 @@ interface QueueItem {
   // MC.3.3 — when status is 'duplicate', captures whether the
   // server also re-filed the existing asset into a new folder.
   refiled?: boolean
+  // MC.3.5 — upload progress (0–100). Only populated for source=file
+  // since URL imports are server-side fetch + upload, no client byte
+  // stream to measure.
+  progress?: number
+  // MC.3.5 — auto-retry counter. Visible in the row so the operator
+  // sees that the network was flaky, not their connection.
+  retries?: number
   // For file uploads only
   file?: File
   // For URL uploads only
@@ -191,39 +210,53 @@ export default function UploadModal({
     if (files.length) addFiles(files)
   }
 
-  const uploadOne = async (item: QueueItem): Promise<QueueItem> => {
+  // MC.3.5 — single-item upload via XHR (file) or fetch (URL).
+  // Reports progress through the supplied setter. Resolves to the
+  // updated QueueItem so the queue can be patched once at the end
+  // of each attempt.
+  const uploadOne = async (
+    item: QueueItem,
+    onProgress: (pct: number) => void,
+  ): Promise<QueueItem> => {
     try {
-      let res: Response
+      let body: { asset: unknown; dedup?: boolean; refiled?: boolean }
       if (item.source === 'file' && item.file) {
         const fd = new FormData()
         fd.append('file', item.file, item.filename)
         if (folderId) fd.append('folderId', folderId)
-        res = await fetch(`${apiBase}/api/assets/upload`, {
-          method: 'POST',
+        const res = await xhrUpload({
+          url: `${apiBase}/api/assets/upload`,
           body: fd,
+          onProgress,
         })
+        if (!res.ok) {
+          const err = (res.body ?? {}) as { error?: string }
+          throw new Error(err.error ?? `Upload failed (${res.status})`)
+        }
+        body = res.body as typeof body
       } else if (item.source === 'url' && item.url) {
-        res = await fetch(`${apiBase}/api/assets/upload-url`, {
+        // URL imports run server-side; client progress is a 0→100
+        // jump bracketing the request lifetime.
+        onProgress(10)
+        const res = await fetch(`${apiBase}/api/assets/upload-url`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ url: item.url, folderId }),
         })
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(err.error ?? `Import failed (${res.status})`)
+        }
+        body = (await res.json()) as typeof body
+        onProgress(100)
       } else {
         throw new Error('Invalid queue item')
-      }
-      if (!res.ok) {
-        const errBody = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(errBody.error ?? `Upload failed (${res.status})`)
-      }
-      const body = (await res.json()) as {
-        asset: unknown
-        dedup?: boolean
-        refiled?: boolean
       }
       return {
         ...item,
         status: body.dedup ? 'duplicate' : 'done',
         refiled: body.refiled,
+        progress: 100,
       }
     } catch (err) {
       return {
@@ -234,6 +267,45 @@ export default function UploadModal({
     }
   }
 
+  // MC.3.5 — single-attempt runner with auto-retry on transient
+  // failures. The first MAX_AUTO_RETRIES attempts wait 500ms, 1500ms;
+  // anything beyond that is operator-driven via the per-row Retry
+  // button.
+  const runWithRetry = async (
+    initialItem: QueueItem,
+    onProgress: (pct: number) => void,
+  ): Promise<QueueItem> => {
+    let attempt = 0
+    let item = initialItem
+    while (true) {
+      const result = await uploadOne(item, onProgress)
+      if (result.status !== 'error') return result
+      // Retry only network/transient signals — skip 4xx-style
+      // semantic failures that won't get better on retry.
+      const transient =
+        /network error|timed out|aborted|502|503|504/i.test(
+          result.error ?? '',
+        )
+      if (!transient || attempt >= MAX_AUTO_RETRIES) return result
+      attempt += 1
+      const wait = 500 * Math.pow(3, attempt - 1)
+      await new Promise((r) => setTimeout(r, wait))
+      item = { ...item, retries: attempt, progress: 0 }
+      // Mirror retry counter into the queue so the row shows it.
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === item.id
+            ? { ...q, retries: attempt, progress: 0, status: 'uploading' }
+            : q,
+        ),
+      )
+    }
+  }
+
+  // MC.3.5 — concurrent batch runner. Pulls items off `pending` in
+  // parallel up to CONCURRENCY workers; each worker grabs the next
+  // queued item, runs it (with auto-retry), records the result,
+  // loops until empty.
   const startUpload = async () => {
     const pending = queue.filter((q) => q.status === 'queued')
     if (pending.length === 0) return
@@ -241,20 +313,37 @@ export default function UploadModal({
     let successes = 0
     let duplicates = 0
     let failures = 0
-    for (const item of pending) {
-      setQueue((prev) =>
-        prev.map((q) =>
-          q.id === item.id ? { ...q, status: 'uploading' } : q,
-        ),
-      )
-      const updated = await uploadOne(item)
-      setQueue((prev) =>
-        prev.map((q) => (q.id === item.id ? updated : q)),
-      )
-      if (updated.status === 'done') successes++
-      else if (updated.status === 'duplicate') duplicates++
-      else failures++
+    const cursor = { i: 0 }
+
+    const worker = async () => {
+      while (cursor.i < pending.length) {
+        const item = pending[cursor.i++]!
+        setQueue((prev) =>
+          prev.map((q) =>
+            q.id === item.id
+              ? { ...q, status: 'uploading', progress: 0 }
+              : q,
+          ),
+        )
+        const updated = await runWithRetry(item, (pct) =>
+          setQueue((prev) =>
+            prev.map((q) =>
+              q.id === item.id ? { ...q, progress: pct } : q,
+            ),
+          ),
+        )
+        setQueue((prev) =>
+          prev.map((q) => (q.id === item.id ? updated : q)),
+        )
+        if (updated.status === 'done') successes++
+        else if (updated.status === 'duplicate') duplicates++
+        else failures++
+      }
     }
+
+    const workers = Array.from({ length: CONCURRENCY }, () => worker())
+    await Promise.all(workers)
+
     setBusy(false)
     if (successes > 0) {
       toast.success(
@@ -278,6 +367,53 @@ export default function UploadModal({
         t('marketingContent.upload.failureCount', {
           n: failures.toString(),
         }),
+      )
+    }
+  }
+
+  // MC.3.5 — operator-driven retry for a single failed row. Resets
+  // status + retries counter and runs the same path as the batch.
+  const retryOne = async (id: string) => {
+    const item = queue.find((q) => q.id === id)
+    if (!item || item.status !== 'error') return
+    setBusy(true)
+    setQueue((prev) =>
+      prev.map((q) =>
+        q.id === id
+          ? {
+              ...q,
+              status: 'uploading',
+              progress: 0,
+              retries: 0,
+              error: undefined,
+            }
+          : q,
+      ),
+    )
+    const updated = await runWithRetry(
+      { ...item, retries: 0, error: undefined },
+      (pct) =>
+        setQueue((prev) =>
+          prev.map((q) => (q.id === id ? { ...q, progress: pct } : q)),
+        ),
+    )
+    setQueue((prev) => prev.map((q) => (q.id === id ? updated : q)))
+    setBusy(false)
+    if (updated.status === 'done') {
+      toast.success(
+        t('marketingContent.upload.successCount', { n: '1' }),
+      )
+      onComplete()
+    } else if (updated.status === 'duplicate') {
+      toast({
+        title: t('marketingContent.upload.duplicateCount', { n: '1' }),
+        description: t('marketingContent.upload.duplicateBody'),
+        tone: 'info',
+      })
+      onComplete()
+    } else {
+      toast.error(
+        updated.error ?? t('marketingContent.upload.failureCount', { n: '1' }),
       )
     }
   }
@@ -373,49 +509,81 @@ export default function UploadModal({
                 {queue.map((item) => (
                   <li
                     key={item.id}
-                    className="flex items-center gap-2 px-3 py-2"
+                    className="px-3 py-2"
                   >
-                    {item.status === 'done' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    ) : item.status === 'duplicate' ? (
-                      <CheckCircle2 className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                    ) : item.status === 'error' ? (
-                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    ) : item.status === 'uploading' ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-blue-500 flex-shrink-0" />
-                    ) : (
-                      <FileImage className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm text-slate-900 dark:text-slate-100">
-                        {item.filename}
-                      </p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        {item.status === 'duplicate' ? (
-                          <span className="text-amber-700 dark:text-amber-400">
-                            {item.refiled
-                              ? t('marketingContent.upload.duplicateRefiled')
-                              : t('marketingContent.upload.duplicateRow')}
-                          </span>
-                        ) : item.source === 'url' ? (
-                          item.url
-                        ) : null}
-                        {item.error ? (
-                          <span className="text-red-600 dark:text-red-400">
-                            {item.error}
-                          </span>
-                        ) : null}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      {item.status === 'done' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      ) : item.status === 'duplicate' ? (
+                        <CheckCircle2 className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                      ) : item.status === 'error' ? (
+                        <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      ) : item.status === 'uploading' ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-500 flex-shrink-0" />
+                      ) : (
+                        <FileImage className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate text-sm text-slate-900 dark:text-slate-100">
+                          {item.filename}
+                        </p>
+                        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                          {item.status === 'duplicate' ? (
+                            <span className="text-amber-700 dark:text-amber-400">
+                              {item.refiled
+                                ? t('marketingContent.upload.duplicateRefiled')
+                                : t('marketingContent.upload.duplicateRow')}
+                            </span>
+                          ) : item.status === 'uploading' &&
+                            typeof item.progress === 'number' ? (
+                            <span>
+                              {item.progress}%
+                              {item.retries
+                                ? ` · ${t('marketingContent.upload.retryAttempt', {
+                                    n: item.retries.toString(),
+                                  })}`
+                                : ''}
+                            </span>
+                          ) : item.source === 'url' ? (
+                            item.url
+                          ) : null}
+                          {item.error ? (
+                            <span className="text-red-600 dark:text-red-400">
+                              {item.error}
+                            </span>
+                          ) : null}
+                        </p>
+                      </div>
+                      {item.status === 'queued' && !busy && (
+                        <button
+                          type="button"
+                          onClick={() => removeFromQueue(item.id)}
+                          aria-label={t(
+                            'marketingContent.upload.removeQueueItem',
+                          )}
+                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {item.status === 'error' && !busy && (
+                        <button
+                          type="button"
+                          onClick={() => void retryOne(item.id)}
+                          aria-label={t('marketingContent.upload.retry')}
+                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    {item.status === 'queued' && !busy && (
-                      <button
-                        type="button"
-                        onClick={() => removeFromQueue(item.id)}
-                        aria-label={t('marketingContent.upload.removeQueueItem')}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                    {item.status === 'uploading' && (
+                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-full bg-blue-500 transition-[width] duration-150 ease-out"
+                          style={{ width: `${item.progress ?? 0}%` }}
+                        />
+                      </div>
                     )}
                   </li>
                 ))}

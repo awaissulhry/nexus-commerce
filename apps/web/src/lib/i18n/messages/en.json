@@ -4270,6 +4270,8 @@
   "marketingContent.upload.duplicateBody": "Identical bytes were already in the library — the existing assets are reused instead of re-uploading.",
   "marketingContent.upload.duplicateRow": "Already in library — reused existing asset",
   "marketingContent.upload.duplicateRefiled": "Already in library — moved to current folder",
+  "marketingContent.upload.retry": "Retry",
+  "marketingContent.upload.retryAttempt": "retry {n}",
   "bulkOps.nav.imports": "Imports",
   "bulkOps.nav.exports": "Exports",
   "bulkOps.nav.automation": "Automation",

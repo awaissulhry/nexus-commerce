@@ -4321,6 +4321,8 @@
   "marketingContent.upload.duplicateBody": "Bytes identici erano già nella libreria — gli asset esistenti vengono riutilizzati invece di ricaricarli.",
   "marketingContent.upload.duplicateRow": "Già in libreria — asset esistente riutilizzato",
   "marketingContent.upload.duplicateRefiled": "Già in libreria — spostato nella cartella attuale",
+  "marketingContent.upload.retry": "Riprova",
+  "marketingContent.upload.retryAttempt": "tentativo {n}",
   "bulkOps.nav.imports": "Importazioni",
   "bulkOps.nav.exports": "Esportazioni",
   "bulkOps.nav.automation": "Automazione",
