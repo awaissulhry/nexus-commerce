@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Sparkles, ArrowDownToLine, ArrowUpFromLine, AlertTriangle } from 'lucide-react'
+import { Sparkles, ArrowDownToLine, ArrowUpFromLine, AlertTriangle, Copy, DollarSign } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -35,6 +35,10 @@ interface Listing {
   listingStatus: string
   externalListingId: string | null
   bulletPointsOverride: string[] | null
+  pricingRule?: string | null
+  priceOverride?: string | number | null
+  priceAdjustmentPercent?: string | number | null
+  followMasterPrice?: boolean
   [key: string]: any
 }
 
@@ -43,9 +47,8 @@ interface Props {
   channel: string
   marketplace: string
   marketInfo: MarketInfo
+  siblingMarkets?: MarketInfo[]
   listing: Listing | undefined
-  /** W1.1 — number of unsaved fields in the schema-driven editor.
-   *  Bubbles to ProductEditClient's per-tab dirty aggregation. */
   onDirtyChange: (count: number) => void
   onSave: (updated: Listing) => void
 }
@@ -55,15 +58,13 @@ export default function ChannelListingTab({
   channel,
   marketplace,
   marketInfo,
+  siblingMarkets = [],
   listing,
   onDirtyChange,
   onSave,
 }: Props) {
   const { t } = useTranslations()
   const [pulling, setPulling] = useState(false)
-  // W1.5 — translate-all is debounced to one in-flight call at a
-  // time; the editor below drives the actual fan-out via the ref
-  // ChannelFieldEditor binds when its schema manifest loads.
   const [translating, setTranslating] = useState(false)
   const translateAllRef = useRef<
     | (() => Promise<{ translated: number; skipped: number }>)
@@ -75,12 +76,6 @@ export default function ChannelListingTab({
   } | null>(null)
   const isNew = !listing
 
-  // NN.18 — fetch wrapper with 429 handling. Amazon SP-API and eBay
-  // Inventory API both rate-limit per-account. Without retry, a
-  // simple click that lands during a throttle window fails with a
-  // generic "HTTP 429" — useless to the user. We catch 429, parse
-  // Retry-After, surface a clear message, and retry once after the
-  // server-suggested delay (capped at 8s so the UI doesn't hang).
   async function fetchWithRateLimitRetry(
     url: string,
     onWaiting: (seconds: number) => void,
@@ -118,10 +113,7 @@ export default function ChannelListingTab({
             }),
         )
         if (res.status === 429) {
-          setStatusMsg({
-            kind: 'error',
-            text: 'Amazon: still rate-limited after retry — try again in a minute.',
-          })
+          setStatusMsg({ kind: 'error', text: 'Amazon: still rate-limited after retry — try again in a minute.' })
           return
         }
         const result = await res.json()
@@ -141,9 +133,6 @@ export default function ChannelListingTab({
       return
     }
     if (channel === 'EBAY') {
-      // DD.3 — eBay Inventory API is seller-account-scoped and keyed by
-      // SKU (the same SKU we sent on createOrReplace). The product's
-      // master SKU is the natural lookup key for the canonical listing.
       const sku = product.sku
       if (!sku) {
         setStatusMsg({ kind: 'error', text: 'No SKU on this product — cannot pull from eBay.' })
@@ -155,16 +144,10 @@ export default function ChannelListingTab({
         url.searchParams.set('sku', sku)
         url.searchParams.set('marketplace', marketplace)
         const res = await fetchWithRateLimitRetry(url.toString(), (sec) =>
-          setStatusMsg({
-            kind: 'info',
-            text: `eBay rate-limited — retrying in ${sec}s…`,
-          }),
+          setStatusMsg({ kind: 'info', text: `eBay rate-limited — retrying in ${sec}s…` }),
         )
         if (res.status === 429) {
-          setStatusMsg({
-            kind: 'error',
-            text: 'eBay: still rate-limited after retry — try again in a minute.',
-          })
+          setStatusMsg({ kind: 'error', text: 'eBay: still rate-limited after retry — try again in a minute.' })
           return
         }
         const result = await res.json()
@@ -173,10 +156,7 @@ export default function ChannelListingTab({
         } else if (!result.found) {
           setStatusMsg({ kind: 'info', text: result.message ?? 'No eBay item for this SKU yet.' })
         } else if (result.summary?.title) {
-          setStatusMsg({
-            kind: 'success',
-            text: `Pulled latest title: "${result.summary.title}"`,
-          })
+          setStatusMsg({ kind: 'success', text: `Pulled latest title: "${result.summary.title}"` })
         } else {
           setStatusMsg({ kind: 'info', text: 'eBay returned the item with no title set.' })
         }
@@ -190,73 +170,34 @@ export default function ChannelListingTab({
     setStatusMsg({ kind: 'info', text: `Pull from ${channel} ships when its adapter lands.` })
   }
 
-  // W1.5 — translate every AI-supported string field on the active
-  // listing in one click. ChannelFieldEditor binds the imperative
-  // handle when its manifest loads; if the user clicks before that,
-  // we say so rather than no-op silently.
   async function handleAITranslate() {
     const fn = translateAllRef.current
     if (!fn) {
-      setStatusMsg({
-        kind: 'info',
-        text: t('products.edit.translate.editorLoading'),
-      })
+      setStatusMsg({ kind: 'info', text: t('products.edit.translate.editorLoading') })
       return
     }
     setTranslating(true)
-    setStatusMsg({
-      kind: 'info',
-      text: t('products.edit.translate.running', {
-        marketplace: marketInfo.code,
-      }),
-    })
+    setStatusMsg({ kind: 'info', text: t('products.edit.translate.running', { marketplace: marketInfo.code }) })
     try {
       const { translated, skipped } = await fn()
       if (translated === 0 && skipped === 0) {
-        setStatusMsg({
-          kind: 'info',
-          text: t('products.edit.translate.noFields'),
-        })
+        setStatusMsg({ kind: 'info', text: t('products.edit.translate.noFields') })
       } else if (translated === 0) {
-        setStatusMsg({
-          kind: 'error',
-          text: t('products.edit.translate.allSkipped', {
-            count: skipped,
-          }),
-        })
+        setStatusMsg({ kind: 'error', text: t('products.edit.translate.allSkipped', { count: skipped }) })
       } else if (skipped === 0) {
-        setStatusMsg({
-          kind: 'success',
-          text: t('products.edit.translate.success', {
-            count: translated,
-          }),
-        })
+        setStatusMsg({ kind: 'success', text: t('products.edit.translate.success', { count: translated }) })
       } else {
-        setStatusMsg({
-          kind: 'success',
-          text: t('products.edit.translate.partial', {
-            translated,
-            skipped,
-          }),
-        })
+        setStatusMsg({ kind: 'success', text: t('products.edit.translate.partial', { translated, skipped }) })
       }
     } catch (e) {
-      setStatusMsg({
-        kind: 'error',
-        text: t('products.edit.translate.failed', {
-          error: e instanceof Error ? e.message : String(e),
-        }),
-      })
+      setStatusMsg({ kind: 'error', text: t('products.edit.translate.failed', { error: e instanceof Error ? e.message : String(e) }) })
     } finally {
       setTranslating(false)
     }
   }
 
   function handlePushPlaceholder() {
-    setStatusMsg({
-      kind: 'info',
-      text: `Push to ${channel} ships when channel adapters land (TECH_DEBT #35).`,
-    })
+    setStatusMsg({ kind: 'info', text: `Push to ${channel} ships when channel adapters land (TECH_DEBT #35).` })
   }
 
   return (
@@ -315,9 +256,7 @@ export default function ChannelListingTab({
               loading={translating}
               icon={<Sparkles className="w-3.5 h-3.5" />}
               onClick={handleAITranslate}
-              title={t('products.edit.translate.tooltip', {
-                marketplace: marketInfo.code,
-              })}
+              title={t('products.edit.translate.tooltip', { marketplace: marketInfo.code })}
             >
               {t('products.edit.translate.button')}
             </Button>
@@ -346,6 +285,27 @@ export default function ChannelListingTab({
         )}
       </Card>
 
+      {/* ── Pricing panel ──────────────────────────────────────── */}
+      <PricingPanel
+        productId={product.id}
+        channel={channel}
+        marketplace={marketplace}
+        currency={marketInfo.currency}
+        listing={listing}
+        onSaved={onSave}
+      />
+
+      {/* ── Replication panel (multi-market only) ──────────────── */}
+      {siblingMarkets.length > 0 && (
+        <ReplicationPanel
+          productId={product.id}
+          channel={channel}
+          marketplace={marketplace}
+          siblingMarkets={siblingMarkets}
+          onDone={() => onSave(listing as Listing)}
+        />
+      )}
+
       {/* ── Readiness checklist (W5.1) ────────────────────────── */}
       <ReadinessChecklist listing={listing} t={t} />
 
@@ -367,14 +327,391 @@ export default function ChannelListingTab({
   )
 }
 
+// ── Pricing panel ─────────────────────────────────────────────────────
+// Lets operators set a per-marketplace price override, pricing rule, and
+// optional adjustment percentage. All three map directly to ChannelListing
+// columns and are saved via POST /api/products/:id/listings/:ch/:mp/pricing.
+function PricingPanel({
+  productId,
+  channel,
+  marketplace,
+  currency,
+  listing,
+  onSaved,
+}: {
+  productId: string
+  channel: string
+  marketplace: string
+  currency: string
+  listing: Listing | undefined
+  onSaved: (updated: any) => void
+}) {
+  const [rule, setRule] = useState<string>(listing?.pricingRule ?? 'FIXED')
+  const [price, setPrice] = useState<string>(
+    listing?.priceOverride != null ? String(listing.priceOverride) : '',
+  )
+  const [adj, setAdj] = useState<string>(
+    listing?.priceAdjustmentPercent != null ? String(listing.priceAdjustmentPercent) : '',
+  )
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [open, setOpen] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    setMsg(null)
+    try {
+      const body: Record<string, any> = { pricingRule: rule }
+      if (rule === 'FIXED' || rule === 'MATCH_AMAZON') {
+        body.priceOverride = price !== '' ? parseFloat(price) : null
+      }
+      if (rule === 'PERCENT_OF_MASTER') {
+        body.priceAdjustmentPercent = adj !== '' ? parseFloat(adj) : null
+      }
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/pricing`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error ?? `HTTP ${res.status}`)
+      }
+      const updated = await res.json()
+      onSaved(updated)
+      setMsg({ kind: 'success', text: 'Pricing saved' })
+    } catch (e) {
+      setMsg({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const currentDisplay = listing?.priceOverride != null
+    ? `${currency} ${Number(listing.priceOverride).toFixed(2)}`
+    : listing?.price != null
+    ? `${currency} ${Number(listing.price).toFixed(2)}`
+    : 'Not set'
+
+  return (
+    <Card noPadding>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-slate-400" />
+          <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+            Marketplace Pricing
+          </span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            {currentDisplay}
+            {listing?.pricingRule && listing.pricingRule !== 'FIXED' && (
+              <span className="ml-1 text-xs text-slate-400">({listing.pricingRule})</span>
+            )}
+          </span>
+        </div>
+        <span className="text-slate-400 text-sm">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Pricing rule */}
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Pricing rule
+              </label>
+              <select
+                value={rule}
+                onChange={(e) => setRule(e.target.value)}
+                className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              >
+                <option value="FIXED">Fixed price</option>
+                <option value="MATCH_AMAZON">Match Amazon</option>
+                <option value="PERCENT_OF_MASTER">% of master price</option>
+              </select>
+            </div>
+
+            {/* Price override (FIXED / MATCH_AMAZON) */}
+            {(rule === 'FIXED' || rule === 'MATCH_AMAZON') && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Price ({currency})
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                />
+              </div>
+            )}
+
+            {/* Adjustment % (PERCENT_OF_MASTER) */}
+            {rule === 'PERCENT_OF_MASTER' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Adjustment %
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="0"
+                  value={adj}
+                  onChange={(e) => setAdj(e.target.value)}
+                  className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  e.g. 10 = master + 10%. Negative = discount.
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-end">
+              <Button size="sm" onClick={save} loading={saving}>
+                Save pricing
+              </Button>
+            </div>
+          </div>
+
+          {msg && (
+            <div
+              className={cn(
+                'text-sm px-3 py-2 rounded',
+                msg.kind === 'success' && 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300',
+                msg.kind === 'error' && 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+              )}
+            >
+              {msg.text}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ── Replication panel ─────────────────────────────────────────────────
+// Copy content from the current market to one or more sibling markets.
+// Three modes: All fields / Text only (title+desc+bullets) / Attributes only.
+function ReplicationPanel({
+  productId,
+  channel,
+  marketplace,
+  siblingMarkets,
+  onDone,
+}: {
+  productId: string
+  channel: string
+  marketplace: string
+  siblingMarkets: MarketInfo[]
+  onDone: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [mode, setMode] = useState<'all' | 'text' | 'attributes' | 'price'>('all')
+  const [includePrice, setIncludePrice] = useState(false)
+  const [replicating, setReplicating] = useState(false)
+  const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+
+  const TEXT_FIELDS = ['item_name', 'product_description', 'bullet_point']
+  const ATTR_FIELDS = undefined // all schema attributes
+
+  function toggle(code: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (selected.size === siblingMarkets.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(siblingMarkets.map((m) => m.code)))
+    }
+  }
+
+  async function replicate() {
+    if (selected.size === 0) return
+    setReplicating(true)
+    setMsg(null)
+    try {
+      const fields = mode === 'text' ? TEXT_FIELDS : ATTR_FIELDS
+      const body: Record<string, any> = {
+        targetMarketplaces: Array.from(selected),
+        includeSetup: mode === 'all' || mode === 'attributes',
+        includePrice,
+      }
+      if (fields) body.fields = fields
+
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/replicate`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+
+      const { replicated, total, results } = json
+      const failed = (results as any[]).filter((r: any) => !r.ok)
+      if (failed.length > 0) {
+        setMsg({
+          kind: 'error',
+          text: `${replicated}/${total} replicated. Failed: ${failed.map((r: any) => r.marketplace).join(', ')}`,
+        })
+      } else {
+        setMsg({ kind: 'success', text: `Replicated to ${replicated} market${replicated !== 1 ? 's' : ''}` })
+      }
+      onDone()
+    } catch (e) {
+      setMsg({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setReplicating(false)
+    }
+  }
+
+  return (
+    <Card noPadding>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Copy className="w-4 h-4 text-slate-400" />
+          <span className="text-md font-medium text-slate-900 dark:text-slate-100">
+            Replicate to Markets
+          </span>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            Push {marketplace} content to other {channel} markets
+          </span>
+        </div>
+        <span className="text-slate-400 text-sm">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-4 space-y-4">
+          {/* Target markets */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Target markets
+              </span>
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {selected.size === siblingMarkets.length ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {siblingMarkets.map((m) => (
+                <button
+                  key={m.code}
+                  type="button"
+                  onClick={() => toggle(m.code)}
+                  className={cn(
+                    'px-2.5 py-1 rounded text-sm font-mono border transition-colors',
+                    selected.has(m.code)
+                      ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
+                  )}
+                >
+                  {m.code}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Mode */}
+          <div>
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-2">
+              What to replicate
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(
+                [
+                  { value: 'all', label: 'All fields', desc: 'Title, bullets, desc, attributes, setup' },
+                  { value: 'text', label: 'Text only', desc: 'Title, bullets, description' },
+                  { value: 'attributes', label: 'Attributes', desc: 'Schema attributes + setup' },
+                  { value: 'price', label: 'Price only', desc: 'Price override + rule' },
+                ] as const
+              ).map(({ value, label, desc }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setMode(value)
+                    if (value === 'price') setIncludePrice(true)
+                    else setIncludePrice(false)
+                  }}
+                  className={cn(
+                    'text-left px-3 py-2 rounded border text-sm transition-colors',
+                    mode === value
+                      ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
+                  )}
+                >
+                  <div className="font-medium">{label}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {mode !== 'price' && (
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includePrice}
+                  onChange={(e) => setIncludePrice(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Also replicate price override
+                </span>
+              </label>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              onClick={replicate}
+              loading={replicating}
+              disabled={selected.size === 0}
+            >
+              Replicate to {selected.size > 0 ? `${selected.size} market${selected.size !== 1 ? 's' : ''}` : '…'}
+            </Button>
+            {selected.size === 0 && (
+              <span className="text-xs text-slate-400">Select at least one target market</span>
+            )}
+          </div>
+
+          {msg && (
+            <div
+              className={cn(
+                'text-sm px-3 py-2 rounded',
+                msg.kind === 'success' && 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300',
+                msg.kind === 'error' && 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+              )}
+            >
+              {msg.text}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ── W5.1 Readiness checklist (Salsify cornerstone) ────────────
-//
-// Five top-level dimensions, 20% each. ReadinessChecklist mirrors
-// the same scoring as channelReadiness() in ProductEditClient so
-// the per-tab badge and the per-listing hero can never diverge.
-// Per-listing schema-required attributes (platformAttributes) aren't
-// surfaced here — those land in the schema-driven editor below this
-// card and contribute to the per-tab "Unsaved" counter when dirty.
 function ReadinessChecklist({
   listing,
   t,
@@ -386,50 +723,33 @@ function ReadinessChecklist({
     {
       key: 'title',
       label: t('products.edit.readiness.title'),
-      done:
-        !!listing &&
-        typeof listing.title === 'string' &&
-        listing.title.trim().length > 0,
+      done: !!listing && typeof listing.title === 'string' && listing.title.trim().length > 0,
     },
     {
       key: 'description',
       label: t('products.edit.readiness.description'),
-      done:
-        !!listing &&
-        typeof listing.description === 'string' &&
-        listing.description.trim().length > 0,
+      done: !!listing && typeof listing.description === 'string' && listing.description.trim().length > 0,
     },
     {
       key: 'bullets',
       label: t('products.edit.readiness.bullets'),
-      done:
-        !!listing &&
-        Array.isArray(listing.bulletPointsOverride) &&
-        listing.bulletPointsOverride.length >= 3,
+      done: !!listing && Array.isArray(listing.bulletPointsOverride) && listing.bulletPointsOverride.length >= 3,
       hint: t('products.edit.readiness.bulletsHint'),
     },
     {
       key: 'price',
       label: t('products.edit.readiness.price'),
-      done:
-        !!listing &&
-        listing.price != null &&
-        Number.isFinite(Number(listing.price)) &&
-        Number(listing.price) > 0,
+      done: !!listing && listing.price != null && Number.isFinite(Number(listing.price)) && Number(listing.price) > 0,
     },
     {
       key: 'quantity',
       label: t('products.edit.readiness.quantity'),
-      done:
-        !!listing &&
-        typeof listing.quantity === 'number' &&
-        listing.quantity >= 0,
+      done: !!listing && typeof listing.quantity === 'number' && listing.quantity >= 0,
       hint: t('products.edit.readiness.quantityHint'),
     },
   ]
   const score = items.filter((i) => i.done).length * 20
-  const tone =
-    score >= 100 ? 'success' : score >= 60 ? 'warning' : 'danger'
+  const tone = score >= 100 ? 'success' : score >= 60 ? 'warning' : 'danger'
 
   return (
     <Card noPadding>
@@ -449,12 +769,9 @@ function ReadinessChecklist({
           <span
             className={cn(
               'inline-flex items-center justify-center px-2.5 py-1 rounded font-mono text-md tabular-nums',
-              tone === 'success' &&
-                'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-              tone === 'warning' &&
-                'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-              tone === 'danger' &&
-                'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+              tone === 'success' && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+              tone === 'warning' && 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+              tone === 'danger' && 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
             )}
           >
             {score}%
@@ -463,40 +780,23 @@ function ReadinessChecklist({
       </div>
       <ul className="px-4 py-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">
         {items.map((item) => (
-          <li
-            key={item.key}
-            className="flex items-start gap-2 text-md"
-          >
+          <li key={item.key} className="flex items-start gap-2 text-md">
             <span
               className={cn(
                 'inline-flex items-center justify-center w-4 h-4 rounded-full flex-shrink-0 mt-0.5 text-xs font-mono',
                 item.done
                   ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                  : 'partial' in item && item.partial
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
               )}
             >
-              {item.done
-                ? '✓'
-                : 'partial' in item && item.partial
-                  ? '·'
-                  : ' '}
+              {item.done ? '✓' : ' '}
             </span>
             <div className="flex-1 min-w-0">
-              <div
-                className={cn(
-                  item.done
-                    ? 'text-slate-700 dark:text-slate-300'
-                    : 'text-slate-500 dark:text-slate-400',
-                )}
-              >
+              <div className={cn(item.done ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500 dark:text-slate-400')}>
                 {item.label}
               </div>
-              {item.hint && !item.done && (
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {item.hint}
-                </div>
+              {'hint' in item && item.hint && !item.done && (
+                <div className="text-xs text-slate-500 dark:text-slate-400">{item.hint}</div>
               )}
             </div>
           </li>

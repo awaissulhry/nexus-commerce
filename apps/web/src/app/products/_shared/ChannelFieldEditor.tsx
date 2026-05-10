@@ -1115,6 +1115,13 @@ export default function ChannelFieldEditor({
           fetchedAt={manifest.fetchedAtByChannel[channelKey]}
           schemaVersion={manifest.schemaVersionByChannel[channelKey]}
           channelKey={channelKey}
+          fetchError={
+            manifest.channelsMissingSchema.find((m) => m.channelKey === channelKey)?.detail
+          }
+          onFetch={() => {
+            setForceRefresh(true)
+            setReloadKey((k) => k + 1)
+          }}
         />
       )}
 

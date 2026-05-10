@@ -853,6 +853,7 @@ export default function ProductEditClient({
                 channel={channel}
                 marketplace={selectedMarket}
                 marketInfo={marketInfo}
+                siblingMarkets={channelMarkets.filter((m) => m.code !== selectedMarket)}
                 listing={listing}
                 onDirtyChange={(count) => setTabDirty(tabKey, count)}
                 onSave={() => router.refresh()}

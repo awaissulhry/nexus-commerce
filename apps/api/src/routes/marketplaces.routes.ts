@@ -429,6 +429,186 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
   )
+
+  // POST /api/products/:id/listings/:channel/:marketplace/replicate
+  //
+  // Copy content from a source (channel, marketplace) listing to one or
+  // more target marketplaces within the same channel. Useful for
+  // pan-EU sellers who maintain IT as the master and want to push the
+  // same bullets / attributes to DE, FR, ES, UK.
+  //
+  // Body:
+  //   targetMarketplaces: string[]    — e.g. ["DE","FR","ES","UK"]
+  //   fields?: string[]               — specific field ids; omit for all
+  //   includeSetup?: boolean          — also copy productType + variationTheme (default true)
+  //   includePrice?: boolean          — also copy priceOverride (default false)
+  fastify.post<{
+    Params: { id: string; channel: string; marketplace: string }
+    Body: {
+      targetMarketplaces: string[]
+      fields?: string[]
+      includeSetup?: boolean
+      includePrice?: boolean
+    }
+  }>(
+    '/products/:id/listings/:channel/:marketplace/replicate',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+      const {
+        targetMarketplaces,
+        fields,
+        includeSetup = true,
+        includePrice = false,
+      } = request.body ?? {}
+
+      if (!Array.isArray(targetMarketplaces) || targetMarketplaces.length === 0) {
+        return reply.code(400).send({ error: 'targetMarketplaces[] required' })
+      }
+
+      const source = await prisma.channelListing.findFirst({
+        where: { productId: id, channel, marketplace },
+      })
+      if (!source) {
+        return reply.code(404).send({ error: `No listing found for ${channel}/${marketplace}` })
+      }
+
+      const sourcePA = (source.platformAttributes as Record<string, any> | null) ?? {}
+      const sourceAttrs = (typeof sourcePA.attributes === 'object' && sourcePA.attributes)
+        ? sourcePA.attributes as Record<string, unknown>
+        : {}
+
+      const results: { marketplace: string; ok: boolean; error?: string }[] = []
+
+      for (const targetMarket of targetMarketplaces) {
+        if (targetMarket.toUpperCase() === marketplace.toUpperCase()) {
+          results.push({ marketplace: targetMarket, ok: false, error: 'same as source' })
+          continue
+        }
+        try {
+          const targetMp = await prisma.marketplace.findUnique({
+            where: { channel_code: { channel, code: targetMarket } },
+          })
+          if (!targetMp) {
+            results.push({ marketplace: targetMarket, ok: false, error: 'marketplace not configured' })
+            continue
+          }
+
+          const existing = await prisma.channelListing.findFirst({
+            where: { productId: id, channel, marketplace: targetMarket },
+          })
+          const existingPA = (existing?.platformAttributes as Record<string, any> | null) ?? {}
+          const existingAttrs = (typeof existingPA.attributes === 'object' && existingPA.attributes)
+            ? existingPA.attributes as Record<string, unknown>
+            : {}
+
+          // Merge source attributes into target, field-filter if requested
+          const mergedAttrs = { ...existingAttrs }
+          const attrsToCopy = fields
+            ? Object.fromEntries(Object.entries(sourceAttrs).filter(([k]) => fields.includes(k)))
+            : sourceAttrs
+          Object.assign(mergedAttrs, attrsToCopy)
+
+          const nextPA: Record<string, any> = { ...existingPA, attributes: mergedAttrs }
+          if (includeSetup) {
+            if (sourcePA.productType) nextPA.productType = sourcePA.productType
+            if (sourcePA.variants && !fields) nextPA.variants = sourcePA.variants
+          }
+
+          const data: Record<string, any> = { platformAttributes: nextPA }
+
+          // Copy title / description / bullets if not field-filtered or field is in the list
+          const copyField = (name: string) => !fields || fields.includes(name)
+          if (copyField('item_name') && source.title) data.title = source.title
+          if (copyField('product_description') && source.description) data.description = source.description
+          if (copyField('bullet_point') && source.bulletPointsOverride?.length) {
+            data.bulletPointsOverride = source.bulletPointsOverride
+          }
+          if (includeSetup && copyField('variationTheme') && source.variationTheme) {
+            data.variationTheme = source.variationTheme
+          }
+          if (includePrice && source.priceOverride != null) {
+            data.price = source.priceOverride
+            data.pricingRule = source.pricingRule
+            data.priceAdjustmentPercent = source.priceAdjustmentPercent
+          }
+
+          if (existing) {
+            await prisma.channelListing.update({ where: { id: existing.id }, data })
+          } else {
+            await prisma.channelListing.create({
+              data: {
+                ...data,
+                productId: id,
+                channel,
+                marketplace: targetMarket,
+                channelMarket: `${channel}_${targetMarket}`,
+                region: targetMarket,
+              },
+            })
+          }
+          results.push({ marketplace: targetMarket, ok: true })
+        } catch (err: any) {
+          results.push({ marketplace: targetMarket, ok: false, error: err?.message ?? String(err) })
+        }
+      }
+
+      const succeeded = results.filter((r) => r.ok).length
+      return reply.send({ ok: true, replicated: succeeded, total: targetMarketplaces.length, results })
+    }
+  )
+
+  // POST /api/products/:id/listings/:channel/:marketplace/pricing
+  //
+  // Set the pricing rule for this (channel, marketplace): priceOverride,
+  // pricingRule, priceAdjustmentPercent, followMasterPrice.
+  fastify.post<{
+    Params: { id: string; channel: string; marketplace: string }
+    Body: {
+      priceOverride?: number | null
+      pricingRule?: string
+      priceAdjustmentPercent?: number | null
+      followMasterPrice?: boolean
+    }
+  }>(
+    '/products/:id/listings/:channel/:marketplace/pricing',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+      const { priceOverride, pricingRule, priceAdjustmentPercent, followMasterPrice } =
+        request.body ?? {}
+
+      const mp = await prisma.marketplace.findUnique({
+        where: { channel_code: { channel, code: marketplace } },
+      })
+      if (!mp) return reply.code(400).send({ error: `Marketplace ${channel}/${marketplace} not configured` })
+
+      const existing = await prisma.channelListing.findFirst({
+        where: { productId: id, channel, marketplace },
+      })
+
+      const data: Record<string, any> = {}
+      if (priceOverride !== undefined) data.price = priceOverride
+      if (pricingRule !== undefined) data.pricingRule = pricingRule
+      if (priceAdjustmentPercent !== undefined) data.priceAdjustmentPercent = priceAdjustmentPercent
+      if (followMasterPrice !== undefined) data.followMasterPrice = followMasterPrice
+
+      let listing
+      if (existing) {
+        listing = await prisma.channelListing.update({ where: { id: existing.id }, data })
+      } else {
+        listing = await prisma.channelListing.create({
+          data: {
+            ...data,
+            productId: id,
+            channel,
+            marketplace,
+            channelMarket: `${channel}_${marketplace}`,
+            region: marketplace,
+          },
+        })
+      }
+      return listing
+    }
+  )
 }
 
 export default marketplacesRoutes

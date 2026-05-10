@@ -1442,21 +1442,43 @@ export function OverrideMenu({
 
 // P.4 — surface how stale the cached schema is for the active
 // channel. Bands: < 24h (fresh, grey), < 7d (ok, slate), >= 7d
-// (amber, suggest refresh).
+// (amber, suggest refresh). When fetchedAt is undefined the schema
+// hasn't been loaded yet; onFetch triggers a fresh pull.
 export function SchemaAgeIndicator({
   fetchedAt,
   schemaVersion,
   channelKey,
+  onFetch,
+  fetchError,
 }: {
   fetchedAt: string | undefined
   schemaVersion: string | undefined
   channelKey: string
+  onFetch?: () => void
+  fetchError?: string | null
 }) {
   if (!fetchedAt) {
     return (
-      <div className="mt-2 text-xs text-slate-400 dark:text-slate-500 px-1">
-        Schema for <span className="font-mono">{channelKey}</span>: not yet
-        fetched
+      <div className="mt-2 flex items-center gap-2 px-1">
+        <span className="text-xs text-slate-400 dark:text-slate-500">
+          Schema for <span className="font-mono">{channelKey}</span>:{' '}
+          {fetchError ? (
+            <span className="text-amber-600 dark:text-amber-400" title={fetchError}>
+              fetch failed
+            </span>
+          ) : (
+            'not yet fetched'
+          )}
+        </span>
+        {onFetch && (
+          <button
+            type="button"
+            onClick={onFetch}
+            className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+          >
+            Fetch now
+          </button>
+        )}
       </div>
     )
   }
