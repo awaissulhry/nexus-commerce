@@ -4462,5 +4462,11 @@
   "aplus.builder.preview.comparisonHint": "Aggiungi ASIN e attributi per visualizzare la tabella di confronto",
   "aplus.builder.preview.comparisonAttribute": "Attributo",
   "aplus.builder.preview.comparisonAttrPlaceholder": "(attributo)",
-  "aplus.builder.preview.bulletedHint": "Aggiungi fino a 6 voci puntate con immagini"
+  "aplus.builder.preview.bulletedHint": "Aggiungi fino a 6 voci puntate con immagini",
+  "aplus.builder.preview.videoHint": "Aggiungi poster video + titolo per l'anteprima",
+  "aplus.builder.preview.itiHint": "Aggiungi corpo del testo tra due immagini laterali",
+  "aplus.builder.preview.carouselHint": "Aggiungi slide per visualizzare la striscia del carosello",
+  "aplus.builder.preview.premiumQaHint": "Aggiungi coppie Q&A (con eventuale attribuzione) per l'anteprima",
+  "aplus.builder.preview.hotspotsHint": "Aggiungi etichette hotspot (le posizioni sono indicative finché non arriva l'editor di posizionamento)",
+  "aplus.builder.preview.brandStoryHint": "Aggiungi fino a 5 sezioni narrative con immagine + titolo + testo"
 }

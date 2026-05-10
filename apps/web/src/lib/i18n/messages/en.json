@@ -4411,5 +4411,11 @@
   "aplus.builder.preview.comparisonHint": "Add ASINs and attribute rows to preview the comparison table",
   "aplus.builder.preview.comparisonAttribute": "Attribute",
   "aplus.builder.preview.comparisonAttrPlaceholder": "(attribute)",
-  "aplus.builder.preview.bulletedHint": "Add up to 6 bullet items with images"
+  "aplus.builder.preview.bulletedHint": "Add up to 6 bullet items with images",
+  "aplus.builder.preview.videoHint": "Add a video poster + headline to preview",
+  "aplus.builder.preview.itiHint": "Add body text between two bookend images",
+  "aplus.builder.preview.carouselHint": "Add slides to preview the carousel strip",
+  "aplus.builder.preview.premiumQaHint": "Add Q&A pairs (with optional attribution) to preview",
+  "aplus.builder.preview.hotspotsHint": "Add hotspot labels (positions are illustrative until the placement editor ships)",
+  "aplus.builder.preview.brandStoryHint": "Add up to 5 narrative sections with image + headline + body"
 }

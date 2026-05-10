@@ -13,7 +13,16 @@
 // contained — adding one in MC.8.4 is just adding an entry here.
 
 import Image from 'next/image'
-import { Image as ImageIcon, MessageSquare, Check, Minus } from 'lucide-react'
+import {
+  Image as ImageIcon,
+  MessageSquare,
+  Check,
+  Minus,
+  Play,
+  ChevronRight,
+  Quote,
+  MapPin,
+} from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import type { ModuleSpec } from '../_lib/modules'
 
@@ -45,6 +54,22 @@ export default function ModuleRender({ spec, payload }: Props) {
       return <ComparisonChart payload={payload} columns={4} />
     case 'bulleted_list_with_images':
       return <BulletedListWithImages payload={payload} />
+    case 'premium_video':
+      return <PremiumVideo payload={payload} />
+    case 'premium_comparison_chart_8col':
+      return <ComparisonChart payload={payload} columns={8} />
+    case 'premium_image_text_image':
+      return <PremiumImageTextImage payload={payload} />
+    case 'premium_dynamic_carousel':
+      return <PremiumDynamicCarousel payload={payload} />
+    case 'premium_qa':
+      return <PremiumQa payload={payload} />
+    case 'premium_image_hotspots':
+      return <PremiumImageHotspots payload={payload} />
+    case 'premium_text_overlay':
+      return <PremiumTextOverlay payload={payload} />
+    case 'premium_brand_story':
+      return <PremiumBrandStory payload={payload} />
     default:
       return <PlaceholderRender spec={spec} />
   }
@@ -397,7 +422,7 @@ function ComparisonChart({
   columns,
 }: {
   payload: Record<string, unknown>
-  columns: 3 | 4
+  columns: 3 | 4 | 8
 }) {
   const { t } = useTranslations()
   const asins: string[] = Array.isArray(payload.asins)
@@ -524,6 +549,399 @@ function BulletedListWithImages({
         )
       })}
     </ul>
+  )
+}
+
+// ── premium_video ─────────────────────────────────────────────
+
+function PremiumVideo({
+  payload,
+}: {
+  payload: Record<string, unknown>
+}) {
+  const { t } = useTranslations()
+  const posterUrl =
+    resolveAssetUrl(payload.posterAssetId) ??
+    resolveAssetUrl(payload.videoAssetId)
+  const headline = (payload.headline as string) || ''
+  return (
+    <div className="relative aspect-video w-full overflow-hidden rounded-md bg-slate-900">
+      {posterUrl ? (
+        <Image
+          src={posterUrl}
+          alt={headline || 'Video poster'}
+          fill
+          sizes="(min-width: 1024px) 800px, 100vw"
+          className="object-cover opacity-90"
+          unoptimized
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-slate-500">
+          <ImageIcon className="w-8 h-8" />
+        </div>
+      )}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30 text-white">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-slate-900 shadow-lg">
+          <Play className="w-5 h-5 ml-0.5" />
+        </div>
+        {headline && (
+          <p className="px-3 text-center text-sm font-semibold">
+            {headline}
+          </p>
+        )}
+        {!posterUrl && !headline && (
+          <p className="text-xs text-slate-300">
+            {t('aplus.builder.preview.videoHint')}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── premium_image_text_image ──────────────────────────────────
+
+function PremiumImageTextImage({
+  payload,
+}: {
+  payload: Record<string, unknown>
+}) {
+  const { t } = useTranslations()
+  const left = resolveAssetUrl(payload.leftAssetId)
+  const right = resolveAssetUrl(payload.rightAssetId)
+  const body = (payload.body as string) || ''
+  return (
+    <div className="grid grid-cols-3 gap-2 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+      <Bookend url={left} alt="Left image" />
+      <div className="flex items-center justify-center text-center text-xs text-slate-700 dark:text-slate-300">
+        {body ? (
+          <p className="line-clamp-6">{body}</p>
+        ) : (
+          <p className="italic text-slate-400">
+            {t('aplus.builder.preview.itiHint')}
+          </p>
+        )}
+      </div>
+      <Bookend url={right} alt="Right image" />
+    </div>
+  )
+}
+
+function Bookend({ url, alt }: { url: string | null; alt: string }) {
+  return (
+    <div className="relative aspect-square overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+      {url ? (
+        <Image
+          src={url}
+          alt={alt}
+          fill
+          sizes="200px"
+          className="object-cover"
+          unoptimized
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-slate-400">
+          <ImageIcon className="w-5 h-5" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── premium_dynamic_carousel ──────────────────────────────────
+
+function PremiumDynamicCarousel({
+  payload,
+}: {
+  payload: Record<string, unknown>
+}) {
+  const { t } = useTranslations()
+  const slides: PanelItem[] = Array.isArray(payload.slides)
+    ? (payload.slides as PanelItem[])
+    : []
+  if (slides.length === 0)
+    return (
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+        {t('aplus.builder.preview.carouselHint')}
+      </p>
+    )
+  // The preview is a horizontally-scrollable strip of slides — gives
+  // operator a sense of how the live carousel paginates without
+  // building an actual auto-advance loop in the canvas.
+  return (
+    <div className="relative rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex gap-2 overflow-x-auto pb-1.5">
+        {slides.map((slide, idx) => {
+          const url = resolveAssetUrl(slide.assetId) ?? slide.url ?? null
+          return (
+            <div
+              key={idx}
+              className="flex-shrink-0 space-y-1"
+              style={{ width: 140 }}
+            >
+              <div className="relative aspect-square overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+                {url ? (
+                  <Image
+                    src={url}
+                    alt={slide.headline ?? `Slide ${idx + 1}`}
+                    fill
+                    sizes="140px"
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-slate-400">
+                    <ImageIcon className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+              <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
+                {slide.headline ?? `Slide ${idx + 1}`}
+              </p>
+              {slide.body && (
+                <p className="line-clamp-2 text-[11px] text-slate-600 dark:text-slate-400">
+                  {slide.body}
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow dark:bg-slate-800 dark:text-slate-200">
+        <ChevronRight className="w-3.5 h-3.5" />
+      </div>
+    </div>
+  )
+}
+
+// ── premium_qa ────────────────────────────────────────────────
+
+function PremiumQa({ payload }: { payload: Record<string, unknown> }) {
+  const { t } = useTranslations()
+  interface QaItem {
+    question?: string
+    answer?: string
+    attribution?: string
+  }
+  const items: QaItem[] = Array.isArray(payload.items)
+    ? (payload.items as QaItem[])
+    : []
+  if (items.length === 0)
+    return (
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+        {t('aplus.builder.preview.premiumQaHint')}
+      </p>
+    )
+  return (
+    <ul className="space-y-2 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+      {items.map((qa, idx) => (
+        <li
+          key={idx}
+          className="rounded-md border-l-4 border-blue-500 bg-blue-50 p-2 dark:bg-blue-950/30"
+        >
+          <p className="flex items-start gap-1 text-xs font-semibold text-slate-900 dark:text-slate-100">
+            <Quote className="w-3 h-3 flex-shrink-0 mt-0.5 text-blue-500" />
+            {qa.question || (
+              <span className="italic text-slate-400">
+                {t('aplus.builder.preview.faqEmptyQuestion')}
+              </span>
+            )}
+          </p>
+          {qa.answer && (
+            <p className="ml-4 mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+              {qa.answer}
+            </p>
+          )}
+          {qa.attribution && (
+            <p className="ml-4 mt-0.5 text-[11px] italic text-slate-500 dark:text-slate-500">
+              — {qa.attribution}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// ── premium_image_hotspots ────────────────────────────────────
+
+function PremiumImageHotspots({
+  payload,
+}: {
+  payload: Record<string, unknown>
+}) {
+  const { t } = useTranslations()
+  const url = resolveAssetUrl(payload.imageAssetId)
+  const hotspots: string[] = Array.isArray(payload.hotspots)
+    ? (payload.hotspots as unknown[]).filter(
+        (v): v is string => typeof v === 'string',
+      )
+    : []
+  return (
+    <div className="space-y-1.5">
+      <div className="relative aspect-video w-full overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
+        {url ? (
+          <Image
+            src={url}
+            alt="Hotspot image"
+            fill
+            sizes="(min-width: 1024px) 800px, 100vw"
+            className="object-cover"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-slate-400">
+            <ImageIcon className="w-8 h-8" />
+          </div>
+        )}
+        {hotspots.slice(0, 6).map((_, idx) => {
+          // Faux positions — six default coordinates so the operator
+          // sees the spatial distribution; live placement editor lands
+          // in MC.8-followup with a positioned marker UI.
+          const positions: Array<{ left: string; top: string }> = [
+            { left: '20%', top: '25%' },
+            { left: '70%', top: '20%' },
+            { left: '40%', top: '60%' },
+            { left: '85%', top: '55%' },
+            { left: '15%', top: '70%' },
+            { left: '55%', top: '85%' },
+          ]
+          const pos = positions[idx]!
+          return (
+            <span
+              key={idx}
+              className="absolute flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-900 shadow-md ring-2 ring-blue-500"
+              style={{ left: pos.left, top: pos.top }}
+            >
+              {idx + 1}
+            </span>
+          )
+        })}
+      </div>
+      {hotspots.length === 0 ? (
+        <p className="text-xs italic text-slate-400">
+          {t('aplus.builder.preview.hotspotsHint')}
+        </p>
+      ) : (
+        <ul className="space-y-0.5 text-xs text-slate-600 dark:text-slate-400">
+          {hotspots.map((label, idx) => (
+            <li key={idx} className="flex items-start gap-1">
+              <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5 text-blue-500" />
+              <span>
+                <strong>#{idx + 1}.</strong> {label}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ── premium_text_overlay ──────────────────────────────────────
+
+function PremiumTextOverlay({
+  payload,
+}: {
+  payload: Record<string, unknown>
+}) {
+  const { t } = useTranslations()
+  const url = resolveAssetUrl(payload.imageAssetId)
+  const headline = (payload.headline as string) || ''
+  const body = (payload.body as string) || ''
+  return (
+    <div className="relative aspect-[16/7] w-full overflow-hidden rounded-md bg-slate-200 dark:bg-slate-800">
+      {url ? (
+        <Image
+          src={url}
+          alt={headline || 'Background'}
+          fill
+          sizes="(min-width: 1024px) 800px, 100vw"
+          className="object-cover"
+          unoptimized
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-slate-400">
+          <ImageIcon className="w-8 h-8" />
+        </div>
+      )}
+      <div className="absolute inset-y-0 left-0 flex w-1/2 flex-col justify-center gap-1.5 bg-black/40 p-4 text-white backdrop-blur-sm">
+        {headline ? (
+          <p className="text-base font-bold leading-tight">{headline}</p>
+        ) : (
+          <p className="text-xs italic text-white/70">
+            {t('aplus.builder.preview.headlineHint')}
+          </p>
+        )}
+        {body ? (
+          <p className="line-clamp-4 text-xs leading-snug opacity-90">
+            {body}
+          </p>
+        ) : (
+          <p className="text-[11px] italic text-white/60">
+            {t('aplus.builder.preview.bodyHint')}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── premium_brand_story ───────────────────────────────────────
+
+function PremiumBrandStory({
+  payload,
+}: {
+  payload: Record<string, unknown>
+}) {
+  const { t } = useTranslations()
+  const sections: PanelItem[] = Array.isArray(payload.sections)
+    ? (payload.sections as PanelItem[])
+    : []
+  if (sections.length === 0)
+    return (
+      <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/50">
+        {t('aplus.builder.preview.brandStoryHint')}
+      </p>
+    )
+  // Vertical scrolling narrative — each section renders full-bleed
+  // then text underneath.
+  return (
+    <div className="space-y-2 rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+      {sections.slice(0, 5).map((section, idx) => {
+        const url = resolveAssetUrl(section.assetId) ?? section.url ?? null
+        return (
+          <div key={idx} className="space-y-1">
+            <div className="relative aspect-[16/7] w-full overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
+              {url ? (
+                <Image
+                  src={url}
+                  alt={section.headline ?? `Section ${idx + 1}`}
+                  fill
+                  sizes="(min-width: 1024px) 800px, 100vw"
+                  className="object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-slate-400">
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+              )}
+            </div>
+            {section.headline && (
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {section.headline}
+              </p>
+            )}
+            {section.body && (
+              <p className="line-clamp-3 text-xs text-slate-600 dark:text-slate-400">
+                {section.body}
+              </p>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

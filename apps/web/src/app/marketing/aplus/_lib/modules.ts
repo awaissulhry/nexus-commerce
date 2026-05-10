@@ -183,7 +183,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'posterAssetId', label: 'Poster image', kind: 'asset_id' },
       { key: 'headline', label: 'Headline', kind: 'text', max: 200 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_comparison_chart_8col',
@@ -195,7 +195,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'asins', label: 'ASINs', kind: 'list_text', max: 8 },
       { key: 'attributes', label: 'Attribute rows', kind: 'list_text', max: 12 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_image_text_image',
@@ -208,7 +208,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'rightAssetId', label: 'Right image', kind: 'asset_id', required: true },
       { key: 'body', label: 'Body', kind: 'textarea', max: 1500 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_dynamic_carousel',
@@ -219,7 +219,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
     fields: [
       { key: 'slides', label: 'Slides', kind: 'list_image', max: 8 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_qa',
@@ -230,7 +230,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
     fields: [
       { key: 'items', label: 'Q&A pairs', kind: 'list_qa', max: 6 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_image_hotspots',
@@ -242,7 +242,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'imageAssetId', label: 'Hero image', kind: 'asset_id', required: true },
       { key: 'hotspots', label: 'Hotspots', kind: 'list_text', max: 6 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_text_overlay',
@@ -255,7 +255,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'headline', label: 'Headline', kind: 'text', max: 80 },
       { key: 'body', label: 'Body', kind: 'textarea', max: 400 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'premium_brand_story',
@@ -266,7 +266,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
     fields: [
       { key: 'sections', label: 'Sections', kind: 'list_image', max: 5 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
 ]
 
