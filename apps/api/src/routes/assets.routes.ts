@@ -140,6 +140,15 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     return { profiles: DELIVERY_PROFILES, active: defaultProfile() }
   })
 
+  // MC.13.4 — analytics aggregation for the storage dashboard.
+  // Single roundtrip; computed inline by asset-analytics.service.
+  fastify.get('/assets/analytics', async () => {
+    const { computeAssetAnalytics } = await import(
+      '../services/asset-analytics.service.js'
+    )
+    return await computeAssetAnalytics()
+  })
+
   // ── DigitalAsset ────────────────────────────────────────────
 
   // MC.1.1 — DAM hub KPI overview. Single roundtrip for the
