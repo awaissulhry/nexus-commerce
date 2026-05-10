@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CalendarClock, Download, History as HistoryIcon, Upload, Wand2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
+import QueueStatsBanner from './QueueStatsBanner'
 import BulkOperationsClient from './BulkOperationsClient'
 
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,7 @@ export default function BulkOperationsPage() {
           </div>
         }
       />
+      <QueueStatsBanner />
       <ActiveJobsStrip />
       <BulkOperationsClient />
     </div>
