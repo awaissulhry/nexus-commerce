@@ -198,6 +198,11 @@ export default function ChannelFieldEditor({
     productType: string
     variationTheme: string
   }>({ productType: '', variationTheme: '' })
+  // Ref that always holds the latest setupValues so debounced callbacks
+  // don't close over a stale snapshot (stale closure bug: the timer fires
+  // with the setupValues from the render before setSetupValues took effect).
+  const setupValuesRef = useRef(setupValues)
+  useEffect(() => { setupValuesRef.current = setupValues }, [setupValues])
   const setupSaveTimer = useRef<number | null>(null)
   const setupDirtyRef = useRef<Set<'productType' | 'variationTheme'>>(new Set())
 
@@ -486,7 +491,9 @@ export default function ChannelFieldEditor({
     const dirty = setupDirtyRef.current
     if (dirty.size === 0) return
     const payload: Record<string, unknown> = {}
-    for (const k of dirty) payload[k] = setupValues[k]
+    // Read from the ref (always current) not the stale closure value.
+    const current = setupValuesRef.current
+    for (const k of dirty) payload[k] = current[k]
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}`,
@@ -514,7 +521,7 @@ export default function ChannelFieldEditor({
       setStatus('error')
       setStatusMsg(e instanceof Error ? e.message : String(e))
     }
-  }, [productId, channel, marketplace, setupValues, onSaved, reportDirty])
+  }, [productId, channel, marketplace, onSaved, reportDirty])
 
   const setSetup = useCallback(
     (key: 'productType' | 'variationTheme', value: string) => {
