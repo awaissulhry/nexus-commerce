@@ -1945,6 +1945,102 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Variation themes — real-time SP-API fetch ────────────────
+  // GET /api/listing-wizard/:id/variation-themes?marketplace=IT&productType=JACKET
+  //
+  // Returns ThemeOption[] for the given Amazon productType, fetching
+  // live from SP-API on cache miss (via CategorySchemaService which
+  // handles caching + expiry). Falls back to the bundled theme map
+  // when SP-API is not configured or the call fails.
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { marketplace?: string; productType?: string }
+  }>(
+    '/listing-wizard/:id/variation-themes',
+    async (request, reply) => {
+      const { marketplace, productType } = request.query
+      if (!marketplace || !productType) {
+        return reply
+          .code(400)
+          .send({ error: 'marketplace and productType are required' })
+      }
+
+      // Helper — convert stored variationThemes to a ThemeOption[] in
+      // the same shape the frontend expects. Amazon stores:
+      //   { themes: ['SIZE_COLOR', 'COLOR_NAME', ...] }
+      // OR the raw vt object. Either way, we extract the string list.
+      function themeIdsFromStored(stored: unknown): string[] {
+        if (!stored) return []
+        if (Array.isArray(stored)) {
+          return (stored as unknown[]).filter((s) => typeof s === 'string') as string[]
+        }
+        const inner = (stored as Record<string, unknown>)?.themes
+        if (Array.isArray(inner)) {
+          return (inner as unknown[]).filter((s) => typeof s === 'string') as string[]
+        }
+        return []
+      }
+
+      const KNOWN_LABELS: Record<string, string> = {
+        SIZE_COLOR: 'Size and Color',
+        COLOR_SIZE: 'Color and Size',
+        SIZE_NAME: 'Size',
+        COLOR_NAME: 'Color',
+        SIZE: 'Size',
+        COLOR: 'Color',
+        STYLE: 'Style',
+        PATTERN_NAME: 'Pattern',
+        MATERIAL_TYPE: 'Material',
+      }
+      function themeAttrs(id: string): string[] {
+        const cleaned = id.replace(/_NAMES?$/i, '').replace(/_NAME(?=_)/gi, '')
+        const parts = cleaned.split(/[_-]/).map((p) => p.trim().toLowerCase()).filter(Boolean)
+        return Array.from(new Set(parts))
+      }
+      function toThemeOption(id: string) {
+        return {
+          id,
+          label: KNOWN_LABELS[id] ?? themeAttrs(id).map((p) => p[0]!.toUpperCase() + p.slice(1)).join(' / '),
+          requiredAttributes: themeAttrs(id),
+        }
+      }
+
+      try {
+        // getSchema checks DB cache first; on miss it calls SP-API,
+        // stores the result, and returns the fresh schema row.
+        const schema = await categorySchemaService.getSchema({
+          channel: 'AMAZON',
+          marketplace,
+          productType,
+        })
+        const ids = themeIdsFromStored(schema?.variationThemes)
+        if (ids.length > 0) {
+          const themes = ids.map(toThemeOption).sort((a, b) => {
+            if (a.id === 'SIZE_COLOR') return -1
+            if (b.id === 'SIZE_COLOR') return 1
+            return a.id.localeCompare(b.id)
+          })
+          return { themes, source: 'live' }
+        }
+      } catch (err) {
+        fastify.log.warn(
+          { err, marketplace, productType },
+          '[variation-themes] SP-API fetch failed, falling back to bundled',
+        )
+      }
+
+      // Bundled fallback — always returns something for known types.
+      const { bundledThemesFor } = await import(
+        '../services/listing-wizard/product-types.constants.js'
+      )
+      const bundled = bundledThemesFor(productType) ?? []
+      return {
+        themes: (bundled as string[]).map(toThemeOption),
+        source: 'bundled',
+      }
+    },
+  )
+
   // ── Step 7 — Images (Phase F multi-channel) ──────────────────
   // GET /api/listing-wizard/:id/images
   //

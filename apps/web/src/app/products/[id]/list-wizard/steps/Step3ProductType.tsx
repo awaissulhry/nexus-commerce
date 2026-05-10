@@ -16,6 +16,23 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
 import { Button } from '@/components/ui/Button'
+import Step2GtinExemption from './Step2GtinExemption'
+
+// ── GTIN types (mirrored from Step1Identifiers) ───────────────────
+type GtinPath = 'have-code' | 'have-exemption' | 'apply-now'
+
+interface IdentifiersSlice {
+  path?: GtinPath
+  gtinValue?: string
+  trademarkNumber?: string
+  exemptionApplicationId?: string
+}
+
+interface ExemptCheckResponse {
+  approved?: { id: string; brandName: string; approvedAt: string | null }
+  pending?: { id: string; brandName: string; submittedAt: string | null; status: string }
+  amazonInference?: { inferred: 'exempt' | 'not_exempt' | 'unknown'; evidenceSku?: string; evidenceAsin?: string; reason: string }
+}
 
 interface ProductTypeListItem {
   productType: string
@@ -61,6 +78,8 @@ export default function Step3ProductType({
   updateWizardState,
   channels,
   product,
+  marketplace,
+  ...restProps
 }: StepProps) {
   // Phase K.1: every Amazon channel gets its own picker. Non-Amazon
   // channels don't have a productType taxonomy (yet), so they're
@@ -120,6 +139,70 @@ export default function Step3ProductType({
     }
     return set
   })
+
+  // ── GTIN / Identifiers state (merged from the former Step 3) ────
+  const hasAmazon = channels.some((c) => c.platform === 'AMAZON')
+  const firstAmazonMarketplace =
+    channels.find((c) => c.platform === 'AMAZON')?.marketplace ?? marketplace
+  const existingGtin =
+    product.gtin || product.upc || product.ean || null
+  const idSlice = (wizardState.identifiers ?? {}) as IdentifiersSlice
+
+  const [gtinPath, setGtinPath] = useState<GtinPath>(
+    idSlice.path ?? (existingGtin ? 'have-code' : 'apply-now'),
+  )
+  const [gtinValue, setGtinValue] = useState(
+    idSlice.gtinValue ?? existingGtin ?? '',
+  )
+  const [trademarkNumber, setTrademarkNumber] = useState(
+    idSlice.trademarkNumber ?? '',
+  )
+  const [exemptCache, setExemptCache] = useState<ExemptCheckResponse | null>(null)
+  const [exemptLoading, setExemptLoading] = useState(false)
+
+  useEffect(() => {
+    if (!hasAmazon || !product.brand) return
+    setExemptLoading(true)
+    let cancelled = false
+    const url = new URL(`${getBackendUrl()}/api/gtin-exemption/check`)
+    url.searchParams.set('brand', product.brand)
+    url.searchParams.set('marketplace', firstAmazonMarketplace)
+    fetch(url.toString(), { cache: 'no-store' })
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((data: ExemptCheckResponse | null) => {
+        if (cancelled || !data) return
+        setExemptCache(data)
+        if (idSlice.path) return // user already chose a path
+        if (data.approved) setGtinPath('have-exemption')
+        else if (data.amazonInference?.inferred === 'exempt') setGtinPath('have-exemption')
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setExemptLoading(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.brand, firstAmazonMarketplace])
+
+  const handleGtinPathChange = useCallback(
+    (newPath: GtinPath) => {
+      setGtinPath(newPath)
+      // Save path immediately so Step2GtinExemption (apply-now) can read it.
+      void updateWizardState({ identifiers: { ...idSlice, path: newPath } })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [updateWizardState],
+  )
+
+  const gtinDigits = gtinValue.replace(/\D/g, '')
+  const gtinValid = gtinDigits.length >= 8 && gtinDigits.length <= 14
+  const amazonInferredExempt = exemptCache?.amazonInference?.inferred === 'exempt'
+
+  const gtinContinueDisabled =
+    hasAmazon &&
+    ((gtinPath === 'have-code' && !gtinValid) ||
+      (gtinPath === 'have-exemption' &&
+        !exemptCache?.approved &&
+        !amazonInferredExempt &&
+        !trademarkNumber))
 
   // ── Persist per-channel pick to channelStates[key].productType ──
   const persistPick = useCallback(
@@ -235,8 +318,28 @@ export default function Step3ProductType({
 
   const onContinue = useCallback(async () => {
     if (unsatisfied.length > 0) return
-    await updateWizardState({}, { advance: true })
-  }, [unsatisfied.length, updateWizardState])
+    if (gtinContinueDisabled) return
+    const identifiers: IdentifiersSlice = hasAmazon
+      ? {
+          path: gtinPath,
+          gtinValue: gtinPath === 'have-code' ? gtinValue : undefined,
+          trademarkNumber:
+            gtinPath === 'have-exemption' ? trademarkNumber : undefined,
+          exemptionApplicationId: exemptCache?.approved?.id,
+        }
+      : { path: 'have-code', gtinValue: existingGtin ?? '' }
+    await updateWizardState({ identifiers }, { advance: true })
+  }, [
+    unsatisfied.length,
+    gtinContinueDisabled,
+    hasAmazon,
+    gtinPath,
+    gtinValue,
+    trademarkNumber,
+    exemptCache,
+    existingGtin,
+    updateWizardState,
+  ])
 
   if (channels.length === 0) {
     return (
@@ -306,17 +409,149 @@ export default function Step3ProductType({
         })}
       </div>
 
+      {/* GTIN / Identifiers — merged from the former Step 3 */}
+      {hasAmazon && (
+        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-0.5">
+            Product Identifiers
+          </h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+            Amazon requires a UPC / EAN / GTIN or brand exemption certificate.
+          </p>
+
+          {/* Exemption / inference banners */}
+          {exemptLoading && (
+            <div className="mb-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Checking brand exemption status…
+            </div>
+          )}
+          {exemptCache?.approved && (
+            <div className="mb-3 px-3 py-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-sm text-emerald-900 dark:text-emerald-200 flex items-start gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <span className="font-semibold">"{product.brand}"</span> has an approved GTIN
+                exemption on Amazon {firstAmazonMarketplace}. Pre-selected below.
+              </div>
+            </div>
+          )}
+          {exemptCache?.amazonInference?.inferred === 'exempt' &&
+            !exemptCache.approved &&
+            !exemptCache.pending && (
+              <div className="mb-3 px-3 py-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-sm text-emerald-900 dark:text-emerald-200 flex items-start gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  Amazon shows <span className="font-semibold">"{product.brand}"</span> already
+                  sells GTIN-free — exemption inferred from existing listings.
+                </div>
+              </div>
+            )}
+
+          {/* 3-path radio options */}
+          <div className="space-y-2">
+            <GtinOption
+              checked={gtinPath === 'have-code'}
+              onChange={() => handleGtinPathChange('have-code')}
+              label="I have a UPC / EAN / GTIN for this product"
+            >
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  value={gtinValue}
+                  onChange={(e) => setGtinValue(e.target.value)}
+                  placeholder="e.g. 1234567890123"
+                  className="flex-1 h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                {gtinValue.trim().length > 0 && (
+                  <span
+                    className={cn(
+                      'text-xs',
+                      gtinValid
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : 'text-amber-700 dark:text-amber-300',
+                    )}
+                  >
+                    {gtinValid ? '✓ valid' : '8–14 digits'}
+                  </span>
+                )}
+              </div>
+            </GtinOption>
+
+            <GtinOption
+              checked={gtinPath === 'have-exemption'}
+              onChange={() => handleGtinPathChange('have-exemption')}
+              label="My brand already has GTIN exemption on Amazon"
+            >
+              <div className="space-y-2 mt-2">
+                <div className="text-sm text-slate-600 dark:text-slate-400">
+                  Brand:{' '}
+                  <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">
+                    {product.brand ?? '(no brand set)'}
+                  </span>
+                </div>
+                <input
+                  value={trademarkNumber}
+                  onChange={(e) => setTrademarkNumber(e.target.value)}
+                  placeholder="Trademark number (optional, e.g. EU 018937481)"
+                  className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                {!exemptCache?.approved && !amazonInferredExempt && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    No approved exemption on record — pick "Apply now" if you
+                    need to apply.
+                  </p>
+                )}
+              </div>
+            </GtinOption>
+
+            <GtinOption
+              checked={gtinPath === 'apply-now'}
+              onChange={() => handleGtinPathChange('apply-now')}
+              label="I need to apply for a GTIN exemption"
+            >
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                We generate the brand letter PDF and submission package — fill
+                in the form below.
+              </p>
+            </GtinOption>
+          </div>
+
+          {/* Embedded exemption application form (apply-now path) */}
+          {gtinPath === 'apply-now' && (
+            <div className="mt-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-4">
+              <Step2GtinExemption
+                wizardId={wizardId}
+                wizardState={wizardState}
+                updateWizardState={updateWizardState}
+                product={product}
+                channels={channels}
+                updateWizardChannels={restProps.updateWizardChannels}
+                channel={restProps.channel}
+                marketplace={marketplace}
+                onJumpToStep={restProps.onJumpToStep}
+                reportValidity={restProps.reportValidity}
+                setJumpToBlocker={restProps.setJumpToBlocker}
+                embedded
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-6 flex items-center justify-between gap-3">
         <span className="text-base">
-          {unsatisfied.length === 0 ? (
+          {unsatisfied.length === 0 && !gtinContinueDisabled ? (
             <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Every channel has a product type.
+              Ready to continue.
             </span>
-          ) : (
+          ) : unsatisfied.length > 0 ? (
             <span className="text-amber-700 dark:text-amber-300">
               {unsatisfied.length} channel
               {unsatisfied.length === 1 ? '' : 's'} still need a category
+            </span>
+          ) : (
+            <span className="text-amber-700 dark:text-amber-300">
+              Fill in the identifier above to continue
             </span>
           )}
         </span>
@@ -324,7 +559,7 @@ export default function Step3ProductType({
           variant="primary"
           size="sm"
           onClick={onContinue}
-          disabled={unsatisfied.length > 0}
+          disabled={unsatisfied.length > 0 || gtinContinueDisabled}
         >
           Continue
         </Button>
@@ -366,7 +601,7 @@ function GtinStatusBanner({
       case 'no_product_type':
         return 'Pick a product type before checking GTIN status'
       default:
-        return 'GTIN exemption needed — Step 3 collects it'
+        return 'GTIN exemption needed — fill in below'
     }
   })()
   return (
@@ -1135,6 +1370,43 @@ function extractSearchSeed(name: string): string {
     .trim()
   const tokens = cleaned.split(' ').filter((t) => t.length > 0)
   return tokens.slice(0, 4).join(' ')
+}
+
+// ── GtinOption — compact radio card used in the merged identifiers section ──
+function GtinOption({
+  checked,
+  onChange,
+  label,
+  children,
+}: {
+  checked: boolean
+  onChange: () => void
+  label: string
+  children?: React.ReactNode
+}) {
+  return (
+    <label
+      className={cn(
+        'block px-3 py-2.5 rounded-lg border cursor-pointer transition-colors',
+        checked
+          ? 'border-blue-400 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-950/20'
+          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600',
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        <input
+          type="radio"
+          checked={checked}
+          onChange={onChange}
+          className="mt-0.5 w-3.5 h-3.5 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-600 focus:ring-blue-500"
+        />
+        <div className="flex-1">
+          <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{label}</div>
+          {checked && children}
+        </div>
+      </div>
+    </label>
+  )
 }
 
 function ConfidenceBadge({ value }: { value: number }) {

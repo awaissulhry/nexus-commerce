@@ -25,7 +25,7 @@
  * are ignored. Empty SKUs fall back to the auto-generator.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   Check,
@@ -33,6 +33,7 @@ import {
   Layers,
   Loader2,
   Plus,
+  RefreshCw,
   X,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -72,16 +73,69 @@ const DEFAULT_SKU_PATTERN = '{parent}-{values}'
 export default function MatrixVariantBuilder({
   payload,
   onCreated,
+  wizardId,
 }: {
   payload: VariationsPayload
   onCreated: () => void
+  wizardId: string
 }) {
+  // ── Real-time Amazon variation themes ─────────────────────────
+  // On mount, fetch fresh themes from SP-API (via the backend cache
+  // layer) for the first Amazon channel's productType. This replaces
+  // the schema-cache themes that may be stale or empty (bundled).
+  const [liveThemes, setLiveThemes] = useState<ThemeOption[] | null>(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+
+  const fetchLiveThemes = async () => {
+    const amazonChannel = payload.channels.find((c) => c.platform === 'AMAZON')
+    if (!amazonChannel?.productType || !amazonChannel.marketplace) return
+    setLiveLoading(true)
+    try {
+      const url = new URL(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}/variation-themes`,
+      )
+      url.searchParams.set('marketplace', amazonChannel.marketplace)
+      url.searchParams.set('productType', amazonChannel.productType)
+      const res = await fetch(url.toString())
+      if (!res.ok) return
+      const json = await res.json()
+      if (Array.isArray(json?.themes) && json.themes.length > 0) {
+        setLiveThemes(json.themes as ThemeOption[])
+      }
+    } catch {
+      // Swallow — payload themes are the fallback.
+    } finally {
+      setLiveLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void fetchLiveThemes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizardId, payload.channels])
+
+  // Merge live themes over the payload's theme list. Live themes win
+  // when available; payload themes are the fallback for the duration
+  // of the SP-API fetch.
+  const effectivePayload: VariationsPayload = useMemo(() => {
+    if (!liveThemes) return payload
+    // Find the Amazon channel key to override themesByChannel.
+    const amazonChannel = payload.channels.find((c) => c.platform === 'AMAZON')
+    if (!amazonChannel) return { ...payload, commonThemes: liveThemes }
+    const channelKey = `${amazonChannel.platform}:${amazonChannel.marketplace}`
+    return {
+      ...payload,
+      commonThemes: liveThemes,
+      themesByChannel: { ...payload.themesByChannel, [channelKey]: liveThemes },
+    }
+  }, [payload, liveThemes])
+
   // Default-pick the first common theme so the operator sees axis
   // inputs immediately rather than an empty form. Falls back to the
   // first per-channel theme when no common one exists.
   const initialThemeId =
-    payload.commonThemes[0]?.id ??
-    Object.values(payload.themesByChannel).flat()[0]?.id ??
+    effectivePayload.commonThemes[0]?.id ??
+    Object.values(effectivePayload.themesByChannel).flat()[0]?.id ??
     null
 
   const [selectedThemeId, setSelectedThemeId] = useState<string | null>(
@@ -103,12 +157,12 @@ export default function MatrixVariantBuilder({
   const allThemes = useMemo(() => {
     const seen = new Set<string>()
     const out: ThemeOption[] = []
-    for (const t of payload.commonThemes) {
+    for (const t of effectivePayload.commonThemes) {
       if (seen.has(t.id)) continue
       seen.add(t.id)
       out.push(t)
     }
-    for (const channelThemes of Object.values(payload.themesByChannel)) {
+    for (const channelThemes of Object.values(effectivePayload.themesByChannel)) {
       for (const t of channelThemes) {
         if (seen.has(t.id)) continue
         seen.add(t.id)
@@ -116,7 +170,7 @@ export default function MatrixVariantBuilder({
       }
     }
     return out
-  }, [payload])
+  }, [effectivePayload])
 
   const selectedTheme = useMemo(
     () => allThemes.find((t) => t.id === selectedThemeId) ?? null,
@@ -148,12 +202,12 @@ export default function MatrixVariantBuilder({
         .map((v) => v.replace(/[^A-Za-z0-9]+/g, '').toUpperCase())
         .join('-')
       const autoSku = skuPattern
-        .replace('{parent}', payload.parentSku)
+        .replace('{parent}', effectivePayload.parentSku)
         .replace('{values}', valuesPart)
       const ov = overrides[idx] ?? {}
       const overrideSku = ov.sku?.trim()
       const sku = overrideSku && overrideSku.length > 0 ? overrideSku : autoSku
-      const name = `${payload.parentName} — ${Object.values(optionValues).join(' / ')}`
+      const name = `${effectivePayload.parentName} — ${Object.values(optionValues).join(' / ')}`
       const priceN = ov.price && ov.price.trim() ? Number(ov.price) : undefined
       const stockN = ov.stock && ov.stock.trim() ? Number(ov.stock) : undefined
       return {
@@ -164,7 +218,7 @@ export default function MatrixVariantBuilder({
         stockOverride: Number.isFinite(stockN as number) ? stockN : undefined,
       }
     })
-  }, [selectedTheme, axisValues, skuPattern, payload.parentSku, payload.parentName, overrides])
+  }, [selectedTheme, axisValues, skuPattern, effectivePayload.parentSku, effectivePayload.parentName, overrides])
 
   const skuConflicts = useMemo(() => {
     const seen = new Set<string>()
@@ -315,7 +369,7 @@ export default function MatrixVariantBuilder({
     }
   }
 
-  if (allThemes.length === 0) {
+  if (allThemes.length === 0 && !liveLoading) {
     return (
       <div className="border border-amber-200 dark:border-amber-900 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-5 py-4 text-base text-amber-900 dark:text-amber-200 inline-flex items-start gap-2">
         <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
@@ -347,9 +401,21 @@ export default function MatrixVariantBuilder({
       <div className="px-5 py-4 space-y-4">
         {/* Theme picker */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-            Variation theme
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Variation theme
+            </label>
+            <button
+              type="button"
+              onClick={() => void fetchLiveThemes()}
+              disabled={liveLoading}
+              className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-40"
+              title="Refresh themes from Amazon SP-API"
+            >
+              <RefreshCw className={cn('w-2.5 h-2.5', liveLoading && 'animate-spin')} />
+              {liveLoading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
           <select
             value={selectedThemeId ?? ''}
             onChange={(e) => {
@@ -372,9 +438,21 @@ export default function MatrixVariantBuilder({
             ))}
           </select>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {payload.commonThemes.find((t) => t.id === selectedThemeId)
-              ? 'Common to every selected channel.'
-              : 'Available on at least one of the selected channels.'}
+            {liveLoading ? (
+              <span className="inline-flex items-center gap-1">
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                Fetching live themes from Amazon…
+              </span>
+            ) : liveThemes ? (
+              <span className="text-blue-600 dark:text-blue-400">
+                Live from Amazon SP-API · {liveThemes.length} theme
+                {liveThemes.length === 1 ? '' : 's'} available
+              </span>
+            ) : effectivePayload.commonThemes.find((t) => t.id === selectedThemeId) ? (
+              'Common to every selected channel.'
+            ) : (
+              'Available on at least one of the selected channels.'
+            )}
           </p>
         </div>
 

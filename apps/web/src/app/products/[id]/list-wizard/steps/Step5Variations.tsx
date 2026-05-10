@@ -391,6 +391,7 @@ export default function Step5Variations({
         productSku={payload.parentSku}
         productName={payload.parentName}
         payload={payload}
+        wizardId={wizardId}
         onAdvance={() =>
           updateWizardState({}, { advance: true }).catch(() => {})
         }
@@ -1101,12 +1102,14 @@ function SingleProductSetup({
   productSku,
   productName,
   payload,
+  wizardId,
   onAdvance,
   onMutated,
 }: {
   productSku: string
   productName: string
   payload: MultiChannelVariationsPayload
+  wizardId: string
   onAdvance: () => void
   onMutated: () => void
 }) {
@@ -1187,7 +1190,7 @@ function SingleProductSetup({
             </button>
           </div>
           {promoteMode === 'matrix' ? (
-            <MatrixVariantBuilder payload={payload} onCreated={onMutated} />
+            <MatrixVariantBuilder payload={payload} onCreated={onMutated} wizardId={wizardId} />
           ) : (
             <PromotePanel onPromoted={onMutated} />
           )}
