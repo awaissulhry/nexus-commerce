@@ -251,6 +251,53 @@ export default function AiPromptsClient({ initialRows }: Props) {
     [confirm, patchRow, toast],
   )
 
+  // AB.5 — winner picker. When an A/B has 2+ ACTIVE rows at the same
+  // scope, the operator inspects per-variant traffic share (AB.4)
+  // and decides who won. This helper does the close-out: keep the
+  // top-callCount variant ACTIVE, archive every other ACTIVE in the
+  // same scope. Confirms first; lists what'll get archived in the
+  // dialog body so the operator sees the impact before clicking.
+  const pickWinner = useCallback(
+    async (feature: string, language: string | null, marketplace: string | null) => {
+      const inScope = rows.filter(
+        (r) =>
+          r.feature === feature &&
+          r.status === 'ACTIVE' &&
+          (r.language ?? null) === language &&
+          (r.marketplace ?? null) === marketplace,
+      )
+      if (inScope.length < 2) return
+      const sorted = [...inScope].sort(
+        (a, b) => (b.callCount ?? 0) - (a.callCount ?? 0),
+      )
+      const winner = sorted[0]
+      const losers = sorted.slice(1)
+      const ok = await confirm({
+        title: `Pick winner: ${winner.name} v${winner.version}?`,
+        description: `${winner.feature}${language ? ` · lang=${language}` : ''}${marketplace ? ` · market=${marketplace}` : ''} — keeping "${winner.name}" (${winner.callCount} calls). Will archive: ${losers.map((l) => `"${l.name}" (${l.callCount} calls)`).join(', ')}.`,
+        confirmLabel: 'Archive losers',
+        tone: 'warning',
+      })
+      if (!ok) return
+      // Sequential rather than Promise.all — patchRow updates rows
+      // state on each call. Parallel updates would race the optimistic
+      // setRows; the loser count is small (typically 1 row), so the
+      // wall time is not material.
+      let archived = 0
+      for (const loser of losers) {
+        const success = await patchRow(loser.id, { status: 'ARCHIVED' })
+        if (success) archived += 1
+      }
+      toast({
+        tone: 'success',
+        title: `Winner: ${winner.name}`,
+        description: `Archived ${archived} loser${archived === 1 ? '' : 's'}.`,
+        durationMs: 4000,
+      })
+    },
+    [rows, confirm, patchRow, toast],
+  )
+
   const saveBody = useCallback(
     async (row: PromptTemplateRow) => {
       const next = editBody[row.id]
@@ -371,14 +418,41 @@ export default function AiPromptsClient({ initialRows }: Props) {
                 <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
                   {feature}
                 </div>
-                {abVariants >= 2 && (
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-medium"
-                    title={`${abVariants} ACTIVE variants share the same scope — traffic splits evenly (AB.1).`}
-                  >
-                    A/B · {abVariants} variants
-                  </span>
-                )}
+                {abVariants >= 2 && (() => {
+                  // Find the A/B-running scope key for the Pick-winner
+                  // button. There can be at most one A/B per feature
+                  // header in v1 (an operator with two simultaneous
+                  // A/Bs on the same feature is an edge case; the
+                  // button picks the first scope encountered).
+                  let abScopeKey: string | null = null
+                  for (const [k, n] of scopeCounts.entries()) {
+                    if (n >= 2) {
+                      abScopeKey = k
+                      break
+                    }
+                  }
+                  const [abLang, abMarket] = abScopeKey
+                    ? abScopeKey.split('|').map((p) => (p === '*' ? null : p))
+                    : [null, null]
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-medium"
+                        title={`${abVariants} ACTIVE variants share the same scope — traffic splits evenly (AB.1).`}
+                      >
+                        A/B · {abVariants} variants
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void pickWinner(feature, abLang, abMarket)}
+                        className="text-xs px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                        title="Keep the highest-callCount variant ACTIVE; archive the rest."
+                      >
+                        Pick winner
+                      </button>
+                    </div>
+                  )
+                })()}
               </div>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {list.map((row) => {
