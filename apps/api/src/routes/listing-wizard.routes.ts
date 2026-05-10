@@ -3148,18 +3148,28 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // platformAttributes.productType wins over the master product's
       // productType. Lets sellers list the same product under different
       // Amazon categories per marketplace.
+      //
+      // IMPORTANT: for eBay the productType IS the numeric eBay category ID
+      // (e.g. "15724"). The master product.productType is an Amazon type string
+      // (e.g. "OUTERWEAR") which is meaningless to eBay. Never fall back to it
+      // for eBay channels or the taxonomy API will return 400 errorId 62005.
       const platformAttrs =
         (listing?.platformAttributes as Record<string, any> | null) ?? null
       const listingProductType =
         platformAttrs && typeof platformAttrs.productType === 'string'
           ? platformAttrs.productType
           : null
-      const productType = listingProductType || product.productType || ''
+
+      const isEbay = channel.toUpperCase() === 'EBAY'
+      const productType = isEbay
+        ? (listingProductType ?? '') // eBay: only use per-listing category, never master
+        : (listingProductType || product.productType || '')
+
       if (!productType) {
-        return reply.code(409).send({
-          error:
-            'No product type set on the master product. Pick a product type before configuring channel attributes.',
-        })
+        const msg = isEbay
+          ? 'No eBay category set for this listing. Use the product type picker in the listing setup to select an eBay category.'
+          : 'No product type set on the master product. Pick a product type before configuring channel attributes.'
+        return reply.code(409).send({ error: msg })
       }
 
       // Seed baseAttributes from the existing listing so the editor

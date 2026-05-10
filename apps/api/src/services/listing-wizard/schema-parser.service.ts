@@ -347,10 +347,13 @@ export class SchemaParserService {
 
     for (const c of channels) {
       const channelKey = `${c.platform}:${c.marketplace}`
+      // For eBay the productType IS the numeric category ID — never fall back
+      // to fallbackProductType which is typically an Amazon type string like
+      // "OUTERWEAR". Using an Amazon type as an eBay category ID causes
+      // taxonomy API error 62005 "category ID does not belong to tree".
       const productType =
         opts.productTypeByChannel[channelKey] ??
-        opts.fallbackProductType ??
-        ''
+        (c.platform === 'EBAY' ? '' : (opts.fallbackProductType ?? ''))
 
       if (c.platform === 'EBAY') {
         // II — eBay branch in the multi-channel schema parser. The
