@@ -42,12 +42,21 @@
  *     channel-listing flow can introduce its own role names later)
  */
 
+import { createHash } from 'node:crypto'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import {
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
+
+// MC.3.3 — content-hash. Lowercase hex, 64 chars. Computing it on
+// the upload path lets us short-circuit before paying for a
+// Cloudinary roundtrip when the operator re-uploads a file we
+// already have.
+function sha256Hex(buf: Buffer): string {
+  return createHash('sha256').update(buf).digest('hex')
+}
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const VALID_ASSET_TYPES = new Set(['image', 'video', 'document', 'model3d'])
@@ -1068,6 +1077,31 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         size: buffer.length,
       })
 
+    // MC.3.3 — dedup. Hash the bytes; if we have a row already, file
+    // it into the requested folder (if different) and return that.
+    // Never re-upload the same bytes to Cloudinary — saves storage
+    // cost and keeps publicIds stable so downstream caches hold.
+    const contentHash = sha256Hex(buffer)
+    const existing = await prisma.digitalAsset.findUnique({
+      where: { contentHash },
+    })
+    if (existing) {
+      // If the operator dropped this file into a different folder
+      // than where it lived previously, re-file it. Don't overwrite
+      // label/alt — the operator's prior work on metadata is more
+      // valuable than the latest filename.
+      if (folderId && existing.folderId !== folderId) {
+        const moved = await prisma.digitalAsset.update({
+          where: { id: existing.id },
+          data: { folderId },
+        })
+        return reply
+          .code(200)
+          .send({ asset: moved, dedup: true, refiled: true })
+      }
+      return reply.code(200).send({ asset: existing, dedup: true })
+    }
+
     const folder = folderId
       ? `marketing-content/${folderId}`
       : 'marketing-content/unfiled'
@@ -1082,24 +1116,42 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    const asset = await prisma.digitalAsset.create({
-      data: {
-        label: labelOverride ?? part.filename ?? 'Untitled',
-        type: 'image',
-        mimeType: part.mimetype,
-        sizeBytes: cloudResult.bytes,
-        storageProvider: 'cloudinary',
-        storageId: cloudResult.publicId,
-        url: cloudResult.url,
-        originalFilename: part.filename ?? null,
-        folderId,
-        metadata: {
-          width: cloudResult.width,
-          height: cloudResult.height,
-          format: cloudResult.format,
+    let asset
+    try {
+      asset = await prisma.digitalAsset.create({
+        data: {
+          label: labelOverride ?? part.filename ?? 'Untitled',
+          type: 'image',
+          mimeType: part.mimetype,
+          sizeBytes: cloudResult.bytes,
+          storageProvider: 'cloudinary',
+          storageId: cloudResult.publicId,
+          url: cloudResult.url,
+          originalFilename: part.filename ?? null,
+          contentHash,
+          folderId,
+          metadata: {
+            width: cloudResult.width,
+            height: cloudResult.height,
+            format: cloudResult.format,
+          },
         },
-      },
-    })
+      })
+    } catch (err: any) {
+      // Race: a concurrent upload of the same bytes won the unique
+      // index. Look up the winning row and return it. Cloudinary
+      // upload we just did is now an orphan; cleanup is fire-and-
+      // forget — Cloudinary's admin tools / a periodic sweep handle
+      // these.
+      if (err?.code === 'P2002') {
+        const winner = await prisma.digitalAsset.findUnique({
+          where: { contentHash },
+        })
+        if (winner)
+          return reply.code(200).send({ asset: winner, dedup: true })
+      }
+      throw err
+    }
 
     return reply.code(201).send({ asset })
   })
@@ -1174,6 +1226,27 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
     const buffer = Buffer.from(arrayBuffer)
+
+    // MC.3.3 — same dedup path as the multipart upload. URL imports
+    // are common-case for "I bought stock photos and pasted three
+    // links" workflows so the dedup hit is meaningful.
+    const contentHash = sha256Hex(buffer)
+    const existing = await prisma.digitalAsset.findUnique({
+      where: { contentHash },
+    })
+    if (existing) {
+      if (body.folderId && existing.folderId !== body.folderId) {
+        const moved = await prisma.digitalAsset.update({
+          where: { id: existing.id },
+          data: { folderId: body.folderId },
+        })
+        return reply
+          .code(200)
+          .send({ asset: moved, dedup: true, refiled: true })
+      }
+      return reply.code(200).send({ asset: existing, dedup: true })
+    }
+
     const folder = body.folderId
       ? `marketing-content/${body.folderId}`
       : 'marketing-content/unfiled'
@@ -1192,26 +1265,39 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       decodeURIComponent(parsed.pathname.split('/').pop() ?? '') ||
       `import-${Date.now()}`
 
-    const asset = await prisma.digitalAsset.create({
-      data: {
-        label: body.label?.trim() || filename,
-        type: 'image',
-        mimeType,
-        sizeBytes: cloudResult.bytes,
-        storageProvider: 'cloudinary',
-        storageId: cloudResult.publicId,
-        url: cloudResult.url,
-        originalFilename: filename,
-        folderId: body.folderId ?? null,
-        metadata: {
-          width: cloudResult.width,
-          height: cloudResult.height,
-          format: cloudResult.format,
-          source: 'url_import',
-          sourceUrl: parsed.toString(),
+    let asset
+    try {
+      asset = await prisma.digitalAsset.create({
+        data: {
+          label: body.label?.trim() || filename,
+          type: 'image',
+          mimeType,
+          sizeBytes: cloudResult.bytes,
+          storageProvider: 'cloudinary',
+          storageId: cloudResult.publicId,
+          url: cloudResult.url,
+          originalFilename: filename,
+          contentHash,
+          folderId: body.folderId ?? null,
+          metadata: {
+            width: cloudResult.width,
+            height: cloudResult.height,
+            format: cloudResult.format,
+            source: 'url_import',
+            sourceUrl: parsed.toString(),
+          },
         },
-      },
-    })
+      })
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        const winner = await prisma.digitalAsset.findUnique({
+          where: { contentHash },
+        })
+        if (winner)
+          return reply.code(200).send({ asset: winner, dedup: true })
+      }
+      throw err
+    }
 
     return reply.code(201).send({ asset })
   })

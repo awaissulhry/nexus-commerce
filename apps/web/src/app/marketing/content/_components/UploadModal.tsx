@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
 
-type QueueItemStatus = 'queued' | 'uploading' | 'done' | 'error'
+type QueueItemStatus = 'queued' | 'uploading' | 'done' | 'duplicate' | 'error'
 
 interface QueueItem {
   id: string
@@ -38,6 +38,9 @@ interface QueueItem {
   size: number | null
   status: QueueItemStatus
   error?: string
+  // MC.3.3 — when status is 'duplicate', captures whether the
+  // server also re-filed the existing asset into a new folder.
+  refiled?: boolean
   // For file uploads only
   file?: File
   // For URL uploads only
@@ -190,32 +193,38 @@ export default function UploadModal({
 
   const uploadOne = async (item: QueueItem): Promise<QueueItem> => {
     try {
+      let res: Response
       if (item.source === 'file' && item.file) {
         const fd = new FormData()
         fd.append('file', item.file, item.filename)
         if (folderId) fd.append('folderId', folderId)
-        const res = await fetch(`${apiBase}/api/assets/upload`, {
+        res = await fetch(`${apiBase}/api/assets/upload`, {
           method: 'POST',
           body: fd,
         })
-        if (!res.ok) {
-          const errBody = (await res.json().catch(() => ({}))) as { error?: string }
-          throw new Error(errBody.error ?? `Upload failed (${res.status})`)
-        }
       } else if (item.source === 'url' && item.url) {
-        const res = await fetch(`${apiBase}/api/assets/upload-url`, {
+        res = await fetch(`${apiBase}/api/assets/upload-url`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ url: item.url, folderId }),
         })
-        if (!res.ok) {
-          const errBody = (await res.json().catch(() => ({}))) as { error?: string }
-          throw new Error(errBody.error ?? `Import failed (${res.status})`)
-        }
       } else {
         throw new Error('Invalid queue item')
       }
-      return { ...item, status: 'done' }
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(errBody.error ?? `Upload failed (${res.status})`)
+      }
+      const body = (await res.json()) as {
+        asset: unknown
+        dedup?: boolean
+        refiled?: boolean
+      }
+      return {
+        ...item,
+        status: body.dedup ? 'duplicate' : 'done',
+        refiled: body.refiled,
+      }
     } catch (err) {
       return {
         ...item,
@@ -230,6 +239,7 @@ export default function UploadModal({
     if (pending.length === 0) return
     setBusy(true)
     let successes = 0
+    let duplicates = 0
     let failures = 0
     for (const item of pending) {
       setQueue((prev) =>
@@ -242,6 +252,7 @@ export default function UploadModal({
         prev.map((q) => (q.id === item.id ? updated : q)),
       )
       if (updated.status === 'done') successes++
+      else if (updated.status === 'duplicate') duplicates++
       else failures++
     }
     setBusy(false)
@@ -251,8 +262,17 @@ export default function UploadModal({
           n: successes.toString(),
         }),
       )
-      onComplete()
     }
+    if (duplicates > 0) {
+      toast({
+        title: t('marketingContent.upload.duplicateCount', {
+          n: duplicates.toString(),
+        }),
+        description: t('marketingContent.upload.duplicateBody'),
+        tone: 'info',
+      })
+    }
+    if (successes + duplicates > 0) onComplete()
     if (failures > 0) {
       toast.error(
         t('marketingContent.upload.failureCount', {
@@ -357,6 +377,8 @@ export default function UploadModal({
                   >
                     {item.status === 'done' ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    ) : item.status === 'duplicate' ? (
+                      <CheckCircle2 className="w-4 h-4 text-amber-500 flex-shrink-0" />
                     ) : item.status === 'error' ? (
                       <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                     ) : item.status === 'uploading' ? (
@@ -369,7 +391,15 @@ export default function UploadModal({
                         {item.filename}
                       </p>
                       <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        {item.source === 'url' ? item.url : null}
+                        {item.status === 'duplicate' ? (
+                          <span className="text-amber-700 dark:text-amber-400">
+                            {item.refiled
+                              ? t('marketingContent.upload.duplicateRefiled')
+                              : t('marketingContent.upload.duplicateRow')}
+                          </span>
+                        ) : item.source === 'url' ? (
+                          item.url
+                        ) : null}
                         {item.error ? (
                           <span className="text-red-600 dark:text-red-400">
                             {item.error}

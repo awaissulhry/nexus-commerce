@@ -862,6 +862,13 @@ model DigitalAsset {
   // the right photo?" diffing).
   originalFilename String?
 
+  // MC.3.3 — SHA-256 of the uploaded bytes (lowercase hex). Lets us
+  // skip the Cloudinary roundtrip when the operator re-uploads a
+  // file already in the catalogue. Indexed unique so a duplicate
+  // hash collides at the DB layer instead of racing two requests
+  // into separate Cloudinary calls.
+  contentHash      String? @unique
+
   // Free-form metadata: alt text, photographer credit, color tags,
   // dominant colors, captions, etc. JSON keeps the schema flexible
   // until we identify access patterns that warrant a dedicated
