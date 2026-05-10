@@ -219,6 +219,61 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * POST /api/bulk-operations/ai/cost-preview
+   *
+   * W11.4 — Pre-flight USD cost estimate for AI bulk actions.
+   * Returns the call count + token estimates + USD upper bound at
+   * the runtime provider's default model. The front-end calls this
+   * after the operator picks targets + AI action type, so the
+   * Execute button can show "≈ $1.23 across 280 SKUs" up-front.
+   *
+   * Body: { actionType, productCount, payload, avgImagesPerProduct? }
+   */
+  fastify.post<{
+    Body: {
+      actionType?: string
+      productCount?: number
+      payload?: Record<string, unknown>
+      avgImagesPerProduct?: number
+    }
+  }>('/bulk-operations/ai/cost-preview', async (request, reply) => {
+    const body = request.body ?? {}
+    if (
+      body.actionType !== 'AI_TRANSLATE_PRODUCT' &&
+      body.actionType !== 'AI_SEO_REGEN' &&
+      body.actionType !== 'AI_ALT_TEXT'
+    ) {
+      return reply
+        .code(400)
+        .send({ success: false, error: 'actionType must be one of AI_TRANSLATE_PRODUCT | AI_SEO_REGEN | AI_ALT_TEXT' })
+    }
+    if (typeof body.productCount !== 'number' || body.productCount <= 0) {
+      return reply
+        .code(400)
+        .send({ success: false, error: 'productCount required (> 0)' })
+    }
+    try {
+      const { estimateAiBulkCost } = await import(
+        '../services/ai/cost-preview.service.js'
+      )
+      const estimate = estimateAiBulkCost({
+        actionType: body.actionType,
+        productCount: body.productCount,
+        payload: body.payload ?? {},
+        avgImagesPerProduct: body.avgImagesPerProduct,
+      })
+      return reply.send({ success: true, estimate })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      fastify.log.error(
+        { err: error },
+        '[bulk-operations] ai cost-preview failed',
+      )
+      return reply.code(500).send({ success: false, error: message })
+    }
+  })
+
+  /**
    * GET /api/bulk-operations/history
    * Paginated job history for the /bulk-operations/history page.
    * Ordered by createdAt DESC. Supports status / actionType / since
