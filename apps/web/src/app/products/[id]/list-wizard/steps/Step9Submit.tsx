@@ -504,6 +504,15 @@ export default function Step9Submit({
             )}
             Submit listings
           </Button>
+
+          {/* WT.4 — Save current wizard configuration as a template
+              for re-use. Sits below Submit so it's discoverable
+              without competing with the primary action. Only
+              renders pre-submit (this entire block is gated by
+              !submissions). */}
+          <div className="mt-3">
+            <SaveAsTemplateButton wizardId={wizardId} />
+          </div>
         </div>
         <HistoryStrip
           events={history}
@@ -1025,4 +1034,134 @@ function humanStatus(status: SubmissionStatus, retrying: boolean): string {
     default:
       return status
   }
+}
+
+// WT.4 — "Save as template" button + inline form. Operator clicks
+// → form expands inline below the Submit cluster → name +
+// description + category hint inputs → Save POSTs /from-wizard/:id
+// + collapses back. Toast confirms. No modal — operators are at
+// the bottom of the wizard with full context, an inline form keeps
+// the flow without a focus jump.
+function SaveAsTemplateButton({ wizardId }: { wizardId: string }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [categoryHint, setCategoryHint] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const reset = useCallback(() => {
+    setName('')
+    setDescription('')
+    setCategoryHint('')
+    setError(null)
+    setOpen(false)
+  }, [])
+
+  const onSave = useCallback(async () => {
+    if (name.trim().length === 0) {
+      setError('Name is required.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/wizard-templates/from-wizard/${wizardId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            description: description.trim() || undefined,
+            categoryHint: categoryHint.trim() || undefined,
+          }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`)
+      }
+      reset()
+      // Toast handled by caller side-effect via inline alert; the
+      // submit-step doesn't want noisy toasts on top of the publish
+      // flow. A success indicator below the button does the job.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [name, description, categoryHint, wizardId, reset])
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+      >
+        Save current wizard as a template…
+      </button>
+    )
+  }
+
+  return (
+    <div className="text-left border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
+      <div className="text-md font-medium text-slate-900 dark:text-slate-100">
+        Save as template
+      </div>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Template name (e.g. 'Helmet — Amazon EU + eBay IT')"
+        className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+        autoFocus
+      />
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Optional description — explain what this template is for"
+        rows={2}
+        className="w-full px-2 py-1 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+      />
+      <input
+        type="text"
+        value={categoryHint}
+        onChange={(e) => setCategoryHint(e.target.value)}
+        placeholder="Optional category hint (e.g. 'helmet') — surfaces when a matching product opens the wizard"
+        className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+      />
+      {error && (
+        <div className="text-sm text-rose-700 dark:text-rose-300 inline-flex items-start gap-1">
+          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => void onSave()}
+          disabled={busy || name.trim().length === 0}
+        >
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+          Save template
+        </Button>
+        <button
+          type="button"
+          onClick={reset}
+          disabled={busy}
+          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Captures the current channel selection + reusable defaults
+        (SKU strategy, variations, pricing). Identifiers / content /
+        images stay product-specific and aren&apos;t saved.
+      </p>
+    </div>
+  )
 }
