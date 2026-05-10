@@ -1093,7 +1093,7 @@ export default function ChannelFieldEditor({
 
       {noCategorySet && !loading && (
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-4 py-6 text-center text-md text-slate-500 dark:text-slate-400">
-          Select a {channel} category in the <strong>Channel Setup</strong> card above to load the attribute fields.
+          Pick a category in the <strong>Channel Setup</strong> card above ↑ — attribute fields load once a category is selected.
         </div>
       )}
 
@@ -1661,17 +1661,28 @@ function ListingSetupCard({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 space-y-3">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+      {/* Card header */}
+      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          Channel Setup
+        </span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">
+          {channel} · {marketplace}
+        </span>
+      </div>
+
+      <div className="px-4 py-3 space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
         {/* Product type */}
         <div className="space-y-1">
           <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {channel} product type
+            {isEbay ? 'eBay category' : `${channel} product type`}
           </label>
           {/* eBay: warn if no valid category is set */}
           {isEbay && !ebayHasValidCategory && (
             <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 mb-1">
-              No eBay category set for {marketplace}. Pick one below — each marketplace needs its own category.
+              No eBay category set for {marketplace}. Search and select one below.
             </div>
           )}
 
@@ -1871,6 +1882,7 @@ function ListingSetupCard({
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }
