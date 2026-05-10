@@ -4767,6 +4767,74 @@ model BrandStoryVersion {
   @@index([storyId, createdAt])
 }
 
+/// MC.10.1 — Brand Kit (brand identity bundle).
+///
+/// One row per brand. Mirrors the operator's brand-guideline doc:
+/// color palette, typography, logo lockups, voice/tone notes. Used
+/// by MC.10.2 (auto-apply defaults to A+ + Brand Story modules),
+/// MC.10.3 (watermark templates), MC.10.4 (consistency monitoring),
+/// and the deferred MC.4/5 AI flows (brand-constrained generation).
+///
+/// `brand` is the unique key — matches Product.brand and the brand
+/// label on APlusContent / BrandStory rows. JSON columns keep the
+/// schema flexible; access patterns are operator-driven (browse +
+/// edit + read on submission), not analytical, so JSON beats
+/// dedicated tables here.
+model BrandKit {
+  id           String   @id @default(cuid())
+  brand        String   @unique
+  /// Operator-friendly display name (defaults to `brand` on create).
+  displayName  String?
+  /// Tagline displayed in the brand portal + Brand Story header.
+  tagline      String?
+  /// Voice/tone notes — long-form. MC.4 feeds this into AI prompts
+  /// once the AI work resumes.
+  voiceNotes   String?
+  /// Color palette: [{ name, hex, role }]. Roles match the
+  /// operator's mental model — primary / secondary / accent /
+  /// neutral / status. Stored as JSON for forward-compat with new
+  /// roles; consistency-monitoring rules read it as an array.
+  colors       Json     @default("[]")
+  /// Typography: [{ name, family, weight, role }]. Roles:
+  /// heading / body / mono / display.
+  fonts        Json     @default("[]")
+  /// Logo lockups: [{ name, assetId?, url?, role }]. Roles:
+  /// primary / mark / wordmark / monochrome / inverse.
+  logos        Json     @default("[]")
+  /// Free-form additional guideline notes.
+  notes        String?
+  watermarks   BrandWatermarkTemplate[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// MC.10.3 — per-brand watermark template.
+///
+/// Stored as configuration only — actual rendering happens via
+/// Cloudinary `l_` overlay transformations at variant-build time
+/// (MC.6.1 channel-variants service calls into this when the brand
+/// has a default watermark enabled).
+model BrandWatermarkTemplate {
+  id          String   @id @default(cuid())
+  brand       String
+  brandKit    BrandKit @relation(fields: [brand], references: [brand], onDelete: Cascade)
+  name        String
+  /// 'corner_logo' | 'badge' | 'overlay_band' | 'diagonal_text' — string
+  /// for forward-compat with new template types.
+  type        String
+  /// Renderer config: { logoAssetId, position, size, opacity,
+  /// rotation, color, text? }. Per-type fields documented in the
+  /// spec library at apps/web/.../brand-kit/_lib/watermarks.ts.
+  config      Json
+  /// When true, MC.6.1 auto-applies this template to channel
+  /// variants for assets tagged with this brand.
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brand, enabled])
+}
+
 // Phase A: per-listing image set with multi-scope and variation-aware
 // targeting. ProductImage stays as the master gallery (source of truth);
 // ListingImage entries either reference a master image (via

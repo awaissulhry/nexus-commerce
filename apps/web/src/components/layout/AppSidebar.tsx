@@ -36,6 +36,7 @@ import {
   FileEdit,
   BadgeCheck,
   BookOpen,
+  Palette,
   ShoppingCart,
   Cable,
   Sun,
@@ -561,6 +562,12 @@ export default function AppSidebar() {
             icon={BookOpen}
             label="Brand Story"
             active={pathname.startsWith('/marketing/brand-story')}
+          />
+          <NavItem
+            href="/marketing/brand-kit"
+            icon={Palette}
+            label="Brand Kit"
+            active={pathname.startsWith('/marketing/brand-kit')}
           />
           <NavItem
             href="/marketing/reviews"
