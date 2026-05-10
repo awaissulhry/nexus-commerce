@@ -294,7 +294,14 @@ export default function ProductEditClient({
     router.refresh()
   }
 
-  const orderedChannels = CHANNEL_ORDER.filter((c) => marketplaces[c]?.length)
+  // WOOCOMMERCE and ETSY are not active channels for this operator —
+  // only show them if there are actual listings (i.e. they were
+  // connected at some point and have data). Amazon / eBay / Shopify
+  // appear whenever the marketplaces endpoint returns them.
+  const orderedChannels = CHANNEL_ORDER.filter((c) => {
+    if (c === 'WOOCOMMERCE' || c === 'ETSY') return (listings[c]?.length ?? 0) > 0
+    return (marketplaces[c]?.length ?? 0) > 0
+  })
 
   // W14.3 — flat list of tab keys in display order. Powers arrow-key
   // navigation (ArrowLeft/Right cycle through; Home/End jump to ends)

@@ -110,7 +110,7 @@ interface StockProductSnapshot {
   atpPerChannel?: Array<{
     channel: string
     marketplace: string
-    atp: number
+    available: number  // resolveAtpAcrossChannels returns 'available', not 'atp'
   }>
 }
 
@@ -426,7 +426,7 @@ export default function InventoryTab({
                         : '—'}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">
-                      {atpRow ? atpRow.atp.toLocaleString() : '—'}
+                      {atpRow ? atpRow.available.toLocaleString() : '—'}
                     </td>
                     <td className="px-3 py-2">
                       <SyncBadge status={cl.syncStatus} />
