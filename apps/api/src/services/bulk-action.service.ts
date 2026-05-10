@@ -61,7 +61,12 @@ export type BulkActionType =
   | 'ATTRIBUTE_UPDATE'
   | 'LISTING_SYNC'
   | 'MARKETPLACE_OVERRIDE_UPDATE'
-  | 'LISTING_BULK_ACTION';
+  | 'LISTING_BULK_ACTION'
+  // W11.1 — bulk translation of Product copy. payload =
+  //   { targetLanguages: string[], fields?: ('name'|'description'|'bulletPoints')[] }.
+  // Each item resolves to a Product; the handler upserts one
+  // ProductTranslation row per (product, language).
+  | 'AI_TRANSLATE_PRODUCT';
 
 /**
  * Runtime allowlist mirroring `BulkActionType`. Used by the Zod
@@ -77,6 +82,7 @@ export const KNOWN_BULK_ACTION_TYPES: ReadonlySet<BulkActionType> = new Set([
   'LISTING_SYNC',
   'MARKETPLACE_OVERRIDE_UPDATE',
   'LISTING_BULK_ACTION',
+  'AI_TRANSLATE_PRODUCT',
 ]);
 
 export function isKnownBulkActionType(t: string): t is BulkActionType {
@@ -116,6 +122,9 @@ const ACTION_ENTITY = {
   // its own per-listing worker), so this entry is documentation +
   // rollback-eligibility wiring rather than execution dispatch.
   LISTING_BULK_ACTION: 'channelListing',
+  // W11.1 — AI bulk translation operates on Product rows; the
+  // handler reads master copy + writes ProductTranslation rows.
+  AI_TRANSLATE_PRODUCT: 'product',
 } as const satisfies Record<
   BulkActionType,
   'product' | 'variation' | 'channelListing'
@@ -1913,6 +1922,26 @@ export class BulkActionService {
         };
       case 'LISTING_SYNC':
         return {};
+      case 'AI_TRANSLATE_PRODUCT':
+        // W11.1 — capture the master copy that the AI saw at request
+        // time + the requested language list, so the diff drawer
+        // shows what was translated and into which locales.
+        return {
+          targetLanguages: Array.isArray(payload?.targetLanguages)
+            ? payload?.targetLanguages
+            : [],
+          fields: Array.isArray(payload?.fields)
+            ? payload?.fields
+            : ['name', 'description', 'bulletPoints'],
+          masterName: typeof item.name === 'string' ? item.name : null,
+          masterDescription:
+            typeof item.description === 'string'
+              ? item.description.slice(0, 200)
+              : null,
+          masterBulletCount: Array.isArray(item.bulletPoints)
+            ? item.bulletPoints.length
+            : 0,
+        };
       default:
         return {};
     }
@@ -1984,6 +2013,23 @@ export class BulkActionService {
       }
       case 'LISTING_SYNC':
         return {};
+      case 'AI_TRANSLATE_PRODUCT': {
+        // W11.1 — return the language → source/sourceModel pairs
+        // that now exist for this product. The diff drawer can show
+        // "wrote it/de/fr · gemini-2.0-flash" as the after-snapshot.
+        const rows = await this.prisma.productTranslation.findMany({
+          where: { productId: itemId },
+          select: { language: true, source: true, sourceModel: true, reviewedAt: true },
+        });
+        return {
+          translations: rows.map((r) => ({
+            language: r.language,
+            source: r.source,
+            sourceModel: r.sourceModel,
+            reviewed: !!r.reviewedAt,
+          })),
+        };
+      }
       default:
         return {};
     }
@@ -2058,9 +2104,120 @@ export class BulkActionService {
           item as ChannelListing,
           payload,
         );
+      case 'AI_TRANSLATE_PRODUCT':
+        return await this.processAiTranslate(item as Product, payload);
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
     }
+  }
+
+  /**
+   * W11.1 — AI bulk translate handler.
+   *
+   * Payload:
+   *   targetLanguages: string[]                  (ISO 639-1 lowercase)
+   *   fields?: ('name'|'description'|'bulletPoints')[]
+   *   skipReviewed?: boolean                     (default true — never
+   *     overwrite operator-reviewed copy. Set false when redoing.)
+   *
+   * For each requested target language: calls translateProductCopy
+   * once, upserts ProductTranslation. Skips the row when:
+   *   - the source product has no copy in any of the requested fields
+   *     (nothing to translate)
+   *   - skipReviewed=true AND the existing ProductTranslation has a
+   *     non-null reviewedAt for that language (operator already
+   *     reviewed; respecting their work).
+   */
+  private async processAiTranslate(
+    item: Product,
+    payload: Record<string, any>,
+  ): Promise<{ status: 'processed' | 'skipped' }> {
+    const { translateProductCopy } = await import('./ai/translate.service.js');
+    const targetLanguages = Array.isArray(payload.targetLanguages)
+      ? (payload.targetLanguages as unknown[])
+          .filter((l): l is string => typeof l === 'string')
+          .map((l) => l.trim().toLowerCase())
+          .filter((l) => /^[a-z]{2}$/.test(l))
+      : [];
+    if (targetLanguages.length === 0) {
+      throw new Error(
+        'AI_TRANSLATE_PRODUCT: payload.targetLanguages required (ISO 639-1 lowercase)',
+      );
+    }
+    const fields = Array.isArray(payload.fields)
+      ? (payload.fields as unknown[]).filter(
+          (f): f is 'name' | 'description' | 'bulletPoints' =>
+            f === 'name' || f === 'description' || f === 'bulletPoints',
+        )
+      : (['name', 'description', 'bulletPoints'] as ('name' | 'description' | 'bulletPoints')[]);
+    if (fields.length === 0) {
+      throw new Error('AI_TRANSLATE_PRODUCT: payload.fields must be non-empty');
+    }
+    const skipReviewed = payload.skipReviewed !== false;
+    const product = await this.prisma.product.findUnique({
+      where: { id: item.id },
+    });
+    if (!product) {
+      throw new Error(`Product not found: ${item.id}`);
+    }
+    const hasAny =
+      (fields.includes('name') && !!product.name) ||
+      (fields.includes('description') && !!product.description) ||
+      (fields.includes('bulletPoints') &&
+        Array.isArray(product.bulletPoints) &&
+        product.bulletPoints.length > 0);
+    if (!hasAny) return { status: 'skipped' };
+
+    let didWriteAny = false;
+    for (const language of targetLanguages) {
+      if (skipReviewed) {
+        const existing = await this.prisma.productTranslation.findUnique({
+          where: {
+            productId_language: { productId: product.id, language },
+          },
+        });
+        if (existing?.reviewedAt) continue;
+      }
+      const translated = await translateProductCopy({
+        source: {
+          name: product.name,
+          description: product.description,
+          bulletPoints: product.bulletPoints,
+        },
+        targetLanguage: language,
+        fields,
+        brand: product.brand,
+        productType: product.productType ?? null,
+        productId: product.id,
+        feature: 'bulk-translate',
+      });
+      await this.prisma.productTranslation.upsert({
+        where: {
+          productId_language: { productId: product.id, language },
+        },
+        create: {
+          productId: product.id,
+          language,
+          name: translated.name,
+          description: translated.description,
+          bulletPoints: translated.bulletPoints ?? [],
+          source: translated.source,
+          sourceModel: translated.sourceModel,
+        },
+        update: {
+          name: translated.name,
+          description: translated.description,
+          bulletPoints: translated.bulletPoints ?? [],
+          source: translated.source,
+          sourceModel: translated.sourceModel,
+          // Reset reviewedAt — fresh AI output is unreviewed
+          // regardless of whether a prior review existed.
+          reviewedAt: null,
+        },
+      });
+      didWriteAny = true;
+    }
+    return { status: didWriteAny ? 'processed' : 'skipped' };
   }
 
   // ── Operation handlers ──────────────────────────────────────────────
