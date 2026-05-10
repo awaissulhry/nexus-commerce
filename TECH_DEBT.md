@@ -230,11 +230,17 @@ Validation: SKU required + unique (server returns 409 on collision via the exist
 
 Not needed for v1 sort options; flag here so the next person adding a column knows the boundary.
 
-## 23. 🟢 /inventory sub-routes → `/products/*`
+## 23. ✅ /inventory sub-routes → `/products/*` — public subroutes resolved 2026-05-10 (IM.1)
 
-Only the top-level browse page moved. `/inventory/upload`, `/inventory/manage`, `/inventory/fba`, `/inventory/stranded`, `/inventory/resolve`, etc. still live under `/inventory/*`. Breadcrumbs were retargeted to point back at `/products`, so the user-visible nav is consistent, but the URLs themselves are inconsistent.
+**Resolution (public sub-routes):** Four canonical homes moved:
+  - `/products/stranded` ← `/inventory/stranded`
+  - `/products/fba`      ← `/inventory/fba`
+  - `/products/upload`   ← `/inventory/upload`
+  - `/products/resolve`  ← `/inventory/resolve`
 
-**Proper fix:** rename each sub-route to live under `/products/*` (e.g. `/products/upload`, `/products/fba`). Each move is small but they touch deep links, server actions' `revalidatePath` calls, and the legacy `Sidebar.tsx`. Doing them one at a time as the relevant pages are next touched is fine.
+Old `/inventory/*` paths now redirect to the new homes (same pattern as `/inventory/page.tsx`'s pre-existing redirect to `/products`). `/catalog/upload` and `/catalog/import` retargeted to `/products/upload`. The legacy `Sidebar.tsx` is unimported anywhere; the active `AppSidebar.tsx` already treats `/inventory/*` as part of `/products/*` for navigation highlighting, so no UI changes were needed.
+
+**Component-path migration** (`@/app/inventory/manage/...` imports, `@/components/inventory/*`, `@/types/inventory`) is item #24 — many consumers across `/fulfillment/stock` + the new `/products/fba` page. That sweep is gated on the next time those surfaces are touched.
 
 ## 24. 🟢 /inventory legacy components & types not deleted
 
