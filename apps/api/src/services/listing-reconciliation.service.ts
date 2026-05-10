@@ -277,45 +277,98 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
     throw new Error('Row has no externalListingId — channel data may be incomplete')
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Upsert ChannelListing for this product+channel+marketplace
-    const existing = await tx.channelListing.findFirst({
-      where: {
-        productId: row.matchedProductId!,
-        channel: row.channel,
-        marketplace: row.marketplace,
-      },
-      select: { id: true },
-    })
+  // ── Determine whether this is a variation child or standalone ──────────
+  //
+  // The merchant listings report returns child/variation SKUs. Each row has:
+  //   externalListingId = child ASIN (buyable, e.g. GALE jacket size L)
+  //   parentAsin        = parent ASIN (non-buyable variation group)
+  //   matchedVariationId = ProductVariation.id (when SKU matched a variation)
+  //
+  // Correct mapping:
+  //   ChannelListing.externalListingId → parentAsin (the variation group)
+  //   VariantChannelListing.channelProductId → child ASIN (per-size)
+  //
+  // For standalone products (no parentAsin, no variation), the child ASIN IS
+  // the listing identifier and goes directly on ChannelListing.
 
-    if (existing) {
-      await tx.channelListing.update({
-        where: { id: existing.id },
-        data: {
-          externalListingId: row.externalListingId,
-          listingStatus: 'ACTIVE',
-          price: row.channelPrice ?? undefined,
-          masterQuantity: row.channelQuantity ?? undefined,
-        },
-      })
-    } else {
-      // Stub listing record so Nexus knows about it
-      await tx.channelListing.create({
-        data: {
+  const isVariationChild = !!(row.parentAsin && row.matchedVariationId)
+  const listingAsin = isVariationChild
+    ? row.parentAsin!          // parent ASIN → ChannelListing
+    : row.externalListingId    // standalone ASIN → ChannelListing
+
+  await prisma.$transaction(async (tx) => {
+    // ── 1. Upsert ChannelListing (parent-level) ──────────────────────────
+    // Use the named unique index (productId, channel, marketplace) so that
+    // multiple variation children confirming the same parent product don't
+    // race to create duplicate ChannelListing rows.
+    await tx.channelListing.upsert({
+      where: {
+        productId_channel_marketplace: {
           productId: row.matchedProductId!,
           channel: row.channel,
           marketplace: row.marketplace,
-          channelMarket: `${row.channel}_${row.marketplace}`,
-          region: row.marketplace,
-          externalListingId: row.externalListingId,
+        },
+      },
+      create: {
+        productId: row.matchedProductId!,
+        channel: row.channel,
+        marketplace: row.marketplace,
+        channelMarket: `${row.channel}_${row.marketplace}`,
+        region: row.marketplace,
+        externalListingId: listingAsin,
+        externalParentId: row.parentAsin ?? null,
+        listingStatus: 'ACTIVE',
+        title: row.title ?? undefined,
+        // Price/qty on the parent listing: for variations, this is the range;
+        // we use the confirming row's values as an initial snapshot.
+        price: row.channelPrice ?? undefined,
+        masterQuantity: row.channelQuantity ?? undefined,
+      },
+      update: {
+        // Keep the parent ASIN if already set; don't downgrade to a child ASIN
+        // if another variation was confirmed first.
+        ...(row.parentAsin
+          ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin }
+          : {}),
+        listingStatus: 'ACTIVE',
+      },
+    })
+
+    // ── 2. Upsert VariantChannelListing (per-variation) ─────────────────
+    // Only when this is a variation child with a known variation ID.
+    // Stores the child ASIN + per-size price & qty. Upserts on the
+    // @@unique([variantId, channel, marketplace]) constraint.
+    if (isVariationChild) {
+      await tx.variantChannelListing.upsert({
+        where: {
+          variantId_channel_marketplace: {
+            variantId: row.matchedVariationId!,
+            channel: row.channel,
+            marketplace: row.marketplace,
+          },
+        },
+        create: {
+          variantId: row.matchedVariationId!,
+          channel: row.channel,
+          marketplace: row.marketplace,
+          channelSku: row.externalSku,
+          channelProductId: row.externalListingId,  // child ASIN
+          channelPrice: row.channelPrice ?? 0,
+          channelQuantity: row.channelQuantity ?? 0,
           listingStatus: 'ACTIVE',
-          title: row.title ?? undefined,
-          price: row.channelPrice ?? undefined,
-          masterQuantity: row.channelQuantity ?? undefined,
+        },
+        update: {
+          channelProductId: row.externalListingId,
+          channelSku: row.externalSku,
+          channelPrice: row.channelPrice ?? 0,
+          channelQuantity: row.channelQuantity ?? 0,
+          listingStatus: 'ACTIVE',
+          lastSyncedAt: new Date(),
         },
       })
     }
 
+    // ── 3. Mark the reconciliation row as CONFIRMED ───────────────────────
     await tx.listingReconciliation.update({
       where: { id },
       data: {
@@ -398,21 +451,34 @@ export async function listReconRows(opts: ReconListOptions = {}) {
     prisma.listingReconciliation.count({ where }),
   ])
 
-  // Attach product/variation names for UI display
+  // Attach product + variation names for UI display
   const productIds = [...new Set(rows.map(r => r.matchedProductId).filter(Boolean) as string[])]
-  const products =
+  const variationIds = [...new Set(rows.map(r => r.matchedVariationId).filter(Boolean) as string[])]
+
+  const [products, variations] = await Promise.all([
     productIds.length > 0
-      ? await prisma.product.findMany({
+      ? prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, sku: true, name: true },
+          select: { id: true, sku: true, name: true, variationTheme: true },
         })
-      : []
+      : Promise.resolve([]),
+    variationIds.length > 0
+      ? prisma.productVariation.findMany({
+          where: { id: { in: variationIds } },
+          select: { id: true, sku: true, variationAttributes: true },
+        })
+      : Promise.resolve([]),
+  ])
+
   const productMap = new Map(products.map(p => [p.id, p]))
+  const variationMap = new Map(variations.map(v => [v.id, v]))
 
   return {
     rows: rows.map(r => ({
       ...r,
       matchedProduct: r.matchedProductId ? productMap.get(r.matchedProductId) ?? null : null,
+      matchedVariation: r.matchedVariationId ? variationMap.get(r.matchedVariationId) ?? null : null,
+      isVariationChild: !!(r.parentAsin && r.matchedVariationId),
     })),
     total,
     page,

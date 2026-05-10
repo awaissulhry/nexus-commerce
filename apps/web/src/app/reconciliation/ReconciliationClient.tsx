@@ -45,7 +45,9 @@ interface ReconRow {
   importedAt: string | null
   runId: string
   createdAt: string
-  matchedProduct: { id: string; sku: string; name: string } | null
+  matchedProduct: { id: string; sku: string; name: string; variationTheme?: string } | null
+  matchedVariation: { id: string; sku: string; variationAttributes: Record<string, string> | null } | null
+  isVariationChild: boolean
 }
 
 interface ReconPage {
@@ -506,7 +508,17 @@ export default function ReconciliationClient({
                           <div className="font-medium text-gray-800 truncate max-w-[11rem]" title={row.matchedProduct.name}>
                             {row.matchedProduct.name}
                           </div>
-                          <div className="text-gray-400 font-mono">{row.matchedProduct.sku}</div>
+                          {row.matchedVariation && row.matchedVariation.variationAttributes ? (
+                            <div className="text-blue-600 font-mono text-xs">
+                              {Object.entries(row.matchedVariation.variationAttributes as Record<string,string>)
+                                .map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                            </div>
+                          ) : (
+                            <div className="text-gray-400 font-mono">{row.matchedProduct.sku}</div>
+                          )}
+                          {row.isVariationChild && row.parentAsin && (
+                            <div className="text-gray-300 font-mono text-xs">Parent: {row.parentAsin}</div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-gray-400 italic">No match</span>
