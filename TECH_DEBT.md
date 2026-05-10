@@ -863,13 +863,13 @@ Promote to 🔴 when a regression slips past the build gates and into production
 
 ---
 
-## 44. 🟢 Saved views + column reorder/resize on /fulfillment/stock
+## 44. ✅ Saved views + column reorder/resize on /fulfillment/stock — resolved 2026-05-10
 
-**Symptom:** H.9 polish landed density modes, column show/hide, and keyboard shortcuts. Saved views (named filter snapshots) and drag-to-reorder/resize for table columns were deferred — both are substantial scope (saved views needs persistence + a UI flow; reorder/resize needs dnd-kit machinery).
+**Resolution arc:** Three independently-shipped pieces.
 
-**Workaround:** URL state (`view`, `location`, `status`, `search`, `page`) survives reload + share, which covers the most common "remember this filter" use case.
-
-**Proper fix:** When a user explicitly asks. Saved views: add a `UserView` model keyed by user + page + name, store the URL query, surface in a dropdown next to the filter bar. Column reorder: dnd-kit on the column picker dropdown.
+- **Saved views** ✅ — S.18 (localStorage hydrate) + T.28 (server-side persistence via generic `/api/saved-views?surface=stock`). Operator names a snapshot of the current filter+view+columns; restores in one click. Multi-user warehouse staff supported via the saved-view-alerts.routes.ts adjacency.
+- **Column reorder** ✅ — CS.5 wired @dnd-kit/sortable into the column picker; visibleColumns array drives both the picker (drag-to-reorder) AND the table render, so a single source of truth.
+- **Column resize** ✅ — CR.1 (2026-05-10) added a hover-visible resize handle on each `<th>` right edge; mousemove drags within [40, 800] px, double-click resets. Persisted as `stock.columnWidths` in localStorage with hydrate-time validation against the column catalogue.
 
 ---
 
