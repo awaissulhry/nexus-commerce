@@ -667,8 +667,8 @@ export default function Step1Channels({
         if (!marketAvailable) return null
         const key = `AMAZON:${primaryMarketplace}`
         return (
-          <div className="flex items-center justify-between gap-3 px-3 py-2 mb-3 border border-violet-200 dark:border-violet-800 rounded-md bg-violet-50 dark:bg-violet-900/20 text-sm">
-            <div className="text-violet-900 dark:text-violet-200">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2 mb-3 border border-violet-200 dark:border-violet-800 rounded-md bg-violet-50 dark:bg-violet-900/20 text-sm">
+            <div className="text-violet-900 dark:text-violet-200 min-w-0">
               Your primary marketplace is{' '}
               <span className="font-mono font-semibold">{primaryMarketplace}</span>.
               Default-select{' '}

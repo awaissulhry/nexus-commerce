@@ -475,7 +475,7 @@ function DraftForm({
 }) {
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <input
           type="text"
           placeholder="brand (optional)"

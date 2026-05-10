@@ -1366,9 +1366,9 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
           {pendingRows.map((row) => (
             <li
               key={row.id}
-              className="text-sm flex items-center justify-between gap-3 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+              className="text-sm flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
             >
-              <span className="text-slate-700 dark:text-slate-300">
+              <span className="text-slate-700 dark:text-slate-300 break-words min-w-0">
                 Pending —{' '}
                 <span className="font-mono">
                   {new Date(row.scheduledFor).toLocaleString()}
@@ -1377,7 +1377,7 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
               <button
                 type="button"
                 onClick={() => void onCancel(row)}
-                className="text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 text-xs"
+                className="text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 text-xs flex-shrink-0"
               >
                 Cancel
               </button>

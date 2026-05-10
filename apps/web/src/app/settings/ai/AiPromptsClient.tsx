@@ -454,8 +454,8 @@ export default function AiPromptsClient({ initialRows }: Props) {
               key={feature}
               className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden"
             >
-              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-2">
-                <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
+              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                <div className="font-mono text-sm text-slate-900 dark:text-slate-100 break-all min-w-0">
                   {feature}
                 </div>
                 {abVariants >= 2 && (() => {
