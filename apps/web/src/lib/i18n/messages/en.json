@@ -4455,5 +4455,10 @@
   "aplus.validate.summary": "{count} of max {cap} modules · {tier} tier",
   "aplus.validate.blockingTitle": "Blocking ({n})",
   "aplus.validate.warningTitle": "Warnings ({n})",
-  "aplus.validate.cleanRun": "No issues — every check passed."
+  "aplus.validate.cleanRun": "No issues — every check passed.",
+  "aplus.builder.submit": "Submit to Amazon",
+  "aplus.submit.confirm": "Submit this A+ document to {marketplace}? In sandbox mode it's recorded locally as if Amazon accepted it; in live mode it posts to Amazon and counts against your daily quota.",
+  "aplus.submit.success": "Submitted ({mode}) — Amazon document id {id}",
+  "aplus.submit.validationFailed": "Submission blocked — {n} validation issue(s) need fixing first",
+  "aplus.submit.error": "Submission failed — see notes for detail"
 }

@@ -17,6 +17,10 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { validateAplusDocument } from '../services/aplus-validation.service.js'
+import {
+  submitAplusDocument,
+  submissionMode,
+} from '../services/aplus-amazon.service.js'
 
 const VALID_STATUSES = new Set([
   'DRAFT',
@@ -302,6 +306,78 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'module not found' })
       throw err
     }
+  })
+
+  // ── MC.8.9 — Submit to Amazon (sandbox by default) ───────
+
+  fastify.post(
+    '/aplus-content/:id/submit',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const content = await prisma.aPlusContent.findUnique({
+        where: { id },
+        include: { modules: { orderBy: { position: 'asc' } } },
+      })
+      if (!content)
+        return reply.code(404).send({ error: 'A+ content not found' })
+
+      const validation = validateAplusDocument({
+        name: content.name,
+        brand: content.brand,
+        marketplace: content.marketplace,
+        locale: content.locale,
+        modules: content.modules.map((m) => ({
+          type: m.type,
+          payload: (m.payload as Record<string, unknown>) ?? {},
+        })),
+      })
+
+      const submission = await submitAplusDocument(
+        {
+          id: content.id,
+          name: content.name,
+          brand: content.brand,
+          marketplace: content.marketplace,
+          locale: content.locale,
+          modules: content.modules.map((m) => ({
+            type: m.type,
+            payload: (m.payload as Record<string, unknown>) ?? {},
+          })),
+        },
+        validation,
+      )
+
+      // Persist the submission outcome regardless of success — even
+      // a failed submission is useful audit data ("we tried,
+      // Amazon rejected because X"). amazonDocumentId stays
+      // populated forever once set, so a retry overwrites with the
+      // newest id.
+      await prisma.aPlusContent.update({
+        where: { id },
+        data: {
+          status: submission.ok ? 'SUBMITTED' : content.status,
+          amazonDocumentId:
+            submission.amazonDocumentId ?? content.amazonDocumentId,
+          submittedAt: new Date(),
+          submissionPayload: (submission.rawResponse as never) ?? null,
+          notes: submission.error
+            ? `${content.notes ? `${content.notes}\n\n` : ''}[${new Date().toISOString()}] Submission ${submission.mode}: ${submission.error}`
+            : content.notes,
+        },
+      })
+
+      return {
+        ok: submission.ok,
+        mode: submission.mode,
+        amazonDocumentId: submission.amazonDocumentId,
+        validation,
+        error: submission.error,
+      }
+    },
+  )
+
+  fastify.get('/aplus-content/_meta/submission-mode', async () => {
+    return { mode: submissionMode() }
   })
 
   // ── MC.8.8 — Server-side validation pre-flight ───────────

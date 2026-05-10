@@ -4506,5 +4506,10 @@
   "aplus.validate.summary": "{count} di massimo {cap} moduli · tier {tier}",
   "aplus.validate.blockingTitle": "Bloccanti ({n})",
   "aplus.validate.warningTitle": "Avvisi ({n})",
-  "aplus.validate.cleanRun": "Nessun problema — tutti i controlli sono passati."
+  "aplus.validate.cleanRun": "Nessun problema — tutti i controlli sono passati.",
+  "aplus.builder.submit": "Invia ad Amazon",
+  "aplus.submit.confirm": "Inviare questo documento A+ a {marketplace}? In modalità sandbox viene registrato localmente come se Amazon l'avesse accettato; in modalità live viene inviato ad Amazon e conteggiato nella quota giornaliera.",
+  "aplus.submit.success": "Inviato ({mode}) — ID documento Amazon {id}",
+  "aplus.submit.validationFailed": "Invio bloccato — {n} problemi di validazione da risolvere prima",
+  "aplus.submit.error": "Invio fallito — vedi le note per i dettagli"
 }

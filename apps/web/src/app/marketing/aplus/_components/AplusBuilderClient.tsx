@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   Sparkles,
   CheckSquare,
+  Send,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -61,10 +62,65 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
     initial.modules[0]?.id ?? null,
   )
   const [status, setStatus] = useState<AplusStatus>(initial.status)
-  const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status' | 'validate'>(null)
+  const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status' | 'validate' | 'submit'>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [validationOpen, setValidationOpen] = useState(false)
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+
+  const submit = async () => {
+    if (
+      !window.confirm(
+        t('aplus.submit.confirm', {
+          marketplace: initial.marketplace,
+        }),
+      )
+    )
+      return
+    setBusy('submit')
+    try {
+      const res = await fetch(
+        `${apiBase}/api/aplus-content/${encodeURIComponent(initial.id)}/submit`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error(`Submit failed (${res.status})`)
+      const data = (await res.json()) as {
+        ok: boolean
+        mode: 'sandbox' | 'live'
+        amazonDocumentId: string | null
+        validation: ValidationResult
+        error: string | null
+      }
+      if (data.ok) {
+        toast.success(
+          t('aplus.submit.success', {
+            mode: data.mode,
+            id: data.amazonDocumentId ?? '—',
+          }),
+        )
+        router.refresh()
+      } else if (data.validation && !data.validation.ok) {
+        // Surface validation issues via the existing modal so the
+        // operator sees exactly what to fix.
+        setValidationResult(data.validation)
+        setValidationOpen(true)
+        toast.error(
+          t('aplus.submit.validationFailed', {
+            n: data.validation.blocking.length.toString(),
+          }),
+        )
+      } else {
+        toast.error(
+          data.error ?? t('aplus.submit.error'),
+        )
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t('aplus.submit.error'),
+      )
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const runValidation = async () => {
     setBusy('validate')
@@ -340,6 +396,19 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
               <CheckSquare className="w-4 h-4 mr-1" />
             )}
             {t('aplus.builder.validate')}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={submit}
+            disabled={busy !== null || modules.length === 0}
+          >
+            {busy === 'submit' ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4 mr-1" />
+            )}
+            {t('aplus.builder.submit')}
           </Button>
           <select
             value={status}
