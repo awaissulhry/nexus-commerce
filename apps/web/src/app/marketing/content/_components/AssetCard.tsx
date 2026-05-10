@@ -6,10 +6,32 @@
 // drawer); for now they're inert but accessible.
 
 import Image from 'next/image'
-import { Film, Box, FileText, ImageOff, Link2, AlertTriangle } from 'lucide-react'
+import { Film, Box, FileText, ImageOff, Link2, AlertTriangle, Play } from 'lucide-react'
 import { formatBytes } from '../_lib/format'
 import { splitForHighlight } from '../_lib/highlight'
 import type { LibraryItem } from '../_lib/types'
+
+// MC.7.2 — Cloudinary video poster URL. Cloudinary serves a JPEG
+// frame on the same publicId by swapping `/video/upload/` to a
+// thumbnail-sized variant + `.jpg` extension. We grab a frame from
+// 1s in (so_1) so most videos return something more interesting
+// than the first black frame.
+// MC.7.2 — "1:23" duration badge.
+function formatDuration(seconds: number): string {
+  const total = Math.round(seconds)
+  const m = Math.floor(total / 60)
+  const s = total - m * 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function videoPosterUrl(rawUrl: string): string | null {
+  if (!rawUrl.includes('/video/upload/')) return null
+  const tokens = 'so_1,c_fill,g_center,w_400,h_400,q_auto,f_auto'
+  // Inject transform tokens after /upload/, swap extension to .jpg.
+  return rawUrl
+    .replace('/video/upload/', `/video/upload/${tokens}/`)
+    .replace(/\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i, '.jpg$2')
+}
 
 interface Props {
   item: LibraryItem
@@ -89,20 +111,62 @@ export default function AssetCard({
         />
       )}
       <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-800">
-        {isImage ? (
-          <Image
-            src={item.url}
-            alt={item.label}
-            fill
-            sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 50vw"
-            className="object-cover transition-transform group-hover:scale-105"
-            unoptimized
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-400 dark:text-slate-500">
-            <ImageOff className="w-8 h-8" aria-hidden="true" />
-          </div>
-        )}
+        {(() => {
+          if (isImage) {
+            return (
+              <Image
+                src={item.url}
+                alt={item.label}
+                fill
+                sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 50vw"
+                className="object-cover transition-transform group-hover:scale-105"
+                unoptimized
+              />
+            )
+          }
+          // MC.7.2 — render Cloudinary's poster frame for videos so
+          // the grid stays scannable without auto-loading the player.
+          if (item.type === 'video') {
+            const poster = videoPosterUrl(item.url)
+            return (
+              <>
+                {poster ? (
+                  <Image
+                    src={poster}
+                    alt={item.label}
+                    fill
+                    sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 50vw"
+                    className="object-cover transition-transform group-hover:scale-105"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-slate-400 dark:text-slate-500">
+                    <Film className="w-8 h-8" aria-hidden="true" />
+                  </div>
+                )}
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="rounded-full bg-slate-900/60 p-3 backdrop-blur-sm transition-transform group-hover:scale-110">
+                    <Play
+                      className="w-5 h-5 text-white"
+                      fill="white"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+                {item.durationSeconds != null && (
+                  <div className="absolute right-1.5 bottom-1.5 rounded bg-slate-900/80 px-1.5 py-0.5 text-[11px] font-mono font-medium text-white backdrop-blur-sm">
+                    {formatDuration(item.durationSeconds)}
+                  </div>
+                )}
+              </>
+            )
+          }
+          return (
+            <div className="flex h-full w-full items-center justify-center text-slate-400 dark:text-slate-500">
+              <ImageOff className="w-8 h-8" aria-hidden="true" />
+            </div>
+          )
+        })()}
         {item.type !== 'image' && (
           <div className="absolute right-1.5 top-1.5 rounded bg-slate-900/80 px-1.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm flex items-center gap-1">
             <TypeIcon type={item.type} />

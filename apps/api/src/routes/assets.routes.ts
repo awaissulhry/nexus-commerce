@@ -488,6 +488,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       productName: string | null
       role: string | null
       hasQualityWarnings: boolean
+      /// MC.7.2 — surfaced for video tiles to render the duration
+      /// badge without a detail-fetch roundtrip.
+      durationSeconds: number | null
     }
 
     const merged: LibraryItem[] = []
@@ -515,6 +518,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         hasQualityWarnings:
           Array.isArray(meta.qualityWarnings) &&
           meta.qualityWarnings.length > 0,
+        durationSeconds:
+          typeof meta.durationSeconds === 'number'
+            ? (meta.durationSeconds as number)
+            : null,
       })
     }
 
@@ -544,6 +551,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         // upload-time quality check. Always false until W4.7 cuts
         // them into DigitalAsset.
         hasQualityWarnings: false,
+        durationSeconds: null,
       })
     }
 

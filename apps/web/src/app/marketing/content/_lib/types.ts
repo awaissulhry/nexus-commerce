@@ -47,6 +47,9 @@ export interface LibraryItem {
   /// MC.3.4 — true when the asset has any quality warnings persisted.
   /// Lets the card render a badge without fetching the full detail.
   hasQualityWarnings?: boolean
+  /// MC.7.2 — present for video assets so the grid card renders the
+  /// "0:14"-style duration badge without a detail roundtrip.
+  durationSeconds?: number | null
 }
 
 export interface LibraryResponse {
