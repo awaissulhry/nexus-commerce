@@ -18,6 +18,11 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import KpiStrip from './_components/KpiStrip'
 import ContentToolbar, { type ViewMode } from './_components/ContentToolbar'
 import AssetLibrary from './_components/AssetLibrary'
+import FilterSidebar, {
+  EMPTY_FILTER,
+  activeFilterCount,
+  type FilterState,
+} from './_components/FilterSidebar'
 import { formatBytes, formatCount } from './_lib/format'
 import type { LibraryItem, OverviewPayload } from './_lib/types'
 
@@ -37,7 +42,9 @@ export default function ContentHubClient({
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [selected, setSelected] = useState<LibraryItem | null>(null)
+  const filterCount = activeFilterCount(filter)
 
   // Per the audit, ProductImage is the canonical master gallery and
   // DigitalAsset is the forward-compat DAM model. Until the W4.7
@@ -132,19 +139,34 @@ export default function ContentHubClient({
         onSearchChange={setSearch}
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen((prev) => !prev)}
+        activeFilterCount={filterCount}
       />
 
-      <AssetLibrary
-        view={view}
-        search={search}
-        typeFilter={null}
-        sourceFilter={null}
-        apiBase={apiBase}
-        onSelect={(item) =>
-          setSelected((prev) => (prev?.id === item.id ? null : item))
+      <div
+        className={
+          filtersOpen
+            ? 'grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]'
+            : 'block'
         }
-        selectedId={selected?.id ?? null}
-      />
+      >
+        {filtersOpen && (
+          <FilterSidebar
+            filter={filter}
+            onChange={setFilter}
+            onClose={() => setFiltersOpen(false)}
+          />
+        )}
+        <AssetLibrary
+          view={view}
+          search={search}
+          filter={filter}
+          apiBase={apiBase}
+          onSelect={(item) =>
+            setSelected((prev) => (prev?.id === item.id ? null : item))
+          }
+          selectedId={selected?.id ?? null}
+        />
+      </div>
     </div>
   )
 }

@@ -20,6 +20,7 @@ interface Props {
   onSearchChange: (next: string) => void
   filtersOpen: boolean
   onToggleFilters: () => void
+  activeFilterCount?: number
 }
 
 export default function ContentToolbar({
@@ -29,6 +30,7 @@ export default function ContentToolbar({
   onSearchChange,
   filtersOpen,
   onToggleFilters,
+  activeFilterCount = 0,
 }: Props) {
   const { t } = useTranslations()
   const { toast } = useToast()
@@ -55,7 +57,7 @@ export default function ContentToolbar({
       <div className="flex items-center gap-2 flex-wrap">
         {/* Filter toggle */}
         <Button
-          variant={filtersOpen ? 'primary' : 'secondary'}
+          variant={filtersOpen || activeFilterCount > 0 ? 'primary' : 'secondary'}
           size="sm"
           onClick={onToggleFilters}
           aria-pressed={filtersOpen}
@@ -65,6 +67,11 @@ export default function ContentToolbar({
           <span className="hidden sm:inline ml-1">
             {t('marketingContent.toolbar.filters')}
           </span>
+          {activeFilterCount > 0 && (
+            <span className="ml-1 rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold leading-none">
+              {activeFilterCount}
+            </span>
+          )}
         </Button>
 
         {/* View toggle */}

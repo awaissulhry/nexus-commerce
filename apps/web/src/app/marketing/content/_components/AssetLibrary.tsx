@@ -20,15 +20,15 @@ import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import AssetCard from './AssetCard'
 import { formatBytes } from '../_lib/format'
-import type { LibraryItem, LibraryResponse, AssetSource } from '../_lib/types'
+import type { LibraryItem, LibraryResponse } from '../_lib/types'
+import type { FilterState } from './FilterSidebar'
 
 export type ViewMode = 'grid' | 'list'
 
 interface Props {
   view: ViewMode
   search: string
-  typeFilter: string | null
-  sourceFilter: AssetSource | null
+  filter: FilterState
   apiBase: string
   onSelect?: (item: LibraryItem) => void
   selectedId?: string | null
@@ -71,8 +71,7 @@ function useGridCols(scrollerRef: React.RefObject<HTMLDivElement | null>) {
 export default function AssetLibrary({
   view,
   search,
-  typeFilter,
-  sourceFilter,
+  filter,
   apiBase,
   onSelect,
   selectedId,
@@ -91,7 +90,7 @@ export default function AssetLibrary({
       targetPage: number,
       replace: boolean,
       currentSearch: string,
-      currentType: string | null,
+      currentFilter: FilterState,
     ) => {
       const seq = ++requestSeq.current
       setLoading(true)
@@ -101,7 +100,15 @@ export default function AssetLibrary({
         url.searchParams.set('page', String(targetPage))
         url.searchParams.set('pageSize', String(PAGE_SIZE))
         if (currentSearch) url.searchParams.set('search', currentSearch)
-        if (currentType) url.searchParams.set('type', currentType)
+        if (currentFilter.types.length)
+          url.searchParams.set('types', currentFilter.types.join(','))
+        if (currentFilter.sources.length)
+          url.searchParams.set('sources', currentFilter.sources.join(','))
+        if (currentFilter.usage)
+          url.searchParams.set('usage', currentFilter.usage)
+        if (currentFilter.missingAlt) url.searchParams.set('missingAlt', '1')
+        if (currentFilter.dateRange)
+          url.searchParams.set('dateRange', currentFilter.dateRange)
         const res = await fetch(url.toString(), { cache: 'no-store' })
         if (!res.ok)
           throw new Error(`Library API returned ${res.status}`)
@@ -130,15 +137,16 @@ export default function AssetLibrary({
       setItems([])
       setPage(1)
       setHasMore(false)
-      void fetchPage(1, true, search, typeFilter)
+      void fetchPage(1, true, search, filter)
     }, 250)
     return () => clearTimeout(handle)
-  }, [search, typeFilter, fetchPage])
+  }, [search, filter, fetchPage])
 
-  const visibleItems = useMemo(() => {
-    if (!sourceFilter) return items
-    return items.filter((i) => i.source === sourceFilter)
-  }, [items, sourceFilter])
+  // The server already applies every dimension; no client-side filter
+  // pass needed. Keeping the variable for symmetry with the loops
+  // below — when MC.2 introduces saved-views with mixed local/server
+  // filtering this is the seam.
+  const visibleItems = useMemo(() => items, [items])
 
   const scrollerRef = useRef<HTMLDivElement>(null)
   const cols = useGridCols(scrollerRef)
@@ -159,17 +167,8 @@ export default function AssetLibrary({
     if (!virtualItems.length) return
     const last = virtualItems[virtualItems.length - 1]
     if (!last) return
-    if (
-      hasMore &&
-      !loading &&
-      !error &&
-      last.index >= rowCount - 4 &&
-      visibleItems.length === items.length // don't paginate while a
-      // client-side source filter is active; the server doesn't yet
-      // know about the filter (sourceFilter is web-only), so paging
-      // would just append more rows the user has filtered out.
-    ) {
-      void fetchPage(page + 1, false, search, typeFilter)
+    if (hasMore && !loading && !error && last.index >= rowCount - 4) {
+      void fetchPage(page + 1, false, search, filter)
     }
   }, [
     virtualizer,
@@ -177,11 +176,9 @@ export default function AssetLibrary({
     loading,
     error,
     rowCount,
-    visibleItems.length,
-    items.length,
     page,
     search,
-    typeFilter,
+    filter,
     fetchPage,
   ])
 
@@ -196,9 +193,7 @@ export default function AssetLibrary({
         <Button
           variant="secondary"
           size="sm"
-          onClick={() =>
-            fetchPage(1, true, search, typeFilter)
-          }
+          onClick={() => fetchPage(1, true, search, filter)}
         >
           <RefreshCw className="w-4 h-4 mr-1" />
           {t('marketingContent.library.retry')}

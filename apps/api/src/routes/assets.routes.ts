@@ -127,6 +127,11 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/assets/library', async (request) => {
     const q = request.query as {
       type?: string
+      types?: string // comma-separated alt input
+      sources?: string // 'digital_asset,product_image'
+      usage?: string // 'in_use' | 'orphaned'
+      missingAlt?: string // '1' / 'true' to filter
+      dateRange?: string // 'today' | 'last_7d' | 'last_30d'
       search?: string
       page?: string
       pageSize?: string
@@ -136,16 +141,68 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       Math.max(parseInt(q.pageSize ?? '60', 10) || 60, 1),
       200,
     )
-    const typeFilter =
-      q.type && VALID_ASSET_TYPES.has(q.type) ? q.type : null
+    // Accept either ?type=image (legacy) or ?types=image,video. The
+    // multi-value form keeps the URL short when the operator filters
+    // to images-and-videos via the MC.1.3 sidebar.
+    const requestedTypes = new Set<string>()
+    if (q.type && VALID_ASSET_TYPES.has(q.type)) requestedTypes.add(q.type)
+    if (q.types) {
+      for (const v of q.types.split(',').map((s) => s.trim())) {
+        if (VALID_ASSET_TYPES.has(v)) requestedTypes.add(v)
+      }
+    }
+    const typeFilter = requestedTypes.size > 0 ? [...requestedTypes] : null
+
+    const sourceFilter = q.sources
+      ? new Set(
+          q.sources
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => s === 'digital_asset' || s === 'product_image'),
+        )
+      : null
+
+    const usageFilter =
+      q.usage === 'in_use' || q.usage === 'orphaned' ? q.usage : null
+    const missingAlt = q.missingAlt === '1' || q.missingAlt === 'true'
+
+    let dateFrom: Date | null = null
+    if (q.dateRange) {
+      const now = Date.now()
+      const day = 24 * 60 * 60 * 1000
+      if (q.dateRange === 'today')
+        dateFrom = new Date(now - day)
+      else if (q.dateRange === 'last_7d')
+        dateFrom = new Date(now - 7 * day)
+      else if (q.dateRange === 'last_30d')
+        dateFrom = new Date(now - 30 * day)
+    }
+
     const search = q.search?.trim() || null
 
-    // Step 1 — count + fetch from each source. Skip ProductImage if
-    // type is set to anything other than 'image'.
-    const includeProductImages = !typeFilter || typeFilter === 'image'
+    // Step 1 — figure out which sources are eligible.
+    //   - `sources` filter narrows explicitly.
+    //   - `type` filter implicitly excludes ProductImage when the
+    //     operator picks anything other than 'image'.
+    //   - `missingAlt` only matches ProductImage rows today (the
+    //     DigitalAsset alt lives in metadata.alt, an unindexed JSON
+    //     path; revisit when MC.2 gives DigitalAsset a dedicated
+    //     altText column).
+    const sourceAllowsDigitalAsset =
+      !sourceFilter || sourceFilter.has('digital_asset')
+    const sourceAllowsProductImage =
+      !sourceFilter || sourceFilter.has('product_image')
+    const typeAllowsProductImage =
+      !typeFilter || typeFilter.includes('image')
+    const includeDigitalAssets = sourceAllowsDigitalAsset && !missingAlt
+    const includeProductImages =
+      sourceAllowsProductImage && typeAllowsProductImage
 
     const daWhere: Record<string, unknown> = {}
-    if (typeFilter) daWhere.type = typeFilter
+    if (typeFilter) daWhere.type = { in: typeFilter }
+    if (dateFrom) daWhere.createdAt = { gte: dateFrom }
+    if (usageFilter === 'in_use') daWhere.usages = { some: {} }
+    if (usageFilter === 'orphaned') daWhere.usages = { none: {} }
     if (search) {
       daWhere.OR = [
         { label: { contains: search, mode: 'insensitive' } },
@@ -155,20 +212,33 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const piWhere: Record<string, unknown> = {}
+    if (dateFrom) piWhere.createdAt = { gte: dateFrom }
+    if (missingAlt) piWhere.OR = [{ alt: null }, { alt: '' }]
+    if (usageFilter === 'orphaned') {
+      // ProductImage rows are always attached to a product, so the
+      // orphaned filter rules them out entirely.
+      piWhere.id = '__never__'
+    }
     if (search) {
-      piWhere.OR = [
+      const searchOr = [
         { alt: { contains: search, mode: 'insensitive' } },
-        // ProductImage has no filename column; surface the publicId
-        // (Cloudinary key — readable enough for operator search) and
-        // the linked product name.
         { publicId: { contains: search, mode: 'insensitive' } },
         { product: { name: { contains: search, mode: 'insensitive' } } },
         { product: { sku: { contains: search, mode: 'insensitive' } } },
       ]
+      if (piWhere.OR) {
+        // missingAlt already set OR; combine via AND so both apply.
+        piWhere.AND = [{ OR: piWhere.OR }, { OR: searchOr }]
+        delete piWhere.OR
+      } else {
+        piWhere.OR = searchOr
+      }
     }
 
     const [daTotal, piTotal] = await Promise.all([
-      prisma.digitalAsset.count({ where: daWhere }),
+      includeDigitalAssets
+        ? prisma.digitalAsset.count({ where: daWhere })
+        : Promise.resolve(0),
       includeProductImages
         ? prisma.productImage.count({ where: piWhere })
         : Promise.resolve(0),
@@ -183,12 +253,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     const fetchLimit = Math.min(page * pageSize, 1000)
 
     const [daRows, piRows] = await Promise.all([
-      prisma.digitalAsset.findMany({
-        where: daWhere,
-        orderBy: { createdAt: 'desc' },
-        take: fetchLimit,
-        include: { _count: { select: { usages: true } } },
-      }),
+      includeDigitalAssets
+        ? prisma.digitalAsset.findMany({
+            where: daWhere,
+            orderBy: { createdAt: 'desc' },
+            take: fetchLimit,
+            include: { _count: { select: { usages: true } } },
+          })
+        : Promise.resolve([] as never[]),
       includeProductImages
         ? prisma.productImage.findMany({
             where: piWhere,
