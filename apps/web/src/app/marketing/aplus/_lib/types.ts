@@ -39,6 +39,60 @@ export interface AplusContentRow {
   }
 }
 
+export interface AplusModuleRow {
+  id: string
+  type: string
+  position: number
+  payload: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AplusAsinRow {
+  asin: string
+  attachedAt: string
+  product: {
+    id: string
+    sku: string
+    name: string
+  } | null
+}
+
+export interface AplusLocalizationRef {
+  id: string
+  locale: string
+  marketplace: string
+  status: AplusStatus
+  updatedAt: string
+}
+
+export interface AplusMasterRef {
+  id: string
+  locale: string
+  marketplace: string
+  status: AplusStatus
+}
+
+export interface AplusDetail {
+  id: string
+  name: string
+  brand: string | null
+  marketplace: string
+  locale: string
+  status: AplusStatus
+  masterContentId: string | null
+  amazonDocumentId: string | null
+  submittedAt: string | null
+  publishedAt: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  modules: AplusModuleRow[]
+  asinAttachments: AplusAsinRow[]
+  localizations: AplusLocalizationRef[]
+  master: AplusMasterRef | null
+}
+
 // Common Amazon marketplaces — feeds the create-form picker. Add
 // additional locales here as the operator needs them; backend
 // accepts any string so this is purely a UX convenience list.

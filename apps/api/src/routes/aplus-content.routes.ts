@@ -213,6 +213,133 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  // ── MC.8.3 — Modules CRUD + reorder ───────────────────────
+
+  // Create a module appended to the end. Position is computed
+  // server-side so concurrent appends from two browser tabs don't
+  // collide (last-write-wins on the count is fine — both rows end
+  // up with consecutive positions).
+  fastify.post('/aplus-content/:id/modules', async (request, reply) => {
+    const { id: contentId } = request.params as { id: string }
+    const body = request.body as { type?: string; payload?: unknown }
+    if (!body.type?.trim())
+      return reply.code(400).send({ error: 'type is required' })
+
+    const content = await prisma.aPlusContent.findUnique({
+      where: { id: contentId },
+      select: { id: true },
+    })
+    if (!content)
+      return reply.code(404).send({ error: 'A+ content not found' })
+
+    const existingCount = await prisma.aPlusModule.count({
+      where: { contentId },
+    })
+
+    const module = await prisma.aPlusModule.create({
+      data: {
+        contentId,
+        type: body.type,
+        position: existingCount,
+        // Default to {} so every module row is queryable JSON; the
+        // builder fills in the type-specific shape on first edit.
+        payload: (body.payload as never) ?? {},
+      },
+    })
+    return reply.code(201).send({ module })
+  })
+
+  fastify.patch('/aplus-modules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { type?: string; payload?: unknown }
+    const data: Record<string, unknown> = {}
+    if (body.type !== undefined) {
+      if (!body.type.trim())
+        return reply.code(400).send({ error: 'type cannot be empty' })
+      data.type = body.type
+    }
+    if (body.payload !== undefined) {
+      data.payload = (body.payload as never) ?? {}
+    }
+    if (Object.keys(data).length === 0)
+      return reply.code(400).send({ error: 'no mutable fields supplied' })
+    try {
+      const module = await prisma.aPlusModule.update({
+        where: { id },
+        data,
+      })
+      return { module }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'module not found' })
+      throw err
+    }
+  })
+
+  fastify.delete('/aplus-modules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      // Capture the deleted module's contentId + position so we can
+      // re-pack the remaining siblings without leaving a hole. The
+      // builder treats positions as 0..n-1 contiguous; gaps would
+      // confuse drag-reorder math.
+      const deleted = await prisma.aPlusModule.delete({
+        where: { id },
+        select: { contentId: true, position: true },
+      })
+      await prisma.aPlusModule.updateMany({
+        where: {
+          contentId: deleted.contentId,
+          position: { gt: deleted.position },
+        },
+        data: { position: { decrement: 1 } },
+      })
+      return { ok: true, id }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'module not found' })
+      throw err
+    }
+  })
+
+  // Bulk reorder. Body: { order: [{ id, position }] }. Caller sends
+  // the complete new sequence (matches ProductImage reorder pattern
+  // from W8.1). Server validates that every id belongs to the
+  // referenced content row, then applies in a transaction so a
+  // partial failure doesn't leave half-reordered rows.
+  fastify.post(
+    '/aplus-content/:id/modules/reorder',
+    async (request, reply) => {
+      const { id: contentId } = request.params as { id: string }
+      const body = request.body as {
+        order?: Array<{ id: string; position: number }>
+      }
+      const order = body.order
+      if (!Array.isArray(order) || order.length === 0)
+        return reply.code(400).send({ error: 'order array is required' })
+
+      const owned = await prisma.aPlusModule.findMany({
+        where: { contentId },
+        select: { id: true },
+      })
+      const ownedSet = new Set(owned.map((r) => r.id))
+      if (order.some((row) => !ownedSet.has(row.id)))
+        return reply
+          .code(400)
+          .send({ error: 'order contains modules from another content row' })
+
+      await prisma.$transaction(
+        order.map((row) =>
+          prisma.aPlusModule.update({
+            where: { id: row.id },
+            data: { position: row.position },
+          }),
+        ),
+      )
+      return { updated: order.length }
+    },
+  )
 }
 
 export default aPlusContentRoutes
