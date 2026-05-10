@@ -1622,46 +1622,47 @@ function ListingSetupCard({
     <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
         {/* Product type */}
-        <div className="space-y-1 md:col-span-2">
+        <div className="space-y-1">
           <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {channel} product type &amp; category
+            {channel} product type
           </label>
-
-          {isAmazon ? (
-            <AmazonCategoryPicker
-              marketplace={marketplace}
-              productType={productType}
-              masterProductType={masterProductType}
-              categoryPath={categoryPath}
-              categoryPathLoading={categoryPathLoading}
-              onSelect={(pt, path, nodes) => {
-                onChange('productType', pt)
-                setCategoryPath(path)
-                setBrowseNodes(nodes)
-                setBrowseNodesInput(nodes.join(', '))
-                void saveBrowseNodes(nodes, path)
-              }}
-            />
-          ) : (
-            <>
-              <ProductTypePicker
-                channel={pickerChannel}
-                marketplace={marketplace}
-                value={productType}
-                onChange={(v) => onChange('productType', v)}
-                placeholder={
-                  masterProductType
-                    ? `Inherits master: ${masterProductType}`
-                    : `Pick a ${channel} product type`
-                }
-              />
+          <ProductTypePicker
+            channel={pickerChannel}
+            marketplace={marketplace}
+            value={productType}
+            onChange={(v) => {
+              onChange('productType', v)
+              setCategoryPath(null)
+              setBrowseNodes([])
+              setBrowseNodesInput('')
+            }}
+            placeholder={
+              masterProductType
+                ? `Inherits master: ${masterProductType}`
+                : `Pick a ${channel} product type`
+            }
+          />
+          {/* Category navigation path — auto-fetched or from detection */}
+          <div className="min-h-[1rem]">
+            {categoryPathLoading ? (
+              <p className="text-xs text-slate-400 italic">Fetching category…</p>
+            ) : categoryPath ? (
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed">
+                {categoryPath.split('›').map((part, i, arr) => (
+                  <span key={i}>
+                    <span>{part.trim()}</span>
+                    {i < arr.length - 1 && <span className="mx-1 text-slate-400">›</span>}
+                  </span>
+                ))}
+              </p>
+            ) : (
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {inheriting
-                  ? 'Using the master product type. Override here if this listing maps to a different category.'
-                  : 'Per-listing override active — schema fields reflect this type.'}
+                  ? 'Inheriting master type — detect below to see category path.'
+                  : 'Detect below to confirm the category path.'}
               </p>
-            </>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Variation theme */}
@@ -1808,197 +1809,3 @@ function ListingSetupCard({
   )
 }
 
-// ── AmazonCategoryPicker ──────────────────────────────────────────────
-// Full category search matching Amazon Seller Central's "Choose product type"
-// flow: type a keyword → see matching category paths → click Select.
-interface CategorySuggestion {
-  productType: string
-  pathParts: string[]
-  browseNodes: number[]
-  count: number
-}
-
-function AmazonCategoryPicker({
-  marketplace,
-  productType,
-  masterProductType,
-  categoryPath,
-  categoryPathLoading,
-  onSelect,
-}: {
-  marketplace: string
-  productType: string
-  masterProductType: string
-  categoryPath: string | null
-  categoryPathLoading: boolean
-  onSelect: (productType: string, categoryPath: string, browseNodes: number[]) => void
-}) {
-  const [keyword, setKeyword] = useState('')
-  const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([])
-  const [searching, setSearching] = useState(false)
-  const [searched, setSearched] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
-  const [showSearch, setShowSearch] = useState(false)
-  const debounceRef = useRef<number | null>(null)
-
-  const effectiveType = productType || masterProductType
-
-  async function search(kw: string) {
-    if (!kw.trim()) { setSuggestions([]); setSearched(false); setSearchError(null); return }
-    setSearching(true)
-    setSearchError(null)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/categories/suggestions?channel=AMAZON&marketplace=${marketplace}&keyword=${encodeURIComponent(kw)}`,
-      )
-      const json = await res.json()
-      if (!res.ok) {
-        setSearchError(json?.error ?? `HTTP ${res.status}`)
-        setSuggestions([])
-        setSearched(true)
-        return
-      }
-      setSuggestions(Array.isArray(json.suggestions) ? json.suggestions : [])
-      setSearched(true)
-    } catch {
-      setSuggestions([])
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  function handleKeywordChange(v: string) {
-    setKeyword(v)
-    if (debounceRef.current) window.clearTimeout(debounceRef.current)
-    debounceRef.current = window.setTimeout(() => search(v), 600)
-  }
-
-  return (
-    <div className="space-y-2">
-      {/* Current selection */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          {effectiveType ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-mono font-medium text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                {effectiveType}
-              </span>
-              {!productType && masterProductType && (
-                <span className="text-xs text-slate-400">(inherits master)</span>
-              )}
-            </div>
-          ) : (
-            <span className="text-sm text-slate-400 italic">No product type selected</span>
-          )}
-
-          {/* Category breadcrumb */}
-          <div className="mt-1 min-h-[1rem]">
-            {categoryPathLoading ? (
-              <p className="text-xs text-slate-400 italic">Fetching category…</p>
-            ) : categoryPath ? (
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed">
-                {categoryPath.split('›').map((part, i, arr) => (
-                  <span key={i}>
-                    <span>{part.trim()}</span>
-                    {i < arr.length - 1 && (
-                      <span className="mx-1 text-slate-400 dark:text-slate-600">›</span>
-                    )}
-                  </span>
-                ))}
-              </p>
-            ) : effectiveType ? (
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                Search below to confirm the correct category path.
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => { setShowSearch((s) => !s); if (!showSearch) setKeyword('') }}
-          className="text-xs px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap flex-shrink-0"
-        >
-          {showSearch ? 'Hide search' : 'Browse categories'}
-        </button>
-      </div>
-
-      {/* Category search */}
-      {showSearch && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={keyword}
-                onChange={(e) => handleKeywordChange(e.target.value)}
-                placeholder="Search categories… e.g. moto jacket"
-                autoFocus
-                className="flex-1 h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
-              />
-              {searching && <span className="text-xs text-slate-400">Searching…</span>}
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
-              Type a product keyword to see matching Amazon categories — same as Seller Central.
-            </p>
-          </div>
-
-          {/* Results / errors */}
-          {searchError && (
-            <div className="px-3 py-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900">
-              <strong>Error:</strong> {searchError}
-            </div>
-          )}
-          {searched && !searchError && suggestions.length === 0 && (
-            <div className="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-              No categories found for "{keyword}". Try a different keyword.
-            </div>
-          )}
-
-          {suggestions.length > 0 && (
-            <div className="divide-y divide-slate-100 dark:divide-slate-700/60 max-h-96 overflow-y-auto">
-              {suggestions.map((s, i) => (
-                <div key={i} className="px-3 py-2.5 flex items-start gap-3 hover:bg-white dark:hover:bg-slate-800 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
-                        {s.productType}
-                      </span>
-                    </div>
-                    <div className="flex items-center flex-wrap gap-x-1 gap-y-0.5">
-                      {s.pathParts.map((part, pi) => (
-                        <span key={pi} className="flex items-center gap-1">
-                          <span className="text-sm text-slate-700 dark:text-slate-300">{part}</span>
-                          {pi < s.pathParts.length - 1 && (
-                            <span className="text-slate-400 dark:text-slate-600 text-xs">›</span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const path = s.pathParts.join(' › ')
-                      onSelect(s.productType, path, s.browseNodes)
-                      setShowSearch(false)
-                    }}
-                    className="flex-shrink-0 text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 font-medium"
-                  >
-                    Select
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!searched && !searching && (
-            <div className="px-3 py-3 text-xs text-slate-400 dark:text-slate-500">
-              {suggestions.length === 0 ? 'Start typing to search Amazon categories.' : ''}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
