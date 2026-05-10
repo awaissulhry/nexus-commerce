@@ -46,6 +46,7 @@ import {
   Moon,
   Monitor,
   GitCompare,
+  PackagePlus,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -430,6 +431,12 @@ export default function AppSidebar() {
             expanded={expandedChannels.has('EBAY')}
             onToggle={() => toggleChannel('EBAY')}
             pathname={pathname}
+          />
+          <NavItem
+            href="/listings/ebay/gaps"
+            icon={PackagePlus}
+            label="eBay Gaps (P3)"
+            active={pathname === '/listings/ebay/gaps'}
           />
           <NavItem
             href="/listings/shopify"

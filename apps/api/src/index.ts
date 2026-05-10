@@ -108,6 +108,7 @@ import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import reconciliationRoutes from "./routes/reconciliation.routes.js";
+import ebayPhase3Routes from "./routes/ebay-phase3.routes.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
@@ -483,6 +484,7 @@ app.register(notificationsRoutes, { prefix: '/api' });
 app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });
+app.register(ebayPhase3Routes, { prefix: '/api' });
 // L.0d — BullMQ admin endpoints. Routes declare full /api/monitoring/...
 // paths inline, so register without a prefix. Coexists with
 // monitoringRoutes (which uses /monitoring/* without /api/).
