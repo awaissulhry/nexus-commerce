@@ -19,6 +19,13 @@ export type OperationType =
   | 'ATTRIBUTE_UPDATE'
   | 'LISTING_SYNC'
   | 'MARKETPLACE_OVERRIDE_UPDATE'
+  // W11/W12 operator-facing surfaces. Mirror BulkActionType in
+  // apps/api/src/services/bulk-action.service.ts; isKnownBulkActionType
+  // there enforces the runtime allowlist.
+  | 'AI_TRANSLATE_PRODUCT'
+  | 'AI_SEO_REGEN'
+  | 'AI_ALT_TEXT'
+  | 'CHANNEL_BATCH'
 
 export interface OperationConfig {
   type: OperationType

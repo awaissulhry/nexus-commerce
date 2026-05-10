@@ -419,4 +419,244 @@ export const OPERATIONS: OperationConfig[] = [
       )
     },
   },
+  // ── W11 / W12 — AI + channel-batch operator surfaces ─────────────────
+  // These wire the bulk-operations modal to the action handlers added
+  // in W11.1-3 (AI translate / SEO regen / alt-text) and W12.4
+  // (CHANNEL_BATCH). Each entry's payload shape mirrors what the
+  // server-side handler validates — keep them in lockstep when adding
+  // new fields.
+  {
+    type: 'AI_TRANSLATE_PRODUCT',
+    label: 'AI · Translate copy',
+    description:
+      'Translate product name / description / bullet points into one or more locales. Skips operator-reviewed translations by default.',
+    initialPayload: {
+      targetLanguages: ['it'],
+      fields: ['name', 'description', 'bulletPoints'],
+      skipReviewed: true,
+    },
+    isPayloadValid: (p) =>
+      Array.isArray(p.targetLanguages) &&
+      (p.targetLanguages as unknown[]).length > 0 &&
+      Array.isArray(p.fields) &&
+      (p.fields as unknown[]).length > 0,
+    renderParams: (p, set) => {
+      const langs = (p.targetLanguages as string[] | undefined) ?? []
+      const fields =
+        (p.fields as string[] | undefined) ?? ['name', 'description', 'bulletPoints']
+      const skipReviewed = p.skipReviewed !== false
+      const toggleLang = (l: string) => {
+        const next = langs.includes(l)
+          ? langs.filter((x) => x !== l)
+          : [...langs, l]
+        set({ ...p, targetLanguages: next })
+      }
+      const toggleField = (f: string) => {
+        const next = fields.includes(f)
+          ? fields.filter((x) => x !== f)
+          : [...fields, f]
+        set({ ...p, fields: next })
+      }
+      return (
+        <>
+          <Field label="Target languages (ISO 639-1)">
+            <div className="flex flex-wrap gap-1.5">
+              {['it', 'de', 'fr', 'es', 'en', 'nl', 'sv', 'pl'].map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => toggleLang(l)}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    langs.includes(l)
+                      ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                  aria-pressed={langs.includes(l)}
+                >
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Fields to translate">
+            <div className="flex flex-wrap gap-1.5">
+              {(['name', 'description', 'bulletPoints'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => toggleField(f)}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    fields.includes(f)
+                      ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                  aria-pressed={fields.includes(f)}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <BoolField
+            label="Skip already-reviewed translations"
+            field="skipReviewed"
+            payload={p}
+            onToggle={() => set({ ...p, skipReviewed: !skipReviewed })}
+            onChange={(v) => set({ ...p, skipReviewed: v })}
+          />
+        </>
+      )
+    },
+  },
+  {
+    type: 'AI_SEO_REGEN',
+    label: 'AI · Regenerate SEO',
+    description:
+      'Rewrite metaTitle / metaDescription / og pair per locale. Operator-set urlHandle / canonicalUrl are never touched.',
+    initialPayload: { locales: ['en'] },
+    isPayloadValid: (p) =>
+      Array.isArray(p.locales) && (p.locales as unknown[]).length > 0,
+    renderParams: (p, set) => {
+      const locales = (p.locales as string[] | undefined) ?? []
+      const toggle = (l: string) => {
+        const next = locales.includes(l)
+          ? locales.filter((x) => x !== l)
+          : [...locales, l]
+        set({ ...p, locales: next })
+      }
+      return (
+        <Field label="Locales (BCP 47)">
+          <div className="flex flex-wrap gap-1.5">
+            {['en', 'it', 'de', 'fr', 'es', 'nl'].map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => toggle(l)}
+                className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                  locales.includes(l)
+                    ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                }`}
+                aria-pressed={locales.includes(l)}
+              >
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </Field>
+      )
+    },
+  },
+  {
+    type: 'AI_ALT_TEXT',
+    label: 'AI · Generate alt text',
+    description:
+      'Write accessibility-grade alt for product images. Skips images that already have alt by default.',
+    initialPayload: { onlyEmpty: true, locale: 'en' },
+    isPayloadValid: (p) =>
+      typeof p.locale === 'string' &&
+      /^[a-z]{2}(-[a-z0-9]{2,8})?$/.test(p.locale as string),
+    renderParams: (p, set) => {
+      const locale = (p.locale as string) ?? 'en'
+      const onlyEmpty = p.onlyEmpty !== false
+      return (
+        <>
+          <Field label="Locale">
+            <div className="flex flex-wrap gap-1.5">
+              {['en', 'it', 'de', 'fr', 'es'].map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => set({ ...p, locale: l })}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    locale === l
+                      ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <BoolField
+            label="Only generate when alt is empty"
+            field="onlyEmpty"
+            payload={p}
+            onToggle={() => set({ ...p, onlyEmpty: !onlyEmpty })}
+            onChange={(v) => set({ ...p, onlyEmpty: v })}
+          />
+        </>
+      )
+    },
+  },
+  {
+    type: 'CHANNEL_BATCH',
+    label: 'Channel batch — price / stock push',
+    description:
+      'Push price or stock to AMAZON / EBAY / SHOPIFY through the W12 batch service (JSON_LISTINGS_FEED, bulkOperationRunMutation, parallel-with-retry).',
+    initialPayload: { channel: 'AMAZON', operation: 'price' },
+    isPayloadValid: (p) =>
+      (p.channel === 'AMAZON' || p.channel === 'EBAY' || p.channel === 'SHOPIFY') &&
+      (p.operation === 'price' || p.operation === 'stock'),
+    renderParams: (p, set) => {
+      const channel = (p.channel as string) ?? 'AMAZON'
+      const operation = (p.operation as string) ?? 'price'
+      const marketplace = (p.marketplace as string | undefined) ?? ''
+      return (
+        <>
+          <Field label="Channel">
+            <div className="flex gap-1.5">
+              {(['AMAZON', 'EBAY', 'SHOPIFY'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => set({ ...p, channel: c })}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    channel === c
+                      ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Operation">
+            <div className="flex gap-1.5">
+              {(['price', 'stock'] as const).map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => set({ ...p, operation: o })}
+                  className={`h-7 px-2.5 text-sm rounded border transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    operation === o
+                      ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Marketplace (optional — Amazon: IT/DE/FR/ES/NL)">
+            <input
+              type="text"
+              value={marketplace}
+              onChange={(e) =>
+                set({
+                  ...p,
+                  marketplace: e.target.value.trim() || undefined,
+                })
+              }
+              placeholder="IT"
+              className={inputCls}
+            />
+          </Field>
+        </>
+      )
+    },
+  },
 ]
