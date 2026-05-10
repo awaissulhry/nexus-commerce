@@ -4729,5 +4729,9 @@
   "automation.presets.applied": "\"{name}\" added — review and enable from the rule list",
   "automation.presets.appliedNeedsEdit": "\"{name}\" added — edit the placeholder fields, then enable",
   "automation.presets.applyError": "Couldn't apply the preset — try again",
-  "automation.presets.needsEditBadge": "Needs edit"
+  "automation.presets.needsEditBadge": "Needs edit",
+  "automation.historyBtn": "History",
+  "automation.fireNowAria": "Run now (manual fire)",
+  "automation.firedToast": "Ran \"{name}\" — status: {status}",
+  "automation.fireError": "Couldn't fire the rule — try again"
 }

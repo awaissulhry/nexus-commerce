@@ -8,6 +8,7 @@
 // → action config → save.
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   Zap,
   Plus,
@@ -20,6 +21,7 @@ import {
   Power,
   Play,
   LayoutTemplate,
+  History,
 } from 'lucide-react'
 // Power is used by the editor's trigger Section icon — keep it imported
 // even though the eslint linter won't see usage in the parent component.
@@ -94,6 +96,30 @@ export default function AutomationListClient({
     }
   }
 
+  const fireNow = async (rule: RuleRow) => {
+    try {
+      const res = await fetch(
+        `${apiBase}/api/marketing-automation/rules/${encodeURIComponent(rule.id)}/run`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error(`Run failed (${res.status})`)
+      const data = (await res.json()) as { status: string; reason: string }
+      toast({
+        title: t('automation.firedToast', {
+          name: rule.name,
+          status: data.status,
+        }),
+        description: data.reason,
+        tone: 'info',
+      })
+      await refresh()
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t('automation.fireError'),
+      )
+    }
+  }
+
   const remove = async (rule: RuleRow) => {
     if (
       !window.confirm(
@@ -134,6 +160,15 @@ export default function AutomationListClient({
               <RefreshCw className="w-4 h-4 mr-1" />
               {t('common.refresh')}
             </Button>
+            <Link
+              href="/marketing/automation/history"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+            >
+              <History className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {t('automation.historyBtn')}
+              </span>
+            </Link>
             <Button
               variant="secondary"
               size="sm"
@@ -204,6 +239,7 @@ export default function AutomationListClient({
               onToggle={() => toggleEnabled(rule)}
               onEdit={() => setEditing(rule)}
               onDelete={() => remove(rule)}
+              onFire={() => fireNow(rule)}
             />
           ))}
         </ul>
@@ -243,11 +279,13 @@ function RuleRowCard({
   onToggle,
   onEdit,
   onDelete,
+  onFire,
 }: {
   rule: RuleRow
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
+  onFire: () => void
 }) {
   const { t } = useTranslations()
   const triggerSpec = getTriggerSpec(rule.trigger)
@@ -328,6 +366,15 @@ function RuleRowCard({
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onFire}
+            aria-label={t('automation.fireNowAria')}
+            title={t('automation.fireNowAria')}
+            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800 dark:hover:text-blue-400"
+          >
+            <Play className="w-3.5 h-3.5" />
+          </button>
           <button
             type="button"
             onClick={onEdit}

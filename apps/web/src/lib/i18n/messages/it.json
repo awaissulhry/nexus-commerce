@@ -4780,5 +4780,9 @@
   "automation.presets.applied": "\"{name}\" aggiunta — rivedi e attiva dalla lista regole",
   "automation.presets.appliedNeedsEdit": "\"{name}\" aggiunta — modifica i campi segnaposto, poi attiva",
   "automation.presets.applyError": "Impossibile applicare il preset — riprova",
-  "automation.presets.needsEditBadge": "Da modificare"
+  "automation.presets.needsEditBadge": "Da modificare",
+  "automation.historyBtn": "Cronologia",
+  "automation.fireNowAria": "Esegui ora (manuale)",
+  "automation.firedToast": "Eseguita \"{name}\" — stato: {status}",
+  "automation.fireError": "Impossibile eseguire la regola — riprova"
 }

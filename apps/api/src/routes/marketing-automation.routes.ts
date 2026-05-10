@@ -163,6 +163,102 @@ const marketingAutomationRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── MC.11.3 — Manual run + execution history ──────────────
+
+  // Manual fire. Creates an AutomationRuleExecution row recording
+  // what the executor *would* do; the AI-action gating means rules
+  // with deferred actions log status='deferred' instead of
+  // 'completed'. Deterministic actions today still log 'deferred'
+  // because the executor itself is MC.11-followup work — this
+  // endpoint produces audit rows so the history view is meaningful
+  // before the executor lands.
+  fastify.post(
+    '/marketing-automation/rules/:id/run',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const rule = await prisma.automationRule.findUnique({
+        where: { id },
+      })
+      if (!rule || rule.domain !== DOMAIN)
+        return reply.code(404).send({ error: 'rule not found' })
+
+      const startedAt = new Date()
+      const actions = (rule.actions as Array<{ type?: string }>) ?? []
+      const aiAction = actions[0]?.type
+      const aiSet = new Set([
+        'auto_alt_text',
+        'auto_tag',
+        'translate_caption',
+        'background_removal',
+        'generate_lifestyle',
+      ])
+      const status = aiAction && aiSet.has(aiAction) ? 'DEFERRED' : 'DEFERRED'
+      const reason =
+        aiAction && aiSet.has(aiAction)
+          ? 'AI integration paused per engagement directive (docs/MC-AI-DEFERRED.md)'
+          : 'Executor wiring pending (MC.11-followup)'
+
+      const exec = await prisma.automationRuleExecution.create({
+        data: {
+          ruleId: id,
+          startedAt,
+          finishedAt: new Date(),
+          status,
+          dryRun: rule.dryRun,
+          triggerData: { source: 'manual', firedAt: startedAt.toISOString() },
+          actionResults: [
+            {
+              type: aiAction ?? 'noop',
+              ok: false,
+              deferred: true,
+              reason,
+            },
+          ] as never,
+          errorMessage: null,
+          durationMs:
+            new Date().getTime() - startedAt.getTime(),
+        },
+      })
+
+      // Touch counters so the rule list shows it ran.
+      await prisma.automationRule.update({
+        where: { id },
+        data: {
+          executionCount: { increment: 1 },
+          lastExecutedAt: new Date(),
+        },
+      })
+
+      return reply.code(201).send({ execution: exec, status, reason })
+    },
+  )
+
+  fastify.get(
+    '/marketing-automation/executions',
+    async (request) => {
+      // Cross-rule history view — defaults to recent 100. Restricts
+      // to marketing-content domain by joining through the rule.
+      const q = request.query as { limit?: string; status?: string }
+      const limit = Math.min(
+        Math.max(parseInt(q.limit ?? '100', 10) || 100, 1),
+        500,
+      )
+      const where: Record<string, unknown> = {
+        rule: { domain: DOMAIN },
+      }
+      if (q.status) where.status = q.status
+      const executions = await prisma.automationRuleExecution.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        take: limit,
+        include: {
+          rule: { select: { id: true, name: true } },
+        },
+      })
+      return { executions }
+    },
+  )
+
   fastify.delete(
     '/marketing-automation/rules/:id',
     async (request, reply) => {
