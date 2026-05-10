@@ -240,7 +240,7 @@ export default function Step3ProductType({
 
   if (channels.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto py-12 px-6 text-center">
+      <div className="max-w-2xl mx-auto py-6 md:py-12 px-3 md:px-6 text-center">
         <p className="text-md text-slate-600 dark:text-slate-400">
           Pick channels in Step 1 first.
         </p>
@@ -249,7 +249,7 @@ export default function Step3ProductType({
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6">
+    <div className="max-w-3xl mx-auto py-4 md:py-10 px-3 md:px-6">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Product Type

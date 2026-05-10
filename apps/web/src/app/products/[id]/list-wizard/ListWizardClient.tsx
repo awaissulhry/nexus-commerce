@@ -700,7 +700,7 @@ function NeedsChannelsBlock({
 }) {
   const { t } = useTranslations()
   return (
-    <div className="max-w-xl mx-auto py-12 px-6">
+    <div className="max-w-xl mx-auto py-6 md:py-12 px-3 md:px-6">
       <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-4 text-center">
         <h3 className="text-lg font-semibold text-amber-900">
           {t('listWizard.client.needsChannelsTitle')}

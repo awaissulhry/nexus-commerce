@@ -391,7 +391,7 @@ export default function Step1Channels({
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto py-12 px-6 text-center">
+      <div className="max-w-3xl mx-auto py-6 md:py-12 px-3 md:px-6 text-center">
         <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400 dark:text-slate-500" />
         <p className="mt-2 text-base text-slate-500 dark:text-slate-400">
           Loading channel connections…
@@ -402,7 +402,7 @@ export default function Step1Channels({
 
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto py-12 px-6">
+      <div className="max-w-2xl mx-auto py-6 md:py-12 px-3 md:px-6">
         <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-lg px-4 py-3 text-md text-rose-700 dark:text-rose-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
           {error}
@@ -414,7 +414,7 @@ export default function Step1Channels({
   if (!status) return null
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6">
+    <div className="max-w-3xl mx-auto py-4 md:py-10 px-3 md:px-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">

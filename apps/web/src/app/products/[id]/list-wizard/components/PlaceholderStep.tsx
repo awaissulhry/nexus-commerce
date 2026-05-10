@@ -16,7 +16,7 @@ interface Props {
 export default function PlaceholderStep({ step }: Props) {
   const { t } = useTranslations()
   return (
-    <div className="max-w-2xl mx-auto py-12 px-6">
+    <div className="max-w-2xl mx-auto py-6 md:py-12 px-3 md:px-6">
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-600 mb-4">
           <Sparkles className="w-6 h-6" />

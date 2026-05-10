@@ -458,7 +458,7 @@ export default function Step9Submit({
   // ── Pre-submit ──────────────────────────────────────────────
   if (!submissions) {
     return (
-      <div className="max-w-xl mx-auto py-12 px-6">
+      <div className="max-w-xl mx-auto py-6 md:py-12 px-3 md:px-6">
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-8 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 mb-4">
             <Rocket className="w-6 h-6" />
@@ -528,7 +528,7 @@ export default function Step9Submit({
   ).length
 
   return (
-    <div className="max-w-2xl mx-auto py-10 px-6">
+    <div className="max-w-2xl mx-auto py-4 md:py-10 px-3 md:px-6">
       <div className="mb-5">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
           Submission

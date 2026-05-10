@@ -398,7 +398,7 @@ export default function Step5Variations({
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6">
+    <div className="max-w-3xl mx-auto py-4 md:py-10 px-3 md:px-6">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Variations</h2>
         <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
@@ -1109,7 +1109,7 @@ function SingleProductSetup({
   const [mode, setMode] = useState<SetupMode>('standalone')
 
   return (
-    <div className="max-w-3xl mx-auto py-10 px-6">
+    <div className="max-w-3xl mx-auto py-4 md:py-10 px-3 md:px-6">
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Variations</h2>
         <p className="text-md text-slate-600 dark:text-slate-400 mt-1">
