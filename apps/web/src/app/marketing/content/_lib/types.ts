@@ -9,6 +9,16 @@ export interface OverviewPayload {
   videoCount: number
   byType: Record<string, number>
   storageBytes: number
+  /// MC.13.1 — workspace storage quota. null fields mean "no cap set"
+  /// for that tier; surface only the warning band when softCap or
+  /// 100%-block when hardCap is hit.
+  storageQuota?: {
+    hardCapBytes: number | null
+    softCapBytes: number | null
+    usagePercent: number | null
+    atSoftCap: boolean
+    atHardCap: boolean
+  }
   inUseCount: number
   orphanedCount: number
   needsAttention: {

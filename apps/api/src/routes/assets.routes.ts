@@ -53,6 +53,32 @@ import {
 import { checkAssetQuality } from '../services/asset-quality.service.js'
 import { buildAllVariants } from '../services/channel-variants.service.js'
 
+// MC.13.1 — Storage quota. Env-driven for now (workspace settings
+// land in MC.13-followup). When set + the workspace's accumulated
+// DigitalAsset.sizeBytes meets/exceeds it, uploads return 507. Set
+// MC_STORAGE_SOFT_QUOTA_BYTES to surface a warning percentage in
+// the KPI strip without blocking; MC_STORAGE_HARD_QUOTA_BYTES
+// blocks new uploads. Either may be omitted (no quota).
+async function checkStorageQuota(
+  newBytes: number,
+): Promise<{ ok: boolean; usedBytes: number; hardCap: number | null }> {
+  const hardCap = parseInt(
+    process.env.MC_STORAGE_HARD_QUOTA_BYTES ?? '',
+    10,
+  )
+  if (!Number.isFinite(hardCap) || hardCap <= 0)
+    return { ok: true, usedBytes: 0, hardCap: null }
+  const agg = await prisma.digitalAsset.aggregate({
+    _sum: { sizeBytes: true },
+  })
+  const usedBytes = agg._sum.sizeBytes ?? 0
+  return {
+    ok: usedBytes + newBytes <= hardCap,
+    usedBytes,
+    hardCap,
+  }
+}
+
 // MC.3.3 — content-hash. Lowercase hex, 64 chars. Computing it on
 // the upload path lets us short-circuit before paying for a
 // Cloudinary roundtrip when the operator re-uploads a file we
@@ -144,12 +170,41 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     const inUseCount = inUseDistinct.length
     const orphanedCount = Math.max(totalAssets - inUseCount, 0)
 
+    // MC.13.1 — quota surfacing. Hard cap blocks uploads at 100%;
+    // soft cap drives the warning band on the Hub KPI tile. Both
+    // are env-driven; either may be omitted.
+    const storageBytes = sizeAgg._sum.sizeBytes ?? 0
+    const hardCapEnv = parseInt(
+      process.env.MC_STORAGE_HARD_QUOTA_BYTES ?? '',
+      10,
+    )
+    const softCapEnv = parseInt(
+      process.env.MC_STORAGE_SOFT_QUOTA_BYTES ?? '',
+      10,
+    )
+    const hardCapBytes =
+      Number.isFinite(hardCapEnv) && hardCapEnv > 0 ? hardCapEnv : null
+    const softCapBytes =
+      Number.isFinite(softCapEnv) && softCapEnv > 0 ? softCapEnv : null
+    const usagePercent = hardCapBytes
+      ? Math.min(100, Math.round((storageBytes / hardCapBytes) * 100))
+      : null
+
     return {
       totalAssets,
       productImageCount,
       videoCount,
       byType,
-      storageBytes: sizeAgg._sum.sizeBytes ?? 0,
+      storageBytes,
+      storageQuota: {
+        hardCapBytes,
+        softCapBytes,
+        usagePercent,
+        atSoftCap:
+          softCapBytes !== null ? storageBytes >= softCapBytes : false,
+        atHardCap:
+          hardCapBytes !== null ? storageBytes >= hardCapBytes : false,
+      },
       inUseCount,
       orphanedCount,
       needsAttention: {
@@ -1132,6 +1187,19 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         size: buffer.length,
       })
 
+    // MC.13.1 — quota check (env-driven). Returns 507 Insufficient
+    // Storage when the workspace would breach the hard cap.
+    {
+      const quota = await checkStorageQuota(buffer.length)
+      if (!quota.ok)
+        return reply.code(507).send({
+          error: `Storage quota exceeded`,
+          usedBytes: quota.usedBytes,
+          hardCapBytes: quota.hardCap,
+          fileSize: buffer.length,
+        })
+    }
+
     // MC.3.3 — dedup. Hash the bytes; if we have a row already, file
     // it into the requested folder (if different) and return that.
     // Never re-upload the same bytes to Cloudinary — saves storage
@@ -1290,6 +1358,20 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         error: `remote file exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
         size: arrayBuffer.byteLength,
       })
+
+    // MC.13.1 — quota check on URL imports too. Cap is the same
+    // workspace-level number; URL imports count against the hard
+    // cap exactly like multipart uploads.
+    {
+      const quota = await checkStorageQuota(arrayBuffer.byteLength)
+      if (!quota.ok)
+        return reply.code(507).send({
+          error: 'Storage quota exceeded',
+          usedBytes: quota.usedBytes,
+          hardCapBytes: quota.hardCap,
+          fileSize: arrayBuffer.byteLength,
+        })
+    }
 
     const buffer = Buffer.from(arrayBuffer)
 

@@ -114,8 +114,19 @@ export default function ContentHubClient({
     {
       label: t('marketingContent.kpi.storage'),
       value: formatBytes(overview.storageBytes),
+      // MC.13.1 — surface workspace cap when env-set. "12.3 / 50 GB"
+      // gives the operator the budget at a glance; tone shifts when
+      // soft cap is breached so the tile pre-warns before uploads
+      // start failing with 507.
+      secondary: overview.storageQuota?.hardCapBytes
+        ? `${formatBytes(overview.storageBytes)} / ${formatBytes(overview.storageQuota.hardCapBytes)} (${overview.storageQuota.usagePercent ?? 0}%)`
+        : undefined,
       icon: HardDrive,
-      tone: 'default' as const,
+      tone: overview.storageQuota?.atHardCap
+        ? ('warn' as const)
+        : overview.storageQuota?.atSoftCap
+          ? ('warn' as const)
+          : ('default' as const),
     },
     {
       label: t('marketingContent.kpi.inUse'),
