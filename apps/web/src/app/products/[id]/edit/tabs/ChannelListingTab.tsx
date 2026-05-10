@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Sparkles, ArrowDownToLine, ArrowUpFromLine, AlertTriangle, Copy, DollarSign } from 'lucide-react'
+import { Sparkles, ArrowDownToLine, AlertTriangle, Copy, DollarSign, Save, Send, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -66,10 +66,14 @@ export default function ChannelListingTab({
   const { t } = useTranslations()
   const [pulling, setPulling] = useState(false)
   const [translating, setTranslating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedFlash, setSavedFlash] = useState(false)
+  const [showPublishModal, setShowPublishModal] = useState(false)
   const translateAllRef = useRef<
     | (() => Promise<{ translated: number; skipped: number }>)
     | null
   >(null)
+  const flushRef = useRef<(() => Promise<void>) | null>(null)
   const [statusMsg, setStatusMsg] = useState<{
     kind: 'info' | 'error' | 'success'
     text: string
@@ -196,8 +200,17 @@ export default function ChannelListingTab({
     }
   }
 
-  function handlePushPlaceholder() {
-    setStatusMsg({ kind: 'info', text: `Push to ${channel} ships when channel adapters land (TECH_DEBT #35).` })
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await flushRef.current?.()
+      setSavedFlash(true)
+      window.setTimeout(() => setSavedFlash(false), 1500)
+    } catch (e) {
+      setStatusMsg({ kind: 'error', text: `Save failed: ${(e as Error).message}` })
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -263,10 +276,20 @@ export default function ChannelListingTab({
             <Button
               variant="secondary"
               size="sm"
-              icon={<ArrowUpFromLine className="w-3.5 h-3.5" />}
-              onClick={handlePushPlaceholder}
+              loading={saving}
+              icon={savedFlash ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Save className="w-3.5 h-3.5" />}
+              onClick={handleSave}
+              title="Save all pending changes immediately"
             >
-              Push
+              {savedFlash ? 'Saved' : 'Save'}
+            </Button>
+            <Button
+              size="sm"
+              icon={<Send className="w-3.5 h-3.5" />}
+              onClick={() => setShowPublishModal(true)}
+              title={`Publish to ${marketInfo.name}`}
+            >
+              Publish
             </Button>
           </div>
         </div>
@@ -322,7 +345,23 @@ export default function ChannelListingTab({
         bindTranslateAll={(fn) => {
           translateAllRef.current = fn
         }}
+        bindFlushAll={(fn) => {
+          flushRef.current = fn
+        }}
       />
+
+      {/* ── Publish review modal ───────────────────────────────── */}
+      {showPublishModal && (
+        <PublishReviewModal
+          productId={product.id}
+          channel={channel}
+          marketplace={marketplace}
+          marketInfo={marketInfo}
+          listing={listing}
+          product={product}
+          onClose={() => setShowPublishModal(false)}
+        />
+      )}
     </div>
   )
 }
@@ -708,6 +747,243 @@ function ReplicationPanel({
         </div>
       )}
     </Card>
+  )
+}
+
+// ── PublishReviewModal ─────────────────────────────────────────
+function PublishReviewModal({
+  productId,
+  channel,
+  marketplace,
+  marketInfo,
+  listing,
+  product,
+  onClose,
+}: {
+  productId: string
+  channel: string
+  marketplace: string
+  marketInfo: MarketInfo
+  listing: Listing | undefined
+  product: any
+  onClose: () => void
+}) {
+  const [publishing, setPublishing] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const title = listing?.title ?? product?.name ?? ''
+  const description = listing?.description ?? ''
+  const bullets = Array.isArray(listing?.bulletPointsOverride) ? listing!.bulletPointsOverride : []
+  const rawPrice = listing?.price != null ? Number(listing.price) : (product?.basePrice != null ? Number(product.basePrice) : null)
+  const price = rawPrice != null && Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null
+  const quantity = typeof listing?.quantity === 'number' ? listing.quantity : null
+  const productType = (listing as any)?.platformAttributes?.productType ?? product?.productType ?? ''
+
+  const checks = [
+    {
+      key: 'title',
+      label: 'Title',
+      done: typeof title === 'string' && title.trim().length > 0,
+      preview: title ? title.slice(0, 60) + (title.length > 60 ? '…' : '') : null,
+      critical: true,
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      done: typeof description === 'string' && description.trim().length > 0,
+      preview: description ? `${description.trim().length} chars` : null,
+      critical: false,
+    },
+    {
+      key: 'bullets',
+      label: 'Bullet points',
+      done: bullets.length >= 3,
+      preview: `${bullets.length}/3 required`,
+      critical: false,
+    },
+    {
+      key: 'price',
+      label: 'Price',
+      done: price !== null,
+      preview: price !== null ? `${marketInfo.currency} ${price.toFixed(2)}` : null,
+      critical: true,
+    },
+    {
+      key: 'quantity',
+      label: 'Quantity',
+      done: quantity !== null && quantity >= 0,
+      preview: quantity !== null ? String(quantity) : null,
+      critical: false,
+    },
+    {
+      key: 'productType',
+      label: 'Product type',
+      done: typeof productType === 'string' && productType.trim().length > 0,
+      preview: productType || null,
+      critical: true,
+    },
+  ]
+
+  const hasCriticalMissing = checks.some((c) => c.critical && !c.done)
+  const hasAnyMissing = checks.some((c) => !c.done)
+
+  async function handlePublish() {
+    setPublishing(true)
+    setResult(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/publish`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
+      )
+      const json = await res.json()
+      if (!res.ok) {
+        setResult({ ok: false, message: json?.error ?? `HTTP ${res.status}` })
+      } else {
+        setResult({ ok: json.ok ?? true, message: json.message ?? 'Published successfully' })
+      }
+    } catch (e) {
+      setResult({ ok: false, message: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const CHANNEL_LABEL: Record<string, string> = {
+    AMAZON: 'Amazon',
+    EBAY: 'eBay',
+    SHOPIFY: 'Shopify',
+    WOOCOMMERCE: 'WooCommerce',
+    ETSY: 'Etsy',
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={result?.ok ? onClose : undefined}
+        aria-hidden="true"
+      />
+      {/* Modal card */}
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            Publish to {CHANNEL_LABEL[channel] ?? channel} {marketplace}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+            aria-label="Close"
+          >
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          {/* Readiness checklist */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Readiness checklist
+            </div>
+            <ul className="space-y-2">
+              {checks.map((item) => (
+                <li key={item.key} className="flex items-start gap-2.5">
+                  <span
+                    className={cn(
+                      'flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-xs mt-0.5',
+                      item.done
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : item.critical
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+                    )}
+                  >
+                    {item.done ? '✓' : '✗'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className={cn(
+                      'text-sm',
+                      item.done
+                        ? 'text-slate-700 dark:text-slate-300'
+                        : item.critical
+                        ? 'text-rose-700 dark:text-rose-300 font-medium'
+                        : 'text-amber-700 dark:text-amber-300',
+                    )}>
+                      {item.label}
+                    </span>
+                    {item.preview && (
+                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500 truncate">
+                        {item.preview}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Warning banner */}
+          {hasAnyMissing && (
+            <div className={cn(
+              'rounded-lg px-4 py-3 text-sm flex items-start gap-2',
+              hasCriticalMissing
+                ? 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+                : 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+            )}>
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>
+                {hasCriticalMissing
+                  ? 'Fix the items above before publishing'
+                  : 'Some optional fields are missing — you can still publish'}
+              </span>
+            </div>
+          )}
+
+          {/* Price display */}
+          {price !== null && (
+            <div className="text-sm text-slate-600 dark:text-slate-400">
+              Will publish at:{' '}
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {marketInfo.currency} {price.toFixed(2)}
+              </span>
+            </div>
+          )}
+
+          {/* Result banner */}
+          {result && (
+            <div className={cn(
+              'rounded-lg px-4 py-3 text-sm flex items-start gap-2',
+              result.ok
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300',
+            )}>
+              {result.ok
+                ? <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                : <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+              <span>{result.message}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            {result?.ok ? 'Close' : 'Cancel'}
+          </Button>
+          {!result?.ok && (
+            <Button
+              size="sm"
+              onClick={handlePublish}
+              loading={publishing}
+              disabled={hasCriticalMissing || publishing}
+              icon={publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            >
+              {publishing ? 'Publishing…' : 'Publish'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

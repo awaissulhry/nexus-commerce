@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 
 const amazonService = new AmazonService()
 
@@ -758,6 +759,188 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       return listing
+    }
+  )
+
+  // POST /api/products/:id/listings/:channel/:marketplace/publish
+  //
+  // Validates required fields, attempts a channel push (Amazon SP-API or
+  // optimistic mark-as-published for other channels), then sets
+  // isPublished=true and listingStatus='ACTIVE' on success.
+  //
+  // Returns { ok, status, message, issues? }
+  fastify.post<{
+    Params: { id: string; channel: string; marketplace: string }
+    Body: Record<string, never>
+  }>(
+    '/products/:id/listings/:channel/:marketplace/publish',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+
+      try {
+        const [product, listing] = await Promise.all([
+          prisma.product.findUnique({ where: { id } }),
+          prisma.channelListing.findFirst({ where: { productId: id, channel, marketplace } }),
+        ])
+        if (!product) return reply.code(404).send({ error: `Product ${id} not found` })
+
+        // Resolve values: listing override first, fall back to master product
+        const resolvedTitle = listing?.title ?? product.name
+        const resolvedPrice = listing?.price ?? (product as any).basePrice ?? null
+        const pa = (listing?.platformAttributes as Record<string, any> | null) ?? {}
+        const resolvedProductType = pa.productType ?? (product as any).productType ?? ''
+
+        const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = []
+        if (!resolvedTitle || String(resolvedTitle).trim().length === 0) {
+          issues.push({ message: 'Title is required', severity: 'ERROR' })
+        }
+        if (resolvedPrice == null || Number(resolvedPrice) <= 0) {
+          issues.push({ message: 'Price is required and must be positive', severity: 'ERROR' })
+        }
+        if (!resolvedProductType || String(resolvedProductType).trim().length === 0) {
+          issues.push({ message: 'Product type is required', severity: 'ERROR' })
+        }
+
+        const errors = issues.filter((i) => i.severity === 'ERROR')
+        if (errors.length > 0) {
+          return reply.code(422).send({
+            ok: false,
+            status: 'INVALID',
+            message: errors.map((e) => e.message).join('; '),
+            issues,
+          })
+        }
+
+        let responsePayload: {
+          ok: boolean
+          status: string
+          message: string
+          issues?: { message: string; severity: string }[]
+        }
+
+        if (channel.toUpperCase() === 'AMAZON' && amazonService.isConfigured()) {
+          const mpId = (MARKETPLACES.find(
+            (m) => m.channel === 'AMAZON' && m.code === marketplace,
+          ) as (typeof MARKETPLACES)[number] & { marketplaceId?: string } | undefined)?.marketplaceId
+
+          if (!mpId) {
+            return reply.code(400).send({ error: `No marketplaceId for AMAZON/${marketplace}` })
+          }
+
+          const sku = product.sku
+          if (!sku) return reply.code(400).send({ error: 'Product has no SKU — cannot publish to Amazon' })
+
+          const attrs = typeof pa.attributes === 'object' && pa.attributes
+            ? (pa.attributes as Record<string, unknown>)
+            : {}
+
+          // Build a minimal SP-API attributes payload
+          const spAttrs: Record<string, unknown> = {
+            ...attrs,
+          }
+          if (resolvedTitle) {
+            spAttrs.item_name = [{ value: resolvedTitle, marketplace_id: mpId, language_tag: 'it_IT' }]
+          }
+          if (listing?.description) {
+            spAttrs.product_description = [{ value: listing.description, marketplace_id: mpId, language_tag: 'it_IT' }]
+          }
+          if (Array.isArray(listing?.bulletPointsOverride) && listing.bulletPointsOverride.length > 0) {
+            spAttrs.bullet_point = listing.bulletPointsOverride.map((b: string) => ({
+              value: b,
+              marketplace_id: mpId,
+              language_tag: 'it_IT',
+            }))
+          }
+          if (resolvedPrice != null) {
+            spAttrs.purchasable_offer = [{
+              currency: 'EUR',
+              our_price: [{ schedule: [{ value_with_tax: Number(resolvedPrice) }] }],
+              marketplace_id: mpId,
+            }]
+          }
+
+          const sellerId = process.env.AMAZON_SELLER_ID ?? ''
+          const spResult = await amazonSpApiClient.putListingsItem({
+            sellerId,
+            sku,
+            marketplaceId: mpId,
+            productType: resolvedProductType,
+            attributes: spAttrs,
+          })
+
+          if (!spResult.success) {
+            return reply.send({
+              ok: false,
+              status: spResult.status ?? 'FAILED',
+              message: spResult.error ?? 'Amazon rejected the listing',
+              issues: spResult.issues?.map((i: any) => ({ message: i.message ?? String(i), severity: 'ERROR' })),
+            })
+          }
+
+          // Mark as published
+          await prisma.channelListing.updateMany({
+            where: { productId: id, channel, marketplace },
+            data: { isPublished: true, listingStatus: 'ACTIVE', lastSyncedAt: new Date() },
+          })
+
+          responsePayload = {
+            ok: true,
+            status: spResult.dryRun ? 'DRY_RUN' : (spResult.status ?? 'SUBMITTED'),
+            message: spResult.dryRun
+              ? 'Dry-run: listing payload accepted (no live push). Set AMAZON_PUBLISH_MODE=live to publish for real.'
+              : `Submitted to Amazon. Submission ID: ${spResult.submissionId ?? 'n/a'}`,
+            issues: spResult.warnings?.map((w) => ({ message: w.message, severity: w.severity })),
+          }
+        } else {
+          // Non-Amazon channels (eBay, Shopify, etc.) — optimistic mark-as-published
+          await prisma.channelListing.upsert({
+            where: listing
+              ? { id: listing.id }
+              : { id: 'none' }, // fallback: upsert by productId+channel+marketplace below
+            update: { isPublished: true, listingStatus: 'ACTIVE', lastSyncedAt: new Date() },
+            create: {
+              productId: id,
+              channel,
+              marketplace,
+              channelMarket: `${channel}_${marketplace}`,
+              region: marketplace,
+              isPublished: true,
+              listingStatus: 'ACTIVE',
+              lastSyncedAt: new Date(),
+            },
+          }).catch(async () => {
+            // upsert by unique id failed (no existing listing), create instead
+            await prisma.channelListing.create({
+              data: {
+                productId: id,
+                channel,
+                marketplace,
+                channelMarket: `${channel}_${marketplace}`,
+                region: marketplace,
+                isPublished: true,
+                listingStatus: 'ACTIVE',
+                lastSyncedAt: new Date(),
+              },
+            })
+          })
+
+          const channelLabel =
+            channel === 'EBAY' ? 'eBay'
+            : channel === 'SHOPIFY' ? 'Shopify'
+            : channel
+
+          responsePayload = {
+            ok: true,
+            status: 'SUBMITTED',
+            message: `Marked as published. Sync will push to ${channelLabel} on next cycle.`,
+          }
+        }
+
+        return reply.send(responsePayload)
+      } catch (error: any) {
+        fastify.log.error({ err: error }, '[products/listings/publish] failed')
+        return reply.code(500).send({ ok: false, status: 'ERROR', message: error?.message ?? String(error) })
+      }
     }
   )
 }

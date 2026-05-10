@@ -74,6 +74,11 @@ interface Props {
   onSchemaReadiness?: (
     score: { required: number; complete: number } | null,
   ) => void
+  /** Save button — imperative handle to immediately flush all pending
+   *  dirty fields (base attributes + setup + variant overrides) without
+   *  waiting for the debounce timer. Called with the flush function
+   *  once the manifest loads, and with `null` on unmount. */
+  bindFlushAll?: (fn: (() => Promise<void>) | null) => void
 }
 
 /** Maps schema field ids to the master product columns they inherit
@@ -151,6 +156,7 @@ export default function ChannelFieldEditor({
   onDirtyChange,
   bindTranslateAll,
   onSchemaReadiness,
+  bindFlushAll,
 }: Props) {
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
@@ -908,6 +914,25 @@ export default function ChannelFieldEditor({
     bindTranslateAll(translateAllFields)
     return () => bindTranslateAll(null)
   }, [bindTranslateAll, manifest, translateAllFields])
+
+  // Wire the imperative handle for the parent's Save button. Provides
+  // a flushAll function that cancels pending debounce timers and
+  // immediately writes all dirty refs to the server.
+  useEffect(() => {
+    if (!bindFlushAll) return
+    const flushAll = async () => {
+      if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null }
+      if (variantSaveTimer.current) { window.clearTimeout(variantSaveTimer.current); variantSaveTimer.current = null }
+      if (setupSaveTimer.current) { window.clearTimeout(setupSaveTimer.current); setupSaveTimer.current = null }
+      await Promise.all([
+        dirtyRef.current.size > 0 ? flush() : Promise.resolve(),
+        dirtyVariantsRef.current.size > 0 ? flushVariants() : Promise.resolve(),
+        setupDirtyRef.current.size > 0 ? flushSetup() : Promise.resolve(),
+      ])
+    }
+    bindFlushAll(flushAll)
+    return () => bindFlushAll(null)
+  }, [bindFlushAll, flush, flushVariants, flushSetup])
 
   // ── W5.2 schema-driven readiness ─────────────────────────────
   // Counts manifest fields with `required=true` and reports how many

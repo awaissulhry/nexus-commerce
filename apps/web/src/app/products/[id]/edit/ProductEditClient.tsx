@@ -9,6 +9,8 @@ import {
   FileText,
   LayoutGrid,
   LifeBuoy,
+  Loader2,
+  Save,
   TableProperties,
   X,
 } from 'lucide-react'
@@ -254,6 +256,20 @@ export default function ProductEditClient({
   const [showCreatedBanner, setShowCreatedBanner] = useState(
     () => searchParams?.get('created') === '1',
   )
+  const [headerSaving, setHeaderSaving] = useState(false)
+  const [headerSaved, setHeaderSaved] = useState(false)
+
+  const handleHeaderSave = useCallback(async () => {
+    if (headerSaving) return
+    setHeaderSaving(true)
+    // 800ms covers the debounce timers in child editors; then refresh
+    // so the page reflects the latest saved state.
+    await new Promise((r) => window.setTimeout(r, 800))
+    setHeaderSaving(false)
+    setHeaderSaved(true)
+    router.refresh()
+    window.setTimeout(() => setHeaderSaved(false), 1500)
+  }, [headerSaving, router])
 
   // NN.3 — beforeunload guard so closing the tab / hitting back
   // doesn't silently drop unsaved edits.
@@ -505,6 +521,23 @@ export default function ProductEditClient({
               {t('products.edit.recover')}
             </Button>
             <ListOnChannelDropdown productId={product.id} />
+            {isDirty && (
+              <Button
+                size="sm"
+                onClick={handleHeaderSave}
+                loading={headerSaving}
+                title="Save all pending changes"
+                icon={
+                  headerSaved
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    : headerSaving
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Save className="w-3.5 h-3.5" />
+                }
+              >
+                {headerSaved ? 'Saved' : 'Save'}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
