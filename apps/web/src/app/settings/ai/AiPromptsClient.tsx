@@ -153,7 +153,7 @@ export default function AiPromptsClient({ initialRows }: Props) {
     async (row: PromptTemplateRow) => {
       const ok = await confirm({
         title: 'Promote to ACTIVE?',
-        description: `${row.feature} (${row.name} v${row.version}) will become the prompt every AI call uses for this feature${row.language ? ` in ${row.language}` : ''}${row.marketplace ? ` on ${row.marketplace}` : ''}. Existing ACTIVE rows on the same scope are NOT auto-archived; use the Archive button on the old one.`,
+        description: `${row.feature} (${row.name} v${row.version}) will go ACTIVE for this feature${row.language ? ` in ${row.language}` : ''}${row.marketplace ? ` on ${row.marketplace}` : ''}. Other ACTIVE rows on the same scope stay ACTIVE — traffic splits evenly among them (AB.1). Archive the loser when you're done A/B-ing.`,
         confirmLabel: 'Promote to ACTIVE',
         tone: 'warning',
       })
@@ -174,8 +174,9 @@ export default function AiPromptsClient({ initialRows }: Props) {
   // AI-2.4 — clone a prompt as a DRAFT variant. Used for A/B testing
   // — operator authors a new variant alongside the existing ACTIVE,
   // edits the body, then promotes when ready (existing ACTIVE stays
-  // ACTIVE until manually archived; matcher picks the most-recent
-  // updatedAt when multiple ACTIVE rows match the same scope).
+  // ACTIVE until manually archived; AB.1 — when multiple ACTIVE rows
+  // match the same scope, the matcher evenly splits traffic among
+  // them, and the per-row callCount surfaces the realised split).
   const cloneRow = useCallback(
     async (row: PromptTemplateRow) => {
       setRowBusy(row.id, true)
@@ -339,15 +340,34 @@ export default function AiPromptsClient({ initialRows }: Props) {
         </div>
       ) : (
         <div className="space-y-3">
-          {[...grouped.entries()].map(([feature, list]) => (
+          {[...grouped.entries()].map(([feature, list]) => {
+            // AB.1 — count ACTIVE rows per scope key to detect an
+            // A/B in progress. Same-scope = same (language || '*',
+            // marketplace || '*'); 2+ ACTIVEs = traffic splits.
+            const scopeCounts = new Map<string, number>()
+            for (const r of list) {
+              if (r.status !== 'ACTIVE') continue
+              const k = `${r.language ?? '*'}|${r.marketplace ?? '*'}`
+              scopeCounts.set(k, (scopeCounts.get(k) ?? 0) + 1)
+            }
+            const abVariants = Math.max(0, ...scopeCounts.values())
+            return (
             <div
               key={feature}
               className="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 overflow-hidden"
             >
-              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
+              <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-2">
                 <div className="font-mono text-sm text-slate-900 dark:text-slate-100">
                   {feature}
                 </div>
+                {abVariants >= 2 && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 font-medium"
+                    title={`${abVariants} ACTIVE variants share the same scope — traffic splits evenly (AB.1).`}
+                  >
+                    A/B · {abVariants} variants
+                  </span>
+                )}
               </div>
               <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                 {list.map((row) => {
@@ -508,7 +528,8 @@ export default function AiPromptsClient({ initialRows }: Props) {
                 })}
               </ul>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </section>
