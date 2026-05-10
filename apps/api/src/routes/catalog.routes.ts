@@ -21,6 +21,10 @@ interface CreateProductBody {
   basePrice: number;
   productType: string;
   categoryAttributes: Record<string, any>;
+  /** SPC.1 — optional brand on create. Persists to Product.brand;
+   *  bulk-edit + edit page already read this column, so populating
+   *  on create saves the operator a separate edit pass. */
+  brand?: string | null;
 }
 
 interface GeneratedVariation {
@@ -208,6 +212,7 @@ export async function catalogRoutes(app: FastifyInstance) {
           basePrice,
           productType,
           categoryAttributes,
+          brand,
         } = request.body;
 
         // Validate required fields
@@ -316,6 +321,12 @@ export async function catalogRoutes(app: FastifyInstance) {
             basePrice: newBasePrice.toFixed(2),
             productType,
             categoryAttributes: categoryAttributes || {},
+            // SPC.1 — brand is optional; null when blank/missing.
+            // Trim defensively in case the client sent whitespace.
+            brand:
+              typeof brand === 'string' && brand.trim().length > 0
+                ? brand.trim()
+                : null,
             status: "ACTIVE",
             // Phase 20: SSOT fields with defaults
             syncChannels: [],
