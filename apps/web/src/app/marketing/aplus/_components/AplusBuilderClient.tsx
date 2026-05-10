@@ -24,6 +24,8 @@ import {
   Sparkles,
   CheckSquare,
   Send,
+  History,
+  Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -36,6 +38,7 @@ import TemplatePicker from './TemplatePicker'
 import ValidationResultModal, {
   type ValidationResult,
 } from './ValidationResultModal'
+import VersionHistoryModal from './VersionHistoryModal'
 import {
   getModuleSpec,
   validateModulePayload,
@@ -66,6 +69,48 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [validationOpen, setValidationOpen] = useState(false)
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [scheduleInput, setScheduleInput] = useState('')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+
+  // MC.8.10 — schedule helpers. The header surfaces a datetime
+  // input so the operator can pick a future time; submitting fires
+  // the PATCH /schedule endpoint.
+  const saveSchedule = async (raw: string) => {
+    setScheduleSaving(true)
+    try {
+      const res = await fetch(
+        `${apiBase}/api/aplus-content/${encodeURIComponent(initial.id)}/schedule`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            scheduledFor: raw ? new Date(raw).toISOString() : null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(err.error ?? `Schedule failed (${res.status})`)
+      }
+      router.refresh()
+      toast.success(
+        raw
+          ? t('aplus.schedule.set', {
+              when: new Date(raw).toLocaleString(),
+            })
+          : t('aplus.schedule.cleared'),
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('aplus.schedule.error'),
+      )
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
 
   const submit = async () => {
     if (
@@ -398,6 +443,15 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
             {t('aplus.builder.validate')}
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setHistoryOpen(true)}
+            disabled={busy !== null}
+          >
+            <History className="w-4 h-4 mr-1" />
+            {t('aplus.builder.history')}
+          </Button>
+          <Button
             variant="primary"
             size="sm"
             onClick={submit}
@@ -430,6 +484,58 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
       </div>
 
       <LocalizationsPanel document={initial} apiBase={apiBase} />
+
+      {/* MC.8.10 — schedule strip. Shows the current scheduledFor
+          (if any) + datetime input to set/clear. The cron picker
+          (MC.8.10-followup once a job runner is wired) walks
+          (status='APPROVED', scheduledFor < now) and submits. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <Clock className="w-4 h-4 text-slate-400" />
+        <span className="font-medium text-slate-900 dark:text-slate-100">
+          {t('aplus.schedule.label')}
+        </span>
+        <input
+          type="datetime-local"
+          value={scheduleInput}
+          onChange={(e) => setScheduleInput(e.target.value)}
+          disabled={scheduleSaving}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void saveSchedule(scheduleInput)}
+          disabled={scheduleSaving || !scheduleInput}
+        >
+          {scheduleSaving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            t('aplus.schedule.set_cta')
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setScheduleInput('')
+            void saveSchedule('')
+          }}
+          disabled={scheduleSaving}
+        >
+          {t('aplus.schedule.clear')}
+        </Button>
+        <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+          {initial.publishedAt
+            ? t('aplus.schedule.publishedAt', {
+                when: new Date(initial.publishedAt).toLocaleString(),
+              })
+            : initial.submittedAt
+              ? t('aplus.schedule.submittedAt', {
+                  when: new Date(initial.submittedAt).toLocaleString(),
+                })
+              : t('aplus.schedule.notSubmitted')}
+        </span>
+      </div>
 
       {/* Three-pane layout. Below lg the panes stack; the canvas stays
           dominant by being the middle column on desktop and the
@@ -468,6 +574,14 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
         open={validationOpen}
         onClose={() => setValidationOpen(false)}
         result={validationResult}
+      />
+
+      <VersionHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        contentId={initial.id}
+        apiBase={apiBase}
+        onRestored={() => router.refresh()}
       />
     </div>
   )

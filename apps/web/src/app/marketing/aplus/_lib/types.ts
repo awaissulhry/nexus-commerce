@@ -85,6 +85,7 @@ export interface AplusDetail {
   submittedAt: string | null
   publishedAt: string | null
   notes: string | null
+  scheduledFor: string | null
   createdAt: string
   updatedAt: string
   modules: AplusModuleRow[]

@@ -22,6 +22,49 @@ import {
   submissionMode,
 } from '../services/aplus-amazon.service.js'
 
+// MC.8.10 — snapshot helper. Captures the full document + module
+// state into APlusContentVersion. Returns the new version number
+// so callers can surface "saved as v3".
+async function snapshotAplusContent(
+  contentId: string,
+  reason: 'pre_submit' | 'manual_save' | 'pre_rollback',
+  prismaClient: typeof prisma,
+): Promise<number> {
+  const content = await prismaClient.aPlusContent.findUnique({
+    where: { id: contentId },
+    include: { modules: { orderBy: { position: 'asc' } } },
+  })
+  if (!content) throw new Error(`content ${contentId} not found`)
+  const lastVersion = await prismaClient.aPlusContentVersion.findFirst({
+    where: { contentId },
+    orderBy: { version: 'desc' },
+    select: { version: true },
+  })
+  const nextVersion = (lastVersion?.version ?? 0) + 1
+  const snapshot = {
+    name: content.name,
+    brand: content.brand,
+    marketplace: content.marketplace,
+    locale: content.locale,
+    status: content.status,
+    notes: content.notes,
+    modules: content.modules.map((m) => ({
+      type: m.type,
+      position: m.position,
+      payload: m.payload,
+    })),
+  }
+  await prismaClient.aPlusContentVersion.create({
+    data: {
+      contentId,
+      version: nextVersion,
+      reason,
+      snapshot: snapshot as never,
+    },
+  })
+  return nextVersion
+}
+
 const VALID_STATUSES = new Set([
   'DRAFT',
   'REVIEW',
@@ -332,6 +375,20 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         })),
       })
 
+      // MC.8.10 — snapshot before sending to Amazon. Even if the
+      // submission fails, we have a record of "what we tried to
+      // send" — useful for diffing against next attempt.
+      try {
+        await snapshotAplusContent(id, 'pre_submit', prisma)
+      } catch (snapshotErr) {
+        // Snapshot failure shouldn't block submission; log + carry
+        // on. Operator notices via the missing version row.
+        request.log.error(
+          { err: snapshotErr, contentId: id },
+          'Failed to snapshot pre_submit',
+        )
+      }
+
       const submission = await submitAplusDocument(
         {
           id: content.id,
@@ -379,6 +436,134 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/aplus-content/_meta/submission-mode', async () => {
     return { mode: submissionMode() }
   })
+
+  // ── MC.8.10 — Versioning + scheduling ────────────────────
+
+  fastify.get('/aplus-content/:id/versions', async (request) => {
+    const { id } = request.params as { id: string }
+    const versions = await prisma.aPlusContentVersion.findMany({
+      where: { contentId: id },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        reason: true,
+        createdAt: true,
+      },
+    })
+    return { versions }
+  })
+
+  fastify.post(
+    '/aplus-content/:id/versions/save',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const content = await prisma.aPlusContent.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!content)
+        return reply.code(404).send({ error: 'A+ content not found' })
+      const version = await snapshotAplusContent(id, 'manual_save', prisma)
+      return reply.code(201).send({ version })
+    },
+  )
+
+  fastify.post(
+    '/aplus-content/:id/versions/:versionId/restore',
+    async (request, reply) => {
+      const { id, versionId } = request.params as {
+        id: string
+        versionId: string
+      }
+      const target = await prisma.aPlusContentVersion.findUnique({
+        where: { id: versionId },
+      })
+      if (!target || target.contentId !== id)
+        return reply
+          .code(404)
+          .send({ error: 'version not found for this content' })
+
+      // Snapshot current state first so the rollback is itself
+      // undoable.
+      await snapshotAplusContent(id, 'pre_rollback', prisma)
+
+      interface SnapshotShape {
+        name?: string
+        brand?: string | null
+        notes?: string | null
+        status?: string
+        modules?: Array<{
+          type: string
+          position: number
+          payload: unknown
+        }>
+      }
+      const snap = (target.snapshot ?? {}) as SnapshotShape
+
+      await prisma.$transaction(async (tx) => {
+        await tx.aPlusContent.update({
+          where: { id },
+          data: {
+            // Roll back the editable surface only; status, marketplace
+            // and locale stay where they are because rolling those
+            // back can desync the row from Amazon's record.
+            name: snap.name ?? undefined,
+            brand: snap.brand ?? null,
+            notes: snap.notes ?? null,
+          },
+        })
+        await tx.aPlusModule.deleteMany({ where: { contentId: id } })
+        if (Array.isArray(snap.modules) && snap.modules.length > 0) {
+          await tx.aPlusModule.createMany({
+            data: snap.modules.map((m, idx) => ({
+              contentId: id,
+              type: m.type,
+              position: typeof m.position === 'number' ? m.position : idx,
+              payload: (m.payload as never) ?? {},
+            })),
+          })
+        }
+      })
+      return { ok: true, restoredVersion: target.version }
+    },
+  )
+
+  // Set/clear scheduledFor. Body: { scheduledFor: ISO string | null }.
+  // The cron picker (a future commit) walks (status='APPROVED',
+  // scheduledFor < now) and submits — we already have the
+  // (status, scheduledFor) compound index for that scan.
+  fastify.patch(
+    '/aplus-content/:id/schedule',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const body = request.body as { scheduledFor?: string | null }
+      let scheduled: Date | null = null
+      if (body.scheduledFor) {
+        const parsed = new Date(body.scheduledFor)
+        if (isNaN(parsed.getTime()))
+          return reply
+            .code(400)
+            .send({ error: 'scheduledFor must be an ISO datetime' })
+        if (parsed.getTime() < Date.now() - 60_000)
+          return reply
+            .code(400)
+            .send({ error: 'scheduledFor must be in the future' })
+        scheduled = parsed
+      }
+      try {
+        const content = await prisma.aPlusContent.update({
+          where: { id },
+          data: { scheduledFor: scheduled },
+        })
+        return { content }
+      } catch (err: any) {
+        if (err?.code === 'P2025')
+          return reply.code(404).send({ error: 'A+ content not found' })
+        throw err
+      }
+    },
+  )
 
   // ── MC.8.8 — Server-side validation pre-flight ───────────
 

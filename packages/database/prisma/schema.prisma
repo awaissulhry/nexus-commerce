@@ -2207,6 +2207,13 @@ model AccountSettings {
   country      String   @default("US")
   timezone     String   @default("America/New_York")
   currency     String   @default("USD")
+
+  // PSM.1 — primary marketplace ISO country code (e.g. "IT" for
+  // Xavia's Amazon IT focus). Used to default-select on Step 1 of
+  // the list-wizard. Null when the operator hasn't picked one yet —
+  // every consumer treats null as "no preference" rather than failing.
+  primaryMarketplace String?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -4573,14 +4580,46 @@ model APlusContent {
   /// Free-form reviewer notes — operator-written or copied from
   /// Amazon's rejection reason.
   notes             String?
+  /// MC.8.10 — scheduled submission. When set + status='APPROVED',
+  /// the cron picker auto-submits at the scheduled time. NULL means
+  /// manual submit only.
+  scheduledFor      DateTime?
   asinAttachments   APlusContentAsin[]
   modules           APlusModule[]
+  versions          APlusContentVersion[]
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@index([marketplace, status])
   @@index([brand])
   @@index([masterContentId])
+  @@index([status, scheduledFor])
+}
+
+/// MC.8.10 — A+ Content version snapshots.
+///
+/// Auto-snapshotted before every submission + on operator-driven
+/// "Save version" actions. Captures the entire document state so
+/// an operator can roll back to any point in history. Snapshot is
+/// JSON (not relational) because module count is bounded
+/// (≤7 premium); the rollback path recreates APlusModule rows
+/// from scratch anyway, so keeping snapshots self-contained
+/// avoids cascade leaks from rollback.
+model APlusContentVersion {
+  id        String       @id @default(cuid())
+  contentId String
+  content   APlusContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  /// Monotonically increasing per content row.
+  version   Int
+  /// Why the snapshot was taken: 'pre_submit' | 'manual_save' |
+  /// 'pre_rollback' (snapshot of the current state before applying
+  /// an older one, so the rollback is itself undoable).
+  reason    String
+  snapshot  Json
+  createdAt DateTime @default(now())
+
+  @@unique([contentId, version])
+  @@index([contentId, createdAt])
 }
 
 /// MC.8.1 — ASIN attachment join. One A+ Content document can
