@@ -16,6 +16,7 @@ import {
 import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import KpiStrip from './_components/KpiStrip'
+import DeliveryProfileBadge from './_components/DeliveryProfileBadge'
 import ContentToolbar, { type ViewMode } from './_components/ContentToolbar'
 import AssetLibrary from './_components/AssetLibrary'
 import AssetDetailDrawer from './_components/AssetDetailDrawer'
@@ -176,6 +177,10 @@ export default function ContentHubClient({
       )}
 
       <KpiStrip tiles={tiles} />
+
+      <div className="flex items-center justify-end">
+        <DeliveryProfileBadge apiBase={apiBase} />
+      </div>
 
       <ContentToolbar
         view={view}

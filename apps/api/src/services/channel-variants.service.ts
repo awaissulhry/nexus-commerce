@@ -17,7 +17,17 @@
  * Channels are intentionally hardcoded — these are spec-driven (e.g.
  * Amazon's 1500px hero requirement, OG's 1200×630). Future channels
  * land here.
+ *
+ * MC.13.2 — quality/format defaults are now sourced from
+ * cdn-delivery-profile.service.ts so operators can dial workspace-wide
+ * bandwidth (eco/balanced/hd/lossless) without editing this file.
  */
+
+import {
+  defaultProfile,
+  profileTokens,
+  type DeliveryProfileId,
+} from './cdn-delivery-profile.service.js'
 
 export interface ChannelVariantSpec {
   /** Channel identifier ('AMAZON_HERO', 'EBAY_ZOOM', etc.) */
@@ -177,6 +187,7 @@ const CROP_TOKEN: Record<ChannelVariantSpec['cropMode'], string> = {
 export function buildVariantUrl(
   spec: ChannelVariantSpec,
   asset: { storageProvider: string; storageId: string | null; url: string },
+  profile?: DeliveryProfileId,
 ): string | null {
   if (asset.storageProvider !== 'cloudinary' || !asset.storageId) return null
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME
@@ -186,8 +197,7 @@ export function buildVariantUrl(
     `w_${spec.width}`,
     `h_${spec.height}`,
     CROP_TOKEN[spec.cropMode],
-    'q_auto',
-    'f_auto',
+    ...profileTokens(profile),
   ]
   if (spec.cropMode === 'pad' && spec.background) {
     transforms.push(`b_${spec.background}`)
@@ -198,6 +208,7 @@ export function buildVariantUrl(
 
 export function buildAllVariants(
   asset: { storageProvider: string; storageId: string | null; url: string },
+  profile?: DeliveryProfileId,
 ): Array<{
   id: string
   channel: string
@@ -208,6 +219,7 @@ export function buildAllVariants(
   url: string | null
   notes: string | null
 }> {
+  const resolved = profile ?? defaultProfile()
   return CHANNEL_VARIANTS.map((spec) => ({
     id: spec.id,
     channel: spec.channel,
@@ -215,7 +227,7 @@ export function buildAllVariants(
     width: spec.width,
     height: spec.height,
     cropMode: spec.cropMode,
-    url: buildVariantUrl(spec, asset),
+    url: buildVariantUrl(spec, asset, resolved),
     notes: spec.notes ?? null,
   }))
 }

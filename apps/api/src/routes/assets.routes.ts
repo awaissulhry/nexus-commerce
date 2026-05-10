@@ -127,6 +127,19 @@ const MAX_ZIP_ENTRIES = parseInt(
 )
 
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
+  // ── Meta ────────────────────────────────────────────────────
+
+  // MC.13.2 — delivery profile catalog + active default. Powers the
+  // settings dropdown that lets operators pick eco/balanced/hd/
+  // lossless. Active default is env-driven for now (workspace
+  // setting in MC.13 follow-up).
+  fastify.get('/assets/_meta/delivery-profiles', async () => {
+    const { DELIVERY_PROFILES, defaultProfile } = await import(
+      '../services/cdn-delivery-profile.service.js'
+    )
+    return { profiles: DELIVERY_PROFILES, active: defaultProfile() }
+  })
+
   // ── DigitalAsset ────────────────────────────────────────────
 
   // MC.1.1 — DAM hub KPI overview. Single roundtrip for the
