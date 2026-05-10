@@ -601,22 +601,65 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
           error: `Cannot process job with status: ${job.status}`,
         })
       }
-      // Fire-and-forget — log internal failures so they're visible
-      // in Railway logs even though the response already returned.
-      bulkActionService.processJob(id).catch((error) => {
-        const message =
-          error instanceof Error ? error.message : String(error)
-        fastify.log.error(
-          { err: error, jobId: id },
-          '[bulk-operations] async processJob failed',
-        )
-        return message
-      })
+
+      // W13.2 — auto-promote large jobs to BullMQ. The threshold
+      // is env-tunable (default 200); below it the in-process
+      // path is fine. Above it, the API process would be
+      // unresponsive while a 10k-row batch chews on its work.
+      // Promotion is best-effort: if Redis isn't reachable or
+      // ENABLE_QUEUE_WORKERS=0, fall back to in-process.
+      const promoteThreshold = Number(
+        process.env.NEXUS_BULK_PROMOTE_THRESHOLD ?? 200,
+      )
+      const queueEnabled = process.env.ENABLE_QUEUE_WORKERS === '1'
+      let promotedTo: 'bullmq' | 'inline' = 'inline'
+      if (
+        queueEnabled &&
+        Number.isFinite(promoteThreshold) &&
+        job.totalItems > promoteThreshold
+      ) {
+        try {
+          const { bulkJobQueue } = await import('../lib/queue.js')
+          await bulkJobQueue.add(
+            'process',
+            { jobId: id },
+            { jobId: `bulk-${id}` }, // dedupe — same id never queued twice
+          )
+          promotedTo = 'bullmq'
+        } catch (err) {
+          fastify.log.warn(
+            {
+              err,
+              jobId: id,
+              totalItems: job.totalItems,
+              promoteThreshold,
+            },
+            '[bulk-operations] BullMQ promotion failed — falling back to inline',
+          )
+        }
+      }
+
+      if (promotedTo === 'inline') {
+        // Fire-and-forget — log internal failures so they're visible
+        // in Railway logs even though the response already returned.
+        bulkActionService.processJob(id).catch((error) => {
+          const message =
+            error instanceof Error ? error.message : String(error)
+          fastify.log.error(
+            { err: error, jobId: id },
+            '[bulk-operations] async processJob failed',
+          )
+          return message
+        })
+      }
+
       return reply.send({
         success: true,
         jobId: id,
         status: 'IN_PROGRESS',
         message: 'Job processing started',
+        promotedTo,
+        totalItems: job.totalItems,
       })
     },
   )
