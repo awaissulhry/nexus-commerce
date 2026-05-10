@@ -213,7 +213,6 @@ export default function ChannelFieldEditor({
   const setupDirtyRef = useRef<Set<'productType' | 'variationTheme'>>(new Set())
 
   // Browse nodes + category path seeded from the active listing's platformAttributes
-  const [initialBrowseNodes, setInitialBrowseNodes] = useState<number[] | null>(null)
   const [initialCategoryPath, setInitialCategoryPath] = useState<string | null>(null)
 
   // Q.8 — user-defined channel groups, persisted to localStorage keyed
@@ -384,16 +383,12 @@ export default function ChannelFieldEditor({
           (active?.platformAttributes?.productType as string | undefined) ??
           (product?.productType as string | undefined) ??
           ''
-        const existingBrowseNodes =
-          (active?.platformAttributes?.attributes as Record<string, any> | undefined)
-            ?.recommended_browse_nodes as number[] | undefined
         const existingCategoryPath =
           (active?.platformAttributes as Record<string, any> | undefined)?.detectedCategoryPath as string | undefined
         setSetupValues({
           productType: activePT,
           variationTheme: active?.variationTheme ?? '',
         })
-        setInitialBrowseNodes(existingBrowseNodes ?? null)
         setInitialCategoryPath(existingCategoryPath ?? null)
         const variants = active?.platformAttributes?.variants
         if (variants && typeof variants === 'object') {
@@ -1157,7 +1152,6 @@ export default function ChannelFieldEditor({
         channel={channel}
         marketplace={marketplace}
         onChange={setSetup}
-        initialBrowseNodes={initialBrowseNodes}
         initialCategoryPath={initialCategoryPath}
       />
 
@@ -1504,7 +1498,6 @@ function ListingSetupCard({
   channel,
   marketplace,
   onChange,
-  initialBrowseNodes,
   initialCategoryPath,
 }: {
   productId: string
@@ -1514,7 +1507,6 @@ function ListingSetupCard({
   channel: string
   marketplace: string
   onChange: (key: 'productType' | 'variationTheme', value: string) => void
-  initialBrowseNodes?: number[] | null
   initialCategoryPath?: string | null
 }) {
   const inheriting =
@@ -1535,14 +1527,8 @@ function ListingSetupCard({
   const ebayHasValidCategory = isEbay && /^\d+$/.test((productType ?? '').trim())
   const effectiveType = productType || (isEbay ? '' : masterProductType)
 
-  // Browse nodes — seeded from the active listing, overridable via detection or manual edit
-  const [_browseNodes, setBrowseNodes] = useState<number[]>(initialBrowseNodes ?? [])
-  const [browseNodesInput, setBrowseNodesInput] = useState(
-    (initialBrowseNodes ?? []).join(', '),
-  )
   const [categoryPath, setCategoryPath] = useState<string | null>(initialCategoryPath ?? null)
   const [categoryPathLoading, setCategoryPathLoading] = useState(false)
-  const [savingNodes, setSavingNodes] = useState(false)
 
   // Auto-fetch the category breadcrumb whenever the effective product type changes.
   // Uses GET /api/categories/browse-path which finds a known ASIN from the DB
@@ -1561,10 +1547,6 @@ function ListingSetupCard({
         if (cancelled) return
         if (data?.categoryPath) {
           setCategoryPath(data.categoryPath)
-          if (Array.isArray(data.browseNodes) && data.browseNodes.length > 0) {
-            setBrowseNodes(data.browseNodes)
-            setBrowseNodesInput(data.browseNodes.join(', '))
-          }
         }
       })
       .catch(() => {})
@@ -1592,21 +1574,6 @@ function ListingSetupCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEbay, productId])
 
-  async function saveBrowseNodes(nodes: number[], path: string | null) {
-    setSavingNodes(true)
-    try {
-      await fetch(
-        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/save-browse-nodes`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ browseNodes: nodes, categoryPath: path }),
-        },
-      )
-    } catch { /* non-fatal */ } finally {
-      setSavingNodes(false)
-    }
-  }
 
   // Live variation themes from the Amazon schema for this (marketplace, productType)
   const [schemaThemes, setSchemaThemes] = useState<string[]>([])
@@ -1667,14 +1634,9 @@ function ListingSetupCard({
         onChange('variationTheme', json.variationTheme)
         changed = true
       }
-      if (Array.isArray(json.browseNodes) && json.browseNodes.length > 0) {
-        setBrowseNodes(json.browseNodes)
-        setBrowseNodesInput(json.browseNodes.join(', '))
-        changed = true
-        void saveBrowseNodes(json.browseNodes, json.categoryPath ?? null)
-      }
       if (json.categoryPath) {
         setCategoryPath(json.categoryPath)
+        changed = true
       }
       if (!changed) {
         setDetectMsg({ kind: 'error', text: 'Amazon returned no data for this listing. It may not be live yet.' })
@@ -1682,7 +1644,7 @@ function ListingSetupCard({
         const parts: string[] = []
         if (json.productType) parts.push(`type → ${json.productType}`)
         if (json.variationTheme) parts.push(`theme → ${json.variationTheme}`)
-        if (json.browseNodes?.length) parts.push(`${json.browseNodes.length} browse node(s)`)
+        if (json.categoryPath) parts.push('category path')
         setDetectMsg({ kind: 'success', text: `Detected: ${parts.join(', ')} (${json.source})` })
       }
     } catch (e) {
@@ -1725,8 +1687,6 @@ function ListingSetupCard({
             onChange={(v) => {
               onChange('productType', v)
               setCategoryPath(null)
-              setBrowseNodes([])
-              setBrowseNodesInput('')
             }}
             placeholder={`Search eBay ${marketplace} categories…`}
           />
@@ -1813,42 +1773,6 @@ function ListingSetupCard({
           </p>
         </div>
       </div>
-
-      {/* Browse nodes (Amazon only) */}
-      {isAmazon && (
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-1.5">
-          <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Browse nodes
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={browseNodesInput}
-              onChange={(e) => setBrowseNodesInput(e.target.value)}
-              placeholder="e.g. 1571280031, 12345678"
-              className="flex-1 h-8 px-2 text-sm font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            />
-            <button
-              type="button"
-              disabled={savingNodes}
-              onClick={() => {
-                const parsed = browseNodesInput
-                  .split(/[,\s]+/)
-                  .map((s) => parseInt(s.trim(), 10))
-                  .filter((n) => !isNaN(n) && n > 0)
-                setBrowseNodes(parsed)
-                void saveBrowseNodes(parsed, categoryPath)
-              }}
-              className="text-xs px-2.5 py-1 h-8 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 disabled:opacity-50 whitespace-nowrap"
-            >
-              {savingNodes ? 'Saving…' : 'Save nodes'}
-            </button>
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            Amazon category node IDs for this marketplace — comma-separated. Auto-filled by detection below.
-          </p>
-        </div>
-      )}
 
       {/* Detect from Amazon */}
       {isAmazon && (
