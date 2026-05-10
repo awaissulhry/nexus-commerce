@@ -84,6 +84,13 @@ const ACCEPTED_MIME = new Set([
   'image/gif',
   'image/avif',
   'image/tiff',
+  // MC.7.1 — videos accepted by the same upload route via Cloudinary
+  // resource_type=video. The API enforces a separate (larger) cap.
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-matroska',
+  'video/x-msvideo',
 ])
 
 // MC.3.2 — ZIP uploads go through their own endpoint. Some browsers

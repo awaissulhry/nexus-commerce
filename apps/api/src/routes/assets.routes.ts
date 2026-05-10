@@ -90,10 +90,10 @@ function sha256Hex(buf: Buffer): string {
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const VALID_ASSET_TYPES = new Set(['image', 'video', 'document', 'model3d'])
 
-// MC.3.1 — accept-list for direct upload. Image-first; video lands in
-// MC.7 once we wire the transcoding pipeline. The mime-type guard is a
-// defence-in-depth check after we already filter by extension on the
-// client; servers should never trust the client.
+// MC.3.1 — accept-list for direct upload. Image-first; MC.7 wires
+// video into the same path via Cloudinary's resource_type=video. The
+// mime-type guard is a defence-in-depth check after we already
+// filter by extension on the client.
 const UPLOAD_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -103,12 +103,32 @@ const UPLOAD_IMAGE_MIME_TYPES = new Set([
   'image/tiff',
 ])
 
+// MC.7.1 — video MIME types accepted into the same upload route.
+// Cloudinary handles MP4/MOV/WebM/MKV transparently via
+// resource_type=video; we don't need a separate transcoding pipeline
+// for the common case. Per-file size cap is bumped via
+// MC_MAX_VIDEO_BYTES.
+const UPLOAD_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-matroska',
+  'video/x-msvideo',
+])
+
 // 25 MB cap for direct uploads. ProductImage hero photos at 4000×4000
 // fit easily under this; anything larger probably belongs in the bulk
-// ZIP flow (MC.3.2) or the dedicated video pipeline. Configurable via
-// env if a workspace needs more.
+// ZIP flow (MC.3.2). Configurable via env if a workspace needs more.
 const MAX_UPLOAD_BYTES = parseInt(
   process.env.MC_MAX_UPLOAD_BYTES ?? `${25 * 1024 * 1024}`,
+  10,
+)
+
+// MC.7.1 — separate (larger) cap for video. 200 MB matches a 60-
+// second 4K H.264 clip with headroom; configurable via env. Larger
+// videos belong in a chunked-upload path that lands in MC.7.5.
+const MAX_VIDEO_BYTES = parseInt(
+  process.env.MC_MAX_VIDEO_BYTES ?? `${200 * 1024 * 1024}`,
   10,
 )
 
@@ -1342,9 +1362,14 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     const part = await request.file()
     if (!part) return reply.code(400).send({ error: 'no file uploaded' })
 
-    if (!UPLOAD_IMAGE_MIME_TYPES.has(part.mimetype))
+    // MC.7.1 — accept video too. The route picks the right Cloudinary
+    // resource_type below; a single endpoint keeps the client + dedup
+    // path simple for both media types.
+    const isVideo = UPLOAD_VIDEO_MIME_TYPES.has(part.mimetype)
+    const isImage = UPLOAD_IMAGE_MIME_TYPES.has(part.mimetype)
+    if (!isImage && !isVideo)
       return reply.code(400).send({
-        error: `unsupported mime type "${part.mimetype}". Allowed: ${[...UPLOAD_IMAGE_MIME_TYPES].join(', ')}`,
+        error: `unsupported mime type "${part.mimetype}". Allowed: ${[...UPLOAD_IMAGE_MIME_TYPES, ...UPLOAD_VIDEO_MIME_TYPES].join(', ')}`,
       })
 
     // Pull the multipart fields out of the form-data body. fastify-
@@ -1371,9 +1396,13 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     // get a partial buffer back; checking length post-toBuffer is
     // belt-and-braces.
     const buffer = await part.toBuffer()
-    if (buffer.length > MAX_UPLOAD_BYTES)
+    // MC.7.1 — videos use the larger MAX_VIDEO_BYTES cap; images stay
+    // on the historical MAX_UPLOAD_BYTES so the existing operator
+    // expectations don't shift.
+    const sizeCap = isVideo ? MAX_VIDEO_BYTES : MAX_UPLOAD_BYTES
+    if (buffer.length > sizeCap)
       return reply.code(413).send({
-        error: `file exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
+        error: `file exceeds the ${sizeCap} byte limit`,
         size: buffer.length,
       })
 
@@ -1421,7 +1450,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
     let cloudResult
     try {
-      cloudResult = await uploadBufferToCloudinary(buffer, { folder })
+      cloudResult = await uploadBufferToCloudinary(buffer, {
+        folder,
+        resourceType: isVideo ? 'video' : 'image',
+      })
     } catch (err) {
       return reply.code(502).send({
         error: 'storage upload failed',
@@ -1429,22 +1461,24 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    // MC.3.4 — quality check. Cheap (no I/O), warnings persisted
-    // alongside the metadata so the detail drawer can render them
-    // without re-deriving on every fetch.
-    const qualityWarnings = checkAssetQuality({
-      width: cloudResult.width,
-      height: cloudResult.height,
-      mimeType: part.mimetype,
-      sizeBytes: cloudResult.bytes,
-    })
+    // MC.3.4 — quality check. Skip for videos in MC.7.1; the spec
+    // library is still image-only. MC.7.6 will land a video-specific
+    // checker (resolution + duration + bitrate).
+    const qualityWarnings = isVideo
+      ? []
+      : checkAssetQuality({
+          width: cloudResult.width,
+          height: cloudResult.height,
+          mimeType: part.mimetype,
+          sizeBytes: cloudResult.bytes,
+        })
 
     let asset
     try {
       asset = await prisma.digitalAsset.create({
         data: {
           label: labelOverride ?? part.filename ?? 'Untitled',
-          type: 'image',
+          type: isVideo ? 'video' : 'image',
           mimeType: part.mimetype,
           sizeBytes: cloudResult.bytes,
           storageProvider: 'cloudinary',
@@ -1457,6 +1491,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             width: cloudResult.width,
             height: cloudResult.height,
             format: cloudResult.format,
+            // MC.7.6 — video metadata captured up-front so the drawer
+            // doesn't need to re-probe Cloudinary on render.
+            durationSeconds: cloudResult.durationSeconds ?? null,
+            resourceType: cloudResult.resourceType ?? null,
             qualityWarnings: qualityWarnings as unknown as object[],
           },
         },
@@ -1537,15 +1575,18 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: `source URL returned ${res.status}` })
 
     const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim()
-    if (!mimeType || !UPLOAD_IMAGE_MIME_TYPES.has(mimeType))
+    const isVideo = mimeType ? UPLOAD_VIDEO_MIME_TYPES.has(mimeType) : false
+    const isImage = mimeType ? UPLOAD_IMAGE_MIME_TYPES.has(mimeType) : false
+    if (!mimeType || (!isImage && !isVideo))
       return reply
         .code(400)
         .send({ error: `unsupported content-type "${mimeType ?? 'unknown'}"` })
 
     const arrayBuffer = await res.arrayBuffer()
-    if (arrayBuffer.byteLength > MAX_UPLOAD_BYTES)
+    const sizeCap = isVideo ? MAX_VIDEO_BYTES : MAX_UPLOAD_BYTES
+    if (arrayBuffer.byteLength > sizeCap)
       return reply.code(413).send({
-        error: `remote file exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
+        error: `remote file exceeds the ${sizeCap} byte limit`,
         size: arrayBuffer.byteLength,
       })
 
@@ -1591,7 +1632,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
 
     let cloudResult
     try {
-      cloudResult = await uploadBufferToCloudinary(buffer, { folder })
+      cloudResult = await uploadBufferToCloudinary(buffer, {
+        folder,
+        resourceType: isVideo ? 'video' : 'image',
+      })
     } catch (err) {
       return reply.code(502).send({
         error: 'storage upload failed',
@@ -1603,19 +1647,21 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       decodeURIComponent(parsed.pathname.split('/').pop() ?? '') ||
       `import-${Date.now()}`
 
-    const qualityWarnings = checkAssetQuality({
-      width: cloudResult.width,
-      height: cloudResult.height,
-      mimeType,
-      sizeBytes: cloudResult.bytes,
-    })
+    const qualityWarnings = isVideo
+      ? []
+      : checkAssetQuality({
+          width: cloudResult.width,
+          height: cloudResult.height,
+          mimeType,
+          sizeBytes: cloudResult.bytes,
+        })
 
     let asset
     try {
       asset = await prisma.digitalAsset.create({
         data: {
           label: body.label?.trim() || filename,
-          type: 'image',
+          type: isVideo ? 'video' : 'image',
           mimeType,
           sizeBytes: cloudResult.bytes,
           storageProvider: 'cloudinary',
@@ -1628,6 +1674,8 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             width: cloudResult.width,
             height: cloudResult.height,
             format: cloudResult.format,
+            durationSeconds: cloudResult.durationSeconds ?? null,
+            resourceType: cloudResult.resourceType ?? null,
             qualityWarnings: qualityWarnings as unknown as object[],
             source: 'url_import',
             sourceUrl: parsed.toString(),

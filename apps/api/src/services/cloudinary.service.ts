@@ -53,6 +53,10 @@ export interface CloudinaryUploadResult {
   height: number
   format: string
   bytes: number
+  /// MC.7 — set on video uploads (resource_type=video). Seconds.
+  durationSeconds?: number
+  /// MC.7 — Cloudinary's resource_type ('image' | 'video' | 'raw').
+  resourceType?: string
 }
 
 /**
@@ -70,6 +74,10 @@ export function uploadBufferToCloudinary(
      *  for "stable URL" cases like a brand logo where you want re-uploads
      *  to overwrite the same asset. */
     publicId?: string
+    /** MC.7 — when 'video', Cloudinary handles MP4/MOV/WebM uploads
+     *  and exposes duration. Defaults to 'image' so existing callers
+     *  are unaffected. */
+    resourceType?: 'image' | 'video' | 'raw'
   },
 ): Promise<CloudinaryUploadResult> {
   ensureConfigured()
@@ -79,7 +87,7 @@ export function uploadBufferToCloudinary(
         folder: options.folder,
         public_id: options.publicId,
         overwrite: true,
-        resource_type: 'image',
+        resource_type: options.resourceType ?? 'image',
       },
       (error, result) => {
         if (error || !result) {
@@ -93,6 +101,12 @@ export function uploadBufferToCloudinary(
           height: result.height,
           format: result.format,
           bytes: result.bytes,
+          durationSeconds:
+            typeof (result as unknown as { duration?: number }).duration ===
+            'number'
+              ? (result as unknown as { duration: number }).duration
+              : undefined,
+          resourceType: result.resource_type,
         })
       },
     )
@@ -106,8 +120,11 @@ export function uploadBufferToCloudinary(
  * was already gone (result.result === 'not found'). Throws on network
  * or auth errors so callers can decide whether to surface them.
  */
-export async function deleteFromCloudinary(publicId: string): Promise<boolean> {
+export async function deleteFromCloudinary(
+  publicId: string,
+  resourceType: 'image' | 'video' | 'raw' = 'image',
+): Promise<boolean> {
   ensureConfigured()
-  const result = await cloudinary.uploader.destroy(publicId, { resource_type: 'image' })
+  const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType })
   return result.result === 'ok'
 }
