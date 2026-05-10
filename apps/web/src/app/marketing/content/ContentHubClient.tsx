@@ -4,7 +4,7 @@
 // MC.1.2 — virtualized grid/list library now wired in. Filter
 // sidebar, dedicated search, detail drawer land in MC.1.3 → MC.1.5.
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   Layers,
   Image as ImageIcon,
@@ -62,6 +62,56 @@ export default function ContentHubClient({
   )
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
   const filterCount = activeFilterCount(filter)
+
+  // MC.14.3 — global keyboard shortcuts. We register on the window
+  // (capture=false) so input/textarea focus disables them; the
+  // CommandPalette owns Cmd+K independently.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const inEditable =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable
+      // Esc closes drawer and bulk selection regardless of focus.
+      if (e.key === 'Escape') {
+        if (selected) setSelected(null)
+        else if (bulkSelected.size > 0) setBulkSelected(new Map())
+        return
+      }
+      if (inEditable || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === '/') {
+        e.preventDefault()
+        const input = document.querySelector<HTMLInputElement>(
+          'input[type="search"], input[role="searchbox"]',
+        )
+        input?.focus()
+        return
+      }
+      if (e.key === 'u' || e.key === 'U') {
+        e.preventDefault()
+        setUploadOpen(true)
+        return
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault()
+        setFiltersOpen((v) => !v)
+        return
+      }
+      if (e.key === 'g' || e.key === 'G') {
+        e.preventDefault()
+        setView('grid')
+        return
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault()
+        setView('list')
+        return
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected, bulkSelected])
 
   const toggleBulk = (item: LibraryItem) => {
     setBulkSelected((prev) => {
