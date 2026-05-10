@@ -1552,6 +1552,32 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/amazon/financials/sync — pull financial events for a date
+  // window and write FinancialTransaction rows. Body: { start?, end?, daysBack? }
+  // Defaults to yesterday if no range given. Safe to re-run (idempotent).
+  fastify.post<{
+    Body?: { start?: string; end?: string; daysBack?: number }
+  }>('/financials/sync', async (request, reply) => {
+    const { syncFinancialEvents, syncYesterdayFinancialEvents } = await import('../services/amazon-financial-events.service.js')
+    try {
+      const body = request.body ?? {}
+      let summary
+      if (body.start && body.end) {
+        summary = await syncFinancialEvents(new Date(body.start), new Date(body.end))
+      } else if (typeof body.daysBack === 'number') {
+        const end = new Date()
+        const start = new Date(end.getTime() - body.daysBack * 24 * 60 * 60 * 1000)
+        summary = await syncFinancialEvents(start, end)
+      } else {
+        summary = await syncYesterdayFinancialEvents()
+      }
+      return { success: true, ...summary }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/financials/sync] failed')
+      return reply.code(500).send({ success: false, error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   /**
    * GET /api/amazon/sp-api/health
    *

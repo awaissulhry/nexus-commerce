@@ -113,6 +113,48 @@ export interface FBAInventoryRow {
   lastUpdatedTime: string | null
 }
 
+/** Charge/fee component from financial events. */
+export interface AmazonMoneyType { Amount: string; CurrencyCode: string }
+export interface AmazonChargeComponent { ChargeType: string; ChargeAmount: AmazonMoneyType }
+export interface AmazonFeeComponent { FeeType: string; FeeAmount: AmazonMoneyType }
+export interface AmazonShipmentItem {
+  SellerSKU?: string
+  ASIN?: string
+  QuantityShipped?: number
+  ItemChargeList?: AmazonChargeComponent[]
+  ItemFeeList?: AmazonFeeComponent[]
+  ShipmentItemId?: string
+}
+export interface AmazonOrderFinancialEvent {
+  AmazonOrderId?: string
+  PostedDate?: string
+  ShipmentItemList?: AmazonShipmentItem[]
+  OrderChargeList?: AmazonChargeComponent[]
+  OrderFeeList?: AmazonFeeComponent[]
+}
+export interface AmazonRefundEvent {
+  AmazonOrderId?: string
+  PostedDate?: string
+  SellerOrderId?: string
+  ShipmentItemAdjustmentList?: Array<{
+    ShipmentItemId?: string
+    SellerSKU?: string
+    ItemChargeAdjustmentList?: AmazonChargeComponent[]
+    ItemFeeAdjustmentList?: AmazonFeeComponent[]
+  }>
+}
+export interface AmazonServiceFeeEvent {
+  AmazonOrderId?: string
+  Reason?: string
+  StoreName?: string
+  FeeList?: AmazonFeeComponent[]
+}
+export interface FinancialEventsPayload {
+  orderEvents: AmazonOrderFinancialEvent[]
+  refundEvents: AmazonRefundEvent[]
+  serviceFeeEvents: AmazonServiceFeeEvent[]
+}
+
 /** Options accepted by `fetchOrders`. Mutually-exclusive cursors:
  *  - `since`: fetch orders with `LastUpdatedAfter >= since` (incremental polling)
  *  - `daysBack`: fetch `CreatedAfter >= now - daysBack days` (initial backfill)
@@ -1332,5 +1374,61 @@ export class AmazonService {
     SE: 'A2NODRKZP88ZB9',
     PL: 'A1C3SOZRARQ6R3',
     US: 'ATVPDKIKX0DER',
+  }
+
+  /**
+   * Pull financial events for a date window from /finances/v0/financialEvents.
+   * Returns the raw FinancialEvents payload. Handles NextToken pagination.
+   * Rate limit: 0.5 req/s — caller must sleep between chunks.
+   */
+  async fetchFinancialEvents(postedAfter: Date, postedBefore: Date): Promise<FinancialEventsPayload> {
+    const sp = await this.getClient()
+    const allOrderEvents: AmazonOrderFinancialEvent[] = []
+    const allRefundEvents: AmazonRefundEvent[] = []
+    const allServiceFeeEvents: AmazonServiceFeeEvent[] = []
+    let nextToken: string | undefined
+
+    do {
+      const res: any = await sp.callAPI({
+        operation: 'listFinancialEvents',
+        endpoint: 'finances',
+        query: {
+          PostedAfter: postedAfter.toISOString(),
+          PostedBefore: postedBefore.toISOString(),
+          MaxResultsPerPage: 100,
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        },
+      })
+
+      const fe = res?.FinancialEvents ?? {}
+      if (Array.isArray(fe.OrderFinancialEventList)) allOrderEvents.push(...fe.OrderFinancialEventList)
+      if (Array.isArray(fe.RefundEventList)) allRefundEvents.push(...fe.RefundEventList)
+      if (Array.isArray(fe.ServiceFeeEventList)) allServiceFeeEvents.push(...fe.ServiceFeeEventList)
+      nextToken = res?.NextToken ?? undefined
+
+      if (nextToken) await sleep(2100)
+    } while (nextToken)
+
+    return { orderEvents: allOrderEvents, refundEvents: allRefundEvents, serviceFeeEvents: allServiceFeeEvents }
+  }
+
+  /**
+   * Pull financial events for a single order from /finances/v0/orders/{orderId}/financialEvents.
+   * Used for targeted backfill when we have the Amazon order ID.
+   */
+  async fetchFinancialEventsByOrderId(amazonOrderId: string): Promise<AmazonOrderFinancialEvent | null> {
+    const sp = await this.getClient()
+    try {
+      const res: any = await sp.callAPI({
+        operation: 'listFinancialEventsByOrderId',
+        endpoint: 'finances',
+        path: { orderId: amazonOrderId },
+      })
+      const events = res?.FinancialEvents?.OrderFinancialEventList ?? []
+      return events[0] ?? null
+    } catch (err) {
+      console.warn('[amazon] fetchFinancialEventsByOrderId failed', amazonOrderId, err instanceof Error ? err.message : String(err))
+      return null
+    }
   }
 }
