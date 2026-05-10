@@ -46,6 +46,47 @@ interface PublishInput {
   options?: Record<string, unknown>
 }
 
+// ── eBay EPS — MC.12.2 ────────────────────────────────────────────
+//
+// Real call (live, future):
+//   POST UploadSiteHostedPictures via the eBay Trading API XML
+//   endpoint. eBay also accepts URL-based uploads (PictureURL on
+//   AddItem / ReviseItem) — we'd use EPS for guaranteed persistence
+//   + zoom support.
+//
+// Sandbox returns a fake PictureURL hosted at the eBay EPS host.
+export async function publishToEbay(
+  input: PublishInput,
+): Promise<PublishResult> {
+  const mode = channelPublishMode('EBAY')
+  if (mode === 'sandbox') {
+    const fakePicId = `eps-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    return {
+      ok: true,
+      channel: 'EBAY',
+      mode: 'sandbox',
+      channelImageId: fakePicId,
+      rawResponse: {
+        sandbox: true,
+        itemId: input.destinationId,
+        pictureURL: `https://i.ebayimg.com/00/s/sandbox/${fakePicId}.jpg`,
+        pictureSetMember: input.options?.gallerySlot ?? '0',
+        sourceImage: input.assetUrl,
+      },
+      error: null,
+    }
+  }
+  return {
+    ok: false,
+    channel: 'EBAY',
+    mode: 'live',
+    channelImageId: null,
+    rawResponse: null,
+    error:
+      'Live eBay EPS upload is not yet wired. Set CHANNEL_PUBLISH_EBAY=sandbox or wait for the eBay credential integration.',
+  }
+}
+
 // ── Amazon SP-API ────────────────────────────────────────────────
 //
 // Real call sequence (live mode, future):

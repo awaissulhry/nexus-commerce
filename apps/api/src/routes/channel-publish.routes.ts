@@ -15,6 +15,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import {
   publishToAmazon,
+  publishToEbay,
   channelPublishMode,
   type ChannelKey,
   type PublishResult,
@@ -113,6 +114,76 @@ const channelPublishRoutes: FastifyPluginAsync = async (fastify) => {
       )
     }
 
+    return reply.code(result.ok ? 200 : 502).send(result)
+  })
+
+  // ── eBay — MC.12.2 ────────────────────────────────────────────
+
+  fastify.post('/channel-publish/ebay', async (request, reply) => {
+    const body = request.body as {
+      assetId?: string
+      assetUrl?: string
+      itemId?: string
+      productId?: string
+      gallerySlot?: string
+    }
+    if (!body.itemId?.trim())
+      return reply.code(400).send({ error: 'itemId is required' })
+
+    let assetUrl = body.assetUrl?.trim() ?? null
+    if (!assetUrl && body.assetId) {
+      const id = body.assetId
+      if (id.startsWith('da_')) {
+        const asset = await prisma.digitalAsset.findUnique({
+          where: { id: id.slice(3) },
+          select: { url: true },
+        })
+        assetUrl = asset?.url ?? null
+      } else if (id.startsWith('pi_')) {
+        const row = await prisma.productImage.findUnique({
+          where: { id: id.slice(3) },
+          select: { url: true },
+        })
+        assetUrl = row?.url ?? null
+      } else {
+        return reply.code(400).send({
+          error:
+            'assetId must be prefixed "da_" (digital asset) or "pi_" (product image)',
+        })
+      }
+    }
+    if (!assetUrl)
+      return reply.code(400).send({ error: 'asset not found' })
+
+    const result: PublishResult = await publishToEbay({
+      assetUrl,
+      destinationId: body.itemId,
+      options: { gallerySlot: body.gallerySlot ?? '0' },
+    })
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: result.ok ? 'CHANNEL_PUBLISH_OK' : 'CHANNEL_PUBLISH_FAILED',
+          entityType: 'DigitalAsset',
+          entityId: body.assetId ?? assetUrl,
+          metadata: {
+            channel: 'EBAY',
+            mode: result.mode,
+            itemId: body.itemId,
+            productId: body.productId ?? null,
+            channelImageId: result.channelImageId,
+            error: result.error,
+            response: result.rawResponse,
+          } as never,
+        },
+      })
+    } catch (err) {
+      request.log.warn(
+        { err, assetId: body.assetId },
+        'Failed to write AuditLog row for eBay publish',
+      )
+    }
     return reply.code(result.ok ? 200 : 502).send(result)
   })
 }
