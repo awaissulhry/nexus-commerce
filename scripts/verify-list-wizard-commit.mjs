@@ -19,6 +19,8 @@
 //   9. Telemetry POST is fire-and-forget (sendBeacon + keepalive).
 //  10. page.tsx has `dynamic = 'force-dynamic'`.
 //  11. WizardStepEvent telemetry helper imported in client + step9.
+//  12. SP series — schedule-for-later UI + cron + history.
+//  13. AB series — same-scope traffic split + per-product stickiness.
 //
 // New checks appended as the wizard evolves; old checks should NOT be
 // removed unless the underlying invariant is intentionally retired.
@@ -116,6 +118,50 @@ check('export const dynamic = "force-dynamic"', /export const dynamic = 'force-d
 console.log('\nCase 11: telemetry call sites still present')
 check('client imports postWizardEvent', /from '\.\/lib\/telemetry'/.test(client))
 check('submit step imports postWizardEvent', /postWizardEvent/.test(submitStep))
+
+console.log('\nCase 12: SP series — schedule-for-later')
+const wizardRoutes = read('apps/api/src/routes/listing-wizard.routes.ts')
+const scheduledJob = (() => {
+  try {
+    return read('apps/api/src/jobs/scheduled-wizard-publish.job.ts')
+  } catch {
+    return ''
+  }
+})()
+check('Step 9 references ScheduleForLaterButton component',
+  /ScheduleForLaterButton/.test(submitStep))
+check('ScheduleForLaterButton fetches scheduled-publishes',
+  /\/scheduled-publishes/.test(submitStep))
+check('Step 9 surfaces cronEnabled warning (SP.5)',
+  /cronEnabled/.test(submitStep))
+check('Step 9 history disclosure renders FIRED/FAILED rows (SP.6)',
+  /historyRows/.test(submitStep))
+check('API has POST schedule-publish route',
+  /'\/listing-wizard\/:id\/schedule-publish'/.test(wizardRoutes))
+check('API has GET scheduled-publishes route',
+  /'\/listing-wizard\/:id\/scheduled-publishes'/.test(wizardRoutes))
+check('API has DELETE scheduled-publishes/:id route',
+  /'\/listing-wizard\/scheduled-publishes\/:id'/.test(wizardRoutes))
+check('GET response exposes cronEnabled (SP.5)',
+  /cronEnabled/.test(wizardRoutes))
+check('cron job present + default-OFF guarded',
+  scheduledJob.length > 0 &&
+    /NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH/.test(scheduledJob))
+
+console.log('\nCase 13: AB series — A/B routing')
+const promptSvc = read('apps/api/src/services/ai/prompt-template.service.ts')
+const promptsClient = read('apps/web/src/app/settings/ai/AiPromptsClient.tsx')
+const listingContent = read('apps/api/src/services/ai/listing-content.service.ts')
+check('matcher splits same-scope traffic (AB.1)',
+  /pickFromTier/.test(promptSvc))
+check('PromptScope exposes stableSeed (AB.3)',
+  /stableSeed\?:/.test(promptSvc))
+check('listing-content threads stableSeed: product.id',
+  /stableSeed:\s*params\.product\.id/.test(listingContent))
+check('admin shows A/B variants badge (AB.2)',
+  /A\/B · /.test(promptsClient))
+check('admin shows per-row traffic share (AB.4)',
+  /scopeTotalCalls/.test(promptsClient))
 
 console.log(`\n${failures === 0 ? '✓ all checks passed' : `✗ ${failures} check(s) failed`}\n`)
 process.exit(failures === 0 ? 0 : 1)
