@@ -171,6 +171,64 @@ export default function AiPromptsClient({ initialRows }: Props) {
     [confirm, patchRow, toast],
   )
 
+  // AI-2.4 — clone a prompt as a DRAFT variant. Used for A/B testing
+  // — operator authors a new variant alongside the existing ACTIVE,
+  // edits the body, then promotes when ready (existing ACTIVE stays
+  // ACTIVE until manually archived; matcher picks the most-recent
+  // updatedAt when multiple ACTIVE rows match the same scope).
+  const cloneRow = useCallback(
+    async (row: PromptTemplateRow) => {
+      setRowBusy(row.id, true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/ai/prompt-templates/${row.id}/clone`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+        )
+        const json = await res.json()
+        if (!res.ok) {
+          toast({
+            tone: 'error',
+            title: 'Clone failed',
+            description: json?.error ?? `HTTP ${res.status}`,
+            durationMs: 6000,
+          })
+          return
+        }
+        if (json?.row) {
+          const cloned = json.row as PromptTemplateRow
+          setRows((prev) => [cloned, ...prev])
+          // Auto-expand the new variant so the operator can edit
+          // the body immediately without hunting for it.
+          setExpanded((prev) => {
+            const next = new Set(prev)
+            next.add(cloned.id)
+            return next
+          })
+          toast({
+            tone: 'success',
+            title: `Cloned as "${cloned.name}"`,
+            description: 'Edit the body and Promote when ready to A/B.',
+            durationMs: 4000,
+          })
+        }
+      } catch (err) {
+        toast({
+          tone: 'error',
+          title: 'Clone failed',
+          description: err instanceof Error ? err.message : String(err),
+          durationMs: 6000,
+        })
+      } finally {
+        setRowBusy(row.id, false)
+      }
+    },
+    [setRowBusy, toast],
+  )
+
   const archive = useCallback(
     async (row: PromptTemplateRow) => {
       const ok = await confirm({
@@ -340,6 +398,20 @@ export default function AiPromptsClient({ initialRows }: Props) {
                           </div>
                         </button>
                         <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* AI-2.4 — Clone as variant. Available on
+                              every status (operators may want a DRAFT
+                              variant of an ARCHIVED prompt to start
+                              from). Lands as DRAFT with a fresh id so
+                              it never collides with the source. */}
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void cloneRow(row)}
+                            disabled={isBusy}
+                            title="Clone as a DRAFT variant for A/B testing"
+                          >
+                            Clone
+                          </Button>
                           {row.status === 'DRAFT' && (
                             <Button
                               variant="primary"

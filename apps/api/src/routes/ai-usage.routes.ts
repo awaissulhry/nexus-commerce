@@ -121,6 +121,88 @@ const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // AI-2.4 (list-wizard) — clone a PromptTemplate as a DRAFT variant.
+  //
+  // POST /api/ai/prompt-templates/:id/clone
+  //   body: { name?: string }
+  //
+  // Creates a new row with the source's body / description / scope but
+  // status='DRAFT' and a fresh id. Default name is "<source-name>-
+  // variant-N" where N counts sibling variants of the same feature.
+  // Operators can override the name in the body.
+  //
+  // No traffic-routing in this v1 — operator promotes the variant
+  // when ready (AI-2.5 admin UI). The matcher already supports
+  // multiple ACTIVE rows per feature with distinct names, but at
+  // most one will be picked per call (name='default' wins; the
+  // matcher returns the most-recent updatedAt when multiple match
+  // the same scope).
+  fastify.post<{
+    Params: { id: string }
+    Body: { name?: string }
+  }>(
+    '/ai/prompt-templates/:id/clone',
+    async (request, reply) => {
+      const source = await prisma.promptTemplate.findUnique({
+        where: { id: request.params.id },
+      })
+      if (!source) {
+        return reply.code(404).send({ error: 'PromptTemplate not found' })
+      }
+
+      // Default name composition. Counts sibling rows for the same
+      // feature so consecutive clones don't collide on the default
+      // name ("variant-1", "variant-2", ...).
+      let name: string
+      if (typeof request.body?.name === 'string' && request.body.name.trim().length > 0) {
+        name = request.body.name.trim().slice(0, 80)
+      } else {
+        const siblingCount = await prisma.promptTemplate.count({
+          where: { feature: source.feature },
+        })
+        name = `variant-${siblingCount}`
+      }
+
+      try {
+        const clone = await prisma.promptTemplate.create({
+          data: {
+            feature: source.feature,
+            name,
+            description:
+              source.description != null
+                ? `Variant of ${source.name} v${source.version}: ${source.description}`.slice(
+                    0,
+                    500,
+                  )
+                : `Variant of ${source.name} v${source.version}`,
+            body: source.body,
+            status: 'DRAFT',
+            version: 1,
+            language: source.language,
+            marketplace: source.marketplace,
+            createdBy: 'operator',
+          },
+        })
+        reply.code(201)
+        return {
+          row: {
+            ...clone,
+            createdAt: clone.createdAt.toISOString(),
+            updatedAt: clone.updatedAt.toISOString(),
+            lastUsedAt: clone.lastUsedAt
+              ? clone.lastUsedAt.toISOString()
+              : null,
+          },
+        }
+      } catch (err) {
+        fastify.log.error({ err }, '[ai/prompt-templates] clone failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // AI-2.2 (list-wizard) — list PromptTemplate rows. Read-only v1
   // surface that the admin UI on /settings/ai (lands in AI-2.5) will
   // call to render the prompt list. Filterable by feature + status.
