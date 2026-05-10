@@ -127,8 +127,8 @@ model Product {
   // SetNull on stage delete so removing a stage from a workflow
   // doesn't cascade-wipe products (they fall off the workflow but
   // keep their data — re-attaching via family is the recovery path).
-  workflowStageId String?
-  workflowStage   WorkflowStage? @relation("ProductCurrentStage", fields: [workflowStageId], references: [id], onDelete: SetNull)
+  workflowStageId     String?
+  workflowStage       WorkflowStage?       @relation("ProductCurrentStage", fields: [workflowStageId], references: [id], onDelete: SetNull)
   workflowTransitions WorkflowTransition[] @relation("ProductWorkflowTransitions")
   workflowComments    WorkflowComment[]    @relation("ProductWorkflowComments")
 
@@ -170,7 +170,7 @@ model Product {
   // 'C' = remaining sales-active, 'D' = zero sales in window, NULL =
   // never classified yet. TEXT (not enum) so per-channel splits can land
   // without a migration.
-  abcClass          String?   // 'A' | 'B' | 'C' | 'D' | null
+  abcClass          String? // 'A' | 'B' | 'C' | 'D' | null
   abcClassUpdatedAt DateTime?
 
   // S.20 — Costing methodology. Default WAC (weighted average cost):
@@ -178,7 +178,7 @@ model Product {
   // can switch per-product to FIFO (perishable / fashion / falling-
   // price) or LIFO (rising-price tax shelter). TEXT not enum so we
   // can add 'STANDARD' / 'SPECIFIC' methods later without a migration.
-  costingMethod        String  @default("WAC")
+  costingMethod        String           @default("WAC")
   // Rolling weighted-average cost in cents. Recomputed at every
   // receive when costingMethod = 'WAC'. NULL until first receive
   // (or until backfill runs).
@@ -286,8 +286,8 @@ model Product {
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
-  seoEntries                ProductSeo[]                  // W12: per-locale SEO metadata
-  workflowAssignments       WorkflowAssignment[]          // W9.x: per-product assignees
+  seoEntries                ProductSeo[] // W12: per-locale SEO metadata
+  workflowAssignments       WorkflowAssignment[] // W9.x: per-product assignees
   recommendations           ReplenishmentRecommendation[] // R.3
   stockoutEvents            StockoutEvent[] // R.12
   substitutionsAsPrimary    ProductSubstitution[]         @relation("SubstitutionPrimary") // R.17
@@ -308,11 +308,11 @@ model Product {
   // selling motorcycle gear across EU Amazon + eBay marketplaces.
   // PPE Directive 2016/425: Cat I (min risk), Cat II (intermediate),
   // Cat III (mortal risk — motorcycle helmets, body armour).
-  ppeCategory    String?  // 'CAT_I' | 'CAT_II' | 'CAT_III'
+  ppeCategory    String? // 'CAT_I' | 'CAT_II' | 'CAT_III'
   // ADR/IATA hazardous materials flags (uncommon for apparel, but
   // needed for aerosols, chain lube, etc. in Xavia's accessories range).
-  hazmatClass    String?  // UN hazard class e.g. "3", "8", "9"
-  hazmatUnNumber String?  // UN number e.g. "UN1950"
+  hazmatClass    String? // UN hazard class e.g. "3", "8", "9"
+  hazmatUnNumber String? // UN number e.g. "UN1950"
   // Back-relation to per-product certificate rows (CE, EN-13595, REACH…)
   certificates   ProductCertificate[]
 
@@ -487,8 +487,8 @@ model CustomAttribute {
   groupId String
   group   AttributeGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
 
-  type         String  // text | textarea | number | boolean | select | multiselect | date | reference | asset
-  validation   Json?   // { minLength?, maxLength?, min?, max?, step?, unit?, pattern? }
+  type         String // text | textarea | number | boolean | select | multiselect | date | reference | asset
+  validation   Json? // { minLength?, maxLength?, min?, max?, step?, unit?, pattern? }
   defaultValue Json?
   localizable  Boolean @default(false)
   scope        String  @default("global") // 'global' | 'per_variant'
@@ -510,13 +510,13 @@ model CustomAttribute {
 /// values. `metadata` carries swatch data (color hex, texture URL)
 /// until full reference-entity tables land in a later W2.x commit.
 model AttributeOption {
-  id          String @id @default(cuid())
+  id          String          @id @default(cuid())
   attributeId String
   attribute   CustomAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
 
   code     String // 'red', 'leather'
   label    String // 'Red', 'Leather'
-  metadata Json?  // { color: '#ff0000' } | { texturePath: '/...' }
+  metadata Json? // { color: '#ff0000' } | { texturePath: '/...' }
 
   sortOrder Int @default(0)
 
@@ -553,18 +553,18 @@ model AttributeOption {
 /// chose flat now, EAV later. If/when a real product flow needs
 /// that, a follow-up commit adds FamilyAttributeChannelRule.
 model FamilyAttribute {
-  id          String @id @default(cuid())
+  id          String          @id @default(cuid())
   familyId    String
-  family      ProductFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  family      ProductFamily   @relation(fields: [familyId], references: [id], onDelete: Cascade)
   attributeId String
   attribute   CustomAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
 
-  required  Boolean @default(false)
+  required  Boolean  @default(false)
   // Channel codes where this attribute is required (when required=true).
   // Empty array = required on every channel. Codes match
   // ChannelListing.channel: 'AMAZON' | 'EBAY' | 'SHOPIFY' | ...
   channels  String[]
-  sortOrder Int     @default(0)
+  sortOrder Int      @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -620,9 +620,9 @@ model ProductWorkflow {
 /// a manual operator action so cascade-to-marketplace stays
 /// explicit.
 model WorkflowStage {
-  id          String  @id @default(cuid())
-  workflowId  String
-  workflow    ProductWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id         String          @id @default(cuid())
+  workflowId String
+  workflow   ProductWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   // Stable code within this workflow ('draft', 'in_review',
   // 'approved', 'published'). Unique per (workflow, code).
@@ -643,11 +643,11 @@ model WorkflowStage {
   // workflow.
   isTerminal    Boolean @default(false)
 
-  productsHere     Product[]            @relation("ProductCurrentStage")
-  transitionsFrom  WorkflowTransition[] @relation("TransitionFromStage")
-  transitionsTo    WorkflowTransition[] @relation("TransitionToStage")
-  comments         WorkflowComment[]
-  assignments      WorkflowAssignment[] // W9.x: per-stage assignees
+  productsHere    Product[]            @relation("ProductCurrentStage")
+  transitionsFrom WorkflowTransition[] @relation("TransitionFromStage")
+  transitionsTo   WorkflowTransition[] @relation("TransitionToStage")
+  comments        WorkflowComment[]
+  assignments     WorkflowAssignment[] // W9.x: per-stage assignees
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -669,9 +669,9 @@ model WorkflowStage {
 ///                        landing on it; the operator must rewire
 ///                        first)
 model WorkflowTransition {
-  id          String  @id @default(cuid())
+  id          String         @id @default(cuid())
   productId   String
-  product     Product @relation("ProductWorkflowTransitions", fields: [productId], references: [id], onDelete: Cascade)
+  product     Product        @relation("ProductWorkflowTransitions", fields: [productId], references: [id], onDelete: Cascade)
   fromStageId String?
   fromStage   WorkflowStage? @relation("TransitionFromStage", fields: [fromStageId], references: [id], onDelete: SetNull)
   toStageId   String
@@ -691,9 +691,9 @@ model WorkflowTransition {
 /// stage where it was made, even after the product moves on) so the
 /// audit trail reads chronologically per stage.
 model WorkflowComment {
-  id        String  @id @default(cuid())
+  id        String        @id @default(cuid())
   productId String
-  product   Product @relation("ProductWorkflowComments", fields: [productId], references: [id], onDelete: Cascade)
+  product   Product       @relation("ProductWorkflowComments", fields: [productId], references: [id], onDelete: Cascade)
   stageId   String
   stage     WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
 
@@ -715,21 +715,21 @@ model WorkflowComment {
 /// "assigned to review at this stage". Role distinguishes REVIEWER
 /// (can comment), APPROVER (can advance stage), OWNER (primary DRI).
 model WorkflowAssignment {
-  id           String       @id @default(cuid())
+  id           String         @id @default(cuid())
   productId    String
-  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product      Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   stageId      String?
   stage        WorkflowStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
   assigneeId   String
-  assignee     UserProfile  @relation(fields: [assigneeId], references: [id], onDelete: Cascade)
+  assignee     UserProfile    @relation(fields: [assigneeId], references: [id], onDelete: Cascade)
   /// 'REVIEWER' | 'APPROVER' | 'OWNER'
-  role         String       @default("REVIEWER")
+  role         String         @default("REVIEWER")
   /// ID of user who created the assignment
   assignedById String?
   dueAt        DateTime?
   note         String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@unique([productId, assigneeId, role])
   @@index([productId])
@@ -837,26 +837,26 @@ model ProductTierPrice {
 /// DigitalAsset + AssetUsage by a one-shot script (Wave 4 follow-up
 /// commit). Until then, both paths coexist.
 model DigitalAsset {
-  id            String  @id @default(cuid())
+  id              String  @id @default(cuid())
   // Operator-facing slug ('xavia-jacket-hero-front'). Optional —
   // useful when the operator wants to refer to the asset by name,
   // but not required (most uploads have no operator-set code).
-  code          String? @unique
+  code            String? @unique
   // Operator-facing label (filename or curator-set name).
-  label         String
+  label           String
   // 'image' | 'video' | 'document' | 'model3d'. Stored as string
   // (not enum) so future asset types don't need a migration.
-  type          String  @default("image")
-  mimeType      String  // 'image/jpeg', 'video/mp4', etc.
-  sizeBytes     Int
+  type            String  @default("image")
+  mimeType        String // 'image/jpeg', 'video/mp4', etc.
+  sizeBytes       Int
   // Provider-specific. 'cloudinary' is canonical for the Xavia
   // catalog; 's3'/'r2' planned for video + document storage.
-  storageProvider String @default("cloudinary")
+  storageProvider String  @default("cloudinary")
   // Provider-specific identifier (Cloudinary public_id, S3 key).
-  storageId     String
+  storageId       String
   // Public URL — what the client renders. Source of truth is
   // storageProvider + storageId; url is denormalised for quick reads.
-  url           String
+  url             String
 
   // Original filename at upload time (for download / "is this still
   // the right photo?" diffing).
@@ -900,7 +900,7 @@ model DigitalAsset {
 /// `sortOrder` controls display order within a (scope, scopeId,
 /// role) group.
 model AssetUsage {
-  id      String @id @default(cuid())
+  id      String       @id @default(cuid())
   assetId String
   asset   DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
@@ -908,12 +908,12 @@ model AssetUsage {
   // scope today; productId is the FK target. Future scopes
   // ('channel_listing', 'translation', 'marketing_campaign') will
   // gain their own optional FK columns.
-  scope     String  // 'product' for now
+  scope     String // 'product' for now
   productId String?
   product   Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  role      String   // 'main' | 'alt' | 'lifestyle' | 'hero' | 'detail' | 'packaging'
-  sortOrder Int      @default(0)
+  role      String // 'main' | 'alt' | 'lifestyle' | 'hero' | 'detail' | 'packaging'
+  sortOrder Int    @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -959,11 +959,11 @@ model AssetUsage {
 /// rule is always-on. Operator-set "only reprice during business
 /// hours" is the canonical use case.
 model RepricingRule {
-  id          String  @id @default(cuid())
-  productId   String
-  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  channel     String  // 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  channel     String // 'AMAZON' | 'EBAY' | 'SHOPIFY'
   marketplace String? // 'IT' | 'DE' | etc. (null = all marketplaces under the channel)
 
   enabled Boolean @default(true)
@@ -1023,13 +1023,13 @@ model RepricingRule {
 /// observability). `capped` indicates whether the floor or ceiling
 /// held back a more aggressive price.
 model RepricingDecision {
-  id     String @id @default(cuid())
+  id     String        @id @default(cuid())
   ruleId String
   rule   RepricingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   oldPrice Decimal @db.Decimal(10, 2)
   newPrice Decimal @db.Decimal(10, 2)
-  reason   String  // Free-form: 'matched buy box at €89.99', 'undercut competitor by 2%', 'capped at ceiling €120'
+  reason   String // Free-form: 'matched buy box at €89.99', 'undercut competitor by 2%', 'capped at ceiling €120'
 
   // Market context at decision time.
   buyBoxPrice     Decimal? @db.Decimal(10, 2)
@@ -1616,8 +1616,8 @@ model ListingRecoveryEvent {
   id String @id @default(cuid())
 
   // ── Target ──────────────────────────────────────────────────────
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
   // The ChannelListing that was touched. Nullable because a "full
   // reset" flow may end with a deleted ChannelListing row (the
   // recreate makes a new one). The audit row outlives the listing.
@@ -1657,7 +1657,7 @@ model ListingRecoveryEvent {
 
   // The error message from the last failure, if any. Cleared on
   // retry. Plus the SP-API submission ID(s) for cross-reference.
-  error           String?
+  error               String?
   amazonSubmissionIds String[] @default([])
 
   // ── Operator + timing ───────────────────────────────────────────
@@ -2144,14 +2144,14 @@ model ApiKey {
 }
 
 model UserProfile {
-  id           String   @id @default(cuid())
-  displayName  String   @default("")
-  email        String   @default("")
-  avatarUrl    String   @default("")
+  id                  String               @id @default(cuid())
+  displayName         String               @default("")
+  email               String               @default("")
+  avatarUrl           String               @default("")
   // Password stored as bcrypt hash
-  passwordHash String   @default("")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  passwordHash        String               @default("")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   // W9.x — workflow assignments this user appears in
   workflowAssignments WorkflowAssignment[]
 }
@@ -2211,8 +2211,8 @@ model ChannelStockEvent {
   channelEventId String
 
   // Our product (resolved from channel SKU at ingest time).
-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  productId String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId   String?
   variationId String?
   sku         String
 
@@ -2221,16 +2221,16 @@ model ChannelStockEvent {
   // for single-location channels.
   locationId String?
 
-  channelReportedQty       Int
-  localQtyAtObservation    Int
+  channelReportedQty    Int
+  localQtyAtObservation Int
   // Computed at ingest: channelReportedQty - localQtyAtObservation.
   // Persisted so list views don't recompute on every render.
-  drift                    Int
+  drift                 Int
 
-  status     ChannelStockEventStatus @default(PENDING)
+  status              ChannelStockEventStatus @default(PENDING)
   // Free-form reason recorded when an operator picks IGNORED or
   // when AUTO_APPLY_THRESHOLD self-resolves a small drift.
-  resolution String?
+  resolution          String?
   // Audit pointers — populated when status flips to APPLIED so the
   // operator can trace the resulting StockMovement back to its
   // origin event.
@@ -2378,7 +2378,7 @@ model Order {
   // relation below is the canonical identity; new code reads through it.
   customerName    String
   customerEmail   String
-  customer        Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer        Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   customerId      String?
   shippingAddress Json // { street, city, state, postalCode, country }
 
@@ -2386,11 +2386,11 @@ model Order {
   // (DPR 633/72) cares about the values as of the order date, not
   // whatever the customer's profile happens to say later. Mirror of
   // the Customer.* fields below, snapshotted on order ingest.
-  codiceFiscale       String? // 16 chars (individuals)
-  partitaIva          String? // 11 digits (businesses)
-  fiscalKind          String? // 'B2B' | 'B2C' | NULL = unknown
-  pecEmail            String? // SDI fallback delivery
-  codiceDestinatario  String? // 7-char SDI routing code
+  codiceFiscale      String? // 16 chars (individuals)
+  partitaIva         String? // 11 digits (businesses)
+  fiscalKind         String? // 'B2B' | 'B2C' | NULL = unknown
+  pecEmail           String? // SDI fallback delivery
+  codiceDestinatario String? // 7-char SDI routing code
 
   // D.1: Phase 28 — real customer-side timestamps. createdAt is the row
   // insert time (ingestion); these track the order's own lifecycle.
@@ -2423,8 +2423,8 @@ model Order {
   tags                  OrderTag[]
   mcfShipments          MCFShipment[] // S.24
   riskScore             OrderRiskScore? // O.22 — at most one per order
-  fiscalInvoice         FiscalInvoice?  // F.2 — at most one IT invoice per order
-  notes                 OrderNote[]     // AU.5 — per-order operator notes
+  fiscalInvoice         FiscalInvoice? // F.2 — at most one IT invoice per order
+  notes                 OrderNote[] // AU.5 — per-order operator notes
 
   // Metadata
   amazonMetadata      Json?
@@ -2473,26 +2473,26 @@ model Customer {
   // F.1 — Italian fiscal identity. Codice fiscale for individuals
   // (16 alphanumeric) or partita IVA for businesses (11 digits).
   // fiscalKind drives invoice-vs-receipt rendering + SDI submission.
-  codiceFiscale       String?
-  partitaIva          String?
-  fiscalKind          String? // 'B2B' | 'B2C' | NULL
-  pecEmail            String? // SDI fallback delivery
-  codiceDestinatario  String? // 7-char SDI routing code
+  codiceFiscale      String?
+  partitaIva         String?
+  fiscalKind         String? // 'B2B' | 'B2C' | NULL
+  pecEmail           String? // SDI fallback delivery
+  codiceDestinatario String? // 7-char SDI routing code
 
-  totalOrders        Int      @default(0)
+  totalOrders        Int       @default(0)
   // Cents to avoid Decimal vs JS-number drift on the read side.
   // BIGINT in SQL; Prisma maps to BigInt — but for a small-business-
   // scale app totals fit in Int safely (€20M cap at €0.01 precision).
-  totalSpentCents    BigInt   @default(0)
+  totalSpentCents    BigInt    @default(0)
   firstOrderAt       DateTime?
   lastOrderAt        DateTime?
   channelOrderCounts Json?
 
   // Operator surface
-  tags              String[]   @default([])
+  tags               String[]  @default([])
   // O.22 risk engine populates these. NULL = unscored.
-  riskFlag          String?
-  manualReviewState String?
+  riskFlag           String?
+  manualReviewState  String?
   // O.22: timestamp of the last rollup. Drives "stale risk" affordances
   // on /customers (operator can see a customer scored hours ago vs
   // re-scored on every recent order).
@@ -2578,7 +2578,7 @@ model FiscalInvoice {
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId String @unique
 
-  issuer         String  @default("XAVIA")
+  issuer         String @default("XAVIA")
   fiscalYear     Int
   sequenceNumber Int
   // Materialised "NNNNN/YYYY" — computed at insert time so PDF
@@ -2638,9 +2638,9 @@ model CreditNote {
   originalInvoice   FiscalInvoice? @relation(fields: [originalInvoiceId], references: [id], onDelete: SetNull)
   originalInvoiceId String?
 
-  issuer         String @default("XAVIA")
-  fiscalYear     Int
-  sequenceNumber Int
+  issuer           String @default("XAVIA")
+  fiscalYear       Int
+  sequenceNumber   Int
   // "NC-NNNNN/YYYY"
   creditNoteNumber String
 
@@ -3488,7 +3488,9 @@ model BulkActionTemplate {
    */
   actionType String
 
-  /** ISO channel code ('AMAZON' / 'EBAY' / null = all). */
+  /**
+   * ISO channel code ('AMAZON' / 'EBAY' / null = all).
+   */
   channel String?
 
   /**
@@ -3496,7 +3498,7 @@ model BulkActionTemplate {
    * receives). Parameter placeholders use the form `${name}` inside
    * string values — the apply path interpolates them via parameters[].
    * Example for PRICING_UPDATE:
-   *   { adjustmentType: 'PERCENT', value: '${pct}' }
+   * { adjustmentType: 'PERCENT', value: '${pct}' }
    */
   actionPayload Json @default("{}")
 
@@ -3508,8 +3510,8 @@ model BulkActionTemplate {
 
   /**
    * Parameter declarations. Shape:
-   *   [{ name: 'pct', label: 'Discount %', type: 'number',
-   *      defaultValue: 5, required: true, min: 0, max: 50 }]
+   * [{ name: 'pct', label: 'Discount %', type: 'number',
+   * defaultValue: 5, required: true, min: 0, max: 50 }]
    * The apply UI renders one input per declaration and substitutes
    * the typed value into actionPayload before POSTing.
    */
@@ -3536,15 +3538,17 @@ model BulkActionTemplate {
    */
   isBuiltin Boolean @default(false)
 
-  /** Telemetry — incremented in a transaction when the apply path
-   *  fires. Used to surface most-used templates at the top of the
-   *  library and to spot dead seeds in production. */
+  /**
+   * Telemetry — incremented in a transaction when the apply path
+   * fires. Used to surface most-used templates at the top of the
+   * library and to spot dead seeds in production.
+   */
   usageCount Int       @default(0)
   lastUsedAt DateTime?
 
   createdBy String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([category])
@@ -3584,18 +3588,24 @@ model ScheduledBulkAction {
    */
   actionType String
 
-  /** ISO channel code, null = all. Same shape as BulkActionJob. */
+  /**
+   * ISO channel code, null = all. Same shape as BulkActionJob.
+   */
   channel String?
 
-  /** Job payload. Same shape as BulkActionJob.actionPayload. May
-   *  carry parameter placeholders if the schedule was created from a
-   *  BulkActionTemplate — substitution happens once at create time,
-   *  not per-fire. */
+  /**
+   * Job payload. Same shape as BulkActionJob.actionPayload. May
+   * carry parameter placeholders if the schedule was created from a
+   * BulkActionTemplate — substitution happens once at create time,
+   * not per-fire.
+   */
   actionPayload Json @default("{}")
 
-  /** Either explicit target IDs OR filters (mutually exclusive at
-   *  the API boundary, both fields here for shape compatibility
-   *  with BulkActionJob). */
+  /**
+   * Either explicit target IDs OR filters (mutually exclusive at
+   * the API boundary, both fields here for shape compatibility
+   * with BulkActionJob).
+   */
   targetProductIds   String[] @default([])
   targetVariationIds String[] @default([])
   filters            Json?
@@ -3638,12 +3648,14 @@ model ScheduledBulkAction {
   /**
    * Audit + UX: every fire bumps these.
    */
-  lastRunAt   DateTime?
-  lastJobId   String?
-  /** Last-fire status: 'SUCCESS' | 'FAILED' | 'SKIPPED' */
-  lastStatus  String?
-  lastError   String?
-  runCount    Int       @default(0)
+  lastRunAt  DateTime?
+  lastJobId  String?
+  /**
+   * Last-fire status: 'SUCCESS' | 'FAILED' | 'SKIPPED'
+   */
+  lastStatus String?
+  lastError  String?
+  runCount   Int       @default(0)
 
   /**
    * Optional link back to the BulkActionTemplate the operator
@@ -3682,61 +3694,77 @@ model ScheduledBulkAction {
 model BulkAutomationApproval {
   id String @id @default(cuid())
 
-  /** The rule that requested approval. No FK so deleting a rule
-   *  doesn't lose the audit trail of past pending approvals. */
-  ruleId String
-  /** Snapshot of the rule's name at request time — survives a rule
-   *  rename or delete so the queue UI can still show what it was. */
+  /**
+   * The rule that requested approval. No FK so deleting a rule
+   * doesn't lose the audit trail of past pending approvals.
+   */
+  ruleId   String
+  /**
+   * Snapshot of the rule's name at request time — survives a rule
+   * rename or delete so the queue UI can still show what it was.
+   */
   ruleName String
 
-  /** Snapshot of the trigger payload + the action plan the engine
-   *  was about to execute. Approving replays this exactly. */
+  /**
+   * Snapshot of the trigger payload + the action plan the engine
+   * was about to execute. Approving replays this exactly.
+   */
   triggerPayload Json
   actionPlan     Json
 
   /**
    * Why this approval was required:
-   *   'value'   exceeded rule.maxValueCentsEur
-   *   'manual'  rule explicitly carries requireApproval=true
-   *   'safety'  hard-coded blast-radius guard fired
+   * 'value'   exceeded rule.maxValueCentsEur
+   * 'manual'  rule explicitly carries requireApproval=true
+   * 'safety'  hard-coded blast-radius guard fired
    */
   threshold String
 
-  /** Estimated EUR-cents value of the actions being approved.
-   *  Drives the operator's read-the-room: "this would spend €1,200"
-   *  vs "this would publish 47 listings". Null when N/A. */
+  /**
+   * Estimated EUR-cents value of the actions being approved.
+   * Drives the operator's read-the-room: "this would spend €1,200"
+   * vs "this would publish 47 listings". Null when N/A.
+   */
   estimatedValueCentsEur Int?
 
   /**
    * State machine:
-   *   PENDING                         (created)
-   *   APPROVED  → action fired        (operator clicks Approve)
-   *   REJECTED  → action dropped      (operator clicks Reject)
-   *   EXPIRED   → action dropped      (auto-expired after expiresAt)
+   * PENDING                         (created)
+   * APPROVED  → action fired        (operator clicks Approve)
+   * REJECTED  → action dropped      (operator clicks Reject)
+   * EXPIRED   → action dropped      (auto-expired after expiresAt)
    */
   status String @default("PENDING")
 
-  /** Soft cutoff. Default 24h from createdAt; operators can extend
-   *  by editing the row from the queue UI in a follow-up. Stale
-   *  pending rows past this timestamp get auto-EXPIRED by the
-   *  approval-cleanup tick. */
+  /**
+   * Soft cutoff. Default 24h from createdAt; operators can extend
+   * by editing the row from the queue UI in a follow-up. Stale
+   * pending rows past this timestamp get auto-EXPIRED by the
+   * approval-cleanup tick.
+   */
   expiresAt DateTime
 
-  /** Audit fields populated when the operator acts. */
+  /**
+   * Audit fields populated when the operator acts.
+   */
   approvedBy     String?
   approvedAt     DateTime?
   rejectedBy     String?
   rejectedAt     DateTime?
   rejectedReason String?
 
-  /** Outcome from the resumed action (when status='APPROVED' and
-   *  the action successfully fired). Same shape as
-   *  AutomationRuleExecution.actionResults. Null until resumed. */
+  /**
+   * Outcome from the resumed action (when status='APPROVED' and
+   * the action successfully fired). Same shape as
+   * AutomationRuleExecution.actionResults. Null until resumed.
+   */
   resolvedActionResults Json?
 
-  /** Optional link to the AutomationRuleExecution row created when
-   *  the approved action fires — lets the queue UI link straight
-   *  through to the per-execution drill-down. */
+  /**
+   * Optional link to the AutomationRuleExecution row created when
+   * the approved action fires — lets the queue UI link straight
+   * through to the per-execution drill-down.
+   */
   resolvedExecutionId String?
 
   createdBy String?
@@ -3778,51 +3806,63 @@ model ImportJob {
    * Where the file came from. 'upload' is the operator-driven
    * path; 'url' / 'ftp' are scheduled pulls.
    */
-  source     String @default("upload")
-  /** For url / ftp sources, the location pulled. Null for uploads. */
-  sourceUrl  String?
-  /** Original filename when known (uploads carry it). */
-  filename   String?
-  /** Detected file kind: 'csv' | 'xlsx' | 'json'. */
-  fileKind   String
+  source    String  @default("upload")
+  /**
+   * For url / ftp sources, the location pulled. Null for uploads.
+   */
+  sourceUrl String?
+  /**
+   * Original filename when known (uploads carry it).
+   */
+  filename  String?
+  /**
+   * Detected file kind: 'csv' | 'xlsx' | 'json'.
+   */
+  fileKind  String
 
   /**
    * What entity these rows write to:
-   *   'product'         — base catalog rows
-   *   'channelListing'  — per-marketplace overrides
-   *   'inventory'       — stock-only updates
+   * 'product'         — base catalog rows
+   * 'channelListing'  — per-marketplace overrides
+   * 'inventory'       — stock-only updates
    * Drives validator + write path selection.
    */
   targetEntity String
 
   /**
    * Operator-supplied or auto-detected column → field mapping. Shape:
-   *   { sku: 'SKU', name: 'Title', basePrice: 'Price (EUR)' }
+   * { sku: 'SKU', name: 'Title', basePrice: 'Price (EUR)' }
    * Fields the operator left unmapped fall through (no write).
    */
   columnMapping Json @default("{}")
 
   /**
    * Behaviour when a row hits a validation failure:
-   *   'abort'   — first failure aborts the whole apply (legacy)
-   *   'skip'    — failed rows skipped, successful rows commit
-   *               (default — partial-import is the expected case)
+   * 'abort'   — first failure aborts the whole apply (legacy)
+   * 'skip'    — failed rows skipped, successful rows commit
+   * (default — partial-import is the expected case)
    */
   onError String @default("skip")
 
   status String @default("PENDING_PREVIEW")
 
-  /** Aggregate counters — kept on the parent for cheap UI. */
-  totalRows     Int @default(0)
-  successRows   Int @default(0)
-  failedRows    Int @default(0)
-  skippedRows   Int @default(0)
+  /**
+   * Aggregate counters — kept on the parent for cheap UI.
+   */
+  totalRows   Int @default(0)
+  successRows Int @default(0)
+  failedRows  Int @default(0)
+  skippedRows Int @default(0)
 
   errorSummary String?
 
-  /** Optional schedule that triggered this import (W8.4). */
-  scheduleId String?
-  /** A rerun-of-failed-rows points back at its parent. */
+  /**
+   * Optional schedule that triggered this import (W8.4).
+   */
+  scheduleId  String?
+  /**
+   * A rerun-of-failed-rows points back at its parent.
+   */
   parentJobId String?
 
   rows ImportJobRow[]
@@ -3844,24 +3884,32 @@ model ImportJobRow {
   jobId String
   job   ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  /** Row index in the source file (1-based, header-skipped). Used to
-   *  link back to the original spreadsheet for triage. */
+  /**
+   * Row index in the source file (1-based, header-skipped). Used to
+   * link back to the original spreadsheet for triage.
+   */
   rowIndex Int
 
-  /** Resolved target id when the row matched an existing entity (sku
-   *  match, etc.); null when the row was rejected before lookup. */
+  /**
+   * Resolved target id when the row matched an existing entity (sku
+   * match, etc.); null when the row was rejected before lookup.
+   */
   targetId String?
 
-  /** Pre-validation snapshot of the row's parsed values. Frozen so
-   *  rollback can read what was about to be written. */
+  /**
+   * Pre-validation snapshot of the row's parsed values. Frozen so
+   * rollback can read what was about to be written.
+   */
   parsedValues Json
 
   status String @default("PENDING") // PENDING | SUCCESS | FAILED | SKIPPED
 
   errorMessage String?
 
-  /** Snapshot of the entity's fields BEFORE the import wrote (only
-   *  populated when status=SUCCESS) — drives rollback. */
+  /**
+   * Snapshot of the entity's fields BEFORE the import wrote (only
+   * populated when status=SUCCESS) — drives rollback.
+   */
   beforeState Json?
   afterState  Json?
 
@@ -3884,28 +3932,32 @@ model ScheduledImport {
   name        String
   description String?
 
-  /** Where to pull from. 'url' for HTTP(S), 'ftp' for FTP/SFTP. */
-  source   String
+  /**
+   * Where to pull from. 'url' for HTTP(S), 'ftp' for FTP/SFTP.
+   */
+  source    String
   sourceUrl String
 
-  /** Same shape as ImportJob.targetEntity / columnMapping / onError —
-   *  the worker copies these onto the ImportJob it creates. */
-  targetEntity   String
-  columnMapping  Json    @default("{}")
-  onError        String  @default("skip")
+  /**
+   * Same shape as ImportJob.targetEntity / columnMapping / onError —
+   * the worker copies these onto the ImportJob it creates.
+   */
+  targetEntity  String
+  columnMapping Json   @default("{}")
+  onError       String @default("skip")
 
   cronExpression String?
   scheduledFor   DateTime?
-  timezone       String  @default("Europe/Rome")
+  timezone       String    @default("Europe/Rome")
 
   nextRunAt DateTime?
-  enabled   Boolean @default(true)
+  enabled   Boolean   @default(true)
 
-  lastRunAt    DateTime?
-  lastJobId    String?
-  lastStatus   String?
-  lastError    String?
-  runCount     Int @default(0)
+  lastRunAt  DateTime?
+  lastJobId  String?
+  lastStatus String?
+  lastError  String?
+  runCount   Int       @default(0)
 
   createdBy String?
   createdAt DateTime @default(now())
@@ -3927,14 +3979,22 @@ model ExportJob {
   jobName     String
   description String?
 
-  /** csv | xlsx | json | pdf */
+  /**
+   * csv | xlsx | json | pdf
+   */
   format       String
-  /** product | channelListing | inventory */
+  /**
+   * product | channelListing | inventory
+   */
   targetEntity String
 
-  /** [{ id, label, format? }] — operator-picked column-spec. */
-  columns Json @default("[]")
-  /** Same shape as BulkActionJob.filters. */
+  /**
+   * [{ id, label, format? }] — operator-picked column-spec.
+   */
+  columns Json  @default("[]")
+  /**
+   * Same shape as BulkActionJob.filters.
+   */
   filters Json?
 
   status String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
@@ -3942,7 +4002,9 @@ model ExportJob {
   rowCount Int @default(0)
   bytes    Int @default(0)
 
-  /** Inline payload for small exports (<1 MB). Base64-encoded. */
+  /**
+   * Inline payload for small exports (<1 MB). Base64-encoded.
+   */
   artifactBase64 String?
   artifactUrl    String?
 
@@ -3975,7 +4037,7 @@ model ScheduledExport {
   format       String
   targetEntity String
 
-  columns Json @default("[]")
+  columns Json  @default("[]")
   filters Json?
 
   /**
@@ -3988,16 +4050,16 @@ model ScheduledExport {
 
   cronExpression String?
   scheduledFor   DateTime?
-  timezone       String   @default("Europe/Rome")
+  timezone       String    @default("Europe/Rome")
 
   nextRunAt DateTime?
   enabled   Boolean   @default(true)
 
-  lastRunAt   DateTime?
-  lastJobId   String?
-  lastStatus  String?
-  lastError   String?
-  runCount    Int       @default(0)
+  lastRunAt  DateTime?
+  lastJobId  String?
+  lastStatus String?
+  lastError  String?
+  runCount   Int       @default(0)
 
   createdBy String?
   createdAt DateTime @default(now())
@@ -4468,7 +4530,7 @@ model Warehouse {
   // warehouses without a kind set are treated as PRIMARY (the
   // default sellable pool). Values: PRIMARY | SECOND_QUALITY |
   // REFURBISH | QUARANTINE.
-  kind         String?
+  kind String?
 
   // Sendcloud sender address mapping — Sendcloud uses sender_address_id
   sendcloudSenderId Int?
@@ -4524,21 +4586,21 @@ model StockLocation {
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
   stockLevels    StockLevel[]
-  movements      StockMovement[] @relation("StockLocationMovements")
-  movementsFrom  StockMovement[] @relation("StockMovementFromLocation")
-  movementsTo    StockMovement[] @relation("StockMovementToLocation")
+  movements      StockMovement[]  @relation("StockLocationMovements")
+  movementsFrom  StockMovement[]  @relation("StockMovementFromLocation")
+  movementsTo    StockMovement[]  @relation("StockMovementToLocation")
   stockoutEvents StockoutEvent[] // R.12
   cycleCounts    CycleCount[]
   costLayers     StockCostLayer[] // S.20
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  serials   SerialNumber[] @relation("StockLocationSerials")
+  bins      StockBin[]     @relation("StockLocationBins")
 
   @@index([type])
   @@index([isActive])
   @@index([externalChannel, externalLocationId])
-  serials      SerialNumber[]   @relation("StockLocationSerials")
-  bins         StockBin[]       @relation("StockLocationBins")
 }
 
 // Per-location, per-product (or per-variation) quantity ledger.
@@ -4570,7 +4632,8 @@ model StockLevel {
 
   reservations StockReservation[]
 
-  createdAt DateTime @default(now())
+  createdAt     DateTime           @default(now())
+  binQuantities StockBinQuantity[] @relation("StockLevelBinQuantities")
 
   // The DB-level UNIQUE is enforced by two partial indexes (variationId
   // IS NULL / IS NOT NULL) created in the migration SQL. We keep this
@@ -4581,7 +4644,6 @@ model StockLevel {
   @@index([locationId])
   @@index([quantity])
   @@index([syncStatus])
-  binQuantities StockBinQuantity[] @relation("StockLevelBinQuantities")
 }
 
 // Time-bounded holds against StockLevel.reserved. PENDING_ORDER
@@ -4598,7 +4660,7 @@ model StockReservation {
   // RV.1 — HARD decrements available; SOFT is advisory (cart hold,
   // payment-pending). Default HARD preserves prior behavior. CHECK
   // constraint enforces valid values at the DB.
-  kind     String @default("HARD")
+  kind    String  @default("HARD")
 
   expiresAt  DateTime
   releasedAt DateTime?
@@ -4652,11 +4714,11 @@ model StockMovement {
   // S.20 — captured at consume time so reports don't have to replay
   // historical layers to compute COGS per shipment. NULL on receives,
   // adjustments, and pre-S.20 rows.
-  cogsCents      Int?
+  cogsCents Int?
 
   // L.1 — lot reference. Optional; populated on receives that capture
   // a lotNumber and on consumes that depleted a specific lot.
-  lotId          String?
+  lotId String?
 
   // SR.1 — serial-number reference. Set when a movement touched a
   // specific unit (premium helmet receive, outbound, RMA).
@@ -4664,18 +4726,18 @@ model StockMovement {
 
   // BN.1 — bin reference. Set when a movement was posted into/out
   // of a specific bin (vs the location-aggregate ledger).
-  binId          String?
+  binId String?
 
-  warehouse       Warehouse?     @relation(fields: [warehouseId], references: [id])
-  location        StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
-  fromLocation    StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
-  toLocation      StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
-  lot             Lot?           @relation("LotMovements", fields: [lotId], references: [id])
-  serial          SerialNumber?  @relation("SerialMovements", fields: [serialNumberId], references: [id])
-  bin             StockBin?      @relation("BinMovements", fields: [binId], references: [id])
+  warehouse      Warehouse?     @relation(fields: [warehouseId], references: [id])
+  location       StockLocation? @relation("StockLocationMovements", fields: [locationId], references: [id])
+  fromLocation   StockLocation? @relation("StockMovementFromLocation", fields: [fromLocationId], references: [id])
+  toLocation     StockLocation? @relation("StockMovementToLocation", fields: [toLocationId], references: [id])
+  lot            Lot?           @relation("LotMovements", fields: [lotId], references: [id])
+  serial         SerialNumber?  @relation("SerialMovements", fields: [serialNumberId], references: [id])
+  bin            StockBin?      @relation("BinMovements", fields: [binId], references: [id])
   // Back-relation for the Lot.originStockMovementId FK (one movement
   // can be the origin receive of one or more lots — split-receive case).
-  lotsOriginated  Lot[]          @relation("LotOrigin")
+  lotsOriginated Lot[]          @relation("LotOrigin")
 
   @@index([productId, createdAt])
   @@index([variationId, createdAt])
@@ -4697,43 +4759,43 @@ model StockMovement {
 // created for audit history. Synthetic seed layers carry the
 // 'S.20 backfill' note.
 model StockCostLayer {
-  id             String   @id @default(cuid())
-  productId      String
-  variationId    String?
-  locationId     String?
-  receivedAt     DateTime @default(now())
+  id                    String   @id @default(cuid())
+  productId             String
+  variationId           String?
+  locationId            String?
+  receivedAt            DateTime @default(now())
   // Decimal so landed-cost addends can carry sub-cent precision
   // (per-unit freight on a 24-unit case can land at €0.4583/unit).
-  unitCost       Decimal  @db.Decimal(12, 4)
-  unitsReceived  Int
-  unitsRemaining Int
+  unitCost              Decimal  @db.Decimal(12, 4)
+  unitsReceived         Int
+  unitsRemaining        Int
   // Landed-cost breakdown (per unit, in cents). All optional.
-  freightCents   Int?
-  dutyCents      Int?
-  insuranceCents Int?
-  brokerCents    Int?
+  freightCents          Int?
+  dutyCents             Int?
+  insuranceCents        Int?
+  brokerCents           Int?
   // T.6 — Multi-currency capture. Italian fiscal valuation
   // (Codice Civile Art. 2427-bis) requires inventory in EUR at the
   // historical exchange rate. costCurrency is the supplier-invoice
   // currency; exchangeRateOnReceive is the rate to base (EUR) on
   // receivedAt — required when costCurrency != 'EUR' (DB CHECK).
-  costCurrency           String   @default("EUR")
-  exchangeRateOnReceive  Decimal? @db.Decimal(14, 8)
+  costCurrency          String   @default("EUR")
+  exchangeRateOnReceive Decimal? @db.Decimal(14, 8)
   // T.7 — VAT (IVA) treatment. Italian fiscal law requires
   // inventory to exclude VAT (DPR 633/72 Art. 19). Default true
   // because the receive path is convention-net. vatRate is the
   // applicable rate at receive time (e.g. 0.2200 for IT 22%); CHECK
   // keeps it in [0, 1).
-  unitCostVatExcluded    Boolean  @default(true)
-  vatRate                Decimal? @db.Decimal(5, 4)
+  unitCostVatExcluded   Boolean  @default(true)
+  vatRate               Decimal? @db.Decimal(5, 4)
   // Source linkage.
-  inboundShipmentId String?
-  stockMovementId   String?
-  notes             String?
+  inboundShipmentId     String?
+  stockMovementId       String?
+  notes                 String?
   // L.1 — link a cost layer to its source lot when a receive captured
   // both. Lets the rimanenze report break down value by lot for recall
   // / compliance audits.
-  lotId             String?
+  lotId                 String?
 
   createdAt DateTime @default(now())
 
@@ -4762,31 +4824,31 @@ model StockCostLayer {
 //   unitsRemaining >= 0
 //   unitsRemaining <= unitsReceived
 model Lot {
-  id            String   @id @default(cuid())
-  productId     String
-  variationId   String?
-  lotNumber     String
-  receivedAt    DateTime @default(now())
-  expiresAt     DateTime?
-  unitsReceived  Int
-  unitsRemaining Int
+  id                      String    @id @default(cuid())
+  productId               String
+  variationId             String?
+  lotNumber               String
+  receivedAt              DateTime  @default(now())
+  expiresAt               DateTime?
+  unitsReceived           Int
+  unitsRemaining          Int
   // Origin links for backward trace.
-  originPoId             String?
+  originPoId              String?
   originInboundShipmentId String?
-  originStockMovementId  String?
+  originStockMovementId   String?
   // Supplier's own lot reference if it differs from our lotNumber.
-  supplierLotRef String?
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  supplierLotRef          String?
+  notes                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variation     ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
-  originMovement StockMovement?   @relation("LotOrigin", fields: [originStockMovementId], references: [id], onDelete: SetNull)
-  movements     StockMovement[]   @relation("LotMovements")
-  costLayers    StockCostLayer[]  @relation("LotCostLayers")
-  recalls       LotRecall[]
-  serials       SerialNumber[]    @relation("LotSerials")
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variation      ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  originMovement StockMovement?    @relation("LotOrigin", fields: [originStockMovementId], references: [id], onDelete: SetNull)
+  movements      StockMovement[]   @relation("LotMovements")
+  costLayers     StockCostLayer[]  @relation("LotCostLayers")
+  recalls        LotRecall[]
+  serials        SerialNumber[]    @relation("LotSerials")
 
   @@unique([productId, lotNumber])
   @@index([productId, receivedAt])
@@ -4794,30 +4856,29 @@ model Lot {
   @@index([productId, unitsRemaining])
 }
 
-
 // SR.1 — Serial number tracking. Per-unit identification (lot = batch,
 // serial = individual). For Xavia: premium helmet warranty + recall
 // granularity beyond lot. Lifecycle: AVAILABLE -> RESERVED -> SHIPPED
 // -> RETURNED -> AVAILABLE | DISPOSED.
 model SerialNumber {
-  id             String   @id @default(cuid())
-  productId      String
-  variationId    String?
-  serialNumber   String
-  lotId          String?
-  status         String   @default("AVAILABLE")
-  locationId     String?
-  receivedAt     DateTime @default(now())
-  shippedAt      DateTime?
-  returnedAt     DateTime?
-  disposedAt     DateTime?
+  id                String    @id @default(cuid())
+  productId         String
+  variationId       String?
+  serialNumber      String
+  lotId             String?
+  status            String    @default("AVAILABLE")
+  locationId        String?
+  receivedAt        DateTime  @default(now())
+  shippedAt         DateTime?
+  returnedAt        DateTime?
+  disposedAt        DateTime?
   currentOrderId    String?
   currentShipmentId String?
   lastReturnId      String?
   manufacturerRef   String?
   notes             String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
@@ -4832,25 +4893,24 @@ model SerialNumber {
   @@index([currentOrderId])
 }
 
-
 // BN.1 — Bin management within StockLocation. Bin = physical
 // subdivision (shelf, pallet slot, zone). Sum of StockBinQuantity.
 // quantity per StockLevel must equal StockLevel.quantity (invariant).
 model StockBin {
-  id           String   @id @default(cuid())
-  locationId   String
-  code         String
-  name         String?
-  zone         String?
-  binType      String?
-  capacity     Int?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String   @id @default(cuid())
+  locationId String
+  code       String
+  name       String?
+  zone       String?
+  binType    String?
+  capacity   Int?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  location     StockLocation      @relation("StockLocationBins", fields: [locationId], references: [id], onDelete: Cascade)
-  quantities   StockBinQuantity[]
-  movements    StockMovement[]    @relation("BinMovements")
+  location   StockLocation      @relation("StockLocationBins", fields: [locationId], references: [id], onDelete: Cascade)
+  quantities StockBinQuantity[]
+  movements  StockMovement[]    @relation("BinMovements")
 
   @@unique([locationId, code])
   @@index([locationId, zone])
@@ -4863,8 +4923,8 @@ model StockBinQuantity {
   quantity      Int      @default(0)
   lastUpdatedAt DateTime @default(now())
 
-  stockLevel    StockLevel @relation("StockLevelBinQuantities", fields: [stockLevelId], references: [id], onDelete: Cascade)
-  bin           StockBin   @relation(fields: [binId], references: [id], onDelete: Restrict)
+  stockLevel StockLevel @relation("StockLevelBinQuantities", fields: [stockLevelId], references: [id], onDelete: Cascade)
+  bin        StockBin   @relation(fields: [binId], references: [id], onDelete: Restrict)
 
   @@unique([stockLevelId, binId])
   @@index([binId])
@@ -4887,7 +4947,7 @@ model LotRecall {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  lot       Lot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  lot Lot @relation(fields: [lotId], references: [id], onDelete: Cascade)
 
   @@index([lotId])
   @@index([status])
@@ -4907,21 +4967,21 @@ model LotRecall {
 // 2025-12-31T23:59:59Z). snapshotAt is when the cron actually ran.
 // They differ if the operator manually replays a missed year.
 model YearEndSnapshot {
-  id             String   @id @default(cuid())
-  year           Int      @unique
-  asOf           DateTime
-  snapshotAt     DateTime @default(now())
-  totalUnits     Int
+  id                 String   @id @default(cuid())
+  year               Int      @unique
+  asOf               DateTime
+  snapshotAt         DateTime @default(now())
+  totalUnits         Int
   totalValueEurCents Int
-  layerCount     Int
+  layerCount         Int
   // JSON aggregates — same shape as the year-end-valuation endpoint.
-  byLocation     Json
-  byMethod       Json
-  byCurrency     Json
-  vatTreatment   Json
+  byLocation         Json
+  byMethod           Json
+  byCurrency         Json
+  vatTreatment       Json
   // Optional commentary the cron / operator captures (e.g.
   // "manually replayed 2024 after late ECB rate update").
-  notes          String?
+  notes              String?
 
   @@index([year])
 }
@@ -4934,21 +4994,21 @@ model YearEndSnapshot {
 // per-FC dimensionality for distribution visibility, aged-inventory
 // tracking, and unfulfillable surfacing.
 model FbaInventoryDetail {
-  id                    String   @id @default(cuid())
-  productId             String?
-  sku                   String
-  asin                  String?
-  marketplaceId         String   // 'A1PA6795UKMFR9' (DE), 'APJ6JRA9NG5V4' (IT), etc
-  fulfillmentCenterId   String   // 'FRA5', 'MAD4', 'MXP6', etc
-  condition             String   // 'SELLABLE'|'UNFULFILLABLE'|'INBOUND'|'RESERVED'|'RESEARCHING'
-  quantity              Int      @default(0)
+  id                  String    @id @default(cuid())
+  productId           String?
+  sku                 String
+  asin                String?
+  marketplaceId       String // 'A1PA6795UKMFR9' (DE), 'APJ6JRA9NG5V4' (IT), etc
+  fulfillmentCenterId String // 'FRA5', 'MAD4', 'MXP6', etc
+  condition           String // 'SELLABLE'|'UNFULFILLABLE'|'INBOUND'|'RESERVED'|'RESEARCHING'
+  quantity            Int       @default(0)
   // Earliest receipt at this FC × condition; preserved across updates
   // so age-based long-term-storage-fee tracking stays honest.
-  firstReceivedAt       DateTime?
-  lastSyncedAt          DateTime @default(now())
-  rawData               Json?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  firstReceivedAt     DateTime?
+  lastSyncedAt        DateTime  @default(now())
+  rawData             Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
@@ -4966,25 +5026,25 @@ model FbaInventoryDetail {
 // fulfillment-order states; reserve-then-consume integrates with
 // AMAZON-EU-FBA StockLevel via the S.2 helpers.
 model MCFShipment {
-  id                       String   @id @default(cuid())
+  id                       String    @id @default(cuid())
   orderId                  String
-  amazonFulfillmentOrderId String   @unique
-  sellerFulfillmentOrderId String?  // operator-owned idempotency key
-  status                   String   @default("NEW")
+  amazonFulfillmentOrderId String    @unique
+  sellerFulfillmentOrderId String? // operator-owned idempotency key
+  status                   String    @default("NEW")
   marketplaceId            String?
   displayableOrderId       String?
-  shippingSpeedCategory    String?  // 'Standard' | 'Expedited' | 'Priority'
-  requestedAt              DateTime @default(now())
+  shippingSpeedCategory    String? // 'Standard' | 'Expedited' | 'Priority'
+  requestedAt              DateTime  @default(now())
   shippedAt                DateTime?
   deliveredAt              DateTime?
   cancelledAt              DateTime?
   lastSyncedAt             DateTime?
   trackingNumber           String?
   carrier                  String?
-  rawResponse              Json?    // last SP-API response
+  rawResponse              Json? // last SP-API response
   lastError                String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -6700,7 +6760,7 @@ model AlertRule {
   metric        String
   operator      String
   threshold     Float
-  windowMinutes Int    @default(15)
+  windowMinutes Int     @default(15)
   channel       String?
 
   // Notification channels. Array of strings — see schema-level note.
@@ -6733,12 +6793,12 @@ model AlertEvent {
   value Float
 
   // 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
-  status      String    @default("TRIGGERED")
-  triggeredAt DateTime  @default(now())
+  status         String    @default("TRIGGERED")
+  triggeredAt    DateTime  @default(now())
   acknowledgedAt DateTime?
   acknowledgedBy String?
-  resolvedAt    DateTime?
-  resolvedBy    String?
+  resolvedAt     DateTime?
+  resolvedBy     String?
 
   // Free-form notes operators add when ack-ing (e.g. "investigating
   // — Amazon EU outage").
@@ -6999,8 +7059,8 @@ model FbaInboundPlanV2 {
   operationIds Json?
 
   // Operator's per-step selections — null until the operator picks.
-  selectedPackingOptionId   String?
-  selectedPlacementOptionId String?
+  selectedPackingOptionId       String?
+  selectedPlacementOptionId     String?
   // Multi-shipment plans pick a transportationOptionId per shipment.
   // Shape: [{ shipmentId, transportationOptionId, contactInformation? }].
   selectedTransportationOptions Json?
@@ -7251,6 +7311,73 @@ model AiUsageLog {
   @@index([createdAt])
 }
 
+// ── AI-2.1 (list-wizard): prompts as data ──────────────────────────────
+// Lifts the four hardcoded LLM prompts out of
+// apps/api/src/services/ai/listing-content.service.ts so they can be
+// A/B-tested + revised without redeploying the API. Future PromptTemplate
+// rows hold per-feature variants (e.g. "listing-wizard.title.variant-a")
+// keyed by the feature tag the wizard route already uses for AiUsageLog.
+//
+// Lifecycle:
+//   DRAFT     — operator-edited or AI-suggested; never picked for live
+//               calls until promoted to ACTIVE.
+//   ACTIVE    — picked by feature lookup. At most one ACTIVE per feature
+//               per (language, marketplace) pair (enforced in code, not
+//               schema, so manual edits don't lock up the table during
+//               edits).
+//   ARCHIVED  — kept for history; not selectable.
+//
+// callCount + lastUsedAt are the lightweight telemetry hooks the prompt
+// dashboard reads to show "this variant got 50 calls last week, average
+// quality score 78". The full call-by-call history still lives in
+// AiUsageLog with provider/model/cost/latency.
+model PromptTemplate {
+  id String @id @default(cuid())
+
+  // Feature tag this prompt builds for, e.g. "listing-wizard.title"
+  // matches the feature column on AiUsageLog rows so the dashboard
+  // can join Prompt → Usage cheaply.
+  feature String
+
+  // Human-readable variant name. "default" for the original; A/B
+  // variants get descriptive names like "variant-a" or
+  // "tighter-200char". Free-form so operators don't fight a constraint.
+  name String @default("default")
+
+  description String?
+
+  // The prompt body, with {placeholder} interpolation handled at render
+  // time. listing-content.service.ts will load the ACTIVE row for the
+  // feature/name/scope at call time and substitute.
+  body String
+
+  // Lifecycle.
+  status String @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+
+  // Versioning — bumped on each ACTIVE re-publish. A/B variant rows
+  // share the same feature but get a distinct name; their version
+  // tracks edits to that variant specifically.
+  version Int @default(1)
+
+  // Optional scoping. null = applies everywhere. When set, the prompt
+  // matcher prefers (language && marketplace) → (language) → (null)
+  // so a per-IT prompt overrides the global default for IT calls.
+  language    String?
+  marketplace String?
+
+  // Telemetry — populated by AI calls that use this prompt. Kept as
+  // plain counters for cheap reads; AiUsageLog has the per-call detail.
+  callCount  Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([feature, status])
+  @@index([status])
+}
+
 // ── In-app notifications (H.8) ────────────────────────────────────────
 // DO.30 — operator-set targets (revenue, orders, AOV, units, new
 // customers) per period (daily / weekly / monthly / quarterly /
@@ -7267,11 +7394,11 @@ model AiUsageLog {
 model Goal {
   id          String   @id @default(cuid())
   userId      String   @default("default-user")
-  type        String   // revenue | orders | aov | units | newCustomers
-  period      String   // daily | weekly | monthly | quarterly | yearly
+  type        String // revenue | orders | aov | units | newCustomers
+  period      String // daily | weekly | monthly | quarterly | yearly
   targetValue Decimal  @db.Decimal(14, 2)
-  currency    String?  // only meaningful for revenue / aov goals
-  label       String?  // optional friendly name shown in the UI
+  currency    String? // only meaningful for revenue / aov goals
+  label       String? // optional friendly name shown in the UI
   status      String   @default("ACTIVE") // ACTIVE | ARCHIVED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -7358,18 +7485,18 @@ model DashboardView {
 // multiple stakeholders (CFO, ops manager) on the same digest.
 // Comma-separated addresses are normalised at send time.
 model ScheduledReport {
-  id         String   @id @default(cuid())
-  userId     String   @default("default-user")
-  email      String   // single recipient or comma-separated list
-  frequency  String   // daily | weekly | monthly
-  hourLocal  Int      @default(8) // 0-23, Europe/Rome local hour
+  id         String    @id @default(cuid())
+  userId     String    @default("default-user")
+  email      String // single recipient or comma-separated list
+  frequency  String // daily | weekly | monthly
+  hourLocal  Int       @default(8) // 0-23, Europe/Rome local hour
   // Optional saved-view pointer to scope the digest's section
   // selection — if null, the operator's current live layout is used.
   viewId     String?
-  isActive   Boolean  @default(true)
+  isActive   Boolean   @default(true)
   lastSentAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([userId])
   @@index([isActive, frequency])
@@ -7537,9 +7664,9 @@ model ProductRelation {
 /// (enforced at the application layer — not a DB unique since the same slug
 /// could appear on different domains/storefronts).
 model ProductSeo {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   productId       String
-  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   /// BCP 47 locale, lowercase. 'default' = canonical/master entry.
   locale          String
   /// <title> tag; max 60 chars for SERP truncation. Inherits from
@@ -7559,8 +7686,8 @@ model ProductSeo {
   canonicalUrl    String?
   /// schema.org Product JSON-LD override (null → auto-generated)
   schemaOrgJson   Json?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([productId, locale])
   @@index([productId])
@@ -7581,9 +7708,9 @@ model ProductSeo {
 /// operators can paste a link from any source without first going
 /// through the DAM upload flow.
 model ProductCertificate {
-  id          String    @id @default(cuid())
-  productId   String
-  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   /// 'CE' | 'EN_13595' | 'EN_22_05' | 'REACH' | 'ROHS' | 'WEEE' | 'ATEX' | 'OTHER'
   certType    String
@@ -7599,8 +7726,8 @@ model ProductCertificate {
   fileUrl     String?
   notes       String?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([productId])
   @@index([productId, certType])
@@ -7850,9 +7977,9 @@ model ScheduledProductChange {
   scheduledFor DateTime
 
   // Lifecycle.
-  status     String    @default("PENDING") // 'PENDING' | 'APPLIED' | 'FAILED' | 'CANCELLED'
-  appliedAt  DateTime?
-  error      String?
+  status    String    @default("PENDING") // 'PENDING' | 'APPLIED' | 'FAILED' | 'CANCELLED'
+  appliedAt DateTime?
+  error     String?
 
   // Who.
   createdBy String?
@@ -7945,7 +8072,7 @@ model AutomationRuleExecution {
   actionResults Json
 
   dryRun       Boolean
-  status       String  // SUCCESS | PARTIAL | FAILED | DRY_RUN
+  status       String // SUCCESS | PARTIAL | FAILED | DRY_RUN
   errorMessage String?
 
   startedAt  DateTime  @default(now())
