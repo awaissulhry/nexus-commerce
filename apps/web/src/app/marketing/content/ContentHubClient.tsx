@@ -18,6 +18,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import KpiStrip from './_components/KpiStrip'
 import ContentToolbar, { type ViewMode } from './_components/ContentToolbar'
 import AssetLibrary from './_components/AssetLibrary'
+import AssetDetailDrawer from './_components/AssetDetailDrawer'
 import FilterSidebar, {
   EMPTY_FILTER,
   activeFilterCount,
@@ -161,12 +162,16 @@ export default function ContentHubClient({
           search={search}
           filter={filter}
           apiBase={apiBase}
-          onSelect={(item) =>
-            setSelected((prev) => (prev?.id === item.id ? null : item))
-          }
+          onSelect={(item) => setSelected(item)}
           selectedId={selected?.id ?? null}
         />
       </div>
+
+      <AssetDetailDrawer
+        selected={selected}
+        apiBase={apiBase}
+        onClose={() => setSelected(null)}
+      />
     </div>
   )
 }

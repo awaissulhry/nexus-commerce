@@ -43,3 +43,41 @@ export interface LibraryResponse {
   total: number
   hasMore: boolean
 }
+
+// MC.1.5 — full asset detail for the drawer.
+
+export interface AssetUsage {
+  id: string
+  scope: string
+  role: string
+  sortOrder: number
+  productId: string | null
+  productSku: string | null
+  productName: string | null
+}
+
+export interface AssetDetail {
+  id: string
+  source: AssetSource
+  url: string
+  label: string
+  code: string | null
+  type: string
+  mimeType: string | null
+  sizeBytes: number | null
+  width: number | null
+  height: number | null
+  alt: string | null
+  caption: string | null
+  tags: string[]
+  originalFilename: string | null
+  storageProvider: string
+  storageId: string | null
+  createdAt: string
+  updatedAt: string
+  usages: AssetUsage[]
+}
+
+export interface AssetDetailResponse {
+  detail: AssetDetail
+}

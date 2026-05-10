@@ -367,6 +367,116 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // MC.1.5 — unified detail endpoint for the library drawer.
+  //
+  // Accepts the "da_<id>" / "pi_<id>" prefix from /assets/library and
+  // returns a normalised AssetDetail that the drawer can render
+  // without branching on the source. ProductImage rows surface their
+  // single product attachment as a synthetic usage so the "Used in"
+  // section has the same shape regardless of source.
+  fastify.get('/assets/library/:id', async (request, reply) => {
+    const { id: prefixed } = request.params as { id: string }
+    if (prefixed.startsWith('da_')) {
+      const id = prefixed.slice(3)
+      const asset = await prisma.digitalAsset.findUnique({
+        where: { id },
+        include: {
+          usages: {
+            include: {
+              product: { select: { id: true, sku: true, name: true } },
+            },
+            orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }],
+          },
+        },
+      })
+      if (!asset) return reply.code(404).send({ error: 'asset not found' })
+      const meta =
+        (asset.metadata as Record<string, unknown> | null) ?? {}
+      return {
+        detail: {
+          id: prefixed,
+          source: 'digital_asset' as const,
+          url: asset.url,
+          label: asset.label,
+          code: asset.code,
+          type: asset.type,
+          mimeType: asset.mimeType,
+          sizeBytes: asset.sizeBytes,
+          width: typeof meta.width === 'number' ? meta.width : null,
+          height: typeof meta.height === 'number' ? meta.height : null,
+          alt: typeof meta.alt === 'string' ? meta.alt : null,
+          caption: typeof meta.caption === 'string' ? meta.caption : null,
+          tags: Array.isArray(meta.tags)
+            ? (meta.tags.filter((t) => typeof t === 'string') as string[])
+            : [],
+          originalFilename: asset.originalFilename,
+          storageProvider: asset.storageProvider,
+          storageId: asset.storageId,
+          createdAt: asset.createdAt.toISOString(),
+          updatedAt: asset.updatedAt.toISOString(),
+          usages: asset.usages.map((u) => ({
+            id: u.id,
+            scope: u.scope,
+            role: u.role,
+            sortOrder: u.sortOrder,
+            productId: u.product?.id ?? null,
+            productSku: u.product?.sku ?? null,
+            productName: u.product?.name ?? null,
+          })),
+        },
+      }
+    }
+    if (prefixed.startsWith('pi_')) {
+      const id = prefixed.slice(3)
+      const row = await prisma.productImage.findUnique({
+        where: { id },
+        include: {
+          product: { select: { id: true, sku: true, name: true } },
+        },
+      })
+      if (!row) return reply.code(404).send({ error: 'asset not found' })
+      return {
+        detail: {
+          id: prefixed,
+          source: 'product_image' as const,
+          url: row.url,
+          label: row.alt || row.publicId || row.product?.sku || 'Untitled',
+          code: null,
+          type: 'image',
+          mimeType: null,
+          sizeBytes: null,
+          width: null,
+          height: null,
+          alt: row.alt,
+          caption: null,
+          tags: [],
+          originalFilename: null,
+          storageProvider: row.publicId ? 'cloudinary' : 'external',
+          storageId: row.publicId,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+          usages: [
+            // Synthetic usage so the drawer's "Used in" section has
+            // a consistent shape across both sources.
+            {
+              id: `pi_usage_${row.id}`,
+              scope: 'product',
+              role: row.type.toLowerCase(),
+              sortOrder: row.sortOrder,
+              productId: row.product?.id ?? null,
+              productSku: row.product?.sku ?? null,
+              productName: row.product?.name ?? null,
+            },
+          ],
+        },
+      }
+    }
+    return reply.code(400).send({
+      error:
+        'id must be prefixed with "da_" (digital asset) or "pi_" (product image)',
+    })
+  })
+
   fastify.get('/assets', async (request) => {
     const q = request.query as {
       type?: string
