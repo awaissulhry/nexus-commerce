@@ -70,6 +70,7 @@ import bulkAutomationApprovalsRoutes from "./routes/bulk-automation-approvals.ro
 import importWizardRoutes from "./routes/import-wizard.routes.js";
 import scheduledImportsRoutes from "./routes/scheduled-imports.routes.js";
 import exportWizardRoutes from "./routes/export-wizard.routes.js";
+import scheduledExportsRoutes from "./routes/scheduled-exports.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import auditLogRoutes from "./routes/audit-log.routes.js";
@@ -104,6 +105,7 @@ import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.jo
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
 import { startBulkAutomationTickCron } from "./jobs/bulk-automation-tick.job.js";
 import { startScheduledImportCron } from "./jobs/scheduled-import.job.js";
+import { startScheduledExportCron } from "./jobs/scheduled-export.job.js";
 import { startSalesReportIngestCron } from "./jobs/sales-report-ingest.job.js";
 import { startForecastCron } from "./jobs/forecast.job.js";
 import { startDashboardDigestCron } from "./jobs/dashboard-digest.job.js";
@@ -142,6 +144,11 @@ import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
 import { startAutomationRuleEvaluatorCron } from "./jobs/automation-rule-evaluator.job.js";
+// AI-2.2 (list-wizard) — idempotent seed of the four Step 5 attribute
+// prompts on API boot so /settings/ai prompt admin (lands AI-2.5) has
+// rows to render. DRAFT status keeps live AI calls on the inline
+// path until operators promote.
+import { seedPromptTemplateDefaults } from "./services/ai/prompt-template.service.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
 import { startRepricingEvaluatorCron } from "./jobs/repricing-evaluator.job.js";
@@ -429,6 +436,7 @@ app.register(bulkAutomationApprovalsRoutes, { prefix: '/api' });
 app.register(importWizardRoutes, { prefix: '/api' });
 app.register(scheduledImportsRoutes, { prefix: '/api' });
 app.register(exportWizardRoutes, { prefix: '/api' });
+app.register(scheduledExportsRoutes, { prefix: '/api' });
 app.register(dashboardRoutes, { prefix: '/api' });
 app.register(pimRoutes, { prefix: '/api' });
 app.register(auditLogRoutes, { prefix: '/api' });
@@ -513,6 +521,13 @@ async function start() {
     // ScheduledImport rows into real ImportJob runs via the
     // import-wizard service. No-op when no schedules are due.
     startScheduledImportCron();
+
+    // W9.4 — scheduled-export tick. 5-min cron fans out due
+    // ScheduledExport rows into real ExportJob runs + delivery.
+    // Email delivery logs a Notification row (real SMTP send is
+    // gated behind NEXUS_ENABLE_OUTBOUND_EMAILS, so dev never
+    // accidentally fires real mail). No-op when no schedules due.
+    startScheduledExportCron();
 
     // W7.1 — register bulk-ops action handlers into the existing
     // AutomationRule registry. Idempotent — safe to call before /
@@ -834,6 +849,19 @@ async function start() {
     if (process.env.NEXUS_ENABLE_AUTOMATION_RULE_CRON === '1') {
       startAutomationRuleEvaluatorCron();
     }
+
+    // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts
+    // on boot. Idempotent: skips rows that already exist for
+    // (feature, name='default', version=1) so an operator-edited
+    // body isn't clobbered. Failures here mustn't kill startup —
+    // the inline-prompt path in listing-content.service.ts still
+    // works without the DB rows.
+    seedPromptTemplateDefaults(prisma).catch((err: unknown) => {
+      console.warn(
+        '[api] prompt-template seed failed (non-fatal):',
+        err instanceof Error ? err.message : err,
+      );
+    });
 
     // S.17 — daily ABC-driven cycle-count scheduler. 02:30 UTC.
     // Picks up products whose cadence has elapsed (A=7d, B=30d,

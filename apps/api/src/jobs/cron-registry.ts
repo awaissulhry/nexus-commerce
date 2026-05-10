@@ -53,6 +53,7 @@ import { runObservabilityRetention } from './observability-retention.job.js'
 import { runOrphanBulkJobCleanupOnce } from './bulk-job-orphan-cleanup.job.js'
 import { runScheduledBulkActionCronOnce } from './scheduled-bulk-action.job.js'
 import { runScheduledImportCronOnce } from './scheduled-import.job.js'
+import { runScheduledExportCronOnce } from './scheduled-export.job.js'
 import { runBulkAutomationTickOnce } from './bulk-automation-tick.job.js'
 import { runAlertEvaluator } from '../services/alert-evaluator.service.js'
 import {
@@ -107,6 +108,7 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'bulk-job-orphan-cleanup': () => runOrphanBulkJobCleanupOnce(),
   'scheduled-bulk-action': () => runScheduledBulkActionCronOnce(),
   'scheduled-import': () => runScheduledImportCronOnce(),
+  'scheduled-export': () => runScheduledExportCronOnce(),
   'bulk-automation-tick': () => runBulkAutomationTickOnce(),
   'alert-evaluator': () => runAlertEvaluator(),
 
