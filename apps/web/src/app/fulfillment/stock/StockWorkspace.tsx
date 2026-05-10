@@ -505,6 +505,11 @@ export default function StockWorkspace() {
   // doesn't crash on a missing window.
   const [density, setDensity] = useState<Density>('comfortable')
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMNS)
+  // CR.1 — per-column widths in pixels, keyed by ColumnKey. Persists in
+  // localStorage so a resize survives reload. Auto when missing — the
+  // table is `w-full`, so an absent width falls back to the browser's
+  // natural sizing rather than collapsing the column.
+  const [columnWidths, setColumnWidths] = useState<Partial<Record<ColumnKey, number>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   useEffect(() => {
     try {
@@ -517,6 +522,26 @@ export default function StockWorkspace() {
           setVisibleColumns(parsed)
         }
       }
+      const w = localStorage.getItem('stock.columnWidths')
+      if (w) {
+        const parsed = JSON.parse(w) as Record<string, number>
+        if (parsed && typeof parsed === 'object') {
+          // Filter to known column keys + numeric widths so a stale or
+          // tampered storage row doesn't propagate garbage into render.
+          const valid: Partial<Record<ColumnKey, number>> = {}
+          for (const [k, v] of Object.entries(parsed)) {
+            if (
+              ALL_COLUMNS.some((col) => col.key === k) &&
+              typeof v === 'number' &&
+              v >= 40 &&
+              v <= 800
+            ) {
+              valid[k as ColumnKey] = v
+            }
+          }
+          setColumnWidths(valid)
+        }
+      }
     } catch { /* ignore */ }
   }, [])
   useEffect(() => {
@@ -525,6 +550,11 @@ export default function StockWorkspace() {
   useEffect(() => {
     try { localStorage.setItem('stock.columns', JSON.stringify(visibleColumns)) } catch { /* ignore */ }
   }, [visibleColumns])
+  useEffect(() => {
+    try {
+      localStorage.setItem('stock.columnWidths', JSON.stringify(columnWidths))
+    } catch { /* ignore */ }
+  }, [columnWidths])
   // S.18 — saved views. Hydrate from localStorage on mount; the
   // operator's current filter/view/columns capture into a named view
   // they can restore in one click. No schema change; one operator per
@@ -1167,6 +1197,16 @@ export default function StockWorkspace() {
             onToggleSelectAll={toggleSelectAll}
             density={density}
             visibleColumns={visibleColumns}
+            columnWidths={columnWidths}
+            onColumnWidthChange={(key, width) =>
+              setColumnWidths((prev) => ({ ...prev, [key]: width }))
+            }
+            onColumnWidthReset={(key) =>
+              setColumnWidths((prev) => {
+                const { [key]: _omit, ...rest } = prev
+                return rest
+              })
+            }
           />
         )
       })()}
@@ -3256,9 +3296,64 @@ const COLUMN_META: Record<ColumnKey, {
   },
 }
 
+// CR.1 — column resize handle on each thead <th>. mousedown captures
+// the starting clientX + width, mousemove drags, mouseup commits.
+// Width is clamped to [40, 800] px (matches the localStorage hydrate
+// validator). Double-click clears the override so the column returns
+// to auto sizing. Pointer-events:none on the handle's parent <th>
+// hover so the column header text doesn't fight for the click.
+function ResizeHandle({
+  currentWidth,
+  onResize,
+  onReset,
+}: {
+  currentWidth: number | undefined
+  onResize: (width: number) => void
+  onReset: () => void
+}) {
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    // Use the parent <th> width as the baseline — covers both the
+    // explicit currentWidth case and the auto-sizing initial case.
+    const th = (e.currentTarget.parentElement as HTMLElement | null) ?? null
+    const startWidth =
+      typeof currentWidth === 'number'
+        ? currentWidth
+        : th?.getBoundingClientRect().width ?? 120
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(40, Math.min(800, startWidth + (ev.clientX - startX)))
+      onResize(next)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize column"
+      onMouseDown={onMouseDown}
+      onDoubleClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onReset()
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none opacity-0 group-hover:opacity-100 hover:bg-blue-400/60 dark:hover:bg-blue-500/60 transition-opacity"
+      title="Drag to resize · double-click to reset"
+    />
+  )
+}
+
 function TableView({
   items, onOpenProduct, selected, onToggleSelect, onToggleSelectAll,
-  density, visibleColumns,
+  density, visibleColumns, columnWidths, onColumnWidthChange, onColumnWidthReset,
 }: {
   items: StockRow[]
   onOpenProduct: (id: string) => void
@@ -3267,6 +3362,9 @@ function TableView({
   onToggleSelectAll: () => void
   density: Density
   visibleColumns: ColumnKey[]
+  columnWidths: Partial<Record<ColumnKey, number>>
+  onColumnWidthChange: (key: ColumnKey, width: number) => void
+  onColumnWidthReset: (key: ColumnKey) => void
 }) {
   const { t } = useTranslations()
   const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
@@ -3291,12 +3389,31 @@ function TableView({
               </th>
               {visibleColumns.map((key) => {
                 const meta = COLUMN_META[key]
+                const width = columnWidths[key]
                 return (
                   <th
                     key={key}
-                    className={`px-3 ${padY} text-${meta.align} text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 ${meta.headWidthCls ?? ''}`}
+                    className={`px-3 ${padY} text-${meta.align} text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 ${meta.headWidthCls ?? ''} relative group`}
+                    style={
+                      typeof width === 'number'
+                        ? { width: `${width}px`, minWidth: `${width}px` }
+                        : undefined
+                    }
                   >
                     {meta.head}
+                    {/* CR.1 — column resize handle. Right edge drags to
+                        change width; double-click resets to auto.
+                        Hidden on the last column (last visible) so the
+                        end of the table doesn't sprout a phantom
+                        handle. The thumb column has fixed width and
+                        skips this entirely. */}
+                    {key !== 'thumb' && (
+                      <ResizeHandle
+                        currentWidth={width}
+                        onResize={(w) => onColumnWidthChange(key, w)}
+                        onReset={() => onColumnWidthReset(key)}
+                      />
+                    )}
                   </th>
                 )
               })}
