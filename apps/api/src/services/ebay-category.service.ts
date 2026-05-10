@@ -803,46 +803,16 @@ export class EbayCategoryService {
       return [];
     }
     const rows = json?.aspects ?? [];
-
-    // For non-English marketplaces, fetch English aspect names in parallel so
-    // the UI can show "Marca (Brand)" and "Taglia (Size)" alongside the local
-    // label. Accept-Language: en-US asks the same tree for English labels —
-    // same category IDs, same structure, different locale strings.
     const isEnglishMarket = ['EBAY_UK', 'EBAY_US', 'EBAY_AU', 'EBAY_CA'].includes(marketplaceId)
-    let englishNames: Map<number, string> = new Map()
-    if (!isEnglishMarket) {
-      try {
-        const enRes = await fetch(url, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'Accept-Language': 'en-US',
-          },
-        })
-        if (enRes.ok) {
-          const enJson = await enRes.json().catch(() => null) as any
-          const enRows: any[] = enJson?.aspects ?? []
-          enRows.forEach((a: any, i: number) => {
-            if (typeof a?.localizedAspectName === 'string') {
-              englishNames.set(i, a.localizedAspectName)
-            }
-          })
-        }
-      } catch {
-        // non-fatal — English names are a best-effort enhancement
-      }
-    }
 
     const aspects: EbayAspectRich[] = [];
-    rows.forEach((a: any, i: number) => {
+    for (const a of rows) {
       const name = a?.localizedAspectName;
-      if (!name) return;
+      if (!name) continue;
       const c = a.aspectConstraint ?? {};
-      const englishName = englishNames.get(i)
+      const englishName = isEnglishMarket ? undefined : lookupEnglishAspectName(name)
       aspects.push({
         name,
-        // Only store englishName when it differs from the localized label
         ...(englishName && englishName !== name ? { englishName } : {}),
         dataType: (c.aspectDataType ?? "STRING") as EbayAspectRich["dataType"],
         mode: (c.aspectMode ?? "FREE_TEXT") as EbayAspectRich["mode"],
@@ -857,7 +827,7 @@ export class EbayCategoryService {
           .map((v: any) => v.localizedValue)
           .filter((v: any): v is string => typeof v === "string" && v.length > 0),
       });
-    });
+    }
     this.richCache.set(key, {
       aspects,
       expiresAt: Date.now() + CACHE_TTL,
@@ -996,4 +966,156 @@ export class EbayCategoryService {
       entries: Array.from(this.cache.keys()),
     };
   }
+}
+
+// ── eBay aspect name → English translation dictionary ───────────────────
+//
+// The Taxonomy API always returns aspect names in the marketplace language
+// (Accept-Language is ignored). We maintain a static lookup so the UI can
+// show the English meaning alongside the localized label.
+//
+// Covers IT, DE, FR, ES — the four non-English eBay markets Xavia sells on.
+// Keys are lower-cased; the lookup is case-insensitive.
+
+const ASPECT_EN: Record<string, string> = {
+  // ── Italian (IT) ──────────────────────────────────────────────────────
+  'marca': 'Brand',
+  'taglia': 'Size',
+  'colore': 'Color',
+  'materiale': 'Material',
+  'genere': 'Gender',
+  'tipo': 'Type',
+  'stile': 'Style',
+  'stagione': 'Season',
+  'modello': 'Model',
+  'produttore': 'Manufacturer',
+  'numero di serie': 'Serial number',
+  'lunghezza manica': 'Sleeve length',
+  'vestibilità': 'Fit',
+  'vestibilita': 'Fit',
+  'caratteristiche': 'Features',
+  'paese di fabbricazione': 'Country of manufacture',
+  'peso': 'Weight',
+  'peso del prodotto': 'Product weight',
+  'lunghezza': 'Length',
+  'larghezza': 'Width',
+  'altezza': 'Height',
+  'dimensioni': 'Dimensions',
+  'occasione': 'Occasion',
+  'motivo': 'Pattern',
+  'chiusura': 'Closure / Fastening',
+  'protezione': 'Protection',
+  'livello di protezione': 'Protection level',
+  'impermeabile': 'Waterproof',
+  'certificazione': 'Certification',
+  'norma': 'Standard',
+  'taglia produttore': 'Manufacturer size',
+  'linea': 'Line',
+  'collezione': 'Collection',
+  'anno': 'Year',
+  'reparto': 'Department',
+  'tipo di tessuto': 'Fabric type',
+  'composizione': 'Composition',
+  'numero articolo fornitore': 'Supplier part number',
+  'ean': 'EAN',
+  'isbn': 'ISBN',
+  'mpn': 'MPN',
+  'upc': 'UPC',
+
+  // ── German (DE) ───────────────────────────────────────────────────────
+  'marke': 'Brand',
+  'größe': 'Size',
+  'grösse': 'Size',
+  'farbe': 'Color',
+  'material': 'Material',
+  'abteilung': 'Department',
+  'stil': 'Style',
+  'modell': 'Model',
+  'hersteller': 'Manufacturer',
+  'saison': 'Season',
+  'passform': 'Fit',
+  'anlass': 'Occasion',
+  'muster': 'Pattern',
+  'verschluss': 'Closure',
+  'thema': 'Theme',
+  'herstellernummer': 'Manufacturer part number',
+  'herstellungsland und -region': 'Country of manufacture',
+  'produktart': 'Product type',
+  'produktlinie': 'Product line',
+  'type': 'Type',
+  'länge': 'Length',
+  'breite': 'Width',
+  'höhe': 'Height',
+  'gewicht': 'Weight',
+  'schutzklasse': 'Protection class',
+  'wasserdicht': 'Waterproof',
+  'zertifizierung': 'Certification',
+  'norm': 'Standard',
+  'herstellergröße': 'Manufacturer size',
+  'herstellergroesse': 'Manufacturer size',
+  'kollektion': 'Collection',
+  'jahr': 'Year',
+  'stoff': 'Fabric',
+  'zusammensetzung': 'Composition',
+  'artikelnummer des herstellers': 'Manufacturer part number',
+  'eu-schuhgröße': 'EU shoe size',
+
+  // ── French (FR) ───────────────────────────────────────────────────────
+  'marque': 'Brand',
+  'taille': 'Size',
+  'couleur': 'Color',
+  'matière': 'Material',
+  'matiere': 'Material',
+  'département': 'Department',
+  'departement': 'Department',
+  'modèle': 'Model',
+  'coupe': 'Fit',
+  'motif': 'Pattern',
+  'fermeture': 'Closure',
+  'thème': 'Theme',
+  'pays de fabrication': 'Country of manufacture',
+  'type de produit': 'Product type',
+  'longueur': 'Length',
+  'largeur': 'Width',
+  'hauteur': 'Height',
+  'poids': 'Weight',
+  'imperméable': 'Waterproof',
+  'annee': 'Year',
+  'tissu': 'Fabric',
+  'référence du fabricant': 'Manufacturer part number',
+  'numéro de pièce fabricant': 'Manufacturer part number',
+
+  // ── Spanish (ES) ──────────────────────────────────────────────────────
+  'talla': 'Size',
+  'color': 'Color',
+  'departamento': 'Department',
+  'modelo': 'Model',
+  'temporada': 'Season',
+  'ajuste': 'Fit',
+  'ocasión': 'Occasion',
+  'ocasion': 'Occasion',
+  'estampado': 'Pattern',
+  'cierre': 'Closure',
+  'tema': 'Theme',
+  'país de fabricación': 'Country of manufacture',
+  'tipo de producto': 'Product type',
+  'longitud': 'Length',
+  'anchura': 'Width',
+  'altura': 'Height',
+  'protección': 'Protection',
+  'proteccion': 'Protection',
+  'impermeable': 'Waterproof',
+  'certificación': 'Certification',
+  'colección': 'Collection',
+  'coleccion': 'Collection',
+  'ano': 'Year',
+  'tela': 'Fabric',
+  'composición': 'Composition',
+  'composicion': 'Composition',
+  'número de pieza del fabricante': 'Manufacturer part number',
+}
+
+function lookupEnglishAspectName(localizedName: string): string | undefined {
+  const key = localizedName.trim().toLowerCase()
+  return ASPECT_EN[key]
 }
