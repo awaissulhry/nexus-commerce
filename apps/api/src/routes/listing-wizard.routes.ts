@@ -4269,6 +4269,161 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── SP.2 (list-wizard) — scheduled wizard publish endpoints ────
+  //
+  // POST   /api/listing-wizard/:id/schedule-publish
+  //   body: { scheduledFor: ISO datetime }
+  //   Creates a PENDING ScheduledWizardPublish row. Validates the
+  //   wizard is ready (ALL channels ready) AND scheduledFor is in
+  //   the future. Returns the row.
+  //
+  // GET    /api/listing-wizard/:id/scheduled-publishes
+  //   Lists all schedule rows for a wizard, newest first. For the
+  //   Step 9 UI's "Pending schedules" surface.
+  //
+  // DELETE /api/listing-wizard/scheduled-publishes/:id
+  //   Sets status='CANCELLED' on a PENDING row. Refuses FIRED /
+  //   FAILED / already-CANCELLED rows.
+  //
+  // SP.3 will land the cron picker that flips PENDING → FIRED by
+  // calling the same orchestration as POST /:id/submit.
+  fastify.post<{
+    Params: { id: string }
+    Body: { scheduledFor?: string }
+  }>(
+    '/listing-wizard/:id/schedule-publish',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, status: true },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      if (wizard.status !== 'DRAFT') {
+        return reply.code(409).send({
+          error: `Cannot schedule a wizard in status ${wizard.status}. Only DRAFT wizards can be scheduled.`,
+        })
+      }
+
+      const raw = request.body?.scheduledFor
+      if (typeof raw !== 'string' || raw.trim().length === 0) {
+        return reply.code(400).send({
+          error: 'scheduledFor (ISO datetime) is required',
+        })
+      }
+      const scheduledFor = new Date(raw)
+      if (!Number.isFinite(scheduledFor.getTime())) {
+        return reply.code(400).send({
+          error: `scheduledFor "${raw}" is not a valid ISO datetime`,
+        })
+      }
+      // Refuse past dates with a small grace (5 minutes) to absorb
+      // clock skew between operator's browser and the server.
+      const minScheduledFor = new Date(Date.now() - 5 * 60 * 1000)
+      if (scheduledFor < minScheduledFor) {
+        return reply.code(400).send({
+          error: `scheduledFor must be in the future (got ${scheduledFor.toISOString()}; now ${new Date().toISOString()}).`,
+        })
+      }
+
+      try {
+        const row = await prisma.scheduledWizardPublish.create({
+          data: {
+            wizardId: wizard.id,
+            scheduledFor,
+            status: 'PENDING',
+            createdBy: 'operator',
+          },
+        })
+        reply.code(201)
+        return {
+          row: {
+            ...row,
+            scheduledFor: row.scheduledFor.toISOString(),
+            firedAt: row.firedAt ? row.firedAt.toISOString() : null,
+            cancelledAt: row.cancelledAt
+              ? row.cancelledAt.toISOString()
+              : null,
+            createdAt: row.createdAt.toISOString(),
+            updatedAt: row.updatedAt.toISOString(),
+          },
+        }
+      } catch (err) {
+        fastify.log.error({ err }, '[schedule-publish] create failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/scheduled-publishes',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+        select: { id: true },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+
+      const rows = await prisma.scheduledWizardPublish.findMany({
+        where: { wizardId: request.params.id },
+        orderBy: [{ scheduledFor: 'desc' }],
+        take: 50,
+      })
+      return {
+        rows: rows.map((r) => ({
+          ...r,
+          scheduledFor: r.scheduledFor.toISOString(),
+          firedAt: r.firedAt ? r.firedAt.toISOString() : null,
+          cancelledAt: r.cancelledAt ? r.cancelledAt.toISOString() : null,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString(),
+        })),
+      }
+    },
+  )
+
+  fastify.delete<{ Params: { id: string } }>(
+    '/listing-wizard/scheduled-publishes/:id',
+    async (request, reply) => {
+      const row = await prisma.scheduledWizardPublish.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, status: true },
+      })
+      if (!row) {
+        return reply.code(404).send({ error: 'Schedule not found' })
+      }
+      if (row.status !== 'PENDING') {
+        return reply.code(409).send({
+          error: `Schedule is ${row.status} — only PENDING rows can be cancelled.`,
+        })
+      }
+      try {
+        const updated = await prisma.scheduledWizardPublish.update({
+          where: { id: request.params.id },
+          data: { status: 'CANCELLED', cancelledAt: new Date() },
+        })
+        return {
+          row: {
+            ...updated,
+            scheduledFor: updated.scheduledFor.toISOString(),
+            firedAt: updated.firedAt ? updated.firedAt.toISOString() : null,
+            cancelledAt: updated.cancelledAt
+              ? updated.cancelledAt.toISOString()
+              : null,
+            createdAt: updated.createdAt.toISOString(),
+            updatedAt: updated.updatedAt.toISOString(),
+          },
+        }
+      } catch (err) {
+        fastify.log.error({ err }, '[schedule-publish] cancel failed')
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    },
+  )
+
   // ── C.1 (list-wizard) — per-channel compliance status ──────────
   //
   // GET /api/listing-wizard/:id/compliance-status
