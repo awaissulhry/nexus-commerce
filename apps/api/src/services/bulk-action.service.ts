@@ -72,7 +72,14 @@ export type BulkActionType =
   // Per-locale ProductSeo upsert: metaTitle / metaDescription /
   // ogTitle / ogDescription rewritten by the LLM with SERP-aware
   // length caps applied defensively.
-  | 'AI_SEO_REGEN';
+  | 'AI_SEO_REGEN'
+  // W11.3 — bulk alt-text generation. payload =
+  //   { onlyEmpty?: boolean (default true), locale?: string }.
+  // For each item Product, walks ProductImage rows and writes
+  // ProductImage.alt with an AI-generated description. v0 is
+  // text-only (derived from product context); a vision-capable
+  // v1 follow-up could send the image URL to a multimodal model.
+  | 'AI_ALT_TEXT';
 
 /**
  * Runtime allowlist mirroring `BulkActionType`. Used by the Zod
@@ -90,6 +97,7 @@ export const KNOWN_BULK_ACTION_TYPES: ReadonlySet<BulkActionType> = new Set([
   'LISTING_BULK_ACTION',
   'AI_TRANSLATE_PRODUCT',
   'AI_SEO_REGEN',
+  'AI_ALT_TEXT',
 ]);
 
 export function isKnownBulkActionType(t: string): t is BulkActionType {
@@ -136,6 +144,10 @@ const ACTION_ENTITY = {
   // handler reads master copy + writes ProductSeo rows per
   // requested locale.
   AI_SEO_REGEN: 'product',
+  // W11.3 — AI bulk alt-text operates on Product rows; the
+  // handler walks ProductImage rows for each product and
+  // upserts the alt column.
+  AI_ALT_TEXT: 'product',
 } as const satisfies Record<
   BulkActionType,
   'product' | 'variation' | 'channelListing'
@@ -1961,6 +1973,15 @@ export class BulkActionService {
           masterName: typeof item.name === 'string' ? item.name : null,
           masterKeywords: Array.isArray(item.keywords) ? item.keywords : [],
         };
+      case 'AI_ALT_TEXT':
+        // W11.3 — capture the policy + locale; the per-image
+        // before-snapshot is too much for the audit row, the
+        // afterState lookup handles the per-image diff.
+        return {
+          onlyEmpty: payload?.onlyEmpty !== false,
+          locale: typeof payload?.locale === 'string' ? payload?.locale : 'en',
+          masterName: typeof item.name === 'string' ? item.name : null,
+        };
       default:
         return {};
     }
@@ -2069,6 +2090,24 @@ export class BulkActionService {
           })),
         };
       }
+      case 'AI_ALT_TEXT': {
+        // W11.3 — return per-image alt previews so the diff drawer
+        // shows what the model wrote. Trimmed to first 80 chars
+        // per row to keep the JSON column compact for jobs that
+        // touch many images.
+        const images = await this.prisma.productImage.findMany({
+          where: { productId: itemId },
+          select: { id: true, type: true, alt: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        });
+        return {
+          images: images.map((i) => ({
+            id: i.id,
+            type: i.type,
+            alt: typeof i.alt === 'string' ? i.alt.slice(0, 80) : null,
+          })),
+        };
+      }
       default:
         return {};
     }
@@ -2147,9 +2186,77 @@ export class BulkActionService {
         return await this.processAiTranslate(item as Product, payload);
       case 'AI_SEO_REGEN':
         return await this.processAiSeoRegen(item as Product, payload);
+      case 'AI_ALT_TEXT':
+        return await this.processAiAltText(item as Product, payload);
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
     }
+  }
+
+  /**
+   * W11.3 — AI bulk alt-text handler.
+   *
+   * Payload:
+   *   onlyEmpty?: boolean   (default true — never overwrites an
+   *     operator-authored alt. Set false to redo every image.)
+   *   locale?: string       (BCP 47 lowercase; default 'en')
+   *
+   * For each ProductImage on the master Product:
+   *   - Skip when onlyEmpty=true and the row already has alt text.
+   *   - Otherwise call generateAltText with the product's master
+   *     copy + the image's role (MAIN / ALT / LIFESTYLE / SWATCH).
+   *   - Update ProductImage.alt with the returned string.
+   *
+   * Returns 'skipped' when the product has no images or every
+   * image already has alt text.
+   */
+  private async processAiAltText(
+    item: Product,
+    payload: Record<string, any>,
+  ): Promise<{ status: 'processed' | 'skipped' }> {
+    const { generateAltText } = await import('./ai/alt-text.service.js');
+    const onlyEmpty = payload.onlyEmpty !== false;
+    const locale =
+      typeof payload.locale === 'string'
+        ? payload.locale.trim().toLowerCase()
+        : 'en';
+    if (!/^[a-z]{2}(-[a-z0-9]{2,8})?$/.test(locale)) {
+      throw new Error(
+        `AI_ALT_TEXT: payload.locale must be BCP 47 lowercase; got "${locale}"`,
+      );
+    }
+    const product = await this.prisma.product.findUnique({
+      where: { id: item.id },
+    });
+    if (!product || !product.name?.trim()) return { status: 'skipped' };
+    const images = await this.prisma.productImage.findMany({
+      where: { productId: product.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+    if (images.length === 0) return { status: 'skipped' };
+    let didWriteAny = false;
+    for (const img of images) {
+      if (onlyEmpty && img.alt && img.alt.trim().length > 0) continue;
+      const out = await generateAltText({
+        source: {
+          name: product.name,
+          brand: product.brand,
+          productType: product.productType ?? null,
+          imageType: img.type,
+        },
+        locale,
+        productId: product.id,
+        imageId: img.id,
+        feature: 'bulk-alt-text',
+      });
+      if (!out.alt) continue;
+      await this.prisma.productImage.update({
+        where: { id: img.id },
+        data: { alt: out.alt },
+      });
+      didWriteAny = true;
+    }
+    return { status: didWriteAny ? 'processed' : 'skipped' };
   }
 
   /**
