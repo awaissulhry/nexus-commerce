@@ -29,6 +29,7 @@ import {
   findActivePromptTemplate,
   renderPromptBody,
 } from './prompt-template.service.js'
+import { renderBrandVoiceBlock } from './brand-voice.service.js'
 import type {
   LLMProvider,
   ProviderName,
@@ -475,6 +476,15 @@ export class ListingContentService {
       description: 'listing-wizard.description',
       keywords: 'listing-wizard.keywords',
     }
+    // BV.2 — resolve the brand-voice block once for this generation
+    // call (same scope across every requested field). renderBrand-
+    // VoiceBlock returns "" when no row matched, so the prompt
+    // renderer concats unconditionally without a guard.
+    const brandVoiceBlock = await renderBrandVoiceBlock(prisma, {
+      brand: params.product.brand,
+      marketplace: params.marketplace,
+      language: language.toLowerCase(),
+    })
     const resolveOne = async (f: ContentField): Promise<string> => {
       const active = await findActivePromptTemplate(prisma, promptFeatureMap[f], {
         language: language.toLowerCase(),
@@ -490,14 +500,15 @@ export class ListingContentService {
           language,
           contextBlock: this.contextBlock(params.product),
           terminologyBlock: this.terminologyBlock(params.terminology),
+          brandVoiceBlock,
         })
       }
       // Fall back to the inline static body — what every wizard call
       // resolves to today since the AI-2.2 seed lands rows as DRAFT.
-      if (f === 'title') return this.titlePrompt(params, language)
-      if (f === 'bullets') return this.bulletsPrompt(params, language)
-      if (f === 'description') return this.descriptionPrompt(params, language)
-      return this.keywordsPrompt(params, language)
+      if (f === 'title') return this.titlePrompt(params, language, brandVoiceBlock)
+      if (f === 'bullets') return this.bulletsPrompt(params, language, brandVoiceBlock)
+      if (f === 'description') return this.descriptionPrompt(params, language, brandVoiceBlock)
+      return this.keywordsPrompt(params, language, brandVoiceBlock)
     }
     await Promise.all(
       params.fields.map(async (f) => {
@@ -1451,7 +1462,11 @@ Rules for the response:
     return lines.join('\n')
   }
 
-  private titlePrompt(params: GenerationParams, language: string): string {
+  private titlePrompt(
+    params: GenerationParams,
+    language: string,
+    brandVoiceBlock = '',
+  ): string {
     return `You are an Amazon SEO expert. Generate ONE optimised product title for Amazon ${params.marketplace}.
 
 Product:
@@ -1464,7 +1479,7 @@ Requirements:
 - Add variation details (size, colour, material) at the end if applicable
 - Natural language — no keyword stuffing, no SHOUTING CAPS, no emojis
 - Optimised for ${params.marketplace} customer search behaviour
-- Write in ${language}${this.terminologyBlock(params.terminology)}
+- Write in ${language}${this.terminologyBlock(params.terminology)}${brandVoiceBlock}
 
 Return JSON only — no markdown, no commentary, no surrounding text:
 {
@@ -1478,7 +1493,11 @@ Return JSON only — no markdown, no commentary, no surrounding text:
 }`
   }
 
-  private bulletsPrompt(params: GenerationParams, language: string): string {
+  private bulletsPrompt(
+    params: GenerationParams,
+    language: string,
+    brandVoiceBlock = '',
+  ): string {
     return `You are an Amazon SEO expert. Generate exactly 5 bullet points for Amazon ${params.marketplace}.
 
 Product:
@@ -1491,7 +1510,7 @@ Per-bullet requirements:
 - Active voice, customer-benefit focus (not feature dumps)
 - Naturally include searchable keywords; no keyword stuffing
 - No emojis, no excessive punctuation, no SHOUTING outside the header
-- Write in ${language}${this.terminologyBlock(params.terminology)}
+- Write in ${language}${this.terminologyBlock(params.terminology)}${brandVoiceBlock}
 
 Bullet themes (one per bullet, in this order):
 1. Premium quality, protection, or safety
@@ -1508,7 +1527,11 @@ Return JSON only:
 }`
   }
 
-  private descriptionPrompt(params: GenerationParams, language: string): string {
+  private descriptionPrompt(
+    params: GenerationParams,
+    language: string,
+    brandVoiceBlock = '',
+  ): string {
     return `You are an Amazon listing copywriter. Generate the long product description as Amazon-safe HTML for marketplace ${params.marketplace}.
 
 Product:
@@ -1527,7 +1550,7 @@ HTML constraints (Amazon's Listing API restrictions):
 - No inline styles, no class attributes, no other tags
 - No <html>, <head>, <body>, <div>
 - Total length 1000–2500 characters of HTML
-- Write in ${language}${this.terminologyBlock(params.terminology)}
+- Write in ${language}${this.terminologyBlock(params.terminology)}${brandVoiceBlock}
 
 Return JSON only:
 {
@@ -1537,7 +1560,11 @@ Return JSON only:
 }`
   }
 
-  private keywordsPrompt(params: GenerationParams, language: string): string {
+  private keywordsPrompt(
+    params: GenerationParams,
+    language: string,
+    brandVoiceBlock = '',
+  ): string {
     return `Generate Amazon backend search terms for marketplace ${params.marketplace}.
 
 Product:
@@ -1550,7 +1577,7 @@ Hard requirements:
 - Do NOT repeat words already in the product title (Amazon ignores those)
 - Mix ${language} + English where it makes sense (catches both audiences)
 - Include synonyms, common misspellings, and use-case phrases (e.g. "summer riding")
-- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves")${this.terminologyBlock(params.terminology)}
+- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves")${this.terminologyBlock(params.terminology)}${brandVoiceBlock}
 
 Return JSON only:
 {

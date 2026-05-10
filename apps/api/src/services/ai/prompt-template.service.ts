@@ -309,6 +309,7 @@ export async function listPromptTemplates(
 //   {language}         — LANGUAGE_FOR_MARKETPLACE[marketplace] resolution
 //   {contextBlock}     — formatted product context (name / brand / desc / ...)
 //   {terminologyBlock} — brand terminology preferences (P0 #27)
+//   {brandVoiceBlock}  — brand voice / tone guidance (BV.1)
 //
 // Bodies stay static — operators editing them won't accidentally
 // break interpolation as long as they don't rename the placeholder
@@ -327,7 +328,7 @@ Requirements:
 - Add variation details (size, colour, material) at the end if applicable
 - Natural language — no keyword stuffing, no SHOUTING CAPS, no emojis
 - Optimised for {marketplace} customer search behaviour
-- Write in {language}{terminologyBlock}
+- Write in {language}{terminologyBlock}{brandVoiceBlock}
 
 Return JSON only — no markdown, no commentary, no surrounding text:
 {
@@ -352,7 +353,7 @@ Per-bullet requirements:
 - Active voice, customer-benefit focus (not feature dumps)
 - Naturally include searchable keywords; no keyword stuffing
 - No emojis, no excessive punctuation, no SHOUTING outside the header
-- Write in {language}{terminologyBlock}
+- Write in {language}{terminologyBlock}{brandVoiceBlock}
 
 Bullet themes (one per bullet, in this order):
 1. Premium quality, protection, or safety
@@ -386,7 +387,7 @@ HTML constraints (Amazon's Listing API restrictions):
 - No inline styles, no class attributes, no other tags
 - No <html>, <head>, <body>, <div>
 - Total length 1000–2500 characters of HTML
-- Write in {language}{terminologyBlock}
+- Write in {language}{terminologyBlock}{brandVoiceBlock}
 
 Return JSON only:
 {
@@ -407,7 +408,7 @@ Hard requirements:
 - Do NOT repeat words already in the product title (Amazon ignores those)
 - Mix {language} + English where it makes sense (catches both audiences)
 - Include synonyms, common misspellings, and use-case phrases (e.g. "summer riding")
-- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves"){terminologyBlock}
+- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves"){terminologyBlock}{brandVoiceBlock}
 
 Return JSON only:
 {
@@ -465,6 +466,11 @@ export type PromptRenderVars = {
   language?: string
   contextBlock?: string
   terminologyBlock?: string
+  /** BV.2 — operator-authored brand-voice guidance, rendered with a
+   *  "Brand voice:" prefix by renderBrandVoiceBlock(). Empty string
+   *  when no BrandVoice row matched the scope; the existing seed
+   *  prompts append unconditionally. */
+  brandVoiceBlock?: string
 }
 
 export function renderPromptBody(body: string, vars: PromptRenderVars): string {
