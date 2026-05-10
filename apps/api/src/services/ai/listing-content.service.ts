@@ -360,6 +360,11 @@ export interface GenerationResult {
     provider: ProviderName
     elapsedMs: number
     generatedAt: string
+    /** BV.5 — short preview of the BrandVoice body that was injected
+     *  into this generation, so the wizard can surface "Brand voice:
+     *  Xavia formal" without a separate fetch. Empty string when no
+     *  BrandVoice row matched. */
+    brandVoicePreview?: string
   }
 }
 
@@ -631,6 +636,18 @@ export class ListingContentService {
     )
     const redactionTotal = totalRedactions(redactions)
 
+    // BV.5 — capture a short, operator-visible preview of the
+    // BrandVoice body. The renderer prefixes "Brand voice:\n" so we
+    // strip it for the UI chip. Cap at 120 chars so a verbose voice
+    // body doesn't bloat the response.
+    const trimmedVoice = brandVoiceBlock
+      .replace(/^\s*\n+Brand voice:\s*\n*/, '')
+      .trim()
+    const brandVoicePreview =
+      trimmedVoice.length > 120
+        ? `${trimmedVoice.slice(0, 117)}…`
+        : trimmedVoice
+
     const result: GenerationResult = {
       usage: usageList,
       budgetWarn: budgetWarn === undefined ? undefined : budgetWarn,
@@ -647,6 +664,7 @@ export class ListingContentService {
         provider: provider.name,
         elapsedMs: Date.now() - start,
         generatedAt: new Date().toISOString(),
+        brandVoicePreview,
       },
     }
     for (const { field, result: value } of settled) {

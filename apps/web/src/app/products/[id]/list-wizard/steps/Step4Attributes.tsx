@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import type { StepProps } from '../ListWizardClient'
@@ -185,6 +185,11 @@ export default function Step4Attributes({
     outputTokens: number
   } | null>(null)
 
+  // BV.5 — last BrandVoice surfaced as a chip so the operator sees
+  // which voice was applied to the most recent generation. Sister to
+  // lastAiCost; same lifecycle (cleared on next AI call).
+  const [lastAiBrandVoice, setLastAiBrandVoice] = useState<string | null>(null)
+
   const onTranslate = useCallback(
     async (fieldId: string, channelKey: string) => {
       const aiKind = AI_FIELD_MAP[fieldId]
@@ -341,6 +346,14 @@ export default function Step4Attributes({
             outputTokens: totalOut,
           })
         }
+        // BV.5 — surface which BrandVoice was applied (preview only;
+        // empty when no row matched).
+        const firstGroupForVoice = json?.groups?.[0]
+        const brandVoicePreview =
+          typeof firstGroupForVoice?.metadata?.brandVoicePreview === 'string'
+            ? firstGroupForVoice.metadata.brandVoicePreview
+            : ''
+        setLastAiBrandVoice(brandVoicePreview.length > 0 ? brandVoicePreview : null)
         let value: string | undefined
         if (aiKind === 'title') {
           value = firstGroup.title?.content
@@ -819,6 +832,18 @@ export default function Step4Attributes({
               {lastAiCost.inputTokens + lastAiCost.outputTokens} tok
               {' · '}
               ${lastAiCost.costUSD.toFixed(4)}
+            </p>
+          )}
+          {/* BV.5 — chip surfaces the BrandVoice that was applied to
+              the last generation. Only renders when a voice matched
+              (empty otherwise — most generations early in life). */}
+          {lastAiBrandVoice && (
+            <p
+              className="text-xs text-violet-700 dark:text-violet-300 mt-1 inline-flex items-center gap-1"
+              title={lastAiBrandVoice}
+            >
+              <Sparkles className="w-3 h-3" />
+              Brand voice applied — {lastAiBrandVoice}
             </p>
           )}
         </div>
