@@ -4690,5 +4690,18 @@
   "brandKit.field.logoNamePlaceholder": "Nome logo",
   "brandKit.field.logoUrlPlaceholder": "https://res.cloudinary.com/…/brand-mark.svg",
   "brandKit.field.addLogo": "Aggiungi logo",
-  "brandKit.field.notesPlaceholder": "Altro — regole d'uso, do-not, note di stile fotografico…"
+  "brandKit.field.notesPlaceholder": "Altro — regole d'uso, do-not, note di stile fotografico…",
+  "brandKitRef.title": "Brand Kit · {brand}",
+  "brandKitRef.openKit": "Apri Brand Kit",
+  "brandKitRef.tagline": "Tagline",
+  "brandKitRef.colors": "Colori ({n})",
+  "brandKitRef.logos": "Logo ({n})",
+  "brandKitRef.fonts": "Font ({n})",
+  "brandKitRef.voice": "Voce e tono",
+  "brandKitRef.copied": "Copiato {label} negli appunti",
+  "brandKitRef.copyFailed": "Impossibile copiare — appunti bloccati",
+  "brandKitRef.copyAria": "Copia {label}",
+  "brandKitRef.noKitTitle": "Nessun Brand Kit per {brand}",
+  "brandKitRef.noKitBody": "Crea un kit per fissare colori, logo e voce — appariranno qui durante la modifica.",
+  "brandKitRef.createCta": "Crea Brand Kit"
 }

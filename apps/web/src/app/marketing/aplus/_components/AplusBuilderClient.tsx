@@ -35,6 +35,7 @@ import ModuleCanvas from './ModuleCanvas'
 import ModuleEditor from './ModuleEditor'
 import LocalizationsPanel from './LocalizationsPanel'
 import TemplatePicker from './TemplatePicker'
+import BrandKitReferencePanel from '@/components/brand-kit/BrandKitReferencePanel'
 import ValidationResultModal, {
   type ValidationResult,
 } from './ValidationResultModal'
@@ -484,6 +485,8 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
       </div>
 
       <LocalizationsPanel document={initial} apiBase={apiBase} />
+
+      <BrandKitReferencePanel brand={initial.brand} apiBase={apiBase} />
 
       {/* MC.8.10 — schedule strip. Shows the current scheduledFor
           (if any) + datetime input to set/clear. The cron picker

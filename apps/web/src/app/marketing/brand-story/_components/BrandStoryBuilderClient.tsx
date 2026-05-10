@@ -46,6 +46,7 @@ import {
 } from '../_lib/types'
 import BrandStoryLocalizationsPanel from './BrandStoryLocalizationsPanel'
 import BrandStoryVersionHistoryModal from './BrandStoryVersionHistoryModal'
+import BrandKitReferencePanel from '@/components/brand-kit/BrandKitReferencePanel'
 import ValidationResultModal, {
   type ValidationResult,
 } from '../../aplus/_components/ValidationResultModal'
@@ -458,6 +459,8 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
       </div>
 
       <BrandStoryLocalizationsPanel document={initial} apiBase={apiBase} />
+
+      <BrandKitReferencePanel brand={initial.brand} apiBase={apiBase} />
 
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <Clock className="w-4 h-4 text-slate-400" />
