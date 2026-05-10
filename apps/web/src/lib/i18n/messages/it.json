@@ -4487,5 +4487,15 @@
   "aplus.localizations.aiTeaserBody": "Quando il lavoro AI riprenderà (vedi docs/MC-AI-DEFERRED.md), questo stesso dialogo offrirà la traduzione automatica dal locale master, con il glossario TerminologyPreference inserito nel prompt.",
   "aplus.localizations.aiCta": "Prova AI translate",
   "aplus.localizations.aiDeferredTitle": "AI translate arriva con MC.4",
-  "aplus.localizations.aiDeferredBody": "Secondo la direttiva dell'engagement, l'integrazione AI è in pausa. Il percorso clone-document qui sopra produce un sibling con i moduli copiati; nel frattempo traduci modulo per modulo via editor."
+  "aplus.localizations.aiDeferredBody": "Secondo la direttiva dell'engagement, l'integrazione AI è in pausa. Il percorso clone-document qui sopra produce un sibling con i moduli copiati; nel frattempo traduci modulo per modulo via editor.",
+  "aplus.builder.applyTemplate": "Applica template",
+  "aplus.templates.title": "Applica template A+",
+  "aplus.templates.modules": "moduli",
+  "aplus.templates.modulesIncluded": "Moduli inclusi",
+  "aplus.templates.replaceLabel": "Sostituisci i moduli esistenti",
+  "aplus.templates.replaceHint": "Rimuove ogni modulo attualmente nel documento prima di applicare il template. Disattivato di default — l'aggiunta è più sicura.",
+  "aplus.templates.pickHint": "Scegli un template a sinistra per vedere i suoi moduli e applicarlo.",
+  "aplus.templates.applyCta": "Applica {n} moduli",
+  "aplus.templates.applied": "Applicati {n} moduli da \"{label}\"",
+  "aplus.templates.applyError": "Impossibile applicare il template — riprova"
 }

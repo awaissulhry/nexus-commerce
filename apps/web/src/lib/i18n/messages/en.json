@@ -4436,5 +4436,15 @@
   "aplus.localizations.aiTeaserBody": "When the AI work resumes (see docs/MC-AI-DEFERRED.md), this same dialog will offer one-click translate from the master locale, with TerminologyPreference glossary feeding the prompt.",
   "aplus.localizations.aiCta": "Try AI translate",
   "aplus.localizations.aiDeferredTitle": "AI translate ships with MC.4",
-  "aplus.localizations.aiDeferredBody": "Per the engagement directive, AI integration is paused. The clone-document path above produces a sibling with copied modules; translate per-module via the editor in the meantime."
+  "aplus.localizations.aiDeferredBody": "Per the engagement directive, AI integration is paused. The clone-document path above produces a sibling with copied modules; translate per-module via the editor in the meantime.",
+  "aplus.builder.applyTemplate": "Apply template",
+  "aplus.templates.title": "Apply A+ template",
+  "aplus.templates.modules": "modules",
+  "aplus.templates.modulesIncluded": "Modules included",
+  "aplus.templates.replaceLabel": "Replace existing modules",
+  "aplus.templates.replaceHint": "Drops every module currently in this document before applying the template. Off by default — appending is safer.",
+  "aplus.templates.pickHint": "Pick a template on the left to see its modules and apply it.",
+  "aplus.templates.applyCta": "Apply {n} modules",
+  "aplus.templates.applied": "Applied {n} modules from \"{label}\"",
+  "aplus.templates.applyError": "Couldn't apply the template — try again"
 }

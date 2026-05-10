@@ -303,6 +303,67 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── MC.8.7 — Apply template (bulk-create modules) ────────
+
+  // POST /aplus-content/:id/apply-template
+  //   body: { modules: [{ type, payload }, ...], replaceExisting?: bool }
+  //
+  // Server-side bulk insert so applying a 5-module template doesn't
+  // need 5 round-trips. The client posts the resolved template
+  // payload (templates live client-side in MC.8.7 — operator-
+  // editable templates are MC.8.7-followup with a SavedAPlusTemplate
+  // model). When `replaceExisting=true` we drop existing modules
+  // first, otherwise we append to the current sequence.
+  fastify.post(
+    '/aplus-content/:id/apply-template',
+    async (request, reply) => {
+      const { id: contentId } = request.params as { id: string }
+      const body = request.body as {
+        modules?: Array<{ type?: string; payload?: unknown }>
+        replaceExisting?: boolean
+      }
+      if (!Array.isArray(body.modules) || body.modules.length === 0)
+        return reply.code(400).send({ error: 'modules array is required' })
+      if (body.modules.some((m) => !m.type?.trim()))
+        return reply
+          .code(400)
+          .send({ error: 'every module must have a non-empty type' })
+
+      const content = await prisma.aPlusContent.findUnique({
+        where: { id: contentId },
+        select: { id: true },
+      })
+      if (!content)
+        return reply.code(404).send({ error: 'A+ content not found' })
+
+      const result = await prisma.$transaction(async (tx) => {
+        let basePosition = 0
+        if (body.replaceExisting) {
+          await tx.aPlusModule.deleteMany({ where: { contentId } })
+        } else {
+          basePosition = await tx.aPlusModule.count({ where: { contentId } })
+        }
+        await tx.aPlusModule.createMany({
+          data: body.modules!.map((m, idx) => ({
+            contentId,
+            type: m.type!,
+            position: basePosition + idx,
+            payload: (m.payload as never) ?? {},
+          })),
+        })
+        return tx.aPlusModule.findMany({
+          where: { contentId },
+          orderBy: { position: 'asc' },
+        })
+      })
+      return reply.code(201).send({
+        modules: result,
+        added: body.modules.length,
+        replaced: !!body.replaceExisting,
+      })
+    },
+  )
+
   // ── MC.8.6 — Localization sibling cloning ────────────────
 
   // POST /aplus-content/:id/localize — clone the master document

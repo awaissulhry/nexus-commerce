@@ -21,13 +21,16 @@ import {
   BadgeCheck,
   Loader2,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ModulePalette from './ModulePalette'
 import ModuleCanvas from './ModuleCanvas'
 import ModuleEditor from './ModuleEditor'
 import LocalizationsPanel from './LocalizationsPanel'
+import TemplatePicker from './TemplatePicker'
 import {
   getModuleSpec,
   validateModulePayload,
@@ -55,6 +58,7 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
   )
   const [status, setStatus] = useState<AplusStatus>(initial.status)
   const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status'>(null)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   // Re-sync if the operator navigates away + back; Next caches the
   // initial result but the builder's internal state should reset
@@ -287,6 +291,15 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
               })}
             </span>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setTemplatesOpen(true)}
+            disabled={busy !== null}
+          >
+            <Sparkles className="w-4 h-4 mr-1" />
+            {t('aplus.builder.applyTemplate')}
+          </Button>
           <select
             value={status}
             onChange={(e) => void updateStatus(e.target.value as AplusStatus)}
@@ -327,6 +340,19 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
           validationByModule={validationByModule}
         />
       </div>
+
+      <TemplatePicker
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        contentId={initial.id}
+        apiBase={apiBase}
+        hasExistingModules={modules.length > 0}
+        onApplied={() => {
+          // Refresh from server so the canvas sees the new modules.
+          // Avoids re-implementing the merge logic client-side.
+          router.refresh()
+        }}
+      />
     </div>
   )
 }
