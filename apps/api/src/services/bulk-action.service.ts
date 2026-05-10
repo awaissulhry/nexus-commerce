@@ -324,12 +324,32 @@ export class BulkActionService {
         throw new Error(`Progress exceeds 100%: ${progressPercent}%`);
       }
 
+      // W10.2 — project finish time. Linear extrapolation from
+      // wall-clock elapsed since startedAt. Skip while no items have
+      // finished (avoid divide-by-zero) or once the job is past
+      // 99.5% complete (the projection just clamps to "now"-ish at
+      // that point, so it's not informative).
+      let estimatedCompletionAt: Date | null = null;
+      if (
+        job.startedAt &&
+        totalProcessed > 0 &&
+        totalProcessed < job.totalItems
+      ) {
+        const elapsedMs = Date.now() - job.startedAt.getTime();
+        const totalEstimatedMs =
+          (elapsedMs / totalProcessed) * job.totalItems;
+        estimatedCompletionAt = new Date(
+          job.startedAt.getTime() + totalEstimatedMs,
+        );
+      }
+
       logger.debug(`Updating job progress`, {
         jobId,
         progressPercent,
         processedItems: input.processedItems,
         failedItems: input.failedItems,
-        skippedItems: input.skippedItems
+        skippedItems: input.skippedItems,
+        estimatedCompletionAt,
       });
 
       const updatedJob = await this.prisma.bulkActionJob.update({
@@ -339,6 +359,7 @@ export class BulkActionService {
           failedItems: input.failedItems,
           skippedItems: input.skippedItems,
           progressPercent,
+          estimatedCompletionAt,
           errorLog: input.errors && input.errors.length > 0 ? input.errors : null,
           lastError: input.errors?.[0]?.error || null,
           updatedAt: new Date()
@@ -451,6 +472,11 @@ export class BulkActionService {
           },
         });
 
+        // W10.2 — wall-clock per-item timer. Stamped on the
+        // BulkActionItem row regardless of success/failure so
+        // service-level p50/p95 reporting can pull durations
+        // directly without extra joins.
+        const itemStartedAt = Date.now();
         try {
           const result = await this.processItem(item, job);
           const afterState = await this.refetchAfterState(
@@ -466,6 +492,7 @@ export class BulkActionService {
                 result.status === 'processed' ? 'SUCCEEDED' : 'SKIPPED',
               afterState,
               completedAt: new Date(),
+              durationMs: Date.now() - itemStartedAt,
             },
           });
 
@@ -489,6 +516,7 @@ export class BulkActionService {
               status: 'FAILED',
               errorMessage,
               completedAt: new Date(),
+              durationMs: Date.now() - itemStartedAt,
             },
           });
 

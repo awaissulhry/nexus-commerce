@@ -2006,6 +2006,10 @@ model BulkActionJob {
   createdAt   DateTime  @default(now())
   startedAt   DateTime? // When processing began
   completedAt DateTime? // When processing finished
+  // W10.2 — projected finish time, recomputed inside the item loop
+  // as: startedAt + (totalItems / processedItems) * elapsed. NULL
+  // until enough items have processed for the estimate to settle.
+  estimatedCompletionAt DateTime?
   updatedAt   DateTime  @updatedAt
 
   // ── Per-item state (Commit 2 of bulk-ops rebuild) ────────────────────
@@ -2053,6 +2057,10 @@ model BulkActionItem {
 
   createdAt   DateTime  @default(now())
   completedAt DateTime?
+  // W10.2 — wall-clock per-handler time. Stamped after the item
+  // finishes processing (success or failure) so service-level
+  // p50/p95 reporting can pull this directly.
+  durationMs  Int?
 
   @@index([jobId])
   @@index([jobId, status])

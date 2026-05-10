@@ -50,7 +50,12 @@ function sigFor(job: {
   skippedItems: number
   progressPercent: number
   lastError: string | null
+  estimatedCompletionAt?: Date | string | null
 }): string {
+  const eta =
+    job.estimatedCompletionAt instanceof Date
+      ? job.estimatedCompletionAt.toISOString()
+      : (job.estimatedCompletionAt ?? '')
   return [
     job.status,
     job.totalItems,
@@ -59,6 +64,7 @@ function sigFor(job: {
     job.skippedItems,
     job.progressPercent,
     job.lastError ?? '',
+    eta,
   ].join('|')
 }
 

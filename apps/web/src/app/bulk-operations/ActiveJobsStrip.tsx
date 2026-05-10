@@ -19,6 +19,26 @@ interface ActiveJob {
   skippedItems: number
   progressPercent: number
   createdAt: string
+  estimatedCompletionAt?: string | null
+}
+
+/**
+ * W10.2 — ETA chip helper. Renders a short relative time
+ * ("~3m left", "~12m left", "~1h 4m left") from the projection
+ * the API computes. Returns null until the projection has
+ * settled (no items processed yet → no estimate possible).
+ */
+function formatEta(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const ms = new Date(iso).getTime() - Date.now()
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  const totalSec = Math.round(ms / 1000)
+  if (totalSec < 60) return `~${totalSec}s left`
+  const min = Math.round(totalSec / 60)
+  if (min < 60) return `~${min}m left`
+  const h = Math.floor(min / 60)
+  const remMin = min % 60
+  return remMin === 0 ? `~${h}h left` : `~${h}h ${remMin}m left`
 }
 
 const POLL_INTERVAL_MS = 5_000
@@ -235,6 +255,18 @@ export default function ActiveJobsStrip() {
                       {job.failedItems > 0 && (
                         <span className="text-red-700 dark:text-red-300 ml-1">
                           · {job.failedItems} failed
+                        </span>
+                      )}
+                      {job.status === 'IN_PROGRESS' && formatEta(job.estimatedCompletionAt) && (
+                        <span
+                          className="ml-1 text-blue-700 dark:text-blue-300"
+                          title={
+                            job.estimatedCompletionAt
+                              ? `Projected finish: ${new Date(job.estimatedCompletionAt).toLocaleString()}`
+                              : undefined
+                          }
+                        >
+                          · {formatEta(job.estimatedCompletionAt)}
                         </span>
                       )}
                     </span>
