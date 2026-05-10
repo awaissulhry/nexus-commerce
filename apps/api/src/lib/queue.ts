@@ -91,6 +91,22 @@ export const channelSyncQueue: Queue = new Queue('channel-sync', {
   defaultJobOptions,
 })
 
+// W13.1 — out-of-process bulk-job processor. Large jobs (W13.2
+// promotion threshold) get enqueued here so the API process
+// stays responsive while a 10k-row batch chews on its work.
+export const bulkJobQueue: Queue = new Queue('bulk-job', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    // Bulk jobs are checkpointed in BulkActionJob.processedItems —
+    // a retry runs the same processJob() call, which short-circuits
+    // when status !== PENDING/QUEUED. So we only attempt once at
+    // the BullMQ level; retries are application-level.
+    attempts: 1,
+    removeOnComplete: { age: 86400 },
+    removeOnFail: { age: 7 * 86400 },
+  },
+})
+
 export const queueEvents: QueueEvents = new QueueEvents('outbound-sync', {
   connection: redis.connection,
 })
