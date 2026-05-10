@@ -8,6 +8,7 @@
 
 import { getBackendUrl } from '@/lib/backend-url'
 import AiUsageClient from './AiUsageClient'
+import AiPromptsClient, { type PromptTemplateRow } from './AiPromptsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -15,9 +16,9 @@ export const revalidate = 0
 export default async function AiSettingsPage() {
   const backend = getBackendUrl()
 
-  // AI-1.7 + AI-1.8 — providers + budget posture + per-wizard ROI
-  // round-trip together. First paint renders every card without a
-  // client spinner.
+  // AI-1.7 + AI-1.8 + AI-2.5 — providers + budget posture + per-wizard
+  // ROI + prompt templates round-trip together. First paint renders
+  // every card without a client spinner.
   const [
     providersRes,
     summary7Res,
@@ -25,6 +26,7 @@ export default async function AiSettingsPage() {
     recentRes,
     postureRes,
     topWizardsRes,
+    promptsRes,
   ] = await Promise.all([
     fetch(`${backend}/api/ai/providers`, { cache: 'no-store' }),
     fetch(`${backend}/api/ai/usage/summary?days=7`, { cache: 'no-store' }),
@@ -34,6 +36,7 @@ export default async function AiSettingsPage() {
     fetch(`${backend}/api/ai/usage/top-wizards?days=30&limit=10`, {
       cache: 'no-store',
     }),
+    fetch(`${backend}/api/ai/prompt-templates`, { cache: 'no-store' }),
   ])
 
   const providersJson = providersRes.ok ? await providersRes.json() : null
@@ -46,16 +49,22 @@ export default async function AiSettingsPage() {
   const recent = recentRes.ok ? (await recentRes.json()).rows ?? [] : []
   const posture = postureRes.ok ? await postureRes.json() : null
   const topWizards = topWizardsRes.ok ? await topWizardsRes.json() : null
+  const prompts: PromptTemplateRow[] = promptsRes.ok
+    ? ((await promptsRes.json()).rows ?? [])
+    : []
 
   return (
-    <AiUsageClient
-      providers={providers}
-      killSwitch={killSwitch}
-      summary7={summary7}
-      summary30={summary30}
-      recent={recent}
-      posture={posture}
-      topWizards={topWizards}
-    />
+    <div className="space-y-6">
+      <AiUsageClient
+        providers={providers}
+        killSwitch={killSwitch}
+        summary7={summary7}
+        summary30={summary30}
+        recent={recent}
+        posture={posture}
+        topWizards={topWizards}
+      />
+      <AiPromptsClient initialRows={prompts} />
+    </div>
   )
 }

@@ -38,6 +38,89 @@ import {
 const MAX_DAYS = 90
 
 const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
+  // AI-2.5 (list-wizard) — promote / archive / edit a single
+  // PromptTemplate row. Drives the admin UI on /settings/ai.
+  //
+  // PATCH /api/ai/prompt-templates/:id
+  //   body: { status?: 'DRAFT'|'ACTIVE'|'ARCHIVED', body?: string,
+  //           description?: string, name?: string }
+  //
+  // No version bump on body edits in v1 — operators iterate on the
+  // current version's body until they're happy. Cloning to a new
+  // version (for A/B + history) lands in AI-2.4.
+  fastify.patch<{
+    Params: { id: string }
+    Body: {
+      status?: string
+      body?: string
+      description?: string
+      name?: string
+    }
+  }>('/ai/prompt-templates/:id', async (request, reply) => {
+    const id = request.params.id
+    const allowedStatuses = new Set(['DRAFT', 'ACTIVE', 'ARCHIVED'])
+    const data: Record<string, unknown> = {}
+    if (typeof request.body?.status === 'string') {
+      if (!allowedStatuses.has(request.body.status)) {
+        return reply.code(400).send({
+          error: `status must be one of ${[...allowedStatuses].join(', ')}`,
+        })
+      }
+      data.status = request.body.status
+    }
+    if (typeof request.body?.body === 'string') {
+      const trimmed = request.body.body.trim()
+      if (trimmed.length === 0) {
+        return reply.code(400).send({
+          error: 'body cannot be empty — promotion would break AI calls',
+        })
+      }
+      data.body = request.body.body
+    }
+    if (typeof request.body?.description === 'string') {
+      data.description = request.body.description.slice(0, 500)
+    }
+    if (typeof request.body?.name === 'string') {
+      const n = request.body.name.trim()
+      if (n.length === 0) {
+        return reply.code(400).send({ error: 'name cannot be empty' })
+      }
+      data.name = n.slice(0, 80)
+    }
+    if (Object.keys(data).length === 0) {
+      return reply.code(400).send({
+        error: 'no recognised fields in body — pass status / body / description / name',
+      })
+    }
+    try {
+      const updated = await prisma.promptTemplate.update({
+        where: { id },
+        data,
+      })
+      return {
+        row: {
+          ...updated,
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+          lastUsedAt: updated.lastUsedAt
+            ? updated.lastUsedAt.toISOString()
+            : null,
+        },
+      }
+    } catch (err) {
+      // Prisma surfaces P2025 when the row doesn't exist.
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code?: string }).code === 'P2025'
+      ) {
+        return reply.code(404).send({ error: 'PromptTemplate not found' })
+      }
+      throw err
+    }
+  })
+
   // AI-2.2 (list-wizard) — list PromptTemplate rows. Read-only v1
   // surface that the admin UI on /settings/ai (lands in AI-2.5) will
   // call to render the prompt list. Filterable by feature + status.
