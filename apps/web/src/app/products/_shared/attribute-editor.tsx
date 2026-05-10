@@ -1458,17 +1458,33 @@ export function SchemaAgeIndicator({
   fetchError?: string | null
 }) {
   if (!fetchedAt) {
+    if (fetchError) {
+      return (
+        <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 space-y-1">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-600 dark:text-amber-400 text-sm font-medium flex-shrink-0 mt-0.5">⚠ Schema fetch failed</span>
+          </div>
+          <p className="text-xs text-amber-700 dark:text-amber-300 font-mono break-all">{fetchError}</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+            The product type above (<span className="font-mono">{channelKey}</span>) is likely not a valid Amazon category code.
+            Use the <strong>Amazon product type</strong> picker above to select a valid type — search for keywords like "jacket", "gloves", "pants", etc.
+          </p>
+          {onFetch && (
+            <button
+              type="button"
+              onClick={onFetch}
+              className="text-xs text-amber-700 dark:text-amber-300 underline hover:no-underline mt-1"
+            >
+              Retry fetch
+            </button>
+          )}
+        </div>
+      )
+    }
     return (
       <div className="mt-2 flex items-center gap-2 px-1">
         <span className="text-xs text-slate-400 dark:text-slate-500">
-          Schema for <span className="font-mono">{channelKey}</span>:{' '}
-          {fetchError ? (
-            <span className="text-amber-600 dark:text-amber-400" title={fetchError}>
-              fetch failed
-            </span>
-          ) : (
-            'not yet fetched'
-          )}
+          Schema for <span className="font-mono">{channelKey}</span>: not yet fetched
         </span>
         {onFetch && (
           <button
