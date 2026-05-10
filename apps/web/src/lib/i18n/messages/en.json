@@ -4125,6 +4125,17 @@
   "marketingContent.toolbar.uploadComing.body": "Drag-drop, paste, URL, and bulk folder upload land in the Upload & Ingestion wave.",
   "marketingContent.library.placeholderTitle": "Library view ships next",
   "marketingContent.library.placeholderBody": "MC.1.2 replaces this placeholder with the virtualized grid + list view. The KPI strip and toolbar above are live and read from /api/assets/overview.",
+  "marketingContent.library.loading": "Loading library…",
+  "marketingContent.library.loadingMore": "Loading more…",
+  "marketingContent.library.countSummary": "Showing {shown} of {total}",
+  "marketingContent.library.errorTitle": "Couldn't load the library",
+  "marketingContent.library.retry": "Retry",
+  "marketingContent.library.emptyTitle": "No assets yet",
+  "marketingContent.library.emptyBody": "Upload images, video, and brand assets via the Upload button — they'll appear here ready to attach to products and channel listings.",
+  "marketingContent.library.emptySearchTitle": "No matches",
+  "marketingContent.library.emptySearchBody": "Nothing matches \"{search}\". Try a different filename, alt text, or product SKU.",
+  "marketingContent.library.usedIn": "used by {n}",
+  "marketingContent.library.noProductLink": "Unattached",
   "marketingContent.error.overviewTitle": "Overview KPIs are showing placeholder zeros",
   "marketingContent.error.overviewDetail": "The /api/assets/overview endpoint did not respond ({detail}). Counts will refresh on next page load."
 }

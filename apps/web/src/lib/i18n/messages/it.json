@@ -4176,6 +4176,17 @@
   "marketingContent.toolbar.uploadComing.body": "Drag-drop, incolla, URL e caricamento bulk per cartelle arriveranno nella wave Upload & Ingestion.",
   "marketingContent.library.placeholderTitle": "La libreria arriva prossimamente",
   "marketingContent.library.placeholderBody": "MC.1.2 sostituirà questo placeholder con la vista griglia + elenco virtualizzata. La striscia KPI e la toolbar qui sopra sono attive e leggono da /api/assets/overview.",
+  "marketingContent.library.loading": "Caricamento libreria…",
+  "marketingContent.library.loadingMore": "Caricamento altri…",
+  "marketingContent.library.countSummary": "Visualizzati {shown} di {total}",
+  "marketingContent.library.errorTitle": "Impossibile caricare la libreria",
+  "marketingContent.library.retry": "Riprova",
+  "marketingContent.library.emptyTitle": "Nessun asset",
+  "marketingContent.library.emptyBody": "Carica immagini, video e asset di brand tramite il pulsante Carica — appariranno qui pronti per essere associati a prodotti e listing.",
+  "marketingContent.library.emptySearchTitle": "Nessun risultato",
+  "marketingContent.library.emptySearchBody": "Niente corrisponde a \"{search}\". Prova con un nome file, testo alt o SKU diverso.",
+  "marketingContent.library.usedIn": "usato da {n}",
+  "marketingContent.library.noProductLink": "Non associato",
   "marketingContent.error.overviewTitle": "I KPI di riepilogo mostrano valori a zero",
   "marketingContent.error.overviewDetail": "L'endpoint /api/assets/overview non ha risposto ({detail}). I conteggi si aggiorneranno al prossimo caricamento."
 }

@@ -106,6 +106,184 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // MC.1.2 — unified library feed.
+  //
+  // Merges DigitalAsset (W4.5 canonical) with ProductImage (legacy
+  // master gallery) into a single chronological feed. Until the W4.7
+  // migration backfills ProductImage rows into DigitalAsset+
+  // AssetUsage, the operator must see both sources or the library
+  // would appear empty for the entire Xavia catalogue.
+  //
+  // Pagination: page+pageSize (1-indexed) instead of cursor — merging
+  // two heterogeneous cursors with stable ordering is a footgun. The
+  // dataset size today (low thousands) is well within the OFFSET-
+  // scan envelope; MC.2 swaps to keyset pagination if profiling
+  // shows the merge as the bottleneck.
+  //
+  // Filtering: `type` narrows to image/video/document/model3d. Note
+  // ProductImage rows are always type='image' so a type=video filter
+  // implicitly excludes them. `search` matches filename/label/alt
+  // case-insensitively across both tables.
+  fastify.get('/assets/library', async (request) => {
+    const q = request.query as {
+      type?: string
+      search?: string
+      page?: string
+      pageSize?: string
+    }
+    const page = Math.max(parseInt(q.page ?? '1', 10) || 1, 1)
+    const pageSize = Math.min(
+      Math.max(parseInt(q.pageSize ?? '60', 10) || 60, 1),
+      200,
+    )
+    const typeFilter =
+      q.type && VALID_ASSET_TYPES.has(q.type) ? q.type : null
+    const search = q.search?.trim() || null
+
+    // Step 1 — count + fetch from each source. Skip ProductImage if
+    // type is set to anything other than 'image'.
+    const includeProductImages = !typeFilter || typeFilter === 'image'
+
+    const daWhere: Record<string, unknown> = {}
+    if (typeFilter) daWhere.type = typeFilter
+    if (search) {
+      daWhere.OR = [
+        { label: { contains: search, mode: 'insensitive' } },
+        { code: { contains: search, mode: 'insensitive' } },
+        { originalFilename: { contains: search, mode: 'insensitive' } },
+      ]
+    }
+
+    const piWhere: Record<string, unknown> = {}
+    if (search) {
+      piWhere.OR = [
+        { alt: { contains: search, mode: 'insensitive' } },
+        // ProductImage has no filename column; surface the publicId
+        // (Cloudinary key — readable enough for operator search) and
+        // the linked product name.
+        { publicId: { contains: search, mode: 'insensitive' } },
+        { product: { name: { contains: search, mode: 'insensitive' } } },
+        { product: { sku: { contains: search, mode: 'insensitive' } } },
+      ]
+    }
+
+    const [daTotal, piTotal] = await Promise.all([
+      prisma.digitalAsset.count({ where: daWhere }),
+      includeProductImages
+        ? prisma.productImage.count({ where: piWhere })
+        : Promise.resolve(0),
+    ])
+    const total = daTotal + piTotal
+
+    // Step 2 — fetch enough rows from each table to satisfy the
+    // requested page after merge. Worst case: all rows in one source
+    // come before the other in createdAt order, so we fetch
+    // (page * pageSize) rows from each. Capped at 1000 to keep the
+    // round trip bounded — MC.2 keyset pagination removes this cap.
+    const fetchLimit = Math.min(page * pageSize, 1000)
+
+    const [daRows, piRows] = await Promise.all([
+      prisma.digitalAsset.findMany({
+        where: daWhere,
+        orderBy: { createdAt: 'desc' },
+        take: fetchLimit,
+        include: { _count: { select: { usages: true } } },
+      }),
+      includeProductImages
+        ? prisma.productImage.findMany({
+            where: piWhere,
+            orderBy: { createdAt: 'desc' },
+            take: fetchLimit,
+            include: {
+              product: { select: { id: true, sku: true, name: true } },
+            },
+          })
+        : Promise.resolve([] as never[]),
+    ])
+
+    type LibraryItem = {
+      id: string
+      source: 'digital_asset' | 'product_image'
+      url: string
+      label: string
+      type: string
+      mimeType: string | null
+      sizeBytes: number | null
+      width: number | null
+      height: number | null
+      createdAt: string
+      usageCount: number
+      productId: string | null
+      productSku: string | null
+      productName: string | null
+      role: string | null
+    }
+
+    const merged: LibraryItem[] = []
+
+    for (const a of daRows) {
+      const meta = (a.metadata as Record<string, unknown> | null) ?? {}
+      merged.push({
+        id: `da_${a.id}`,
+        source: 'digital_asset',
+        url: a.url,
+        label: a.label || a.originalFilename || 'Untitled',
+        type: a.type,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+        width:
+          typeof meta.width === 'number' ? (meta.width as number) : null,
+        height:
+          typeof meta.height === 'number' ? (meta.height as number) : null,
+        createdAt: a.createdAt.toISOString(),
+        usageCount: a._count.usages,
+        productId: null,
+        productSku: null,
+        productName: null,
+        role: null,
+      })
+    }
+
+    for (const p of piRows as Array<
+      (typeof piRows)[number] & { product: { id: string; sku: string; name: string } | null }
+    >) {
+      merged.push({
+        id: `pi_${p.id}`,
+        source: 'product_image',
+        url: p.url,
+        label: p.alt || p.publicId || `${p.product?.sku ?? ''} ${p.type}`.trim(),
+        type: 'image',
+        mimeType: null,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        createdAt: p.createdAt.toISOString(),
+        // Each ProductImage row is intrinsically attached to one
+        // product, so usageCount is 1 by definition. Setting 0 would
+        // be misleading on the "Orphaned" KPI tile.
+        usageCount: 1,
+        productId: p.product?.id ?? null,
+        productSku: p.product?.sku ?? null,
+        productName: p.product?.name ?? null,
+        role: p.type,
+      })
+    }
+
+    // Step 3 — sort merged feed by createdAt desc, paginate.
+    merged.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    const start = (page - 1) * pageSize
+    const items = merged.slice(start, start + pageSize)
+    const hasMore = start + items.length < total
+
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      hasMore,
+    }
+  })
+
   fastify.get('/assets', async (request) => {
     const q = request.query as {
       type?: string

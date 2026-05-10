@@ -1,8 +1,8 @@
 'use client'
 
-// MC.1.1 — DAM hub client. Renders header + KPI strip + toolbar +
-// library placeholder. Library, filter sidebar, search wiring, and
-// detail drawer land in MC.1.2 → MC.1.5.
+// MC.1.1 — DAM hub client (header + KPI strip + toolbar).
+// MC.1.2 — virtualized grid/list library now wired in. Filter
+// sidebar, dedicated search, detail drawer land in MC.1.3 → MC.1.5.
 
 import { useState, type ReactNode } from 'react'
 import {
@@ -14,24 +14,30 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
-import { EmptyState } from '@/components/ui/EmptyState'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import KpiStrip from './_components/KpiStrip'
 import ContentToolbar, { type ViewMode } from './_components/ContentToolbar'
+import AssetLibrary from './_components/AssetLibrary'
 import { formatBytes, formatCount } from './_lib/format'
-import type { OverviewPayload } from './_lib/types'
+import type { LibraryItem, OverviewPayload } from './_lib/types'
 
 interface Props {
   overview: OverviewPayload
   overviewError: string | null
+  apiBase: string
   icon: ReactNode
 }
 
-export default function ContentHubClient({ overview, overviewError }: Props) {
+export default function ContentHubClient({
+  overview,
+  overviewError,
+  apiBase,
+}: Props) {
   const { t } = useTranslations()
   const [view, setView] = useState<ViewMode>('grid')
   const [search, setSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [selected, setSelected] = useState<LibraryItem | null>(null)
 
   // Per the audit, ProductImage is the canonical master gallery and
   // DigitalAsset is the forward-compat DAM model. Until the W4.7
@@ -128,11 +134,16 @@ export default function ContentHubClient({ overview, overviewError }: Props) {
         onToggleFilters={() => setFiltersOpen((prev) => !prev)}
       />
 
-      {/* Library placeholder — MC.1.2 replaces with virtualized grid+list. */}
-      <EmptyState
-        icon={ImageIcon}
-        title={t('marketingContent.library.placeholderTitle')}
-        description={t('marketingContent.library.placeholderBody')}
+      <AssetLibrary
+        view={view}
+        search={search}
+        typeFilter={null}
+        sourceFilter={null}
+        apiBase={apiBase}
+        onSelect={(item) =>
+          setSelected((prev) => (prev?.id === item.id ? null : item))
+        }
+        selectedId={selected?.id ?? null}
       />
     </div>
   )

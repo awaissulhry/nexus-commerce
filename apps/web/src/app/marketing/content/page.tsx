@@ -58,10 +58,12 @@ async function fetchOverview(): Promise<{
 
 export default async function ContentHubPage() {
   const { data, error } = await fetchOverview()
+  const apiBase = getBackendUrl()
   return (
     <ContentHubClient
       overview={data}
       overviewError={error}
+      apiBase={apiBase}
       icon={<ImageIcon className="w-5 h-5" />}
     />
   )
