@@ -34,6 +34,7 @@ import { formatBytes } from '../_lib/format'
 import AssetTagPicker from './AssetTagPicker'
 import ChannelVariantsList from './ChannelVariantsList'
 import LocaleOverlayManager from './LocaleOverlayManager'
+import ChannelPreviewPane from './ChannelPreviewPane'
 import type {
   AssetDetail,
   AssetDetailResponse,
@@ -394,6 +395,12 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
 
               {/* MC.6.3 — locale overlays */}
               <LocaleOverlayManager
+                assetId={detail.id}
+                apiBase={apiBase}
+              />
+
+              {/* MC.6.4 — per-channel preview pane */}
+              <ChannelPreviewPane
                 assetId={detail.id}
                 apiBase={apiBase}
               />

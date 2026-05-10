@@ -1050,6 +1050,66 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     return { tags }
   })
 
+  // ── MC.6.4 — Per-channel preview pane ──────────────────────
+
+  // Returns the channel variant URLs with the picked locale overlay
+  // spliced in. The preview pane on the drawer renders these with
+  // channel-specific frames (Amazon hero, eBay gallery, Shopify
+  // product card, OG card, IG square/story).
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { locale?: string; profile?: string }
+  }>('/assets/:id/preview', async (request, reply) => {
+    const id = request.params.id.startsWith('da_')
+      ? request.params.id.slice(3)
+      : request.params.id
+    const locale = request.query.locale ?? 'it-IT'
+
+    const asset = await prisma.digitalAsset.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        url: true,
+        storageProvider: true,
+        storageId: true,
+        localeOverlays: {
+          where: { enabled: true },
+        },
+      },
+    })
+    if (!asset) return reply.code(404).send({ error: 'asset not found' })
+
+    const { buildAllVariants } = await import(
+      '../services/channel-variants.service.js'
+    )
+    const { pickOverlayForLocale, applyOverlayToUrl } = await import(
+      '../services/asset-locale-overlay.service.js'
+    )
+
+    const validProfile =
+      request.query.profile === 'eco' ||
+      request.query.profile === 'balanced' ||
+      request.query.profile === 'hd' ||
+      request.query.profile === 'lossless'
+        ? request.query.profile
+        : undefined
+    const overlay = pickOverlayForLocale(asset.localeOverlays, locale)
+    const variants = buildAllVariants(asset, validProfile).map((v) => ({
+      ...v,
+      url: v.url ? applyOverlayToUrl(v.url, overlay) : null,
+    }))
+
+    return {
+      assetId: id,
+      locale,
+      profile: validProfile ?? null,
+      activeOverlay: overlay
+        ? { id: overlay.id, locale: overlay.locale, text: overlay.text }
+        : null,
+      variants,
+    }
+  })
+
   // ── MC.6.3 — AssetLocaleOverlay CRUD ───────────────────────
 
   // List overlays for a single asset. The drawer fetches this on
