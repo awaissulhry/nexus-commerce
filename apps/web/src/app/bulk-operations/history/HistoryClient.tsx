@@ -448,6 +448,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
                         type="button"
                         onClick={() => setDrawerItem(it)}
                         title="View full payload"
+                        aria-label={`View full payload for ${it.sku ?? 'deleted item'}`}
                         className="text-blue-700 dark:text-blue-300 hover:underline text-sm"
                       >
                         View

@@ -366,18 +366,20 @@ export default function ExportsClient() {
                         <a
                           href={`${getBackendUrl()}/api/export-jobs/${j.id}/download`}
                           title="Download"
+                          aria-label={`Download export ${j.jobName}`}
                           className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded"
                         >
-                          <Download className="w-3 h-3" />
+                          <Download className="w-3 h-3" aria-hidden="true" />
                         </a>
                       )}
                       <button
                         type="button"
                         onClick={() => deleteJob(j)}
                         title="Delete"
+                        aria-label={`Delete export ${j.jobName}`}
                         className="h-6 w-6 inline-flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-3 h-3" aria-hidden="true" />
                       </button>
                     </div>
                   </td>

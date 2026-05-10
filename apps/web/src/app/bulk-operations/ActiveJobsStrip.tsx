@@ -255,7 +255,14 @@ export default function ActiveJobsStrip() {
                   {/* Progress bar — only meaningful while IN_PROGRESS;
                       for PENDING / QUEUED keep a flat indeterminate bar. */}
                   <div className="mt-1 flex items-center gap-2">
-                    <div className="h-1 bg-blue-100 dark:bg-blue-900/60 rounded-full overflow-hidden flex-1">
+                    <div
+                      className="h-1 bg-blue-100 dark:bg-blue-900/60 rounded-full overflow-hidden flex-1"
+                      role="progressbar"
+                      aria-label={`Progress for ${job.jobName}`}
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
@@ -268,7 +275,11 @@ export default function ActiveJobsStrip() {
                         }}
                       />
                     </div>
-                    <span className="text-xs text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap">
+                    <span
+                      className="text-xs text-slate-600 dark:text-slate-400 tabular-nums whitespace-nowrap"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
                       {job.processedItems} / {job.totalItems}
                       {job.failedItems > 0 && (
                         <span className="text-red-700 dark:text-red-300 ml-1">
@@ -297,8 +308,9 @@ export default function ActiveJobsStrip() {
                     disabled={cancellingId === job.id}
                     className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded disabled:opacity-50"
                     title={`Cancel ${job.jobName}`}
+                    aria-label={`Cancel ${job.jobName}`}
                   >
-                    <Ban className="w-3 h-3" />
+                    <Ban className="w-3 h-3" aria-hidden="true" />
                     {cancellingId === job.id ? 'Cancelling…' : 'Cancel'}
                   </button>
                 )}
