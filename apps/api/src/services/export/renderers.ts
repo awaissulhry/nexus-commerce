@@ -96,6 +96,99 @@ function renderCsv(input: RenderInput): RenderOutput {
   }
 }
 
+async function renderXlsx(input: RenderInput): Promise<RenderOutput> {
+  // W9.2 — exceljs already a dep (used by W8.2 import parser).
+  const ExcelJS = (await import('exceljs')).default
+  const wb = new ExcelJS.Workbook()
+  // Excel sheet names: max 31 chars, no [ ] : * ? / \
+  const safeSheet =
+    (input.filename ?? 'Export')
+      .slice(0, 31)
+      .replace(/[\[\]:*?/\\]/g, '_') || 'Export'
+  const ws = wb.addWorksheet(safeSheet)
+  ws.addRow(input.columns.map((c) => c.label))
+  ws.getRow(1).font = { bold: true }
+  for (const row of input.rows) {
+    ws.addRow(input.columns.map((c) => readPath(row, c.id) ?? ''))
+  }
+  // Tighten column widths against header label so a 200-row export
+  // doesn't open with everything jammed against column A.
+  input.columns.forEach((c, i) => {
+    const col = ws.getColumn(i + 1)
+    col.width = Math.max(c.label.length + 2, 10)
+  })
+  const buffer = await wb.xlsx.writeBuffer()
+  return {
+    bytes: new Uint8Array(buffer as ArrayBuffer),
+    contentType:
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }
+}
+
+async function renderPdf(input: RenderInput): Promise<RenderOutput> {
+  // W9.2 — pdfkit already a dep (used by F1.8 customs declaration).
+  const PDFKitMod = await import('pdfkit')
+  const PDFKit = (PDFKitMod as any).default ?? PDFKitMod
+  const doc = new PDFKit({ size: 'A4', margin: 36, layout: 'landscape' })
+  const chunks: Buffer[] = []
+  doc.on('data', (c: Buffer) => chunks.push(c))
+  const done: Promise<Buffer> = new Promise((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', (err: Error) => reject(err))
+  })
+
+  doc
+    .fontSize(14)
+    .text(input.filename ?? 'Export', { align: 'left' })
+    .moveDown(0.25)
+    .fontSize(9)
+    .fillColor('#666')
+    .text(`${input.rows.length} rows · ${new Date().toISOString().slice(0, 10)}`)
+    .moveDown(0.5)
+    .fillColor('#000')
+
+  const PAGE_WIDTH =
+    doc.page.width - doc.page.margins.left - doc.page.margins.right
+  const colWidth = PAGE_WIDTH / Math.max(input.columns.length, 1)
+  const rowHeight = 16
+
+  function drawHeader(y: number) {
+    doc.fontSize(8).font('Helvetica-Bold')
+    input.columns.forEach((c, i) => {
+      doc.text(c.label, doc.page.margins.left + i * colWidth, y, {
+        width: colWidth - 4,
+        ellipsis: true,
+      })
+    })
+    doc.font('Helvetica')
+  }
+
+  drawHeader(doc.y)
+  doc.moveDown(0.6)
+  for (const row of input.rows) {
+    if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage()
+      drawHeader(doc.y)
+      doc.moveDown(0.6)
+    }
+    const y = doc.y
+    input.columns.forEach((c, i) => {
+      const cell = formatCell(readPath(row, c.id), c.format)
+      doc.text(cell, doc.page.margins.left + i * colWidth, y, {
+        width: colWidth - 4,
+        ellipsis: true,
+      })
+    })
+    doc.moveDown(0.4)
+  }
+  doc.end()
+  const buffer = await done
+  return {
+    bytes: new Uint8Array(buffer),
+    contentType: 'application/pdf',
+  }
+}
+
 export async function renderExport(input: RenderInput): Promise<RenderOutput> {
   if (input.format === 'csv') return renderCsv(input)
   if (input.format === 'json') {
@@ -111,7 +204,8 @@ export async function renderExport(input: RenderInput): Promise<RenderOutput> {
       contentType: 'application/json',
     }
   }
-  // W9.2 fills in xlsx + pdf.
+  if (input.format === 'xlsx') return renderXlsx(input)
+  if (input.format === 'pdf') return renderPdf(input)
   throw new Error(`Renderer for ${input.format} not yet implemented`)
 }
 
