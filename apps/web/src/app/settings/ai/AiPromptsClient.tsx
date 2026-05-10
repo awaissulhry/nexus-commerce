@@ -344,11 +344,22 @@ export default function AiPromptsClient({ initialRows }: Props) {
             // AB.1 — count ACTIVE rows per scope key to detect an
             // A/B in progress. Same-scope = same (language || '*',
             // marketplace || '*'); 2+ ACTIVEs = traffic splits.
+            //
+            // AB.4 — also accumulate per-scope total callCount so
+            // the per-row badge can show realised traffic share
+            // ("60% of A/B") without re-scanning the whole list.
             const scopeCounts = new Map<string, number>()
+            const scopeTotalCalls = new Map<string, number>()
+            const scopeKey = (r: PromptTemplateRow) =>
+              `${r.language ?? '*'}|${r.marketplace ?? '*'}`
             for (const r of list) {
               if (r.status !== 'ACTIVE') continue
-              const k = `${r.language ?? '*'}|${r.marketplace ?? '*'}`
+              const k = scopeKey(r)
               scopeCounts.set(k, (scopeCounts.get(k) ?? 0) + 1)
+              scopeTotalCalls.set(
+                k,
+                (scopeTotalCalls.get(k) ?? 0) + (r.callCount ?? 0),
+              )
             }
             const abVariants = Math.max(0, ...scopeCounts.values())
             return (
@@ -409,6 +420,32 @@ export default function AiPromptsClient({ initialRows }: Props) {
                                   ? ` · last ${fmtRelative(row.lastUsedAt)}`
                                   : ''}
                               </span>
+                              {(() => {
+                                // AB.4 — show realised traffic share
+                                // when this row is part of an A/B
+                                // (same-scope ACTIVEs ≥ 2). 0% rows
+                                // still get a label so an operator
+                                // can spot a variant nobody hits.
+                                if (row.status !== 'ACTIVE') return null
+                                const k = scopeKey(row)
+                                const variants = scopeCounts.get(k) ?? 0
+                                if (variants < 2) return null
+                                const total = scopeTotalCalls.get(k) ?? 0
+                                const pct =
+                                  total === 0
+                                    ? 0
+                                    : Math.round(
+                                        ((row.callCount ?? 0) / total) * 100,
+                                      )
+                                return (
+                                  <span
+                                    className="text-xs px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 tabular-nums font-medium"
+                                    title={`${row.callCount} of ${total} A/B calls in this scope.`}
+                                  >
+                                    {pct}% A/B
+                                  </span>
+                                )
+                              })()}
                             </div>
                             {row.description && (
                               <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
