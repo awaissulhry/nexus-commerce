@@ -79,14 +79,13 @@ export default function Step1Identifiers(props: StepProps) {
   // no questions to ask. eBay treats missing GTIN as "Does Not
   // Apply" (per category policy); Shopify never required one;
   // WooCommerce stores SKUs only. We auto-populate a no-op
-  // identifiers slice + advance, so the operator never sees this
-  // step. Fired once per mount; the autoSkippedRef guard makes
-  // strict-mode double-mount safe.
+  // identifiers slice + advance every time the operator lands here
+  // without an Amazon channel — including when navigating BACK to
+  // the step (the operator never wanted to see it).
   const autoSkippedRef = useRef(false)
   useEffect(() => {
     if (autoSkippedRef.current) return
     if (hasAmazon) return
-    if (stateSlice.path) return // already filled in (e.g. resumed wizard)
     autoSkippedRef.current = true
     void updateWizardState(
       {
@@ -249,8 +248,10 @@ export default function Step1Identifiers(props: StepProps) {
   }
 
   // GTIN.1 — render a thin loader while the auto-skip useEffect runs,
-  // so the operator never glimpses the form they don't need.
-  if (!hasAmazon && !stateSlice.path) {
+  // so the operator never glimpses the form they don't need. Triggers
+  // both for fresh wizards (stateSlice.path === undefined) and for
+  // back-navigation (stateSlice.path already set but !hasAmazon).
+  if (!hasAmazon) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-3 md:px-6 text-center">
         <Loader2 className="w-5 h-5 animate-spin text-slate-400 dark:text-slate-500 mx-auto mb-2" />

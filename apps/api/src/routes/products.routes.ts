@@ -1120,6 +1120,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       'ppeCategory',
       'hazmatClass',
       'hazmatUnNumber',
+      // GTIN.3 / Step 4 variant flow — the list-wizard's "promote to
+      // parent" action PATCHes isParent=true and "link variant to
+      // parent" PATCHes parentId. Both write into Product directly;
+      // the wizard owned this surface but hit "Field not editable"
+      // because the bulk allowlist didn't include them.
+      'isParent',
+      'parentId',
     ])
     // D.3d: prefixed channel fields write to ChannelListing instead of
     // Product. Only the suffixes in this set are wired today; the rest
@@ -1488,6 +1495,47 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             error: 'ppeCategory must be CAT_I, CAT_II, or CAT_III',
           })
           continue
+        }
+      } else if (c.field === 'isParent') {
+        // GTIN.3 / Step 4 — boolean coercion. Accept true/false +
+        // their string forms ("true"/"false", "1"/"0") since the
+        // bulk-ops grid sometimes pastes JSON-stringified payloads.
+        if (typeof value === 'boolean') {
+          // already correct
+        } else if (
+          value === 'true' ||
+          value === '1' ||
+          value === 1
+        ) {
+          value = true
+        } else if (
+          value === 'false' ||
+          value === '0' ||
+          value === 0 ||
+          value === '' ||
+          value === null ||
+          value === undefined
+        ) {
+          value = false
+        } else {
+          errors.push({
+            id: c.id,
+            field: c.field,
+            error: 'isParent must be a boolean',
+          })
+          continue
+        }
+      } else if (c.field === 'parentId') {
+        // GTIN.3 / Step 4 — FK to another Product.id. Empty / null
+        // unsets the parent link. A non-existent FK would be caught
+        // by Prisma; we don't pre-validate here to keep the bulk
+        // path narrow.
+        if (value === null || value === undefined || value === '') {
+          value = null
+        } else if (typeof value !== 'string') {
+          value = String(value).trim() || null
+        } else {
+          value = value.trim() || null
         }
       } else {
         // text fields — trim, coerce empty string to null only for
