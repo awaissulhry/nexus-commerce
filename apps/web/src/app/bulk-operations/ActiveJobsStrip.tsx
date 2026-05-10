@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Ban, Clock, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -72,6 +73,7 @@ export default function ActiveJobsStrip() {
   const [jobs, setJobs] = useState<ActiveJob[]>([])
   const [error, setError] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const askConfirm = useConfirm()
 
   const fetchActive = useCallback(async () => {
     try {
@@ -160,11 +162,27 @@ export default function ActiveJobsStrip() {
   }, [])
 
   const cancelJob = useCallback(
-    async (jobId: string) => {
-      setCancellingId(jobId)
+    async (job: ActiveJob) => {
+      // W10.4 — confirm before cancelling. PENDING / QUEUED jobs
+      // immediately go terminal (no work lost). IN_PROGRESS goes
+      // CANCELLING + cooperatively exits between items, so partial
+      // results stay on BulkActionItem. The confirm copy reflects
+      // the difference so the operator knows what they're about to do.
+      const inFlight = job.status === 'IN_PROGRESS'
+      const ok = await askConfirm({
+        title: `Cancel "${job.jobName}"?`,
+        description: inFlight
+          ? `${job.processedItems} of ${job.totalItems} items have already been written. Cancelling now stops the loop between items — the partial results stay in the audit trail.`
+          : 'The job has not started yet — cancelling marks it CANCELLED immediately.',
+        confirmLabel: 'Cancel job',
+        cancelLabel: inFlight ? 'Keep running' : 'Keep queued',
+        tone: 'warning',
+      })
+      if (!ok) return
+      setCancellingId(job.id)
       try {
         const res = await fetch(
-          `${getBackendUrl()}/api/bulk-operations/${jobId}/cancel`,
+          `${getBackendUrl()}/api/bulk-operations/${job.id}/cancel`,
           { method: 'POST' },
         )
         if (!res.ok) {
@@ -178,7 +196,7 @@ export default function ActiveJobsStrip() {
         setCancellingId(null)
       }
     },
-    [fetchActive],
+    [askConfirm, fetchActive],
   )
 
   // Hide the strip entirely when there's nothing active. Same pattern
@@ -275,7 +293,7 @@ export default function ActiveJobsStrip() {
                 {cancellable && (
                   <button
                     type="button"
-                    onClick={() => cancelJob(job.id)}
+                    onClick={() => cancelJob(job)}
                     disabled={cancellingId === job.id}
                     className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-sm text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded disabled:opacity-50"
                     title={`Cancel ${job.jobName}`}

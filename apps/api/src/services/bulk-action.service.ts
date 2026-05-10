@@ -435,29 +435,46 @@ export class BulkActionService {
       // W1.1 — between items, re-read the job's `status` column. If
       // it has flipped to CANCELLING (operator clicked cancel mid-
       // flight) we break out of the loop and let the post-loop block
-      // finalize the job as CANCELLED. The DB read costs ~1ms per
-      // item; for a 1000-item job that's ~1s overhead — acceptable
-      // for the cancel-responsiveness this buys.
+      // finalize the job as CANCELLED.
+      //
+      // W10.4 — pre-W10.4 the loop hit Prisma every single item (1ms
+      // each = ~1s/1000 items). For high-volume jobs that overhead is
+      // not free, and per-item cancel-responsiveness is not a real
+      // requirement — operators tolerate a 1-2s delay before the
+      // CANCELLING status takes effect. So now the loop checks every
+      // CANCEL_POLL_EVERY items (10) AND on a max wall-clock of
+      // CANCEL_POLL_MAX_MS (2000), whichever comes first.
+      const CANCEL_POLL_EVERY = 10;
+      const CANCEL_POLL_MAX_MS = 2000;
+      let lastCancelCheck = Date.now();
       const actionType = job.actionType as BulkActionType;
       const jobPayload = (job.actionPayload ?? {}) as Record<string, any>;
+      let itemIdx = 0;
       for (const item of items) {
-        const liveStatus = await this.prisma.bulkActionJob.findUnique({
-          where: { id: jobId },
-          select: { status: true },
-        });
-        if (
-          liveStatus?.status === 'CANCELLING' ||
-          liveStatus?.status === 'CANCELLED'
-        ) {
-          logger.info(`Job cancellation observed — exiting per-item loop`, {
-            jobId,
-            processedSoFar: processedItems,
-            failedSoFar: failedItems,
-            skippedSoFar: skippedItems,
+        const sinceLastCheck = Date.now() - lastCancelCheck;
+        const dueByCount = itemIdx % CANCEL_POLL_EVERY === 0;
+        const dueByTime = sinceLastCheck >= CANCEL_POLL_MAX_MS;
+        if (itemIdx === 0 || dueByCount || dueByTime) {
+          const liveStatus = await this.prisma.bulkActionJob.findUnique({
+            where: { id: jobId },
+            select: { status: true },
           });
-          cancelled = true;
-          break;
+          lastCancelCheck = Date.now();
+          if (
+            liveStatus?.status === 'CANCELLING' ||
+            liveStatus?.status === 'CANCELLED'
+          ) {
+            logger.info(`Job cancellation observed — exiting per-item loop`, {
+              jobId,
+              processedSoFar: processedItems,
+              failedSoFar: failedItems,
+              skippedSoFar: skippedItems,
+            });
+            cancelled = true;
+            break;
+          }
         }
+        itemIdx++;
         const beforeState = this.extractItemState(
           item,
           actionType,
