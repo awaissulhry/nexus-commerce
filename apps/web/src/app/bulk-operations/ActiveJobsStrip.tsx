@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Ban, Clock, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -78,6 +78,66 @@ export default function ActiveJobsStrip() {
     const id = setInterval(fetchActive, POLL_INTERVAL_MS)
     return () => clearInterval(id)
   }, [fetchActive])
+
+  // W10.1 — Per-job SSE subscriptions. The list-level poll above
+  // catches added/removed jobs (operator starts a new bulk action,
+  // a queued job ages out); the SSE stream updates live progress for
+  // each active row without forcing the strip to repoll every 5s.
+  // On terminal status the server closes the stream — we refetch the
+  // list once so the row drops off cleanly.
+  const subsRef = useRef<Map<string, EventSource>>(new Map())
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
+    const subs = subsRef.current
+    const wantedIds = new Set(jobs.map((j) => j.id))
+    // Close subs for jobs no longer in the list
+    for (const [id, es] of subs) {
+      if (!wantedIds.has(id)) {
+        es.close()
+        subs.delete(id)
+      }
+    }
+    // Open subs for new jobs
+    for (const job of jobs) {
+      if (subs.has(job.id)) continue
+      const es = new EventSource(
+        `${getBackendUrl()}/api/bulk-operations/${job.id}/events`,
+      )
+      es.addEventListener('update', (ev) => {
+        try {
+          const next = JSON.parse((ev as MessageEvent).data) as ActiveJob
+          setJobs((prev) => prev.map((j) => (j.id === next.id ? { ...j, ...next } : j)))
+        } catch {
+          // Bad payload — ignore the tick.
+        }
+      })
+      es.addEventListener('done', () => {
+        es.close()
+        subs.delete(job.id)
+        // Refetch so terminal jobs drop off the strip.
+        fetchActive()
+      })
+      es.onerror = () => {
+        // EventSource auto-reconnects on transient drops; if it
+        // settles into CLOSED the browser stops retrying. Either
+        // way the next 5s list-poll will recreate the row.
+      }
+      subs.set(job.id, es)
+    }
+    return () => {
+      // Don't close on every render — only on unmount. The cleanup
+      // above (`!wantedIds.has`) handles removals between renders.
+    }
+  }, [jobs, fetchActive])
+
+  useEffect(() => {
+    // True unmount: close everything.
+    const subs = subsRef.current
+    return () => {
+      for (const es of subs.values()) es.close()
+      subs.clear()
+    }
+  }, [])
 
   const cancelJob = useCallback(
     async (jobId: string) => {

@@ -36,6 +36,32 @@ interface CreateBody {
   force?: boolean
 }
 
+/**
+ * W10.1 — Compact change-signature for the SSE stream. Hash the
+ * tracked progress fields into a short string; the SSE handler
+ * only emits an `update` event when this signature changes.
+ * Avoids spamming the client with no-op events on each 1s tick.
+ */
+function sigFor(job: {
+  status: string
+  totalItems: number
+  processedItems: number
+  failedItems: number
+  skippedItems: number
+  progressPercent: number
+  lastError: string | null
+}): string {
+  return [
+    job.status,
+    job.totalItems,
+    job.processedItems,
+    job.failedItems,
+    job.skippedItems,
+    job.progressPercent,
+    job.lastError ?? '',
+  ].join('|')
+}
+
 const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /api/bulk-operations
@@ -394,6 +420,91 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
         )
         return reply.code(500).send({ success: false, error: message })
       }
+    },
+  )
+
+  /**
+   * GET /api/bulk-operations/:id/events
+   *
+   * W10.1 — Server-sent events stream for live job progress.
+   * Replaces the 1-2s polling loop the client used to do for
+   * progressPercent / processedItems / failedItems / status.
+   *
+   * Implementation: 1s server-side tick polls Prisma, emits an
+   * `update` event only when a tracked field changes, and closes
+   * the stream once status is terminal (COMPLETED / FAILED /
+   * PARTIALLY_COMPLETED / CANCELLED). Heartbeat every 25s keeps
+   * the connection alive past most reverse-proxy idle windows.
+   *
+   * No EventEmitter wired into bulk-action.service — that would
+   * couple the service to a transport layer. The 1s poll cost
+   * is bounded (one Prisma findUnique per active subscriber per
+   * second) and the connection auto-closes on terminal state, so
+   * a typical bulk job adds ~30s of subscription, not minutes.
+   */
+  fastify.get<{ Params: { id: string } }>(
+    '/bulk-operations/:id/events',
+    async (request, reply) => {
+      const { id } = request.params
+      if (!id) {
+        return reply.code(400).send({ success: false, error: 'job id required' })
+      }
+      const initial = await bulkActionService.getJobStatus(id)
+      if (!initial) {
+        return reply.code(404).send({ success: false, error: `Job not found: ${id}` })
+      }
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      })
+      const send = (event: string, data: unknown) => {
+        try {
+          reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+        } catch {
+          // ignore — close handler unwires the timers
+        }
+      }
+      send('snapshot', initial)
+      const TERMINAL = new Set(['COMPLETED', 'FAILED', 'PARTIALLY_COMPLETED', 'CANCELLED'])
+      let lastSig = sigFor(initial)
+      let closed = false
+      const close = () => {
+        if (closed) return
+        closed = true
+        clearInterval(pollTimer)
+        clearInterval(heartbeat)
+        try { reply.raw.end() } catch {}
+      }
+      const pollTimer = setInterval(async () => {
+        if (closed) return
+        try {
+          const row = await bulkActionService.getJobStatus(id)
+          if (!row) {
+            send('error', { error: 'Job disappeared' })
+            close()
+            return
+          }
+          const sig = sigFor(row)
+          if (sig !== lastSig) {
+            lastSig = sig
+            send('update', row)
+          }
+          if (TERMINAL.has(row.status)) {
+            send('done', { status: row.status })
+            close()
+          }
+        } catch (err) {
+          send('error', { error: err instanceof Error ? err.message : String(err) })
+        }
+      }, 1000)
+      const heartbeat = setInterval(() => {
+        try { reply.raw.write(`: heartbeat ${Date.now()}\n\n`) } catch {}
+      }, 25_000)
+      request.raw.on('close', close)
+      // Hold the connection open until close fires.
+      await new Promise(() => {})
     },
   )
 
