@@ -17,6 +17,7 @@ import {
   publishToAmazon,
   publishToEbay,
   publishToShopify,
+  publishToWoo,
   channelPublishMode,
   type ChannelKey,
   type PublishResult,
@@ -251,6 +252,74 @@ const channelPublishRoutes: FastifyPluginAsync = async (fastify) => {
       request.log.warn(
         { err, assetId: body.assetId },
         'Failed to write AuditLog row for Shopify publish',
+      )
+    }
+    return reply.code(result.ok ? 200 : 502).send(result)
+  })
+
+  // ── WooCommerce — MC.12.4 ─────────────────────────────────────
+
+  fastify.post('/channel-publish/woo', async (request, reply) => {
+    const body = request.body as {
+      assetId?: string
+      assetUrl?: string
+      productId?: string
+      wooProductId?: string
+    }
+    if (!body.wooProductId?.trim())
+      return reply.code(400).send({ error: 'wooProductId is required' })
+
+    let assetUrl = body.assetUrl?.trim() ?? null
+    if (!assetUrl && body.assetId) {
+      const id = body.assetId
+      if (id.startsWith('da_')) {
+        const asset = await prisma.digitalAsset.findUnique({
+          where: { id: id.slice(3) },
+          select: { url: true },
+        })
+        assetUrl = asset?.url ?? null
+      } else if (id.startsWith('pi_')) {
+        const row = await prisma.productImage.findUnique({
+          where: { id: id.slice(3) },
+          select: { url: true },
+        })
+        assetUrl = row?.url ?? null
+      } else {
+        return reply.code(400).send({
+          error:
+            'assetId must be prefixed "da_" (digital asset) or "pi_" (product image)',
+        })
+      }
+    }
+    if (!assetUrl)
+      return reply.code(400).send({ error: 'asset not found' })
+
+    const result: PublishResult = await publishToWoo({
+      assetUrl,
+      destinationId: body.wooProductId,
+    })
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: result.ok ? 'CHANNEL_PUBLISH_OK' : 'CHANNEL_PUBLISH_FAILED',
+          entityType: 'DigitalAsset',
+          entityId: body.assetId ?? assetUrl,
+          metadata: {
+            channel: 'WOOCOMMERCE',
+            mode: result.mode,
+            wooProductId: body.wooProductId,
+            productId: body.productId ?? null,
+            channelImageId: result.channelImageId,
+            error: result.error,
+            response: result.rawResponse,
+          } as never,
+        },
+      })
+    } catch (err) {
+      request.log.warn(
+        { err, assetId: body.assetId },
+        'Failed to write AuditLog row for Woo publish',
       )
     }
     return reply.code(result.ok ? 200 : 502).send(result)

@@ -46,6 +46,48 @@ interface PublishInput {
   options?: Record<string, unknown>
 }
 
+// ── WooCommerce — MC.12.4 ─────────────────────────────────────────
+//
+// Real call (live, future):
+//   POST /wp-json/wp/v2/media — uploads the image as a WP
+//   attachment, returning a numeric `id`. Then POST/PUT
+//   /wp-json/wc/v3/products/{id} with `images: [{ id }]` to attach
+//   it to the product. Two-step because WP's media library is
+//   separate from the WC product image set.
+//
+// Sandbox returns a fake numeric attachment id matching that shape.
+export async function publishToWoo(
+  input: PublishInput,
+): Promise<PublishResult> {
+  const mode = channelPublishMode('WOOCOMMERCE')
+  if (mode === 'sandbox') {
+    const fakeId = Math.floor(Math.random() * 90_000 + 10_000)
+    return {
+      ok: true,
+      channel: 'WOOCOMMERCE',
+      mode: 'sandbox',
+      channelImageId: String(fakeId),
+      rawResponse: {
+        sandbox: true,
+        productId: input.destinationId,
+        attachmentId: fakeId,
+        attachmentSlug: `attachment-${fakeId}`,
+        sourceImage: input.assetUrl,
+      },
+      error: null,
+    }
+  }
+  return {
+    ok: false,
+    channel: 'WOOCOMMERCE',
+    mode: 'live',
+    channelImageId: null,
+    rawResponse: null,
+    error:
+      'Live WooCommerce wp/v2/media + wc/v3/products upload is not yet wired. Set CHANNEL_PUBLISH_WOOCOMMERCE=sandbox or wait for the Woo credential integration.',
+  }
+}
+
 // ── Shopify — MC.12.3 ─────────────────────────────────────────────
 //
 // Real call (live, future):
