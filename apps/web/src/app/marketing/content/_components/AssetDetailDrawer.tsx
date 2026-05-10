@@ -35,6 +35,7 @@ import AssetTagPicker from './AssetTagPicker'
 import ChannelVariantsList from './ChannelVariantsList'
 import LocaleOverlayManager from './LocaleOverlayManager'
 import ChannelPreviewPane from './ChannelPreviewPane'
+import AltTextHelper from './AltTextHelper'
 import type {
   AssetDetail,
   AssetDetailResponse,
@@ -304,6 +305,11 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                     />
                   )}
                 </dl>
+                {/* MC.14.7 — Italian glossary helper for Amazon IT.
+                     Operator references the curated TerminologyPreference
+                     rows when writing alt text without leaving the
+                     drawer. */}
+                <AltTextHelper apiBase={apiBase} />
               </section>
 
               {/* MC.3.4 — quality warnings, if any. */}
