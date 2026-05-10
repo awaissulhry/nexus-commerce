@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
 import SearchInput from './SearchInput'
+import SavedViewsMenu from './SavedViewsMenu'
+import type { FilterState } from './FilterSidebar'
 
 export type ViewMode = 'grid' | 'list'
 
@@ -22,6 +24,8 @@ interface Props {
   filtersOpen: boolean
   onToggleFilters: () => void
   activeFilterCount?: number
+  filter: FilterState
+  onApplyView: (search: string, filter: FilterState) => void
 }
 
 export default function ContentToolbar({
@@ -32,6 +36,8 @@ export default function ContentToolbar({
   filtersOpen,
   onToggleFilters,
   activeFilterCount = 0,
+  filter,
+  onApplyView,
 }: Props) {
   const { t } = useTranslations()
   const { toast } = useToast()
@@ -59,6 +65,12 @@ export default function ContentToolbar({
             </span>
           )}
         </Button>
+
+        <SavedViewsMenu
+          search={search}
+          filter={filter}
+          onApply={onApplyView}
+        />
 
         {/* View toggle */}
         <div

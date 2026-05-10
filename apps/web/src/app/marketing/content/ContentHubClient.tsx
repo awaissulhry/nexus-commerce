@@ -168,6 +168,11 @@ export default function ContentHubClient({
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen((prev) => !prev)}
         activeFilterCount={filterCount}
+        filter={filter}
+        onApplyView={(s, f) => {
+          setSearch(s)
+          setFilter(f)
+        }}
       />
 
       <div
