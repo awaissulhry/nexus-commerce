@@ -71,6 +71,17 @@ export interface QualityWarning {
   message: string
 }
 
+export interface ChannelVariant {
+  id: string
+  channel: string
+  label: string
+  width: number
+  height: number
+  cropMode: 'fit' | 'fill' | 'pad'
+  url: string | null
+  notes: string | null
+}
+
 export interface AssetDetail {
   id: string
   source: AssetSource
@@ -92,6 +103,11 @@ export interface AssetDetail {
   tags: string[]
   /// MC.3.4 — quality warnings persisted at upload time.
   qualityWarnings: QualityWarning[]
+  /// MC.6.1 — per-channel variant URLs (Amazon hero/standard/thumb,
+  /// eBay zoom/standard/thumb, Shopify product/grid/cart, Instagram
+  /// feed/story/portrait, OG card). Built from the Cloudinary master
+  /// via on-demand transformations.
+  channelVariants: ChannelVariant[]
   originalFilename: string | null
   storageProvider: string
   storageId: string | null

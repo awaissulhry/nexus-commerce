@@ -32,6 +32,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatBytes } from '../_lib/format'
 import AssetTagPicker from './AssetTagPicker'
+import ChannelVariantsList from './ChannelVariantsList'
 import type {
   AssetDetail,
   AssetDetailResponse,
@@ -384,6 +385,11 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                   </ul>
                 )}
               </section>
+
+              {/* MC.6.1 — per-channel variants */}
+              {detail.channelVariants.length > 0 && (
+                <ChannelVariantsList variants={detail.channelVariants} />
+              )}
 
               {/* Storage */}
               <section

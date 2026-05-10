@@ -51,6 +51,7 @@ import {
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
 import { checkAssetQuality } from '../services/asset-quality.service.js'
+import { buildAllVariants } from '../services/channel-variants.service.js'
 
 // MC.3.3 — content-hash. Lowercase hex, 64 chars. Computing it on
 // the upload path lets us short-circuit before paying for a
@@ -526,6 +527,15 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
                 message: string
               }>)
             : [],
+          // MC.6.1 — per-channel variant URLs computed from the
+          // Cloudinary master. No physical copies; transformations
+          // happen on-demand via Cloudinary's image-upload URL
+          // params (w_, h_, c_, q_auto, f_auto).
+          channelVariants: buildAllVariants({
+            storageProvider: asset.storageProvider,
+            storageId: asset.storageId,
+            url: asset.url,
+          }),
           originalFilename: asset.originalFilename,
           storageProvider: asset.storageProvider,
           storageId: asset.storageId,
@@ -580,6 +590,15 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             channel: string | null
             message: string
           }>,
+          // MC.6.1 — ProductImage rows aren't always Cloudinary-backed
+          // (some come from external sync URLs); buildAllVariants
+          // handles that by returning null url's for non-cloudinary
+          // sources, which the drawer renders as "not available".
+          channelVariants: buildAllVariants({
+            storageProvider: row.publicId ? 'cloudinary' : 'external',
+            storageId: row.publicId,
+            url: row.url,
+          }),
           originalFilename: null,
           storageProvider: row.publicId ? 'cloudinary' : 'external',
           storageId: row.publicId,
