@@ -4,15 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   CheckCircle2,
+  Edit2,
   Layers,
   Loader2,
   Package,
   PackageOpen,
   Plus,
+  RefreshCw,
+  Save,
   Search,
   Sparkles,
   Trash2,
   X,
+  XCircle,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -55,6 +59,9 @@ interface MultiChannelVariationsPayload {
   }>
 }
 
+// Alias so VariantsTable props match the task spec naming.
+type MultiChannelVariationChild = VariationChild
+
 interface VariationsSlice {
   /** Common-theme pick that applies to all channels by default. */
   commonTheme?: string
@@ -66,6 +73,15 @@ interface VariationsSlice {
    *  reads this to compute missing attributes. */
   customAttributesByChannel?: Record<string, string[]>
   includedSkus?: string[]
+  /** Per-child "inherit parent name/description" toggle. */
+  inheritByChildId?: Record<string, boolean>
+}
+
+interface VariantDraftEdit {
+  sku: string
+  price: string
+  stock: string
+  attrs: Record<string, string>
 }
 
 const CUSTOM_PREFIX = 'CUSTOM__'
@@ -84,6 +100,7 @@ export default function Step5Variations({
   updateWizardState,
   wizardId,
   channels,
+  product,
   reportValidity,
   setJumpToBlocker,
 }: StepProps) {
@@ -126,6 +143,18 @@ export default function Step5Variations({
   // collapse is gone; the grid below renders inline so the seller
   // can see what each channel will publish under at a glance.
   const [customDraft, setCustomDraft] = useState<Record<string, string>>({})
+
+  // Live Amazon SP-API themes. Fetched after the payload loads for
+  // Amazon channels. Merged over commonThemes/themesByChannel (live
+  // wins). liveThemesKey bumps when user clicks the refresh button.
+  const [liveThemes, setLiveThemes] = useState<ThemeOption[]>([])
+  const [liveThemesBusy, setLiveThemesBusy] = useState(false)
+  const [liveThemesKey, setLiveThemesKey] = useState(0)
+
+  // Matrix builder expand/collapse.
+  const [showMatrix, setShowMatrix] = useState(false)
+  // Add-variant inline form.
+  const [showAddRow, setShowAddRow] = useState(false)
 
   // Fetch payload. Re-fetch when channels or selection changes so the
   // server-side `missingByChannel` annotations track the user's
@@ -189,14 +218,44 @@ export default function Step5Variations({
     })
   }, [])
 
-  const onSelectAll = useCallback(() => {
+  // Fetch live Amazon SP-API themes when payload is available and an
+  // Amazon channel is selected. liveThemesKey bumps on manual refresh.
+  useEffect(() => {
     if (!payload) return
-    setIncludedSkus(new Set(payload.children.map((c) => c.sku)))
-  }, [payload])
-
-  const onSelectNone = useCallback(() => {
-    setIncludedSkus(new Set())
-  }, [])
+    const amazonChannel = payload.channels.find(
+      (ch) => ch.platform.toLowerCase() === 'amazon',
+    )
+    if (!amazonChannel) return
+    const channelKey = `${amazonChannel.platform}:${amazonChannel.marketplace}`
+    const productTypeVal =
+      (wizardState?.channelStates as Record<string, Record<string, unknown>> | undefined)?.[channelKey]?.productType as
+        | { productType?: string }
+        | undefined
+    const productType = productTypeVal?.productType
+    if (!productType) return
+    let cancelled = false
+    setLiveThemesBusy(true)
+    const url = new URL(
+      `${getBackendUrl()}/api/listing-wizard/${wizardId}/variation-themes`,
+    )
+    url.searchParams.set('marketplace', amazonChannel.marketplace)
+    url.searchParams.set('productType', productType)
+    fetch(url.toString())
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return
+        const themes = (json?.themes ?? json ?? []) as ThemeOption[]
+        if (Array.isArray(themes)) setLiveThemes(themes)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLiveThemesBusy(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload, wizardId, liveThemesKey])
 
   // Persist selection to wizardState (state.variations) and per-
   // channel theme to channelStates[key].variations.theme. Debounced
@@ -224,15 +283,62 @@ export default function Step5Variations({
     [themeByChannel, commonTheme],
   )
 
+  const channelKeys = useMemo(() => {
+    return payload ? Object.keys(payload.themesByChannel) : []
+  }, [payload])
+
+  // Merge live themes into commonThemes / themesByChannel (live wins).
+  const effectivePayload = useMemo(() => {
+    if (!payload || liveThemes.length === 0) return payload
+    const liveIds = new Set(liveThemes.map((t) => t.id))
+    const mergedCommon = [
+      ...liveThemes,
+      ...payload.commonThemes.filter((t) => !liveIds.has(t.id)),
+    ]
+    const mergedByChannel: Record<string, ThemeOption[]> = {}
+    for (const [k, v] of Object.entries(payload.themesByChannel)) {
+      mergedByChannel[k] = [
+        ...liveThemes,
+        ...v.filter((t) => !liveIds.has(t.id)),
+      ]
+    }
+    return { ...payload, commonThemes: mergedCommon, themesByChannel: mergedByChannel }
+  }, [payload, liveThemes])
+
+  const selectedTheme = useMemo<ThemeOption | null>(() => {
+    if (!effectivePayload || !commonTheme) return null
+    return effectivePayload.commonThemes.find((t) => t.id === commonTheme) ?? null
+  }, [effectivePayload, commonTheme])
+
+  const inheritByChildId = useMemo<Record<string, boolean>>(
+    () => (slice.inheritByChildId ?? {}) as Record<string, boolean>,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slice.inheritByChildId],
+  )
+
+  const onInheritChange = useCallback(
+    (childId: string, value: boolean) => {
+      const current = (slice.inheritByChildId ?? {}) as Record<string, boolean>
+      updateWizardState({
+        variations: {
+          ...(wizardState.variations as object | undefined ?? {}),
+          inheritByChildId: { ...current, [childId]: value },
+        },
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slice.inheritByChildId, wizardState.variations, updateWizardState],
+  )
+
   // Re-annotate missingByChannel client-side based on current picks
   // — the server's annotation is computed from the persisted state,
   // which lags by SAVE_DEBOUNCE_MS. Doing this in the UI keeps the
   // chips in sync with what the user just clicked.
   const childrenWithLiveAnnotations = useMemo(() => {
-    if (!payload) return []
-    return payload.children.map((c) => {
+    if (!effectivePayload) return []
+    return effectivePayload.children.map((c) => {
       const missingByChannel: Record<string, string[]> = {}
-      for (const channelKey of Object.keys(payload.themesByChannel)) {
+      for (const channelKey of Object.keys(effectivePayload.themesByChannel)) {
         const themeId = effectiveTheme(channelKey)
         if (!themeId) {
           missingByChannel[channelKey] = []
@@ -246,7 +352,7 @@ export default function Step5Variations({
           )
           continue
         }
-        const theme = (payload.themesByChannel[channelKey] ?? []).find(
+        const theme = (effectivePayload.themesByChannel[channelKey] ?? []).find(
           (t) => t.id === themeId,
         )
         if (!theme) {
@@ -259,7 +365,7 @@ export default function Step5Variations({
       }
       return { ...c, missingByChannel }
     })
-  }, [payload, effectiveTheme, customAttrsByChannel])
+  }, [effectivePayload, effectiveTheme, customAttrsByChannel])
 
   const includedChildren = useMemo(() => {
     return childrenWithLiveAnnotations.filter((c) =>
@@ -272,10 +378,6 @@ export default function Step5Variations({
       Object.values(c.missingByChannel).some((arr) => arr.length > 0),
     )
   }, [includedChildren])
-
-  const channelKeys = useMemo(() => {
-    return payload ? Object.keys(payload.themesByChannel) : []
-  }, [payload])
 
   // C.0 / A1 — register a jump-to-blocker callback. Scrolls to the
   // first row tagged with data-blocker-row="true" within this step.
@@ -319,13 +421,13 @@ export default function Step5Variations({
       reportValidity({ valid: false, blockers: 1, reasons: [error] })
       return
     }
-    if (!payload || !payload.isParent) {
+    if (!effectivePayload || !effectivePayload.isParent) {
       reportValidity({ valid: true, blockers: 0 })
       return
     }
     const reasons: string[] = []
     let blockers = 0
-    const anyThemeSet = Object.keys(payload.themesByChannel).some(
+    const anyThemeSet = Object.keys(effectivePayload.themesByChannel).some(
       (ch) => effectiveTheme(ch) !== null,
     )
     if (!anyThemeSet) {
@@ -355,8 +457,8 @@ export default function Step5Variations({
   ])
 
   const onContinue = useCallback(async () => {
-    if (!payload) return
-    if (payload.isParent && includedChildren.length === 0) return
+    if (!effectivePayload) return
+    if (effectivePayload.isParent && includedChildren.length === 0) return
     if (blockingChildren.length > 0) return
     // Persist before advance — bypass debounce.
     await persistThemes(wizardId, {
@@ -372,9 +474,9 @@ export default function Step5Variations({
     channelKeys,
     commonTheme,
     customAttrsByChannel,
+    effectivePayload,
     includedChildren.length,
     includedSkus,
-    payload,
     themeByChannel,
     updateWizardState,
     wizardId,
@@ -430,16 +532,16 @@ export default function Step5Variations({
         </div>
       )}
 
-      {payload && (
+      {effectivePayload && (
         <>
           {/* Channel-with-missing-themes warning */}
-          {payload.channelsMissingThemes.length > 0 && (
+          {effectivePayload.channelsMissingThemes.length > 0 && (
             <div className="mb-4 border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 rounded-md px-3 py-2 text-base text-amber-800">
               <div className="font-medium mb-1">
                 Themes unavailable for some channels
               </div>
               <ul className="space-y-0.5 text-sm">
-                {payload.channelsMissingThemes.map((m) => (
+                {effectivePayload.channelsMissingThemes.map((m) => (
                   <li key={m.channelKey}>
                     <span className="font-mono">{m.channelKey}</span> —{' '}
                     <span className="text-amber-700 dark:text-amber-300">{m.reason}</span>
@@ -456,7 +558,22 @@ export default function Step5Variations({
                 Common theme (applies to every selected channel)
               </label>
               <div className="flex items-center gap-2">
-                {payload.commonThemes.length === 0 && (
+                {liveThemes.length > 0 && (
+                  <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-medium">
+                    Live from Amazon SP-API
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setLiveThemesKey((k) => k + 1)}
+                  disabled={liveThemesBusy}
+                  title="Refresh live themes from Amazon SP-API"
+                  className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <RefreshCw className={cn('w-3 h-3', liveThemesBusy && 'animate-spin')} />
+                  Refresh
+                </button>
+                {effectivePayload.commonThemes.length === 0 && (
                   <span className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">
                     No theme common to all channels
                   </span>
@@ -468,7 +585,7 @@ export default function Step5Variations({
                   variant="secondary"
                   size="sm"
                   onClick={async () => {
-                    if (payload.commonThemes.length === 0) return
+                    if (effectivePayload.commonThemes.length === 0) return
                     setAiThemeBusy(true)
                     setAiThemeError(null)
                     setAiThemeRec(null)
@@ -479,8 +596,8 @@ export default function Step5Variations({
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
-                            presentAttributes: payload.presentAttributes,
-                            availableThemes: payload.commonThemes.map((th) => ({
+                            presentAttributes: effectivePayload.presentAttributes,
+                            availableThemes: effectivePayload.commonThemes.map((th) => ({
                               id: th.id,
                               label: th.label,
                               requiredAttributes: th.requiredAttributes,
@@ -506,7 +623,7 @@ export default function Step5Variations({
                     }
                   }}
                   disabled={
-                    aiThemeBusy || payload.commonThemes.length === 0
+                    aiThemeBusy || effectivePayload.commonThemes.length === 0
                   }
                   className="inline-flex items-center gap-1.5"
                 >
@@ -545,7 +662,7 @@ export default function Step5Variations({
                         {t('listWizard.aiSuggestTheme.recommends')}
                       </span>
                       <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {payload.commonThemes.find(
+                        {effectivePayload.commonThemes.find(
                           (th) => th.id === aiThemeRec.themeId,
                         )?.label ?? aiThemeRec.themeId}
                       </span>
@@ -607,14 +724,14 @@ export default function Step5Variations({
               value={commonTheme ?? ''}
               onChange={(e) => setCommonTheme(e.target.value || null)}
               className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
-              disabled={payload.commonThemes.length === 0}
+              disabled={effectivePayload.commonThemes.length === 0}
             >
-              {payload.commonThemes.length === 0 ? (
+              {effectivePayload.commonThemes.length === 0 ? (
                 <option value="">— No common themes —</option>
               ) : (
                 <>
                   <option value="">— Select common theme —</option>
-                  {payload.commonThemes.map((t) => (
+                  {effectivePayload.commonThemes.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.label} ({t.id})
                     </option>
@@ -626,7 +743,7 @@ export default function Step5Variations({
               <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
                 Required per variation:{' '}
                 <span className="font-mono">
-                  {payload.commonThemes
+                  {effectivePayload.commonThemes
                     .find((t) => t.id === commonTheme)
                     ?.requiredAttributes.join(', ') ?? '—'}
                 </span>
@@ -653,7 +770,7 @@ export default function Step5Variations({
               </div>
               <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-3 space-y-2">
                 {channelKeys.map((channelKey) => {
-                    const themes = payload.themesByChannel[channelKey] ?? []
+                    const themes = effectivePayload.themesByChannel[channelKey] ?? []
                     const overrideValue = themeByChannel[channelKey] ?? ''
                     const inherits = !overrideValue
                     const isCustom = overrideValue.startsWith(CUSTOM_PREFIX)
@@ -838,101 +955,71 @@ export default function Step5Variations({
             </div>
           )}
 
-          {/* Children list */}
-          <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
-            <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between text-base">
-              <span className="text-slate-700 dark:text-slate-300">
-                <span className="font-medium">{includedSkus.size}</span> of{' '}
-                {payload.children.length} variations included
-              </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={onSelectAll}
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={onSelectNone}
-                  className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline"
-                >
-                  Select none
-                </button>
-              </div>
+          {/* Variants table with CRUD */}
+          {effectivePayload.children.length > 0 && (
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowMatrix((v) => !v)}
+                className={cn(
+                  'h-7 px-3 text-sm rounded-md border inline-flex items-center gap-1.5',
+                  showMatrix
+                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                )}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Matrix builder
+              </button>
             </div>
-            <div className="max-h-[420px] overflow-y-auto">
-              {childrenWithLiveAnnotations.length === 0 ? (
-                <div className="px-3 py-6 text-base text-slate-500 dark:text-slate-400 text-center">
-                  No children found. Add variations on the master product
-                  before listing.
-                </div>
-              ) : (
-                childrenWithLiveAnnotations.map((c) => {
-                  const included = includedSkus.has(c.sku)
-                  const blockingChannels = Object.entries(c.missingByChannel)
-                    .filter(([, missing]) => missing.length > 0)
-                    .map(([channelKey, missing]) => ({ channelKey, missing }))
-                  const hasBlocking = included && blockingChannels.length > 0
-                  return (
-                    <label
-                      key={c.id}
-                      // C.0 / A1 — first blocking row gets a data-attr
-                      // hook so the global setJumpToBlocker can find
-                      // and scroll to it. scroll-margin-top keeps the
-                      // sticky header from covering it after the jump.
-                      data-blocker-row={hasBlocking ? 'true' : undefined}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 scroll-mt-24',
-                        hasBlocking && 'bg-amber-50/40 hover:bg-amber-50/70',
-                      )}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={included}
-                        onChange={() => onToggleSku(c.sku)}
-                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-mono text-base text-slate-900 dark:text-slate-100 truncate">
-                          {c.sku}
-                        </div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
-                          {Object.keys(c.attributes).length === 0
-                            ? '(no attributes set)'
-                            : Object.entries(c.attributes)
-                                .map(([k, v]) => `${k}: ${v}`)
-                                .join(' · ')}
-                        </div>
-                      </div>
-                      <div className="text-sm text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">
-                        €{c.price.toFixed(2)} · {c.stock}
-                      </div>
-                      {hasBlocking && (
-                        <div className="flex flex-col gap-0.5 items-end">
-                          {blockingChannels.slice(0, 2).map((b) => (
-                            <span
-                              key={b.channelKey}
-                              className="text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.5 rounded font-mono"
-                              title={`Missing for ${b.channelKey}: ${b.missing.join(', ')}`}
-                            >
-                              {b.channelKey}: −{b.missing.length}
-                            </span>
-                          ))}
-                          {blockingChannels.length > 2 && (
-                            <span className="text-xs text-amber-600 dark:text-amber-400">
-                              +{blockingChannels.length - 2} more
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </label>
-                  )
-                })
-              )}
+          )}
+
+          {showMatrix && effectivePayload.children.length > 0 && (
+            <div className="mb-4">
+              <MatrixVariantBuilder
+                payload={effectivePayload}
+                onCreated={() => setRefetchKey((k) => k + 1)}
+                wizardId={wizardId}
+              />
             </div>
-          </div>
+          )}
+
+          <VariantsTable
+            children={childrenWithLiveAnnotations}
+            parentId={product.id}
+            wizardId={wizardId}
+            selectedTheme={selectedTheme}
+            includedSkus={includedSkus}
+            inheritByChildId={inheritByChildId}
+            onToggleSku={onToggleSku}
+            onRefetch={() => setRefetchKey((k) => k + 1)}
+            onInheritChange={onInheritChange}
+          />
+
+          {showAddRow && (
+            <AddVariantRow
+              parentId={product.id}
+              selectedTheme={selectedTheme}
+              onDone={() => {
+                setShowAddRow(false)
+                setRefetchKey((k) => k + 1)
+              }}
+              onCancel={() => setShowAddRow(false)}
+            />
+          )}
+
+          {!showAddRow && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddRow(true)}
+                className="h-7 px-3 text-sm rounded-md border border-dashed border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add variant
+              </button>
+            </div>
+          )}
 
           <div className="mt-6 flex items-center justify-between gap-3">
             <ContinueStatus
@@ -940,15 +1027,15 @@ export default function Step5Variations({
               channelKeys={channelKeys}
               includedCount={includedChildren.length}
               blockingCount={blockingChildren.length}
-              hasChildren={payload.children.length > 0}
+              hasChildren={effectivePayload.children.length > 0}
             />
             <Button
               variant="primary"
               size="sm"
               onClick={onContinue}
               disabled={
-                !payload ||
-                (payload.children.length > 0 &&
+                !effectivePayload ||
+                (effectivePayload.children.length > 0 &&
                   (includedChildren.length === 0 ||
                     blockingChildren.length > 0))
               }
@@ -958,6 +1045,433 @@ export default function Step5Variations({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function VariantsTable({
+  children,
+  parentId,
+  selectedTheme,
+  includedSkus,
+  inheritByChildId,
+  onToggleSku,
+  onRefetch,
+  onInheritChange,
+}: {
+  children: MultiChannelVariationChild[]
+  parentId: string
+  wizardId: string
+  selectedTheme: ThemeOption | null
+  includedSkus: Set<string>
+  inheritByChildId: Record<string, boolean>
+  onToggleSku: (sku: string) => void
+  onRefetch: () => void
+  onInheritChange: (childId: string, value: boolean) => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<VariantDraftEdit | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const attrCols = selectedTheme?.requiredAttributes ?? []
+
+  const startEdit = useCallback((child: MultiChannelVariationChild) => {
+    setEditingId(child.id)
+    setSaveError(null)
+    setEditDraft({
+      sku: child.sku,
+      price: child.price.toString(),
+      stock: child.stock.toString(),
+      attrs: { ...child.attributes },
+    })
+  }, [])
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null)
+    setEditDraft(null)
+    setSaveError(null)
+  }, [])
+
+  const commitEdit = useCallback(
+    async (child: MultiChannelVariationChild) => {
+      if (!editDraft) return
+      setSaving(true)
+      setSaveError(null)
+      try {
+        const basicRes = await fetch(
+          `${getBackendUrl()}/api/products/${encodeURIComponent(parentId)}/children/${encodeURIComponent(child.id)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sku: editDraft.sku,
+              basePrice: editDraft.price ? Number(editDraft.price) : undefined,
+              totalStock: editDraft.stock ? Number(editDraft.stock) : undefined,
+            }),
+          },
+        )
+        if (!basicRes.ok) {
+          const j = await basicRes.json().catch(() => ({}))
+          throw new Error(j?.error ?? `HTTP ${basicRes.status}`)
+        }
+        const attrRes = await fetch(
+          `${getBackendUrl()}/api/catalog/products/${encodeURIComponent(child.id)}/variant-attributes`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editDraft.attrs),
+          },
+        )
+        if (!attrRes.ok) {
+          const j = await attrRes.json().catch(() => ({}))
+          throw new Error(j?.error ?? `HTTP ${attrRes.status}`)
+        }
+        setEditingId(null)
+        setEditDraft(null)
+        onRefetch()
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setSaving(false)
+      }
+    },
+    [editDraft, parentId, onRefetch],
+  )
+
+  const handleDelete = useCallback(
+    async (child: MultiChannelVariationChild) => {
+      if (!confirm(`Delete variant ${child.sku}?`)) return
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/catalog/products/${encodeURIComponent(child.id)}`,
+          { method: 'DELETE' },
+        )
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          alert(j?.error ?? `Delete failed (HTTP ${res.status})`)
+          return
+        }
+        onRefetch()
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [onRefetch],
+  )
+
+  if (children.length === 0) {
+    return (
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-3 py-6 text-base text-slate-500 dark:text-slate-400 text-center">
+        No children found. Add a variant below.
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+            <th className="w-8 px-2 py-2 text-center">
+              <span className="sr-only">Include</span>
+            </th>
+            <th className="px-2 py-2 text-left font-medium text-slate-600 dark:text-slate-400">SKU</th>
+            {attrCols.map((attr) => (
+              <th key={attr} className="px-2 py-2 text-left font-medium text-slate-600 dark:text-slate-400 capitalize">
+                {attr}
+              </th>
+            ))}
+            <th className="px-2 py-2 text-right font-medium text-slate-600 dark:text-slate-400">Price</th>
+            <th className="px-2 py-2 text-right font-medium text-slate-600 dark:text-slate-400">Stock</th>
+            <th className="px-2 py-2 text-right font-medium text-slate-600 dark:text-slate-400">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {children.map((child) => {
+            const isEditing = editingId === child.id
+            const included = includedSkus.has(child.sku)
+            const blockingChannels = Object.entries(child.missingByChannel)
+              .filter(([, m]) => m.length > 0)
+              .map(([k, m]) => ({ k, m }))
+            const hasBlocking = included && blockingChannels.length > 0
+            const inherits = inheritByChildId[child.id] ?? false
+
+            return (
+              <tr
+                key={child.id}
+                data-blocker-row={hasBlocking ? 'true' : undefined}
+                className={cn(
+                  'border-b border-slate-100 dark:border-slate-800 last:border-b-0 scroll-mt-24',
+                  hasBlocking && 'bg-amber-50/40 dark:bg-amber-950/10',
+                  isEditing && 'bg-blue-50/30 dark:bg-blue-950/10',
+                )}
+              >
+                <td className="px-2 py-1.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={included}
+                    onChange={() => onToggleSku(child.sku)}
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                  />
+                </td>
+                <td className="px-2 py-1.5">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editDraft!.sku}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, sku: e.target.value } : d)}
+                      className="w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 font-mono"
+                    />
+                  ) : (
+                    <div>
+                      <div className="font-mono text-slate-900 dark:text-slate-100">{child.sku}</div>
+                      {inherits && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Parent details inherited</div>
+                      )}
+                    </div>
+                  )}
+                </td>
+                {attrCols.map((attr) => (
+                  <td key={attr} className="px-2 py-1.5">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editDraft!.attrs[attr] ?? ''}
+                        onChange={(e) =>
+                          setEditDraft((d) =>
+                            d ? { ...d, attrs: { ...d.attrs, [attr]: e.target.value } } : d,
+                          )
+                        }
+                        placeholder={`${attr} (empty = remove)`}
+                        className="w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                      />
+                    ) : (
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {child.attributes[attr] ?? <span className="text-slate-400 dark:text-slate-600 italic">—</span>}
+                      </span>
+                    )}
+                  </td>
+                ))}
+                <td className="px-2 py-1.5 text-right">
+                  {isEditing ? (
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editDraft!.price}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, price: e.target.value } : d)}
+                      className="w-20 h-7 px-2 text-sm text-right border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                    />
+                  ) : (
+                    <span className="tabular-nums text-slate-700 dark:text-slate-300">€{child.price.toFixed(2)}</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  {isEditing ? (
+                    <input
+                      type="number"
+                      min="0"
+                      value={editDraft!.stock}
+                      onChange={(e) => setEditDraft((d) => d ? { ...d, stock: e.target.value } : d)}
+                      className="w-16 h-7 px-2 text-sm text-right border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900"
+                    />
+                  ) : (
+                    <span className="tabular-nums text-slate-700 dark:text-slate-300">{child.stock}</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5">
+                  <div className="flex items-center justify-end gap-1.5">
+                    {isEditing ? (
+                      <>
+                        <div className="flex flex-col gap-1 items-end mr-1">
+                          <label className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={inheritByChildId[child.id] ?? false}
+                              onChange={(e) => onInheritChange(child.id, e.target.checked)}
+                              className="w-3 h-3 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                            />
+                            Inherit parent name/desc
+                          </label>
+                          {saveError && (
+                            <span className="text-xs text-rose-600 dark:text-rose-400 max-w-[160px] text-right">{saveError}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void commitEdit(child)}
+                          disabled={saving}
+                          title="Save"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50"
+                        >
+                          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          title="Cancel"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(child)}
+                          title="Edit"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(child)}
+                          title="Delete"
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-200 dark:hover:border-rose-800"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function AddVariantRow({
+  parentId,
+  selectedTheme,
+  onDone,
+  onCancel,
+}: {
+  parentId: string
+  selectedTheme: ThemeOption | null
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const attrCols = selectedTheme?.requiredAttributes ?? []
+  const [sku, setSku] = useState('')
+  const [price, setPrice] = useState('')
+  const [stock, setStock] = useState('')
+  const [attrs, setAttrs] = useState<Record<string, string>>(() =>
+    Object.fromEntries(attrCols.map((a) => [a, ''])),
+  )
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleAdd = useCallback(async () => {
+    if (!sku.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/catalog/products/${encodeURIComponent(parentId)}/children`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku: sku.trim(),
+            name: sku.trim(),
+            basePrice: price ? Number(price) : undefined,
+            totalStock: stock ? Number(stock) : undefined,
+          }),
+        },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`)
+      }
+      const newId = json?.data?.id ?? json?.id
+      if (newId && Object.values(attrs).some((v) => v.trim())) {
+        await fetch(
+          `${getBackendUrl()}/api/catalog/products/${encodeURIComponent(newId)}/variant-attributes`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(attrs),
+          },
+        )
+      }
+      onDone()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [sku, price, stock, attrs, parentId, onDone])
+
+  return (
+    <div className="mt-2 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/40 dark:bg-blue-950/10 px-3 py-3">
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium mb-2">New variant</div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        <input
+          type="text"
+          value={sku}
+          onChange={(e) => setSku(e.target.value)}
+          placeholder="SKU *"
+          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 font-mono w-36"
+        />
+        {attrCols.map((attr) => (
+          <input
+            key={attr}
+            type="text"
+            value={attrs[attr] ?? ''}
+            onChange={(e) => setAttrs((a) => ({ ...a, [attr]: e.target.value }))}
+            placeholder={attr}
+            className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-24"
+          />
+        ))}
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Price"
+          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-20"
+        />
+        <input
+          type="number"
+          min="0"
+          value={stock}
+          onChange={(e) => setStock(e.target.value)}
+          placeholder="Stock"
+          className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 w-16"
+        />
+      </div>
+      {error && (
+        <div className="mb-2 text-xs text-rose-600 dark:text-rose-400 inline-flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void handleAdd()}
+          disabled={busy || !sku.trim()}
+          className="h-7 px-3 text-sm rounded-md border border-blue-300 dark:border-blue-700 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+          Add
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-7 px-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }

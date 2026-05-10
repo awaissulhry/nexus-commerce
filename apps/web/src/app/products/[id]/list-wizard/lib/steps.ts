@@ -30,6 +30,9 @@ export interface StepConfig {
     | 'Phase I'
     | 'Phase J'
   preview: string
+  /** When true the step is hidden from the WizardStepper visual track.
+   *  Routing and completion logic still use the real step.id. */
+  hidden?: true
 }
 
 export const STEPS: StepConfig[] = [
@@ -57,6 +60,7 @@ export const STEPS: StepConfig[] = [
     shortLabel: 'Identifiers',
     description: 'UPC / EAN / GTIN — or exemption (inline if needed)',
     filledIn: '5.4',
+    hidden: true,
     preview:
       'Smart UPC/GTIN detection with three exemption paths. The exemption form is inlined below when "apply now" is picked — no separate step.',
   },

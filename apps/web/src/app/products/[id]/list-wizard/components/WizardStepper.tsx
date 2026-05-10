@@ -48,13 +48,17 @@ export default function WizardStepper({
   // leaving zero room for padding). Below md (640px) we render a
   // compact "Step N of M: Title" strip + progress bar; the full
   // tablist stays available on md+ for desktop power users.
-  const completedCount = STEPS.filter(
+  const visibleSteps = STEPS.filter((s) => !s.hidden)
+  const completedCount = visibleSteps.filter(
     (s) => completedSteps.has(s.id) || s.id < currentStep,
   ).length
   const progressPct = Math.min(
     100,
-    Math.round((completedCount / STEPS.length) * 100),
+    Math.round((completedCount / visibleSteps.length) * 100),
   )
+  // Visual position of currentStep in the visible list (1-based).
+  const currentVisualPos =
+    visibleSteps.filter((s) => s.id <= currentStep).length || 1
   const currentBlockers = blockerCounts?.[currentStep] ?? 0
   return (
     <>
@@ -70,7 +74,7 @@ export default function WizardStepper({
             className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-semibold flex-shrink-0 dark:bg-blue-500"
             aria-current="step"
           >
-            {currentStep}
+            {currentVisualPos}
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-base font-medium text-slate-900 dark:text-slate-100 truncate">
@@ -78,8 +82,8 @@ export default function WizardStepper({
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
               {t('listWizard.stepper.mobileProgress', {
-                current: currentStep,
-                total: STEPS.length,
+                current: currentVisualPos,
+                total: visibleSteps.length,
               })}
               {currentBlockers > 0 && (
                 <span className="ml-1 text-rose-600 dark:text-rose-400">
@@ -122,11 +126,12 @@ export default function WizardStepper({
           aria-orientation="horizontal"
           className="flex items-center gap-1 min-w-max"
         >
-        {STEPS.map((step, idx) => {
+        {visibleSteps.map((step, idx) => {
           const isCurrent = step.id === currentStep
           const isCompleted = completedSteps.has(step.id)
           const isSkipped = skippedSteps?.has(step.id) ?? false
           const isClickable = isCompleted || step.id < currentStep || isCurrent
+          const visualPos = idx + 1
 
           const lineActive = step.id < currentStep || isCompleted
           return (
@@ -155,7 +160,7 @@ export default function WizardStepper({
                   : ''
                 const titleStr = isSkipped
                   ? t('listWizard.stepper.title.skipped', {
-                      id: step.id,
+                      id: visualPos,
                       title: localizedTitle,
                     })
                   : showBadge
@@ -163,10 +168,10 @@ export default function WizardStepper({
                         blockers === 1
                           ? 'listWizard.stepper.title.withBlockerOne'
                           : 'listWizard.stepper.title.withBlockerOther',
-                        { id: step.id, title: localizedTitle, n: blockers },
+                        { id: visualPos, title: localizedTitle, n: blockers },
                       )
                     : t('listWizard.stepper.title.plain', {
-                        id: step.id,
+                        id: visualPos,
                         title: localizedTitle,
                       })
                 return (
@@ -176,8 +181,8 @@ export default function WizardStepper({
                     aria-selected={isCurrent}
                     aria-current={isCurrent ? 'step' : undefined}
                     aria-label={`${t('listWizard.stepper.aria.step', {
-                      n: step.id,
-                      total: STEPS.length,
+                      n: visualPos,
+                      total: visibleSteps.length,
                       title: localizedTitle,
                     })}${ariaSuffix}${blockerSuffix}`}
                     tabIndex={isCurrent ? 0 : -1}
@@ -210,7 +215,7 @@ export default function WizardStepper({
                     ) : isCompleted ? (
                       <Check className="w-3.5 h-3.5" />
                     ) : (
-                      step.id
+                      visualPos
                     )}
                     {showBadge && (
                       <span
@@ -229,7 +234,7 @@ export default function WizardStepper({
               })()}
 
               </li>
-              {idx < STEPS.length - 1 && (
+              {idx < visibleSteps.length - 1 && (
                 <li
                   role="presentation"
                   aria-hidden="true"
