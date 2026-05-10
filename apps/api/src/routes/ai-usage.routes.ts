@@ -30,10 +30,43 @@ import {
   isAiKillSwitchOn,
   listProviders,
 } from '../services/ai/providers/index.js'
+import {
+  listPromptTemplates,
+  type PromptTemplateStatus,
+} from '../services/ai/prompt-template.service.js'
 
 const MAX_DAYS = 90
 
 const aiUsageRoutes: FastifyPluginAsync = async (fastify) => {
+  // AI-2.2 (list-wizard) — list PromptTemplate rows. Read-only v1
+  // surface that the admin UI on /settings/ai (lands in AI-2.5) will
+  // call to render the prompt list. Filterable by feature + status.
+  fastify.get<{
+    Querystring: { feature?: string; status?: string }
+  }>('/ai/prompt-templates', async (request) => {
+    const allowedStatuses = new Set(['DRAFT', 'ACTIVE', 'ARCHIVED'])
+    const status =
+      typeof request.query?.status === 'string' &&
+      allowedStatuses.has(request.query.status)
+        ? (request.query.status as PromptTemplateStatus)
+        : undefined
+    const feature =
+      typeof request.query?.feature === 'string' && request.query.feature.length > 0
+        ? request.query.feature
+        : undefined
+    const rows = await listPromptTemplates(prisma, { feature, status })
+    return {
+      rows: rows.map((r) => ({
+        ...r,
+        // Surface ISO timestamps so the client doesn't need a Date
+        // parse step.
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString(),
+        lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
+      })),
+    }
+  })
+
   fastify.get('/ai/providers', async () => {
     // AI-1.2: response shape is { killSwitch, providers: [...] } so the
     // UI can render a banner when NEXUS_AI_KILL_SWITCH is on instead of
