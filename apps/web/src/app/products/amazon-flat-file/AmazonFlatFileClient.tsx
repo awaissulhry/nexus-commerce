@@ -140,7 +140,10 @@ export default function AmazonFlatFileClient({
 
   const [marketplace, setMarketplace] = useState(initialMarketplace)
   const [productType, setProductType] = useState(initialProductType)
-  const [productTypeInput, setProductTypeInput] = useState(initialProductType)
+
+  // Known product types for the current marketplace (from DB cache + catalog)
+  const [productTypes, setProductTypes] = useState<Array<{ value: string; source: string }>>([])
+  const [ptLoading, setPtLoading] = useState(false)
 
   const [manifest, setManifest] = useState<Manifest | null>(initialManifest)
   const [rows, setRows] = useState<Row[]>(initialRows)
@@ -163,6 +166,26 @@ export default function AmazonFlatFileClient({
   const [polling, setPolling] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Fetch known product types whenever marketplace changes ─────────
+  useEffect(() => {
+    let cancelled = false
+    async function fetchTypes() {
+      setPtLoading(true)
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/amazon/flat-file/product-types?marketplace=${marketplace}`
+        )
+        if (!cancelled && res.ok) {
+          const data = await res.json()
+          setProductTypes(data.types ?? [])
+        }
+      } catch { /* non-fatal */ }
+      finally { if (!cancelled) setPtLoading(false) }
+    }
+    void fetchTypes()
+    return () => { cancelled = true }
+  }, [marketplace])
 
   // ── Derived ────────────────────────────────────────────────────────
 
@@ -398,7 +421,7 @@ export default function AmazonFlatFileClient({
             <div className="flex gap-0.5">
               {MARKETPLACES.map((mp) => (
                 <button key={mp} type="button"
-                  onClick={() => { setMarketplace(mp); void loadData(mp, productType) }}
+                  onClick={() => { setMarketplace(mp); void loadData(mp, productType) /* product types fetched via useEffect */ }}
                   className={cn('text-xs font-medium px-2 py-0.5 rounded border transition-colors',
                     marketplace === mp
                       ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
@@ -410,17 +433,15 @@ export default function AmazonFlatFileClient({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Product Type</span>
-            <div className="flex items-center gap-1">
-              <input type="text" value={productTypeInput}
-                onChange={(e) => setProductTypeInput(e.target.value.toUpperCase())}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setProductType(productTypeInput); void loadData(marketplace, productTypeInput) } }}
-                placeholder="e.g. OUTERWEAR"
-                className="text-xs font-mono px-2 py-0.5 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 w-32 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-              <Button size="sm" variant="ghost" loading={loading}
-                onClick={() => { setProductType(productTypeInput); void loadData(marketplace, productTypeInput, true) }}>
-                <RefreshCw className="w-3 h-3 mr-1" />Load
-              </Button>
-            </div>
+            <ProductTypeDropdown
+              value={productType}
+              options={productTypes}
+              loading={ptLoading || loading}
+              onChange={(pt) => {
+                setProductType(pt)
+                void loadData(marketplace, pt)
+              }}
+            />
           </div>
 
           {/* Group toggles */}
@@ -643,6 +664,150 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         )
       })}
     </tr>
+  )
+}
+
+// ── ProductTypeDropdown ────────────────────────────────────────────────
+// Searchable list of known Amazon product types for the selected marketplace.
+// Shows types cached from the schema API and types currently used by products.
+
+interface ProductTypeOption { value: string; source: string }
+
+interface ProductTypeDropdownProps {
+  value: string
+  options: ProductTypeOption[]
+  loading: boolean
+  onChange: (pt: string) => void
+}
+
+function ProductTypeDropdown({ value, options, loading, onChange }: ProductTypeDropdownProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [highlighted, setHighlighted] = useState(0)
+
+  const filtered = useMemo(() => {
+    const q = query.toUpperCase()
+    return q ? options.filter((o) => o.value.includes(q)) : options
+  }, [options, query])
+
+  useEffect(() => { setHighlighted(0) }, [filtered])
+
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 30)
+  }, [open])
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [])
+
+  function select(pt: string) {
+    setOpen(false)
+    setQuery('')
+    onChange(pt)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, filtered.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); if (filtered[highlighted]) select(filtered[highlighted].value) }
+    else if (e.key === 'Escape') setOpen(false)
+  }
+
+  const sourceLabel = (s: string) =>
+    s === 'both' ? 'schema + catalog'
+    : s === 'schema' ? 'schema cached'
+    : 'catalog'
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'inline-flex items-center gap-1.5 text-xs font-mono px-2 py-0.5 border rounded transition-colors',
+          'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100',
+          'border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500',
+          open && 'border-blue-500 ring-1 ring-blue-500',
+        )}
+      >
+        {loading
+          ? <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+          : <span className="truncate max-w-[120px]">{value || 'Select…'}</span>}
+        <ChevronDown className={cn('w-3 h-3 text-slate-400 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
+          {/* Search */}
+          <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search product types…"
+              className="w-full text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Options */}
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-slate-400 italic text-center">
+                {options.length === 0 ? 'No cached schemas yet. Type a product type and load it.' : 'No matches'}
+              </div>
+            ) : (
+              filtered.map((opt, i) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); select(opt.value) }}
+                  onMouseEnter={() => setHighlighted(i)}
+                  className={cn(
+                    'w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left transition-colors',
+                    i === highlighted
+                      ? 'bg-blue-500 text-white'
+                      : opt.value === value
+                      ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50',
+                  )}
+                >
+                  <span className="text-xs font-mono font-medium">{opt.value}</span>
+                  <span className={cn('text-xs opacity-60 shrink-0', i === highlighted && 'opacity-80')}>
+                    {sourceLabel(opt.source)}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Manual entry footer */}
+          <div className="px-2 py-1.5 border-t border-slate-100 dark:border-slate-700">
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                const pt = query.trim().toUpperCase()
+                if (pt) select(pt)
+              }}
+              disabled={!query.trim()}
+              className="w-full text-xs text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-0.5 text-left disabled:opacity-40 disabled:cursor-default"
+            >
+              {query.trim()
+                ? <>Use <span className="font-mono font-medium">{query.trim().toUpperCase()}</span> (new type)</>
+                : 'Type a name to use a custom product type'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

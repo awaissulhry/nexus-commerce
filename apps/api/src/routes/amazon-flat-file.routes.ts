@@ -3,11 +3,12 @@
  *
  * Endpoints that power the /products/amazon-flat-file page:
  *
- *   GET  /api/amazon/flat-file/template   — column manifest from live schema
- *   GET  /api/amazon/flat-file/rows       — existing products as pre-filled rows
- *   POST /api/amazon/flat-file/submit     — rows → JSON_LISTINGS_FEED → feedId
- *   GET  /api/amazon/flat-file/feeds/:id  — poll feed status + processing report
- *   POST /api/amazon/flat-file/parse-tsv  — upload TSV → parsed rows
+ *   GET  /api/amazon/flat-file/product-types — known product types for marketplace
+ *   GET  /api/amazon/flat-file/template      — column manifest from live schema
+ *   GET  /api/amazon/flat-file/rows          — existing products as pre-filled rows
+ *   POST /api/amazon/flat-file/submit        — rows → JSON_LISTINGS_FEED → feedId
+ *   GET  /api/amazon/flat-file/feeds/:id     — poll feed status + processing report
+ *   POST /api/amazon/flat-file/parse-tsv     — upload TSV → parsed rows
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -48,6 +49,60 @@ function getSpClient() {
 }
 
 export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
+  // ── GET /api/amazon/flat-file/product-types ─────────────────────────
+  // Returns every known Amazon product type for the given marketplace,
+  // combining types cached in CategorySchema with types used on products.
+  // No SP-API calls — DB-only, sub-10ms.
+  fastify.get<{ Querystring: { marketplace?: string } }>(
+    '/amazon/flat-file/product-types',
+    async (request, reply) => {
+      const mp = (request.query.marketplace ?? 'IT').toUpperCase()
+      try {
+        const [schemaRows, productRows] = await Promise.all([
+          // Product types we've fetched a schema for on this marketplace
+          prisma.categorySchema.findMany({
+            where: { channel: 'AMAZON', marketplace: mp, isActive: true },
+            select: { productType: true },
+            distinct: ['productType'],
+            orderBy: { productType: 'asc' },
+          }),
+          // Product types actually assigned to products in our catalog
+          prisma.product.findMany({
+            where: { deletedAt: null, productType: { not: null } },
+            select: { productType: true },
+            distinct: ['productType'],
+          }),
+        ])
+
+        const seen = new Set<string>()
+        const types: Array<{ value: string; source: 'schema' | 'catalog' | 'both' }> = []
+
+        for (const r of schemaRows) {
+          if (r.productType && !seen.has(r.productType)) {
+            seen.add(r.productType)
+            types.push({ value: r.productType, source: 'schema' })
+          }
+        }
+        for (const r of productRows) {
+          if (!r.productType) continue
+          if (seen.has(r.productType)) {
+            const existing = types.find((t) => t.value === r.productType)
+            if (existing) existing.source = 'both'
+          } else {
+            seen.add(r.productType)
+            types.push({ value: r.productType, source: 'catalog' })
+          }
+        }
+
+        types.sort((a, b) => a.value.localeCompare(b.value))
+        return reply.send({ marketplace: mp, types })
+      } catch (err: any) {
+        request.log.error(err, 'flat-file/product-types failed')
+        return reply.code(500).send({ error: err?.message ?? 'Failed to load product types' })
+      }
+    },
+  )
+
   // ── GET /api/amazon/flat-file/template ──────────────────────────────
   // Returns the column manifest for the requested marketplace + productType.
   // Fetches the schema live from SP-API on cache miss or when force=1.
