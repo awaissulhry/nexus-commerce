@@ -34,12 +34,36 @@ export default async function ProductEditPage({ params }: PageProps) {
   const childrenJson = childrenRes.ok ? await childrenRes.json() : { children: [] }
   const childrenList = childrenJson.children ?? []
 
+  // When this product is a variant (child), fetch the family context:
+  // parent product, all siblings, and parent's channel listings so we
+  // can surface per-channel parent IDs (Amazon ASIN, eBay item ID, etc.)
+  let parentProduct: any = null
+  let siblings: any[] = []
+  let parentListings: Record<string, any[]> = {}
+
+  if (product.parentId) {
+    const [parentRes, siblingsRes, parentListingsRes] = await Promise.all([
+      fetch(`${backend}/api/products/${product.parentId}`, { cache: 'no-store' }),
+      fetch(`${backend}/api/products/${product.parentId}/children`, { cache: 'no-store' }),
+      fetch(`${backend}/api/products/${product.parentId}/all-listings`, { cache: 'no-store' }),
+    ])
+    if (parentRes.ok) parentProduct = await parentRes.json()
+    if (siblingsRes.ok) {
+      const json = await siblingsRes.json()
+      siblings = json.children ?? []
+    }
+    if (parentListingsRes.ok) parentListings = await parentListingsRes.json()
+  }
+
   return (
     <ProductEditClient
       product={product}
       listings={listings}
       marketplaces={marketplaces}
       childrenList={childrenList}
+      parentProduct={parentProduct}
+      siblings={siblings}
+      parentListings={parentListings}
     />
   )
 }

@@ -30,6 +30,7 @@ import {
   type UnionField,
   type UnionManifest,
 } from '../../../_shared/attribute-editor'
+import { VariationFamilyBanner, type FamilyParent, type FamilySibling } from '../../../_shared/VariationFamilyBanner'
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -93,6 +94,9 @@ interface Props {
    *  surfaces as an editable column on the master tab (writes to
    *  Product.categoryAttributes via attr_* prefix). */
   masterSchemaFields?: UnionField[]
+  parentProduct?: FamilyParent | null
+  siblings?: FamilySibling[]
+  parentListings?: Record<string, any[]>
 }
 
 type ActiveTab = 'master' | string // string = `${channel}:${marketplace}` uppercase
@@ -297,6 +301,9 @@ export default function BulkEditClient({
   childrenList,
   fields,
   masterSchemaFields = [],
+  parentProduct = null,
+  siblings = [],
+  parentListings = {},
 }: Props) {
   const router = useRouter()
   const askConfirm = useConfirm()
@@ -1279,6 +1286,18 @@ export default function BulkEditClient({
             </Button>
           </div>
         </div>
+
+        {/* ── Variation family banner (child products only) ── */}
+        {parentProduct && (
+          <VariationFamilyBanner
+            currentProductId={product.id}
+            currentParentAsin={(product as any).parentAsin ?? null}
+            parentProduct={parentProduct}
+            siblings={siblings}
+            parentListings={parentListings}
+            className="border-x-0"
+          />
+        )}
 
         {/* ── Tab strip ─────────────────────────────────────────── */}
         <div className="px-6 flex items-center -mb-px overflow-x-auto">

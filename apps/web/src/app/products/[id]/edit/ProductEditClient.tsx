@@ -34,6 +34,7 @@ import ImagesTab from './tabs/ImagesTab'
 import SeoTab from './tabs/SeoTab'
 import { cn } from '@/lib/utils'
 import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
+import { VariationFamilyBanner, type FamilyParent, type FamilySibling } from '../../_shared/VariationFamilyBanner'
 
 type TopTab = 'master' | 'variations' | string // also "AMAZON" / "EBAY" / "SHOPIFY_GLOBAL" etc
 
@@ -70,6 +71,9 @@ interface Props {
   listings: Record<string, Listing[]>
   marketplaces: Record<string, Marketplace[]>
   childrenList: any[]
+  parentProduct?: FamilyParent | null
+  siblings?: FamilySibling[]
+  parentListings?: Record<string, any[]>
 }
 
 const SINGLE_STORE_CHANNELS = new Set(['SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
@@ -142,6 +146,9 @@ export default function ProductEditClient({
   listings,
   marketplaces,
   childrenList,
+  parentProduct = null,
+  siblings = [],
+  parentListings = {},
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -552,6 +559,17 @@ export default function ProductEditClient({
             </Button>
           </div>
         </div>
+
+        {/* ── Variation family banner (child products only) ── */}
+        {parentProduct && (
+          <VariationFamilyBanner
+            currentProductId={product.id}
+            currentParentAsin={product.parentAsin ?? null}
+            parentProduct={parentProduct}
+            siblings={siblings}
+            parentListings={parentListings}
+          />
+        )}
 
         {/* ── Top tab row ────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-6 relative">

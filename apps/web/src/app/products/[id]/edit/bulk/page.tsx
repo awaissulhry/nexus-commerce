@@ -74,12 +74,35 @@ export default async function ProductBulkEditPage({ params }: PageProps) {
     }
   }
 
+  // When this product is a variant (child), fetch the family context so
+  // the bulk edit header can show the variation family strip.
+  let parentProduct: any = null
+  let siblings: any[] = []
+  let parentListings: Record<string, any[]> = {}
+
+  if (product.parentId) {
+    const [parentRes, siblingsRes, parentListingsRes] = await Promise.all([
+      fetch(`${backend}/api/products/${product.parentId}`, { cache: 'no-store' }),
+      fetch(`${backend}/api/products/${product.parentId}/children`, { cache: 'no-store' }),
+      fetch(`${backend}/api/products/${product.parentId}/all-listings`, { cache: 'no-store' }),
+    ])
+    if (parentRes.ok) parentProduct = await parentRes.json()
+    if (siblingsRes.ok) {
+      const json = await siblingsRes.json()
+      siblings = json.children ?? []
+    }
+    if (parentListingsRes.ok) parentListings = await parentListingsRes.json()
+  }
+
   return (
     <BulkEditClient
       product={product}
       childrenList={childrenJson.children ?? []}
       fields={fieldsJson.fields ?? []}
       masterSchemaFields={masterSchemaFields as any}
+      parentProduct={parentProduct}
+      siblings={siblings}
+      parentListings={parentListings}
     />
   )
 }
