@@ -4815,5 +4815,18 @@
   "bulkTemplate.downloadKicked": "Avviato il download di {n} file",
   "bulkTemplate.allReady": "Tutti gli asset sono renderizzabili",
   "cron.presetsBtn": "Preset",
-  "cron.nextRunsLabel": "Prossime 5 esecuzioni:"
+  "cron.nextRunsLabel": "Prossime 5 esecuzioni:",
+  "publishDashboard.title": "Pubblica sui canali",
+  "publishDashboard.description": "Invia un asset ad Amazon, eBay, Shopify e WooCommerce in un solo passaggio. I risultati vengono registrati in AuditLog.",
+  "publishDashboard.backToContent": "Torna al Content Hub",
+  "publishDashboard.sandboxTitle": "Tutti i canali sono in sandbox per default",
+  "publishDashboard.sandboxBody": "Le chiamate registrano ID fake nei log. Imposta CHANNEL_PUBLISH_<CHANNEL>=live (per canale) o CHANNEL_PUBLISH_MODE=live (tutti) una volta configurate le credenziali. Il badge a fianco di ogni canale mostra la modalità attuale.",
+  "publishDashboard.assetLabel": "URL asset (Cloudinary o esterno)",
+  "publishDashboard.assetRequired": "URL asset obbligatorio",
+  "publishDashboard.pickAtLeastOne": "Attiva almeno un canale",
+  "publishDashboard.fireCta": "Pubblica sui canali selezionati",
+  "publishDashboard.publishedAs": "Pubblicato come {id}",
+  "publishDashboard.modeLabel": "{mode}",
+  "publishDashboard.publishedCount": "Pubblicato su {n} canali",
+  "publishDashboard.failedCount": "{n} canali falliti — vedi dettagli"
 }

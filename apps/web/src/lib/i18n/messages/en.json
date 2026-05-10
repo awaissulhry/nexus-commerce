@@ -4764,5 +4764,18 @@
   "bulkTemplate.downloadKicked": "Started downloading {n} files",
   "bulkTemplate.allReady": "All assets renderable",
   "cron.presetsBtn": "Presets",
-  "cron.nextRunsLabel": "Next 5 runs:"
+  "cron.nextRunsLabel": "Next 5 runs:",
+  "publishDashboard.title": "Publish to channels",
+  "publishDashboard.description": "Push an asset to Amazon, eBay, Shopify, and WooCommerce in one operator pass. Fire results land in AuditLog so the publish history survives across sessions.",
+  "publishDashboard.backToContent": "Back to Content Hub",
+  "publishDashboard.sandboxTitle": "All channels are sandbox by default",
+  "publishDashboard.sandboxBody": "Publish calls record fake channel-side IDs in audit logs. Flip CHANNEL_PUBLISH_<CHANNEL>=live (per channel) or CHANNEL_PUBLISH_MODE=live (all) once credentials are configured. The badge next to each channel shows its current mode.",
+  "publishDashboard.assetLabel": "Asset URL (Cloudinary or external)",
+  "publishDashboard.assetRequired": "Asset URL is required",
+  "publishDashboard.pickAtLeastOne": "Enable at least one channel",
+  "publishDashboard.fireCta": "Publish to selected channels",
+  "publishDashboard.publishedAs": "Published as {id}",
+  "publishDashboard.modeLabel": "{mode}",
+  "publishDashboard.publishedCount": "Published to {n} channel(s)",
+  "publishDashboard.failedCount": "{n} channel(s) failed — see per-channel detail"
 }
