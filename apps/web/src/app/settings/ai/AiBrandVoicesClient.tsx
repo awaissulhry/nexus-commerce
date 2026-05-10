@@ -515,6 +515,24 @@ function DraftForm({
           'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
         )}
       />
+      {/* BV.6 — preview the rendered prompt block exactly the way
+          renderBrandVoiceBlock formats it for the AI. Operators
+          sanity-check the prefix + body wrap before saving. */}
+      {draft.body.trim().length > 0 && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1">
+            Preview rendered prompt block
+          </summary>
+          <pre className="mt-1 whitespace-pre-wrap font-mono text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-1.5 rounded text-sm">
+{`Brand voice:\n${draft.body.trim()}`}
+          </pre>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            This is appended after the prompt body, separated by two
+            newlines. Match how the AI parses headed sections — keep
+            the body terse and instructional.
+          </p>
+        </details>
+      )}
       <div className="flex items-center gap-2">
         <Button
           variant="primary"
