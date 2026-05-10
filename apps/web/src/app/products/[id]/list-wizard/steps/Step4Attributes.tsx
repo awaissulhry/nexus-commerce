@@ -34,7 +34,24 @@ export default function Step4Attributes({
   channels,
   reportValidity,
   setJumpToBlocker,
+  product,
 }: StepProps) {
+  // AET.2 — captures the AI text the wizard wrote into a field at
+  // generation time, keyed by `${channelKey ?? ''}:${fieldId}` so a
+  // base + per-channel value for the same field don't clobber each
+  // other. Drained on Continue: each baseline POSTs to
+  // /api/ai/prompt-templates/record-edit so the matched template's
+  // acceptedCount / editedCount counters update.
+  const aiBaselineRef = useRef<
+    Map<
+      string,
+      {
+        aiText: string
+        channelKey: string | null
+        aiKind: 'title' | 'bullets' | 'description' | 'keywords'
+      }
+    >
+  >(new Map())
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -233,6 +250,13 @@ export default function Step4Attributes({
         }
         if (typeof value === 'string' && value.length > 0) {
           setOverride(channelKey, fieldId, value as Primitive)
+          // AET.2 — capture this AI baseline so onContinue can compare
+          // to the operator's saved text and POST recordEdit.
+          aiBaselineRef.current.set(`${channelKey}:${fieldId}`, {
+            aiText: value,
+            channelKey,
+            aiKind,
+          })
         }
       } catch (err) {
         setAiError({
@@ -337,6 +361,14 @@ export default function Step4Attributes({
         }
         if (typeof value === 'string' && value.length > 0) {
           setValues((prev) => ({ ...prev, [fieldId]: value as Primitive }))
+          // AET.2 — capture base-tier AI baseline for onContinue's
+          // recordEdit flush. Empty channelKey signals "base value"
+          // (no per-channel scope).
+          aiBaselineRef.current.set(`:${fieldId}`, {
+            aiText: value,
+            channelKey: null,
+            aiKind,
+          })
         }
       } catch (err) {
         // NN.6 — surface generate failures; user shouldn't be staring
@@ -707,8 +739,53 @@ export default function Step4Attributes({
       jumpToNextUnfilled()
       return
     }
+    // AET.2 — flush AI-baseline captures before advancing. Each
+    // baseline POSTs the (aiText, finalText) pair so the matched
+    // PromptTemplate's acceptance counters advance. Fire-and-forget;
+    // a failed POST doesn't block the wizard advance — the operator's
+    // save isn't held hostage to telemetry.
+    const baselines = Array.from(aiBaselineRef.current.entries())
+    aiBaselineRef.current = new Map()
+    for (const [key, baseline] of baselines) {
+      const fieldId = key.split(':').slice(1).join(':')
+      const finalText =
+        baseline.channelKey == null
+          ? values[fieldId]
+          : overrides[baseline.channelKey]?.[fieldId]
+      if (typeof finalText !== 'string') continue
+      // For per-channel rows, derive marketplace from the channelKey
+      // (format: "<PLATFORM>:<MARKETPLACE>"). Base rows pass null —
+      // the matcher falls back to the global tier or whichever single
+      // ACTIVE row exists for the feature.
+      let scopeMarketplace: string | null = null
+      if (baseline.channelKey != null) {
+        const m = baseline.channelKey.split(':')[1]
+        scopeMarketplace = typeof m === 'string' && m.length > 0 ? m : null
+      }
+      void fetch(`${getBackendUrl()}/api/ai/prompt-templates/record-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feature: `listing-wizard.${baseline.aiKind}`,
+          marketplace: scopeMarketplace,
+          productId: product.id,
+          aiText: baseline.aiText,
+          finalText,
+        }),
+        keepalive: true,
+      }).catch(() => {
+        // Swallow; operator's save proceeds regardless.
+      })
+    }
     await updateWizardState({ attributes: values }, { advance: true })
-  }, [unsatisfied.length, jumpToNextUnfilled, updateWizardState, values])
+  }, [
+    unsatisfied.length,
+    jumpToNextUnfilled,
+    updateWizardState,
+    values,
+    overrides,
+    product.id,
+  ])
 
   if (channels.length === 0) {
     return (
