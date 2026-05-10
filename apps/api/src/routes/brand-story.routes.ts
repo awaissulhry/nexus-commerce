@@ -201,6 +201,122 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  // ── MC.9.2 — Module CRUD + reorder ───────────────────────
+
+  fastify.post(
+    '/brand-stories/:id/modules',
+    async (request, reply) => {
+      const { id: storyId } = request.params as { id: string }
+      const body = request.body as { type?: string; payload?: unknown }
+      if (!body.type?.trim())
+        return reply.code(400).send({ error: 'type is required' })
+
+      const story = await prisma.brandStory.findUnique({
+        where: { id: storyId },
+        select: { id: true },
+      })
+      if (!story)
+        return reply.code(404).send({ error: 'Brand Story not found' })
+
+      const existingCount = await prisma.brandStoryModule.count({
+        where: { storyId },
+      })
+
+      const module = await prisma.brandStoryModule.create({
+        data: {
+          storyId,
+          type: body.type,
+          position: existingCount,
+          payload: (body.payload as never) ?? {},
+        },
+      })
+      return reply.code(201).send({ module })
+    },
+  )
+
+  fastify.patch('/brand-story-modules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = request.body as { type?: string; payload?: unknown }
+    const data: Record<string, unknown> = {}
+    if (body.type !== undefined) {
+      if (!body.type.trim())
+        return reply.code(400).send({ error: 'type cannot be empty' })
+      data.type = body.type
+    }
+    if (body.payload !== undefined) {
+      data.payload = (body.payload as never) ?? {}
+    }
+    if (Object.keys(data).length === 0)
+      return reply.code(400).send({ error: 'no mutable fields supplied' })
+    try {
+      const module = await prisma.brandStoryModule.update({
+        where: { id },
+        data,
+      })
+      return { module }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'module not found' })
+      throw err
+    }
+  })
+
+  fastify.delete('/brand-story-modules/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const deleted = await prisma.brandStoryModule.delete({
+        where: { id },
+        select: { storyId: true, position: true },
+      })
+      // Re-pack positions so the canvas stays 0..n-1 contiguous.
+      await prisma.brandStoryModule.updateMany({
+        where: {
+          storyId: deleted.storyId,
+          position: { gt: deleted.position },
+        },
+        data: { position: { decrement: 1 } },
+      })
+      return { ok: true, id }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply.code(404).send({ error: 'module not found' })
+      throw err
+    }
+  })
+
+  fastify.post(
+    '/brand-stories/:id/modules/reorder',
+    async (request, reply) => {
+      const { id: storyId } = request.params as { id: string }
+      const body = request.body as {
+        order?: Array<{ id: string; position: number }>
+      }
+      const order = body.order
+      if (!Array.isArray(order) || order.length === 0)
+        return reply.code(400).send({ error: 'order array is required' })
+
+      const owned = await prisma.brandStoryModule.findMany({
+        where: { storyId },
+        select: { id: true },
+      })
+      const ownedSet = new Set(owned.map((r) => r.id))
+      if (order.some((row) => !ownedSet.has(row.id)))
+        return reply
+          .code(400)
+          .send({ error: 'order contains modules from another story' })
+
+      await prisma.$transaction(
+        order.map((row) =>
+          prisma.brandStoryModule.update({
+            where: { id: row.id },
+            data: { position: row.position },
+          }),
+        ),
+      )
+      return { updated: order.length }
+    },
+  )
 }
 
 export default brandStoryRoutes
