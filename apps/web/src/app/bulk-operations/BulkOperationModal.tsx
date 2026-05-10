@@ -100,6 +100,12 @@ interface Props {
    *  that targets these IDs directly via targetProductIds, skipping
    *  filter resolution. Empty disables that mode. */
   selectedProductIds?: string[]
+  /** W14.7 — operation type to preselect when the modal opens.
+   *  The Cmd+K palette dispatches AI verbs (translate / seo /
+   *  alt-text) and the parent wires them to this prop so the
+   *  operator lands directly on the right operation. Defaults to
+   *  PRICING_UPDATE (legacy behavior). */
+  initialActionType?: OperationType
 }
 
 export default function BulkOperationModal({
@@ -109,8 +115,20 @@ export default function BulkOperationModal({
   marketplaceTargets = [],
   visibleProductIds = [],
   selectedProductIds = [],
+  initialActionType,
 }: Props) {
-  const [opType, setOpType] = useState<OperationType>('PRICING_UPDATE')
+  const [opType, setOpType] = useState<OperationType>(
+    initialActionType ?? 'PRICING_UPDATE',
+  )
+  // W14.7 — when the parent re-opens with a different initial action
+  // (e.g. Cmd+K → AI translate), apply it on the open transition.
+  // Don't sync on every render — the operator may have hand-changed
+  // opType while the modal stays open.
+  useEffect(() => {
+    if (open && initialActionType) {
+      setOpType(initialActionType)
+    }
+  }, [open, initialActionType])
   const op = OPERATIONS.find((o) => o.type === opType)
   const isSchemaOp = opType === 'SCHEMA_FIELD_UPDATE'
 

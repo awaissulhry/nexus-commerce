@@ -440,6 +440,15 @@ export default function BulkOperationsClient() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [bulkOpModalOpen, setBulkOpModalOpen] = useState(false)
+  // W14.7 — the Cmd+K palette dispatches AI verb events; this state
+  // captures which action to preselect when the modal opens. null
+  // (default) lets the modal default to PRICING_UPDATE.
+  const [bulkOpInitialType, setBulkOpInitialType] = useState<
+    | 'AI_TRANSLATE_PRODUCT'
+    | 'AI_SEO_REGEN'
+    | 'AI_ALT_TEXT'
+    | null
+  >(null)
   const [newProductOpen, setNewProductOpen] = useState(false)
   const [replicateOpen, setReplicateOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -597,6 +606,33 @@ export default function BulkOperationsClient() {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery), 150)
     return () => window.clearTimeout(t)
   }, [searchQuery])
+
+  // W14.7 — listen for Cmd+K AI verb events. The CommandPalette
+  // dispatches these CustomEvents from anywhere; we open the bulk
+  // modal pre-selected on the matching action so the operator
+  // doesn't have to re-pick it from the OPERATIONS list.
+  useEffect(() => {
+    const open = (
+      type:
+        | 'AI_TRANSLATE_PRODUCT'
+        | 'AI_SEO_REGEN'
+        | 'AI_ALT_TEXT',
+    ) => {
+      setBulkOpInitialType(type)
+      setBulkOpModalOpen(true)
+    }
+    const onTranslate = () => open('AI_TRANSLATE_PRODUCT')
+    const onSeo = () => open('AI_SEO_REGEN')
+    const onAltText = () => open('AI_ALT_TEXT')
+    window.addEventListener('nexus:bulk-operations:ai-translate', onTranslate)
+    window.addEventListener('nexus:bulk-operations:ai-seo', onSeo)
+    window.addEventListener('nexus:bulk-operations:ai-alt-text', onAltText)
+    return () => {
+      window.removeEventListener('nexus:bulk-operations:ai-translate', onTranslate)
+      window.removeEventListener('nexus:bulk-operations:ai-seo', onSeo)
+      window.removeEventListener('nexus:bulk-operations:ai-alt-text', onAltText)
+    }
+  }, [])
   const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE)
   // W4.1 — multi-key sort. Empty list → grid preserves the order
   // produced by filter / hierarchy. Click on a header cycles asc /
@@ -4240,8 +4276,13 @@ export default function BulkOperationsClient() {
 
       <BulkOperationModal
         open={bulkOpModalOpen}
+        initialActionType={bulkOpInitialType ?? undefined}
         onClose={() => {
           setBulkOpModalOpen(false)
+          // W14.7 — clear the Cmd+K-driven preselect so a
+          // subsequent click on the toolbar's Bulk button starts
+          // back at the default PRICING_UPDATE.
+          setBulkOpInitialType(null)
           // Refresh the grid in case the bulk apply changed visible
           // rows (price/stock/status/attribute updates).
           reloadProducts()
