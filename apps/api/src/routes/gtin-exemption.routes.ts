@@ -32,6 +32,12 @@ import {
 } from '../services/gtin-exemption/brand-letter.service.js'
 import { validateImages } from '../services/gtin-exemption/image-validator.service.js'
 import { buildPackageZip } from '../services/gtin-exemption/exemption-package.service.js'
+import { AmazonService } from '../services/marketplaces/amazon.service.js'
+
+// GTIN.2 — single instance for the SP-API inference call. Same
+// pattern as routes/amazon.routes.ts; lifting this into a shared
+// singleton is a separate refactor.
+const amazonService = new AmazonService()
 
 const ALLOWED_REGISTRATION_TYPES = new Set([
   'TRADEMARK',
@@ -108,7 +114,36 @@ const gtinExemptionRoutes: FastifyPluginAsync = async (fastify) => {
     if (pending) {
       return { pending }
     }
-    return {}
+    // GTIN.2 — no local record; ask Amazon. If the seller has any
+    // existing ACTIVE Amazon listing under this brand AND it has no
+    // GTIN attribute on the SP-API response, the brand has GTIN
+    // exemption (Amazon would have rejected the listing creation
+    // otherwise). The wizard pre-selects "have-exemption" when
+    // amazonInference.inferred === 'exempt'.
+    let amazonInference:
+      | {
+          inferred: 'exempt' | 'not_exempt' | 'unknown'
+          evidenceSku?: string
+          evidenceAsin?: string
+          reason: string
+        }
+      | undefined
+    try {
+      amazonInference = await amazonService.inferBrandGtinExemption(
+        brand,
+        marketplace,
+      )
+    } catch (err) {
+      fastify.log.warn(
+        { err, brand, marketplace },
+        '[gtin-exemption/check] Amazon inference failed',
+      )
+      amazonInference = {
+        inferred: 'unknown',
+        reason: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+      }
+    }
+    return { amazonInference }
   })
 
   fastify.post<{ Body: CreateBody }>(

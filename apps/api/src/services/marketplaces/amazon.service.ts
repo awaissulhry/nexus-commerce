@@ -1159,4 +1159,178 @@ export class AmazonService {
       asin: typeof res?.asin === 'string' ? res.asin : null,
     }
   }
+
+  /**
+   * GTIN.2 — infer brand-level GTIN exemption from existing Amazon
+   * listings for the seller. Amazon doesn't expose a "do I have GTIN
+   * exemption" endpoint cleanly; the strongest available signal is
+   * "this seller has an active listing under this brand without a
+   * GTIN," because Amazon would have rejected the listing creation
+   * if the brand wasn't exempt.
+   *
+   * Picks one ACTIVE Amazon ChannelListing for the brand from local
+   * DB, calls getListingsItem on its SKU, and inspects the
+   * `attributes.gtin` + `externally_assigned_product_identifier`
+   * keys. Absence implies exemption.
+   *
+   * Returns:
+   *   - inferred: 'exempt' when the listing has no GTIN attribute
+   *   - inferred: 'not_exempt' when a GTIN is present
+   *   - inferred: 'unknown' when no listings exist for the brand,
+   *     SP-API isn't configured, or the call fails
+   *
+   * Cached in-process for 5 minutes per (brand, marketplaceId) to
+   * avoid burning rate limits on every wizard mount.
+   */
+  async inferBrandGtinExemption(
+    brand: string,
+    countryCode: string,
+  ): Promise<{
+    inferred: 'exempt' | 'not_exempt' | 'unknown'
+    evidenceSku?: string
+    evidenceAsin?: string
+    reason: string
+  }> {
+    const trimmedBrand = brand.trim()
+    const cc = countryCode.trim().toUpperCase()
+    if (!trimmedBrand || !cc) {
+      return { inferred: 'unknown', reason: 'brand and country required' }
+    }
+    if (!this.isConfigured()) {
+      return { inferred: 'unknown', reason: 'SP-API not configured' }
+    }
+    const cacheKey = `${trimmedBrand}|${cc}`
+    const cached = AmazonService._exemptionCache.get(cacheKey)
+    if (cached && Date.now() - cached.at < AmazonService.EXEMPTION_TTL_MS) {
+      return cached.value
+    }
+    // Country code → SP-API marketplaceId. The map mirrors the one in
+    // tracking-pushback.job; lifting both into a shared module is
+    // tracked in TECH_DEBT but not blocking this fix.
+    const marketplaceId = AmazonService._countryToMarketplace[cc]
+    if (!marketplaceId) {
+      const value = {
+        inferred: 'unknown' as const,
+        reason: `no SP-API marketplaceId for country ${cc}`,
+      }
+      AmazonService._exemptionCache.set(cacheKey, { at: Date.now(), value })
+      return value
+    }
+    // Lazy require to avoid a circular import — prisma client is a
+    // sibling concern to the SP-API client class.
+    const prismaMod = await import('../../db.js')
+    const prisma = prismaMod.default
+    const listing = await prisma.channelListing.findFirst({
+      where: {
+        channel: 'AMAZON',
+        marketplace: cc,
+        listingStatus: 'ACTIVE',
+        product: { brand: trimmedBrand },
+      },
+      include: {
+        product: { select: { sku: true } },
+      },
+    })
+    if (!listing || !listing.product?.sku) {
+      const value = {
+        inferred: 'unknown' as const,
+        reason: 'no existing Amazon listings under this brand',
+      }
+      AmazonService._exemptionCache.set(cacheKey, { at: Date.now(), value })
+      return value
+    }
+    const evidenceSku = listing.product.sku
+    let res: any
+    try {
+      const sp = await this.getClient()
+      res = await sp.callAPI({
+        operation: 'getListingsItem',
+        endpoint: 'listingsItems',
+        path: { sellerId: process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? '', sku: evidenceSku },
+        query: {
+          marketplaceIds: [marketplaceId],
+          includedData: ['summaries', 'attributes', 'identifiers'],
+        },
+      })
+    } catch (err) {
+      // SP-API failure — return unknown but don't cache the failure
+      // for the full TTL; let the next wizard mount retry.
+      return {
+        inferred: 'unknown',
+        reason: `SP-API getListingsItem failed: ${
+          err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)
+        }`,
+      }
+    }
+    // Inspect the listing for GTIN absence. SP-API responses use a
+    // few different shapes across marketplace versions; we check both
+    // attributes.gtin and identifiers[].identifierType === 'GTIN'.
+    const attrs = res?.attributes ?? {}
+    const hasGtinAttr =
+      Array.isArray(attrs.gtin) && attrs.gtin.length > 0 && attrs.gtin[0]?.value
+    const identifiers = res?.identifiers
+    let hasGtinIdentifier = false
+    if (Array.isArray(identifiers)) {
+      for (const block of identifiers) {
+        const codes = block?.identifiers
+        if (!Array.isArray(codes)) continue
+        if (codes.some((c: any) => c?.identifierType?.toString().toUpperCase().includes('GTIN'))) {
+          hasGtinIdentifier = true
+          break
+        }
+      }
+    }
+    const summary = Array.isArray(res?.summaries) ? res.summaries[0] : null
+    const asin = typeof res?.asin === 'string' ? res.asin : summary?.asin
+    let value: {
+      inferred: 'exempt' | 'not_exempt' | 'unknown'
+      evidenceSku?: string
+      evidenceAsin?: string
+      reason: string
+    }
+    if (!hasGtinAttr && !hasGtinIdentifier) {
+      value = {
+        inferred: 'exempt',
+        evidenceSku: evidenceSku,
+        evidenceAsin: typeof asin === 'string' ? asin : undefined,
+        reason: 'existing listing accepted by Amazon without a GTIN',
+      }
+    } else {
+      value = {
+        inferred: 'not_exempt',
+        evidenceSku: evidenceSku,
+        evidenceAsin: typeof asin === 'string' ? asin : undefined,
+        reason: 'existing listing carries a GTIN — exemption not required / not granted',
+      }
+    }
+    AmazonService._exemptionCache.set(cacheKey, { at: Date.now(), value })
+    return value
+  }
+
+  // ── GTIN.2 — in-process exemption-inference cache ────────────
+  private static _exemptionCache = new Map<
+    string,
+    {
+      at: number
+      value: {
+        inferred: 'exempt' | 'not_exempt' | 'unknown'
+        evidenceSku?: string
+        evidenceAsin?: string
+        reason: string
+      }
+    }
+  >()
+  private static EXEMPTION_TTL_MS = 5 * 60 * 1000
+  private static _countryToMarketplace: Record<string, string> = {
+    IT: 'APJ6JRA9NG5V4',
+    DE: 'A1PA6795UKMFR9',
+    FR: 'A13V1IB3VIYZZH',
+    ES: 'A1RKKUPIHCS9HS',
+    UK: 'A1F83G8C2ARO7P',
+    GB: 'A1F83G8C2ARO7P',
+    NL: 'A1805IZSGTT6HS',
+    SE: 'A2NODRKZP88ZB9',
+    PL: 'A1C3SOZRARQ6R3',
+    US: 'ATVPDKIKX0DER',
+  }
 }

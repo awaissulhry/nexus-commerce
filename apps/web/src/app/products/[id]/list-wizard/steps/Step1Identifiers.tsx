@@ -29,6 +29,17 @@ interface CheckResponse {
     submittedAt: string | null
     status: string
   }
+  // GTIN.2 — when no local record, the API falls through to Amazon
+  // SP-API and returns its inference under this key. inferred='exempt'
+  // means the seller has at least one ACTIVE Amazon listing under
+  // the brand without a GTIN — strong evidence Amazon has granted
+  // GTIN exemption to the brand.
+  amazonInference?: {
+    inferred: 'exempt' | 'not_exempt' | 'unknown'
+    evidenceSku?: string
+    evidenceAsin?: string
+    reason: string
+  }
 }
 
 function detectGtin(product: StepProps['product']): string | null {
@@ -147,6 +158,18 @@ export default function Step1Identifiers(props: StepProps) {
         if (data.approved && !stateSlice.path) {
           setPath('have-exemption')
         }
+        // GTIN.2 — same default for SP-API-inferred exemption. Local
+        // DB takes precedence (covers it via the previous branch);
+        // this triggers when no local record exists but Amazon has
+        // an active listing under the brand without a GTIN.
+        else if (
+          !data.approved &&
+          !data.pending &&
+          data.amazonInference?.inferred === 'exempt' &&
+          !stateSlice.path
+        ) {
+          setPath('have-exemption')
+        }
       })
       .catch((err) => {
         if (cancelled) return
@@ -169,10 +192,19 @@ export default function Step1Identifiers(props: StepProps) {
   // DD.2 — eBay accepts "Does Not Apply" as a valid GTIN per category;
   // when no Amazon channels are selected we let the user proceed with
   // an empty value (handled by the channel adapter at submit time).
+  // GTIN.2 — Amazon-inferred exemption is enough to continue under
+  // "have-exemption" without a trademark number. The seller already
+  // has GTIN-less listings live on Amazon under this brand, so
+  // re-collecting the trademark wouldn't add new validation.
+  const amazonInferredExempt =
+    cache?.amazonInference?.inferred === 'exempt'
   const continueDisabled =
     (path === 'have-code' && hasAmazon && !gtinValid) ||
     (path === 'have-code' && !hasAmazon && gtinValue.length > 0 && !gtinValid) ||
-    (path === 'have-exemption' && !cache?.approved && !trademarkNumber) ||
+    (path === 'have-exemption' &&
+      !cache?.approved &&
+      !amazonInferredExempt &&
+      !trademarkNumber) ||
     saving
 
   // C.0 — bridge the in-step continueDisabled to the wizard chrome
@@ -188,7 +220,12 @@ export default function Step1Identifiers(props: StepProps) {
     if (path === 'have-code' && !gtinValid) {
       reasons.push('GTIN check digit invalid')
     }
-    if (path === 'have-exemption' && !cache?.approved && !trademarkNumber) {
+    if (
+      path === 'have-exemption' &&
+      !cache?.approved &&
+      !amazonInferredExempt &&
+      !trademarkNumber
+    ) {
       reasons.push('Enter trademark number or pick approved exemption')
     }
     reportValidity({
@@ -196,7 +233,7 @@ export default function Step1Identifiers(props: StepProps) {
       blockers: Math.max(reasons.length, 1),
       reasons,
     })
-  }, [continueDisabled, path, gtinValid, cache, trademarkNumber, reportValidity])
+  }, [continueDisabled, path, gtinValid, cache, trademarkNumber, reportValidity, amazonInferredExempt])
 
   const onContinue = async () => {
     setSaving(true)
@@ -280,6 +317,48 @@ export default function Step1Identifiers(props: StepProps) {
           </div>
         </div>
       )}
+      {/* GTIN.2 — SP-API inference banner. Renders only when no local
+          record exists AND Amazon's response indicates the brand has
+          existing GTIN-less listings. The defaulting useEffect above
+          pre-selects "have-exemption" when this fires, so the banner
+          confirms the inference rather than asking for input. */}
+      {cache?.amazonInference?.inferred === 'exempt' &&
+        !cache.approved &&
+        !cache.pending && (
+          <div className="mb-4 px-4 py-3 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-base text-emerald-900 flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <div className="font-semibold">
+                Amazon shows your brand "{product.brand}" already has GTIN
+                exemption on {marketplace}
+              </div>
+              <div>
+                {cache.amazonInference.reason}
+                {cache.amazonInference.evidenceSku && (
+                  <>
+                    {' '}
+                    Evidence:{' '}
+                    <span className="font-mono">
+                      {cache.amazonInference.evidenceSku}
+                    </span>
+                    {cache.amazonInference.evidenceAsin && (
+                      <>
+                        {' '}
+                        (ASIN{' '}
+                        <span className="font-mono">
+                          {cache.amazonInference.evidenceAsin}
+                        </span>
+                        )
+                      </>
+                    )}
+                    .
+                  </>
+                )}{' '}
+                Pre-selected "Brand has GTIN exemption" below.
+              </div>
+            </div>
+          </div>
+        )}
       {cacheError && (
         <div className="mb-4 px-4 py-3 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-base text-amber-900">
           {cacheError}
@@ -344,10 +423,17 @@ export default function Step1Identifiers(props: StepProps) {
                 className="w-full h-8 px-2 text-md border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
-            {!cache?.approved && (
+            {!cache?.approved && !amazonInferredExempt && (
               <p className="text-sm text-amber-700 dark:text-amber-300">
                 Heads-up: we don't have a record of an approved exemption
                 for this brand. Pick the next option to apply.
+              </p>
+            )}
+            {!cache?.approved && amazonInferredExempt && (
+              <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                Amazon already accepts your brand without a GTIN
+                (inferred from existing listings). Trademark number is
+                optional.
               </p>
             )}
           </div>
