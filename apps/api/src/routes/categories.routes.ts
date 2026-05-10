@@ -156,13 +156,18 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/categories/suggestions?channel=AMAZON&marketplace=IT&keyword=moto+jacket
   //
-  // Mirrors Amazon Seller Central's "Choose product type" search: returns a
-  // deduplicated list of { productType, pathParts[], browseNodes[] } sorted by
-  // relevance (number of times that path appeared in catalog results).
+  // Two-step search mirroring Amazon Seller Central's "Choose product type":
   //
-  // Implementation: searchCatalogItems with the keyword, pull classifications
-  // from each result, deduplicate by the leaf classificationId, and return up
-  // to 20 unique paths. Client renders them as selectable category cards.
+  //   Step 1 — searchCatalogItems(keyword) → get up to 10 ASINs + product types.
+  //            classifications are NOT reliably returned for keyword searches
+  //            across all marketplaces, so we don't rely on them here.
+  //
+  //   Step 2 — For each unique ASIN (up to 8), call searchCatalogItems(ASIN,
+  //            identifiersType=ASIN, includedData=[classifications]) in parallel.
+  //            This is the same path that "Detect from competitor" uses and is
+  //            known to return full classification trees reliably.
+  //
+  //   Step 3 — Deduplicate by leaf browse node, sort by frequency, return ≤20.
   fastify.get('/categories/suggestions', async (request, reply) => {
     const q = request.query as {
       channel?: string
@@ -184,21 +189,75 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       const mpId = amazonMarketplaceId(q.marketplace ?? 'IT')
       const sp = await (amazon as any).getClient()
 
-      const res: any = await (sp as any).callAPI({
+      // ── Step 1: keyword search ────────────────────────────────────────
+      const searchRes: any = await (sp as any).callAPI({
         operation: 'searchCatalogItems',
         endpoint: 'catalogItems',
         version: '2022-04-01',
         query: {
           keywords: q.keyword.trim(),
           marketplaceIds: [mpId],
-          includedData: ['summaries', 'classifications'],
-          pageSize: 20,
+          includedData: ['summaries', 'productTypes'],
+          pageSize: 10,
         },
       })
 
-      const items: any[] = res?.items ?? []
+      const rawItems: any[] = searchRes?.items ?? []
+      if (rawItems.length === 0) {
+        return reply.send({ suggestions: [], keyword: q.keyword.trim() })
+      }
 
-      // Build a deduplicated map of leaf classificationId → suggestion
+      // Collect unique ASINs and their product types from the search results
+      const asinMeta = new Map<string, string>() // asin → productType
+      for (const item of rawItems) {
+        const asin: string = item.asin
+        if (!asin || asinMeta.has(asin)) continue
+        const rawPt =
+          item.summaries?.[0]?.productTypes?.[0]?.productTypeId ??
+          item.summaries?.[0]?.productTypes?.[0]?.productType ??
+          item.productTypes?.[0]?.productTypeId ??
+          null
+        asinMeta.set(asin, typeof rawPt === 'string' ? rawPt : 'UNKNOWN')
+      }
+
+      const asins = Array.from(asinMeta.keys()).slice(0, 8)
+
+      // ── Step 2: batch classify each ASIN ─────────────────────────────
+      const classified = await Promise.all(
+        asins.map(async (asin) => {
+          try {
+            const r: any = await (sp as any).callAPI({
+              operation: 'searchCatalogItems',
+              endpoint: 'catalogItems',
+              version: '2022-04-01',
+              query: {
+                marketplaceIds: [mpId],
+                identifiers: [asin],
+                identifiersType: 'ASIN',
+                includedData: ['classifications', 'summaries'],
+              },
+            })
+            const item = Array.isArray(r?.items) && r.items.length > 0 ? r.items[0] : null
+            if (!item) return null
+
+            // Prefer productType from this full response, fall back to step-1 value
+            const rawPt =
+              item.summaries?.[0]?.productTypes?.[0]?.productTypeId ??
+              item.summaries?.[0]?.productTypes?.[0]?.productType ??
+              asinMeta.get(asin) ?? 'UNKNOWN'
+
+            return {
+              asin,
+              productType: rawPt,
+              classifications: item.classifications ?? [],
+            }
+          } catch {
+            return null
+          }
+        }),
+      )
+
+      // ── Step 3: deduplicate by leaf browse node ───────────────────────
       const byLeafId = new Map<string, {
         productType: string
         pathParts: string[]
@@ -206,35 +265,30 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
         count: number
       }>()
 
-      for (const item of items) {
-        const summaries: any[] = item.summaries ?? []
-        const classifications: any[] = item.classifications ?? []
+      for (const result of classified) {
+        if (!result) continue
+        const classifications: any[] = result.classifications
         if (!classifications.length) continue
 
-        // Product type from summaries
-        const rawPt = summaries[0]?.productTypes?.[0]?.productTypeId
-          ?? summaries[0]?.productTypes?.[0]?.productType
-          ?? null
-        const productType = typeof rawPt === 'string' ? rawPt : 'UNKNOWN'
-
-        // Build path from classifications (walk parent chain per classification)
         for (const cls of classifications) {
           const { pathParts, browseNodes } = buildPath(cls)
           if (!pathParts.length) continue
 
-          const leafId = browseNodes[browseNodes.length - 1]?.toString()
-            ?? pathParts.join('|')
-
+          const leafId = browseNodes[browseNodes.length - 1]?.toString() ?? pathParts.join('|')
           const existing = byLeafId.get(leafId)
           if (existing) {
             existing.count++
           } else {
-            byLeafId.set(leafId, { productType, pathParts, browseNodes, count: 1 })
+            byLeafId.set(leafId, {
+              productType: result.productType,
+              pathParts,
+              browseNodes,
+              count: 1,
+            })
           }
         }
       }
 
-      // Sort by frequency (most common paths first), cap at 20
       const suggestions = Array.from(byLeafId.values())
         .sort((a, b) => b.count - a.count)
         .slice(0, 20)
