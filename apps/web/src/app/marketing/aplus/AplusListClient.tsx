@@ -164,14 +164,22 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
               : t('aplus.emptyFiltered.body')}
           </p>
           {items.length === 0 && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              {t('aplus.createFirst')}
-            </Button>
+            <div className="flex flex-col items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                {t('aplus.createFirst')}
+              </Button>
+              <a
+                href="/marketing/templates"
+                className="text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                {t('aplus.browseTemplates')}
+              </a>
+            </div>
           )}
         </div>
       ) : (

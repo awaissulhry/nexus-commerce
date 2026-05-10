@@ -222,14 +222,19 @@ export default function AutomationListClient({
           <p className="max-w-md text-xs text-slate-500 dark:text-slate-400">
             {t('automation.empty.body')}
           </p>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setCreating(true)}
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            {t('automation.createFirst')}
-          </Button>
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreating(true)}
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              {t('automation.createFirst')}
+            </Button>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('automation.tryPreset')}
+            </p>
+          </div>
         </div>
       ) : (
         <ul className="space-y-2">
