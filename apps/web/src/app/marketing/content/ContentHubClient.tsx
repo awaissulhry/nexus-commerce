@@ -19,6 +19,7 @@ import KpiStrip from './_components/KpiStrip'
 import ContentToolbar, { type ViewMode } from './_components/ContentToolbar'
 import AssetLibrary from './_components/AssetLibrary'
 import AssetDetailDrawer from './_components/AssetDetailDrawer'
+import BulkActionBar from './_components/BulkActionBar'
 import FilterSidebar, {
   EMPTY_FILTER,
   activeFilterCount,
@@ -45,7 +46,33 @@ export default function ContentHubClient({
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [selected, setSelected] = useState<LibraryItem | null>(null)
+  // MC.2.3 — bulk-selection set, keyed by item.id ("da_..." | "pi_...").
+  // Map (not Set) so we can render the bar without re-fetching the
+  // items the operator has already paged past.
+  const [bulkSelected, setBulkSelected] = useState<Map<string, LibraryItem>>(
+    new Map(),
+  )
+  const [libraryRefreshKey, setLibraryRefreshKey] = useState(0)
   const filterCount = activeFilterCount(filter)
+
+  const toggleBulk = (item: LibraryItem) => {
+    setBulkSelected((prev) => {
+      const next = new Map(prev)
+      if (next.has(item.id)) next.delete(item.id)
+      else next.set(item.id, item)
+      return next
+    })
+  }
+  const clearBulk = () => setBulkSelected(new Map())
+  const handleAfterDelete = (deletedIds: string[]) => {
+    setBulkSelected((prev) => {
+      const next = new Map(prev)
+      for (const id of deletedIds) next.delete(id)
+      return next
+    })
+    if (selected && deletedIds.includes(selected.id)) setSelected(null)
+    setLibraryRefreshKey((k) => k + 1)
+  }
 
   // Per the audit, ProductImage is the canonical master gallery and
   // DigitalAsset is the forward-compat DAM model. Until the W4.7
@@ -164,6 +191,9 @@ export default function ContentHubClient({
           apiBase={apiBase}
           onSelect={(item) => setSelected(item)}
           selectedId={selected?.id ?? null}
+          bulkSelectedIds={bulkSelected}
+          onToggleBulk={toggleBulk}
+          refreshKey={libraryRefreshKey}
         />
       </div>
 
@@ -171,6 +201,13 @@ export default function ContentHubClient({
         selected={selected}
         apiBase={apiBase}
         onClose={() => setSelected(null)}
+      />
+
+      <BulkActionBar
+        selected={[...bulkSelected.values()]}
+        apiBase={apiBase}
+        onClear={clearBulk}
+        onAfterDelete={handleAfterDelete}
       />
     </div>
   )

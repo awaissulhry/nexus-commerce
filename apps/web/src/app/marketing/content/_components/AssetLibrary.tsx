@@ -56,6 +56,9 @@ interface Props {
   apiBase: string
   onSelect?: (item: LibraryItem) => void
   selectedId?: string | null
+  bulkSelectedIds?: Map<string, LibraryItem>
+  onToggleBulk?: (item: LibraryItem) => void
+  refreshKey?: number
 }
 
 const PAGE_SIZE = 60
@@ -99,6 +102,9 @@ export default function AssetLibrary({
   apiBase,
   onSelect,
   selectedId,
+  bulkSelectedIds,
+  onToggleBulk,
+  refreshKey = 0,
 }: Props) {
   const { t } = useTranslations()
   const [items, setItems] = useState<LibraryItem[]>([])
@@ -165,6 +171,15 @@ export default function AssetLibrary({
     }, 250)
     return () => clearTimeout(handle)
   }, [search, filter, fetchPage])
+
+  // MC.2.3 — refresh when caller bumps the key (e.g. after bulk
+  // delete). Does not debounce because the operator just clicked
+  // delete and expects the row to disappear immediately.
+  useEffect(() => {
+    if (refreshKey === 0) return
+    void fetchPage(1, true, search, filter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // The server already applies every dimension; no client-side filter
   // pass needed. Keeping the variable for symmetry with the loops
@@ -247,14 +262,60 @@ export default function AssetLibrary({
   return (
     <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-        <span>
-          {loading
-            ? t('marketingContent.library.loading')
-            : t('marketingContent.library.countSummary', {
-                shown: visibleItems.length.toString(),
-                total: total.toString(),
-              })}
-        </span>
+        <div className="flex items-center gap-2">
+          {onToggleBulk && visibleItems.length > 0 && (
+            <input
+              type="checkbox"
+              aria-label={t('marketingContent.bulk.selectAllAriaLabel')}
+              checked={
+                bulkSelectedIds !== undefined &&
+                visibleItems.length > 0 &&
+                visibleItems.every((i) => bulkSelectedIds.has(i.id))
+              }
+              ref={(el) => {
+                if (!el) return
+                const some =
+                  bulkSelectedIds !== undefined &&
+                  visibleItems.some((i) => bulkSelectedIds.has(i.id))
+                const all =
+                  bulkSelectedIds !== undefined &&
+                  visibleItems.length > 0 &&
+                  visibleItems.every((i) => bulkSelectedIds.has(i.id))
+                el.indeterminate = some && !all
+              }}
+              onChange={(e) => {
+                if (!onToggleBulk) return
+                const all =
+                  bulkSelectedIds !== undefined &&
+                  visibleItems.length > 0 &&
+                  visibleItems.every((i) => bulkSelectedIds.has(i.id))
+                if (all || !e.target.checked) {
+                  // Either fully selected (uncheck all visible) or
+                  // checkbox toggled off — toggle each visible item
+                  // currently in the set so it leaves.
+                  for (const i of visibleItems) {
+                    if (bulkSelectedIds?.has(i.id)) onToggleBulk(i)
+                  }
+                } else {
+                  // Add every visible item that isn't already in the
+                  // bulk set.
+                  for (const i of visibleItems) {
+                    if (!bulkSelectedIds?.has(i.id)) onToggleBulk(i)
+                  }
+                }
+              }}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
+            />
+          )}
+          <span>
+            {loading
+              ? t('marketingContent.library.loading')
+              : t('marketingContent.library.countSummary', {
+                  shown: visibleItems.length.toString(),
+                  total: total.toString(),
+                })}
+          </span>
+        </div>
         {loading && (
           <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
         )}
@@ -293,6 +354,10 @@ export default function AssetLibrary({
                       onSelect={onSelect}
                       selected={selectedId === item.id}
                       highlight={search}
+                      bulkChecked={bulkSelectedIds?.has(item.id) ?? false}
+                      onBulkToggle={
+                        onToggleBulk ? () => onToggleBulk(item) : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -302,15 +367,23 @@ export default function AssetLibrary({
             // list view
             const item = visibleItems[row.index]
             if (!item) return null
+            const bulkChecked = bulkSelectedIds?.has(item.id) ?? false
             return (
-              <button
-                type="button"
+              <div
                 key={row.key}
                 data-index={row.index}
                 ref={virtualizer.measureElement}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect?.(item)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelect?.(item)
+                  }
+                }}
                 aria-pressed={selectedId === item.id}
-                className={`absolute inset-x-0 flex items-center gap-3 border-b border-slate-100 px-3 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:bg-blue-50 dark:border-slate-800 dark:hover:bg-slate-800 dark:focus-visible:bg-blue-950 ${
+                className={`absolute inset-x-0 flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:bg-blue-50 dark:border-slate-800 dark:hover:bg-slate-800 dark:focus-visible:bg-blue-950 ${
                   selectedId === item.id
                     ? 'bg-blue-50 dark:bg-blue-950/40'
                     : ''
@@ -320,6 +393,16 @@ export default function AssetLibrary({
                   height: LIST_ROW_HEIGHT_PX,
                 }}
               >
+                {onToggleBulk && (
+                  <input
+                    type="checkbox"
+                    checked={bulkChecked}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => onToggleBulk(item)}
+                    aria-label={t('marketingContent.bulk.toggleAriaLabel')}
+                    className="h-4 w-4 flex-shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
+                  />
+                )}
                 <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
                   {item.type === 'image' ? (
                     <Image
@@ -373,7 +456,7 @@ export default function AssetLibrary({
                       : ''}
                   </span>
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>

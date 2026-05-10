@@ -16,6 +16,8 @@ interface Props {
   onSelect?: (item: LibraryItem) => void
   selected?: boolean
   highlight?: string
+  bulkChecked?: boolean
+  onBulkToggle?: () => void
 }
 
 function HighlightedText({ text, query }: { text: string; query?: string }) {
@@ -43,19 +45,49 @@ function TypeIcon({ type }: { type: string }) {
   return null
 }
 
-export default function AssetCard({ item, onSelect, selected, highlight }: Props) {
+export default function AssetCard({
+  item,
+  onSelect,
+  selected,
+  highlight,
+  bulkChecked,
+  onBulkToggle,
+}: Props) {
   const isImage = item.type === 'image'
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect?.(item)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect?.(item)
+        }
+      }}
       aria-pressed={selected ?? false}
-      className={`group relative flex flex-col overflow-hidden rounded-md border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-md border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
         selected
           ? 'border-blue-500 ring-2 ring-blue-500/30 dark:border-blue-400'
-          : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'
+          : bulkChecked
+            ? 'border-blue-400 ring-1 ring-blue-400/30 dark:border-blue-500'
+            : 'border-slate-200 hover:border-slate-300 dark:border-slate-800 dark:hover:border-slate-700'
       }`}
     >
+      {onBulkToggle && (
+        <input
+          type="checkbox"
+          checked={bulkChecked ?? false}
+          onClick={(e) => e.stopPropagation()}
+          onChange={onBulkToggle}
+          aria-label="Toggle bulk select"
+          className={`absolute left-1.5 top-1.5 z-10 h-4 w-4 rounded border-slate-300 bg-white text-blue-600 shadow-sm transition-opacity focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 ${
+            bulkChecked
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+          }`}
+        />
+      )}
       <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-800">
         {isImage ? (
           <Image
@@ -108,6 +140,6 @@ export default function AssetCard({ item, onSelect, selected, highlight }: Props
           </span>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
