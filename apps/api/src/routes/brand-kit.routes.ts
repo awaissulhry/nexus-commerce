@@ -126,6 +126,108 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
     return { kit }
   })
 
+  // ── MC.10.3 — Watermark template CRUD ───────────────────
+
+  fastify.get('/brand-kits/:brand/watermarks', async (request, reply) => {
+    const { brand } = request.params as { brand: string }
+    const kit = await prisma.brandKit.findUnique({
+      where: { brand },
+      select: { id: true },
+    })
+    if (!kit)
+      return reply.code(404).send({ error: 'Brand kit not found' })
+    const watermarks = await prisma.brandWatermarkTemplate.findMany({
+      where: { brand },
+      orderBy: { createdAt: 'asc' },
+    })
+    return { watermarks }
+  })
+
+  fastify.post(
+    '/brand-kits/:brand/watermarks',
+    async (request, reply) => {
+      const { brand } = request.params as { brand: string }
+      const body = request.body as {
+        name?: string
+        type?: string
+        config?: unknown
+        enabled?: boolean
+      }
+      if (!body.name?.trim())
+        return reply.code(400).send({ error: 'name is required' })
+      if (!body.type?.trim())
+        return reply.code(400).send({ error: 'type is required' })
+
+      const kit = await prisma.brandKit.findUnique({
+        where: { brand },
+        select: { id: true },
+      })
+      if (!kit)
+        return reply.code(404).send({ error: 'Brand kit not found' })
+
+      const watermark = await prisma.brandWatermarkTemplate.create({
+        data: {
+          brand,
+          name: body.name.trim(),
+          type: body.type.trim(),
+          config: (body.config as never) ?? {},
+          enabled: body.enabled ?? true,
+        },
+      })
+      return reply.code(201).send({ watermark })
+    },
+  )
+
+  fastify.patch(
+    '/brand-watermarks/:id',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const body = request.body as {
+        name?: string
+        type?: string
+        config?: unknown
+        enabled?: boolean
+      }
+      const data: Record<string, unknown> = {}
+      if (body.name !== undefined) data.name = body.name.trim()
+      if (body.type !== undefined) data.type = body.type.trim()
+      if (body.config !== undefined)
+        data.config = (body.config as never) ?? {}
+      if (body.enabled !== undefined) data.enabled = body.enabled
+      if (Object.keys(data).length === 0)
+        return reply
+          .code(400)
+          .send({ error: 'no mutable fields supplied' })
+      try {
+        const watermark = await prisma.brandWatermarkTemplate.update({
+          where: { id },
+          data,
+        })
+        return { watermark }
+      } catch (err: any) {
+        if (err?.code === 'P2025')
+          return reply
+            .code(404)
+            .send({ error: 'watermark template not found' })
+        throw err
+      }
+    },
+  )
+
+  fastify.delete('/brand-watermarks/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await prisma.brandWatermarkTemplate.delete({ where: { id } })
+      return { ok: true, id }
+    } catch (err: any) {
+      if (err?.code === 'P2025')
+        return reply
+          .code(404)
+          .send({ error: 'watermark template not found' })
+      throw err
+    }
+  })
+
   fastify.delete('/brand-kits/:brand', async (request, reply) => {
     const { brand } = request.params as { brand: string }
     try {

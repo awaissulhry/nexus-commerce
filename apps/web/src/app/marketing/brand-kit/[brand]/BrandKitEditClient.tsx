@@ -36,6 +36,7 @@ import {
   type LogoEntry,
   type LogoRole,
 } from '../_lib/types'
+import WatermarksSection from './WatermarksSection'
 
 interface Props {
   brand: string
@@ -444,6 +445,15 @@ export default function BrandKitEditClient({
           className="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
         />
       </Section>
+
+      {/* MC.10.3 — Watermarks. Rendered as its own section because
+          it has its own CRUD endpoints (each watermark is a row,
+          not a field on BrandKit). Only meaningful once the kit
+          has been saved at least once — the API returns 404 for
+          orphan brands. */}
+      {!isNew && (
+        <WatermarksSection brand={brand} apiBase={apiBase} />
+      )}
     </div>
   )
 }
