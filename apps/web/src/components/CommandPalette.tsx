@@ -33,6 +33,10 @@ import {
   Snowflake,
   Globe,
   Cable,
+  Image as ImageIcon,
+  BookOpen,
+  Palette,
+  Send,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -47,7 +51,7 @@ interface Command {
   /** Comma-separated extra keywords for fuzzy matching, e.g. for
    *  "Refresh page" we want "reload" / "fetch" to also match. */
   keywords?: string
-  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments' | 'Pending orders' | 'Replenishment'
+  group: 'Recent' | 'On this page' | 'Navigation' | 'Catalog' | 'System' | 'Action' | 'Listings' | 'Shipments' | 'Pending orders' | 'Replenishment' | 'Marketing'
   /** Either href (navigate) or run (callback). One must be set. */
   href?: string
   run?: (router: AppRouter) => void
@@ -178,6 +182,90 @@ const COMMANDS: Command[] = [
       window.dispatchEvent(new CustomEvent('nexus:bulk-operations:ai-alt-text')),
     contextPath: /^\/bulk-operations(\?|$)/,
   },
+  // ── MC.14.1 — Marketing surfaces ─────────────────────────────
+  {
+    id: 'goto-marketing-content',
+    label: 'Go to Content Hub (DAM — images, videos, A+ assets)',
+    icon: ImageIcon,
+    href: '/marketing/content',
+    group: 'Marketing',
+    chord: 'g m',
+    keywords:
+      'dam digital asset management content hub library photos foto immagini video assets brand cloudinary',
+  },
+  {
+    id: 'goto-marketing-aplus',
+    label: 'Go to A+ Content (Amazon premium PDPs)',
+    icon: Layers,
+    href: '/marketing/aplus',
+    group: 'Marketing',
+    keywords:
+      'a+ aplus a-plus amazon premium pdp module visual builder localization marketplace standard premium',
+  },
+  {
+    id: 'goto-marketing-brand-story',
+    label: 'Go to Brand Story',
+    icon: BookOpen,
+    href: '/marketing/brand-story',
+    group: 'Marketing',
+    keywords:
+      'brand story amazon storefront featured asin carousel narrative storytelling',
+  },
+  {
+    id: 'goto-marketing-brand-kit',
+    label: 'Go to Brand Kit (colors, fonts, logos, watermarks)',
+    icon: Palette,
+    href: '/marketing/brand-kit',
+    group: 'Marketing',
+    keywords:
+      'brand kit guidelines colors palette fonts typography logos watermarks consistency brand identity',
+  },
+  {
+    id: 'goto-marketing-automation',
+    label: 'Go to Marketing Automation (rules + presets)',
+    icon: Sparkles,
+    href: '/marketing/automation',
+    group: 'Marketing',
+    keywords:
+      'automation rules triggers schedule cron presets watermark cascade republish image template apply',
+  },
+  {
+    id: 'goto-marketing-templates',
+    label: 'Go to Image Templates (Cloudinary recipes)',
+    icon: Layers,
+    href: '/marketing/templates',
+    group: 'Marketing',
+    keywords:
+      'image template cloudinary recipe transform watermark badge overlay padding crop aspect',
+  },
+  {
+    id: 'goto-marketing-publish',
+    label: 'Go to Channel Publish (Amazon / eBay / Shopify / Woo)',
+    icon: Send,
+    href: '/marketing/content/publish',
+    group: 'Marketing',
+    keywords:
+      'publish channel fanout cascade amazon ebay shopify woocommerce sandbox live image distribution',
+  },
+  {
+    id: 'goto-marketing-analytics',
+    label: 'Go to Storage Analytics (top assets, format breakdown)',
+    icon: Activity,
+    href: '/marketing/content/analytics',
+    group: 'Marketing',
+    keywords:
+      'storage analytics quota cap usage top assets type format breakdown orphan upload volume',
+  },
+  {
+    id: 'goto-marketing-automation-history',
+    label: 'Marketing automation — execution history',
+    icon: History,
+    href: '/marketing/automation/history',
+    group: 'Marketing',
+    keywords:
+      'automation history executions log runs audit cron schedule fired',
+  },
+
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },
   { id: 'settings', label: 'Open Settings', icon: SettingsIcon, href: '/settings/account', group: 'System' },
