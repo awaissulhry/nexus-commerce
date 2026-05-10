@@ -177,6 +177,27 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                       unoptimized
                     />
                   </div>
+                ) : detail.type === 'video' ? (
+                  /* MC.7.3 — native video player. Cloudinary serves
+                   * adaptive streams via the same URL; controls +
+                   * preload="metadata" keeps the network footprint
+                   * light until the operator hits play. */
+                  <div className="relative w-full bg-black">
+                    <video
+                      src={detail.url}
+                      controls
+                      preload="metadata"
+                      poster={detail.url
+                        .replace(
+                          '/video/upload/',
+                          '/video/upload/so_1,c_fill,w_960,h_540,q_auto,f_auto/',
+                        )
+                        .replace(/\.(mp4|mov|webm|mkv|avi)(\?.*)?$/i, '.jpg$2')}
+                      className="block max-h-[60vh] w-full"
+                    >
+                      <track kind="captions" />
+                    </video>
+                  </div>
                 ) : (
                   <div className="flex aspect-square items-center justify-center text-slate-400">
                     <ImageIcon className="w-12 h-12" />
