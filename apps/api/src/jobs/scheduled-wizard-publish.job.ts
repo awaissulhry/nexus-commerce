@@ -176,6 +176,19 @@ async function fireOneSchedule(
       },
     })
 
+    // SP.7 — write an in-app notification so the operator sees the
+    // outcome from the bell icon. Best-effort; a failed write here
+    // doesn't roll back the schedule row update.
+    await emitScheduleNotification({
+      userId: schedule.createdBy ?? 'default-user',
+      wizardId: wizard.id,
+      productId: wizard.productId,
+      productSku: wizard.product?.sku ?? null,
+      overall,
+      submissionCount: submissions.length,
+      fireError: null,
+    })
+
     return 'fired'
   } catch (err) {
     const message =
@@ -183,7 +196,93 @@ async function fireOneSchedule(
         ? err.message.slice(0, 500)
         : String(err).slice(0, 500)
     await markFailed(scheduleId, message)
+    // SP.7 — surface orchestration failure as a danger notification
+    // so the operator notices without having to refresh the wizard.
+    try {
+      const schedule = await prisma.scheduledWizardPublish.findUnique({
+        where: { id: scheduleId },
+        select: {
+          wizardId: true,
+          createdBy: true,
+          wizard: { select: { productId: true } },
+        },
+      })
+      if (schedule) {
+        await emitScheduleNotification({
+          userId: schedule.createdBy ?? 'default-user',
+          wizardId: schedule.wizardId,
+          productId: schedule.wizard?.productId ?? '',
+          productSku: null,
+          overall: 'FAILED',
+          submissionCount: 0,
+          fireError: message,
+        })
+      }
+    } catch {
+      // Best-effort; don't recurse on errors.
+    }
     return 'failed'
+  }
+}
+
+interface ScheduleNotificationInput {
+  userId: string
+  wizardId: string
+  /** Used to build the click-through href; the wizard page path is
+   *  /products/[productId]/list-wizard, the page resolves the active
+   *  wizard internally. Empty string skips href (keeps the row
+   *  informational rather than linking to a 404). */
+  productId: string
+  productSku: string | null
+  overall: 'DRAFT' | 'SUBMITTED' | 'LIVE' | 'FAILED'
+  submissionCount: number
+  fireError: string | null
+}
+async function emitScheduleNotification(
+  input: ScheduleNotificationInput,
+): Promise<void> {
+  try {
+    const skuTag = input.productSku ? ` for ${input.productSku}` : ''
+    const titleByOutcome: Record<typeof input.overall, string> = {
+      LIVE: `Scheduled publish LIVE${skuTag}`,
+      SUBMITTED: `Scheduled publish queued${skuTag}`,
+      FAILED: `Scheduled publish failed${skuTag}`,
+      DRAFT: `Scheduled publish skipped${skuTag}`,
+    }
+    const severity =
+      input.overall === 'LIVE'
+        ? 'success'
+        : input.overall === 'FAILED'
+          ? 'danger'
+          : 'warn'
+    const body = input.fireError
+      ? input.fireError.slice(0, 300)
+      : `${input.submissionCount} channel${
+          input.submissionCount === 1 ? '' : 's'
+        } dispatched.`
+    await prisma.notification.create({
+      data: {
+        userId: input.userId,
+        type: 'wizard-schedule-fired',
+        severity,
+        title: titleByOutcome[input.overall],
+        body,
+        entityType: 'ListingWizard',
+        entityId: input.wizardId,
+        href: input.productId
+          ? `/products/${input.productId}/list-wizard`
+          : null,
+        meta: {
+          wizardStatus: input.overall,
+          submissionCount: input.submissionCount,
+        } as unknown as object,
+      },
+    })
+  } catch (err) {
+    logger.warn(
+      'scheduled-wizard-publish: notification write failed',
+      { err: err instanceof Error ? err.message : String(err) },
+    )
   }
 }
 
