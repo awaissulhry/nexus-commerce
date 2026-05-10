@@ -4679,6 +4679,94 @@ model APlusModule {
   @@index([contentId, position])
 }
 
+/// MC.9.1 — Amazon Brand Story (Brand Registry).
+///
+/// Brand Story is a brand-level analogue of A+ Content. Where A+
+/// targets specific ASINs, a Brand Story applies to *every* product
+/// under a brand within a marketplace + locale. Amazon shows it on
+/// the brand's storefront link + ranks it in search results above
+/// product-specific A+.
+///
+/// Model parallels APlusContent intentionally so the builder, status
+/// flow, and submission service can reuse patterns. Differences:
+///   - Uniqueness: one Brand Story per (brand, marketplace, locale).
+///     Operator can't have two competing stories for the same
+///     audience; Amazon would reject the second.
+///   - No ASIN attachments — the brand label IS the audience.
+///   - Module set is a tight 4 (vs A+ Content's 17). Validation
+///     enforces presence of brand_header.
+model BrandStory {
+  id               String   @id @default(cuid())
+  /// Operator-friendly title. Same shape as APlusContent.name.
+  name             String
+  /// Brand label — required (brand-level surface). Mirrors the
+  /// Product.brand string so the operator can pick from existing
+  /// brand values.
+  brand            String
+  marketplace      String
+  locale           String
+  /// Sibling-localization pointer matching APlusContent.master.
+  /// NULL = master row; non-null = translation of another row.
+  masterStoryId    String?
+  master           BrandStory?  @relation("BrandStoryLocalizations", fields: [masterStoryId], references: [id], onDelete: SetNull)
+  localizations    BrandStory[] @relation("BrandStoryLocalizations")
+  status           String   @default("DRAFT")
+  amazonDocumentId String?
+  submittedAt      DateTime?
+  submissionPayload Json?
+  publishedAt      DateTime?
+  notes            String?
+  scheduledFor     DateTime?
+  modules          BrandStoryModule[]
+  versions         BrandStoryVersion[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([brand, marketplace, locale])
+  @@index([marketplace, status])
+  @@index([brand])
+  @@index([masterStoryId])
+  @@index([status, scheduledFor])
+}
+
+/// MC.9.1 — Brand Story module. Fixed 4 types per Amazon spec:
+///   brand_header     brand image + headline + intro paragraph
+///   featured_asins   showcase grid of products from the brand
+///   story_focus      single image + body text (used for narrative)
+///   image_carousel   4-image rotating carousel
+///
+/// Type stored as string for forward-compat (Amazon adds module
+/// types occasionally — a string keeps us off the migration
+/// treadmill).
+model BrandStoryModule {
+  id        String     @id @default(cuid())
+  storyId   String
+  story     BrandStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  type      String
+  position  Int        @default(0)
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storyId, position])
+}
+
+/// MC.9.1 — Brand Story version snapshots. Same shape as
+/// APlusContentVersion (MC.8.10). Auto-snapshotted on submit /
+/// rollback / manual save.
+model BrandStoryVersion {
+  id        String     @id @default(cuid())
+  storyId   String
+  story     BrandStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  version   Int
+  reason    String
+  snapshot  Json
+  createdAt DateTime @default(now())
+
+  @@unique([storyId, version])
+  @@index([storyId, createdAt])
+}
+
 // Phase A: per-listing image set with multi-scope and variation-aware
 // targeting. ProductImage stays as the master gallery (source of truth);
 // ListingImage entries either reference a master image (via
