@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import MatrixVariantBuilder from './_MatrixVariantBuilder'
 
 // Mirrors backend types from variations.service.ts.
 interface ThemeOption {
@@ -389,6 +390,7 @@ export default function Step5Variations({
       <SingleProductSetup
         productSku={payload.parentSku}
         productName={payload.parentName}
+        payload={payload}
         onAdvance={() =>
           updateWizardState({}, { advance: true }).catch(() => {})
         }
@@ -1098,15 +1100,22 @@ type SetupMode = 'standalone' | 'link' | 'promote'
 function SingleProductSetup({
   productSku,
   productName,
+  payload,
   onAdvance,
   onMutated,
 }: {
   productSku: string
   productName: string
+  payload: MultiChannelVariationsPayload
   onAdvance: () => void
   onMutated: () => void
 }) {
   const [mode, setMode] = useState<SetupMode>('standalone')
+  // LWV.1 — within the "promote" mode, default to the matrix builder.
+  // The legacy row-by-row builder stays available behind a "manual"
+  // toggle for operators who want pre-named variants without using
+  // axes (rare, but keeps the prior workflow alive).
+  const [promoteMode, setPromoteMode] = useState<'matrix' | 'manual'>('matrix')
 
   return (
     <div className="max-w-3xl mx-auto py-4 md:py-10 px-3 md:px-6">
@@ -1146,7 +1155,44 @@ function SingleProductSetup({
         <StandalonePanel onAdvance={onAdvance} sku={productSku} />
       )}
       {mode === 'link' && <LinkParentPanel onLinked={onMutated} />}
-      {mode === 'promote' && <PromotePanel onPromoted={onMutated} />}
+      {mode === 'promote' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-end gap-2 text-sm">
+            <span className="text-slate-500 dark:text-slate-400">
+              Builder:
+            </span>
+            <button
+              type="button"
+              onClick={() => setPromoteMode('matrix')}
+              className={cn(
+                'px-2 py-0.5 rounded-md border text-sm',
+                promoteMode === 'matrix'
+                  ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+              )}
+            >
+              Matrix (axes × axes)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPromoteMode('manual')}
+              className={cn(
+                'px-2 py-0.5 rounded-md border text-sm',
+                promoteMode === 'manual'
+                  ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+              )}
+            >
+              Manual (one-by-one)
+            </button>
+          </div>
+          {promoteMode === 'matrix' ? (
+            <MatrixVariantBuilder payload={payload} onCreated={onMutated} />
+          ) : (
+            <PromotePanel onPromoted={onMutated} />
+          )}
+        </div>
+      )}
     </div>
   )
 }
