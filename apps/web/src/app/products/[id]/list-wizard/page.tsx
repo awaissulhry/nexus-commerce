@@ -35,7 +35,18 @@ interface PageProps {
   // with old deep-links and the existing /products/:id/edit entry.
   // Without them, the wizard starts empty and the user picks channels
   // in Step 1.
-  searchParams: Promise<{ channel?: string; marketplace?: string }>
+  //
+  // PR.1 — `?step=N` deep-links into a specific step on first paint.
+  // Validated against [1, 9] in the page handler before being passed
+  // to the client. Useful for sharing "go look at Step 5" with a
+  // teammate or bookmarking the spot you left off (independent of
+  // the resumed wizard's currentStep — which always reflects last-
+  // edited progress).
+  searchParams: Promise<{
+    channel?: string
+    marketplace?: string
+    step?: string
+  }>
 }
 
 export default async function ListWizardPage({
@@ -43,7 +54,7 @@ export default async function ListWizardPage({
   searchParams,
 }: PageProps) {
   const { id: productId } = await params
-  const { channel, marketplace } = await searchParams
+  const { channel, marketplace, step: stepParam } = await searchParams
 
   const backend = getBackendUrl()
 
@@ -119,11 +130,25 @@ export default async function ListWizardPage({
     updatedAt: json.wizard.updatedAt,
   }
 
+  // PR.1 — validate ?step=N against [1, 9]. Out-of-range / non-numeric
+  // ignored (client falls back to wizard.currentStep). Operators
+  // can't deep-link into a step that hasn't been reached yet —
+  // ListWizardClient's chrome-Continue gate would block forward
+  // progress anyway, but disallowing here keeps the URL honest.
+  const stepFromUrl = (() => {
+    if (!stepParam) return undefined
+    const n = parseInt(stepParam, 10)
+    if (!Number.isFinite(n) || n < 1 || n > 9) return undefined
+    if (n > wizard.currentStep) return undefined
+    return n
+  })()
+
   return (
     <ListWizardClient
       initialWizard={wizard}
       product={json.product}
       isNew={json.isNew === true}
+      initialStepOverride={stepFromUrl}
     />
   )
 }

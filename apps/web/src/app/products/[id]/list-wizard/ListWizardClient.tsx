@@ -112,6 +112,11 @@ interface Props {
    *  in another tab refreshes within ~200ms instead of waiting for
    *  its 30s polling tick. */
   isNew?: boolean
+  /** PR.1 — `?step=N` URL deep-link override. Page validates against
+   *  [1, currentStep] before passing through; client uses it as the
+   *  starting step instead of the persisted currentStep. Persisted
+   *  state isn't mutated; the next save bumps currentStep again. */
+  initialStepOverride?: number
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -120,15 +125,24 @@ export default function ListWizardClient({
   initialWizard,
   product,
   isNew,
+  initialStepOverride,
 }: Props) {
   const router = useRouter()
   const { t } = useTranslations()
 
   const [wizardId] = useState(initialWizard.id)
-  const [currentStep, setCurrentStep] = useState(initialWizard.currentStep)
+  // PR.1 — `?step=N` URL deep-link override. Page guarantees the
+  // override is in [1, initialWizard.currentStep]. completedSteps
+  // still derives from the persisted currentStep so back-nav from
+  // an earlier step doesn't silently mark later steps incomplete.
+  const [currentStep, setCurrentStep] = useState(
+    typeof initialStepOverride === 'number'
+      ? initialStepOverride
+      : initialWizard.currentStep,
+  )
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => {
-    // On resume, every step strictly before currentStep counts as
-    // completed (the user got there by clicking Continue).
+    // On resume, every step strictly before initialWizard.currentStep
+    // counts as completed (the user got there by clicking Continue).
     const set = new Set<number>()
     for (let i = 1; i < initialWizard.currentStep; i++) set.add(i)
     return set
