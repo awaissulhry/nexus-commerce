@@ -104,7 +104,19 @@ function isZipFile(file: File): boolean {
   )
 }
 
-const MAX_BYTES = 25 * 1024 * 1024
+// MC.7.5 — split caps. The API enforces these too (MAX_UPLOAD_BYTES /
+// MAX_VIDEO_BYTES); the client-side check just gives the operator
+// fast feedback before the network round-trip.
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024
+
+function isVideoMime(mime: string): boolean {
+  return mime.startsWith('video/')
+}
+
+function maxBytesFor(file: File): number {
+  return isVideoMime(file.type) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
+}
 
 interface Props {
   open: boolean
@@ -195,7 +207,7 @@ export default function UploadModal({
         })
         continue
       }
-      if (file.size > MAX_BYTES) {
+      if (file.size > maxBytesFor(file)) {
         toast({
           title: t('marketingContent.upload.rejectedSize', {
             filename: file.name,
