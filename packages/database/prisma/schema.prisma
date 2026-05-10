@@ -287,6 +287,7 @@ model Product {
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
   seoEntries                ProductSeo[]                  // W12: per-locale SEO metadata
+  workflowAssignments       WorkflowAssignment[]          // W9.x: per-product assignees
   recommendations           ReplenishmentRecommendation[] // R.3
   stockoutEvents            StockoutEvent[] // R.12
   substitutionsAsPrimary    ProductSubstitution[]         @relation("SubstitutionPrimary") // R.17
@@ -646,6 +647,7 @@ model WorkflowStage {
   transitionsFrom  WorkflowTransition[] @relation("TransitionFromStage")
   transitionsTo    WorkflowTransition[] @relation("TransitionToStage")
   comments         WorkflowComment[]
+  assignments      WorkflowAssignment[] // W9.x: per-stage assignees
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -703,6 +705,36 @@ model WorkflowComment {
 
   @@index([productId, createdAt])
   @@index([stageId])
+}
+
+/// W9.x — WorkflowAssignment: per-product reviewer/approver tracking.
+///
+/// Operator (Awa) can delegate review of a product's content quality
+/// to a named team member. Assignments are per-product (not per-stage)
+/// so they survive stage transitions; stageId is optional context for
+/// "assigned to review at this stage". Role distinguishes REVIEWER
+/// (can comment), APPROVER (can advance stage), OWNER (primary DRI).
+model WorkflowAssignment {
+  id           String       @id @default(cuid())
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stageId      String?
+  stage        WorkflowStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  assigneeId   String
+  assignee     UserProfile  @relation(fields: [assigneeId], references: [id], onDelete: Cascade)
+  /// 'REVIEWER' | 'APPROVER' | 'OWNER'
+  role         String       @default("REVIEWER")
+  /// ID of user who created the assignment
+  assignedById String?
+  dueAt        DateTime?
+  note         String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([productId, assigneeId, role])
+  @@index([productId])
+  @@index([stageId])
+  @@index([assigneeId])
 }
 
 /// W4.1 — CustomerGroup (Magento + Salesforce B2B parity).
@@ -2120,6 +2152,8 @@ model UserProfile {
   passwordHash String   @default("")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // W9.x — workflow assignments this user appears in
+  workflowAssignments WorkflowAssignment[]
 }
 
 // ── Webhook Event Tracking ─────────────────────────────────────────
