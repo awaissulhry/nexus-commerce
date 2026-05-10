@@ -204,7 +204,7 @@ export default function ExportsClient() {
       {/* Builder */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-3">
         <div className="flex items-center gap-3">
-          <FileSpreadsheet className="w-5 h-5 text-slate-400" />
+          <FileSpreadsheet className="w-5 h-5 text-slate-400 dark:text-slate-500" />
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex-1">
             New export
           </h2>
@@ -265,7 +265,7 @@ export default function ExportsClient() {
         </div>
 
         <div className="border border-slate-200 dark:border-slate-800 rounded p-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">
             Columns ({pickedColumns.length} / {PRODUCT_COLUMNS.length})
           </div>
           <div className="flex flex-wrap gap-1">
@@ -282,7 +282,7 @@ export default function ExportsClient() {
                 )}
               >
                 {pickedColumns.includes(c.id) && (
-                  <span className="text-blue-500">✓</span>
+                  <span className="text-blue-500 dark:text-blue-400">✓</span>
                 )}
                 {c.label}
               </button>
@@ -317,7 +317,7 @@ export default function ExportsClient() {
           </Button>
         </div>
         {jobs.length === 0 ? (
-          <div className="px-3 py-6 text-center text-sm text-slate-500">
+          <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
             No exports yet. Pick columns above and hit Run export.
           </div>
         ) : (
@@ -347,17 +347,17 @@ export default function ExportsClient() {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-xs uppercase font-mono text-slate-500">
+                  <td className="px-3 py-2 text-xs uppercase font-mono text-slate-500 dark:text-slate-400">
                     {j.format}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {j.rowCount.toLocaleString()}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">
+                  <td className="px-3 py-2 text-right text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {j.bytes > 0 ? formatBytes(j.bytes) : '—'}
                   </td>
                   <td className="px-3 py-2">{statusBadge(j.status)}</td>
-                  <td className="px-3 py-2 text-xs text-slate-500 tabular-nums">
+                  <td className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                     {new Date(j.createdAt).toLocaleString()}
                   </td>
                   <td className="px-3 py-2 text-right">

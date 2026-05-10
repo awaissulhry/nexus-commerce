@@ -338,7 +338,7 @@ function ItemsPanel({ jobId }: { jobId: string }) {
       </div>
 
       {retryNotice && (
-        <div className="text-base text-green-800 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
+        <div className="text-base text-green-800 dark:text-green-200 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900 rounded px-3 py-2 mb-3 inline-flex items-center gap-2">
           <CheckCircle2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
           {retryNotice}
         </div>

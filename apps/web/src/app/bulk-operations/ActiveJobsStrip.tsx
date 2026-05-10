@@ -207,17 +207,17 @@ export default function ActiveJobsStrip() {
     <div className="px-6 pb-2 flex-shrink-0">
       <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
         <div className="px-3 py-2 flex items-center justify-between border-b border-blue-200 dark:border-blue-900">
-          <div className="text-sm font-semibold text-blue-900 uppercase tracking-wide">
+          <div className="text-sm font-semibold text-blue-900 dark:text-blue-200 uppercase tracking-wide">
             Active Jobs · {jobs.length}
           </div>
           <Link
             href="/bulk-operations/history"
-            className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-900"
+            className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100"
           >
             View all →
           </Link>
         </div>
-        <div className="divide-y divide-blue-100">
+        <div className="divide-y divide-blue-100 dark:divide-blue-900/60">
           {jobs.map((job) => {
             // W1.1 — IN_PROGRESS jobs are now cooperatively cancellable;
             // the backend flips status → CANCELLING and the per-item
@@ -232,7 +232,7 @@ export default function ActiveJobsStrip() {
             return (
               <div
                 key={job.id}
-                className="px-3 py-2 flex items-center gap-3 hover:bg-blue-100/30 transition-colors"
+                className="px-3 py-2 flex items-center gap-3 hover:bg-blue-100/30 dark:hover:bg-blue-900/30 transition-colors"
               >
                 <StatusIcon status={job.status} />
                 <div className="min-w-0 flex-1">
