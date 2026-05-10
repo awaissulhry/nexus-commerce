@@ -4269,6 +4269,222 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── C.1 (list-wizard) — per-channel compliance status ──────────
+  //
+  // GET /api/listing-wizard/:id/compliance-status
+  //
+  // Reads the master Product's compliance fields (W7.1 — hsCode /
+  // countryOfOrigin / ppeCategory / hazmatClass / hazmatUnNumber)
+  // plus its ProductCertificate rows, then for each (channel,
+  // marketplace) in the wizard returns a {ready, missing[],
+  // warnings[]} report based on per-channel rules.
+  //
+  // v1 rule set (extends as new requirements surface):
+  //
+  //   - PPE Cat II / III + EU marketplace → CE certificate REQUIRED
+  //     (PPE Directive 2016/425; motorcycle helmets / body armour
+  //     are Cat III "mortal risk")
+  //   - hazmatClass set + Amazon → battery / hazmat declaration
+  //     warning (Amazon's hazmat upload is a separate flow)
+  //   - hsCode missing + cross-border channel → warning (customs
+  //     declarations need it)
+  //   - Certificate expired → blocking on EU marketplaces; warning
+  //     elsewhere
+  //
+  // Read-only — never mutates. Step 9 Review surfaces this so
+  // operators see "Amazon DE: CE certificate expired Apr 2026"
+  // before they hit Submit.
+  fastify.get<{ Params: { id: string } }>(
+    '/listing-wizard/:id/compliance-status',
+    async (request, reply) => {
+      const wizard = await prisma.listingWizard.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, channels: true, productId: true },
+      })
+      if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
+      const channels = normalizeChannels(wizard.channels)
+
+      const product = await prisma.product.findUnique({
+        where: { id: wizard.productId },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          hsCode: true,
+          countryOfOrigin: true,
+          ppeCategory: true,
+          hazmatClass: true,
+          hazmatUnNumber: true,
+          certificates: {
+            select: {
+              id: true,
+              certType: true,
+              certNumber: true,
+              standard: true,
+              issuingBody: true,
+              issuedAt: true,
+              expiresAt: true,
+              fileUrl: true,
+            },
+          },
+        },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      // Marketplace classifications — EU members trigger PPE Directive,
+      // CE / EN certificate requirements, etc. Non-EU marketplaces
+      // have looser rules in v1; subsequent commits add per-country
+      // detail.
+      const EU_MARKETS = new Set([
+        'IT', 'DE', 'FR', 'ES', 'NL', 'PL', 'SE', 'BE', 'IE', 'AT', 'PT',
+        'FI', 'DK', 'GR', 'CZ', 'HU', 'RO',
+      ])
+      const UK_MARKETS = new Set(['UK', 'GB']) // post-Brexit treat as EU-like
+      const CROSS_BORDER_MARKETS = new Set([
+        'US', 'CA', 'MX', 'JP', 'AU', 'IN', 'AE', 'SA', 'TR',
+      ])
+
+      const now = new Date()
+      const ceCert = product.certificates.find((c) => c.certType === 'CE')
+      const reachCert = product.certificates.find((c) => c.certType === 'REACH')
+      const ppeIsCatIIorIII =
+        product.ppeCategory === 'CAT_II' || product.ppeCategory === 'CAT_III'
+
+      type Issue = { code: string; message: string; severity: 'block' | 'warn' }
+      function buildIssues(platform: string, marketplace: string): Issue[] {
+        const issues: Issue[] = []
+        const isEU = EU_MARKETS.has(marketplace) || UK_MARKETS.has(marketplace)
+        const isCrossBorder =
+          CROSS_BORDER_MARKETS.has(marketplace) || isEU
+
+        // PPE Cat II/III on EU markets needs a CE certificate.
+        if (ppeIsCatIIorIII && isEU) {
+          if (!ceCert) {
+            issues.push({
+              code: 'ce_cert_missing',
+              message: `PPE Category ${product.ppeCategory} requires a CE certificate for EU marketplaces (PPE Directive 2016/425).`,
+              severity: 'block',
+            })
+          } else if (ceCert.expiresAt && ceCert.expiresAt < now) {
+            issues.push({
+              code: 'ce_cert_expired',
+              message: `CE certificate ${ceCert.certNumber ?? ''} expired ${ceCert.expiresAt.toISOString().slice(0, 10)}.`,
+              severity: 'block',
+            })
+          } else if (
+            ceCert.expiresAt &&
+            ceCert.expiresAt < new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+          ) {
+            issues.push({
+              code: 'ce_cert_expiring',
+              message: `CE certificate expires within 90 days (${ceCert.expiresAt.toISOString().slice(0, 10)}).`,
+              severity: 'warn',
+            })
+          }
+        }
+
+        // REACH compliance is required for chemical-substance products
+        // on EU markets. v1 only flags when the product carries a REACH
+        // certificate row that's expired.
+        if (
+          reachCert?.expiresAt &&
+          reachCert.expiresAt < now &&
+          isEU
+        ) {
+          issues.push({
+            code: 'reach_cert_expired',
+            message: `REACH compliance certificate expired ${reachCert.expiresAt.toISOString().slice(0, 10)}.`,
+            severity: 'warn',
+          })
+        }
+
+        // Hazmat / battery declarations on Amazon are a separate
+        // upload flow — surface as a warning so the operator knows
+        // to prepare it on Seller Central before submit.
+        if (
+          (product.hazmatClass || product.hazmatUnNumber) &&
+          platform === 'AMAZON'
+        ) {
+          issues.push({
+            code: 'amazon_hazmat_declaration',
+            message: `Hazmat product (UN class ${product.hazmatClass ?? '?'}). Amazon requires a separate hazmat declaration upload on Seller Central.`,
+            severity: 'warn',
+          })
+        }
+
+        // HS code missing on cross-border markets — customs need it.
+        if (!product.hsCode && isCrossBorder) {
+          issues.push({
+            code: 'hs_code_missing',
+            message:
+              'HS code (customs classification) missing — required for cross-border shipments.',
+            severity: 'warn',
+          })
+        }
+        if (!product.countryOfOrigin && isCrossBorder) {
+          issues.push({
+            code: 'country_of_origin_missing',
+            message:
+              'Country of origin missing — required on customs declarations for cross-border shipments.',
+            severity: 'warn',
+          })
+        }
+
+        return issues
+      }
+
+      const perChannel = channels.map((c) => {
+        const issues = buildIssues(c.platform, c.marketplace)
+        const blocking = issues.filter((i) => i.severity === 'block')
+        const warnings = issues.filter((i) => i.severity === 'warn')
+        return {
+          channelKey: `${c.platform}:${c.marketplace}`,
+          platform: c.platform,
+          marketplace: c.marketplace,
+          ready: blocking.length === 0,
+          blockingCount: blocking.length,
+          warningCount: warnings.length,
+          issues,
+        }
+      })
+
+      const allReady = perChannel.every((c) => c.ready)
+      const blockingChannels = perChannel
+        .filter((c) => !c.ready)
+        .map((c) => c.channelKey)
+
+      reply.header('Cache-Control', 'private, max-age=15')
+      return {
+        wizard: { id: wizard.id, productId: wizard.productId },
+        product: {
+          sku: product.sku,
+          name: product.name,
+          hsCode: product.hsCode,
+          countryOfOrigin: product.countryOfOrigin,
+          ppeCategory: product.ppeCategory,
+          hazmatClass: product.hazmatClass,
+          hazmatUnNumber: product.hazmatUnNumber,
+          certificateCount: product.certificates.length,
+          // Surface the certs the wizard / UI cares about most so the
+          // client doesn't refetch /api/products/:id just for cert rows.
+          certificates: product.certificates.map((c) => ({
+            ...c,
+            issuedAt: c.issuedAt ? c.issuedAt.toISOString() : null,
+            expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
+            isExpired: !!c.expiresAt && c.expiresAt < now,
+          })),
+        },
+        perChannel,
+        summary: {
+          allReady,
+          blockingChannels,
+          channelCount: perChannel.length,
+          readyCount: perChannel.filter((c) => c.ready).length,
+        },
+      }
+    },
+  )
+
   // ── AI-4.4 — Step 4 variation theme suggester ──────────────────
   //
   // POST /api/listing-wizard/:id/suggest-variation-theme
