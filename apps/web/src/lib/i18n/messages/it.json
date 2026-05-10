@@ -4168,6 +4168,8 @@
   "marketingContent.delivery.popoverTitle": "Profili di consegna CDN",
   "marketingContent.delivery.envHint": "Il profilo attivo è impostato tramite MC_CDN_DEFAULT_PROFILE. L'impostazione workspace arriverà nel follow-up di MC.13.",
   "marketingContent.viewAnalytics": "Vedi analisi",
+  "marketingContent.activity.label": "Attività recente",
+  "marketingContent.activity.title": "Attività recente",
   "marketingContent.overlays.label": "Sovrapposizioni per locale",
   "marketingContent.overlays.title": "Sovrapposizioni locale ({n})",
   "marketingContent.overlays.add": "Aggiungi",

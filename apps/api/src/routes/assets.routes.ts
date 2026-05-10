@@ -169,6 +169,50 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     return await computeAssetAnalytics()
   })
 
+  // MC.14.4 — recent activity feed for the Content Hub. Returns the
+  // last N marketing-content events (uploads, deletions, channel
+  // publishes, A+ submissions, Brand Story submissions, automation
+  // executions). Sourced from AuditLog rows whose action prefix
+  // matches the marketing surface set.
+  fastify.get<{ Querystring: { limit?: string } }>(
+    '/assets/activity',
+    async (request) => {
+      const limit = Math.min(50, parseInt(request.query.limit ?? '15', 10) || 15)
+      const rows = await prisma.auditLog.findMany({
+        where: {
+          OR: [
+            { action: { startsWith: 'CHANNEL_PUBLISH_' } },
+            { action: { startsWith: 'CLOUDINARY_WEBHOOK_' } },
+            { action: { startsWith: 'APLUS_' } },
+            { action: { startsWith: 'BRAND_STORY_' } },
+            { action: { startsWith: 'AUTOMATION_' } },
+            { entityType: 'DigitalAsset' },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          action: true,
+          entityType: true,
+          entityId: true,
+          metadata: true,
+          createdAt: true,
+        },
+      })
+      return {
+        events: rows.map((r) => ({
+          id: r.id,
+          action: r.action,
+          entityType: r.entityType,
+          entityId: r.entityId,
+          metadata: r.metadata,
+          createdAt: r.createdAt.toISOString(),
+        })),
+      }
+    },
+  )
+
   // ── DigitalAsset ────────────────────────────────────────────
 
   // MC.1.1 — DAM hub KPI overview. Single roundtrip for the

@@ -4117,6 +4117,8 @@
   "marketingContent.delivery.popoverTitle": "CDN delivery profiles",
   "marketingContent.delivery.envHint": "Active profile is set via MC_CDN_DEFAULT_PROFILE. Workspace setting lands in MC.13 follow-up.",
   "marketingContent.viewAnalytics": "View analytics",
+  "marketingContent.activity.label": "Recent activity",
+  "marketingContent.activity.title": "Recent activity",
   "marketingContent.overlays.label": "Locale overlays",
   "marketingContent.overlays.title": "Locale overlays ({n})",
   "marketingContent.overlays.add": "Add",
