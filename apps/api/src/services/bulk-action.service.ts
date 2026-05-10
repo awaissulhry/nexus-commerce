@@ -66,7 +66,13 @@ export type BulkActionType =
   //   { targetLanguages: string[], fields?: ('name'|'description'|'bulletPoints')[] }.
   // Each item resolves to a Product; the handler upserts one
   // ProductTranslation row per (product, language).
-  | 'AI_TRANSLATE_PRODUCT';
+  | 'AI_TRANSLATE_PRODUCT'
+  // W11.2 — bulk SEO regeneration. payload =
+  //   { locales: string[] }.
+  // Per-locale ProductSeo upsert: metaTitle / metaDescription /
+  // ogTitle / ogDescription rewritten by the LLM with SERP-aware
+  // length caps applied defensively.
+  | 'AI_SEO_REGEN';
 
 /**
  * Runtime allowlist mirroring `BulkActionType`. Used by the Zod
@@ -83,6 +89,7 @@ export const KNOWN_BULK_ACTION_TYPES: ReadonlySet<BulkActionType> = new Set([
   'MARKETPLACE_OVERRIDE_UPDATE',
   'LISTING_BULK_ACTION',
   'AI_TRANSLATE_PRODUCT',
+  'AI_SEO_REGEN',
 ]);
 
 export function isKnownBulkActionType(t: string): t is BulkActionType {
@@ -125,6 +132,10 @@ const ACTION_ENTITY = {
   // W11.1 — AI bulk translation operates on Product rows; the
   // handler reads master copy + writes ProductTranslation rows.
   AI_TRANSLATE_PRODUCT: 'product',
+  // W11.2 — AI bulk SEO regen operates on Product rows; the
+  // handler reads master copy + writes ProductSeo rows per
+  // requested locale.
+  AI_SEO_REGEN: 'product',
 } as const satisfies Record<
   BulkActionType,
   'product' | 'variation' | 'channelListing'
@@ -1942,6 +1953,14 @@ export class BulkActionService {
             ? item.bulletPoints.length
             : 0,
         };
+      case 'AI_SEO_REGEN':
+        // W11.2 — capture which locales the operator targeted +
+        // the master fields the model receives.
+        return {
+          locales: Array.isArray(payload?.locales) ? payload?.locales : [],
+          masterName: typeof item.name === 'string' ? item.name : null,
+          masterKeywords: Array.isArray(item.keywords) ? item.keywords : [],
+        };
       default:
         return {};
     }
@@ -2030,6 +2049,26 @@ export class BulkActionService {
           })),
         };
       }
+      case 'AI_SEO_REGEN': {
+        // W11.2 — return the locale → metaTitle/metaDescription
+        // pairs that now exist. Surfaces the SERP-bound output to
+        // the diff drawer for review.
+        const rows = await this.prisma.productSeo.findMany({
+          where: { productId: itemId },
+          select: {
+            locale: true,
+            metaTitle: true,
+            metaDescription: true,
+          },
+        });
+        return {
+          seo: rows.map((r) => ({
+            locale: r.locale,
+            metaTitle: r.metaTitle,
+            metaDescription: r.metaDescription,
+          })),
+        };
+      }
       default:
         return {};
     }
@@ -2106,9 +2145,86 @@ export class BulkActionService {
         );
       case 'AI_TRANSLATE_PRODUCT':
         return await this.processAiTranslate(item as Product, payload);
+      case 'AI_SEO_REGEN':
+        return await this.processAiSeoRegen(item as Product, payload);
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
     }
+  }
+
+  /**
+   * W11.2 — AI bulk SEO regen handler.
+   *
+   * Payload:
+   *   locales: string[]   (BCP 47 lowercase, e.g. ['en','it','de-de'])
+   *   keepHandle?: boolean   (default true — never overwrite urlHandle.
+   *     SEO regen rewrites titles/descriptions/og pairs only; the URL
+   *     slug is operator-curated and changing it breaks inbound links.)
+   *
+   * For each locale: calls regenerateProductSeo, upserts ProductSeo
+   * keyed on (productId, locale). The handler skips a row when:
+   *   - the master product has no name (regen needs a source).
+   */
+  private async processAiSeoRegen(
+    item: Product,
+    payload: Record<string, any>,
+  ): Promise<{ status: 'processed' | 'skipped' }> {
+    const { regenerateProductSeo } = await import('./ai/seo-regen.service.js');
+    const locales = Array.isArray(payload.locales)
+      ? (payload.locales as unknown[])
+          .filter((l): l is string => typeof l === 'string')
+          .map((l) => l.trim().toLowerCase())
+          .filter((l) => /^[a-z]{2}(-[a-z0-9]{2,8})?$/.test(l))
+      : [];
+    if (locales.length === 0) {
+      throw new Error(
+        'AI_SEO_REGEN: payload.locales required (BCP 47 lowercase)',
+      );
+    }
+    const product = await this.prisma.product.findUnique({
+      where: { id: item.id },
+    });
+    if (!product || !product.name?.trim()) return { status: 'skipped' };
+
+    let didWriteAny = false;
+    for (const locale of locales) {
+      const seo = await regenerateProductSeo({
+        source: {
+          name: product.name,
+          description: product.description,
+          bulletPoints: product.bulletPoints,
+          brand: product.brand,
+          productType: product.productType ?? null,
+          keywords: product.keywords,
+        },
+        locale,
+        productId: product.id,
+        feature: 'bulk-seo-regen',
+      });
+      await this.prisma.productSeo.upsert({
+        where: {
+          productId_locale: { productId: product.id, locale },
+        },
+        create: {
+          productId: product.id,
+          locale,
+          metaTitle: seo.metaTitle,
+          metaDescription: seo.metaDescription,
+          ogTitle: seo.ogTitle,
+          ogDescription: seo.ogDescription,
+        },
+        update: {
+          metaTitle: seo.metaTitle,
+          metaDescription: seo.metaDescription,
+          ogTitle: seo.ogTitle,
+          ogDescription: seo.ogDescription,
+          // Note: do NOT touch urlHandle / canonicalUrl / schemaOrgJson —
+          // those are operator-curated. SEO regen is title/desc only.
+        },
+      });
+      didWriteAny = true;
+    }
+    return { status: didWriteAny ? 'processed' : 'skipped' };
   }
 
   /**
