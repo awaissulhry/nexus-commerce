@@ -419,11 +419,75 @@ const SCHEMA_FIELDS_SKIP = new Set([
   'purchasable_offer','fulfillment_availability','merchant_shipping_group',
 ])
 
-// ── Schema property parser ─────────────────────────────────────────────
+// ── Schema enum extraction ─────────────────────────────────────────────
 
+/**
+ * Extract enum values from a single schema node.
+ * Amazon uses two locations: `enum` (API values) and
+ * `x-amazon-attributes.validValues` (localized display values).
+ * We prefer `validValues` when present (they're market-specific and match
+ * what Amazon shows in their Excel dropdowns), falling back to `enum`.
+ */
 function extractEnumOptions(inner: Record<string, any>): string[] {
-  const enums: string[] = inner?.enum ?? inner?.['x-amazon-attributes']?.validValues ?? []
-  return enums.map(String)
+  const validValues: string[] = inner?.['x-amazon-attributes']?.validValues ?? []
+  const enumValues: string[] = inner?.enum ?? []
+  const chosen = validValues.length > 0 ? validValues : enumValues
+  return chosen.map(String).filter(Boolean)
+}
+
+/**
+ * Walk all properties in a schema and build a flat map of field IDs →
+ * enum options. Handles:
+ *   - Top-level `value` enums  (e.g. target_gender → ['male','female','unisex'])
+ *   - Sub-property enums       (e.g. apparel_size.size_system → ['IT','DE',...])
+ *   - `anyOf` / `oneOf` unions (pick the first branch that has an enum)
+ */
+function buildSchemaEnums(properties: Record<string, any>): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+
+  function tryEnum(node: Record<string, any>): string[] {
+    if (!node || typeof node !== 'object') return []
+    const direct = extractEnumOptions(node)
+    if (direct.length) return direct
+    // anyOf / oneOf: try each branch
+    for (const key of ['anyOf', 'oneOf']) {
+      if (Array.isArray(node[key])) {
+        for (const branch of node[key]) {
+          const v = extractEnumOptions(branch as Record<string, any>)
+          if (v.length) return v
+        }
+      }
+    }
+    return []
+  }
+
+  for (const [fieldId, prop] of Object.entries(properties)) {
+    const p = prop as Record<string, any>
+
+    // 1. Top-level value node (wrapped array pattern)
+    const valueNode = p?.items?.properties?.value ?? p
+    const topOpts = tryEnum(valueNode)
+    if (topOpts.length) result[fieldId] = topOpts
+
+    // 2. Sub-properties of items (e.g. apparel_size.size_system)
+    const subProps = p?.items?.properties ?? {}
+    for (const [subId, subProp] of Object.entries(subProps)) {
+      if (subId === 'value' || subId === 'marketplace_id' || subId === 'language_tag') continue
+      const subOpts = tryEnum(subProp as Record<string, any>)
+      if (subOpts.length) result[`${fieldId}.${subId}`] = subOpts
+
+      // 3. Three levels deep (e.g. apparel_size.size_system.value)
+      const deepNode = (subProp as any)?.items?.properties?.value
+      if (deepNode) {
+        const deepOpts = tryEnum(deepNode)
+        if (deepOpts.length && !result[`${fieldId}.${subId}`]) {
+          result[`${fieldId}.${subId}`] = deepOpts
+        }
+      }
+    }
+  }
+
+  return result
 }
 
 function schemaFieldToColumn(
@@ -504,13 +568,9 @@ export class AmazonFlatFileService {
     // Build a local-label resolver: schema title > fixed translation > English fallback
     const ll: LL = (id, fallbackEn) => resolveLabel(id, lang, schemaLabels, fallbackEn)
 
-    // Extract enum options for fields we reference in fixed groups
-    const schemaEnums: Record<string, string[]> = {}
-    for (const [fieldId, prop] of Object.entries(properties)) {
-      const inner = (prop as any)?.items?.properties?.value ?? prop
-      const opts = extractEnumOptions(inner as Record<string, any>)
-      if (opts.length > 0) schemaEnums[fieldId] = opts
-    }
+    // Deep-extract all enum options from the live schema (including
+    // sub-properties like apparel_size.size_system, anyOf unions, etc.)
+    const schemaEnums = buildSchemaEnums(properties)
 
     // Schema-dynamic group: fields not already in fixed groups
     const dynamicCols: FlatFileColumn[] = []

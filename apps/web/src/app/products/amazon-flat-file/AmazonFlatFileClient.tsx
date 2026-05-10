@@ -442,6 +442,19 @@ export default function AmazonFlatFileClient({
                 void loadData(marketplace, pt)
               }}
             />
+            {/* Reload/refresh — re-fetches schema from Amazon SP-API (bypasses cache) */}
+            {productType && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void loadData(marketplace, productType, true)}
+                loading={loading}
+                title="Force-refresh schema from Amazon (bypasses 24h cache)"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Refresh schema
+              </Button>
+            )}
           </div>
 
           {/* Group toggles */}
