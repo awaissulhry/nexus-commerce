@@ -1050,6 +1050,114 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     return { tags }
   })
 
+  // ── MC.6.3 — AssetLocaleOverlay CRUD ───────────────────────
+
+  // List overlays for a single asset. The drawer fetches this on
+  // open so the operator can edit existing overlays + add a new one.
+  fastify.get<{ Params: { id: string } }>(
+    '/assets/:id/locale-overlays',
+    async (request, reply) => {
+      const id = request.params.id.startsWith('da_')
+        ? request.params.id.slice(3)
+        : request.params.id
+      const asset = await prisma.digitalAsset.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!asset) return reply.code(404).send({ error: 'asset not found' })
+      const overlays = await prisma.assetLocaleOverlay.findMany({
+        where: { assetId: id },
+        orderBy: { locale: 'asc' },
+      })
+      return { overlays }
+    },
+  )
+
+  // Upsert a single locale overlay (one row per asset+locale). The
+  // unique constraint on (assetId, locale) means we can use Prisma's
+  // upsert and the operator can edit by re-saving.
+  fastify.put<{
+    Params: { id: string }
+    Body: {
+      locale?: string
+      text?: string
+      position?: string
+      color?: string
+      bgColor?: string | null
+      font?: string
+      offsetY?: number
+      offsetX?: number
+      enabled?: boolean
+    }
+  }>(
+    '/assets/:id/locale-overlays/:locale',
+    async (request, reply) => {
+      const id = request.params.id.startsWith('da_')
+        ? request.params.id.slice(3)
+        : request.params.id
+      const locale = (request as unknown as {
+        params: { id: string; locale: string }
+      }).params.locale
+      if (!locale)
+        return reply.code(400).send({ error: 'locale is required' })
+      const body = request.body ?? {}
+      if (typeof body.text !== 'string' || !body.text.trim())
+        return reply.code(400).send({ error: 'text is required' })
+
+      const asset = await prisma.digitalAsset.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!asset)
+        return reply.code(404).send({ error: 'asset not found' })
+
+      const overlay = await prisma.assetLocaleOverlay.upsert({
+        where: { assetId_locale: { assetId: id, locale } },
+        update: {
+          text: body.text.trim(),
+          position: body.position ?? 'south',
+          color: body.color ?? 'white',
+          bgColor: body.bgColor ?? null,
+          font: body.font ?? 'Arial_60_bold',
+          offsetY: body.offsetY ?? 24,
+          offsetX: body.offsetX ?? 0,
+          enabled: body.enabled ?? true,
+        },
+        create: {
+          assetId: id,
+          locale,
+          text: body.text.trim(),
+          position: body.position ?? 'south',
+          color: body.color ?? 'white',
+          bgColor: body.bgColor ?? null,
+          font: body.font ?? 'Arial_60_bold',
+          offsetY: body.offsetY ?? 24,
+          offsetX: body.offsetX ?? 0,
+          enabled: body.enabled ?? true,
+        },
+      })
+      return { overlay }
+    },
+  )
+
+  fastify.delete<{ Params: { id: string; locale: string } }>(
+    '/assets/:id/locale-overlays/:locale',
+    async (request, reply) => {
+      const id = request.params.id.startsWith('da_')
+        ? request.params.id.slice(3)
+        : request.params.id
+      const locale = request.params.locale
+      try {
+        await prisma.assetLocaleOverlay.delete({
+          where: { assetId_locale: { assetId: id, locale } },
+        })
+      } catch {
+        return reply.code(404).send({ error: 'overlay not found' })
+      }
+      return { ok: true }
+    },
+  )
+
   // ── MC.2.2 — AssetFolder CRUD + tree ───────────────────────
 
   // Returns the entire folder tree as a flat list with parentId. The

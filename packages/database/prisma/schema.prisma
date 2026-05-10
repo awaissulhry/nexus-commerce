@@ -892,6 +892,11 @@ model DigitalAsset {
   folderId String?
   folder   AssetFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
+  // MC.6.3 — per-locale text/badge overlays applied at variant build
+  // time via Cloudinary `l_text:` overlays. Empty for assets that
+  // don't need localized badges.
+  localeOverlays AssetLocaleOverlay[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4833,6 +4838,51 @@ model BrandWatermarkTemplate {
   updatedAt   DateTime @updatedAt
 
   @@index([brand, enabled])
+}
+
+/// MC.6.3 — per-asset locale overlay.
+///
+/// Stores localized text/badge overlays that ride on top of a master
+/// DigitalAsset when the asset is delivered for a specific channel +
+/// locale combination ("FREE SHIPPING" for en-US, "SPEDIZIONE
+/// GRATUITA" for it-IT, etc.). Rendering is on-the-fly via Cloudinary
+/// `l_text:` overlays — no extra storage cost. The overlay-builder
+/// service composes the URL from the master public_id + this row's
+/// config.
+model AssetLocaleOverlay {
+  id        String       @id @default(cuid())
+  assetId   String
+  asset     DigitalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// BCP-47 locale (e.g., "it-IT", "en-US", "es-ES"). The overlay
+  /// builder picks the row whose locale matches the channel-locale
+  /// the variant is being built for.
+  locale    String
+  /// Localized overlay text. UTF-8; URL-encoded by the builder.
+  text      String
+  /// 'north' | 'north_east' | 'east' | 'south_east' | 'south' |
+  /// 'south_west' | 'west' | 'north_west' | 'center' — Cloudinary
+  /// gravity tokens. Default 'south'.
+  position  String       @default("south")
+  /// Foreground text color (e.g., "white", "black", "rgb:1c1c1c").
+  /// Stored as the Cloudinary color token directly.
+  color     String       @default("white")
+  /// Optional background color for a padded text strip
+  /// (b_<color>_60 with the 60% opacity Cloudinary helper). Null =
+  /// transparent.
+  bgColor   String?
+  /// Font family + weight as a Cloudinary token (e.g.,
+  /// "Arial_60_bold", "Roboto_48"). Defaults to readable on retina.
+  font      String       @default("Arial_60_bold")
+  /// Optional offset from the gravity edge in pixels (Cloudinary
+  /// y_/x_ tokens). Default 24px.
+  offsetY   Int          @default(24)
+  offsetX   Int          @default(0)
+  enabled   Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([assetId, locale])
+  @@index([locale])
 }
 
 // MC.11.1 — Automation rules schema (AutomationRule +

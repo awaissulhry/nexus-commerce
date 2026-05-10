@@ -33,6 +33,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatBytes } from '../_lib/format'
 import AssetTagPicker from './AssetTagPicker'
 import ChannelVariantsList from './ChannelVariantsList'
+import LocaleOverlayManager from './LocaleOverlayManager'
 import type {
   AssetDetail,
   AssetDetailResponse,
@@ -390,6 +391,12 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
               {detail.channelVariants.length > 0 && (
                 <ChannelVariantsList variants={detail.channelVariants} />
               )}
+
+              {/* MC.6.3 — locale overlays */}
+              <LocaleOverlayManager
+                assetId={detail.id}
+                apiBase={apiBase}
+              />
 
               {/* Storage */}
               <section
