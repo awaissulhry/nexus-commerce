@@ -16,6 +16,7 @@ import prisma from '../db.js'
 import {
   publishToAmazon,
   publishToEbay,
+  publishToShopify,
   channelPublishMode,
   type ChannelKey,
   type PublishResult,
@@ -182,6 +183,74 @@ const channelPublishRoutes: FastifyPluginAsync = async (fastify) => {
       request.log.warn(
         { err, assetId: body.assetId },
         'Failed to write AuditLog row for eBay publish',
+      )
+    }
+    return reply.code(result.ok ? 200 : 502).send(result)
+  })
+
+  // ── Shopify — MC.12.3 ─────────────────────────────────────────
+
+  fastify.post('/channel-publish/shopify', async (request, reply) => {
+    const body = request.body as {
+      assetId?: string
+      assetUrl?: string
+      productGid?: string
+      productId?: string
+    }
+    if (!body.productGid?.trim())
+      return reply.code(400).send({ error: 'productGid is required' })
+
+    let assetUrl = body.assetUrl?.trim() ?? null
+    if (!assetUrl && body.assetId) {
+      const id = body.assetId
+      if (id.startsWith('da_')) {
+        const asset = await prisma.digitalAsset.findUnique({
+          where: { id: id.slice(3) },
+          select: { url: true },
+        })
+        assetUrl = asset?.url ?? null
+      } else if (id.startsWith('pi_')) {
+        const row = await prisma.productImage.findUnique({
+          where: { id: id.slice(3) },
+          select: { url: true },
+        })
+        assetUrl = row?.url ?? null
+      } else {
+        return reply.code(400).send({
+          error:
+            'assetId must be prefixed "da_" (digital asset) or "pi_" (product image)',
+        })
+      }
+    }
+    if (!assetUrl)
+      return reply.code(400).send({ error: 'asset not found' })
+
+    const result: PublishResult = await publishToShopify({
+      assetUrl,
+      destinationId: body.productGid,
+    })
+
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: result.ok ? 'CHANNEL_PUBLISH_OK' : 'CHANNEL_PUBLISH_FAILED',
+          entityType: 'DigitalAsset',
+          entityId: body.assetId ?? assetUrl,
+          metadata: {
+            channel: 'SHOPIFY',
+            mode: result.mode,
+            productGid: body.productGid,
+            productId: body.productId ?? null,
+            channelImageId: result.channelImageId,
+            error: result.error,
+            response: result.rawResponse,
+          } as never,
+        },
+      })
+    } catch (err) {
+      request.log.warn(
+        { err, assetId: body.assetId },
+        'Failed to write AuditLog row for Shopify publish',
       )
     }
     return reply.code(result.ok ? 200 : 502).send(result)

@@ -46,6 +46,53 @@ interface PublishInput {
   options?: Record<string, unknown>
 }
 
+// ── Shopify — MC.12.3 ─────────────────────────────────────────────
+//
+// Real call (live, future):
+//   GraphQL `productImageCreate` mutation against the Admin API
+//   2024-04+. Body shape:
+//     mutation {
+//       productImageCreate(input: { product_id, image: { src } }) {
+//         image { id } userErrors { field, message }
+//       }
+//     }
+//   Returns a gid like "gid://shopify/MediaImage/12345".
+//
+// Sandbox returns a fake gid in that exact shape.
+export async function publishToShopify(
+  input: PublishInput,
+): Promise<PublishResult> {
+  const mode = channelPublishMode('SHOPIFY')
+  if (mode === 'sandbox') {
+    const fakeGid = `gid://shopify/MediaImage/${Math.floor(
+      Math.random() * 9_000_000_000 + 1_000_000_000,
+    )}`
+    return {
+      ok: true,
+      channel: 'SHOPIFY',
+      mode: 'sandbox',
+      channelImageId: fakeGid,
+      rawResponse: {
+        sandbox: true,
+        productGid: input.destinationId,
+        mediaGid: fakeGid,
+        sourceImage: input.assetUrl,
+        userErrors: [],
+      },
+      error: null,
+    }
+  }
+  return {
+    ok: false,
+    channel: 'SHOPIFY',
+    mode: 'live',
+    channelImageId: null,
+    rawResponse: null,
+    error:
+      'Live Shopify productImageCreate is not yet wired. Set CHANNEL_PUBLISH_SHOPIFY=sandbox or wait for the Shopify credential integration.',
+  }
+}
+
 // ── eBay EPS — MC.12.2 ────────────────────────────────────────────
 //
 // Real call (live, future):
