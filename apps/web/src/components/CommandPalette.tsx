@@ -181,6 +181,10 @@ const COMMANDS: Command[] = [
   // System
   { id: 'connections', label: 'Manage channel connections', icon: Plug, href: '/settings/channels', group: 'System' },
   { id: 'settings', label: 'Open Settings', icon: SettingsIcon, href: '/settings/account', group: 'System' },
+  // BV.3 / AET.3 — admin AI surface gained brand voices + acceptance
+  // counters this engagement; surface it directly so the operator
+  // doesn't have to dig through the sidebar.
+  { id: 'settings-ai', label: 'AI settings (prompts, brand voices, usage)', icon: SettingsIcon, href: '/settings/ai', group: 'System', keywords: 'ai prompts brand voice tone style accepted edited callcount usage budget cost' },
   // U.11 — Actions: non-navigation commands that *do* things. Keep
   // them generic enough to be available everywhere (no contextPath);
   // page-specific actions go below in PAGE_COMMANDS.
