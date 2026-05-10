@@ -4497,5 +4497,14 @@
   "aplus.templates.pickHint": "Scegli un template a sinistra per vedere i suoi moduli e applicarlo.",
   "aplus.templates.applyCta": "Applica {n} moduli",
   "aplus.templates.applied": "Applicati {n} moduli da \"{label}\"",
-  "aplus.templates.applyError": "Impossibile applicare il template — riprova"
+  "aplus.templates.applyError": "Impossibile applicare il template — riprova",
+  "aplus.builder.validate": "Valida",
+  "aplus.validate.title": "Risultati validazione",
+  "aplus.validate.runError": "Impossibile eseguire la validazione — riprova",
+  "aplus.validate.passed": "Documento pronto per l'invio",
+  "aplus.validate.failed": "{n} errori bloccanti — risolvi prima di inviare",
+  "aplus.validate.summary": "{count} di massimo {cap} moduli · tier {tier}",
+  "aplus.validate.blockingTitle": "Bloccanti ({n})",
+  "aplus.validate.warningTitle": "Avvisi ({n})",
+  "aplus.validate.cleanRun": "Nessun problema — tutti i controlli sono passati."
 }

@@ -22,6 +22,7 @@ import {
   Loader2,
   AlertTriangle,
   Sparkles,
+  CheckSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -31,6 +32,9 @@ import ModuleCanvas from './ModuleCanvas'
 import ModuleEditor from './ModuleEditor'
 import LocalizationsPanel from './LocalizationsPanel'
 import TemplatePicker from './TemplatePicker'
+import ValidationResultModal, {
+  type ValidationResult,
+} from './ValidationResultModal'
 import {
   getModuleSpec,
   validateModulePayload,
@@ -57,8 +61,32 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
     initial.modules[0]?.id ?? null,
   )
   const [status, setStatus] = useState<AplusStatus>(initial.status)
-  const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status'>(null)
+  const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status' | 'validate'>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [validationOpen, setValidationOpen] = useState(false)
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+
+  const runValidation = async () => {
+    setBusy('validate')
+    try {
+      const res = await fetch(
+        `${apiBase}/api/aplus-content/${encodeURIComponent(initial.id)}/validate`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error(`Validation failed (${res.status})`)
+      const data = (await res.json()) as { result: ValidationResult }
+      setValidationResult(data.result)
+      setValidationOpen(true)
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('aplus.validate.runError'),
+      )
+    } finally {
+      setBusy(null)
+    }
+  }
 
   // Re-sync if the operator navigates away + back; Next caches the
   // initial result but the builder's internal state should reset
@@ -300,6 +328,19 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
             <Sparkles className="w-4 h-4 mr-1" />
             {t('aplus.builder.applyTemplate')}
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={runValidation}
+            disabled={busy !== null}
+          >
+            {busy === 'validate' ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <CheckSquare className="w-4 h-4 mr-1" />
+            )}
+            {t('aplus.builder.validate')}
+          </Button>
           <select
             value={status}
             onChange={(e) => void updateStatus(e.target.value as AplusStatus)}
@@ -352,6 +393,12 @@ export default function AplusBuilderClient({ initial, apiBase }: Props) {
           // Avoids re-implementing the merge logic client-side.
           router.refresh()
         }}
+      />
+
+      <ValidationResultModal
+        open={validationOpen}
+        onClose={() => setValidationOpen(false)}
+        result={validationResult}
       />
     </div>
   )

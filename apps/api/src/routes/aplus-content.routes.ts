@@ -16,6 +16,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { validateAplusDocument } from '../services/aplus-validation.service.js'
 
 const VALID_STATUSES = new Set([
   'DRAFT',
@@ -302,6 +303,33 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
       throw err
     }
   })
+
+  // ── MC.8.8 — Server-side validation pre-flight ───────────
+
+  fastify.post(
+    '/aplus-content/:id/validate',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const content = await prisma.aPlusContent.findUnique({
+        where: { id },
+        include: { modules: { orderBy: { position: 'asc' } } },
+      })
+      if (!content)
+        return reply.code(404).send({ error: 'A+ content not found' })
+
+      const result = validateAplusDocument({
+        name: content.name,
+        brand: content.brand,
+        marketplace: content.marketplace,
+        locale: content.locale,
+        modules: content.modules.map((m) => ({
+          type: m.type,
+          payload: (m.payload as Record<string, unknown>) ?? {},
+        })),
+      })
+      return { result }
+    },
+  )
 
   // ── MC.8.7 — Apply template (bulk-create modules) ────────
 

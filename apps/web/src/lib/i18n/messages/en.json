@@ -4446,5 +4446,14 @@
   "aplus.templates.pickHint": "Pick a template on the left to see its modules and apply it.",
   "aplus.templates.applyCta": "Apply {n} modules",
   "aplus.templates.applied": "Applied {n} modules from \"{label}\"",
-  "aplus.templates.applyError": "Couldn't apply the template — try again"
+  "aplus.templates.applyError": "Couldn't apply the template — try again",
+  "aplus.builder.validate": "Validate",
+  "aplus.validate.title": "Validation results",
+  "aplus.validate.runError": "Couldn't run validation — try again",
+  "aplus.validate.passed": "Document is ready to submit",
+  "aplus.validate.failed": "{n} blocking issue(s) — fix before submitting",
+  "aplus.validate.summary": "{count} of max {cap} modules · {tier} tier",
+  "aplus.validate.blockingTitle": "Blocking ({n})",
+  "aplus.validate.warningTitle": "Warnings ({n})",
+  "aplus.validate.cleanRun": "No issues — every check passed."
 }
