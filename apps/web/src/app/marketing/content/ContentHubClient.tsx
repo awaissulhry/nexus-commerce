@@ -12,6 +12,7 @@ import {
   HardDrive,
   Link as LinkIcon,
   AlertTriangle,
+  BarChart3,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -178,7 +179,14 @@ export default function ContentHubClient({
 
       <KpiStrip tiles={tiles} />
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <a
+          href="/marketing/content/analytics"
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600"
+        >
+          <BarChart3 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+          {t('marketingContent.viewAnalytics')}
+        </a>
         <DeliveryProfileBadge apiBase={apiBase} />
       </div>
 
