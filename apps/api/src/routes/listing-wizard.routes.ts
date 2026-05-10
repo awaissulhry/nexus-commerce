@@ -3161,15 +3161,24 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           : null
 
       const isEbay = channel.toUpperCase() === 'EBAY'
+
+      // eBay category IDs are always numeric ("15724"). If the stored value is
+      // an Amazon type string like "OUTERWEAR" (written before this guard was
+      // added), treat it as if no category is set so the taxonomy API is never
+      // called with a non-numeric ID (which causes errorId 62005).
+      const isValidEbayCategoryId = (v: string) => /^\d+$/.test(v.trim())
+
       const productType = isEbay
-        ? (listingProductType ?? '') // eBay: only use per-listing category, never master
+        ? (listingProductType && isValidEbayCategoryId(listingProductType)
+            ? listingProductType
+            : '')
         : (listingProductType || product.productType || '')
 
       if (!productType) {
         const msg = isEbay
-          ? 'No eBay category set for this listing. Use the product type picker in the listing setup to select an eBay category.'
+          ? 'No eBay category set for this listing. Use the product type picker in the Channel Setup card to select an eBay category for this marketplace.'
           : 'No product type set on the master product. Pick a product type before configuring channel attributes.'
-        return reply.code(409).send({ error: msg })
+        return reply.code(409).send({ error: msg, code: 'no_ebay_category' })
       }
 
       // Seed baseAttributes from the existing listing so the editor

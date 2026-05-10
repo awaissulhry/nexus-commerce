@@ -1477,7 +1477,11 @@ function ListingSetupCard({
     | 'ETSY'
 
   const isAmazon = pickerChannel === 'AMAZON'
-  const effectiveType = productType || masterProductType
+  const isEbay = pickerChannel === 'EBAY'
+  // For eBay, the productType is a numeric category ID. A non-numeric value
+  // (e.g. "OUTERWEAR" bled from the Amazon master type) is treated as unset.
+  const ebayHasValidCategory = isEbay && /^\d+$/.test((productType ?? '').trim())
+  const effectiveType = productType || (isEbay ? '' : masterProductType)
 
   // Browse nodes — seeded from the active listing, overridable via detection or manual edit
   const [_browseNodes, setBrowseNodes] = useState<number[]>(initialBrowseNodes ?? [])
@@ -1517,6 +1521,24 @@ function ListingSetupCard({
     // Only re-run when the effective type or marketplace changes, not on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAmazon, effectiveType, marketplace])
+
+  // eBay: load sibling markets that already have a valid numeric category ID
+  const [ebaySiblings, setEbaySiblings] = useState<{ marketplace: string; categoryId: string }[]>([])
+  useEffect(() => {
+    if (!isEbay) return
+    fetch(`${getBackendUrl()}/api/products/${productId}/ebay-sibling-categories`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.siblings) {
+          setEbaySiblings(
+            (data.siblings as { marketplace: string; categoryId: string }[])
+              .filter((s) => s.marketplace.toUpperCase() !== marketplace.toUpperCase()),
+          )
+        }
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEbay, productId])
 
   async function saveBrowseNodes(nodes: number[], path: string | null) {
     setSavingNodes(true)
@@ -1626,43 +1648,67 @@ function ListingSetupCard({
           <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {channel} product type
           </label>
+          {/* eBay: warn if no valid category is set */}
+          {isEbay && !ebayHasValidCategory && (
+            <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 mb-1">
+              No eBay category set for {marketplace}. Pick one below — each marketplace needs its own category.
+            </div>
+          )}
+
           <ProductTypePicker
             channel={pickerChannel}
             marketplace={marketplace}
-            value={productType}
+            value={isEbay && !ebayHasValidCategory ? '' : productType}
             onChange={(v) => {
               onChange('productType', v)
               setCategoryPath(null)
               setBrowseNodes([])
               setBrowseNodesInput('')
             }}
-            placeholder={
-              masterProductType
-                ? `Inherits master: ${masterProductType}`
-                : `Pick a ${channel} product type`
-            }
+            placeholder={`Search eBay ${marketplace} categories…`}
           />
+
+          {/* Copy from another eBay market */}
+          {isEbay && ebaySiblings.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+              <span className="text-xs text-slate-400">Copy from:</span>
+              {ebaySiblings.map((s) => (
+                <button
+                  key={s.marketplace}
+                  type="button"
+                  onClick={() => {
+                    onChange('productType', s.categoryId)
+                    setCategoryPath(null)
+                  }}
+                  className="text-xs px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 font-mono"
+                >
+                  eBay {s.marketplace} ({s.categoryId})
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Category navigation path — auto-fetched or from detection */}
-          <div className="min-h-[1rem]">
-            {categoryPathLoading ? (
-              <p className="text-xs text-slate-400 italic">Fetching category…</p>
-            ) : categoryPath ? (
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed">
-                {categoryPath.split('›').map((part, i, arr) => (
-                  <span key={i}>
-                    <span>{part.trim()}</span>
-                    {i < arr.length - 1 && <span className="mx-1 text-slate-400">›</span>}
-                  </span>
-                ))}
-              </p>
-            ) : (
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                {inheriting
-                  ? 'Inheriting master type — detect below to see category path.'
-                  : 'Detect below to confirm the category path.'}
-              </p>
-            )}
-          </div>
+          {isAmazon && (
+            <div className="min-h-[1rem]">
+              {categoryPathLoading ? (
+                <p className="text-xs text-slate-400 italic">Fetching category…</p>
+              ) : categoryPath ? (
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed">
+                  {categoryPath.split('›').map((part, i, arr) => (
+                    <span key={i}>
+                      <span>{part.trim()}</span>
+                      {i < arr.length - 1 && <span className="mx-1 text-slate-400">›</span>}
+                    </span>
+                  ))}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {inheriting ? 'Inheriting master type — detect below to see category path.' : 'Detect below to confirm the category path.'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Variation theme */}

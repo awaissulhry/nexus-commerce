@@ -678,6 +678,36 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
+  // GET /api/products/:id/ebay-sibling-categories
+  //
+  // Returns all OTHER eBay marketplaces where this product already has a valid
+  // numeric eBay category ID set. Used by the "Copy category from market" UI
+  // in ListingSetupCard so operators don't have to re-select the same category
+  // on every eBay marketplace.
+  fastify.get<{ Params: { id: string } }>(
+    '/products/:id/ebay-sibling-categories',
+    async (request, reply) => {
+      const { id } = request.params
+      const listings = await prisma.channelListing.findMany({
+        where: { productId: id, channel: 'EBAY' },
+        select: { marketplace: true, platformAttributes: true },
+      })
+
+      const siblings = listings
+        .map((l) => {
+          const pa = l.platformAttributes as Record<string, any> | null
+          const pt = pa?.productType
+          return {
+            marketplace: l.marketplace,
+            categoryId: typeof pt === 'string' && /^\d+$/.test(pt.trim()) ? pt : null,
+          }
+        })
+        .filter((s) => s.categoryId !== null)
+
+      return reply.send({ siblings })
+    }
+  )
+
   // POST /api/products/:id/listings/:channel/:marketplace/save-browse-nodes
   //
   // Persists browse nodes (and optionally category path) for a channel listing.
