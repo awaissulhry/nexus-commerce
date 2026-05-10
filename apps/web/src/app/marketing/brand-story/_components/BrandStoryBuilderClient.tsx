@@ -27,6 +27,7 @@ import {
   Send,
   History,
   Clock,
+  Printer,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -183,6 +184,14 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
     setModules(initial.modules)
     setStatus(initial.status)
   }, [initial.id, initial.modules, initial.status])
+
+  // MC.14.8 — body flag for the print stylesheet (see globals.css).
+  useEffect(() => {
+    document.body.dataset.printMarketing = 'true'
+    return () => {
+      delete document.body.dataset.printMarketing
+    }
+  }, [])
 
   const selected = useMemo(
     () => modules.find((m) => m.id === selectedId) ?? null,
@@ -429,6 +438,15 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
             {t('brandStory.builder.history')}
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.print()}
+            disabled={modules.length === 0}
+          >
+            <Printer className="w-4 h-4 mr-1" />
+            {t('brandStory.builder.print')}
+          </Button>
+          <Button
             variant="primary"
             size="sm"
             onClick={submit}
@@ -511,24 +529,30 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
-        <ModulePalette
-          onAdd={addModule}
-          disabled={busy === 'add'}
-          usedTypes={usedTypes}
-        />
-        <ModuleCanvas
-          modules={modules}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onDelete={deleteModule}
-          onReorder={reorderModules}
-          validationByModule={validationByModule}
-        />
-        <ModuleEditor
-          module={selected}
-          onChange={updateModulePayload}
-          validationByModule={validationByModule}
-        />
+        <div data-print-hide>
+          <ModulePalette
+            onAdd={addModule}
+            disabled={busy === 'add'}
+            usedTypes={usedTypes}
+          />
+        </div>
+        <div data-print-region="canvas">
+          <ModuleCanvas
+            modules={modules}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onDelete={deleteModule}
+            onReorder={reorderModules}
+            validationByModule={validationByModule}
+          />
+        </div>
+        <div data-print-hide>
+          <ModuleEditor
+            module={selected}
+            onChange={updateModulePayload}
+            validationByModule={validationByModule}
+          />
+        </div>
       </div>
 
       <ValidationResultModal

@@ -29,6 +29,43 @@ body {
   }
 }
 
+/* MC.14.8 — Print stylesheet. Operators export A+ Content + Brand
+   Story documents as PDFs via the browser's native print dialog.
+   Hide chrome (sidebar, toolbars, palettes), preserve the canvas,
+   and force-light the colors so the resulting PDF is print-clean.
+
+   Marketing builders mark their canvas root with
+   data-print-region="canvas"; everything outside that subtree
+   is hidden. The body[data-print-marketing] flag is set on the
+   builder page so the stylesheet is scoped to those surfaces and
+   doesn't leak into other prints. */
+@media print {
+  body[data-print-marketing] [data-print-hide],
+  body[data-print-marketing] aside,
+  body[data-print-marketing] nav,
+  body[data-print-marketing] [role="toolbar"] {
+    display: none !important;
+  }
+  body[data-print-marketing] {
+    background: white !important;
+  }
+  body[data-print-marketing] [data-print-region="canvas"] {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+  body[data-print-marketing] [data-print-region="canvas"] * {
+    background-color: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+  body[data-print-marketing] [data-print-region="canvas"] img {
+    page-break-inside: avoid;
+  }
+}
+
 /* DO.44 — Command Center sparkline tick. Fires on each card's
    MiniSpark when the series shifts (Live mode refetch landed). A
    small endpoint dot scales up + fades, drawing the operator's
