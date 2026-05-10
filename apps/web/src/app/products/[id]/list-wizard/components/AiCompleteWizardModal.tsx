@@ -203,6 +203,18 @@ export default function AiCompleteWizardButton({
     window.setTimeout(reset, 250)
   }, [phase, reset])
 
+  // PR.2 — soft helper to navigate-then-reload to Step 5. Used by
+  // both the "no patch needed" and the post-PATCH branches below
+  // so the operator always lands on the step where AI just filled
+  // content. Builds the URL preserving any other existing
+  // searchParams (e.g. ?channel= legacy deep-links from /products/
+  // [id]/edit) instead of clobbering them.
+  const navigateToStep5 = useCallback(() => {
+    const url = new URL(window.location.href)
+    url.searchParams.set('step', '5')
+    window.location.href = url.toString()
+  }, [])
+
   // AI-4.9 — apply all AI content to the wizard. Walks the
   // orchestrator's per-group results, builds a channelStates patch
   // (one entry per channelKey, attributes filled from the group's
@@ -251,7 +263,7 @@ export default function AiCompleteWizardButton({
         // Surface as applied=true so the operator can dismiss; the
         // result-view already shows the failed status.
         setPhase('applied')
-        window.setTimeout(() => window.location.reload(), 800)
+        window.setTimeout(() => navigateToStep5(), 800)
         return
       }
       const res = await fetch(
@@ -272,10 +284,16 @@ export default function AiCompleteWizardButton({
         title: t('listWizard.aiComplete.applied'),
         durationMs: 4000,
       })
-      // Reload so ListWizardClient picks up the patched initialWizard.
-      // Brutal but the soft-refresh path requires plumbing through to
-      // the parent client; defer that to a follow-up.
-      window.setTimeout(() => window.location.reload(), 600)
+      // PR.2 — reload via location with ?step=5 so the operator
+      // lands ON Step 5 (Attributes) where the AI just filled the
+      // fields, ready to review/tweak. Without the deep-link the
+      // reload would put them back wherever currentStep was before
+      // the bulk run — usually pre-Step-5 since the bulk button
+      // sits in the WizardHeader. Reload (vs router.push) is still
+      // load-bearing here: ListWizardClient's local state derives
+      // from initialWizard at first paint, so a soft navigation
+      // wouldn't pick up the freshly-patched channelStates.
+      window.setTimeout(() => navigateToStep5(), 600)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setPhase('error')
