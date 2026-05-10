@@ -174,7 +174,11 @@ The original "single migration + small client patch" estimate held — no per-ca
 
 ## 15. 🟢 Phase 5.5 → quality scoring + brand-voice profiles
 
-After generation, we could score the title / bullets / description against an Amazon-best-practices rubric (length, brand position, keyword density, …) and surface a percentage. We could also save the user's editing patterns per brand ("prefers terse bullets, no emojis, technical tone") so the next product matches without prompting. Both deferred until we have a quality team or rubric author to define the scoring.
+**Quality scoring** — partially shipped via AI-4.7 (Step 9 Review's per-channel quality score, 0-100 with hint per dimension). A formal rubric author / quality team is still needed to refine the scoring weights for an Italian-Xavia-specific corpus.
+
+**Brand-voice profiles** — ✅ resolved 2026-05-10 (BV.1-4). New `BrandVoice` model + matcher (brand+marketplace+language seven-tier specificity); `renderBrandVoiceBlock` injects the `{brandVoiceBlock}` placeholder into Step 5 AI prompts (DB-backed PromptTemplate seeds + inline static fallbacks). `/settings/ai` admin surface lets the operator create / edit / pause / delete voice rows. Per-row Edit + Pause/Resume + Delete with confirms. The original "saves editing patterns per brand" framing was simpler than envisioned — operators write the guidance directly rather than the system inferring it.
+
+What's left: AET counters from #14 could feed back into BrandVoice suggestions in v2 ("you edit 60% of titles for brand X — try refining the voice"), but that's UX design, not infrastructure.
 
 ## 16. 🟢 Phase 5.5 → A+ Content (EBC) generator
 

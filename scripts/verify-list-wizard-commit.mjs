@@ -22,6 +22,7 @@
 //  12. SP series — schedule-for-later UI + cron + history.
 //  13. AB series — same-scope traffic split + per-product stickiness.
 //  14. AET series — operator accept-or-edit telemetry.
+//  15. BV series — BrandVoice prompt-block guidance.
 //
 // New checks appended as the wizard evolves; old checks should NOT be
 // removed unless the underlying invariant is intentionally retired.
@@ -184,6 +185,38 @@ check('Step 4 onContinue flushes record-edit',
   /\/api\/ai\/prompt-templates\/record-edit/.test(step4))
 check('admin shows accepted/edited badge',
   /acceptedCount/.test(promptsClient) && /accepted/.test(promptsClient))
+
+console.log('\nCase 15: BV series — BrandVoice prompt-block')
+const brandVoiceSvc = (() => {
+  try {
+    return read('apps/api/src/services/ai/brand-voice.service.ts')
+  } catch {
+    return ''
+  }
+})()
+const brandVoicesClient = (() => {
+  try {
+    return read('apps/web/src/app/settings/ai/AiBrandVoicesClient.tsx')
+  } catch {
+    return ''
+  }
+})()
+const aiSettingsPage = read('apps/web/src/app/settings/ai/page.tsx')
+check('BrandVoice service present',
+  brandVoiceSvc.length > 0 &&
+    /resolveBrandVoice/.test(brandVoiceSvc) &&
+    /renderBrandVoiceBlock/.test(brandVoiceSvc))
+check('listing-content threads brandVoiceBlock',
+  /brandVoiceBlock/.test(listingContent))
+check('seed prompts reference {brandVoiceBlock}',
+  /\{brandVoiceBlock\}/.test(promptSvc))
+check('PromptRenderVars exposes brandVoiceBlock',
+  /brandVoiceBlock\?:/.test(promptSvc))
+check('admin BrandVoices client mounted on /settings/ai',
+  /AiBrandVoicesClient/.test(aiSettingsPage))
+check('admin client present',
+  brandVoicesClient.length > 0 &&
+    /\/api\/ai\/brand-voices/.test(brandVoicesClient))
 
 console.log(`\n${failures === 0 ? '✓ all checks passed' : `✗ ${failures} check(s) failed`}\n`)
 process.exit(failures === 0 ? 0 : 1)
