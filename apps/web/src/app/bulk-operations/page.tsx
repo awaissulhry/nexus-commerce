@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarClock, History as HistoryIcon, Upload, Wand2 } from 'lucide-react'
+import { CalendarClock, Download, History as HistoryIcon, Upload, Wand2 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
 import BulkOperationsClient from './BulkOperationsClient'
@@ -29,6 +29,13 @@ export default function BulkOperationsPage() {
             >
               <Upload className="w-3.5 h-3.5" />
               Imports
+            </Link>
+            <Link
+              href="/bulk-operations/exports"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Exports
             </Link>
             <Link
               href="/bulk-operations/automation"
