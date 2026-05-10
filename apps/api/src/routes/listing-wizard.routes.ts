@@ -136,6 +136,9 @@ function ebayAspectsToUnionFields(
     return {
       id,
       label: a.name,
+      // English translation shown as the field description when the
+      // marketplace language differs from English.
+      description: a.englishName ?? undefined,
       kind,
       required: a.required,
       wrapped: false,

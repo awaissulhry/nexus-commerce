@@ -65,6 +65,9 @@ interface CachedSearch {
  *  alongside this for legacy callers (workers/listings.ts). */
 export interface EbayAspectRich {
   name: string
+  /** English label fetched with Accept-Language: en-US. Undefined when
+   *  the marketplace is already English or when the parallel fetch fails. */
+  englishName?: string
   dataType: 'STRING' | 'NUMBER' | 'DATE' | string
   mode: 'FREE_TEXT' | 'SELECTION_ONLY' | string
   usage: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL' | string
@@ -800,13 +803,47 @@ export class EbayCategoryService {
       return [];
     }
     const rows = json?.aspects ?? [];
+
+    // For non-English marketplaces, fetch English aspect names in parallel so
+    // the UI can show "Marca (Brand)" and "Taglia (Size)" alongside the local
+    // label. Accept-Language: en-US asks the same tree for English labels —
+    // same category IDs, same structure, different locale strings.
+    const isEnglishMarket = ['EBAY_UK', 'EBAY_US', 'EBAY_AU', 'EBAY_CA'].includes(marketplaceId)
+    let englishNames: Map<number, string> = new Map()
+    if (!isEnglishMarket) {
+      try {
+        const enRes = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept-Language': 'en-US',
+          },
+        })
+        if (enRes.ok) {
+          const enJson = await enRes.json().catch(() => null) as any
+          const enRows: any[] = enJson?.aspects ?? []
+          enRows.forEach((a: any, i: number) => {
+            if (typeof a?.localizedAspectName === 'string') {
+              englishNames.set(i, a.localizedAspectName)
+            }
+          })
+        }
+      } catch {
+        // non-fatal — English names are a best-effort enhancement
+      }
+    }
+
     const aspects: EbayAspectRich[] = [];
-    for (const a of rows) {
+    rows.forEach((a: any, i: number) => {
       const name = a?.localizedAspectName;
-      if (!name) continue;
+      if (!name) return;
       const c = a.aspectConstraint ?? {};
+      const englishName = englishNames.get(i)
       aspects.push({
         name,
+        // Only store englishName when it differs from the localized label
+        ...(englishName && englishName !== name ? { englishName } : {}),
         dataType: (c.aspectDataType ?? "STRING") as EbayAspectRich["dataType"],
         mode: (c.aspectMode ?? "FREE_TEXT") as EbayAspectRich["mode"],
         required: !!c.aspectRequired,
@@ -817,10 +854,10 @@ export class EbayCategoryService {
         cardinality: (c.itemToAspectCardinality ?? "SINGLE") as EbayAspectRich["cardinality"],
         variantEligible: !!c.aspectEnabledForVariations,
         values: (a.aspectValues ?? [])
-          .map((v) => v.localizedValue)
-          .filter((v): v is string => typeof v === "string" && v.length > 0),
+          .map((v: any) => v.localizedValue)
+          .filter((v: any): v is string => typeof v === "string" && v.length > 0),
       });
-    }
+    });
     this.richCache.set(key, {
       aspects,
       expiresAt: Date.now() + CACHE_TTL,
