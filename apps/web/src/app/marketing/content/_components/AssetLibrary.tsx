@@ -20,8 +20,32 @@ import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import AssetCard from './AssetCard'
 import { formatBytes } from '../_lib/format'
+import { splitForHighlight } from '../_lib/highlight'
 import type { LibraryItem, LibraryResponse } from '../_lib/types'
 import type { FilterState } from './FilterSidebar'
+
+function MatchedFields({
+  item,
+  query,
+}: {
+  item: LibraryItem
+  query: string
+}) {
+  if (!query) return null
+  const fields: Array<[label: string, value: string | null]> = [
+    ['filename', item.label],
+    ['alt', item.label],
+    ['sku', item.productSku],
+    ['product', item.productName],
+  ]
+  const matched = fields.filter(([, v]) => v && splitForHighlight(v, query))
+  if (matched.length === 0) return null
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded bg-amber-100 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+      {matched[0]![0]}
+    </span>
+  )
+}
 
 export type ViewMode = 'grid' | 'list'
 
@@ -268,6 +292,7 @@ export default function AssetLibrary({
                       item={item}
                       onSelect={onSelect}
                       selected={selectedId === item.id}
+                      highlight={search}
                     />
                   ))}
                 </div>
@@ -313,7 +338,20 @@ export default function AssetLibrary({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {item.label}
+                    {(() => {
+                      const seg = splitForHighlight(item.label, search)
+                      if (!seg) return item.label
+                      return (
+                        <>
+                          {seg.before}
+                          <mark className="rounded-sm bg-amber-200 px-0.5 text-slate-900 dark:bg-amber-500/40 dark:text-amber-100">
+                            {seg.match}
+                          </mark>
+                          {seg.after}
+                        </>
+                      )
+                    })()}
+                    <MatchedFields item={item} query={search} />
                   </p>
                   <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                     {item.productSku

@@ -204,10 +204,21 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     if (usageFilter === 'in_use') daWhere.usages = { some: {} }
     if (usageFilter === 'orphaned') daWhere.usages = { none: {} }
     if (search) {
+      // MC.1.4 — match the structured fields plus JSON-path captures
+      // for caption and alt living under metadata. Prisma's
+      // string_contains JSON filter does case-sensitive matching;
+      // operator search is overwhelmingly lowercase so that's an
+      // acceptable trade-off until we promote those JSON keys to
+      // first-class columns. Tags are still array_contains so an
+      // exact tag like "racing" matches; partial tag substring search
+      // is a MC.2 follow-up that needs raw-SQL JSONB queries.
       daWhere.OR = [
         { label: { contains: search, mode: 'insensitive' } },
         { code: { contains: search, mode: 'insensitive' } },
         { originalFilename: { contains: search, mode: 'insensitive' } },
+        { metadata: { path: ['caption'], string_contains: search } },
+        { metadata: { path: ['alt'], string_contains: search } },
+        { metadata: { path: ['tags'], array_contains: search } },
       ]
     }
 

@@ -6,10 +6,11 @@
 // fire toasts in this commit; MC.1.2/1.3/1.4 wire each control to a
 // real surface.
 
-import { Search, Filter, LayoutGrid, List, Upload, Sparkles } from 'lucide-react'
+import { Filter, LayoutGrid, List, Upload, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
+import SearchInput from './SearchInput'
 
 export type ViewMode = 'grid' | 'list'
 
@@ -34,25 +35,10 @@ export default function ContentToolbar({
 }: Props) {
   const { t } = useTranslations()
   const { toast } = useToast()
-  const placeholder = t('marketingContent.toolbar.searchPlaceholder')
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center">
-      {/* Search */}
-      <div className="relative flex-1 min-w-0">
-        <Search
-          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500"
-          aria-hidden="true"
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className="w-full rounded-md border border-slate-300 bg-white py-2 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder-slate-500"
-        />
-      </div>
+      <SearchInput value={search} onChange={onSearchChange} />
 
       <div className="flex items-center gap-2 flex-wrap">
         {/* Filter toggle */}

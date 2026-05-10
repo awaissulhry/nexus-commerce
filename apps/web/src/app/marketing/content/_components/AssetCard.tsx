@@ -8,12 +8,29 @@
 import Image from 'next/image'
 import { Film, Box, FileText, ImageOff, Link2 } from 'lucide-react'
 import { formatBytes } from '../_lib/format'
+import { splitForHighlight } from '../_lib/highlight'
 import type { LibraryItem } from '../_lib/types'
 
 interface Props {
   item: LibraryItem
   onSelect?: (item: LibraryItem) => void
   selected?: boolean
+  highlight?: string
+}
+
+function HighlightedText({ text, query }: { text: string; query?: string }) {
+  if (!query) return <>{text}</>
+  const seg = splitForHighlight(text, query)
+  if (!seg) return <>{text}</>
+  return (
+    <>
+      {seg.before}
+      <mark className="rounded-sm bg-amber-200 px-0.5 py-0 text-slate-900 dark:bg-amber-500/40 dark:text-amber-100">
+        {seg.match}
+      </mark>
+      {seg.after}
+    </>
+  )
 }
 
 function TypeIcon({ type }: { type: string }) {
@@ -26,7 +43,7 @@ function TypeIcon({ type }: { type: string }) {
   return null
 }
 
-export default function AssetCard({ item, onSelect, selected }: Props) {
+export default function AssetCard({ item, onSelect, selected, highlight }: Props) {
   const isImage = item.type === 'image'
   return (
     <button
@@ -73,7 +90,7 @@ export default function AssetCard({ item, onSelect, selected }: Props) {
           className="truncate text-xs font-medium text-slate-900 dark:text-slate-100"
           title={item.label}
         >
-          {item.label}
+          <HighlightedText text={item.label} query={highlight} />
         </p>
         <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-0.5">
