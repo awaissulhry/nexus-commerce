@@ -91,8 +91,8 @@ export class AmazonSpApiClient {
   private readonly region: string
 
   constructor() {
-    this.clientId = process.env.AMAZON_CLIENT_ID || ''
-    this.clientSecret = process.env.AMAZON_CLIENT_SECRET || ''
+    this.clientId = process.env.AMAZON_LWA_CLIENT_ID || process.env.AMAZON_CLIENT_ID || ''
+    this.clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET || process.env.AMAZON_CLIENT_SECRET || ''
     this.refreshToken = process.env.AMAZON_REFRESH_TOKEN || ''
     this.region = process.env.AMAZON_REGION || 'us-east-1'
 
