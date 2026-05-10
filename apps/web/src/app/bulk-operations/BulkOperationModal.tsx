@@ -315,6 +315,22 @@ export default function BulkOperationModal({
   const [previewError, setPreviewError] = useState<string | null>(null)
   const previewSeq = useRef(0)
 
+  // W14.8 — AI cost preview. Active when the selected operation is
+  // an AI verb (translate / SEO regen / alt-text); fetches /api/
+  // bulk-operations/ai/cost-preview and renders a "≈ $X.XX across
+  // N SKUs" banner so operators see the bill before clicking Fire.
+  const [aiCost, setAiCost] = useState<{
+    callCount: number
+    inputTokens: number
+    outputTokens: number
+    costUSD: number
+    provider: string
+    model: string
+    note: string
+  } | null>(null)
+  const [aiCostLoading, setAiCostLoading] = useState(false)
+  const aiCostSeq = useRef(0)
+
   const [job, setJob] = useState<JobResult | null>(null)
   const [executing, setExecuting] = useState(false)
   const [executeError, setExecuteError] = useState<string | null>(null)
@@ -486,6 +502,51 @@ export default function BulkOperationModal({
     }, 350)
     return () => window.clearTimeout(timer)
   }, [open, payloadValid, previewKey, op?.label, opType, payload, scopePayload, isSchemaOp])
+
+  // W14.8 — AI cost preview. Fires whenever an AI op is selected
+  // and the preview gives us a productCount; debounced 350ms so
+  // adjusting the language picker doesn't spam the endpoint.
+  const isAiOp =
+    opType === 'AI_TRANSLATE_PRODUCT' ||
+    opType === 'AI_SEO_REGEN' ||
+    opType === 'AI_ALT_TEXT'
+  useEffect(() => {
+    if (!open || !isAiOp || !preview || preview.affectedCount === 0) {
+      setAiCost(null)
+      return
+    }
+    const seq = ++aiCostSeq.current
+    setAiCostLoading(true)
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/bulk-operations/ai/cost-preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              actionType: opType,
+              productCount: preview.affectedCount,
+              payload,
+            }),
+          },
+        )
+        const j = await res.json()
+        if (seq !== aiCostSeq.current) return
+        if (!res.ok || !j.success) {
+          setAiCost(null)
+          return
+        }
+        setAiCost(j.estimate)
+      } catch {
+        // Silent — cost preview is informational, not blocking.
+        if (seq === aiCostSeq.current) setAiCost(null)
+      } finally {
+        if (seq === aiCostSeq.current) setAiCostLoading(false)
+      }
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [open, isAiOp, opType, preview?.affectedCount, payload])
 
   // Execute: POST /create → POST /:id/process → poll /:id every 2s.
   const handleExecute = async () => {
@@ -954,6 +1015,37 @@ export default function BulkOperationModal({
                     {preview.affectedCount === 1 ? 'item' : 'items'} will be
                     affected.
                   </div>
+                  {/* W14.8 — AI cost preview banner. Renders only when
+                      an AI op is selected. The estimate is upper-bound
+                      (4 chars/token heuristic skews high on non-English
+                      content) so operators see a meaningful ceiling
+                      before clicking Fire. */}
+                  {isAiOp && (aiCostLoading || aiCost) && (
+                    <div
+                      className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {aiCostLoading && !aiCost && (
+                        <span className="text-blue-700 dark:text-blue-300">
+                          Estimating cost…
+                        </span>
+                      )}
+                      {aiCost && (
+                        <>
+                          <span className="font-medium">
+                            ≈ ${aiCost.costUSD.toFixed(2)}
+                          </span>
+                          <span className="text-blue-700 dark:text-blue-300 text-xs">
+                            · {aiCost.callCount.toLocaleString()} calls
+                            ·{' '}
+                            {(aiCost.inputTokens + aiCost.outputTokens).toLocaleString()}{' '}
+                            tokens · {aiCost.model}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
                   {preview.sampleItems.length > 0 && (
                     <div className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                       <table className="w-full text-base">
