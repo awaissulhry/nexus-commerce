@@ -16,7 +16,7 @@
  * already-fetched orders + the URL-update callbacks.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight, ExternalLink, Settings2, ShoppingCart } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -109,6 +109,53 @@ export function GridLens(props: GridLensProps) {
       ),
     [visibleColumns],
   )
+  // CR.2 — per-column width overrides, keyed by column.key. Persists
+  // in localStorage so a resize survives reload. Auto when missing —
+  // the column's default `width` from columns.ts is used. Mirrors the
+  // /fulfillment/stock CR.1 pattern; could share a hook later if a
+  // third surface needs it.
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('orders.columnWidths')
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      if (parsed && typeof parsed === 'object') {
+        const valid: Record<string, number> = {}
+        for (const [k, v] of Object.entries(parsed)) {
+          if (
+            ALL_COLUMNS.some((col) => col.key === k) &&
+            typeof v === 'number' &&
+            v >= 40 &&
+            v <= 800
+          ) {
+            valid[k] = v
+          }
+        }
+        setColumnWidths(valid)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'orders.columnWidths',
+        JSON.stringify(columnWidths),
+      )
+    } catch {
+      /* ignore */
+    }
+  }, [columnWidths])
+  const widthFor = (col: OrderColumn) => columnWidths[col.key] ?? col.width
+  const onResizeColumn = (key: string, width: number) =>
+    setColumnWidths((prev) => ({ ...prev, [key]: width }))
+  const onResetColumn = (key: string) =>
+    setColumnWidths((prev) => {
+      const { [key]: _omit, ...rest } = prev
+      return rest
+    })
   const allSelected =
     orders.length > 0 && orders.every((o) => selected.has(o.id))
   const toggleSelectAll = () => {
@@ -211,14 +258,20 @@ export function GridLens(props: GridLensProps) {
                           : 'descending'
                         : 'none'
                       : undefined
+                  const width = widthFor(col)
+                  // CR.2 — locked columns (select, channel, orderId,
+                  // actions) skip the resize handle. The select column
+                  // is the only one with no visible label; layout
+                  // would render the handle floating in dead space.
+                  const showResize = !col.locked
                   return (
                     <th
                       key={col.key}
                       role="columnheader"
                       scope="col"
                       aria-sort={ariaSort}
-                      style={{ width: col.width, minWidth: col.width }}
-                      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left ${
+                      style={{ width, minWidth: width }}
+                      className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left relative group ${
                         isSortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700' : ''
                       }`}
                       onClick={() => {
@@ -249,6 +302,14 @@ export function GridLens(props: GridLensProps) {
                           )}
                         </span>
                       )}
+                      {showResize && (
+                        <OrdersResizeHandle
+                          columnKey={col.key}
+                          currentWidth={columnWidths[col.key]}
+                          onResize={onResizeColumn}
+                          onReset={onResetColumn}
+                        />
+                      )}
                     </th>
                   )
                 })}
@@ -272,20 +333,23 @@ export function GridLens(props: GridLensProps) {
                         : ''
                     }`}
                   >
-                    {visible.map((col) => (
-                      <td
-                        key={col.key}
-                        className="px-3 py-2 align-middle"
-                        style={{ width: col.width, minWidth: col.width }}
-                      >
-                        <OrderCell
-                          col={col.key}
-                          order={o}
-                          isSelected={isSelected}
-                          onToggle={() => toggleSelect(o.id)}
-                        />
-                      </td>
-                    ))}
+                    {visible.map((col) => {
+                      const w = widthFor(col)
+                      return (
+                        <td
+                          key={col.key}
+                          className="px-3 py-2 align-middle"
+                          style={{ width: w, minWidth: w }}
+                        >
+                          <OrderCell
+                            col={col.key}
+                            order={o}
+                            isSelected={isSelected}
+                            onToggle={() => toggleSelect(o.id)}
+                          />
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
@@ -588,5 +652,61 @@ function ColumnPickerMenu({
         </button>
       </div>
     </div>
+  )
+}
+
+
+// CR.2 — column resize handle on /orders thead. mousedown on the
+// right edge captures starting clientX + width, drag updates the
+// override, mouseup commits. Double-click resets to the columns.ts
+// default. Pulled inline rather than into a shared component so the
+// /fulfillment/stock CR.1 version and this one can diverge if the
+// surfaces gain different needs (e.g. min-widths per column).
+function OrdersResizeHandle({
+  columnKey,
+  currentWidth,
+  onResize,
+  onReset,
+}: {
+  columnKey: string
+  currentWidth: number | undefined
+  onResize: (key: string, width: number) => void
+  onReset: (key: string) => void
+}) {
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const th = (e.currentTarget.parentElement as HTMLElement | null) ?? null
+    const startWidth =
+      typeof currentWidth === "number"
+        ? currentWidth
+        : th?.getBoundingClientRect().width ?? 120
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(40, Math.min(800, startWidth + (ev.clientX - startX)))
+      onResize(columnKey, next)
+    }
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize column"
+      onMouseDown={onMouseDown}
+      onDoubleClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onReset(columnKey)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none opacity-0 group-hover:opacity-100 hover:bg-blue-400/60 dark:hover:bg-blue-500/60 transition-opacity"
+      title="Drag to resize · double-click to reset"
+    />
   )
 }
