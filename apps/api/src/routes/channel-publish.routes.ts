@@ -22,6 +22,7 @@ import {
   type ChannelKey,
   type PublishResult,
 } from '../services/channel-publish.service.js'
+import { enqueueCascadeRepublish } from '../services/cascade-image-republish.service.js'
 
 const channelPublishRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Mode introspection ──────────────────────────────────────
@@ -323,6 +324,35 @@ const channelPublishRoutes: FastifyPluginAsync = async (fastify) => {
       )
     }
     return reply.code(result.ok ? 200 : 502).send(result)
+  })
+
+  // ── Cascade fan-out — MC.12.6 ──────────────────────────────────
+
+  fastify.post('/channel-publish/cascade', async (request, reply) => {
+    const body = request.body as {
+      productId?: string
+      assetUrl?: string
+      assetId?: string
+      channels?: Array<'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE'>
+    }
+    if (!body.productId?.trim())
+      return reply.code(400).send({ error: 'productId is required' })
+    if (!body.assetUrl?.trim())
+      return reply.code(400).send({ error: 'assetUrl is required' })
+
+    try {
+      const result = await enqueueCascadeRepublish({
+        productId: body.productId,
+        assetUrl: body.assetUrl,
+        assetId: body.assetId,
+        channels: body.channels,
+      })
+      return reply.code(200).send({ result })
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('not found'))
+        return reply.code(404).send({ error: err.message })
+      throw err
+    }
   })
 }
 
