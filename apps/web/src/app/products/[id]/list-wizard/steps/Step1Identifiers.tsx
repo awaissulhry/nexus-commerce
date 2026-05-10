@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -63,6 +63,33 @@ export default function Step1Identifiers(props: StepProps) {
   // channels need one. eBay, Shopify, Woo each handle identifiers
   // differently but none use Amazon's brand-exemption concept.
   const hasAmazon = channels.some((c) => c.platform === 'AMAZON')
+
+  // GTIN.1 — when only non-Amazon channels are selected, Step 3 has
+  // no questions to ask. eBay treats missing GTIN as "Does Not
+  // Apply" (per category policy); Shopify never required one;
+  // WooCommerce stores SKUs only. We auto-populate a no-op
+  // identifiers slice + advance, so the operator never sees this
+  // step. Fired once per mount; the autoSkippedRef guard makes
+  // strict-mode double-mount safe.
+  const autoSkippedRef = useRef(false)
+  useEffect(() => {
+    if (autoSkippedRef.current) return
+    if (hasAmazon) return
+    if (stateSlice.path) return // already filled in (e.g. resumed wizard)
+    autoSkippedRef.current = true
+    void updateWizardState(
+      {
+        identifiers: {
+          path: 'have-code' as Path,
+          // Carry forward whatever the master product has (UPC / EAN /
+          // GTIN). Empty when none — eBay/Shopify accept that.
+          gtinValue: existingGtin ?? '',
+        },
+      },
+      { advance: true },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAmazon])
 
   // Default selection logic:
   //  - existing GTIN on the product → "have-code"
@@ -182,6 +209,19 @@ export default function Step1Identifiers(props: StepProps) {
     }
     await updateWizardState({ identifiers: slice }, { advance: true })
     setSaving(false)
+  }
+
+  // GTIN.1 — render a thin loader while the auto-skip useEffect runs,
+  // so the operator never glimpses the form they don't need.
+  if (!hasAmazon && !stateSlice.path) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-3 md:px-6 text-center">
+        <Loader2 className="w-5 h-5 animate-spin text-slate-400 dark:text-slate-500 mx-auto mb-2" />
+        <p className="text-md text-slate-500 dark:text-slate-400">
+          No identifier required for the channels you picked. Skipping…
+        </p>
+      </div>
+    )
   }
 
   return (
