@@ -6,6 +6,22 @@ import { instrumentSellingPartner } from "../outbound-api-call-log.service.js";
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
+/** Maps 2-letter marketplace code to Amazon marketplace ID string. */
+export const AMAZON_MARKETPLACE_CODE_TO_ID: Record<string, string> = {
+  IT: 'APJ6JRA9NG5V4',
+  DE: 'A1PA6795UKMFR9',
+  FR: 'A13V1IB3VIYZZH',
+  ES: 'A1RKKUPIHCS9HS',
+  UK: 'A1F83G8C2ARO7P',
+  NL: 'A1805IZSGTT6HS',
+  SE: 'A2NODRKZP88ZB9',
+  PL: 'A1C3SOZRARQ6R3',
+  US: 'ATVPDKIKX0DER',
+}
+
+/** Active EU marketplaces for Xavia — used for "run all" reconciliation. */
+export const XAVIA_ACTIVE_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
+
 const MARKETPLACE_CURRENCY: Record<string, string> = {
   APJ6JRA9NG5V4: "EUR", // Italy
   A1PA6795UKMFR9: "EUR", // Germany
@@ -308,9 +324,10 @@ export class AmazonService {
    * waits for it to finish, downloads the TSV document, and parses
    * it into an array of {@link CatalogItem} objects.
    */
-  async fetchActiveCatalog(): Promise<CatalogItem[]> {
+  async fetchActiveCatalog(marketplaceId?: string): Promise<CatalogItem[]> {
+    const mpId = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4"
     try {
-      console.log("[Amazon] Requesting GET_MERCHANT_LISTINGS_ALL_DATA report…");
+      console.log(`[Amazon] Requesting GET_MERCHANT_LISTINGS_ALL_DATA report for ${mpId}…`);
 
       const sp = await this.getClient();
 
@@ -320,9 +337,7 @@ export class AmazonService {
         endpoint: "reports",
         body: {
           reportType: "GET_MERCHANT_LISTINGS_ALL_DATA",
-          marketplaceIds: [
-            process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4", // Italy default
-          ],
+          marketplaceIds: [mpId],
         },
       });
 

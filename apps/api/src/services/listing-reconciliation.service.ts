@@ -18,7 +18,11 @@
  */
 
 import prisma from '../db.js'
-import { AmazonService } from './marketplaces/amazon.service.js'
+import {
+  AmazonService,
+  AMAZON_MARKETPLACE_CODE_TO_ID,
+  XAVIA_ACTIVE_MARKETPLACES,
+} from './marketplaces/amazon.service.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 
@@ -157,9 +161,12 @@ export async function runAmazonReconciliation(
     throw new Error('Amazon SP-API credentials not configured — check AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN')
   }
 
+  // Resolve the SP-API marketplace ID from the 2-letter code
+  const mpId = AMAZON_MARKETPLACE_CODE_TO_ID[marketplace] ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
+
   // Pull the merchant listings report (~5 min for large catalogs, polls internally)
-  const catalog = await amazonService.fetchActiveCatalog()
-  logger.info('[recon] Catalog fetched', { count: catalog.length, marketplace, runId })
+  const catalog = await amazonService.fetchActiveCatalog(mpId)
+  logger.info('[recon] Catalog fetched', { count: catalog.length, marketplace, mpId, runId })
 
   if (catalog.length === 0) {
     return { runId, channel: 'AMAZON', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0 }
@@ -566,4 +573,121 @@ export async function runEbayReconciliation(marketplace: string = 'IT'): Promise
   const summary: ReconRunSummary = { runId, channel: 'EBAY', marketplace, totalDiscovered: offers.length, matched, unmatched, skipped, durationMs: Date.now() - t0 }
   logger.info('[recon/ebay] Complete', summary)
   return summary
+}
+
+// ── All-markets reconciliation ────────────────────────────────────────────
+
+export interface AllMarketsRunResult {
+  channel: ReconChannel
+  markets: ReconRunSummary[]
+  totalDiscovered: number
+  totalMatched: number
+  totalUnmatched: number
+  totalSkipped: number
+  durationMs: number
+  errors: Array<{ marketplace: string; error: string }>
+}
+
+/**
+ * Run Amazon reconciliation for all active EU marketplaces sequentially.
+ * Each market gets its own report (~5 min each). Errors in one market
+ * don't abort the others — they're collected and returned.
+ */
+export async function runAmazonReconciliationAllMarkets(): Promise<AllMarketsRunResult> {
+  const t0 = Date.now()
+  const markets: ReconRunSummary[] = []
+  const errors: Array<{ marketplace: string; error: string }> = []
+
+  for (const marketplace of XAVIA_ACTIVE_MARKETPLACES) {
+    try {
+      logger.info('[recon/all] Starting market', { marketplace })
+      const summary = await runAmazonReconciliation(marketplace)
+      markets.push(summary)
+      logger.info('[recon/all] Market complete', { marketplace, ...summary })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('[recon/all] Market failed', { marketplace, error: msg })
+      errors.push({ marketplace, error: msg })
+    }
+  }
+
+  return {
+    channel: 'AMAZON',
+    markets,
+    totalDiscovered: markets.reduce((s, m) => s + m.totalDiscovered, 0),
+    totalMatched: markets.reduce((s, m) => s + m.matched, 0),
+    totalUnmatched: markets.reduce((s, m) => s + m.unmatched, 0),
+    totalSkipped: markets.reduce((s, m) => s + m.skipped, 0),
+    durationMs: Date.now() - t0,
+    errors,
+  }
+}
+
+// ── Bulk actions ──────────────────────────────────────────────────────────
+
+export interface BulkActionResult {
+  succeeded: number
+  failed: number
+  errors: Array<{ id: string; error: string }>
+}
+
+/**
+ * Confirm multiple reconciliation rows in one operation.
+ * Rows without a matchedProductId or externalListingId are skipped with an error.
+ */
+export async function bulkConfirmReconRows(
+  ids: string[],
+  reviewedBy: string,
+): Promise<BulkActionResult> {
+  let succeeded = 0
+  let failed = 0
+  const errors: Array<{ id: string; error: string }> = []
+
+  // Process in batches of 10 to avoid overwhelming the DB
+  const BATCH = 10
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH)
+    await Promise.all(
+      batch.map(async id => {
+        try {
+          await confirmReconRow(id, reviewedBy)
+          succeeded++
+        } catch (err) {
+          failed++
+          errors.push({ id, error: err instanceof Error ? err.message : String(err) })
+        }
+      })
+    )
+  }
+
+  return { succeeded, failed, errors }
+}
+
+/**
+ * Set status on multiple rows at once (bulk IGNORE, CONFLICT, etc.).
+ */
+export async function bulkSetReconRowStatus(
+  ids: string[],
+  status: ReconStatus,
+  reviewedBy: string,
+  notes?: string,
+): Promise<BulkActionResult> {
+  try {
+    const result = await prisma.listingReconciliation.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        reconciliationStatus: status,
+        reviewedBy,
+        reviewedAt: new Date(),
+        conflictNotes: notes ?? undefined,
+      },
+    })
+    return { succeeded: result.count, failed: 0, errors: [] }
+  } catch (err) {
+    return {
+      succeeded: 0,
+      failed: ids.length,
+      errors: [{ id: 'bulk', error: err instanceof Error ? err.message : String(err) }],
+    }
+  }
 }

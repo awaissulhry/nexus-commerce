@@ -11,12 +11,14 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
+  Zap,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface ReconStats {
   byStatus: Record<string, number>
+  byMarket?: Record<string, Record<string, number>>
   matchMethods: Record<string, number>
   total: number
 }
@@ -64,8 +66,24 @@ interface Props {
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 const CHANNEL_OPTIONS = ['AMAZON', 'EBAY']
-const MARKETPLACE_OPTIONS = ['IT', 'DE', 'FR', 'ES', 'UK']
+const MARKETPLACE_OPTIONS = ['ALL', 'IT', 'DE', 'FR', 'ES', 'UK']
 const STATUS_OPTIONS = ['PENDING', 'CONFIRMED', 'CONFLICT', 'IGNORE', 'CREATE_NEW']
+
+const MARKET_COLORS: Record<string, string> = {
+  IT: 'bg-green-100 text-green-700',
+  DE: 'bg-blue-100 text-blue-700',
+  FR: 'bg-purple-100 text-purple-700',
+  ES: 'bg-orange-100 text-orange-700',
+  UK: 'bg-gray-100 text-gray-600',
+}
+
+function marketBadge(mp: string) {
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${MARKET_COLORS[mp] ?? 'bg-gray-100 text-gray-600'}`}>
+      {mp}
+    </span>
+  )
+}
 
 function confidenceBadge(confidence: number | null, method: string | null) {
   if (!method || method === 'UNMATCHED') {
@@ -107,7 +125,6 @@ export default function ReconciliationClient({
   initialItems,
 }: Props) {
   const backend = getBackendUrl()
-
   const [channel, setChannel] = useState(initialChannel)
   const [marketplace, setMarketplace] = useState(initialMarketplace)
   const [statusFilter, setStatusFilter] = useState('PENDING')
@@ -119,108 +136,158 @@ export default function ReconciliationClient({
   const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
   const [linkTarget, setLinkTarget] = useState<string | null>(null)
   const [linkProductId, setLinkProductId] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null)
 
-  const refreshStats = useCallback(async () => {
-    const res = await fetch(`${backend}/api/reconciliation/stats?channel=${channel}&marketplace=${marketplace}`, { cache: 'no-store' }).catch(() => null)
+  const refreshStats = useCallback(async (ch: string, mp: string) => {
+    const url = `${backend}/api/reconciliation/stats?channel=${ch}&marketplace=${mp}`
+    const res = await fetch(url, { cache: 'no-store' }).catch(() => null)
     if (res?.ok) setStats(await res.json().catch(() => null))
-  }, [backend, channel, marketplace])
+  }, [backend])
 
-  const refreshItems = useCallback(async (p: number, status: string) => {
+  const refreshItems = useCallback(async (p: number, status: string, ch: string, mp: string) => {
     const res = await fetch(
-      `${backend}/api/reconciliation/items?channel=${channel}&marketplace=${marketplace}&status=${status}&page=${p}&pageSize=50`,
+      `${backend}/api/reconciliation/items?channel=${ch}&marketplace=${mp}&status=${status}&page=${p}&pageSize=100`,
       { cache: 'no-store' }
     ).catch(() => null)
-    if (res?.ok) setItemPage(await res.json().catch(() => null))
-  }, [backend, channel, marketplace])
+    if (res?.ok) {
+      setItemPage(await res.json().catch(() => null))
+      setSelected(new Set())
+    }
+  }, [backend])
 
-  const handleRun = () => {
+  const refresh = useCallback((p = page, s = statusFilter, ch = channel, mp = marketplace) => {
     startTransition(async () => {
-      setRunMsg('Running reconciliation — fetching Amazon catalog (may take 5-10 min)…')
+      await Promise.all([refreshStats(ch, mp), refreshItems(p, s, ch, mp)])
+    })
+  }, [page, statusFilter, channel, marketplace, refreshStats, refreshItems]) // eslint-disable-line
+
+  // ── Run reconciliation ────────────────────────────────────────────────
+
+  const handleRun = (allMarkets: boolean) => {
+    startTransition(async () => {
+      const mp = allMarkets ? 'ALL' : marketplace
+      const label = allMarkets ? 'all markets (IT/DE/FR/ES/UK)' : `Amazon ${marketplace}`
+      setRunMsg(`Running reconciliation for ${label}… (each market takes ~5 min — please wait)`)
       const res = await fetch(`${backend}/api/reconciliation/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel, marketplace }),
+        body: JSON.stringify({ channel, marketplace: mp }),
       }).catch(() => null)
       if (res?.ok) {
         const data = await res.json()
-        const s = data.summary
-        setRunMsg(`Done — ${s.totalDiscovered} discovered, ${s.matched} matched, ${s.unmatched} unmatched, ${s.skipped} skipped (${Math.round(s.durationMs / 1000)}s)`)
+        if (data.allMarkets) {
+          const totals = `${data.totalDiscovered} discovered · ${data.totalMatched} matched · ${data.totalUnmatched} unmatched · ${Math.round(data.durationMs / 60000)}min`
+          const perMarket = data.markets.map((m: any) => `${m.marketplace}: ${m.totalDiscovered}`).join(', ')
+          setRunMsg(`Done ✓ — ${totals} (${perMarket})`)
+        } else {
+          const s = data.summary
+          setRunMsg(`Done ✓ — ${s.totalDiscovered} discovered · ${s.matched} matched · ${s.unmatched} unmatched`)
+        }
       } else {
         const err = await res?.json().catch(() => null)
         setRunMsg(`Error: ${err?.error ?? 'Unknown failure'}`)
       }
-      await Promise.all([refreshStats(), refreshItems(1, statusFilter)])
+      refresh(1, statusFilter, channel, marketplace)
       setPage(1)
     })
   }
 
+  // ── Bulk actions ─────────────────────────────────────────────────────
+
+  const handleBulkConfirm = async () => {
+    const ids = [...selected]
+    setBulkMsg(`Confirming ${ids.length} rows…`)
+    const res = await fetch(`${backend}/api/reconciliation/bulk/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, reviewedBy: 'operator' }),
+    }).catch(() => null)
+    if (res?.ok) {
+      const d = await res.json()
+      setBulkMsg(`✓ Confirmed ${d.succeeded}${d.failed > 0 ? ` · ${d.failed} failed` : ''}`)
+    } else setBulkMsg('Confirm failed')
+    refresh(page, statusFilter, channel, marketplace)
+  }
+
+  const handleBulkIgnore = async () => {
+    const ids = [...selected]
+    setBulkMsg(`Ignoring ${ids.length} rows…`)
+    const res = await fetch(`${backend}/api/reconciliation/bulk/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, status: 'IGNORE', reviewedBy: 'operator' }),
+    }).catch(() => null)
+    if (res?.ok) {
+      const d = await res.json()
+      setBulkMsg(`✓ Ignored ${d.succeeded}`)
+    } else setBulkMsg('Ignore failed')
+    refresh(page, statusFilter, channel, marketplace)
+  }
+
+  const handleConfirmAllHigh = async () => {
+    setBulkMsg('Confirming all high-confidence (≥95%) rows…')
+    const res = await fetch(`${backend}/api/reconciliation/bulk/confirm-all-high`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel, marketplace: marketplace === 'ALL' ? undefined : marketplace, reviewedBy: 'operator' }),
+    }).catch(() => null)
+    if (res?.ok) {
+      const d = await res.json()
+      setBulkMsg(`✓ Confirmed ${d.succeeded} high-confidence rows${d.failed > 0 ? ` · ${d.failed} failed` : ''}`)
+    } else setBulkMsg('Confirm-all failed')
+    refresh(1, statusFilter, channel, marketplace)
+    setPage(1)
+  }
+
+  // ── Single-row actions ────────────────────────────────────────────────
+
   const handleConfirm = async (id: string) => {
     setActionMsg(prev => ({ ...prev, [id]: 'Confirming…' }))
     const res = await fetch(`${backend}/api/reconciliation/items/${id}/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewedBy: 'operator' }),
     }).catch(() => null)
-    const msg = res?.ok ? '✓ Confirmed' : 'Error'
-    setActionMsg(prev => ({ ...prev, [id]: msg }))
-    if (res?.ok) {
-      await Promise.all([refreshStats(), refreshItems(page, statusFilter)])
-    }
+    setActionMsg(prev => ({ ...prev, [id]: res?.ok ? '✓ Confirmed' : 'Error' }))
+    if (res?.ok) refresh(page, statusFilter, channel, marketplace)
   }
 
   const handleSetStatus = async (id: string, status: string) => {
     setActionMsg(prev => ({ ...prev, [id]: 'Saving…' }))
     const res = await fetch(`${backend}/api/reconciliation/items/${id}/status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, reviewedBy: 'operator' }),
     }).catch(() => null)
-    const msg = res?.ok ? `✓ ${status}` : 'Error'
-    setActionMsg(prev => ({ ...prev, [id]: msg }))
-    if (res?.ok) {
-      await Promise.all([refreshStats(), refreshItems(page, statusFilter)])
-    }
+    setActionMsg(prev => ({ ...prev, [id]: res?.ok ? `✓ ${status}` : 'Error' }))
+    if (res?.ok) refresh(page, statusFilter, channel, marketplace)
   }
 
   const handleLink = async (id: string) => {
     if (!linkProductId.trim()) return
     setActionMsg(prev => ({ ...prev, [id]: 'Linking…' }))
     const res = await fetch(`${backend}/api/reconciliation/items/${id}/link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ productId: linkProductId.trim(), reviewedBy: 'operator' }),
     }).catch(() => null)
-    const msg = res?.ok ? '✓ Linked' : 'Error'
-    setActionMsg(prev => ({ ...prev, [id]: msg }))
-    if (res?.ok) {
-      setLinkTarget(null)
-      setLinkProductId('')
-      await Promise.all([refreshStats(), refreshItems(page, statusFilter)])
-    }
+    setActionMsg(prev => ({ ...prev, [id]: res?.ok ? '✓ Linked' : 'Error' }))
+    if (res?.ok) { setLinkTarget(null); setLinkProductId(''); refresh(page, statusFilter, channel, marketplace) }
   }
 
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-    startTransition(() => { refreshItems(newPage, statusFilter) })
+  const handleChannelChange = (ch: string) => {
+    setChannel(ch); setPage(1); setSelected(new Set())
+    refresh(1, statusFilter, ch, marketplace)
   }
-
+  const handleMarketplace = (mp: string) => {
+    setMarketplace(mp); setPage(1); setSelected(new Set())
+    refresh(1, statusFilter, channel, mp)
+  }
   const handleStatusFilter = (s: string) => {
-    setStatusFilter(s)
-    setPage(1)
-    startTransition(() => { refreshItems(1, s) })
+    setStatusFilter(s); setPage(1); setSelected(new Set())
+    refresh(1, s, channel, marketplace)
   }
-
-  const handleMarketplace = (m: string) => {
-    setMarketplace(m)
-    setPage(1)
-    startTransition(async () => {
-      const [sr, ir] = await Promise.all([
-        fetch(`${backend}/api/reconciliation/stats?channel=${channel}&marketplace=${m}`, { cache: 'no-store' }).catch(() => null),
-        fetch(`${backend}/api/reconciliation/items?channel=${channel}&marketplace=${m}&status=${statusFilter}&page=1&pageSize=50`, { cache: 'no-store' }).catch(() => null),
-      ])
-      if (sr?.ok) setStats(await sr.json().catch(() => null))
-      if (ir?.ok) setItemPage(await ir.json().catch(() => null))
-    })
+  const handlePageChange = (p: number) => {
+    setPage(p); setSelected(new Set())
+    refresh(p, statusFilter, channel, marketplace)
   }
 
   const rows = itemPage?.rows ?? []
@@ -233,29 +300,42 @@ export default function ReconciliationClient({
   const ignored = stats?.byStatus?.IGNORE ?? 0
   const total = stats?.total ?? 0
 
+  const highConfPending = rows.filter(r => r.reconciliationStatus === 'PENDING' && (r.matchConfidence ?? 0) >= 0.95 && r.matchedProductId && r.externalListingId).length
+  const allSelected = selected.size === rows.length && rows.length > 0
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b px-6 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Listing Reconciliation</h1>
             <p className="text-sm text-gray-500 mt-0.5">
               Match Amazon/eBay live listings to Nexus products before enabling write-back.
             </p>
           </div>
-          <button
-            onClick={handleRun}
-            disabled={isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Run reconciliation
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleRun(false)}
+              disabled={isPending || marketplace === 'ALL'}
+              className="flex items-center gap-2 px-3 py-2 border bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+            >
+              {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              Run {marketplace !== 'ALL' ? marketplace : '…'}
+            </button>
+            <button
+              onClick={() => handleRun(true)}
+              disabled={isPending}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              Run ALL markets
+            </button>
+          </div>
         </div>
 
         {runMsg && (
-          <div className="mt-3 px-4 py-2 bg-blue-50 text-blue-800 text-sm rounded-lg">
+          <div className={`mt-3 px-4 py-2 rounded-lg text-sm ${runMsg.startsWith('Done') ? 'bg-green-50 text-green-800' : runMsg.startsWith('Error') ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
             {runMsg}
           </div>
         )}
@@ -263,36 +343,30 @@ export default function ReconciliationClient({
 
       <div className="px-6 py-4 max-w-screen-xl mx-auto">
         {/* Channel + Marketplace selector */}
-        <div className="flex gap-4 mb-5">
+        <div className="flex gap-4 mb-5 flex-wrap">
           <div className="flex gap-1">
             {CHANNEL_OPTIONS.map(ch => (
-              <button
-                key={ch}
-                onClick={() => { setChannel(ch); setPage(1); startTransition(async () => { const [sr, ir] = await Promise.all([fetch(`${backend}/api/reconciliation/stats?channel=${ch}&marketplace=${marketplace}`, { cache: 'no-store' }).catch(() => null), fetch(`${backend}/api/reconciliation/items?channel=${ch}&marketplace=${marketplace}&status=${statusFilter}&page=1&pageSize=50`, { cache: 'no-store' }).catch(() => null)]); if (sr?.ok) setStats(await sr.json().catch(() => null)); if (ir?.ok) setItemPage(await ir.json().catch(() => null)) }) }}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${channel === ch ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
-              >
+              <button key={ch} onClick={() => handleChannelChange(ch)}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${channel === ch ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
                 {ch}
               </button>
             ))}
           </div>
           <div className="flex gap-1">
-          {MARKETPLACE_OPTIONS.map(mp => (
-            <button
-              key={mp}
-              onClick={() => handleMarketplace(mp)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${marketplace === mp ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
-            >
-              {mp}
-            </button>
-          ))}
+            {MARKETPLACE_OPTIONS.map(mp => (
+              <button key={mp} onClick={() => handleMarketplace(mp)}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                {mp}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Stats strip */}
-        <div className="grid grid-cols-5 gap-3 mb-6">
+        {/* Stats strip — per-market breakdown when ALL */}
+        <div className="grid grid-cols-5 gap-3 mb-5">
           {[
-            { label: 'Total discovered', value: total, color: 'text-gray-900' },
-            { label: 'Pending review', value: pending, color: 'text-blue-700' },
+            { label: 'Total', value: total, color: 'text-gray-900' },
+            { label: 'Pending', value: pending, color: 'text-blue-700' },
             { label: 'Confirmed', value: confirmed, color: 'text-green-700' },
             { label: 'Conflict', value: conflict, color: 'text-red-700' },
             { label: 'Ignored', value: ignored, color: 'text-gray-500' },
@@ -304,25 +378,65 @@ export default function ReconciliationClient({
           ))}
         </div>
 
-        {/* Match method breakdown */}
-        {stats?.matchMethods && Object.keys(stats.matchMethods).length > 0 && (
-          <div className="flex gap-3 mb-5 flex-wrap">
-            {Object.entries(stats.matchMethods).map(([method, count]) => (
-              <span key={method} className="px-3 py-1 bg-white border rounded-full text-xs text-gray-600">
-                {method}: <strong>{count}</strong>
-              </span>
+        {/* Per-market breakdown (only when ALL is selected) */}
+        {marketplace === 'ALL' && stats?.byMarket && Object.keys(stats.byMarket).length > 0 && (
+          <div className="grid grid-cols-5 gap-2 mb-5">
+            {Object.entries(stats.byMarket).map(([mp, statusCounts]) => (
+              <div key={mp} className="bg-white border rounded-lg px-3 py-2 text-xs">
+                <div className="flex items-center gap-1.5 mb-1.5">{marketBadge(mp)}</div>
+                {Object.entries(statusCounts).map(([s, n]) => (
+                  <div key={s} className="flex justify-between text-gray-600">
+                    <span>{s}</span><span className="font-medium">{n}</span>
+                  </div>
+                ))}
+              </div>
             ))}
+          </div>
+        )}
+
+        {/* Bulk action bar — appears when rows are selected or in PENDING view */}
+        {statusFilter === 'PENDING' && pending > 0 && (
+          <div className="bg-white border rounded-lg px-4 py-3 mb-4 flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-gray-600 font-medium">Bulk actions:</span>
+
+            {highConfPending > 0 && (
+              <button onClick={handleConfirmAllHigh}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700">
+                <CheckCircle2 className="w-4 h-4" />
+                Confirm all high-confidence ({highConfPending} this page)
+              </button>
+            )}
+
+            {selected.size > 0 && (
+              <>
+                <button onClick={handleBulkConfirm}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700">
+                  <CheckCircle2 className="w-4 h-4" /> Confirm {selected.size}
+                </button>
+                <button onClick={handleBulkIgnore}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border text-gray-600 rounded text-sm hover:bg-gray-50">
+                  <XCircle className="w-4 h-4" /> Ignore {selected.size}
+                </button>
+                <button onClick={() => setSelected(new Set())}
+                  className="text-sm text-gray-400 hover:text-gray-600">
+                  Clear
+                </button>
+              </>
+            )}
+
+            {bulkMsg && (
+              <span className={`text-sm px-3 py-1 rounded ${bulkMsg.startsWith('✓') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {bulkMsg}
+              </span>
+            )}
           </div>
         )}
 
         {/* Status filter tabs */}
         <div className="flex gap-1 mb-4 border-b">
           {STATUS_OPTIONS.map(s => (
-            <button
-              key={s}
-              onClick={() => handleStatusFilter(s)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${statusFilter === s ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-            >
+            <button key={s} onClick={() => handleStatusFilter(s)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${statusFilter === s ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {s}
               {s === 'PENDING' && pending > 0 && (
                 <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">{pending}</span>
@@ -336,41 +450,57 @@ export default function ReconciliationClient({
           {rows.length === 0 ? (
             <div className="py-16 text-center text-gray-400">
               {total === 0
-                ? 'No listings discovered yet. Click "Run reconciliation" to pull from Amazon.'
+                ? 'No listings discovered yet. Click "Run ALL markets" to pull from Amazon.'
                 : `No rows with status ${statusFilter}.`}
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-48">Channel SKU / ASIN</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Title</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-32">Price / Qty</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-48">Matched product</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-32">Confidence</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-28">Status</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600 w-56">Actions</th>
+                  <th className="px-3 py-3 w-10">
+                    <input type="checkbox" className="rounded"
+                      checked={allSelected}
+                      onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map(r => r.id)))} />
+                  </th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-12">Mkt</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-44">Channel SKU / ASIN</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600">Title</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-28">Price / Qty</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-48">Matched product</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-32">Confidence</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-28">Status</th>
+                  <th className="px-3 py-3 text-left font-medium text-gray-600 w-48">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {rows.map(row => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                      <div className="truncate max-w-[11rem]" title={row.externalSku}>{row.externalSku}</div>
+                  <tr key={row.id} className={`hover:bg-gray-50 ${selected.has(row.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="px-3 py-2.5">
+                      <input type="checkbox" className="rounded"
+                        checked={selected.has(row.id)}
+                        onChange={e => {
+                          const next = new Set(selected)
+                          if (e.target.checked) next.add(row.id); else next.delete(row.id)
+                          setSelected(next)
+                        }} />
+                    </td>
+                    <td className="px-3 py-2.5">{marketBadge(row.marketplace)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-gray-700">
+                      <div className="truncate max-w-[10rem]" title={row.externalSku}>{row.externalSku}</div>
                       {row.externalListingId && (
-                        <div className="text-gray-400 truncate max-w-[11rem]" title={row.externalListingId}>
+                        <div className="text-gray-400 truncate max-w-[10rem]" title={row.externalListingId}>
                           {row.externalListingId}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">
+                    <td className="px-3 py-2.5 text-gray-700">
                       <div className="line-clamp-2 text-xs">{row.title ?? '—'}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-700 text-xs">
+                    <td className="px-3 py-2.5 text-gray-700 text-xs">
                       {row.channelPrice != null ? `€${Number(row.channelPrice).toFixed(2)}` : '—'}
                       <div className="text-gray-400">qty {row.channelQuantity ?? '—'}</div>
                     </td>
-                    <td className="px-4 py-3 text-xs">
+                    <td className="px-3 py-2.5 text-xs">
                       {row.matchedProduct ? (
                         <div>
                           <div className="font-medium text-gray-800 truncate max-w-[11rem]" title={row.matchedProduct.name}>
@@ -382,55 +512,44 @@ export default function ReconciliationClient({
                         <span className="text-gray-400 italic">No match</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       {confidenceBadge(row.matchConfidence, row.matchMethod)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       {statusBadge(row.reconciliationStatus)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       {actionMsg[row.id] ? (
                         <span className="text-xs text-gray-600">{actionMsg[row.id]}</span>
                       ) : linkTarget === row.id ? (
                         <div className="flex gap-1.5 items-center">
-                          <input
-                            value={linkProductId}
-                            onChange={e => setLinkProductId(e.target.value)}
+                          <input value={linkProductId} onChange={e => setLinkProductId(e.target.value)}
                             placeholder="Product ID"
-                            className="border rounded px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
+                            className="border rounded px-2 py-1 text-xs w-28 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                           <button onClick={() => handleLink(row.id)} className="text-xs text-blue-700 hover:underline">Save</button>
-                          <button onClick={() => { setLinkTarget(null); setLinkProductId('') }} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                          <button onClick={() => { setLinkTarget(null); setLinkProductId('') }} className="text-xs text-gray-400 hover:underline">✕</button>
                         </div>
                       ) : (
-                        <div className="flex gap-1.5 flex-wrap">
-                          {row.reconciliationStatus === 'PENDING' && row.matchedProductId && (
-                            <button
-                              onClick={() => handleConfirm(row.id)}
-                              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                            >
+                        <div className="flex gap-1 flex-wrap">
+                          {row.reconciliationStatus === 'PENDING' && row.matchedProductId && row.externalListingId && (
+                            <button onClick={() => handleConfirm(row.id)}
+                              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
                               <CheckCircle2 className="w-3 h-3" /> Confirm
                             </button>
                           )}
-                          <button
-                            onClick={() => { setLinkTarget(row.id); setLinkProductId('') }}
-                            className="flex items-center gap-1 px-2 py-1 bg-white border text-gray-600 rounded text-xs hover:bg-gray-50"
-                          >
+                          <button onClick={() => { setLinkTarget(row.id); setLinkProductId('') }}
+                            className="flex items-center gap-1 px-2 py-1 bg-white border text-gray-600 rounded text-xs hover:bg-gray-50">
                             <Link2 className="w-3 h-3" /> Link
                           </button>
                           {row.reconciliationStatus !== 'IGNORE' && (
-                            <button
-                              onClick={() => handleSetStatus(row.id, 'IGNORE')}
-                              className="flex items-center gap-1 px-2 py-1 bg-white border text-gray-500 rounded text-xs hover:bg-gray-50"
-                            >
+                            <button onClick={() => handleSetStatus(row.id, 'IGNORE')}
+                              className="flex items-center gap-1 px-2 py-1 bg-white border text-gray-500 rounded text-xs hover:bg-gray-50">
                               <XCircle className="w-3 h-3" /> Ignore
                             </button>
                           )}
                           {row.reconciliationStatus !== 'CONFLICT' && (
-                            <button
-                              onClick={() => handleSetStatus(row.id, 'CONFLICT')}
-                              className="flex items-center gap-1 px-2 py-1 bg-white border text-amber-600 rounded text-xs hover:bg-amber-50"
-                            >
+                            <button onClick={() => handleSetStatus(row.id, 'CONFLICT')}
+                              className="flex items-center gap-1 px-2 py-1 bg-white border text-amber-600 rounded text-xs hover:bg-amber-50">
                               <AlertTriangle className="w-3 h-3" /> Flag
                             </button>
                           )}
@@ -446,22 +565,14 @@ export default function ReconciliationClient({
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="px-4 py-3 border-t flex items-center justify-between bg-gray-50">
-              <span className="text-xs text-gray-500">
-                {totalRows} rows · page {page} of {totalPages}
-              </span>
+              <span className="text-xs text-gray-500">{totalRows} rows · page {page} of {totalPages}</span>
               <div className="flex gap-2">
-                <button
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page <= 1}
-                  className="p-1.5 rounded border bg-white hover:bg-gray-50 disabled:opacity-40"
-                >
+                <button onClick={() => handlePageChange(page - 1)} disabled={page <= 1}
+                  className="p-1.5 rounded border bg-white hover:bg-gray-50 disabled:opacity-40">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page >= totalPages}
-                  className="p-1.5 rounded border bg-white hover:bg-gray-50 disabled:opacity-40"
-                >
+                <button onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}
+                  className="p-1.5 rounded border bg-white hover:bg-gray-50 disabled:opacity-40">
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -469,15 +580,15 @@ export default function ReconciliationClient({
           )}
         </div>
 
-        {/* Zero-state instructions */}
+        {/* Instructions */}
         {total === 0 && !isPending && (
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-5 text-sm">
-            <h3 className="font-medium text-blue-900 mb-2">How to proceed</h3>
+            <h3 className="font-medium text-blue-900 mb-2">How to reconcile all markets in one go</h3>
             <ol className="list-decimal list-inside space-y-1 text-blue-800">
-              <li>Click <strong>Run reconciliation</strong> above — this pulls your live Amazon IT catalog (~5 min for large catalogs).</li>
-              <li>Review the matched rows. Green = high confidence SKU match. Amber = ASIN match. Red = unmatched.</li>
-              <li>For each PENDING row: <strong>Confirm</strong> the match, <strong>Link</strong> to a different product, or <strong>Ignore</strong> listings Nexus shouldn't manage.</li>
-              <li>Once all rows are reviewed, Nexus knows about every live listing. Only then will write-back (price/inventory sync) be enabled.</li>
+              <li>Click <strong>Run ALL markets</strong> — fetches live listings from Amazon IT/DE/FR/ES/UK (~5 min each = ~25 min total).</li>
+              <li>Switch to <strong>ALL</strong> marketplace view to see everything at once.</li>
+              <li>Click <strong>Confirm all high-confidence</strong> — approves every SKU-exact match in one click.</li>
+              <li>Review remaining rows (amber = ASIN match, red = unmatched) individually — Link or Ignore as needed.</li>
             </ol>
           </div>
         )}

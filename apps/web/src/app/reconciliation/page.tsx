@@ -23,7 +23,7 @@ async function fetchInitialData(channel: string, marketplace: string) {
 
   const [statsRes, itemsRes] = await Promise.all([
     fetch(`${base}/stats?channel=${channel}&marketplace=${marketplace}`, { cache: 'no-store' }).catch(() => null),
-    fetch(`${base}/items?channel=${channel}&marketplace=${marketplace}&status=PENDING&pageSize=50`, { cache: 'no-store' }).catch(() => null),
+    fetch(`${base}/items?channel=${channel}&marketplace=${marketplace}&status=PENDING&pageSize=100`, { cache: 'no-store' }).catch(() => null),
   ])
 
   const stats = statsRes?.ok ? await statsRes.json().catch(() => null) : null
@@ -38,7 +38,7 @@ export default async function ReconciliationPage({
   searchParams: Record<string, string>
 }) {
   const channel = searchParams.channel ?? 'AMAZON'
-  const marketplace = searchParams.marketplace ?? 'IT'
+  const marketplace = searchParams.marketplace ?? 'ALL'
 
   const { stats, items } = await fetchInitialData(channel, marketplace)
 
