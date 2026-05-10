@@ -163,6 +163,22 @@ export default function Step1Channels({
   )
   const [strategyExpanded, setStrategyExpanded] = useState(false)
 
+  // FBA.1 — per-Amazon fulfillment method for this listing. Stored
+  // wizard-wide because most operators standardize on one method
+  // across markets; per-marketplace FBA/FBM divergence is rare and
+  // can be modelled later via channelStates[ck].fulfillmentMethod
+  // when the use case surfaces. Default 'FBM' (operator-controlled
+  // fulfillment) — matches Xavia's current setup; FBA requires
+  // separate inbound shipments which the wizard doesn't book.
+  type FulfillmentMethod = 'FBA' | 'FBM'
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>(
+    () => {
+      const raw = (wizardState as { fulfillmentMethod?: unknown })
+        ?.fulfillmentMethod
+      return raw === 'FBA' ? 'FBA' : 'FBM'
+    },
+  )
+
   // AI-6.1 — channel suggester state. Click "AI: suggest channels"
   // → POST /suggest-channels with the connected platforms' available
   // marketplaces flattened. Backend returns ranked recommendations
@@ -479,13 +495,28 @@ export default function Step1Channels({
 
   const onContinue = useCallback(async () => {
     if (channelTuples.length === 0) return
-    // E.3 — Persist SKU strategy alongside the channel selection. The
-    // composition layer reads state.skuStrategy when resolving per-child
-    // channelSku (default "shared" returns master SKU, "per-marketplace"
-    // would derive a suffixed value at variation step).
-    await updateWizardState({ skuStrategy }, { advance: false })
+    // E.3 + FBA.1 — Persist SKU strategy + fulfillment method
+    // alongside the channel selection. The composition layer reads
+    // state.skuStrategy when resolving per-child channelSku;
+    // submission picks up state.fulfillmentMethod for the Amazon
+    // payload's `fulfillment_availability.fulfillment_channel_code`
+    // when it lands (FBA → AMAZON_NA / AMAZON_EU; FBM → DEFAULT).
+    await updateWizardState(
+      { skuStrategy, fulfillmentMethod },
+      { advance: false },
+    )
     await updateWizardChannels(channelTuples, { advance: true })
-  }, [channelTuples, skuStrategy, updateWizardChannels, updateWizardState])
+  }, [channelTuples, skuStrategy, fulfillmentMethod, updateWizardChannels, updateWizardState])
+
+  // FBA.1 — at least one AMAZON marketplace selected? Toggle only
+  // renders when so. Cheaper than memoizing — Step 1 has ≤ 4
+  // platforms, ≤ 10 marketplaces each.
+  const hasAmazonSelected = useMemo(() => {
+    for (const key of selected) {
+      if (key.startsWith('AMAZON:')) return true
+    }
+    return false
+  }, [selected])
 
   if (loading) {
     return (
@@ -595,6 +626,57 @@ export default function Step1Channels({
           />
         ))}
       </div>
+
+      {/* FBA.1 — fulfillment method picker for Amazon. Only renders
+          when at least one AMAZON marketplace is selected. Operators
+          who don't sell on Amazon never see it. */}
+      {hasAmazonSelected && (
+        <div className="mt-4 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
+                Amazon fulfillment
+              </div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                {fulfillmentMethod === 'FBA'
+                  ? 'Amazon stores + ships from FBA warehouses. Inbound shipments managed separately on Seller Central.'
+                  : 'You ship from your own warehouse (FBM / Merchant-Fulfilled). No FBA inventory required.'}
+              </div>
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Amazon fulfillment method"
+              className="inline-flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0"
+            >
+              {(['FBM', 'FBA'] as const).map((option) => {
+                const isSelected = fulfillmentMethod === option
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => setFulfillmentMethod(option)}
+                    className={cn(
+                      'h-8 px-3 text-base font-medium border-l border-slate-200 dark:border-slate-700 first:border-l-0 transition-colors',
+                      isSelected
+                        ? 'bg-blue-600 text-white dark:bg-blue-500'
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                    )}
+                    title={
+                      option === 'FBA'
+                        ? 'Fulfilled by Amazon — Amazon picks, packs, ships'
+                        : 'Fulfilled by Merchant — you ship from your own warehouse'
+                    }
+                  >
+                    {option}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* E.3 — SKU strategy. Collapsed by default; the standard "shared
           parent + shared children + same FBA/FBM SKU" answer is what
