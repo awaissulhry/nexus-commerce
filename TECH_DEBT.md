@@ -206,11 +206,13 @@ No follow-up action.
 
 **Symptom (kept for context):** Bulk-edit-in-place is the obvious next feature but reusing the bulk-operations grid's machinery requires a refactor. Until that ROI clears, the dedicated bulk-ops surface owns the use case.
 
-## 19. 🟢 /products → single-product create form
+## 19. ✅ /products → single-product create form — resolved 2026-05-10 (SPC.1)
 
-"New product" routes to `/bulk-operations#upload` for v1. A form-based one-product creator (SKU, name, brand, base price, initial stock, images) is a deferred design — the bulk-operations flow handles single-product paste fine, and the CSV / XLSX path covers everything else.
+**Resolution:** `/products/new` is now form-first: SKU + master name + brand + base price + optional initial stock. Submit POSTs `/api/products` (endpoint extended to accept optional `brand`) and lands on `/products/[id]/edit` so the operator can refine the master before going to the listing wizard. Initial stock is set via a follow-up `PATCH /api/inventory/:id` when entered; failure there is non-fatal.
 
-Worth designing once we have a clear "from scratch, no upload" use case (e.g. a brand owner adding a single SKU at a time).
+The previous auto-create-plus-redirect flow is preserved as a "create an empty draft" link below the form — operators who want to skip straight to the listing wizard get the original behaviour. Same SS shape (NEW-YYYYMMDD-XXXX SKU, idempotency key on the POST).
+
+Validation: SKU required + unique (server returns 409 on collision via the existing P2002 catch); name required; basePrice required + ≥ 0 (matches MasterPriceService's contract); initialStock optional + non-negative integer.
 
 ## 20. ✅ /products → faceted search counts — partially resolved 2026-05-08
 
