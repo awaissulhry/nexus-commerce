@@ -3,7 +3,10 @@
  *
  * Generates a column manifest that mirrors Amazon's official flat-file
  * template structure (as downloaded from Seller Central), including:
- *   - Exact Amazon group order and Italian labels
+ *   - Exact Amazon group order in the marketplace's local language
+ *   - Schema-driven column labels (extracted from Amazon's localized
+ *     JSON Schema titles — automatically market-specific)
+ *   - Static fallback labels for fixed infrastructure columns
  *   - Schema-driven valid values (enum options) per field
  *   - TSV export + JSON feed body generation
  */
@@ -41,7 +44,7 @@ export interface FlatFileColumn {
   id: string          // Internal field ID used as the row key
   fieldRef: string    // Amazon flat-file attribute reference
   labelEn: string     // English label
-  labelIt: string     // Italian label (from Amazon IT flat file)
+  labelLocal: string  // Marketplace-local label (from Amazon schema title)
   description?: string
   required: boolean
   kind: FlatFileColumnKind
@@ -52,9 +55,9 @@ export interface FlatFileColumn {
 
 export interface FlatFileColumnGroup {
   id: string
-  labelEn: string   // English group name
-  labelIt: string   // Italian group name (as in Amazon file)
-  color: string     // Tailwind colour prefix
+  labelEn: string     // English group name
+  labelLocal: string  // Marketplace-local group name
+  color: string       // Tailwind colour prefix
   columns: FlatFileColumn[]
 }
 
@@ -76,208 +79,161 @@ export interface FlatFileRow {
   [key: string]: unknown
 }
 
-// ── Italian label dictionary (from actual COAT.xlsm Amazon IT file) ───
+// ── Market-local labels for infrastructure columns ─────────────────────
+// These columns are structural (not product-type schema fields) so Amazon's
+// schema titles won't cover them. We maintain per-language translations here.
+// Schema-derived fields (item_name, brand, bullet_point, etc.) get their
+// localised titles extracted directly from the live schema response instead.
 
-const IT_LABELS: Record<string, string> = {
-  // Offer Identity
-  'item_sku':              'SKU',
-  'product_type':          'Tipo di prodotto',
-  'record_action':         "Azione sull'offerta",
-  // Variations
-  'parentage_level':       'Livello di parentela',
-  'parent_sku':            'SKU articolo Parent (principale)',
-  'variation_theme':       'Variazione del Tema del Nome',
-  // Product Identity
-  'item_name':             "Nome dell'articolo",
-  'brand':                 'Nome del marchio',
-  'external_product_id_type': 'Tipo ID di prodotto',
-  'external_product_id':   'ID prodotto',
-  'browse_node_1':         'Nodi di navigazione consigliati',
-  'browse_node_2':         'Nodi di navigazione consigliati',
-  'browse_node_3':         'Nodi di navigazione consigliati',
-  'browse_node_4':         'Nodi di navigazione consigliati',
-  'browse_node_5':         'Nodi di navigazione consigliati',
-  'collar_style_1':        'Stile del colletto',
-  'collar_style_2':        'Stile del colletto',
-  'model_number':          'Numero di modello',
-  'model_name':            'Nome del modello',
-  'manufacturer':          'Produttore',
-  // Images
-  'main_image_url':        'URL immagine principale',
-  'other_image_url_1':     'URL altra immagine',
-  'other_image_url_2':     'URL altra immagine',
-  'other_image_url_3':     'URL altra immagine',
-  'other_image_url_4':     'URL altra immagine',
-  'other_image_url_5':     'URL altra immagine',
-  'other_image_url_6':     'URL altra immagine',
-  'other_image_url_7':     'URL altra immagine',
-  'other_image_url_8':     'URL altra immagine',
-  'swatch_image_url':      'URL immagine campione',
-  // Product Details
-  'product_description':   'Descrizione del prodotto',
-  'bullet_point1':         'Punto elenco',
-  'bullet_point2':         'Punto elenco',
-  'bullet_point3':         'Punto elenco',
-  'bullet_point4':         'Punto elenco',
-  'bullet_point5':         'Punto elenco',
-  'generic_keyword':       'Chiavi di ricerca',
-  'special_feature1':      'Funzionalità speciali',
-  'special_feature2':      'Funzionalità speciali',
-  'special_feature3':      'Funzionalità speciali',
-  'special_feature4':      'Funzionalità speciali',
-  'special_feature5':      'Funzionalità speciali',
-  'lifestyle':             'Stile di vita',
-  'style':                 'Stile',
-  'department':            'Pubblico di Destinazione',
-  'target_gender':         'Sesso a cui è destinato',
-  'age_range_description': 'Descrizione della fascia di età',
-  'apparel_size_system':   'Sistema delle taglie di abbigliamento',
-  'apparel_size_class':    'Formato delle taglie di abbigliamento',
-  'apparel_size':          'Taglia abbigliamento',
-  'apparel_size_to':       'Limite superiore della taglia',
-  'apparel_body_type':     'Tipo di corporatura',
-  'apparel_height_type':   'Altezza',
-  'material1':             'Materiale',
-  'material2':             'Materiale',
-  'material3':             'Materiale',
-  'fabric_type':           'Tipo di tessuto',
-  'lining_description':    'Descrizione rivestimento',
-  'number_of_items':       'Numero di articoli',
-  'item_package_quantity': 'Quantità per pacco',
-  'item_type_name':        'Nome del tipo di prodotto',
-  'water_resistance_level':'Livello di resistenza all\'acqua',
-  'special_size_type':     'Taglie speciali',
-  'color_map':             'Mappa dei colori',
-  'color':                 'Colore',
-  'item_length_description': 'Descrizione della lunghezza',
-  'part_number':           'Numero Di Parte',
-  'theme':                 'Tema',
-  'fit_type':              'Tipo di Vestibilità',
-  'leg_length':            'Lunghezza della gamba',
-  'leg_length_unit':       'Unità lunghezza gamba',
-  'pocket_description1':   'Descrizione della tasca',
-  'pocket_description2':   'Descrizione della tasca',
-  'pocket_description3':   'Descrizione della tasca',
-  'pocket_description4':   'Descrizione della tasca',
-  'pocket_description5':   'Descrizione della tasca',
-  'weave_type':            'Tipo di tessitura',
-  'care_instructions':     'Istruzioni per la Manutenzione',
-  'pattern':               'Motivo',
-  'sport_type':            'Tipo di sport',
-  'coat_silhouette_type':  'Linea della giacca',
-  'closure_type':          'Tipo di chiusura',
-  'sleeve_length':         'Descrizione della lunghezza della manica',
-  'sleeve_type':           'Tipo di manica',
-  'number_of_pockets':     'Numero di tasche',
-  // Offer
-  'skip_offer':            "Ignora l'offerta",
-  'condition_type':        "Condizione dell'articolo",
-  'condition_note':        "Nota sulle condizioni",
-  'list_price':            'Prezzo al pubblico consigliato (IVA inclusa)',
-  'product_tax_code':      'Codice fiscale del prodotto',
-  'merchant_release_date': 'Data di uscita',
-  'max_order_quantity':    'Quantitativo massimo ordine',
-  // Offer IT
-  'fulfillment_channel_code': 'Codice canale di gestione (IT)',
-  'quantity':              'Quantità (IT)',
-  'lead_time_to_ship':     'Tempo di gestione (IT)',
-  'restock_date':          'Data di rifornimento (IT)',
-  'is_inventory_available':'Inventario sempre disponibile (IT)',
-  'price_eur':             'Prezzo EUR (Vendita su Amazon, IT)',
-  'min_price':             'Prezzo minimo consentito al venditore (IT)',
-  'max_price':             'Prezzo massimo consentito al venditore (IT)',
-  'sale_price':            'Prezzo di vendita EUR (IT)',
-  'sale_start_date':       'Data inizio vendita (IT)',
-  'sale_end_date':         'Data fine vendita (IT)',
-  'offer_start_date':      "Data di inizio dell'offerta (IT)",
-  'offer_end_date':        "Data interruzione della vendita (IT)",
-  'merchant_shipping_group':'Modello di spedizione (IT)',
-  // Shipping
-  'pkg_length':            'Lunghezza imballaggio',
-  'pkg_length_unit':       'Unità lunghezza imballaggio',
-  'pkg_width':             'Larghezza imballaggio',
-  'pkg_width_unit':        'Unità larghezza imballaggio',
-  'pkg_height':            'Altezza imballaggio',
-  'pkg_height_unit':       'Unità altezza imballaggio',
-  'pkg_weight':            'Peso imballaggio',
-  'pkg_weight_unit':       'Unità peso imballaggio',
-  // Compliance
-  'country_of_origin':     'Paese di origine',
-  'batteries_required':    'Le batterie sono necessarie?',
-  'batteries_included':    'Le batterie sono incluse?',
-  'item_weight':           "Peso dell'articolo",
-  'item_weight_unit':      "Unità peso dell'articolo",
+type LangTag = 'it_IT' | 'de_DE' | 'fr_FR' | 'es_ES' | 'en_GB'
+
+const FIXED_FIELD_LABELS: Record<string, Partial<Record<LangTag, string>>> = {
+  item_sku:              { it_IT: 'SKU', de_DE: 'SKU', fr_FR: 'SKU', es_ES: 'SKU', en_GB: 'SKU' },
+  product_type:          { it_IT: 'Tipo di prodotto', de_DE: 'Produkttyp', fr_FR: 'Type de produit', es_ES: 'Tipo de producto', en_GB: 'Product Type' },
+  record_action:         { it_IT: "Azione sull'offerta", de_DE: 'Angebotsaktion', fr_FR: "Action sur l'offre", es_ES: 'Acción de la oferta', en_GB: 'Offer Action' },
+  parentage_level:       { it_IT: 'Livello di parentela', de_DE: 'Hierarchieebene', fr_FR: 'Niveau de parenté', es_ES: 'Nivel de parentesco', en_GB: 'Parentage Level' },
+  parent_sku:            { it_IT: 'SKU articolo Parent', de_DE: 'Übergeordnete SKU', fr_FR: 'SKU parent', es_ES: 'SKU del padre', en_GB: 'Parent SKU' },
+  variation_theme:       { it_IT: 'Variazione Tema', de_DE: 'Variationsthema', fr_FR: 'Thème de variation', es_ES: 'Tema de variación', en_GB: 'Variation Theme' },
+  external_product_id_type: { it_IT: 'Tipo ID prodotto', de_DE: 'Produktkennungstyp', fr_FR: "Type d'ID produit", es_ES: 'Tipo de ID de producto', en_GB: 'Product ID Type' },
+  external_product_id:   { it_IT: 'ID prodotto', de_DE: 'Produktkennzeichen', fr_FR: 'ID produit', es_ES: 'ID de producto', en_GB: 'Product ID' },
+  browse_node_1:         { it_IT: 'Nodi di navigazione 1', de_DE: 'Browseknoten 1', fr_FR: 'Nœud de navigation 1', es_ES: 'Nodo de navegación 1', en_GB: 'Browse Node 1' },
+  browse_node_2:         { it_IT: 'Nodi di navigazione 2', de_DE: 'Browseknoten 2', fr_FR: 'Nœud de navigation 2', es_ES: 'Nodo de navegación 2', en_GB: 'Browse Node 2' },
+  main_image_url:        { it_IT: 'URL immagine principale', de_DE: 'Haupt-Bild-URL', fr_FR: 'URL image principale', es_ES: 'URL imagen principal', en_GB: 'Main Image URL' },
+  other_image_url_1:     { it_IT: 'URL altra immagine', de_DE: 'Weitere Bild-URL', fr_FR: 'URL autre image', es_ES: 'URL otra imagen', en_GB: 'Other Image URL' },
+  other_image_url_2:     { it_IT: 'URL altra immagine', de_DE: 'Weitere Bild-URL', fr_FR: 'URL autre image', es_ES: 'URL otra imagen', en_GB: 'Other Image URL' },
+  other_image_url_3:     { it_IT: 'URL altra immagine', de_DE: 'Weitere Bild-URL', fr_FR: 'URL autre image', es_ES: 'URL otra imagen', en_GB: 'Other Image URL' },
+  other_image_url_4:     { it_IT: 'URL altra immagine', de_DE: 'Weitere Bild-URL', fr_FR: 'URL autre image', es_ES: 'URL otra imagen', en_GB: 'Other Image URL' },
+  other_image_url_5:     { it_IT: 'URL altra immagine', de_DE: 'Weitere Bild-URL', fr_FR: 'URL autre image', es_ES: 'URL otra imagen', en_GB: 'Other Image URL' },
+  swatch_image_url:      { it_IT: 'URL immagine campione', de_DE: 'Muster-Bild-URL', fr_FR: "URL image d'échantillon", es_ES: 'URL imagen de muestra', en_GB: 'Swatch Image URL' },
+  skip_offer:            { it_IT: "Ignora l'offerta", de_DE: 'Angebot überspringen', fr_FR: "Ignorer l'offre", es_ES: 'Omitir oferta', en_GB: 'Skip Offer' },
+  condition_type:        { it_IT: "Condizione dell'articolo", de_DE: 'Artikelzustand', fr_FR: "État de l'article", es_ES: 'Condición del artículo', en_GB: 'Item Condition' },
+  condition_note:        { it_IT: 'Nota sulle condizioni', de_DE: 'Zustandshinweis', fr_FR: 'Note sur les conditions', es_ES: 'Nota sobre condición', en_GB: 'Condition Note' },
+  list_price:            { it_IT: 'Prezzo al pubblico consigliato (IVA inclusa)', de_DE: 'Unverbindlicher Verkaufspreis (inkl. MwSt.)', fr_FR: 'Prix public conseillé (TVA incluse)', es_ES: 'Precio de venta recomendado (IVA incl.)', en_GB: 'List Price (incl. VAT)' },
+  product_tax_code:      { it_IT: 'Codice fiscale del prodotto', de_DE: 'Steuerklasse', fr_FR: 'Code fiscal produit', es_ES: 'Código fiscal del producto', en_GB: 'Product Tax Code' },
+  merchant_release_date: { it_IT: 'Data di uscita', de_DE: 'Erscheinungsdatum', fr_FR: 'Date de sortie', es_ES: 'Fecha de lanzamiento', en_GB: 'Release Date' },
+  max_order_quantity:    { it_IT: 'Quantitativo massimo ordine', de_DE: 'Max. Bestellmenge', fr_FR: 'Quantité max. par commande', es_ES: 'Cantidad máxima de pedido', en_GB: 'Max Order Quantity' },
+  fulfillment_channel_code: { it_IT: 'Codice canale di gestione', de_DE: 'Versandkanal-Code', fr_FR: "Code canal d'expédition", es_ES: 'Código de canal de envío', en_GB: 'Fulfillment Channel Code' },
+  quantity:              { it_IT: 'Quantità', de_DE: 'Menge', fr_FR: 'Quantité', es_ES: 'Cantidad', en_GB: 'Quantity' },
+  lead_time_to_ship:     { it_IT: 'Tempo di gestione', de_DE: 'Bearbeitungszeit', fr_FR: 'Délai de traitement', es_ES: 'Tiempo de preparación', en_GB: 'Handling Days' },
+  price_eur:             { it_IT: 'Prezzo (Vendita su Amazon)', de_DE: 'Preis (Verkauf auf Amazon)', fr_FR: 'Prix (Vente sur Amazon)', es_ES: 'Precio (Venta en Amazon)', en_GB: 'Price (Selling on Amazon)' },
+  sale_price:            { it_IT: 'Prezzo di vendita', de_DE: 'Aktionspreis', fr_FR: 'Prix de vente', es_ES: 'Precio de oferta', en_GB: 'Sale Price' },
+  sale_start_date:       { it_IT: 'Data inizio vendita', de_DE: 'Aktionsbeginn', fr_FR: 'Début de la vente', es_ES: 'Inicio de oferta', en_GB: 'Sale Start Date' },
+  sale_end_date:         { it_IT: 'Data fine vendita', de_DE: 'Aktionsende', fr_FR: 'Fin de la vente', es_ES: 'Fin de oferta', en_GB: 'Sale End Date' },
+  min_price:             { it_IT: 'Prezzo minimo consentito', de_DE: 'Mindestverkaufspreis', fr_FR: 'Prix minimum autorisé', es_ES: 'Precio mínimo permitido', en_GB: 'Minimum Seller Allowed Price' },
+  max_price:             { it_IT: 'Prezzo massimo consentito', de_DE: 'Höchstverkaufspreis', fr_FR: 'Prix maximum autorisé', es_ES: 'Precio máximo permitido', en_GB: 'Maximum Seller Allowed Price' },
+  merchant_shipping_group: { it_IT: 'Modello di spedizione', de_DE: 'Versandvorlage', fr_FR: "Modèle d'expédition", es_ES: 'Plantilla de envío', en_GB: 'Shipping Template' },
+  pkg_length:            { it_IT: 'Lunghezza imballaggio', de_DE: 'Verpackungslänge', fr_FR: 'Longueur emballage', es_ES: 'Longitud del embalaje', en_GB: 'Package Length' },
+  pkg_length_unit:       { it_IT: 'Unità lunghezza', de_DE: 'Längeneinheit', fr_FR: 'Unité de longueur', es_ES: 'Unidad de longitud', en_GB: 'Length Unit' },
+  pkg_width:             { it_IT: 'Larghezza imballaggio', de_DE: 'Verpackungsbreite', fr_FR: 'Largeur emballage', es_ES: 'Anchura del embalaje', en_GB: 'Package Width' },
+  pkg_width_unit:        { it_IT: 'Unità larghezza', de_DE: 'Breiteneinheit', fr_FR: 'Unité de largeur', es_ES: 'Unidad de anchura', en_GB: 'Width Unit' },
+  pkg_height:            { it_IT: 'Altezza imballaggio', de_DE: 'Verpackungshöhe', fr_FR: 'Hauteur emballage', es_ES: 'Altura del embalaje', en_GB: 'Package Height' },
+  pkg_height_unit:       { it_IT: 'Unità altezza', de_DE: 'Höheneinheit', fr_FR: "Unité de hauteur", es_ES: 'Unidad de altura', en_GB: 'Height Unit' },
+  pkg_weight:            { it_IT: 'Peso imballaggio', de_DE: 'Verpackungsgewicht', fr_FR: 'Poids emballage', es_ES: 'Peso del embalaje', en_GB: 'Package Weight' },
+  pkg_weight_unit:       { it_IT: 'Unità peso', de_DE: 'Gewichtseinheit', fr_FR: 'Unité de poids', es_ES: 'Unidad de peso', en_GB: 'Weight Unit' },
+  country_of_origin:     { it_IT: 'Paese di origine', de_DE: 'Herkunftsland', fr_FR: "Pays d'origine", es_ES: 'País de origen', en_GB: 'Country of Origin' },
+  batteries_required:    { it_IT: 'Le batterie sono necessarie?', de_DE: 'Batterien erforderlich?', fr_FR: 'Batteries requises ?', es_ES: '¿Se requieren baterías?', en_GB: 'Batteries Required?' },
+  batteries_included:    { it_IT: 'Le batterie sono incluse?', de_DE: 'Batterien enthalten?', fr_FR: 'Batteries incluses ?', es_ES: '¿Baterías incluidas?', en_GB: 'Batteries Included?' },
+  item_weight:           { it_IT: "Peso dell'articolo", de_DE: 'Artikelgewicht', fr_FR: "Poids de l'article", es_ES: 'Peso del artículo', en_GB: 'Item Weight' },
+  item_weight_unit:      { it_IT: 'Unità peso articolo', de_DE: 'Gewichtseinheit', fr_FR: 'Unité de poids', es_ES: 'Unidad de peso', en_GB: 'Weight Unit' },
 }
 
-function itLabel(id: string, fallback: string): string {
-  return IT_LABELS[id] ?? fallback
+// Group names per language
+const GROUP_LOCAL_LABELS: Record<string, Partial<Record<LangTag, string>>> = {
+  offer_identity:    { it_IT: "Identità dell'offerta", de_DE: 'Angebotsidentität', fr_FR: "Identité de l'offre", es_ES: 'Identidad de la oferta', en_GB: 'Offer Identity' },
+  variations:        { it_IT: 'Variazioni', de_DE: 'Variationen', fr_FR: 'Variations', es_ES: 'Variaciones', en_GB: 'Variations' },
+  product_identity:  { it_IT: 'Identità prodotto', de_DE: 'Produktidentität', fr_FR: 'Identité du produit', es_ES: 'Identidad del producto', en_GB: 'Product Identity' },
+  images:            { it_IT: 'Immagini', de_DE: 'Bilder', fr_FR: 'Images', es_ES: 'Imágenes', en_GB: 'Images' },
+  product_details:   { it_IT: 'Dettagli prodotto', de_DE: 'Produktdetails', fr_FR: 'Détails du produit', es_ES: 'Detalles del producto', en_GB: 'Product Details' },
+  offer:             { it_IT: 'Offerta', de_DE: 'Angebot', fr_FR: 'Offre', es_ES: 'Oferta', en_GB: 'Offer' },
+  offer_it:          { it_IT: 'Offerta (IT) - Vendita su Amazon', de_DE: 'Angebot (DE) - Verkauf bei Amazon', fr_FR: 'Offre (FR) - Vente sur Amazon', es_ES: 'Oferta (ES) - Venta en Amazon', en_GB: 'Offer (UK) - Selling on Amazon' },
+  shipping:          { it_IT: 'Spedizione', de_DE: 'Versand', fr_FR: 'Expédition', es_ES: 'Envío', en_GB: 'Shipping' },
+  compliance:        { it_IT: 'Conformità e sicurezza', de_DE: 'Konformität und Sicherheit', fr_FR: 'Conformité et sécurité', es_ES: 'Conformidad y seguridad', en_GB: 'Compliance & Safety' },
+  other_attributes:  { it_IT: 'Altri attributi', de_DE: 'Weitere Attribute', fr_FR: 'Autres attributs', es_ES: 'Otros atributos', en_GB: 'Other Attributes' },
+}
+
+/** Resolve a label: schema title > fixed translation > English fallback */
+function resolveLabel(id: string, langTag: LangTag, schemaLabels: Record<string, string>, fallbackEn: string): string {
+  return schemaLabels[id] ?? FIXED_FIELD_LABELS[id]?.[langTag] ?? fallbackEn
+}
+
+/** Extract localised titles from schema properties into a flat map. */
+function buildSchemaLabels(properties: Record<string, any>): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const [fieldId, prop] of Object.entries(properties)) {
+    const title: string | undefined = prop?.title ?? prop?.items?.properties?.value?.title
+    if (title) map[fieldId] = title
+  }
+  return map
 }
 
 // ── Fixed group definitions (Amazon's exact structure) ─────────────────
+// All accept (lang, sl) — langTag for translations, sl = schema label map
 
-function offerIdentityGroup(variationThemes: string[]): FlatFileColumnGroup {
+type LL = (id: string, fallbackEn: string) => string  // local-label resolver
+
+function offerIdentityGroup(variationThemes: string[], ll: LL, lang: LangTag, marketplace: string): FlatFileColumnGroup {
   return {
     id: 'offer_identity',
     labelEn: 'Offer Identity',
-    labelIt: "Identità dell'offerta",
+    labelLocal: GROUP_LOCAL_LABELS.offer_identity[lang] ?? "Offer Identity",
     color: 'blue',
     columns: [
-      { id: 'item_sku',       fieldRef: 'contribution_sku#1.value',  labelEn: 'Seller SKU',    labelIt: itLabel('item_sku', 'SKU'),         required: true,  kind: 'text',   width: 180 },
-      { id: 'product_type',   fieldRef: 'product_type#1.value',       labelEn: 'Product Type',  labelIt: itLabel('product_type', 'Tipo di prodotto'), required: true, kind: 'text', width: 140 },
-      { id: 'record_action',  fieldRef: '::record_action',            labelEn: 'Operation',     labelIt: itLabel('record_action', "Azione sull'offerta"), required: true, kind: 'enum', width: 130,
+      { id: 'item_sku',      fieldRef: 'contribution_sku#1.value',  labelEn: 'Seller SKU',   labelLocal: ll('item_sku', 'SKU'),          required: true,  kind: 'text',   width: 180 },
+      { id: 'product_type',  fieldRef: 'product_type#1.value',       labelEn: 'Product Type', labelLocal: ll('product_type', 'Product Type'), required: true, kind: 'text', width: 140 },
+      { id: 'record_action', fieldRef: '::record_action',            labelEn: 'Operation',    labelLocal: ll('record_action', 'Offer Action'), required: true, kind: 'enum', width: 130,
         options: ['full_update', 'partial_update', 'delete'],
         description: 'full_update = create or replace; partial_update = merge fields; delete = remove' },
     ],
   }
 }
 
-function variationsGroup(variationThemes: string[]): FlatFileColumnGroup {
+function variationsGroup(variationThemes: string[], ll: LL, lang: LangTag): FlatFileColumnGroup {
   return {
     id: 'variations',
     labelEn: 'Variations',
-    labelIt: 'Variazioni',
+    labelLocal: GROUP_LOCAL_LABELS.variations[lang] ?? 'Variations',
     color: 'purple',
     columns: [
-      { id: 'parentage_level', fieldRef: 'parentage_level[marketplace_id]#1.value', labelEn: 'Parent/Child', labelIt: itLabel('parentage_level', 'Livello di parentela'), required: false, kind: 'enum', width: 110,
+      { id: 'parentage_level', fieldRef: 'parentage_level[marketplace_id]#1.value', labelEn: 'Parent/Child', labelLocal: ll('parentage_level', 'Parentage Level'), required: false, kind: 'enum', width: 110,
         options: ['', 'parent', 'child'], description: 'Leave blank for standalone. "parent" = non-buyable variation parent. "child" = variant.' },
-      { id: 'parent_sku', fieldRef: 'child_parent_sku_relationship[marketplace_id]#1.parent_sku', labelEn: 'Parent SKU', labelIt: itLabel('parent_sku', 'SKU articolo Parent'), required: false, kind: 'text', width: 170,
+      { id: 'parent_sku', fieldRef: 'child_parent_sku_relationship[marketplace_id]#1.parent_sku', labelEn: 'Parent SKU', labelLocal: ll('parent_sku', 'Parent SKU'), required: false, kind: 'text', width: 170,
         description: 'Required when parentage_level = child' },
-      { id: 'variation_theme', fieldRef: 'variation_theme#1.name', labelEn: 'Variation Theme', labelIt: itLabel('variation_theme', 'Variazione Tema'), required: false, kind: 'enum', width: 170,
+      { id: 'variation_theme', fieldRef: 'variation_theme#1.name', labelEn: 'Variation Theme', labelLocal: ll('variation_theme', 'Variation Theme'), required: false, kind: 'enum', width: 170,
         options: ['', ...variationThemes],
-        description: 'Required on parent rows. e.g. COLORE, DIMENSIONI/COLORE' },
+        description: 'Required on parent rows.' },
     ],
   }
 }
 
-function productIdentityGroup(schemaEnums: Record<string, string[]>): FlatFileColumnGroup {
+function productIdentityGroup(schemaEnums: Record<string, string[]>, ll: LL, lang: LangTag): FlatFileColumnGroup {
   return {
     id: 'product_identity',
     labelEn: 'Product Identity',
-    labelIt: 'Identità prodotto',
+    labelLocal: GROUP_LOCAL_LABELS.product_identity[lang] ?? 'Product Identity',
     color: 'emerald',
     columns: [
-      { id: 'item_name',      fieldRef: 'item_name[marketplace_id][language_tag]#1.value', labelEn: 'Title', labelIt: itLabel('item_name', "Nome dell'articolo"), required: true, kind: 'text', width: 300, maxLength: 200 },
-      { id: 'brand',          fieldRef: 'brand[marketplace_id][language_tag]#1.value',     labelEn: 'Brand', labelIt: itLabel('brand', 'Nome del marchio'),        required: true, kind: 'text', width: 140 },
-      { id: 'external_product_id_type', fieldRef: 'amzn1.volt.ca.product_id_type', labelEn: 'ID Type', labelIt: itLabel('external_product_id_type', 'Tipo ID prodotto'), required: false, kind: 'enum', width: 90, options: ['', 'EAN', 'UPC', 'GTIN', 'ISBN', 'ASIN'] },
-      { id: 'external_product_id',      fieldRef: 'amzn1.volt.ca.product_id_value', labelEn: 'EAN / UPC / GTIN', labelIt: itLabel('external_product_id', 'ID prodotto'), required: false, kind: 'text', width: 160 },
-      { id: 'browse_node_1',  fieldRef: 'recommended_browse_nodes[marketplace_id]#1.value', labelEn: 'Browse Node 1', labelIt: itLabel('browse_node_1', 'Nodi di navigazione 1'), required: false, kind: 'text', width: 150 },
-      { id: 'browse_node_2',  fieldRef: 'recommended_browse_nodes[marketplace_id]#2.value', labelEn: 'Browse Node 2', labelIt: itLabel('browse_node_2', 'Nodi di navigazione 2'), required: false, kind: 'text', width: 150 },
-      { id: 'model_number',   fieldRef: 'model_number[marketplace_id]#1.value', labelEn: 'Model Number', labelIt: itLabel('model_number', 'Numero di modello'), required: false, kind: 'text', width: 130 },
-      { id: 'model_name',     fieldRef: 'model_name[marketplace_id][language_tag]#1.value', labelEn: 'Model Name', labelIt: itLabel('model_name', 'Nome del modello'), required: false, kind: 'text', width: 150 },
-      { id: 'manufacturer',   fieldRef: 'manufacturer[marketplace_id][language_tag]#1.value', labelEn: 'Manufacturer', labelIt: itLabel('manufacturer', 'Produttore'), required: false, kind: 'text', width: 150 },
+      { id: 'item_name',      fieldRef: 'item_name[marketplace_id][language_tag]#1.value', labelEn: 'Title',         labelLocal: ll('item_name', 'Title'), required: true, kind: 'text', width: 300, maxLength: 200 },
+      { id: 'brand',          fieldRef: 'brand[marketplace_id][language_tag]#1.value',     labelEn: 'Brand',         labelLocal: ll('brand', 'Brand'),     required: true, kind: 'text', width: 140 },
+      { id: 'external_product_id_type', fieldRef: 'amzn1.volt.ca.product_id_type', labelEn: 'ID Type', labelLocal: ll('external_product_id_type', 'Product ID Type'), required: false, kind: 'enum', width: 90, options: ['', 'EAN', 'UPC', 'GTIN', 'ISBN', 'ASIN'] },
+      { id: 'external_product_id',      fieldRef: 'amzn1.volt.ca.product_id_value', labelEn: 'EAN / UPC / GTIN', labelLocal: ll('external_product_id', 'Product ID'), required: false, kind: 'text', width: 160 },
+      { id: 'browse_node_1',  fieldRef: 'recommended_browse_nodes[marketplace_id]#1.value', labelEn: 'Browse Node 1', labelLocal: ll('browse_node_1', 'Browse Node 1'), required: false, kind: 'text', width: 150 },
+      { id: 'browse_node_2',  fieldRef: 'recommended_browse_nodes[marketplace_id]#2.value', labelEn: 'Browse Node 2', labelLocal: ll('browse_node_2', 'Browse Node 2'), required: false, kind: 'text', width: 150 },
+      { id: 'model_number',   fieldRef: 'model_number[marketplace_id]#1.value', labelEn: 'Model Number', labelLocal: ll('model_number', 'Model Number'), required: false, kind: 'text', width: 130 },
+      { id: 'model_name',     fieldRef: 'model_name[marketplace_id][language_tag]#1.value', labelEn: 'Model Name', labelLocal: ll('model_name', 'Model Name'), required: false, kind: 'text', width: 150 },
+      { id: 'manufacturer',   fieldRef: 'manufacturer[marketplace_id][language_tag]#1.value', labelEn: 'Manufacturer', labelLocal: ll('manufacturer', 'Manufacturer'), required: false, kind: 'text', width: 150 },
     ],
   }
 }
 
-function imagesGroup(): FlatFileColumnGroup {
+function imagesGroup(ll: LL, lang: LangTag): FlatFileColumnGroup {
   const imgCol = (id: string, ref: string, labelEn: string): FlatFileColumn => ({
-    id, fieldRef: ref, labelEn, labelIt: itLabel(id, labelEn), required: false, kind: 'text', width: 220,
+    id, fieldRef: ref, labelEn, labelLocal: ll(id, labelEn), required: false, kind: 'text', width: 220,
     description: 'Full HTTPS URL to image (min 1000px, white background)',
   })
   return {
     id: 'images',
     labelEn: 'Images',
-    labelIt: 'Immagini',
+    labelLocal: GROUP_LOCAL_LABELS.images[lang] ?? 'Images',
     color: 'orange',
     columns: [
       imgCol('main_image_url',   'main_product_image_locator[marketplace_id]#1.media_location', 'Main Image URL'),
@@ -291,25 +247,17 @@ function imagesGroup(): FlatFileColumnGroup {
   }
 }
 
-function productDetailsGroup(schemaEnums: Record<string, string[]>): FlatFileColumnGroup {
+function productDetailsGroup(schemaEnums: Record<string, string[]>, ll: LL, lang: LangTag): FlatFileColumnGroup {
   function col(id: string, ref: string, labelEn: string, overrides: Partial<FlatFileColumn> = {}): FlatFileColumn {
-    return {
-      id, fieldRef: ref, labelEn, labelIt: itLabel(id, labelEn),
-      required: false, kind: 'text', width: 160, ...overrides,
-    }
+    return { id, fieldRef: ref, labelEn, labelLocal: ll(id, labelEn), required: false, kind: 'text', width: 160, ...overrides }
   }
   function enumCol(id: string, ref: string, labelEn: string, options: string[], overrides: Partial<FlatFileColumn> = {}): FlatFileColumn {
     return col(id, ref, labelEn, { kind: 'enum', options: ['', ...options.filter(Boolean)], width: 150, ...overrides })
   }
-
-  const genderOpts = schemaEnums['target_gender'] ?? ['male', 'female', 'unisex']
-  const colorMapOpts = schemaEnums['color'] ?? []
-  const conditionOpts = schemaEnums['condition_type'] ?? ['New']
-
   return {
     id: 'product_details',
     labelEn: 'Product Details',
-    labelIt: 'Dettagli prodotto',
+    labelLocal: GROUP_LOCAL_LABELS.product_details[lang] ?? 'Product Details',
     color: 'teal',
     columns: [
       col('product_description','product_description[marketplace_id][language_tag]#1.value','Description', { kind: 'longtext', width: 280 }),
@@ -324,8 +272,8 @@ function productDetailsGroup(schemaEnums: Record<string, string[]>): FlatFileCol
       col('special_feature3','special_feature[marketplace_id][language_tag]#3.value','Special Feature 3', { width: 180 }),
       enumCol('lifestyle','lifestyle[marketplace_id][language_tag]#1.value','Lifestyle', schemaEnums['lifestyle'] ?? []),
       enumCol('style','style[marketplace_id][language_tag]#1.value','Style', schemaEnums['style'] ?? []),
-      col('department','department[marketplace_id][language_tag]#1.value','Target Audience / Department', { width: 180 }),
-      enumCol('target_gender','target_gender[marketplace_id]#1.value','Target Gender', genderOpts, { width: 120 }),
+      col('department','department[marketplace_id][language_tag]#1.value','Target Audience', { width: 180 }),
+      enumCol('target_gender','target_gender[marketplace_id]#1.value','Target Gender', schemaEnums['target_gender'] ?? ['male','female','unisex'], { width: 120 }),
       col('age_range_description','age_range_description[marketplace_id][language_tag]#1.value','Age Range', { width: 130 }),
       enumCol('apparel_size_system','apparel_size[marketplace_id]#1.size_system','Size System', schemaEnums['apparel_size.size_system'] ?? ['IT','FR','DE','UK','US','JP'], { width: 120 }),
       enumCol('apparel_size_class','apparel_size[marketplace_id]#1.size_class','Size Format', schemaEnums['apparel_size.size_class'] ?? [], { width: 130 }),
@@ -350,49 +298,49 @@ function productDetailsGroup(schemaEnums: Record<string, string[]>): FlatFileCol
   }
 }
 
-function offerGroup(schemaEnums: Record<string, string[]>): FlatFileColumnGroup {
+function offerGroup(schemaEnums: Record<string, string[]>, ll: LL, lang: LangTag): FlatFileColumnGroup {
   return {
     id: 'offer',
     labelEn: 'Offer',
-    labelIt: 'Offerta',
+    labelLocal: GROUP_LOCAL_LABELS.offer[lang] ?? 'Offer',
     color: 'amber',
     columns: [
-      { id: 'skip_offer',   fieldRef: 'skip_offer[marketplace_id]#1.value',    labelEn: 'Skip Offer',    labelIt: itLabel('skip_offer', "Ignora l'offerta"),       required: false, kind: 'enum',   width: 100, options: ['', 'true', 'false'] },
-      { id: 'condition_type',fieldRef:'condition_type[marketplace_id]#1.value', labelEn: 'Condition',     labelIt: itLabel('condition_type', "Condizione"),        required: false, kind: 'enum',   width: 120, options: ['', 'new_new', ...(schemaEnums['condition_type'] ?? ['new_new'])] },
-      { id: 'condition_note',fieldRef:'condition_note[marketplace_id][language_tag]#1.value', labelEn: 'Condition Note', labelIt: itLabel('condition_note', 'Nota condizione'), required: false, kind: 'text', width: 180 },
-      { id: 'list_price',   fieldRef: 'list_price[marketplace_id]#1.value_with_tax', labelEn: 'RRP (incl. VAT)', labelIt: itLabel('list_price', 'Prezzo al pubblico consigliato'), required: false, kind: 'number', width: 120 },
-      { id: 'product_tax_code', fieldRef: 'product_tax_code#1.value', labelEn: 'Tax Code', labelIt: itLabel('product_tax_code', 'Codice fiscale del prodotto'), required: false, kind: 'text', width: 110 },
-      { id: 'merchant_release_date', fieldRef: 'merchant_release_date[marketplace_id]#1.value', labelEn: 'Release Date', labelIt: itLabel('merchant_release_date', 'Data di uscita'), required: false, kind: 'text', width: 120 },
-      { id: 'max_order_quantity', fieldRef: 'max_order_quantity[marketplace_id]#1.value', labelEn: 'Max Order Qty', labelIt: itLabel('max_order_quantity', 'Quantitativo massimo ordine'), required: false, kind: 'number', width: 110 },
+      { id: 'skip_offer',   fieldRef: 'skip_offer[marketplace_id]#1.value',    labelEn: 'Skip Offer',    labelLocal: ll('skip_offer', 'Skip Offer'),       required: false, kind: 'enum',   width: 100, options: ['', 'true', 'false'] },
+      { id: 'condition_type',fieldRef:'condition_type[marketplace_id]#1.value', labelEn: 'Condition',     labelLocal: ll('condition_type', 'Condition'),     required: false, kind: 'enum',   width: 120, options: ['', 'new_new', ...(schemaEnums['condition_type'] ?? ['new_new'])] },
+      { id: 'condition_note',fieldRef:'condition_note[marketplace_id][language_tag]#1.value', labelEn: 'Condition Note', labelLocal: ll('condition_note', 'Condition Note'), required: false, kind: 'text', width: 180 },
+      { id: 'list_price',   fieldRef: 'list_price[marketplace_id]#1.value_with_tax', labelEn: 'RRP (incl. VAT)', labelLocal: ll('list_price', 'RRP (incl. VAT)'), required: false, kind: 'number', width: 120 },
+      { id: 'product_tax_code', fieldRef: 'product_tax_code#1.value', labelEn: 'Tax Code', labelLocal: ll('product_tax_code', 'Tax Code'), required: false, kind: 'text', width: 110 },
+      { id: 'merchant_release_date', fieldRef: 'merchant_release_date[marketplace_id]#1.value', labelEn: 'Release Date', labelLocal: ll('merchant_release_date', 'Release Date'), required: false, kind: 'text', width: 120 },
+      { id: 'max_order_quantity', fieldRef: 'max_order_quantity[marketplace_id]#1.value', labelEn: 'Max Order Qty', labelLocal: ll('max_order_quantity', 'Max Order Qty'), required: false, kind: 'number', width: 110 },
     ],
   }
 }
 
-function offerItGroup(defaultCurrency: string): FlatFileColumnGroup {
+function offerMarketGroup(defaultCurrency: string, mp: string, ll: LL, lang: LangTag): FlatFileColumnGroup {
   return {
     id: 'offer_it',
-    labelEn: 'Offer (IT) — Amazon.it',
-    labelIt: 'Offerta (IT) - (Vendita su Amazon)',
+    labelEn: `Offer (${mp}) — Amazon`,
+    labelLocal: GROUP_LOCAL_LABELS.offer_it[lang] ?? `Offer (${mp}) — Amazon`,
     color: 'yellow',
     columns: [
-      { id: 'fulfillment_channel_code', fieldRef: 'fulfillment_availability#1.fulfillment_channel_code', labelEn: 'Fulfillment Channel', labelIt: itLabel('fulfillment_channel_code', 'Codice canale di gestione'), required: false, kind: 'enum', width: 150, options: ['', 'DEFAULT', 'AMAZON_EU'] },
-      { id: 'quantity',         fieldRef: 'fulfillment_availability#1.quantity',    labelEn: 'Quantity',    labelIt: itLabel('quantity', 'Quantità'),        required: false, kind: 'number', width: 80 },
-      { id: 'lead_time_to_ship',fieldRef: 'fulfillment_availability#1.lead_time_to_ship_max_days', labelEn: 'Handling Days', labelIt: itLabel('lead_time_to_ship', 'Tempo di gestione'), required: false, kind: 'number', width: 110 },
-      { id: 'price_eur',        fieldRef: `purchasable_offer[marketplace_id][audience=ALL]#1.our_price#1.schedule#1.value_with_tax`, labelEn: `Price ${defaultCurrency} (incl. VAT)`, labelIt: itLabel('price_eur', `Prezzo ${defaultCurrency}`), required: false, kind: 'number', width: 130 },
-      { id: 'sale_price',       fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.discounted_price#1.schedule#1.value_with_tax', labelEn: 'Sale Price', labelIt: itLabel('sale_price', 'Prezzo di vendita'), required: false, kind: 'number', width: 110 },
-      { id: 'sale_start_date',  fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.discounted_price#1.schedule#1.start_at', labelEn: 'Sale Start', labelIt: itLabel('sale_start_date', 'Data inizio vendita'), required: false, kind: 'text', width: 120 },
-      { id: 'sale_end_date',    fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.discounted_price#1.schedule#1.end_at', labelEn: 'Sale End', labelIt: itLabel('sale_end_date', 'Data fine vendita'), required: false, kind: 'text', width: 120 },
-      { id: 'min_price',        fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.minimum_seller_allowed_price#1.schedule#1.value_with_tax', labelEn: 'Min Price', labelIt: itLabel('min_price', 'Prezzo minimo'), required: false, kind: 'number', width: 100 },
-      { id: 'max_price',        fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.maximum_seller_allowed_price#1.schedule#1.value_with_tax', labelEn: 'Max Price', labelIt: itLabel('max_price', 'Prezzo massimo'), required: false, kind: 'number', width: 100 },
-      { id: 'merchant_shipping_group', fieldRef: 'merchant_shipping_group[marketplace_id]#1.value', labelEn: 'Shipping Template', labelIt: itLabel('merchant_shipping_group', 'Modello di spedizione'), required: false, kind: 'text', width: 160 },
+      { id: 'fulfillment_channel_code', fieldRef: 'fulfillment_availability#1.fulfillment_channel_code', labelEn: 'Fulfillment Channel', labelLocal: ll('fulfillment_channel_code', 'Fulfillment Channel'), required: false, kind: 'enum', width: 150, options: ['', 'DEFAULT', 'AMAZON_EU'] },
+      { id: 'quantity',         fieldRef: 'fulfillment_availability#1.quantity',    labelEn: 'Quantity',     labelLocal: ll('quantity', 'Quantity'),       required: false, kind: 'number', width: 80 },
+      { id: 'lead_time_to_ship',fieldRef: 'fulfillment_availability#1.lead_time_to_ship_max_days', labelEn: 'Handling Days', labelLocal: ll('lead_time_to_ship', 'Handling Days'), required: false, kind: 'number', width: 110 },
+      { id: 'price_eur',        fieldRef: `purchasable_offer[marketplace_id][audience=ALL]#1.our_price#1.schedule#1.value_with_tax`, labelEn: `Price ${defaultCurrency} (incl. VAT)`, labelLocal: ll('price_eur', `Price ${defaultCurrency} (incl. VAT)`), required: false, kind: 'number', width: 130 },
+      { id: 'sale_price',       fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.discounted_price#1.schedule#1.value_with_tax', labelEn: 'Sale Price', labelLocal: ll('sale_price', 'Sale Price'), required: false, kind: 'number', width: 110 },
+      { id: 'sale_start_date',  fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.discounted_price#1.schedule#1.start_at', labelEn: 'Sale Start', labelLocal: ll('sale_start_date', 'Sale Start'), required: false, kind: 'text', width: 120 },
+      { id: 'sale_end_date',    fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.discounted_price#1.schedule#1.end_at', labelEn: 'Sale End', labelLocal: ll('sale_end_date', 'Sale End'), required: false, kind: 'text', width: 120 },
+      { id: 'min_price',        fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.minimum_seller_allowed_price#1.schedule#1.value_with_tax', labelEn: 'Min Price', labelLocal: ll('min_price', 'Min Price'), required: false, kind: 'number', width: 100 },
+      { id: 'max_price',        fieldRef: 'purchasable_offer[marketplace_id][audience=ALL]#1.maximum_seller_allowed_price#1.schedule#1.value_with_tax', labelEn: 'Max Price', labelLocal: ll('max_price', 'Max Price'), required: false, kind: 'number', width: 100 },
+      { id: 'merchant_shipping_group', fieldRef: 'merchant_shipping_group[marketplace_id]#1.value', labelEn: 'Shipping Template', labelLocal: ll('merchant_shipping_group', 'Shipping Template'), required: false, kind: 'text', width: 160 },
     ],
   }
 }
 
-function shippingGroup(): FlatFileColumnGroup {
-  function dimCol(id: string, ref: string, labelEn: string, labelIt: string, isUnit = false): FlatFileColumn {
+function shippingGroup(ll: LL, lang: LangTag): FlatFileColumnGroup {
+  function dimCol(id: string, ref: string, labelEn: string, isUnit = false): FlatFileColumn {
     return {
-      id, fieldRef: ref, labelEn, labelIt,
+      id, fieldRef: ref, labelEn, labelLocal: ll(id, labelEn),
       required: false, kind: isUnit ? 'enum' : 'number', width: isUnit ? 100 : 90,
       options: isUnit ? ['', 'centimeters', 'meters', 'inches', 'millimeters'] : undefined,
     }
@@ -400,29 +348,29 @@ function shippingGroup(): FlatFileColumnGroup {
   return {
     id: 'shipping',
     labelEn: 'Shipping',
-    labelIt: 'Spedizione',
+    labelLocal: GROUP_LOCAL_LABELS.shipping[lang] ?? 'Shipping',
     color: 'sky',
     columns: [
-      dimCol('pkg_length',      'item_package_dimensions[marketplace_id]#1.length.value',  'Pkg Length',       itLabel('pkg_length', 'Lunghezza imballaggio')),
-      dimCol('pkg_length_unit', 'item_package_dimensions[marketplace_id]#1.length.unit',   'Pkg Length Unit',  itLabel('pkg_length_unit', 'Unità lunghezza'), true),
-      dimCol('pkg_width',       'item_package_dimensions[marketplace_id]#1.width.value',   'Pkg Width',        itLabel('pkg_width', 'Larghezza imballaggio')),
-      dimCol('pkg_width_unit',  'item_package_dimensions[marketplace_id]#1.width.unit',    'Pkg Width Unit',   itLabel('pkg_width_unit', 'Unità larghezza'), true),
-      dimCol('pkg_height',      'item_package_dimensions[marketplace_id]#1.height.value',  'Pkg Height',       itLabel('pkg_height', 'Altezza imballaggio')),
-      dimCol('pkg_height_unit', 'item_package_dimensions[marketplace_id]#1.height.unit',   'Pkg Height Unit',  itLabel('pkg_height_unit', 'Unità altezza'), true),
-      dimCol('pkg_weight',      'item_package_weight[marketplace_id]#1.value',             'Pkg Weight',       itLabel('pkg_weight', 'Peso imballaggio')),
-      { id: 'pkg_weight_unit', fieldRef: 'item_package_weight[marketplace_id]#1.unit', labelEn: 'Pkg Weight Unit', labelIt: itLabel('pkg_weight_unit', 'Unità peso'), required: false, kind: 'enum', width: 100, options: ['', 'grams', 'kilograms', 'pounds', 'ounces'] },
+      dimCol('pkg_length',      'item_package_dimensions[marketplace_id]#1.length.value',  'Pkg Length'),
+      dimCol('pkg_length_unit', 'item_package_dimensions[marketplace_id]#1.length.unit',   'Pkg Length Unit', true),
+      dimCol('pkg_width',       'item_package_dimensions[marketplace_id]#1.width.value',   'Pkg Width'),
+      dimCol('pkg_width_unit',  'item_package_dimensions[marketplace_id]#1.width.unit',    'Pkg Width Unit', true),
+      dimCol('pkg_height',      'item_package_dimensions[marketplace_id]#1.height.value',  'Pkg Height'),
+      dimCol('pkg_height_unit', 'item_package_dimensions[marketplace_id]#1.height.unit',   'Pkg Height Unit', true),
+      dimCol('pkg_weight',      'item_package_weight[marketplace_id]#1.value',             'Pkg Weight'),
+      { id: 'pkg_weight_unit', fieldRef: 'item_package_weight[marketplace_id]#1.unit', labelEn: 'Pkg Weight Unit', labelLocal: ll('pkg_weight_unit', 'Weight Unit'), required: false, kind: 'enum', width: 100, options: ['', 'grams', 'kilograms', 'pounds', 'ounces'] },
     ],
   }
 }
 
-function complianceGroup(schemaEnums: Record<string, string[]>): FlatFileColumnGroup {
+function complianceGroup(schemaEnums: Record<string, string[]>, ll: LL, lang: LangTag): FlatFileColumnGroup {
   function col(id: string, ref: string, labelEn: string, overrides: Partial<FlatFileColumn> = {}): FlatFileColumn {
-    return { id, fieldRef: ref, labelEn, labelIt: itLabel(id, labelEn), required: false, kind: 'text', width: 150, ...overrides }
+    return { id, fieldRef: ref, labelEn, labelLocal: ll(id, labelEn), required: false, kind: 'text', width: 150, ...overrides }
   }
   return {
     id: 'compliance',
     labelEn: 'Compliance & Safety',
-    labelIt: 'Conformità e sicurezza',
+    labelLocal: GROUP_LOCAL_LABELS.compliance[lang] ?? 'Compliance & Safety',
     color: 'red',
     columns: [
       col('country_of_origin', 'country_of_origin[marketplace_id]#1.value', 'Country of Origin', { kind: 'enum', width: 140, options: ['', 'IT', 'CN', 'DE', 'FR', 'ES', 'PT', 'IN', 'BD', 'TR', 'VN', 'PK', 'ID'] }),
@@ -478,7 +426,12 @@ function extractEnumOptions(inner: Record<string, any>): string[] {
   return enums.map(String)
 }
 
-function schemaFieldToColumn(fieldId: string, prop: Record<string, any>, isRequired: boolean): FlatFileColumn | null {
+function schemaFieldToColumn(
+  fieldId: string,
+  prop: Record<string, any>,
+  isRequired: boolean,
+  schemaLabels: Record<string, string>,
+): FlatFileColumn | null {
   const inner = prop?.items?.properties?.value ?? prop
   const t = inner?.type
   let kind: FlatFileColumnKind = 'text'
@@ -495,15 +448,18 @@ function schemaFieldToColumn(fieldId: string, prop: Record<string, any>, isRequi
   } else if (t === 'string') {
     kind = (inner?.maxLength ?? 0) > 500 ? 'longtext' : 'text'
   } else {
-    return null // skip complex/unsupported
+    return null
   }
 
   const labelEn = fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  // labelLocal: prefer the schema's localized title (market-specific),
+  // then the fixed-field fallback table, then fall back to English
+  const labelLocal = schemaLabels[fieldId] ?? FIXED_FIELD_LABELS[fieldId]?.['it_IT'] ?? labelEn
   return {
     id: `attr_${fieldId}`,
     fieldRef: fieldId,
     labelEn,
-    labelIt: IT_LABELS[fieldId] ?? labelEn,
+    labelLocal,
     required: isRequired,
     kind,
     options,
@@ -539,6 +495,15 @@ export class AmazonFlatFileService {
     const rawThemes = (cached.variationThemes as any)?.themes ?? []
     const variationThemes: string[] = Array.isArray(rawThemes) ? rawThemes.map(String) : []
 
+    // Language tag for this marketplace
+    const lang = (LANGUAGE_TAG_MAP[mp] ?? 'en_GB') as LangTag
+
+    // Extract localised titles from the schema (Amazon provides these per marketplace)
+    const schemaLabels = buildSchemaLabels(properties)
+
+    // Build a local-label resolver: schema title > fixed translation > English fallback
+    const ll: LL = (id, fallbackEn) => resolveLabel(id, lang, schemaLabels, fallbackEn)
+
     // Extract enum options for fields we reference in fixed groups
     const schemaEnums: Record<string, string[]> = {}
     for (const [fieldId, prop] of Object.entries(properties)) {
@@ -551,7 +516,7 @@ export class AmazonFlatFileService {
     const dynamicCols: FlatFileColumn[] = []
     for (const [fieldId, prop] of Object.entries(properties)) {
       if (SCHEMA_FIELDS_SKIP.has(fieldId)) continue
-      const col = schemaFieldToColumn(fieldId, prop as Record<string, any>, requiredSet.has(fieldId))
+      const col = schemaFieldToColumn(fieldId, prop as Record<string, any>, requiredSet.has(fieldId), schemaLabels)
       if (col) dynamicCols.push(col)
     }
     dynamicCols.sort((a, b) => {
@@ -562,22 +527,22 @@ export class AmazonFlatFileService {
     const currency = CURRENCY_MAP[mp] ?? 'EUR'
 
     const groups: FlatFileColumnGroup[] = [
-      offerIdentityGroup(variationThemes),
-      variationsGroup(variationThemes),
-      productIdentityGroup(schemaEnums),
-      imagesGroup(),
-      productDetailsGroup(schemaEnums),
-      offerGroup(schemaEnums),
-      offerItGroup(currency),
-      shippingGroup(),
-      complianceGroup(schemaEnums),
+      offerIdentityGroup(variationThemes, ll, lang, mp),
+      variationsGroup(variationThemes, ll, lang),
+      productIdentityGroup(schemaEnums, ll, lang),
+      imagesGroup(ll, lang),
+      productDetailsGroup(schemaEnums, ll, lang),
+      offerGroup(schemaEnums, ll, lang),
+      offerMarketGroup(currency, mp, ll, lang),
+      shippingGroup(ll, lang),
+      complianceGroup(schemaEnums, ll, lang),
     ]
 
     if (dynamicCols.length > 0) {
       groups.push({
         id: 'other_attributes',
         labelEn: 'Other Attributes',
-        labelIt: 'Altri attributi',
+        labelLocal: GROUP_LOCAL_LABELS.other_attributes[lang] ?? 'Other Attributes',
         color: 'violet',
         columns: dynamicCols,
       })
@@ -737,7 +702,7 @@ export class AmazonFlatFileService {
     const colIds  = allCols.map((c) => c.id)
     const meta    = `TemplateType=customizable\tVersion=2025.0\tProductType=${manifest.productType}\tMarketplace=${manifest.marketplace}`
     const hdrEn   = allCols.map((c) => c.labelEn).join('\t')
-    const hdrIt   = allCols.map((c) => c.labelIt).join('\t')
+    const hdrIt   = allCols.map((c) => c.labelLocal).join('\t')
     const hdrRef  = allCols.map((c) => c.fieldRef).join('\t')
     const hdrReq  = allCols.map((c) => c.required ? 'Required' : 'Optional').join('\t')
     const data    = rows.map((row) => colIds.map((id) => {

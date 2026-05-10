@@ -24,7 +24,7 @@ interface Column {
   id: string
   fieldRef: string
   labelEn: string
-  labelIt: string
+  labelLocal: string
   description?: string
   required: boolean
   kind: ColumnKind
@@ -36,7 +36,7 @@ interface Column {
 interface ColumnGroup {
   id: string
   labelEn: string
-  labelIt: string
+  labelLocal: string
   color: string
   columns: Column[]
 }
@@ -488,7 +488,10 @@ export default function AmazonFlatFileClient({
                   return (
                     <th key={g.id} colSpan={g.columns.length}
                       className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', c.header)}>
-                      {g.labelEn}
+                      {g.labelLocal}
+                      {g.labelLocal !== g.labelEn && (
+                        <span className="ml-1.5 font-normal opacity-60">({g.labelEn})</span>
+                      )}
                     </th>
                   )
                 })}
@@ -516,7 +519,7 @@ export default function AmazonFlatFileClient({
                   <th key={`it-${col.id}`}
                     style={{ minWidth: col.width, width: col.width }}
                     className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
-                    {col.labelIt}
+                    {col.labelLocal}
                   </th>
                 ))}
               </tr>
