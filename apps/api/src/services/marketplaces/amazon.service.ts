@@ -1218,6 +1218,88 @@ export class AmazonService {
   }
 
   /**
+   * Fallback catalog fetch using the Listings Items API (getListingsItem
+   * per SKU) for marketplaces where GET_MERCHANT_LISTINGS_ALL_DATA report
+   * is unavailable (e.g. FR/ES/UK on Pan-EU FBA accounts where the seller
+   * is not explicitly registered on those marketplaces).
+   *
+   * Calls getListingsItem for each SKU with includedData=['summaries',
+   * 'relationships'] to also capture parentAsin for variation children.
+   * SKUs that don't exist in the given marketplace are silently skipped.
+   *
+   * Rate limit: getListingsItem is 2 req/s — the SP client's
+   * auto_request_throttled handles backoff automatically.
+   */
+  async fetchCatalogViaListingsItems(
+    skus: string[],
+    marketplaceId: string,
+  ): Promise<CatalogItem[]> {
+    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    if (!sellerId) throw new Error('AMAZON_SELLER_ID not set')
+
+    const sp = await this.getClient()
+    const results: CatalogItem[] = []
+
+    for (const sku of skus) {
+      try {
+        const res: any = await sp.callAPI({
+          operation: 'getListingsItem',
+          endpoint: 'listingsItems',
+          path: { sellerId, sku },
+          query: {
+            marketplaceIds: [marketplaceId],
+            includedData: ['summaries', 'relationships', 'offers'],
+          },
+        })
+
+        const asin: string | null = typeof res?.asin === 'string' ? res.asin : null
+        if (!asin) continue // SKU not listed in this marketplace
+
+        // Listing status
+        const summaries = res?.summaries ?? []
+        const summary = summaries[0] ?? null
+        const rawStatus =
+          (Array.isArray(summary?.status) ? summary.status[0] : summary?.status) ??
+          summary?.itemStatus ?? 'Active'
+        const title: string | null = typeof summary?.itemName === 'string' ? summary.itemName : null
+
+        // Parent ASIN from relationships (variation children only)
+        const relationships: any[] = res?.relationships ?? []
+        const variationRel = relationships.find(r => r.type === 'VARIATION' && r.parentAsin)
+        const parentAsin: string | null = variationRel?.parentAsin ?? null
+
+        // Price from offers
+        let price = 0
+        let quantity = 0
+        const offers: any[] = res?.offers ?? []
+        if (offers.length > 0) {
+          const amount = offers[0]?.buyingPrice?.listingPrice?.amount
+          const parsed = parseFloat(amount ?? '')
+          if (Number.isFinite(parsed)) price = parsed
+          const parsedQty = parseInt(offers[0]?.quantity ?? '', 10)
+          if (Number.isFinite(parsedQty)) quantity = parsedQty
+        }
+
+        results.push({
+          sku,
+          asin,
+          parentAsin,
+          variationTheme: null,
+          price,
+          quantity,
+          title: title ?? '',
+          status: typeof rawStatus === 'string' ? rawStatus : 'Active',
+        })
+      } catch {
+        // 404 = SKU not present in this marketplace — expected, skip silently
+      }
+    }
+
+    console.log(`[Amazon] fetchCatalogViaListingsItems ${marketplaceId}: ${results.length}/${skus.length} SKUs found`)
+    return results
+  }
+
+  /**
    * GTIN.2 — infer brand-level GTIN exemption from existing Amazon
    * listings for the seller. Amazon doesn't expose a "do I have GTIN
    * exemption" endpoint cleanly; the strongest available signal is

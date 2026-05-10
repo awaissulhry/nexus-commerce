@@ -39,6 +39,7 @@ export interface ReconRunSummary {
   unmatched: number
   skipped: number // rows that were already CONFIRMED — not re-evaluated
   durationMs: number
+  fetchMethod?: 'report' | 'listings-api' | 'empty' // how the catalog was fetched
 }
 
 interface MatchResult {
@@ -164,12 +165,48 @@ export async function runAmazonReconciliation(
   // Resolve the SP-API marketplace ID from the 2-letter code
   const mpId = AMAZON_MARKETPLACE_CODE_TO_ID[marketplace] ?? process.env.AMAZON_MARKETPLACE_ID ?? 'APJ6JRA9NG5V4'
 
-  // Pull the merchant listings report (~5 min for large catalogs, polls internally)
-  const catalog = await amazonService.fetchActiveCatalog(mpId)
-  logger.info('[recon] Catalog fetched', { count: catalog.length, marketplace, mpId, runId })
+  // ── Step 1: Try the merchant listings report (fast, full data) ────────
+  // This requires the seller to be actively registered on the marketplace.
+  // For Pan-EU FBA accounts, IT and DE typically work; FR/ES/UK may return
+  // 0 rows because the seller is listed there via replication, not direct reg.
+  let fetchMethod: ReconRunSummary['fetchMethod'] = 'report'
+  let catalog = await amazonService.fetchActiveCatalog(mpId).catch(err => {
+    logger.warn('[recon] Report API failed, will try Listings Items fallback', { marketplace, error: err instanceof Error ? err.message : String(err) })
+    fetchMethod = 'listings-api'
+    return [] as typeof catalog
+  })
 
+  logger.info('[recon] Report catalog fetched', { count: catalog.length, marketplace, mpId, runId })
+
+  // ── Step 2: If report returned 0, fall back to Listings Items API ────
+  // Uses all known SKUs from any previously-reconciled marketplace (usually IT)
+  // and calls getListingsItem per SKU for this marketplace. Works regardless
+  // of direct marketplace registration — only requires active listings via FBA.
   if (catalog.length === 0) {
-    return { runId, channel: 'AMAZON', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0 }
+    fetchMethod = 'listings-api'
+    logger.info('[recon] Report returned 0 rows — trying Listings Items API fallback', { marketplace })
+
+    const knownSkus = await prisma.listingReconciliation.findMany({
+      where: { channel: 'AMAZON' },
+      select: { externalSku: true },
+      distinct: ['externalSku'],
+    })
+
+    if (knownSkus.length === 0) {
+      logger.info('[recon] No known SKUs for fallback — run IT first', { marketplace })
+      return { runId, channel: 'AMAZON', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0, fetchMethod: 'empty' as const }
+    }
+
+    const skus = knownSkus.map(r => r.externalSku)
+    logger.info('[recon] Listings Items fallback: checking SKUs', { count: skus.length, marketplace })
+
+    catalog = await amazonService.fetchCatalogViaListingsItems(skus, mpId)
+    logger.info('[recon] Listings Items fallback complete', { found: catalog.length, checked: skus.length, marketplace })
+
+    if (catalog.length === 0) {
+      logger.info('[recon] No listings found via either method', { marketplace })
+      return { runId, channel: 'AMAZON', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0, fetchMethod: 'empty' as const }
+    }
   }
 
   // Find rows already CONFIRMED — skip re-evaluation to preserve operator decisions
@@ -257,6 +294,7 @@ export async function runAmazonReconciliation(
     unmatched,
     skipped,
     durationMs: Date.now() - t0,
+    fetchMethod,
   }
 
   logger.info('[recon] Amazon reconciliation complete', summary)

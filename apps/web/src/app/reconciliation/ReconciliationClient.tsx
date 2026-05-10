@@ -179,12 +179,16 @@ export default function ReconciliationClient({
       if (res?.ok) {
         const data = await res.json()
         if (data.allMarkets) {
-          const totals = `${data.totalDiscovered} discovered · ${data.totalMatched} matched · ${data.totalUnmatched} unmatched · ${Math.round(data.durationMs / 60000)}min`
-          const perMarket = data.markets.map((m: any) => `${m.marketplace}: ${m.totalDiscovered}`).join(', ')
-          setRunMsg(`Done ✓ — ${totals} (${perMarket})`)
+          const perMarket = (data.markets ?? []).map((m: any) =>
+            `${m.marketplace}: ${m.totalDiscovered}${m.fetchMethod === 'listings-api' ? ' (API)' : m.fetchMethod === 'empty' ? ' (none)' : ''}`
+          ).join(' · ')
+          const errors = data.errors ?? []
+          const errStr = errors.length > 0 ? ` ⚠ ${errors.map((e: any) => `${e.marketplace}: ${e.error.slice(0, 60)}`).join('; ')}` : ''
+          setRunMsg(`Done ✓ — ${data.totalDiscovered} discovered · ${data.totalMatched} matched · ${Math.round(data.durationMs / 60000)}min | ${perMarket}${errStr}`)
         } else {
           const s = data.summary
-          setRunMsg(`Done ✓ — ${s.totalDiscovered} discovered · ${s.matched} matched · ${s.unmatched} unmatched`)
+          const method = s.fetchMethod === 'listings-api' ? ' (via Listings API)' : s.fetchMethod === 'empty' ? ' (no listings found)' : ''
+          setRunMsg(`Done ✓ — ${s.totalDiscovered} discovered · ${s.matched} matched · ${s.unmatched} unmatched${method}`)
         }
       } else {
         const err = await res?.json().catch(() => null)
