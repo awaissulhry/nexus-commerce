@@ -54,6 +54,7 @@ interface AccountSettingsData {
   country: string;
   timezone: string;
   currency: string;
+  primaryMarketplace: string | null;
 }
 
 interface Props {
@@ -74,6 +75,7 @@ export default function AccountSettingsClient({ settings }: Props) {
     country: "US",
     timezone: "America/New_York",
     currency: "USD",
+    primaryMarketplace: null,
   };
 
   const handleSubmit = (formData: FormData) => {
@@ -251,6 +253,32 @@ export default function AccountSettingsClient({ settings }: Props) {
                 </option>
               ))}
             </select>
+          </div>
+          {/* PSM.1 — primary marketplace. Default-selects on Step 1 of
+              the list-wizard. Free-form text so the operator can type
+              any ISO country code (Amazon supports far more
+              marketplaces than the COUNTRIES list above). */}
+          <div>
+            <label
+              htmlFor="primaryMarketplace"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Primary marketplace
+            </label>
+            <input
+              id="primaryMarketplace"
+              name="primaryMarketplace"
+              type="text"
+              maxLength={4}
+              placeholder="e.g. IT, DE, US"
+              defaultValue={defaults.primaryMarketplace ?? ""}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              ISO country code of the marketplace you focus on most.
+              Drives Step 1 default-select on the list-wizard.
+              Leave blank for no preference.
+            </p>
           </div>
         </div>
       </div>

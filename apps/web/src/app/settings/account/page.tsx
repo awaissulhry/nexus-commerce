@@ -39,6 +39,7 @@ export default async function AccountSettingsPage() {
           country: settings.country,
           timezone: settings.timezone,
           currency: settings.currency,
+          primaryMarketplace: settings.primaryMarketplace ?? null,
         } : null}
       />
     </div>

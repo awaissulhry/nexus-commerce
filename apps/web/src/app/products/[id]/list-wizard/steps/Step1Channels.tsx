@@ -141,6 +141,15 @@ export default function Step1Channels({
   const [status, setStatus] = useState<ConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // PSM.1 — operator's primary marketplace. Drives the "Apply your
+  // primary marketplace" banner above the channel grid. null when no
+  // setting is configured OR the fetch failed (banner stays hidden).
+  const [primaryMarketplace, setPrimaryMarketplace] = useState<string | null>(
+    null,
+  )
+  // Banner is dismissed for the rest of the session once the operator
+  // hits Apply OR the X — survives within Step 1 only, no persistence.
+  const [primaryHintDismissed, setPrimaryHintDismissed] = useState(false)
 
   // Local channels selection — keyed by "PLATFORM:MARKET". Seeded from
   // the wizard's existing channels[] so back-nav preserves the picks.
@@ -237,6 +246,29 @@ export default function Step1Channels({
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // PSM.1 — fetch the operator's primary marketplace once on mount.
+  // Independent from connection-status so it can fail without
+  // blocking the channel picker; banner stays hidden when this is
+  // null. Same lifecycle as the connection-status fetch.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${getBackendUrl()}/api/settings/primary-marketplace`)
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled) return
+        const m = j?.primaryMarketplace
+        if (typeof m === 'string' && m.length > 0) {
+          setPrimaryMarketplace(m.toUpperCase())
+        }
+      })
+      .catch(() => {
+        // Fail soft — wizard works without this signal.
       })
     return () => {
       cancelled = true
@@ -615,6 +647,60 @@ export default function Step1Channels({
           t={t}
         />
       )}
+
+      {/* PSM.1 — primary marketplace hint. Renders only when:
+          (a) operator hasn't already selected anything,
+          (b) /settings/account has primaryMarketplace set,
+          (c) Amazon is connected with that marketplace available,
+          (d) the operator hasn't dismissed it this session. One click
+          adds AMAZON:<primary> to the selection — operators can then
+          add eBay/Shopify alongside as needed. */}
+      {(() => {
+        if (primaryHintDismissed) return null
+        if (selected.size > 0) return null
+        if (!primaryMarketplace) return null
+        const amazon = status.platforms.find((p) => p.platform === 'AMAZON')
+        if (!amazon || !amazon.connected) return null
+        const marketAvailable = amazon.marketplaces.some(
+          (m) => m.code?.toUpperCase() === primaryMarketplace,
+        )
+        if (!marketAvailable) return null
+        const key = `AMAZON:${primaryMarketplace}`
+        return (
+          <div className="flex items-center justify-between gap-3 px-3 py-2 mb-3 border border-violet-200 dark:border-violet-800 rounded-md bg-violet-50 dark:bg-violet-900/20 text-sm">
+            <div className="text-violet-900 dark:text-violet-200">
+              Your primary marketplace is{' '}
+              <span className="font-mono font-semibold">{primaryMarketplace}</span>.
+              Default-select{' '}
+              <span className="font-mono">Amazon:{primaryMarketplace}</span>?
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected((prev) => {
+                    const next = new Set(prev)
+                    next.add(key)
+                    return next
+                  })
+                  setPrimaryHintDismissed(true)
+                }}
+                className="h-7 px-3 text-sm font-medium border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-200 rounded hover:bg-violet-100 dark:hover:bg-violet-900/40"
+              >
+                Apply
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrimaryHintDismissed(true)}
+                className="text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100 text-base px-1"
+                aria-label="Dismiss primary marketplace hint"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       <div className="space-y-3">
         {status.platforms.map((p) => (

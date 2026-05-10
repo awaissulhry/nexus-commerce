@@ -4,6 +4,10 @@ import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 
 export async function saveAccountSettings(formData: FormData) {
+  // PSM.1 — primaryMarketplace: nullable. Empty string from the form
+  // collapses to null so the matcher consumers (Step 1 default-select)
+  // see a proper absent signal rather than a blank string.
+  const rawPrimary = (formData.get('primaryMarketplace') as string) ?? ''
   const data = {
     businessName: formData.get('businessName') as string || '',
     addressLine1: formData.get('addressLine1') as string || '',
@@ -14,6 +18,7 @@ export async function saveAccountSettings(formData: FormData) {
     country: formData.get('country') as string || 'US',
     timezone: formData.get('timezone') as string || 'America/New_York',
     currency: formData.get('currency') as string || 'USD',
+    primaryMarketplace: rawPrimary.trim().toUpperCase() || null,
   }
 
   // Upsert: find the first record or create one

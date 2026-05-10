@@ -159,6 +159,27 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // PSM.1 — primary marketplace. Read-only convenience endpoint so the
+  // wizard's Step 1 can default-select without threading the field
+  // through the wide initial-props chain. Returns null when no row
+  // exists OR the column is unset; consumers fall back to no-default
+  // behaviour rather than failing.
+  fastify.get('/settings/primary-marketplace', async (_request, reply) => {
+    try {
+      const row = await (prisma as any).accountSettings.findFirst({
+        select: { primaryMarketplace: true },
+      })
+      return { primaryMarketplace: row?.primaryMarketplace ?? null }
+    } catch (error: any) {
+      fastify.log.error(
+        { err: error },
+        '[settings/primary-marketplace GET] failed',
+      )
+      // Fail soft — wizard can survive without this signal.
+      return { primaryMarketplace: null }
+    }
+  })
 }
 
 export default brandSettingsRoutes
