@@ -2002,15 +2002,15 @@ model BulkActionJob {
   rollbackData   Json? // Snapshot of original values for rollback
 
   // ── Execution Details ────────────────────────────────────────────────
-  createdBy   String? // User ID who created the job
-  createdAt   DateTime  @default(now())
-  startedAt   DateTime? // When processing began
-  completedAt DateTime? // When processing finished
+  createdBy             String? // User ID who created the job
+  createdAt             DateTime  @default(now())
+  startedAt             DateTime? // When processing began
+  completedAt           DateTime? // When processing finished
   // W10.2 — projected finish time, recomputed inside the item loop
   // as: startedAt + (totalItems / processedItems) * elapsed. NULL
   // until enough items have processed for the estimate to settle.
   estimatedCompletionAt DateTime?
-  updatedAt   DateTime  @updatedAt
+  updatedAt             DateTime  @updatedAt
 
   // ── Per-item state (Commit 2 of bulk-ops rebuild) ────────────────────
   // Foundation for retry of failed items, partial rollback, and
@@ -4281,6 +4281,70 @@ model WizardStepEvent {
   @@index([type, step, createdAt])
   @@index([errorCode, createdAt]) // C.0 — analytics path: top errors per window
   @@index([createdAt])
+}
+
+// ── WT.1 (list-wizard): wizard templates ───────────────────────────────
+// Operator productivity multiplier. Awa publishing 50 SKUs/day shouldn't
+// have to walk all 9 wizard steps from defaults each time — apply a
+// matching template (Motorcycle Helmet → Amazon EU + eBay IT + CE
+// pre-flagged) and skip ahead to the first incomplete step.
+//
+// Templates carry two payloads:
+//   channels  — JSON array of {platform, marketplace} the new wizard
+//               should pick. The applier sets wizardState.channels +
+//               recomputes channelsHash.
+//   defaults  — JSON map of wizardState slices to merge into the new
+//               wizard's state. Examples: skuStrategy, productType
+//               (Amazon productType ID), pricing.basePrice if templated,
+//               variations.commonTheme.
+//
+// builtIn=true rows are system-shipped and read-only. Operators can
+// "Save current wizard as template" to create their own; those land
+// with builtIn=false + createdBy=userId. Operators can edit / delete
+// only their own.
+//
+// usageCount + lastUsedAt populated by the apply path so the picker
+// can sort "most used" up top.
+model WizardTemplate {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  /// JSON array of {platform, marketplace}. Order is preserved so a
+  /// template that picks Amazon IT first stays consistent across
+  /// applies.
+  channels Json
+
+  /// JSON map of wizardState slices. Merged into wizardState on
+  /// apply via shallow merge at the slice level (skuStrategy,
+  /// productType, pricing, ...). Caller-supplied keys win, so an
+  /// operator who already filled in a field doesn't lose it.
+  defaults Json @default("{}")
+
+  /// System-shipped templates are read-only at the API surface;
+  /// operator-saved templates live here too with builtIn=false.
+  builtIn Boolean @default(false)
+
+  /// Optional category hint surfaced in the apply picker — when a
+  /// product's productType matches, the template renders with a
+  /// "Recommended for this product" badge. Free-form so operators
+  /// don't fight a constraint.
+  categoryHint String?
+
+  /// Apply telemetry. Increments synchronously on apply so the
+  /// picker can sort by recency / frequency without a cross-table
+  /// join.
+  usageCount Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([builtIn])
+  @@index([usageCount])
+  @@index([lastUsedAt])
 }
 
 // NN.4 — append-only audit log. One row per PATCH/PUT/DELETE on
