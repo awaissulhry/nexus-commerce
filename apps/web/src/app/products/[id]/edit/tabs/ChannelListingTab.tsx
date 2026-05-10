@@ -827,6 +827,36 @@ function PublishReviewModal({
   const hasCriticalMissing = checks.some((c) => c.critical && !c.done)
   const hasAnyMissing = checks.some((c) => !c.done)
 
+  // Build the full field review list — everything that will be sent to the channel.
+  // Direct columns first, then all non-empty schema attributes from platformAttributes.
+  const attrs = (listing as any)?.platformAttributes?.attributes as Record<string, unknown> | undefined
+  const fieldRows: { label: string; value: string }[] = []
+
+  if (title) fieldRows.push({ label: 'Title', value: title })
+  if (description) fieldRows.push({ label: 'Description', value: description.trim().slice(0, 200) + (description.trim().length > 200 ? '…' : '') })
+  if (bullets.length > 0) {
+    bullets.forEach((b, i) => fieldRows.push({ label: `Bullet ${i + 1}`, value: b }))
+  }
+  if (price !== null) fieldRows.push({ label: 'Price', value: `${marketInfo.currency} ${price.toFixed(2)}` })
+  if (quantity !== null) fieldRows.push({ label: 'Quantity', value: String(quantity) })
+  if (productType) fieldRows.push({ label: 'Product type', value: productType })
+  if (attrs) {
+    for (const [key, val] of Object.entries(attrs)) {
+      if (val === null || val === undefined || val === '') continue
+      // Skip internal keys already shown above
+      if (['item_name', 'product_description', 'bullet_point'].includes(key)) continue
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+      let display = ''
+      if (typeof val === 'string') display = val
+      else if (typeof val === 'number' || typeof val === 'boolean') display = String(val)
+      else if (Array.isArray(val)) display = (val as string[]).filter(Boolean).join(', ')
+      else {
+        try { display = JSON.stringify(val) } catch { display = String(val) }
+      }
+      if (display) fieldRows.push({ label, value: display.slice(0, 120) + (display.length > 120 ? '…' : '') })
+    }
+  }
+
   async function handlePublish() {
     setPublishing(true)
     setResult(null)
@@ -922,6 +952,27 @@ function PublishReviewModal({
               ))}
             </ul>
           </div>
+
+          {/* Fields being published */}
+          {fieldRows.length > 0 && (
+            <div>
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Fields to publish ({fieldRows.length})
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
+                {fieldRows.map((row, i) => (
+                  <div key={i} className="flex gap-3 px-3 py-2 text-sm">
+                    <span className="flex-shrink-0 w-32 text-slate-500 dark:text-slate-400 font-medium truncate">
+                      {row.label}
+                    </span>
+                    <span className="flex-1 min-w-0 text-slate-800 dark:text-slate-200 break-words">
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Warning banner */}
           {hasAnyMissing && (
