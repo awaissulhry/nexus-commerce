@@ -51,7 +51,7 @@ console.log('\nCase 2: bulk-action wiring')
 check('AI_SEO_REGEN in BulkActionType union',
   /\| 'AI_SEO_REGEN'/.test(baSvc))
 check('AI_SEO_REGEN in KNOWN_BULK_ACTION_TYPES',
-  /'AI_SEO_REGEN',\s*\n\]\);/.test(baSvc))
+  /KNOWN_BULK_ACTION_TYPES[\s\S]{0,800}'AI_SEO_REGEN'/.test(baSvc))
 check('ACTION_ENTITY maps AI_SEO_REGEN to product',
   /AI_SEO_REGEN: 'product'/.test(baSvc))
 

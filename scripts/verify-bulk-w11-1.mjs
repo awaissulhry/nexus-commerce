@@ -51,7 +51,7 @@ console.log('\nCase 2: bulk-action wiring')
 check('AI_TRANSLATE_PRODUCT in BulkActionType union',
   /\| 'AI_TRANSLATE_PRODUCT'/.test(baSvc))
 check('AI_TRANSLATE_PRODUCT in KNOWN_BULK_ACTION_TYPES',
-  /'AI_TRANSLATE_PRODUCT',\s*\n\]\);/.test(baSvc))
+  /KNOWN_BULK_ACTION_TYPES[\s\S]{0,800}'AI_TRANSLATE_PRODUCT'/.test(baSvc))
 check('ACTION_ENTITY maps to product',
   /AI_TRANSLATE_PRODUCT: 'product'/.test(baSvc))
 
