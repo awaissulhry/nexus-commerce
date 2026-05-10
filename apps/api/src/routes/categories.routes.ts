@@ -173,7 +173,9 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       channel?: string
       marketplace?: string
       keyword?: string
+      debug?: string
     }
+    const debugMode = q.debug === '1'
     if (!q.keyword?.trim()) {
       return reply.code(400).send({ error: 'keyword is required' })
     }
@@ -203,6 +205,22 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       const rawItems: any[] = searchRes?.items ?? []
+
+      if (debugMode) {
+        return reply.send({
+          debug: true,
+          step1_keys: Object.keys(searchRes ?? {}),
+          step1_itemCount: rawItems.length,
+          step1_firstItem: rawItems[0] ? {
+            asin: rawItems[0].asin,
+            hasClassifications: !!rawItems[0].classifications,
+            classificationCount: rawItems[0].classifications?.length ?? 0,
+            summaryKeys: Object.keys(rawItems[0].summaries?.[0] ?? {}),
+            productTypes: rawItems[0].summaries?.[0]?.productTypes,
+          } : null,
+        })
+      }
+
       if (rawItems.length === 0) {
         return reply.send({ suggestions: [], keyword: q.keyword.trim() })
       }

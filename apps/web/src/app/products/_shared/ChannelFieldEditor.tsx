@@ -1837,19 +1837,27 @@ function AmazonCategoryPicker({
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([])
   const [searching, setSearching] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const debounceRef = useRef<number | null>(null)
 
   const effectiveType = productType || masterProductType
 
   async function search(kw: string) {
-    if (!kw.trim()) { setSuggestions([]); setSearched(false); return }
+    if (!kw.trim()) { setSuggestions([]); setSearched(false); setSearchError(null); return }
     setSearching(true)
+    setSearchError(null)
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/categories/suggestions?channel=AMAZON&marketplace=${marketplace}&keyword=${encodeURIComponent(kw)}`,
       )
       const json = await res.json()
+      if (!res.ok) {
+        setSearchError(json?.error ?? `HTTP ${res.status}`)
+        setSuggestions([])
+        setSearched(true)
+        return
+      }
       setSuggestions(Array.isArray(json.suggestions) ? json.suggestions : [])
       setSearched(true)
     } catch {
@@ -1935,8 +1943,13 @@ function AmazonCategoryPicker({
             </p>
           </div>
 
-          {/* Results */}
-          {searched && suggestions.length === 0 && (
+          {/* Results / errors */}
+          {searchError && (
+            <div className="px-3 py-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900">
+              <strong>Error:</strong> {searchError}
+            </div>
+          )}
+          {searched && !searchError && suggestions.length === 0 && (
             <div className="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
               No categories found for "{keyword}". Try a different keyword.
             </div>
