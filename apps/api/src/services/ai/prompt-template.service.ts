@@ -279,6 +279,35 @@ const SEEDS: SeedDefinition[] = [
 ]
 
 /**
+ * AI-2.3 — render a PromptTemplate body by substituting
+ * `{placeholder}` markers with caller-supplied values. Markers that
+ * aren't in `vars` are left as-is (so an operator-edited prompt
+ * with a stray `{foo}` doesn't crash; renders as literal text).
+ *
+ * Whitelist of supported placeholders matches what the seed bodies
+ * use. Adding a new field is intentional — bodies referencing
+ * unknown markers should preview as-is in the admin UI so operators
+ * see what they typed rather than a silently dropped slot.
+ */
+export type PromptRenderVars = {
+  marketplace?: string
+  language?: string
+  contextBlock?: string
+  terminologyBlock?: string
+}
+
+export function renderPromptBody(body: string, vars: PromptRenderVars): string {
+  if (!body) return ''
+  return body.replace(/\{(\w+)\}/g, (match, key: string) => {
+    if (Object.prototype.hasOwnProperty.call(vars, key)) {
+      const v = (vars as Record<string, unknown>)[key]
+      return typeof v === 'string' ? v : match
+    }
+    return match
+  })
+}
+
+/**
  * Idempotent upsert of the four Step 5 attribute prompts as DRAFT
  * rows. Runs on API startup; if a row already exists for
  * (feature, name='default', version=1) we leave it alone (operators

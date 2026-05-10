@@ -13,6 +13,7 @@
  * call so the route can persist AiUsageLog rows.
  */
 
+import prisma from '../../db.js'
 import {
   checkBudget,
   estimateCallCostUSD,
@@ -24,6 +25,10 @@ import {
   totalRedactions,
   type RedactionCount,
 } from './prompt-sanitizer.js'
+import {
+  findActivePromptTemplate,
+  renderPromptBody,
+} from './prompt-template.service.js'
 import type {
   LLMProvider,
   ProviderName,
@@ -453,24 +458,63 @@ export class ListingContentService {
       )
     }
 
+    // AI-2.3 — resolve every requested field's prompt body once,
+    // up-front. Each lookup tries findActivePromptTemplate() first;
+    // a hit renders the DB body with {marketplace} / {language} /
+    // {contextBlock} / {terminologyBlock} substitutions, a miss
+    // falls back to the inline static body. The resolved strings
+    // feed both the AI-1.3 budget pre-check below and the runOne
+    // task fan-out below — keeping a single resolved-prompts map
+    // means we don't double-resolve (and don't surprise operators
+    // with a budget estimate built from the inline body when the
+    // actual call would use a DB-templated body).
+    const resolvedPrompts: Partial<Record<ContentField, string>> = {}
+    const promptFeatureMap: Record<ContentField, string> = {
+      title: 'listing-wizard.title',
+      bullets: 'listing-wizard.bullets',
+      description: 'listing-wizard.description',
+      keywords: 'listing-wizard.keywords',
+    }
+    const resolveOne = async (f: ContentField): Promise<string> => {
+      const active = await findActivePromptTemplate(prisma, promptFeatureMap[f], {
+        language: language.toLowerCase(),
+        marketplace: params.marketplace,
+      })
+      if (active) {
+        return renderPromptBody(active.body, {
+          marketplace: params.marketplace,
+          language,
+          contextBlock: this.contextBlock(params.product),
+          terminologyBlock: this.terminologyBlock(params.terminology),
+        })
+      }
+      // Fall back to the inline static body — what every wizard call
+      // resolves to today since the AI-2.2 seed lands rows as DRAFT.
+      if (f === 'title') return this.titlePrompt(params, language)
+      if (f === 'bullets') return this.bulletsPrompt(params, language)
+      if (f === 'description') return this.descriptionPrompt(params, language)
+      return this.keywordsPrompt(params, language)
+    }
+    await Promise.all(
+      params.fields.map(async (f) => {
+        resolvedPrompts[f] = await resolveOne(f)
+      }),
+    )
+
     // AI-1.3 — pre-call budget check. Sum estimated cost across every
     // requested field, run a single AiBudgetService.checkBudget() with
     // the total. Single read instead of N (one per field) — the budget
     // service hits AiUsageLog three times per call, so a 4-field
     // generate would otherwise burn 12 DB reads for one user click.
+    //
+    // AI-2.3 — uses resolvedPrompts so the estimate matches whatever
+    // body actually goes to the vendor (template vs inline).
     let budgetWarn: BudgetCheckScope extends never ? never : ('per_wizard' | 'per_day' | 'per_month' | undefined) =
       undefined as never
     if (params.budgetScope) {
       let totalEstimateUSD = 0
       for (const f of params.fields) {
-        const prompt =
-          f === 'title'
-            ? this.titlePrompt(params, language)
-            : f === 'bullets'
-              ? this.bulletsPrompt(params, language)
-              : f === 'description'
-                ? this.descriptionPrompt(params, language)
-                : this.keywordsPrompt(params, language)
+        const prompt = resolvedPrompts[f] ?? ''
         totalEstimateUSD += estimateCallCostUSD({
           prompt,
           // Mirror the cap used in runOne — hardcoded 4096 in the
@@ -502,7 +546,7 @@ export class ListingContentService {
     for (const f of params.fields) {
       if (f === 'title') {
         tasks.push(
-          this.runOne(provider, this.titlePrompt(params, language), params.variant).then(
+          this.runOne(provider, resolvedPrompts.title ?? '', params.variant).then(
             (r) => ({
               field: 'title',
               result: this.parseTitle(r.text),
@@ -515,7 +559,7 @@ export class ListingContentService {
         tasks.push(
           this.runOne(
             provider,
-            this.bulletsPrompt(params, language),
+            resolvedPrompts.bullets ?? '',
             params.variant,
             0.05,
           ).then((r) => ({
@@ -529,7 +573,7 @@ export class ListingContentService {
         tasks.push(
           this.runOne(
             provider,
-            this.descriptionPrompt(params, language),
+            resolvedPrompts.description ?? '',
             params.variant,
           ).then((r) => ({
             field: 'description',
@@ -542,7 +586,7 @@ export class ListingContentService {
         tasks.push(
           this.runOne(
             provider,
-            this.keywordsPrompt(params, language),
+            resolvedPrompts.keywords ?? '',
             params.variant,
           ).then((r) => ({
             field: 'keywords',
