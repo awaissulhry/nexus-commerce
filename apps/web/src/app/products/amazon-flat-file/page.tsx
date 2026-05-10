@@ -5,25 +5,27 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 interface PageProps {
-  searchParams: Promise<{ marketplace?: string; productType?: string }>
+  searchParams: Promise<{ marketplace?: string; productType?: string; productId?: string }>
 }
 
 const DEFAULT_MARKETPLACE = 'IT'
 const DEFAULT_PRODUCT_TYPE = 'OUTERWEAR'
 
 export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
-  const { marketplace = DEFAULT_MARKETPLACE, productType = DEFAULT_PRODUCT_TYPE } =
+  const { marketplace = DEFAULT_MARKETPLACE, productType = DEFAULT_PRODUCT_TYPE, productId } =
     await searchParams
   const backend = getBackendUrl()
 
-  // Fetch manifest + initial rows in parallel (non-fatal — client handles errors)
+  const rowsQs = new URLSearchParams({ marketplace, productType })
+  if (productId) rowsQs.set('productId', productId)
+
   const [manifestRes, rowsRes] = await Promise.all([
     fetch(
       `${backend}/api/amazon/flat-file/template?marketplace=${marketplace}&productType=${productType}`,
       { cache: 'no-store' },
     ).catch(() => null),
     fetch(
-      `${backend}/api/amazon/flat-file/rows?marketplace=${marketplace}&productType=${productType}`,
+      `${backend}/api/amazon/flat-file/rows?${rowsQs}`,
       { cache: 'no-store' },
     ).catch(() => null),
   ])
@@ -38,6 +40,7 @@ export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
       initialRows={rows}
       initialMarketplace={marketplace.toUpperCase()}
       initialProductType={productType.toUpperCase()}
+      productId={productId}
     />
   )
 }

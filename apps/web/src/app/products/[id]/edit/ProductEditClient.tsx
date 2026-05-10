@@ -35,6 +35,7 @@ import SeoTab from './tabs/SeoTab'
 import { cn } from '@/lib/utils'
 import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
 import { VariationFamilyBanner, type FamilyParent, type FamilySibling } from '../../_shared/VariationFamilyBanner'
+import { FileSpreadsheet } from 'lucide-react'
 
 type TopTab = 'master' | 'variations' | string // also "AMAZON" / "EBAY" / "SHOPIFY_GLOBAL" etc
 
@@ -517,6 +518,18 @@ export default function ProductEditClient({
             >
               <TableProperties className="w-3.5 h-3.5 mr-1.5" />
               {t('products.edit.bulkEdit')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const pt = (product.productType as string | null) ?? 'OUTERWEAR'
+                router.push(`/products/amazon-flat-file?productId=${product.id}&productType=${pt}&marketplace=IT`)
+              }}
+              title="Open this product in the Amazon Flat File Editor"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
+              Flat File
             </Button>
             <Button
               variant="ghost"

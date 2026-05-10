@@ -586,17 +586,59 @@ export class AmazonFlatFileService {
     return { marketplace: mp, productType: pt, variationThemes, fetchedAt: new Date().toISOString(), groups }
   }
 
-  async getExistingRows(marketplace: string, productType?: string): Promise<FlatFileRow[]> {
+  async getExistingRows(
+    marketplace: string,
+    productType?: string,
+    productId?: string,
+  ): Promise<FlatFileRow[]> {
     const mp = marketplace.toUpperCase()
-    const where: Record<string, any> = { deletedAt: null }
-    if (productType) where.productType = productType.toUpperCase()
+    let products: any[]
 
-    const products = await this.prisma.product.findMany({
-      where,
-      include: { channelListings: { where: { channel: 'AMAZON', marketplace: mp } } },
-      orderBy: [{ parentId: 'asc' }, { sku: 'asc' }],
-      take: 2000,
-    })
+    if (productId) {
+      // Load the anchor product to determine family scope
+      const anchor = await this.prisma.product.findUnique({
+        where: { id: productId },
+        include: { channelListings: { where: { channel: 'AMAZON', marketplace: mp } } },
+      })
+      if (!anchor) return []
+
+      if (anchor.isParent) {
+        // Parent: load itself + all children
+        const children = await this.prisma.product.findMany({
+          where: { parentId: productId, deletedAt: null },
+          include: { channelListings: { where: { channel: 'AMAZON', marketplace: mp } } },
+          orderBy: { sku: 'asc' },
+        })
+        products = [anchor, ...children]
+      } else if ((anchor as any).parentId) {
+        // Child: load the parent + all siblings (including self)
+        const parentId = (anchor as any).parentId as string
+        const [parent, siblings] = await Promise.all([
+          this.prisma.product.findUnique({
+            where: { id: parentId },
+            include: { channelListings: { where: { channel: 'AMAZON', marketplace: mp } } },
+          }),
+          this.prisma.product.findMany({
+            where: { parentId, deletedAt: null },
+            include: { channelListings: { where: { channel: 'AMAZON', marketplace: mp } } },
+            orderBy: { sku: 'asc' },
+          }),
+        ])
+        products = parent ? [parent, ...siblings] : siblings
+      } else {
+        // Standalone
+        products = [anchor]
+      }
+    } else {
+      const where: Record<string, any> = { deletedAt: null }
+      if (productType) where.productType = productType.toUpperCase()
+      products = await this.prisma.product.findMany({
+        where,
+        include: { channelListings: { where: { channel: 'AMAZON', marketplace: mp } } },
+        orderBy: [{ parentId: 'asc' }, { sku: 'asc' }],
+        take: 2000,
+      })
+    }
 
     const currency = CURRENCY_MAP[mp] ?? 'EUR'
     return products.map((p) => {

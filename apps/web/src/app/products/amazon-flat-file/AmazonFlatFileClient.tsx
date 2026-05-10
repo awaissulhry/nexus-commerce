@@ -123,6 +123,7 @@ interface Props {
   initialRows: Row[]
   initialMarketplace: string
   initialProductType: string
+  productId?: string
 }
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export default function AmazonFlatFileClient({
   initialRows,
   initialMarketplace,
   initialProductType,
+  productId,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -195,10 +197,12 @@ export default function AmazonFlatFileClient({
     setFeedResults([])
     const backend = getBackendUrl()
     const qs = new URLSearchParams({ marketplace: mp, productType: pt, ...(force ? { force: '1' } : {}) })
+    const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
+    if (productId) rowsQs.set('productId', productId)
     try {
       const [mRes, rRes] = await Promise.all([
         fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
-        fetch(`${backend}/api/amazon/flat-file/rows?${new URLSearchParams({ marketplace: mp, productType: pt })}`),
+        fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
       ])
       if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
       const m: Manifest = await mRes.json()
@@ -344,6 +348,19 @@ export default function AmazonFlatFileClient({
           <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
             <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100">Amazon Flat File Editor</h1>
             {manifest && <><Badge variant="info">{manifest.productType}</Badge><Badge variant="default">{manifest.marketplace}</Badge></>}
+            {productId && (
+              <span className="inline-flex items-center gap-1 text-xs bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded px-2 py-0.5">
+                <FileSpreadsheet className="w-3 h-3" />
+                Filtered to {rows.length} row{rows.length !== 1 ? 's' : ''}
+                <button
+                  onClick={() => router.push(`/products/amazon-flat-file?marketplace=${marketplace}&productType=${productType}`)}
+                  className="ml-1 opacity-60 hover:opacity-100"
+                  title="Show all products"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {dirtyRows.length > 0 && <Badge variant="warning"><AlertCircle className="w-3 h-3 mr-1" />{dirtyRows.length} unsaved</Badge>}
             {newCount > 0 && <Badge variant="info">{newCount} new rows</Badge>}
           </div>

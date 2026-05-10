@@ -78,13 +78,14 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── GET /api/amazon/flat-file/rows ──────────────────────────────────
   // Returns existing products pre-filled as flat file rows.
   fastify.get<{
-    Querystring: { marketplace?: string; productType?: string }
+    Querystring: { marketplace?: string; productType?: string; productId?: string }
   }>('/amazon/flat-file/rows', async (request, reply) => {
     const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
     const productType = request.query.productType?.toUpperCase() ?? undefined
+    const productId   = request.query.productId ?? undefined
 
     try {
-      const rows = await flatFileService.getExistingRows(marketplace, productType)
+      const rows = await flatFileService.getExistingRows(marketplace, productType, productId)
       return reply.send({ rows })
     } catch (err: any) {
       request.log.error(err, 'flat-file/rows failed')
