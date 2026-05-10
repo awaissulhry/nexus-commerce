@@ -1,0 +1,328 @@
+/**
+ * AI-2.2 (list-wizard) — PromptTemplate service.
+ *
+ * Reads / writes the PromptTemplate table introduced in AI-2.1. v1
+ * scope:
+ *   findActive(feature, scope?)   — matcher used by AI-2.3 to swap
+ *                                    inline prompts for DB-backed
+ *                                    bodies. Returns null today
+ *                                    because the seed lands every
+ *                                    row as DRAFT (operator must
+ *                                    promote via the admin UI in
+ *                                    AI-2.5).
+ *   listAll(feature?, status?)   — admin / route surface
+ *   seedDefaults(prisma)         — idempotent upsert of the four
+ *                                    Step 5 attribute prompts that
+ *                                    listing-content.service.ts
+ *                                    currently inlines. Captures the
+ *                                    prompt frames with {placeholder}
+ *                                    markers; the renderer in AI-2.3
+ *                                    substitutes contextBlock /
+ *                                    terminologyBlock / marketplace /
+ *                                    language at call time.
+ *
+ * Why DRAFT-seed: shipping the rows as ACTIVE and re-routing the
+ * existing inline prompt path through the renderer in one commit
+ * would mean a regression risk on real Italian operator AI calls.
+ * DRAFT keeps existing inline behaviour live; AI-2.5's admin UI
+ * lets operators promote when they're ready to A/B.
+ */
+
+import type { PrismaClient } from '@nexus/database'
+import { logger } from '../../utils/logger.js'
+
+export type PromptTemplateStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED'
+
+export interface PromptTemplateRow {
+  id: string
+  feature: string
+  name: string
+  description: string | null
+  body: string
+  status: string
+  version: number
+  language: string | null
+  marketplace: string | null
+  callCount: number
+  lastUsedAt: Date | null
+  createdAt: Date
+  updatedAt: Date
+  createdBy: string | null
+}
+
+export interface PromptScope {
+  language?: string | null
+  marketplace?: string | null
+}
+
+/**
+ * Resolve the most-specific ACTIVE PromptTemplate for a feature +
+ * scope. Preference order:
+ *   1. exact (language + marketplace) match
+ *   2. language-only match
+ *   3. marketplace-only match
+ *   4. global (both null)
+ * Returns null when nothing matches — caller falls back to inline.
+ */
+export async function findActivePromptTemplate(
+  prisma: PrismaClient,
+  feature: string,
+  scope: PromptScope = {},
+): Promise<PromptTemplateRow | null> {
+  try {
+    const language = scope.language?.toLowerCase() ?? null
+    const marketplace = scope.marketplace?.toUpperCase() ?? null
+    // Pull every ACTIVE row for the feature in one query, then pick
+    // the most-specific match in code. Cheaper than four sequential
+    // queries against an indexed table.
+    const rows = await prisma.promptTemplate.findMany({
+      where: { feature, status: 'ACTIVE' },
+      orderBy: [{ updatedAt: 'desc' }],
+    })
+    if (rows.length === 0) return null
+    const exact = rows.find(
+      (r) =>
+        r.language?.toLowerCase() === language &&
+        r.marketplace?.toUpperCase() === marketplace,
+    )
+    if (exact) return exact as PromptTemplateRow
+    const langOnly = rows.find(
+      (r) => r.language?.toLowerCase() === language && r.marketplace == null,
+    )
+    if (langOnly) return langOnly as PromptTemplateRow
+    const marketOnly = rows.find(
+      (r) => r.language == null && r.marketplace?.toUpperCase() === marketplace,
+    )
+    if (marketOnly) return marketOnly as PromptTemplateRow
+    const global = rows.find((r) => r.language == null && r.marketplace == null)
+    return (global as PromptTemplateRow | undefined) ?? null
+  } catch (err) {
+    logger.warn('prompt-template-service: findActive failed (returning null)', {
+      err: err instanceof Error ? err.message : String(err),
+      feature,
+    })
+    return null
+  }
+}
+
+/**
+ * Enumerate templates for the admin surface. Optional filters keep
+ * the read narrow when the table grows. Capped at 200 rows so a
+ * runaway A/B-fork doesn't drown the UI.
+ */
+export async function listPromptTemplates(
+  prisma: PrismaClient,
+  filter: { feature?: string; status?: PromptTemplateStatus } = {},
+): Promise<PromptTemplateRow[]> {
+  const where: { feature?: string; status?: string } = {}
+  if (filter.feature) where.feature = filter.feature
+  if (filter.status) where.status = filter.status
+  const rows = await prisma.promptTemplate.findMany({
+    where,
+    orderBy: [
+      { feature: 'asc' },
+      { name: 'asc' },
+      { version: 'desc' },
+    ],
+    take: 200,
+  })
+  return rows as PromptTemplateRow[]
+}
+
+// ── Seed bodies ────────────────────────────────────────────────────
+// These mirror the structural framing of the prompts in
+// apps/api/src/services/ai/listing-content.service.ts but use
+// {placeholder} markers in place of the dynamic method calls.
+// The renderer in AI-2.3 will substitute:
+//   {marketplace}      — params.marketplace
+//   {language}         — LANGUAGE_FOR_MARKETPLACE[marketplace] resolution
+//   {contextBlock}     — formatted product context (name / brand / desc / ...)
+//   {terminologyBlock} — brand terminology preferences (P0 #27)
+//
+// Bodies stay static — operators editing them won't accidentally
+// break interpolation as long as they don't rename the placeholder
+// markers. The renderer ignores unknown markers so future fields
+// can be added without breaking older prompts.
+
+const TITLE_BODY = `You are an Amazon SEO expert. Generate ONE optimised product title for Amazon {marketplace}.
+
+Product:
+{contextBlock}
+
+Requirements:
+- HARD MAX 200 characters
+- Brand name at the start
+- Include product type, the primary benefit, and one or two key features
+- Add variation details (size, colour, material) at the end if applicable
+- Natural language — no keyword stuffing, no SHOUTING CAPS, no emojis
+- Optimised for {marketplace} customer search behaviour
+- Write in {language}{terminologyBlock}
+
+Return JSON only — no markdown, no commentary, no surrounding text:
+{
+  "content": "the title",
+  "charCount": <number — count UTF-16 code units, must match content.length>,
+  "insights": [
+    "Short bullet noting why this title works",
+    "Another short bullet",
+    "..."
+  ]
+}`
+
+const BULLETS_BODY = `You are an Amazon SEO expert. Generate exactly 5 bullet points for Amazon {marketplace}.
+
+Product:
+{contextBlock}
+
+Per-bullet requirements:
+- Length: 200–500 characters
+- Start with [BENEFIT_HEADER] in ALL CAPS inside square brackets
+- Then explain the benefit in natural language
+- Active voice, customer-benefit focus (not feature dumps)
+- Naturally include searchable keywords; no keyword stuffing
+- No emojis, no excessive punctuation, no SHOUTING outside the header
+- Write in {language}{terminologyBlock}
+
+Bullet themes (one per bullet, in this order):
+1. Premium quality, protection, or safety
+2. Comfort, fit, or wearability
+3. Versatility or use cases
+4. Materials or construction quality
+5. Brand confidence, warranty, or buyer reassurance
+
+Return JSON only:
+{
+  "content": ["bullet 1", "bullet 2", "bullet 3", "bullet 4", "bullet 5"],
+  "charCounts": [n1, n2, n3, n4, n5],
+  "insights": ["why these bullets work, 2–4 short notes"]
+}`
+
+const DESCRIPTION_BODY = `You are an Amazon listing copywriter. Generate the long product description as Amazon-safe HTML for marketplace {marketplace}.
+
+Product:
+{contextBlock}
+
+Format:
+- Sections in this order, each with its own <h3>:
+  1. Brand story (2–3 sentences)
+  2. Key features (use <ul><li>, 4–6 items)
+  3. Specifications (a simple <ul><li> list of label: value pairs)
+  4. Use cases (one paragraph)
+  5. Care instructions (one short paragraph; omit if not applicable)
+
+HTML constraints (Amazon's Listing API restrictions):
+- ONLY these tags: <h3>, <p>, <ul>, <li>, <strong>, <em>, <br>
+- No inline styles, no class attributes, no other tags
+- No <html>, <head>, <body>, <div>
+- Total length 1000–2500 characters of HTML
+- Write in {language}{terminologyBlock}
+
+Return JSON only:
+{
+  "content": "<h3>...</h3><p>...</p>...",
+  "preview": "first ~200 plain-text characters with all HTML stripped",
+  "insights": ["why this description works, 2–4 short notes"]
+}`
+
+const KEYWORDS_BODY = `Generate Amazon backend search terms for marketplace {marketplace}.
+
+Product:
+{contextBlock}
+
+Hard requirements:
+- HARD MAX 250 characters total
+- Space-separated keywords
+- NO commas, NO punctuation between terms, NO duplicate words
+- Do NOT repeat words already in the product title (Amazon ignores those)
+- Mix {language} + English where it makes sense (catches both audiences)
+- Include synonyms, common misspellings, and use-case phrases (e.g. "summer riding")
+- Include compatible items where relevant (e.g. for jackets: "helmet pants gloves"){terminologyBlock}
+
+Return JSON only:
+{
+  "content": "keyword1 keyword2 keyword3 ...",
+  "charCount": <number — must equal content.length>,
+  "insights": ["why these keywords work, 2–4 short notes"]
+}`
+
+interface SeedDefinition {
+  feature: string
+  body: string
+  description: string
+}
+
+const SEEDS: SeedDefinition[] = [
+  {
+    feature: 'listing-wizard.title',
+    description:
+      'Amazon SEO title — single line up to 200 chars. Brand-first, includes product type + primary benefit + one or two key features.',
+    body: TITLE_BODY,
+  },
+  {
+    feature: 'listing-wizard.bullets',
+    description:
+      'Amazon 5-bullet product attributes. Each starts with [BENEFIT_HEADER]; 200–500 chars per bullet; themed quality / comfort / versatility / materials / brand confidence.',
+    body: BULLETS_BODY,
+  },
+  {
+    feature: 'listing-wizard.description',
+    description:
+      'Amazon long description as restricted HTML. Brand story + key features + specs + use cases + care.',
+    body: DESCRIPTION_BODY,
+  },
+  {
+    feature: 'listing-wizard.keywords',
+    description:
+      'Amazon backend search terms — space-separated, ≤250 chars, no title duplication, mixed language where useful.',
+    body: KEYWORDS_BODY,
+  },
+]
+
+/**
+ * Idempotent upsert of the four Step 5 attribute prompts as DRAFT
+ * rows. Runs on API startup; if a row already exists for
+ * (feature, name='default', version=1) we leave it alone (operators
+ * may have edited the body). Only fires when the row is missing.
+ *
+ * Returns the count of newly-inserted rows so the startup logger can
+ * report visibility.
+ */
+export async function seedPromptTemplateDefaults(
+  prisma: PrismaClient,
+): Promise<{ inserted: number }> {
+  let inserted = 0
+  for (const seed of SEEDS) {
+    try {
+      const existing = await prisma.promptTemplate.findFirst({
+        where: { feature: seed.feature, name: 'default', version: 1 },
+        select: { id: true },
+      })
+      if (existing) continue
+      await prisma.promptTemplate.create({
+        data: {
+          feature: seed.feature,
+          name: 'default',
+          description: seed.description,
+          body: seed.body,
+          status: 'DRAFT',
+          version: 1,
+          createdBy: 'system',
+        },
+      })
+      inserted += 1
+    } catch (err) {
+      // Don't let one failure sink the rest. Logged for visibility.
+      logger.warn('prompt-template-service: seed failed for feature', {
+        feature: seed.feature,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  if (inserted > 0) {
+    logger.info('prompt-template-service: seeded DRAFT prompts', {
+      inserted,
+      total: SEEDS.length,
+    })
+  }
+  return { inserted }
+}
