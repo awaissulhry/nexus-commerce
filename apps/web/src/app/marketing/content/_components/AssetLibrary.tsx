@@ -21,6 +21,12 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import AssetCard from './AssetCard'
 import { formatBytes } from '../_lib/format'
 import { splitForHighlight } from '../_lib/highlight'
+import {
+  groupByTimeline,
+  flattenTimelineRows,
+  type TimelineRow,
+  type TimelineBucket,
+} from '../_lib/timeline'
 import type { LibraryItem, LibraryResponse } from '../_lib/types'
 import type { FilterState } from './FilterSidebar'
 
@@ -47,7 +53,9 @@ function MatchedFields({
   )
 }
 
-export type ViewMode = 'grid' | 'list'
+export type ViewMode = 'grid' | 'list' | 'timeline'
+
+const TIMELINE_HEADER_HEIGHT_PX = 36
 
 interface Props {
   view: ViewMode
@@ -189,14 +197,33 @@ export default function AssetLibrary({
 
   const scrollerRef = useRef<HTMLDivElement>(null)
   const cols = useGridCols(scrollerRef)
+
+  // MC.2.6 — timeline view flattens grouped items into a rowstream
+  // that interleaves headers + tile rows. Memoized so the
+  // virtualizer doesn't re-measure on every render.
+  const timelineRows = useMemo<TimelineRow[]>(() => {
+    if (view !== 'timeline') return []
+    return flattenTimelineRows(groupByTimeline(visibleItems), cols)
+  }, [view, visibleItems, cols])
+
   const rowCount =
-    view === 'grid' ? Math.ceil(visibleItems.length / cols) : visibleItems.length
+    view === 'grid'
+      ? Math.ceil(visibleItems.length / cols)
+      : view === 'timeline'
+        ? timelineRows.length
+        : visibleItems.length
 
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollerRef.current,
-    estimateSize: () =>
-      view === 'grid' ? GRID_ROW_HEIGHT_PX : LIST_ROW_HEIGHT_PX,
+    estimateSize: (index) => {
+      if (view === 'timeline') {
+        return timelineRows[index]?.kind === 'header'
+          ? TIMELINE_HEADER_HEIGHT_PX
+          : GRID_ROW_HEIGHT_PX
+      }
+      return view === 'grid' ? GRID_ROW_HEIGHT_PX : LIST_ROW_HEIGHT_PX
+    },
     overscan: 6,
   })
 
@@ -331,6 +358,58 @@ export default function AssetLibrary({
           style={{ height: virtualizer.getTotalSize() }}
         >
           {virtualizer.getVirtualItems().map((row) => {
+            if (view === 'timeline') {
+              const tlRow = timelineRows[row.index]
+              if (!tlRow) return null
+              if (tlRow.kind === 'header') {
+                return (
+                  <div
+                    key={row.key}
+                    data-index={row.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute inset-x-0 flex items-baseline gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900"
+                    style={{
+                      transform: `translateY(${row.start}px)`,
+                      height: TIMELINE_HEADER_HEIGHT_PX,
+                    }}
+                  >
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      {t(`marketingContent.timeline.${tlRow.bucket satisfies TimelineBucket}`)}
+                    </h3>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {tlRow.count}
+                    </span>
+                  </div>
+                )
+              }
+              return (
+                <div
+                  key={row.key}
+                  data-index={row.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute inset-x-0 grid gap-2 px-3 py-1"
+                  style={{
+                    transform: `translateY(${row.start}px)`,
+                    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {tlRow.items.map((item) => (
+                    <AssetCard
+                      key={item.id}
+                      item={item}
+                      onSelect={onSelect}
+                      selected={selectedId === item.id}
+                      highlight={search}
+                      bulkChecked={bulkSelectedIds?.has(item.id) ?? false}
+                      onBulkToggle={
+                        onToggleBulk ? () => onToggleBulk(item) : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )
+            }
+
             if (view === 'grid') {
               const rowItems = visibleItems.slice(
                 row.index * cols,

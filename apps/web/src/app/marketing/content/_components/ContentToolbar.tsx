@@ -6,7 +6,7 @@
 // fire toasts in this commit; MC.1.2/1.3/1.4 wire each control to a
 // real surface.
 
-import { Filter, LayoutGrid, List, Upload, Sparkles } from 'lucide-react'
+import { Filter, LayoutGrid, List, Calendar, Upload, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
@@ -14,7 +14,7 @@ import SearchInput from './SearchInput'
 import SavedViewsMenu from './SavedViewsMenu'
 import type { FilterState } from './FilterSidebar'
 
-export type ViewMode = 'grid' | 'list'
+export type ViewMode = 'grid' | 'list' | 'timeline'
 
 interface Props {
   view: ViewMode
@@ -103,6 +103,19 @@ export default function ContentToolbar({
             }`}
           >
             <List className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange('timeline')}
+            aria-pressed={view === 'timeline'}
+            aria-label={t('marketingContent.toolbar.viewTimeline')}
+            className={`border-l border-slate-300 px-2.5 py-1.5 text-sm transition-colors dark:border-slate-700 ${
+              view === 'timeline'
+                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
           </button>
         </div>
 
