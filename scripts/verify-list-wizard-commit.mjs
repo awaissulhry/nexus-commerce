@@ -21,6 +21,7 @@
 //  11. WizardStepEvent telemetry helper imported in client + step9.
 //  12. SP series — schedule-for-later UI + cron + history.
 //  13. AB series — same-scope traffic split + per-product stickiness.
+//  14. AET series — operator accept-or-edit telemetry.
 //
 // New checks appended as the wizard evolves; old checks should NOT be
 // removed unless the underlying invariant is intentionally retired.
@@ -165,6 +166,24 @@ check('admin shows A/B variants badge (AB.2)',
   /A\/B · /.test(promptsClient))
 check('admin shows per-row traffic share (AB.4)',
   /scopeTotalCalls/.test(promptsClient))
+
+console.log('\nCase 14: AET series — accept-or-edit telemetry')
+const step4 = read('apps/web/src/app/products/[id]/list-wizard/steps/Step4Attributes.tsx')
+const aiUsageRoutes = read('apps/api/src/routes/ai-usage.routes.ts')
+check('matcher split into matchPromptTemplate (no-side-effects)',
+  /async function matchPromptTemplate/.test(promptSvc))
+check('recordPromptTemplateEdit exists',
+  /export async function recordPromptTemplateEdit/.test(promptSvc))
+check('Levenshtein helper present',
+  /function levenshtein/.test(promptSvc))
+check('POST /ai/prompt-templates/record-edit route',
+  /'\/ai\/prompt-templates\/record-edit'/.test(aiUsageRoutes))
+check('Step 4 captures aiBaselineRef',
+  /aiBaselineRef/.test(step4))
+check('Step 4 onContinue flushes record-edit',
+  /\/api\/ai\/prompt-templates\/record-edit/.test(step4))
+check('admin shows accepted/edited badge',
+  /acceptedCount/.test(promptsClient) && /accepted/.test(promptsClient))
 
 console.log(`\n${failures === 0 ? '✓ all checks passed' : `✗ ${failures} check(s) failed`}\n`)
 process.exit(failures === 0 ? 0 : 1)

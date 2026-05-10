@@ -273,14 +273,48 @@ export default function AiPromptsClient({ initialRows }: Props) {
           (r.marketplace ?? null) === marketplace,
       )
       if (inScope.length < 2) return
-      const sorted = [...inScope].sort(
-        (a, b) => (b.callCount ?? 0) - (a.callCount ?? 0),
+      // AET.4 — when every variant has ≥ MIN_AET_SAMPLE accept-or-
+      // edit observations, sort by acceptance rate (higher wins);
+      // ties broken by lower avg edit distance, then by callCount.
+      // Below the threshold we fall back to callCount alone — small-
+      // sample acceptance is too noisy to trust.
+      const MIN_AET_SAMPLE = 5
+      const aetReady = inScope.every(
+        (r) => (r.acceptedCount ?? 0) + (r.editedCount ?? 0) >= MIN_AET_SAMPLE,
       )
+      const acceptRate = (r: PromptTemplateRow) => {
+        const sample = (r.acceptedCount ?? 0) + (r.editedCount ?? 0)
+        return sample === 0 ? 0 : (r.acceptedCount ?? 0) / sample
+      }
+      const avgEditChars = (r: PromptTemplateRow) => {
+        const e = r.editedCount ?? 0
+        return e === 0 ? 0 : (r.totalEditChars ?? 0) / e
+      }
+      const sorted = aetReady
+        ? [...inScope].sort((a, b) => {
+            const ar = acceptRate(b) - acceptRate(a)
+            if (ar !== 0) return ar
+            const ed = avgEditChars(a) - avgEditChars(b)
+            if (ed !== 0) return ed
+            return (b.callCount ?? 0) - (a.callCount ?? 0)
+          })
+        : [...inScope].sort(
+            (a, b) => (b.callCount ?? 0) - (a.callCount ?? 0),
+          )
       const winner = sorted[0]
       const losers = sorted.slice(1)
+      const winnerSummary = aetReady
+        ? `${Math.round(acceptRate(winner) * 100)}% accepted (${
+            (winner.acceptedCount ?? 0) + (winner.editedCount ?? 0)
+          } samples)`
+        : `${winner.callCount} calls`
+      const loserSummary = (l: PromptTemplateRow) =>
+        aetReady
+          ? `${Math.round(acceptRate(l) * 100)}% accepted`
+          : `${l.callCount} calls`
       const ok = await confirm({
         title: `Pick winner: ${winner.name} v${winner.version}?`,
-        description: `${winner.feature}${language ? ` · lang=${language}` : ''}${marketplace ? ` · market=${marketplace}` : ''} — keeping "${winner.name}" (${winner.callCount} calls). Will archive: ${losers.map((l) => `"${l.name}" (${l.callCount} calls)`).join(', ')}.`,
+        description: `${winner.feature}${language ? ` · lang=${language}` : ''}${marketplace ? ` · market=${marketplace}` : ''} — keeping "${winner.name}" (${winnerSummary}${aetReady ? '' : '; AET sample below threshold, falling back to call volume'}). Will archive: ${losers.map((l) => `"${l.name}" (${loserSummary(l)})`).join(', ')}.`,
         confirmLabel: 'Archive losers',
         tone: 'warning',
       })

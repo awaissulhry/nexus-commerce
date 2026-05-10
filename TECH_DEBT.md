@@ -162,9 +162,15 @@ Sellers could forward Amazon's approval / rejection email to a Nexus inbox; we e
 
 v1 generates content for the wizard's current marketplace. The "generate IT once, translate to DE / FR / ES / UK / US in one pass and write each into ChannelListing" flow needs the publishing layer that lands in Phase 6 (steps 9 and 10). Spec'd but consciously deferred.
 
-## 14. 🟢 Phase 5.5 → AI vs user-edit telemetry
+## 14. ✅ Phase 5.5 → AI vs user-edit telemetry — resolved 2026-05-10 (AET.1-4)
 
-Every AI generation could store its `aiVersion` next to the user's final value, so we can later measure: which fields the user edits most, how heavy the edits are, and whether quality drifts when product types change. Building the storage now is YAGNI — adding the diff log is a single migration + small client patch when we want the data.
+**Resolution:** The AET arc on `/products/[id]/list-wizard` adds the diff log without storing per-call rows. Three counters on `PromptTemplate` (acceptedCount, editedCount, totalEditChars) accumulate operator decisions; matcher split into `matchPromptTemplate` (no side-effects) so the record path doesn't double-count callCount. Step 4 captures an aiBaselineRef per (channelKey, fieldId), drains on Continue, fires `POST /api/ai/prompt-templates/record-edit` for each baseline → server runs Levenshtein and bumps the right row.
+
+Admin surface (`/settings/ai`):
+- Per-row tone-coded "X% accepted · ~Yc" badge (emerald ≥70 / amber 40-69 / rose <40); pre-AET rows stay chrome-clean (sample=0).
+- AB.5 `Pick winner` upgrades to acceptance-rate-first sort once every variant has ≥5 samples; below threshold falls back to callCount with a banner.
+
+The original "single migration + small client patch" estimate held — no per-call audit table needed; the counter aggregates were enough.
 
 ## 15. 🟢 Phase 5.5 → quality scoring + brand-voice profiles
 
