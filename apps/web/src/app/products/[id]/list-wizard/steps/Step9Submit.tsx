@@ -1289,6 +1289,11 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
   })()
 
   const pendingRows = pending.filter((p) => p.status === 'PENDING')
+  // SP.6 — anything not PENDING is history. Order matches the API
+  // response (scheduledFor desc) so the most recent fire/cancel
+  // shows first.
+  const historyRows = pending.filter((p) => p.status !== 'PENDING')
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   return (
     <div className="text-left">
@@ -1385,6 +1390,60 @@ function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
           <Loader2 className="w-3 h-3 animate-spin" />
           checking…
         </span>
+      )}
+
+      {/* SP.6 — schedule history (FIRED / FAILED / CANCELLED). Hidden
+          behind a disclosure so it doesn't dominate the column when
+          empty or the operator has scheduled many times.  */}
+      {historyRows.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
+          >
+            {historyOpen ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
+            History ({historyRows.length})
+          </button>
+          {historyOpen && (
+            <ul className="mt-1 space-y-1">
+              {historyRows.map((row) => {
+                const tone =
+                  row.status === 'FIRED'
+                    ? 'text-emerald-700 dark:text-emerald-300'
+                    : row.status === 'FAILED'
+                      ? 'text-rose-700 dark:text-rose-300'
+                      : 'text-slate-500 dark:text-slate-400'
+                const stamp =
+                  row.firedAt ?? row.cancelledAt ?? row.scheduledFor
+                return (
+                  <li
+                    key={row.id}
+                    className="text-xs flex items-start justify-between gap-3 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className={cn('font-medium', tone)}>
+                        {row.status}
+                      </span>{' '}
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
+                        {new Date(stamp).toLocaleString()}
+                      </span>
+                      {row.fireError && (
+                        <div className="text-rose-700 dark:text-rose-300 mt-0.5 break-words">
+                          {row.fireError}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   )
