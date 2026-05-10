@@ -4891,5 +4891,20 @@
   "publishDashboard.publishedAs": "Pubblicato come {id}",
   "publishDashboard.modeLabel": "{mode}",
   "publishDashboard.publishedCount": "Pubblicato su {n} canali",
-  "publishDashboard.failedCount": "{n} canali falliti — vedi dettagli"
+  "publishDashboard.failedCount": "{n} canali falliti — vedi dettagli",
+  "marketingHome.title": "Marketing Hub",
+  "marketingHome.description": "Contenuti, pagine A+, brand story, brand kit e automazioni — tutto in un posto.",
+  "marketingHome.shortcuts": "Azioni rapide",
+  "marketingHome.tip": "Suggerimento:",
+  "marketingHome.openHub": "Apri Content Hub",
+  "marketingHome.surface.content": "Libreria contenuti",
+  "marketingHome.surface.contentSub": "{videos} video · {storage} usati",
+  "marketingHome.surface.aplus": "Contenuti A+",
+  "marketingHome.surface.brandStory": "Brand Story",
+  "marketingHome.surface.brandKit": "Brand Kit",
+  "marketingHome.surface.automation": "Automazioni",
+  "marketingHome.shortcut.publish": "Pubblica sui canali",
+  "marketingHome.shortcut.analytics": "Analisi contenuti",
+  "marketingHome.shortcut.automationHistory": "Cronologia automazioni",
+  "marketingHome.shortcut.templates": "Modelli"
 }
