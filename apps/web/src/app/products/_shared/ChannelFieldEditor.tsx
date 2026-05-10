@@ -1661,9 +1661,9 @@ function ListingSetupCard({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900">
       {/* Card header */}
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 rounded-t-lg flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
           Channel Setup
         </span>
