@@ -23,7 +23,12 @@ import {
   Quote,
   Layers,
   Camera,
+  CheckSquare,
+  Send,
+  History,
+  Clock,
 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import {
@@ -40,6 +45,10 @@ import {
   type BrandStoryStatus,
 } from '../_lib/types'
 import BrandStoryLocalizationsPanel from './BrandStoryLocalizationsPanel'
+import BrandStoryVersionHistoryModal from './BrandStoryVersionHistoryModal'
+import ValidationResultModal, {
+  type ValidationResult,
+} from '../../aplus/_components/ValidationResultModal'
 
 interface Props {
   initial: BrandStoryDetail
@@ -55,7 +64,119 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
     initial.modules[0]?.id ?? null,
   )
   const [status, setStatus] = useState<BrandStoryStatus>(initial.status)
-  const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status'>(null)
+  const [busy, setBusy] = useState<null | 'add' | 'reorder' | 'status' | 'validate' | 'submit'>(null)
+  const [validationOpen, setValidationOpen] = useState(false)
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [scheduleInput, setScheduleInput] = useState('')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+
+  const runValidation = async () => {
+    setBusy('validate')
+    try {
+      const res = await fetch(
+        `${apiBase}/api/brand-stories/${encodeURIComponent(initial.id)}/validate`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error(`Validation failed (${res.status})`)
+      const data = (await res.json()) as { result: ValidationResult }
+      setValidationResult(data.result)
+      setValidationOpen(true)
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('brandStory.validate.runError'),
+      )
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const submit = async () => {
+    if (
+      !window.confirm(
+        t('brandStory.submit.confirm', {
+          marketplace: initial.marketplace,
+        }),
+      )
+    )
+      return
+    setBusy('submit')
+    try {
+      const res = await fetch(
+        `${apiBase}/api/brand-stories/${encodeURIComponent(initial.id)}/submit`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error(`Submit failed (${res.status})`)
+      const data = (await res.json()) as {
+        ok: boolean
+        mode: 'sandbox' | 'live'
+        amazonDocumentId: string | null
+        validation: ValidationResult
+        error: string | null
+      }
+      if (data.ok) {
+        toast.success(
+          t('brandStory.submit.success', {
+            mode: data.mode,
+            id: data.amazonDocumentId ?? '—',
+          }),
+        )
+        router.refresh()
+      } else if (data.validation && !data.validation.ok) {
+        setValidationResult(data.validation)
+        setValidationOpen(true)
+        toast.error(
+          t('brandStory.submit.validationFailed', {
+            n: data.validation.blocking.length.toString(),
+          }),
+        )
+      } else {
+        toast.error(data.error ?? t('brandStory.submit.error'))
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t('brandStory.submit.error'),
+      )
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const saveSchedule = async (raw: string) => {
+    setScheduleSaving(true)
+    try {
+      const res = await fetch(
+        `${apiBase}/api/brand-stories/${encodeURIComponent(initial.id)}/schedule`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            scheduledFor: raw ? new Date(raw).toISOString() : null,
+          }),
+        },
+      )
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(err.error ?? `Schedule failed (${res.status})`)
+      }
+      router.refresh()
+      toast.success(
+        raw
+          ? t('brandStory.schedule.set', {
+              when: new Date(raw).toLocaleString(),
+            })
+          : t('brandStory.schedule.cleared'),
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t('brandStory.schedule.error'),
+      )
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
 
   useEffect(() => {
     setModules(initial.modules)
@@ -284,6 +405,41 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
               })}
             </span>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={runValidation}
+            disabled={busy !== null}
+          >
+            {busy === 'validate' ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <CheckSquare className="w-4 h-4 mr-1" />
+            )}
+            {t('brandStory.builder.validate')}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setHistoryOpen(true)}
+            disabled={busy !== null}
+          >
+            <History className="w-4 h-4 mr-1" />
+            {t('brandStory.builder.history')}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={submit}
+            disabled={busy !== null || modules.length === 0}
+          >
+            {busy === 'submit' ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4 mr-1" />
+            )}
+            {t('brandStory.builder.submit')}
+          </Button>
           <select
             value={status}
             onChange={(e) => void updateStatus(e.target.value as BrandStoryStatus)}
@@ -302,6 +458,54 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
       </div>
 
       <BrandStoryLocalizationsPanel document={initial} apiBase={apiBase} />
+
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <Clock className="w-4 h-4 text-slate-400" />
+        <span className="font-medium text-slate-900 dark:text-slate-100">
+          {t('brandStory.schedule.label')}
+        </span>
+        <input
+          type="datetime-local"
+          value={scheduleInput}
+          onChange={(e) => setScheduleInput(e.target.value)}
+          disabled={scheduleSaving}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void saveSchedule(scheduleInput)}
+          disabled={scheduleSaving || !scheduleInput}
+        >
+          {scheduleSaving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            t('brandStory.schedule.set_cta')
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setScheduleInput('')
+            void saveSchedule('')
+          }}
+          disabled={scheduleSaving}
+        >
+          {t('brandStory.schedule.clear')}
+        </Button>
+        <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+          {initial.publishedAt
+            ? t('brandStory.schedule.publishedAt', {
+                when: new Date(initial.publishedAt).toLocaleString(),
+              })
+            : initial.submittedAt
+              ? t('brandStory.schedule.submittedAt', {
+                  when: new Date(initial.submittedAt).toLocaleString(),
+                })
+              : t('brandStory.schedule.notSubmitted')}
+        </span>
+      </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         <ModulePalette
@@ -323,6 +527,20 @@ export default function BrandStoryBuilderClient({ initial, apiBase }: Props) {
           validationByModule={validationByModule}
         />
       </div>
+
+      <ValidationResultModal
+        open={validationOpen}
+        onClose={() => setValidationOpen(false)}
+        result={validationResult}
+      />
+
+      <BrandStoryVersionHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        storyId={initial.id}
+        apiBase={apiBase}
+        onRestored={() => router.refresh()}
+      />
     </div>
   )
 }

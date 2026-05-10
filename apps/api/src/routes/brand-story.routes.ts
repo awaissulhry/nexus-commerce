@@ -9,6 +9,53 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { validateBrandStoryDocument } from '../services/brand-story-validation.service.js'
+import {
+  submitBrandStoryDocument,
+  submissionMode,
+} from '../services/brand-story-amazon.service.js'
+
+// MC.9.4 — snapshot helper. Same shape as the A+ Content version
+// snapshot in aplus-content.routes.ts.
+async function snapshotBrandStory(
+  storyId: string,
+  reason: 'pre_submit' | 'manual_save' | 'pre_rollback',
+  prismaClient: typeof prisma,
+): Promise<number> {
+  const story = await prismaClient.brandStory.findUnique({
+    where: { id: storyId },
+    include: { modules: { orderBy: { position: 'asc' } } },
+  })
+  if (!story) throw new Error(`Brand Story ${storyId} not found`)
+  const lastVersion = await prismaClient.brandStoryVersion.findFirst({
+    where: { storyId },
+    orderBy: { version: 'desc' },
+    select: { version: true },
+  })
+  const nextVersion = (lastVersion?.version ?? 0) + 1
+  const snapshot = {
+    name: story.name,
+    brand: story.brand,
+    marketplace: story.marketplace,
+    locale: story.locale,
+    status: story.status,
+    notes: story.notes,
+    modules: story.modules.map((m) => ({
+      type: m.type,
+      position: m.position,
+      payload: m.payload,
+    })),
+  }
+  await prismaClient.brandStoryVersion.create({
+    data: {
+      storyId,
+      version: nextVersion,
+      reason,
+      snapshot: snapshot as never,
+    },
+  })
+  return nextVersion
+}
 
 const VALID_STATUSES = new Set([
   'DRAFT',
@@ -396,4 +443,225 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
   )
 }
 
-export default brandStoryRoutes
+// ── MC.9.4 — Validation + submission + versions + schedule ─
+
+const additionalRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post(
+    '/brand-stories/:id/validate',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const story = await prisma.brandStory.findUnique({
+        where: { id },
+        include: { modules: { orderBy: { position: 'asc' } } },
+      })
+      if (!story)
+        return reply.code(404).send({ error: 'Brand Story not found' })
+      const result = validateBrandStoryDocument({
+        name: story.name,
+        brand: story.brand,
+        marketplace: story.marketplace,
+        locale: story.locale,
+        modules: story.modules.map((m) => ({
+          type: m.type,
+          payload: (m.payload as Record<string, unknown>) ?? {},
+        })),
+      })
+      return { result }
+    },
+  )
+
+  fastify.post(
+    '/brand-stories/:id/submit',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const story = await prisma.brandStory.findUnique({
+        where: { id },
+        include: { modules: { orderBy: { position: 'asc' } } },
+      })
+      if (!story)
+        return reply.code(404).send({ error: 'Brand Story not found' })
+
+      const validation = validateBrandStoryDocument({
+        name: story.name,
+        brand: story.brand,
+        marketplace: story.marketplace,
+        locale: story.locale,
+        modules: story.modules.map((m) => ({
+          type: m.type,
+          payload: (m.payload as Record<string, unknown>) ?? {},
+        })),
+      })
+
+      try {
+        await snapshotBrandStory(id, 'pre_submit', prisma)
+      } catch (snapshotErr) {
+        request.log.error(
+          { err: snapshotErr, storyId: id },
+          'Failed to snapshot pre_submit',
+        )
+      }
+
+      const submission = await submitBrandStoryDocument(
+        {
+          id: story.id,
+          name: story.name,
+          brand: story.brand,
+          marketplace: story.marketplace,
+          locale: story.locale,
+          modules: story.modules.map((m) => ({
+            type: m.type,
+            payload: (m.payload as Record<string, unknown>) ?? {},
+          })),
+        },
+        validation,
+      )
+
+      await prisma.brandStory.update({
+        where: { id },
+        data: {
+          status: submission.ok ? 'SUBMITTED' : story.status,
+          amazonDocumentId:
+            submission.amazonDocumentId ?? story.amazonDocumentId,
+          submittedAt: new Date(),
+          submissionPayload: (submission.rawResponse as never) ?? null,
+          notes: submission.error
+            ? `${story.notes ? `${story.notes}\n\n` : ''}[${new Date().toISOString()}] Submission ${submission.mode}: ${submission.error}`
+            : story.notes,
+        },
+      })
+
+      return {
+        ok: submission.ok,
+        mode: submission.mode,
+        amazonDocumentId: submission.amazonDocumentId,
+        validation,
+        error: submission.error,
+      }
+    },
+  )
+
+  fastify.get('/brand-stories/_meta/submission-mode', async () => {
+    return { mode: submissionMode() }
+  })
+
+  fastify.get('/brand-stories/:id/versions', async (request) => {
+    const { id } = request.params as { id: string }
+    const versions = await prisma.brandStoryVersion.findMany({
+      where: { storyId: id },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true,
+        version: true,
+        reason: true,
+        createdAt: true,
+      },
+    })
+    return { versions }
+  })
+
+  fastify.post(
+    '/brand-stories/:id/versions/save',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const story = await prisma.brandStory.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!story)
+        return reply.code(404).send({ error: 'Brand Story not found' })
+      const version = await snapshotBrandStory(id, 'manual_save', prisma)
+      return reply.code(201).send({ version })
+    },
+  )
+
+  fastify.post(
+    '/brand-stories/:id/versions/:versionId/restore',
+    async (request, reply) => {
+      const { id, versionId } = request.params as {
+        id: string
+        versionId: string
+      }
+      const target = await prisma.brandStoryVersion.findUnique({
+        where: { id: versionId },
+      })
+      if (!target || target.storyId !== id)
+        return reply
+          .code(404)
+          .send({ error: 'version not found for this story' })
+
+      await snapshotBrandStory(id, 'pre_rollback', prisma)
+
+      interface SnapshotShape {
+        name?: string
+        notes?: string | null
+        modules?: Array<{
+          type: string
+          position: number
+          payload: unknown
+        }>
+      }
+      const snap = (target.snapshot ?? {}) as SnapshotShape
+
+      await prisma.$transaction(async (tx) => {
+        await tx.brandStory.update({
+          where: { id },
+          data: {
+            name: snap.name ?? undefined,
+            notes: snap.notes ?? null,
+          },
+        })
+        await tx.brandStoryModule.deleteMany({ where: { storyId: id } })
+        if (Array.isArray(snap.modules) && snap.modules.length > 0) {
+          await tx.brandStoryModule.createMany({
+            data: snap.modules.map((m, idx) => ({
+              storyId: id,
+              type: m.type,
+              position: typeof m.position === 'number' ? m.position : idx,
+              payload: (m.payload as never) ?? {},
+            })),
+          })
+        }
+      })
+      return { ok: true, restoredVersion: target.version }
+    },
+  )
+
+  fastify.patch(
+    '/brand-stories/:id/schedule',
+    async (request, reply) => {
+      const { id } = request.params as { id: string }
+      const body = request.body as { scheduledFor?: string | null }
+      let scheduled: Date | null = null
+      if (body.scheduledFor) {
+        const parsed = new Date(body.scheduledFor)
+        if (isNaN(parsed.getTime()))
+          return reply
+            .code(400)
+            .send({ error: 'scheduledFor must be an ISO datetime' })
+        if (parsed.getTime() < Date.now() - 60_000)
+          return reply
+            .code(400)
+            .send({ error: 'scheduledFor must be in the future' })
+        scheduled = parsed
+      }
+      try {
+        const story = await prisma.brandStory.update({
+          where: { id },
+          data: { scheduledFor: scheduled },
+        })
+        return { story }
+      } catch (err: any) {
+        if (err?.code === 'P2025')
+          return reply.code(404).send({ error: 'Brand Story not found' })
+        throw err
+      }
+    },
+  )
+}
+
+const composedRoutes: FastifyPluginAsync = async (fastify) => {
+  await brandStoryRoutes(fastify, {})
+  await additionalRoutes(fastify, {})
+}
+
+export default composedRoutes
