@@ -34,6 +34,7 @@ import {
   Image as ImageIcon,
   Star,
   FileEdit,
+  BadgeCheck,
   ShoppingCart,
   Cable,
   Sun,
@@ -547,6 +548,12 @@ export default function AppSidebar() {
             icon={ImageIcon}
             label="Content Hub"
             active={pathname === '/marketing/content'}
+          />
+          <NavItem
+            href="/marketing/aplus"
+            icon={BadgeCheck}
+            label="A+ Content"
+            active={pathname.startsWith('/marketing/aplus')}
           />
           <NavItem
             href="/marketing/reviews"
