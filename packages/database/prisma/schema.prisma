@@ -147,6 +147,12 @@ model Product {
   // duplicate upload. Migration plan in a follow-up Wave 4 commit.
   assetUsages AssetUsage[]
 
+  // MC.8.1 — A+ Content asin attachments (Amazon Brand Registry).
+  // One Product can be attached to many APlusContent rows (one per
+  // marketplace × locale combination); deleting the product unsets
+  // the link without dropping the A+ content itself.
+  aPlusContentAttachments APlusContentAsin[]
+
   // ── W4.6 — Repricing rules (Rithum cornerstone) ───────────────
   // Per-(product, channel, marketplace) repricing config: min/max
   // price + strategy + schedule. The repricing engine (W4.7+) reads
@@ -4478,6 +4484,124 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@index([createdAt])
+}
+
+/// MC.8.1 — Amazon A+ Content (Brand Registry).
+///
+/// Structured A+ Content document per (marketplace, locale). The
+/// IT-source row is the master; localized siblings (DE/UK/FR/ES)
+/// link back via masterContentId so MC.8.6's "translate from
+/// master" flow can find them. One operator-built document
+/// supports many ASINs via the APlusContentAsin join — Amazon's
+/// "apply to ASINs" workflow.
+///
+/// Workflow status:
+///   DRAFT     operator editing
+///   REVIEW    locally awaiting approval (single-operator can skip
+///             this; multi-operator workflow lands MC.8-followup)
+///   APPROVED  ready to submit
+///   SUBMITTED sent to Amazon, awaiting their review
+///   PUBLISHED live
+///   REJECTED  Amazon rejected; reviewer notes captured in `notes`
+///
+/// Stored as strings (not enums) so a future workflow tweak doesn't
+/// need a migration.
+model APlusContent {
+  id              String   @id @default(cuid())
+  /// Operator-friendly title — "Premium A+ — Airmesh Jacket".
+  name            String
+  /// Optional brand label. When set, this A+ applies to every
+  /// product under that brand within the marketplace (Amazon's
+  /// Brand-level A+ flow). When NULL, the A+ targets specific ASINs
+  /// via the APlusContentAsin join.
+  brand           String?
+  /// Marketplace key — 'AMAZON_IT' / 'AMAZON_DE' / ... matches the
+  /// rest of the catalogue's marketplace identifiers.
+  marketplace     String
+  /// IETF locale tag — 'it-IT', 'de-DE', 'en-GB', ...
+  locale          String
+  /// Sibling-localization pointer. NULL = master row; otherwise the
+  /// id of the IT-source content this row was translated from.
+  masterContentId String?
+  master          APlusContent?  @relation("APlusLocalizations", fields: [masterContentId], references: [id], onDelete: SetNull)
+  localizations   APlusContent[] @relation("APlusLocalizations")
+  status          String         @default("DRAFT")
+  /// Amazon-side document id returned by createContentDocument.
+  /// Stays null until the first submission attempt.
+  amazonDocumentId  String?
+  submittedAt       DateTime?
+  /// Snapshotted submission body so we can diff "what we sent" vs
+  /// "what's live" if Amazon updates the schema later.
+  submissionPayload Json?
+  publishedAt       DateTime?
+  /// Free-form reviewer notes — operator-written or copied from
+  /// Amazon's rejection reason.
+  notes             String?
+  asinAttachments   APlusContentAsin[]
+  modules           APlusModule[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([marketplace, status])
+  @@index([brand])
+  @@index([masterContentId])
+}
+
+/// MC.8.1 — ASIN attachment join. One A+ Content document can
+/// target many ASINs (Amazon's "apply to ASINs" picker); each row
+/// is one attachment.
+///
+/// `productId` links to the local Product when the operator picks
+/// from the catalogue; standalone-ASIN attachments (from a Brand
+/// Registry browse) leave it NULL. SetNull on Product delete keeps
+/// the historical attachment record without a dangling FK.
+model APlusContentAsin {
+  contentId  String
+  content    APlusContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  asin       String
+  productId  String?
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  attachedAt DateTime @default(now())
+
+  @@id([contentId, asin])
+  @@index([asin])
+  @@index([productId])
+}
+
+/// MC.8.1 — A+ Content module (one row per drag-drop block).
+///
+/// `type` is one of 17 module identifiers (8 standard + 9 premium):
+///   image_header_with_text       standard 1464×600 hero
+///   standard_image_text          standard image + body
+///   single_image_sidebar         standard
+///   multiple_image_text_panels   standard
+///   comparison_chart_3col        standard
+///   comparison_chart_4col        standard
+///   image_gallery_4              standard
+///   image_gallery_6              standard
+///   bulleted_list_with_images    standard
+///   faq                          standard
+///   premium_video                premium
+///   premium_comparison_chart_8col premium
+///   premium_image_text_image     premium
+///   premium_dynamic_carousel     premium
+///   premium_qa                   premium
+///   ... (additional premium modules per Brand Registry tier)
+///
+/// `payload` shape varies by type. The builder validates
+/// per-module client-side; final submission re-validates server-
+/// side against the Amazon spec before posting createContentDocument.
+model APlusModule {
+  id        String       @id @default(cuid())
+  contentId String
+  content   APlusContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  type      String
+  position  Int          @default(0)
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contentId, position])
 }
 
 // Phase A: per-listing image set with multi-scope and variation-aware
