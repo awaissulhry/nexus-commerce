@@ -4402,5 +4402,14 @@
   "aplus.builder.preview.headerHint": "Add a header image and headline to preview",
   "aplus.builder.preview.galleryHint": "Add up to 4 images to preview the gallery",
   "aplus.builder.preview.faqHint": "Add Q&A pairs to preview the FAQ block",
-  "aplus.builder.preview.faqEmptyQuestion": "(question)"
+  "aplus.builder.preview.faqEmptyQuestion": "(question)",
+  "aplus.builder.preview.headlineHint": "Headline (renders bold)",
+  "aplus.builder.preview.bodyHint": "Body text (4 lines clamped in preview)",
+  "aplus.builder.preview.sidebarHeadlineHint": "Sidebar headline",
+  "aplus.builder.preview.sidebarItemsHint": "Add bullet items to the sidebar",
+  "aplus.builder.preview.panelsHint": "Add 2–4 panels to preview the layout",
+  "aplus.builder.preview.comparisonHint": "Add ASINs and attribute rows to preview the comparison table",
+  "aplus.builder.preview.comparisonAttribute": "Attribute",
+  "aplus.builder.preview.comparisonAttrPlaceholder": "(attribute)",
+  "aplus.builder.preview.bulletedHint": "Add up to 6 bullet items with images"
 }

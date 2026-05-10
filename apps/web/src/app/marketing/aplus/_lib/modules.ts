@@ -86,7 +86,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'headline', label: 'Headline', kind: 'text', max: 200 },
       { key: 'body', label: 'Body', kind: 'textarea', max: 1000 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'single_image_sidebar',
@@ -99,7 +99,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'sidebarHeadline', label: 'Sidebar headline', kind: 'text', max: 200 },
       { key: 'sidebarItems', label: 'Sidebar items', kind: 'list_text', max: 6 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'multiple_image_text_panels',
@@ -110,7 +110,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
     fields: [
       { key: 'panels', label: 'Panels', kind: 'list_image', max: 4 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'comparison_chart_3col',
@@ -122,7 +122,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'asins', label: 'ASINs', kind: 'list_text', max: 3 },
       { key: 'attributes', label: 'Attribute rows', kind: 'list_text', max: 8 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'comparison_chart_4col',
@@ -134,7 +134,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
       { key: 'asins', label: 'ASINs', kind: 'list_text', max: 4 },
       { key: 'attributes', label: 'Attribute rows', kind: 'list_text', max: 8 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'image_gallery_4',
@@ -156,7 +156,7 @@ export const MODULE_SPECS: ModuleSpec[] = [
     fields: [
       { key: 'items', label: 'Items', kind: 'list_image', max: 6 },
     ],
-    rendererImplemented: false,
+    rendererImplemented: true,
   },
   {
     id: 'faq',

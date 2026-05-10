@@ -4453,5 +4453,14 @@
   "aplus.builder.preview.headerHint": "Aggiungi un'immagine header e un titolo per l'anteprima",
   "aplus.builder.preview.galleryHint": "Aggiungi fino a 4 immagini per l'anteprima della galleria",
   "aplus.builder.preview.faqHint": "Aggiungi coppie Q&A per l'anteprima del blocco FAQ",
-  "aplus.builder.preview.faqEmptyQuestion": "(domanda)"
+  "aplus.builder.preview.faqEmptyQuestion": "(domanda)",
+  "aplus.builder.preview.headlineHint": "Titolo (visualizzato in grassetto)",
+  "aplus.builder.preview.bodyHint": "Corpo del testo (4 righe nell'anteprima)",
+  "aplus.builder.preview.sidebarHeadlineHint": "Titolo della barra laterale",
+  "aplus.builder.preview.sidebarItemsHint": "Aggiungi voci puntate alla barra laterale",
+  "aplus.builder.preview.panelsHint": "Aggiungi 2–4 pannelli per visualizzare il layout",
+  "aplus.builder.preview.comparisonHint": "Aggiungi ASIN e attributi per visualizzare la tabella di confronto",
+  "aplus.builder.preview.comparisonAttribute": "Attributo",
+  "aplus.builder.preview.comparisonAttrPlaceholder": "(attributo)",
+  "aplus.builder.preview.bulletedHint": "Aggiungi fino a 6 voci puntate con immagini"
 }
