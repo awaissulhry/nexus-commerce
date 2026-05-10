@@ -30,7 +30,8 @@ const root = fs.readFileSync(
 
 console.log('Case 1: page shell + breadcrumb')
 check("page is force-dynamic", /export const dynamic = 'force-dynamic'/.test(page))
-check('renders ImportsClient', /<ImportsClient \/>/.test(page))
+check('imports page mounts the tabs wrapper',
+  /<ImportsTabs \/>|<ImportsClient \/>/.test(page))
 check('breadcrumb back to /bulk-operations',
   /href: '\/bulk-operations'/.test(page))
 

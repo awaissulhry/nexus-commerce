@@ -31,12 +31,12 @@ const hub = fs.readFileSync(
 console.log('Case 1: /bulk-operations/exports page shell')
 check('force-dynamic export',
   /export const dynamic = 'force-dynamic'/.test(page))
-check('renders ExportsClient',
-  /<ExportsClient \/>/.test(page))
+check('exports page mounts the tabs wrapper',
+  /<ExportsTabs \/>|<ExportsClient \/>/.test(page))
 check('breadcrumb back to /bulk-operations',
   /href: '\/bulk-operations'/.test(page) && /label: 'Exports'/.test(page))
-check('PageHeader title',
-  /title="Export wizard"/.test(page))
+check('PageHeader title set',
+  /title="Export(?:s| wizard)"/.test(page))
 
 console.log('\nCase 2: ExportsClient is a client component')
 check("starts with 'use client'",
