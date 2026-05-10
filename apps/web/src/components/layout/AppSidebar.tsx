@@ -41,6 +41,7 @@ import {
   LayoutTemplate,
   ShoppingCart,
   Cable,
+  Send,
   Sun,
   Moon,
   Monitor,
@@ -551,8 +552,29 @@ export default function AppSidebar() {
             href="/marketing/content"
             icon={ImageIcon}
             label="Content Hub"
-            active={pathname === '/marketing/content'}
+            active={pathname.startsWith('/marketing/content')}
           />
+          {/* MC.14.5 — surface the most-trafficked Content Hub
+              sub-routes so the sidebar doesn't go quiet when an
+              operator is deep in publish/analytics. */}
+          {pathname.startsWith('/marketing/content') && (
+            <>
+              <NavItem
+                href="/marketing/content/publish"
+                icon={Send}
+                label="Channel publish"
+                nested
+                active={pathname === '/marketing/content/publish'}
+              />
+              <NavItem
+                href="/marketing/content/analytics"
+                icon={BarChart3}
+                label="Storage analytics"
+                nested
+                active={pathname === '/marketing/content/analytics'}
+              />
+            </>
+          )}
           <NavItem
             href="/marketing/aplus"
             icon={BadgeCheck}
