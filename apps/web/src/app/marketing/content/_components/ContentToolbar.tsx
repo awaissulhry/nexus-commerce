@@ -29,6 +29,7 @@ interface Props {
   folderActive?: boolean
   filter: FilterState
   onApplyView: (search: string, filter: FilterState) => void
+  onUploadClick?: () => void
 }
 
 export default function ContentToolbar({
@@ -44,6 +45,7 @@ export default function ContentToolbar({
   folderActive = false,
   filter,
   onApplyView,
+  onUploadClick,
 }: Props) {
   const { t } = useTranslations()
   const { toast } = useToast()
@@ -159,17 +161,19 @@ export default function ContentToolbar({
           </span>
         </Button>
 
-        {/* Upload — placeholder, MC.3 */}
+        {/* MC.3.1 — upload */}
         <Button
           variant="primary"
           size="sm"
-          onClick={() =>
-            toast({
-              title: t('marketingContent.toolbar.uploadComing.title'),
-              description: t('marketingContent.toolbar.uploadComing.body'),
-              tone: 'info',
-            })
-          }
+          onClick={() => {
+            if (onUploadClick) onUploadClick()
+            else
+              toast({
+                title: t('marketingContent.toolbar.uploadComing.title'),
+                description: t('marketingContent.toolbar.uploadComing.body'),
+                tone: 'info',
+              })
+          }}
         >
           <Upload className="w-4 h-4" />
           <span className="ml-1">{t('marketingContent.toolbar.upload')}</span>

@@ -44,9 +44,35 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import {
+  isCloudinaryConfigured,
+  uploadBufferToCloudinary,
+} from '../services/cloudinary.service.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const VALID_ASSET_TYPES = new Set(['image', 'video', 'document', 'model3d'])
+
+// MC.3.1 — accept-list for direct upload. Image-first; video lands in
+// MC.7 once we wire the transcoding pipeline. The mime-type guard is a
+// defence-in-depth check after we already filter by extension on the
+// client; servers should never trust the client.
+const UPLOAD_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+  'image/tiff',
+])
+
+// 25 MB cap for direct uploads. ProductImage hero photos at 4000×4000
+// fit easily under this; anything larger probably belongs in the bulk
+// ZIP flow (MC.3.2) or the dedicated video pipeline. Configurable via
+// env if a workspace needs more.
+const MAX_UPLOAD_BYTES = parseInt(
+  process.env.MC_MAX_UPLOAD_BYTES ?? `${25 * 1024 * 1024}`,
+  10,
+)
 
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── DigitalAsset ────────────────────────────────────────────
@@ -993,6 +1019,201 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'folder not found' })
       throw err
     }
+  })
+
+  // ── MC.3.1 — direct upload (multipart) ─────────────────────
+
+  fastify.post('/assets/upload', async (request, reply) => {
+    if (!isCloudinaryConfigured())
+      return reply.code(503).send({
+        error:
+          'Storage is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.',
+      })
+
+    const part = await request.file()
+    if (!part) return reply.code(400).send({ error: 'no file uploaded' })
+
+    if (!UPLOAD_IMAGE_MIME_TYPES.has(part.mimetype))
+      return reply.code(400).send({
+        error: `unsupported mime type "${part.mimetype}". Allowed: ${[...UPLOAD_IMAGE_MIME_TYPES].join(', ')}`,
+      })
+
+    // Pull the multipart fields out of the form-data body. fastify-
+    // multipart returns the file as `part`, plus any non-file fields
+    // on `part.fields` keyed by name.
+    const fields = part.fields as Record<
+      string,
+      { value: string } | undefined
+    >
+    const folderId = fields?.folderId?.value || null
+    const labelOverride = fields?.label?.value?.trim() || null
+
+    if (folderId) {
+      const folder = await prisma.assetFolder.findUnique({
+        where: { id: folderId },
+        select: { id: true },
+      })
+      if (!folder)
+        return reply.code(400).send({ error: 'folderId does not exist' })
+    }
+
+    // Stream-to-buffer with a hard cap. fastify-multipart already has
+    // a `limits.fileSize` knob but its enforcement is async and we
+    // get a partial buffer back; checking length post-toBuffer is
+    // belt-and-braces.
+    const buffer = await part.toBuffer()
+    if (buffer.length > MAX_UPLOAD_BYTES)
+      return reply.code(413).send({
+        error: `file exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
+        size: buffer.length,
+      })
+
+    const folder = folderId
+      ? `marketing-content/${folderId}`
+      : 'marketing-content/unfiled'
+
+    let cloudResult
+    try {
+      cloudResult = await uploadBufferToCloudinary(buffer, { folder })
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'storage upload failed',
+        detail: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+
+    const asset = await prisma.digitalAsset.create({
+      data: {
+        label: labelOverride ?? part.filename ?? 'Untitled',
+        type: 'image',
+        mimeType: part.mimetype,
+        sizeBytes: cloudResult.bytes,
+        storageProvider: 'cloudinary',
+        storageId: cloudResult.publicId,
+        url: cloudResult.url,
+        originalFilename: part.filename ?? null,
+        folderId,
+        metadata: {
+          width: cloudResult.width,
+          height: cloudResult.height,
+          format: cloudResult.format,
+        },
+      },
+    })
+
+    return reply.code(201).send({ asset })
+  })
+
+  // MC.3.1 — upload-from-URL.
+  //
+  // Operator pastes a public URL (Amazon CDN, supplier site, Google
+  // Drive direct link) and the server fetches it, validates it, and
+  // pushes to Cloudinary. Saves the operator from a download-then-
+  // upload roundtrip and lets us auto-import from listings on other
+  // marketplaces.
+  fastify.post('/assets/upload-url', async (request, reply) => {
+    if (!isCloudinaryConfigured())
+      return reply.code(503).send({ error: 'Storage is not configured.' })
+
+    const body = request.body as {
+      url?: string
+      label?: string
+      folderId?: string | null
+    }
+    if (!body.url?.trim())
+      return reply.code(400).send({ error: 'url is required' })
+    let parsed: URL
+    try {
+      parsed = new URL(body.url.trim())
+    } catch {
+      return reply.code(400).send({ error: 'url is not a valid URL' })
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+      return reply
+        .code(400)
+        .send({ error: 'url must be http(s)' })
+
+    if (body.folderId) {
+      const folder = await prisma.assetFolder.findUnique({
+        where: { id: body.folderId },
+        select: { id: true },
+      })
+      if (!folder)
+        return reply.code(400).send({ error: 'folderId does not exist' })
+    }
+
+    let res: Response
+    try {
+      res = await fetch(parsed.toString(), {
+        // 15s cap; longer fetches go through the bulk flow.
+        signal: AbortSignal.timeout(15_000),
+        redirect: 'follow',
+      })
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'failed to fetch the URL',
+        detail: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+    if (!res.ok)
+      return reply
+        .code(502)
+        .send({ error: `source URL returned ${res.status}` })
+
+    const mimeType = res.headers.get('content-type')?.split(';')[0]?.trim()
+    if (!mimeType || !UPLOAD_IMAGE_MIME_TYPES.has(mimeType))
+      return reply
+        .code(400)
+        .send({ error: `unsupported content-type "${mimeType ?? 'unknown'}"` })
+
+    const arrayBuffer = await res.arrayBuffer()
+    if (arrayBuffer.byteLength > MAX_UPLOAD_BYTES)
+      return reply.code(413).send({
+        error: `remote file exceeds the ${MAX_UPLOAD_BYTES} byte limit`,
+        size: arrayBuffer.byteLength,
+      })
+
+    const buffer = Buffer.from(arrayBuffer)
+    const folder = body.folderId
+      ? `marketing-content/${body.folderId}`
+      : 'marketing-content/unfiled'
+
+    let cloudResult
+    try {
+      cloudResult = await uploadBufferToCloudinary(buffer, { folder })
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'storage upload failed',
+        detail: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+
+    const filename =
+      decodeURIComponent(parsed.pathname.split('/').pop() ?? '') ||
+      `import-${Date.now()}`
+
+    const asset = await prisma.digitalAsset.create({
+      data: {
+        label: body.label?.trim() || filename,
+        type: 'image',
+        mimeType,
+        sizeBytes: cloudResult.bytes,
+        storageProvider: 'cloudinary',
+        storageId: cloudResult.publicId,
+        url: cloudResult.url,
+        originalFilename: filename,
+        folderId: body.folderId ?? null,
+        metadata: {
+          width: cloudResult.width,
+          height: cloudResult.height,
+          format: cloudResult.format,
+          source: 'url_import',
+          sourceUrl: parsed.toString(),
+        },
+      },
+    })
+
+    return reply.code(201).send({ asset })
   })
 
   // Move a set of assets to a folder (or to "unfiled" via folderId

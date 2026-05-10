@@ -26,6 +26,7 @@ import FilterSidebar, {
   type FilterState,
 } from './_components/FilterSidebar'
 import FolderTree, { type FolderSelection } from './_components/FolderTree'
+import UploadModal from './_components/UploadModal'
 import { formatBytes, formatCount } from './_lib/format'
 import type { LibraryItem, OverviewPayload } from './_lib/types'
 
@@ -50,6 +51,7 @@ export default function ContentHubClient({
     useState<FolderSelection>('all')
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER)
   const [selected, setSelected] = useState<LibraryItem | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   // MC.2.3 — bulk-selection set, keyed by item.id ("da_..." | "pi_...").
   // Map (not Set) so we can render the bar without re-fetching the
   // items the operator has already paged past.
@@ -180,6 +182,7 @@ export default function ContentHubClient({
           setSearch(s)
           setFilter(f)
         }}
+        onUploadClick={() => setUploadOpen(true)}
       />
 
       <div
@@ -233,6 +236,18 @@ export default function ContentHubClient({
         apiBase={apiBase}
         onClear={clearBulk}
         onAfterDelete={handleAfterDelete}
+      />
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        apiBase={apiBase}
+        folderId={
+          folderSelection === 'all' || folderSelection === 'unfiled'
+            ? null
+            : folderSelection
+        }
+        onComplete={() => setLibraryRefreshKey((k) => k + 1)}
       />
     </div>
   )
