@@ -4796,5 +4796,22 @@
   "templates.copyFailed": "Impossibile copiare — appunti bloccati",
   "templates.copyRecipeAria": "Copia ricetta Cloudinary",
   "templates.openExternal": "Apri anteprima",
-  "templates.urlNotCloudinary": "L'anteprima richiede un URL Cloudinary"
+  "templates.urlNotCloudinary": "L'anteprima richiede un URL Cloudinary",
+  "marketingContent.bulk.template": "Template",
+  "bulkTemplate.title": "Applica template a {n} asset",
+  "bulkTemplate.aiDeferredTitle": "La generazione AI è in pausa",
+  "bulkTemplate.aiDeferredBody": "I template odierni applicano ricette Cloudinary in modo deterministico — nessuna AI coinvolta. \"Genera con AI\" arriva con MC.4/5 secondo docs/MC-AI-DEFERRED.md.",
+  "bulkTemplate.aiCta": "Prova AI generate",
+  "bulkTemplate.aiCtaToastTitle": "La generazione AI arriva con MC.4/5",
+  "bulkTemplate.aiCtaToastBody": "Secondo la direttiva, l'integrazione AI è in pausa. Usa un template deterministico sopra per un output Cloudinary oggi.",
+  "bulkTemplate.templateLabel": "Template",
+  "bulkTemplate.previewLabel": "{n} di {total} asset sono Cloudinary-backed e verranno renderizzati",
+  "bulkTemplate.skippedNonCloudinary": "Asset non-Cloudinary — saltato",
+  "bulkTemplate.copyUrls": "Copia URL",
+  "bulkTemplate.copiedAll": "Copiati {n} URL negli appunti",
+  "bulkTemplate.copyFailed": "Impossibile copiare — appunti bloccati",
+  "bulkTemplate.noCloudinaryUrls": "Nessun asset Cloudinary nella selezione",
+  "bulkTemplate.downloadAll": "Scarica {n}",
+  "bulkTemplate.downloadKicked": "Avviato il download di {n} file",
+  "bulkTemplate.allReady": "Tutti gli asset sono renderizzabili"
 }

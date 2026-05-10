@@ -16,12 +16,21 @@
 //   - Clear       (drops the selection)
 
 import { useState } from 'react'
-import { X, Tag as TagIcon, FolderInput, Download, Trash2, Loader2 } from 'lucide-react'
+import {
+  X,
+  Tag as TagIcon,
+  FolderInput,
+  Download,
+  Trash2,
+  Loader2,
+  LayoutTemplate,
+} from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import type { LibraryItem } from '../_lib/types'
+import BulkApplyTemplateModal from './BulkApplyTemplateModal'
 
 interface Props {
   selected: LibraryItem[]
@@ -40,6 +49,7 @@ export default function BulkActionBar({
   const { toast } = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState<null | 'delete' | 'download'>(null)
+  const [templateOpen, setTemplateOpen] = useState(false)
 
   if (selected.length === 0) return null
 
@@ -193,6 +203,17 @@ export default function BulkActionBar({
           <Button
             variant="secondary"
             size="sm"
+            onClick={() => setTemplateOpen(true)}
+            disabled={busy !== null}
+          >
+            <LayoutTemplate className="w-4 h-4" />
+            <span className="hidden sm:inline ml-1">
+              {t('marketingContent.bulk.template')}
+            </span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={downloadAll}
             disabled={busy !== null}
           >
@@ -222,6 +243,12 @@ export default function BulkActionBar({
           </Button>
         </div>
       </div>
+
+      <BulkApplyTemplateModal
+        open={templateOpen}
+        onClose={() => setTemplateOpen(false)}
+        selected={selected}
+      />
     </div>
   )
 }
