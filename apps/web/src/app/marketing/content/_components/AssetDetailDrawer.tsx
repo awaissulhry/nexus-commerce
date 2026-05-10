@@ -260,6 +260,36 @@ export default function AssetDetailDrawer({ selected, apiBase, onClose }: Props)
                 </dl>
               </section>
 
+              {/* MC.3.4 — quality warnings, if any. */}
+              {detail.qualityWarnings.length > 0 && (
+                <section
+                  aria-label={t('marketingContent.detail.qualityLabel')}
+                  className="space-y-2"
+                >
+                  <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {t('marketingContent.detail.quality', {
+                      n: detail.qualityWarnings.length.toString(),
+                    })}
+                  </h3>
+                  <ul className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs dark:border-amber-900 dark:bg-amber-950/30">
+                    {detail.qualityWarnings.map((w, idx) => (
+                      <li
+                        key={`${w.code}-${idx}`}
+                        className="flex items-start gap-1.5 text-amber-900 dark:text-amber-200"
+                      >
+                        {w.channel && (
+                          <span className="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900 dark:bg-amber-500/30 dark:text-amber-100">
+                            {w.channel}
+                          </span>
+                        )}
+                        <span>{w.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               {/* MC.2.1 — interactive tag picker (DigitalAsset only). */}
               {detail.source === 'digital_asset' && (
                 <section

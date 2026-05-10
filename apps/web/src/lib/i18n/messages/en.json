@@ -4225,6 +4225,8 @@
   "marketingContent.savedViews.deleteAriaLabel": "Delete view {name}",
   "marketingContent.savedViews.deleteTitle": "Delete \"{name}\"?",
   "marketingContent.savedViews.deleteBody": "The saved view will be removed from this browser. Other browsers won't be affected.",
+  "marketingContent.detail.qualityLabel": "Quality warnings",
+  "marketingContent.detail.quality": "Quality ({n})",
   "marketingContent.detail.aiTagsLabel": "AI-suggested tags",
   "marketingContent.detail.aiTags": "AI-suggested tags",
   "marketingContent.tagPicker.placeholderEmpty": "Add tags…",

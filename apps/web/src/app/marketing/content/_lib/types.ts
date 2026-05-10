@@ -34,6 +34,9 @@ export interface LibraryItem {
   productSku: string | null
   productName: string | null
   role: string | null
+  /// MC.3.4 — true when the asset has any quality warnings persisted.
+  /// Lets the card render a badge without fetching the full detail.
+  hasQualityWarnings?: boolean
 }
 
 export interface LibraryResponse {
@@ -62,6 +65,12 @@ export interface AssetTagRef {
   color: string | null
 }
 
+export interface QualityWarning {
+  code: string
+  channel: string | null
+  message: string
+}
+
 export interface AssetDetail {
   id: string
   source: AssetSource
@@ -81,6 +90,8 @@ export interface AssetDetail {
   /// Free-text tags from DigitalAsset.metadata.tags. Typically AI-
   /// suggested; promoted to assetTags via the picker.
   tags: string[]
+  /// MC.3.4 — quality warnings persisted at upload time.
+  qualityWarnings: QualityWarning[]
   originalFilename: string | null
   storageProvider: string
   storageId: string | null

@@ -6,7 +6,7 @@
 // drawer); for now they're inert but accessible.
 
 import Image from 'next/image'
-import { Film, Box, FileText, ImageOff, Link2 } from 'lucide-react'
+import { Film, Box, FileText, ImageOff, Link2, AlertTriangle } from 'lucide-react'
 import { formatBytes } from '../_lib/format'
 import { splitForHighlight } from '../_lib/highlight'
 import type { LibraryItem } from '../_lib/types'
@@ -114,6 +114,15 @@ export default function AssetCard({
         {item.role && (
           <div className="absolute left-1.5 top-1.5 rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white backdrop-blur-sm">
             {item.role}
+          </div>
+        )}
+        {item.hasQualityWarnings && (
+          <div
+            className="absolute right-1.5 bottom-1.5 rounded-full bg-amber-500 p-1 shadow-md"
+            title="Quality warnings — open detail"
+            aria-label="Has quality warnings"
+          >
+            <AlertTriangle className="w-3 h-3 text-white" />
           </div>
         )}
       </div>

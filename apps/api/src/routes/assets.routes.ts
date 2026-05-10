@@ -49,6 +49,7 @@ import {
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
+import { checkAssetQuality } from '../services/asset-quality.service.js'
 
 // MC.3.3 — content-hash. Lowercase hex, 64 chars. Computing it on
 // the upload path lets us short-circuit before paying for a
@@ -373,6 +374,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       productSku: string | null
       productName: string | null
       role: string | null
+      hasQualityWarnings: boolean
     }
 
     const merged: LibraryItem[] = []
@@ -397,6 +399,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         productSku: null,
         productName: null,
         role: null,
+        hasQualityWarnings:
+          Array.isArray(meta.qualityWarnings) &&
+          meta.qualityWarnings.length > 0,
       })
     }
 
@@ -422,6 +427,10 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         productSku: p.product?.sku ?? null,
         productName: p.product?.name ?? null,
         role: p.type,
+        // ProductImage rows pre-date MC.3.4 — they don't carry the
+        // upload-time quality check. Always false until W4.7 cuts
+        // them into DigitalAsset.
+        hasQualityWarnings: false,
       })
     }
 
@@ -495,6 +504,13 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           tags: Array.isArray(meta.tags)
             ? (meta.tags.filter((t) => typeof t === 'string') as string[])
             : [],
+          qualityWarnings: Array.isArray(meta.qualityWarnings)
+            ? (meta.qualityWarnings as Array<{
+                code: string
+                channel: string | null
+                message: string
+              }>)
+            : [],
           originalFilename: asset.originalFilename,
           storageProvider: asset.storageProvider,
           storageId: asset.storageId,
@@ -544,6 +560,11 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             color: string | null
           }>,
           tags: [],
+          qualityWarnings: [] as Array<{
+            code: string
+            channel: string | null
+            message: string
+          }>,
           originalFilename: null,
           storageProvider: row.publicId ? 'cloudinary' : 'external',
           storageId: row.publicId,
@@ -1116,6 +1137,16 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
+    // MC.3.4 — quality check. Cheap (no I/O), warnings persisted
+    // alongside the metadata so the detail drawer can render them
+    // without re-deriving on every fetch.
+    const qualityWarnings = checkAssetQuality({
+      width: cloudResult.width,
+      height: cloudResult.height,
+      mimeType: part.mimetype,
+      sizeBytes: cloudResult.bytes,
+    })
+
     let asset
     try {
       asset = await prisma.digitalAsset.create({
@@ -1134,6 +1165,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             width: cloudResult.width,
             height: cloudResult.height,
             format: cloudResult.format,
+            qualityWarnings: qualityWarnings as unknown as object[],
           },
         },
       })
@@ -1265,6 +1297,13 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       decodeURIComponent(parsed.pathname.split('/').pop() ?? '') ||
       `import-${Date.now()}`
 
+    const qualityWarnings = checkAssetQuality({
+      width: cloudResult.width,
+      height: cloudResult.height,
+      mimeType,
+      sizeBytes: cloudResult.bytes,
+    })
+
     let asset
     try {
       asset = await prisma.digitalAsset.create({
@@ -1283,6 +1322,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             width: cloudResult.width,
             height: cloudResult.height,
             format: cloudResult.format,
+            qualityWarnings: qualityWarnings as unknown as object[],
             source: 'url_import',
             sourceUrl: parsed.toString(),
           },

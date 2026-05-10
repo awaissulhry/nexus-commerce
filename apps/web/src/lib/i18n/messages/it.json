@@ -4276,6 +4276,8 @@
   "marketingContent.savedViews.deleteAriaLabel": "Elimina vista {name}",
   "marketingContent.savedViews.deleteTitle": "Eliminare \"{name}\"?",
   "marketingContent.savedViews.deleteBody": "La vista salvata verrà rimossa da questo browser. Altri browser non saranno interessati.",
+  "marketingContent.detail.qualityLabel": "Avvisi qualità",
+  "marketingContent.detail.quality": "Qualità ({n})",
   "marketingContent.detail.aiTagsLabel": "Tag suggeriti dall'AI",
   "marketingContent.detail.aiTags": "Tag suggeriti dall'AI",
   "marketingContent.tagPicker.placeholderEmpty": "Aggiungi tag…",
