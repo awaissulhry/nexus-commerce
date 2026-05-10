@@ -1499,7 +1499,6 @@ function ListingSetupCard({
   const [detecting, setDetecting] = useState(false)
   const [detectMsg, setDetectMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [refAsin, setRefAsin] = useState('')
-  const [showAsinInput, setShowAsinInput] = useState(false)
 
   async function detect(asin?: string) {
     setDetecting(true)
@@ -1605,49 +1604,53 @@ function ListingSetupCard({
 
       {/* Detect from Amazon */}
       {isAmazon && (
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => detect()}
-              disabled={detecting}
-              className="text-xs px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-50 transition-colors"
-            >
-              {detecting ? 'Detecting…' : '⟳ Detect from my live listing'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAsinInput((s) => !s)}
-              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
-            >
-              {showAsinInput ? 'Hide' : 'Or enter a reference ASIN'}
-            </button>
-          </div>
+        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+            Auto-detect from Amazon
+          </p>
 
-          {showAsinInput && (
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={refAsin}
-                onChange={(e) => setRefAsin(e.target.value.trim())}
-                placeholder="B0... reference ASIN"
-                className="flex-1 h-7 px-2 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* My listing */}
+            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">My live listing</span>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Reads the product type and variation theme from your own listing on Amazon {marketplace}.
+              </p>
               <button
                 type="button"
-                disabled={!refAsin || detecting}
-                onClick={() => detect(refAsin)}
-                className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+                onClick={() => detect()}
+                disabled={detecting}
+                className="mt-auto text-xs px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-50 transition-colors text-left"
               >
-                Detect
+                {detecting ? 'Detecting…' : '⟳ Detect from my SKU'}
               </button>
             </div>
-          )}
 
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            Looks up your live listing on Amazon {marketplace} via SP-API and fills the product type and variation theme automatically.
-            If the master SKU isn't listed there yet, enter any ASIN from the same category.
-          </p>
+            {/* Competitor / reference */}
+            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Competitor / reference ASIN</span>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Paste any ASIN from the same category — Nexus reads its product type and variation theme from Amazon's catalog.
+              </p>
+              <div className="flex items-center gap-1.5 mt-auto">
+                <input
+                  type="text"
+                  value={refAsin}
+                  onChange={(e) => setRefAsin(e.target.value.trim())}
+                  placeholder="B0XXXXXXXXX"
+                  className="flex-1 h-7 px-2 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  disabled={!refAsin || detecting}
+                  onClick={() => detect(refAsin)}
+                  className="text-xs px-2.5 py-1 h-7 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 whitespace-nowrap"
+                >
+                  Detect
+                </button>
+              </div>
+            </div>
+          </div>
 
           {detectMsg && (
             <div
