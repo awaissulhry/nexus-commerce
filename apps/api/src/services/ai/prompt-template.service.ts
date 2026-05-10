@@ -85,17 +85,38 @@ export async function findActivePromptTemplate(
         r.language?.toLowerCase() === language &&
         r.marketplace?.toUpperCase() === marketplace,
     )
-    if (exact) return exact as PromptTemplateRow
     const langOnly = rows.find(
       (r) => r.language?.toLowerCase() === language && r.marketplace == null,
     )
-    if (langOnly) return langOnly as PromptTemplateRow
     const marketOnly = rows.find(
       (r) => r.language == null && r.marketplace?.toUpperCase() === marketplace,
     )
-    if (marketOnly) return marketOnly as PromptTemplateRow
     const global = rows.find((r) => r.language == null && r.marketplace == null)
-    return (global as PromptTemplateRow | undefined) ?? null
+    const picked = exact ?? langOnly ?? marketOnly ?? global ?? null
+
+    // PR.3 — increment usage telemetry on the picked row. Fire-and-
+    // forget: the AI call is already running, the operator is
+    // waiting on the response, so we don't make them wait on a DB
+    // round-trip. Failures swallowed (the matcher's job is matching;
+    // counter drift is a tolerable cost vs blocking generation).
+    if (picked) {
+      void prisma.promptTemplate
+        .update({
+          where: { id: picked.id },
+          data: {
+            callCount: { increment: 1 },
+            lastUsedAt: new Date(),
+          },
+        })
+        .catch((err) => {
+          logger.warn(
+            'prompt-template-service: usage telemetry update failed',
+            { err: err instanceof Error ? err.message : String(err), id: picked.id },
+          )
+        })
+    }
+
+    return picked as PromptTemplateRow | null
   } catch (err) {
     logger.warn('prompt-template-service: findActive failed (returning null)', {
       err: err instanceof Error ? err.message : String(err),
