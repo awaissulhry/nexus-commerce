@@ -219,6 +219,68 @@ const bulkOperationsRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   /**
+   * GET /api/bulk-operations/queue-stats
+   *
+   * W13.4 — BullMQ counters for the bulk-job queue. Used by
+   * the front-end's queue-health affordance + by ops dashboards
+   * that want to see "are large bulk jobs backing up?" at a
+   * glance. Returns waiting/active/completed/failed/delayed
+   * counts plus whether queue workers are actually booted (so
+   * the UI can distinguish "queue empty" from "queue not
+   * configured").
+   */
+  fastify.get('/bulk-operations/queue-stats', async (_request, reply) => {
+    const queueEnabled = process.env.ENABLE_QUEUE_WORKERS === '1'
+    if (!queueEnabled) {
+      return reply.send({
+        success: true,
+        queueEnabled: false,
+        counts: {
+          waiting: 0,
+          active: 0,
+          completed: 0,
+          failed: 0,
+          delayed: 0,
+        },
+        promoteThreshold: Number(
+          process.env.NEXUS_BULK_PROMOTE_THRESHOLD ?? 200,
+        ),
+      })
+    }
+    try {
+      const { bulkJobQueue } = await import('../lib/queue.js')
+      const counts = await bulkJobQueue.getJobCounts(
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+      )
+      return reply.send({
+        success: true,
+        queueEnabled: true,
+        counts: {
+          waiting: counts.waiting ?? 0,
+          active: counts.active ?? 0,
+          completed: counts.completed ?? 0,
+          failed: counts.failed ?? 0,
+          delayed: counts.delayed ?? 0,
+        },
+        promoteThreshold: Number(
+          process.env.NEXUS_BULK_PROMOTE_THRESHOLD ?? 200,
+        ),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      fastify.log.warn(
+        { err: error },
+        '[bulk-operations] queue-stats fetch failed',
+      )
+      return reply.code(500).send({ success: false, error: message })
+    }
+  })
+
+  /**
    * POST /api/bulk-operations/ai/cost-preview
    *
    * W11.4 — Pre-flight USD cost estimate for AI bulk actions.
