@@ -543,54 +543,86 @@ export class BulkActionService {
         // service-level p50/p95 reporting can pull durations
         // directly without extra joins.
         const itemStartedAt = Date.now();
-        try {
-          const result = await this.processItem(item, job);
-          const afterState = await this.refetchAfterState(
-            item.id,
-            actionType,
-            jobPayload,
-          );
+        // W13.3 — rate-limit-aware retry. The handler can throw a
+        // RateLimitError (or a string-shaped 429) and the item
+        // loop pauses + retries the SAME item rather than marking
+        // it FAILED. Up to MAX_RATE_LIMIT_RETRIES attempts; after
+        // that the row goes FAILED and the loop moves on so one
+        // wedged channel never wedges the whole job.
+        const MAX_RATE_LIMIT_RETRIES = 4;
+        let rlAttempt = 0;
+        let succeeded = false;
+        while (!succeeded && rlAttempt <= MAX_RATE_LIMIT_RETRIES) {
+          try {
+            const result = await this.processItem(item, job);
+            const afterState = await this.refetchAfterState(
+              item.id,
+              actionType,
+              jobPayload,
+            );
 
-          await this.prisma.bulkActionItem.update({
-            where: { id: itemRow.id },
-            data: {
-              status:
-                result.status === 'processed' ? 'SUCCEEDED' : 'SKIPPED',
-              afterState,
-              completedAt: new Date(),
-              durationMs: Date.now() - itemStartedAt,
-            },
-          });
+            await this.prisma.bulkActionItem.update({
+              where: { id: itemRow.id },
+              data: {
+                status:
+                  result.status === 'processed' ? 'SUCCEEDED' : 'SKIPPED',
+                afterState,
+                completedAt: new Date(),
+                durationMs: Date.now() - itemStartedAt,
+              },
+            });
 
-          if (result.status === 'processed') {
-            processedItems++;
-          } else if (result.status === 'skipped') {
-            skippedItems++;
+            if (result.status === 'processed') {
+              processedItems++;
+            } else if (result.status === 'skipped') {
+              skippedItems++;
+            }
+            succeeded = true;
+          } catch (itemError) {
+            const { isRateLimitError, extractRetryAfterMs, defaultRateLimitBackoffMs } =
+              await import('./channel-batch/rate-limit.js');
+            const isRl = isRateLimitError(itemError);
+            if (isRl && rlAttempt < MAX_RATE_LIMIT_RETRIES) {
+              rlAttempt++;
+              const backoffMs =
+                extractRetryAfterMs(itemError) ??
+                defaultRateLimitBackoffMs(rlAttempt);
+              logger.warn(`Rate limit hit — pausing item retry`, {
+                jobId,
+                itemId: item.id,
+                attempt: rlAttempt,
+                backoffMs,
+              });
+              await new Promise((r) => setTimeout(r, backoffMs));
+              continue;
+            }
+            failedItems++;
+            const errorMessage =
+              itemError instanceof Error ? itemError.message : String(itemError);
+            errors.push({
+              itemId: item.id,
+              error: errorMessage,
+              timestamp: new Date(),
+            });
+
+            await this.prisma.bulkActionItem.update({
+              where: { id: itemRow.id },
+              data: {
+                status: 'FAILED',
+                errorMessage,
+                completedAt: new Date(),
+                durationMs: Date.now() - itemStartedAt,
+              },
+            });
+
+            logger.warn(`Failed to process item`, {
+              jobId,
+              itemId: item.id,
+              error: errorMessage,
+              rateLimitAttempts: rlAttempt,
+            });
+            break;
           }
-        } catch (itemError) {
-          failedItems++;
-          const errorMessage = itemError instanceof Error ? itemError.message : String(itemError);
-          errors.push({
-            itemId: item.id,
-            error: errorMessage,
-            timestamp: new Date()
-          });
-
-          await this.prisma.bulkActionItem.update({
-            where: { id: itemRow.id },
-            data: {
-              status: 'FAILED',
-              errorMessage,
-              completedAt: new Date(),
-              durationMs: Date.now() - itemStartedAt,
-            },
-          });
-
-          logger.warn(`Failed to process item`, {
-            jobId,
-            itemId: item.id,
-            error: errorMessage
-          });
         }
 
         // Update progress every 10 items
