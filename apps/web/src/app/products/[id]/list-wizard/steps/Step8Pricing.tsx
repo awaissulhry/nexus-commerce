@@ -714,7 +714,11 @@ export default function Step8Pricing({
             <div className="text-base font-medium text-slate-700 dark:text-slate-300 mb-2">
               Base pricing (applies to every channel by default)
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            {/* M.5 — base pricing fields stack vertically on mobile
+                so each input gets full width (~315px on a 375px
+                viewport with px-3 outer + px-4 card padding). 3-up
+                grid kicks in at sm: where there's room. */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <BaseField
                 label="Base price"
                 value={base.basePrice}
