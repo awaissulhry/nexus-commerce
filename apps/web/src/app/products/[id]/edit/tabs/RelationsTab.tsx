@@ -42,6 +42,7 @@ import {
   Loader2,
   Plus,
   Search,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -146,6 +147,9 @@ export default function RelationsTab({
   const [suggestions, setSuggestions] = useState<SuggestionRow[] | null>(null)
   const [suggesting, setSuggesting] = useState(false)
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
+  // W11.2 — AI re-ranking state
+  const [aiRanked, setAiRanked] = useState(false)
+  const [aiRanking, setAiRanking] = useState(false)
 
   // Add form state
   const [addType, setAddType] = useState<RelationType>('CROSS_SELL')
@@ -241,19 +245,20 @@ export default function RelationsTab({
 
   // W11.1 — load suggestions for the active type. Heuristic-ranked
   // server-side, so the round-trip is one fetch.
-  const loadSuggestions = useCallback(async () => {
-    setSuggesting(true)
+  // W11.2 — when ai=true, calls Gemini re-ranking on the same endpoint.
+  const loadSuggestions = useCallback(async (ai = false) => {
+    if (ai) setAiRanking(true)
+    else setSuggesting(true)
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/products/${product.id}/relations/suggest?type=${addType}&limit=10`,
-        { cache: 'no-store' },
-      )
+      const url = `${getBackendUrl()}/api/products/${product.id}/relations/suggest?type=${addType}&limit=${ai ? 20 : 10}${ai ? '&ai=true' : ''}`
+      const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) {
         const j = await res.json().catch(() => null)
         throw new Error(j?.error ?? `HTTP ${res.status}`)
       }
-      const json = (await res.json()) as { suggestions: SuggestionRow[] }
+      const json = (await res.json()) as { suggestions: SuggestionRow[]; aiRanked?: boolean }
       setSuggestions(json.suggestions ?? [])
+      setAiRanked(json.aiRanked ?? false)
     } catch (e: any) {
       toast.error(
         t('products.edit.relations.suggestFailed', {
@@ -262,6 +267,7 @@ export default function RelationsTab({
       )
     } finally {
       setSuggesting(false)
+      setAiRanking(false)
     }
   }, [addType, product.id, t, toast])
 
@@ -405,20 +411,34 @@ export default function RelationsTab({
         title={t('products.edit.relations.addTitle')}
         description={t('products.edit.relations.addDesc')}
         action={
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={suggesting}
-            icon={<Lightbulb className="w-3.5 h-3.5" />}
-            onClick={() => void loadSuggestions()}
-            title={t('products.edit.relations.suggestTooltip', {
-              type: typeLabel(addType, t),
-            })}
-          >
-            {suggestions === null
-              ? t('products.edit.relations.suggestButton')
-              : t('products.edit.relations.suggestRefresh')}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={suggesting}
+              icon={<Lightbulb className="w-3.5 h-3.5" />}
+              onClick={() => void loadSuggestions(false)}
+              title={t('products.edit.relations.suggestTooltip', {
+                type: typeLabel(addType, t),
+              })}
+            >
+              {suggestions === null
+                ? t('products.edit.relations.suggestButton')
+                : t('products.edit.relations.suggestRefresh')}
+            </Button>
+            {suggestions !== null && (
+              <Button
+                variant={aiRanked ? 'primary' : 'secondary'}
+                size="sm"
+                loading={aiRanking}
+                icon={<Sparkles className="w-3.5 h-3.5" />}
+                onClick={() => void loadSuggestions(true)}
+                title={t('products.edit.relations.aiRankTooltip')}
+              >
+                {aiRanked ? 'AI ranked' : 'AI rank'}
+              </Button>
+            )}
+          </div>
         }
       >
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-3">

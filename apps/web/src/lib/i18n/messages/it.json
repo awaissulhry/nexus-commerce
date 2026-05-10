@@ -3579,6 +3579,7 @@
   "products.edit.relations.typeDesc.BUNDLE_PART": "Componenti dentro un prodotto bundle.",
   "products.edit.relations.suggestButton": "Suggerisci",
   "products.edit.relations.suggestRefresh": "Re-suggerisci",
+  "products.edit.relations.aiRankTooltip": "Riclassifica i candidati con Gemini AI — comprensione semantica del prodotto oltre le euristiche marca/prezzo.",
   "products.edit.relations.suggestTooltip": "Mostra prodotti candidati classificati per la relazione {type} basato su match di marca / tipo / fascia di prezzo.",
   "products.edit.relations.suggestTitle": "Candidati suggeriti per {type}",
   "products.edit.relations.suggestDesc": "Classificazione euristica sul catalogo: stessa marca (+30), stesso tipo prodotto (+25), fascia di prezzo simile (+20), ha immagine (+10), ha descrizione (+10), in vendita su canali (+5). Scegli cosa sembra giusto; l'operatore decide.",

@@ -3575,6 +3575,7 @@
   "products.edit.relations.typeDesc.BUNDLE_PART": "Components inside a bundle product.",
   "products.edit.relations.suggestButton": "Suggest",
   "products.edit.relations.suggestRefresh": "Re-suggest",
+  "products.edit.relations.aiRankTooltip": "Re-rank candidates using Gemini AI — semantic product understanding beyond brand/price heuristics.",
   "products.edit.relations.suggestTooltip": "Surface ranked candidate products to relate as {type} based on brand / type / price tier matches.",
   "products.edit.relations.suggestTitle": "Suggested {type} candidates",
   "products.edit.relations.suggestDesc": "Heuristic ranking on top of the catalog: same brand (+30), same product type (+25), similar price tier (+20), has image (+10), has description (+10), listed on channels (+5). Pick what looks right; the operator decides.",

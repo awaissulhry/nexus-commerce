@@ -34,6 +34,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { GeminiProvider } from '../services/ai/providers/gemini.provider.js'
 
 const ALLOWED_TYPES = new Set([
   'CROSS_SELL',
@@ -282,7 +283,7 @@ const productRelationsRoutes: FastifyPluginAsync = async (fastify) => {
   // stability.
   fastify.get<{
     Params: { id: string }
-    Querystring: { type?: string; limit?: string }
+    Querystring: { type?: string; limit?: string; ai?: string }
   }>('/products/:id/relations/suggest', async (request, reply) => {
     const { id } = request.params
     const requestedType = (request.query?.type ?? 'CROSS_SELL').toUpperCase()
@@ -295,15 +296,18 @@ const productRelationsRoutes: FastifyPluginAsync = async (fastify) => {
       Math.max(Number(request.query?.limit ?? 10), 1),
       50,
     )
+    const useAi = request.query?.ai === 'true'
 
     const source = await prisma.product.findUnique({
       where: { id },
       select: {
         id: true,
         sku: true,
+        name: true,
         brand: true,
         productType: true,
         basePrice: true,
+        description: true,
       },
     })
     if (!source) return reply.code(404).send({ error: 'Product not found' })
@@ -416,10 +420,70 @@ const productRelationsRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .slice(0, limit)
 
+    // W11.2 — AI re-ranking via Gemini when ?ai=true.
+    // Send the top-20 heuristic candidates (with names + prices) to
+    // Gemini and ask for a ranked list of IDs. Gemini sees the source
+    // product context and can apply semantic reasoning (e.g. "these
+    // are both weatherproof touring jackets; the base-layer is not
+    // cross-sell-relevant even though it shares brand + price range").
+    // Falls back to heuristic order on any AI error so the caller
+    // always gets results.
+    let finalSuggestions = ranked
+    let aiRanked = false
+
+    if (useAi && ranked.length > 1) {
+      try {
+        const gemini = new GeminiProvider()
+        if (!gemini.isConfigured()) throw new Error('not configured')
+
+        const sourceName = source.name ?? source.sku
+        const sourceDesc = (source.description ?? '').replace(/<[^>]*>/g, '').slice(0, 300)
+        const candidateLines = ranked
+          .slice(0, 20)
+          .map((s, i) =>
+            `${i + 1}. [${s.product.id}] ${s.product.name ?? s.product.sku} — ${s.product.brand ?? 'no brand'}, €${s.product.basePrice ?? '?'} (score ${s.score})`,
+          )
+          .join('\n')
+
+        const prompt = `You are a product merchandiser for ${source.brand ?? 'an e-commerce brand'} selling motorcycle gear on Amazon Italy.
+
+SOURCE PRODUCT:
+  Name: ${sourceName}
+  Type: ${source.productType ?? 'unknown'}
+  Price: €${source.basePrice ? Number(source.basePrice).toFixed(2) : '?'}
+  Description (excerpt): ${sourceDesc}
+
+CROSS-SELL CANDIDATES (pre-ranked by heuristic score):
+${candidateLines}
+
+Re-rank these products as cross-sell recommendations for the source product.
+Return ONLY a JSON array of product IDs in your preferred order, most relevant first.
+Example: ["id1","id2","id3"]
+No explanation. No markdown. Pure JSON array.`
+
+        const result = await gemini.generate({ prompt, maxOutputTokens: 200, temperature: 0.3 })
+        const raw = result.text.trim().replace(/^```json?\s*/i, '').replace(/```$/, '').trim()
+        const ids: string[] = JSON.parse(raw)
+        if (Array.isArray(ids) && ids.length > 0) {
+          const idOrder = new Map(ids.map((id, i) => [id, i]))
+          const aiOrdered = [...ranked].sort((a, b) => {
+            const ai = idOrder.get(a.product.id) ?? 999
+            const bi = idOrder.get(b.product.id) ?? 999
+            return ai - bi
+          })
+          finalSuggestions = aiOrdered
+          aiRanked = true
+        }
+      } catch {
+        // non-fatal — fall through to heuristic order
+      }
+    }
+
     return {
-      suggestions: ranked,
+      suggestions: finalSuggestions,
       totalScored: candidates.length,
       excludedCount: excluded.size,
+      aiRanked,
     }
   })
 }
