@@ -79,7 +79,18 @@ export type BulkActionType =
   // ProductImage.alt with an AI-generated description. v0 is
   // text-only (derived from product context); a vision-capable
   // v1 follow-up could send the image URL to a multimodal model.
-  | 'AI_ALT_TEXT';
+  | 'AI_ALT_TEXT'
+  // W12.4 — Channel batch submission. payload =
+  //   { channel: 'AMAZON' | 'EBAY' | 'SHOPIFY',
+  //     operation: 'price' | 'stock',
+  //     marketplace?: string }.
+  // For each item Product, looks up its ChannelListing on the
+  // requested channel/marketplace and submits via the new W12.1-3
+  // batch services. v0 fires one batch submission per item — the
+  // services can handle N-message batches but the per-item loop
+  // here doesn't aggregate yet. A future commit can add a
+  // job-level accumulator for true cross-item batching.
+  | 'CHANNEL_BATCH';
 
 /**
  * Runtime allowlist mirroring `BulkActionType`. Used by the Zod
@@ -98,6 +109,7 @@ export const KNOWN_BULK_ACTION_TYPES: ReadonlySet<BulkActionType> = new Set([
   'AI_TRANSLATE_PRODUCT',
   'AI_SEO_REGEN',
   'AI_ALT_TEXT',
+  'CHANNEL_BATCH',
 ]);
 
 export function isKnownBulkActionType(t: string): t is BulkActionType {
@@ -148,6 +160,11 @@ const ACTION_ENTITY = {
   // handler walks ProductImage rows for each product and
   // upserts the alt column.
   AI_ALT_TEXT: 'product',
+  // W12.4 — CHANNEL_BATCH operates on Product rows; the handler
+  // resolves each Product to its ChannelListing on the configured
+  // (channel, marketplace) and routes through the W12.1/W12.2/W12.3
+  // batch services.
+  CHANNEL_BATCH: 'product',
 } as const satisfies Record<
   BulkActionType,
   'product' | 'variation' | 'channelListing'
@@ -1982,6 +1999,16 @@ export class BulkActionService {
           locale: typeof payload?.locale === 'string' ? payload?.locale : 'en',
           masterName: typeof item.name === 'string' ? item.name : null,
         };
+      case 'CHANNEL_BATCH':
+        // W12.4 — capture the channel + operation + the master
+        // values that the batch service receives.
+        return {
+          channel: typeof payload?.channel === 'string' ? payload?.channel : null,
+          operation: typeof payload?.operation === 'string' ? payload?.operation : null,
+          marketplace: typeof payload?.marketplace === 'string' ? payload?.marketplace : null,
+          masterPrice: item.basePrice != null ? Number(item.basePrice) : null,
+          masterStock: item.totalStock ?? null,
+        };
       default:
         return {};
     }
@@ -2108,6 +2135,28 @@ export class BulkActionService {
           })),
         };
       }
+      case 'CHANNEL_BATCH': {
+        // W12.4 — surface the resolved ChannelListing snapshot for
+        // the diff drawer. The actual outcome of the batch
+        // submission lives in the channel side (Amazon feed report,
+        // Shopify currentBulkOperation poll, eBay per-op result),
+        // beyond what this audit row captures; recording the
+        // post-submit listing values is enough to confirm the
+        // local-side state is consistent.
+        const ch = (payload?.channel as string | undefined)?.toUpperCase();
+        if (!ch) return {};
+        const listing = await this.prisma.channelListing.findFirst({
+          where: { productId: itemId, channel: ch },
+          select: {
+            channel: true,
+            marketplace: true,
+            externalListingId: true,
+            price: true,
+            quantity: true,
+          },
+        });
+        return { listing };
+      }
       default:
         return {};
     }
@@ -2188,9 +2237,172 @@ export class BulkActionService {
         return await this.processAiSeoRegen(item as Product, payload);
       case 'AI_ALT_TEXT':
         return await this.processAiAltText(item as Product, payload);
+      case 'CHANNEL_BATCH':
+        return await this.processChannelBatch(item as Product, payload, job.channel);
       default:
         throw new Error(`Unknown action type: ${job.actionType}`);
     }
+  }
+
+  /**
+   * W12.4 — CHANNEL_BATCH per-item handler.
+   *
+   * Payload:
+   *   channel: 'AMAZON' | 'EBAY' | 'SHOPIFY'
+   *   operation: 'price' | 'stock'
+   *   marketplace?: string  (e.g. 'IT', 'DE' for Amazon; ignored for Shopify)
+   *
+   * Resolves the master Product to its ChannelListing on the
+   * (channel, marketplace) tuple, builds the channel-specific batch
+   * operation, and submits via the W12.1-3 batch services. v0 fires
+   * one submission per item — a follow-up can aggregate multiple
+   * items into a single batch for true cross-item efficiency.
+   *
+   * Skips when:
+   *   - no ChannelListing for this product on the requested channel/marketplace
+   *   - the listing has no priceOverride (for price ops) or no
+   *     resolved stock (for stock ops)
+   */
+  private async processChannelBatch(
+    item: Product,
+    payload: Record<string, any>,
+    jobChannel: string | null,
+  ): Promise<{ status: 'processed' | 'skipped' }> {
+    const channel = String(payload.channel ?? jobChannel ?? '').toUpperCase();
+    if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(channel)) {
+      throw new Error(
+        `CHANNEL_BATCH: payload.channel must be AMAZON | EBAY | SHOPIFY; got "${channel}"`,
+      );
+    }
+    const operation = String(payload.operation ?? '').toLowerCase();
+    if (!['price', 'stock'].includes(operation)) {
+      throw new Error(
+        `CHANNEL_BATCH: payload.operation must be 'price' | 'stock'; got "${operation}"`,
+      );
+    }
+    const marketplace =
+      typeof payload.marketplace === 'string' && payload.marketplace.length > 0
+        ? payload.marketplace
+        : undefined;
+    const listing = await this.prisma.channelListing.findFirst({
+      where: {
+        productId: item.id,
+        channel,
+        ...(marketplace ? { marketplace } : {}),
+      },
+    });
+    if (!listing) return { status: 'skipped' };
+
+    // Defaults derived from product / env so we don't reach for
+    // ChannelListing columns that don't exist on this schema:
+    //   - sku is read from Product.sku
+    //   - currency defaults to 'EUR' (Xavia's primary market is IT)
+    //   - quantity / price fall back to master totals
+    const sku = item.sku;
+    const currency = 'EUR';
+
+    if (channel === 'AMAZON') {
+      const { submitAmazonListingsBatch } = await import(
+        './channel-batch/amazon-batch-feed.service.js'
+      );
+      const sellerId =
+        process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID;
+      if (!sellerId) {
+        throw new Error(
+          'CHANNEL_BATCH AMAZON: AMAZON_SELLER_ID env required',
+        );
+      }
+      const marketplaceIds = marketplace ? [marketplace] : [];
+      if (operation === 'price') {
+        const value = Number(listing.price ?? item.basePrice ?? 0);
+        if (!Number.isFinite(value) || value <= 0) {
+          return { status: 'skipped' };
+        }
+        await submitAmazonListingsBatch({
+          marketplaceIds,
+          sellerId,
+          operations: [{ type: 'price', sku, currency, value }],
+        });
+      } else {
+        const qty = Number(listing.quantity ?? item.totalStock ?? 0);
+        await submitAmazonListingsBatch({
+          marketplaceIds,
+          sellerId,
+          operations: [{ type: 'stock', sku, quantity: qty }],
+        });
+      }
+      return { status: 'processed' };
+    }
+
+    if (channel === 'EBAY') {
+      const { submitEbayParallelBatch } = await import(
+        './channel-batch/ebay-parallel-batch.service.js'
+      );
+      const connection = await this.prisma.channelConnection.findFirst({
+        where: { channelType: 'EBAY', isActive: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (!connection) {
+        throw new Error('CHANNEL_BATCH EBAY: no active eBay connection');
+      }
+      const offerId = listing.externalListingId;
+      if (operation === 'price') {
+        if (!offerId) return { status: 'skipped' };
+        const value = String(listing.price ?? item.basePrice ?? 0);
+        await submitEbayParallelBatch({
+          connectionId: connection.id,
+          operations: [{ type: 'price', sku, offerId, currency, value }],
+        });
+      } else {
+        const qty = Number(listing.quantity ?? item.totalStock ?? 0);
+        await submitEbayParallelBatch({
+          connectionId: connection.id,
+          operations: [{ type: 'stock', sku, quantity: qty }],
+        });
+      }
+      return { status: 'processed' };
+    }
+
+    // SHOPIFY
+    const { submitShopifyBulkMutation } = await import(
+      './channel-batch/shopify-bulk-mutation.service.js'
+    );
+    if (operation === 'price') {
+      const variantId = listing.externalListingId;
+      if (!variantId) return { status: 'skipped' };
+      const value = String(listing.price ?? item.basePrice ?? 0);
+      await submitShopifyBulkMutation({
+        mutation:
+          'mutation Update($input: ProductVariantInput!) { productVariantUpdate(input: $input) { userErrors { message } } }',
+        operations: [{ input: { id: variantId, price: value } }],
+      });
+      return { status: 'processed' };
+    }
+    // stock — Shopify needs (inventoryItemId, locationId) which
+    // aren't on ChannelListing in this schema. Operators set them
+    // in env; reject cleanly when unset.
+    const inventoryItemId = process.env.SHOPIFY_DEFAULT_INVENTORY_ITEM_GID;
+    const locationId = process.env.SHOPIFY_DEFAULT_LOCATION_GID;
+    if (!inventoryItemId || !locationId) {
+      throw new Error(
+        'CHANNEL_BATCH SHOPIFY stock: SHOPIFY_DEFAULT_INVENTORY_ITEM_GID + SHOPIFY_DEFAULT_LOCATION_GID env required',
+      );
+    }
+    const qty = Number(listing.quantity ?? item.totalStock ?? 0);
+    await submitShopifyBulkMutation({
+      mutation:
+        'mutation Set($input: InventorySetQuantitiesInput!) { inventorySetQuantities(input: $input) { userErrors { message } } }',
+      operations: [
+        {
+          input: {
+            reason: 'correction',
+            name: 'available',
+            quantities: [{ inventoryItemId, locationId, quantity: qty }],
+          },
+        },
+      ],
+    });
+    return { status: 'processed' };
   }
 
   /**
