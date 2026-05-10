@@ -187,7 +187,9 @@ function offerIdentityGroup(variationThemes: string[], ll: LL, lang: LangTag, ma
   }
 }
 
-function variationsGroup(variationThemes: string[], ll: LL, lang: LangTag): FlatFileColumnGroup {
+function variationsGroup(variationThemes: string[], ll: LL, lang: LangTag, schemaEnums: Record<string, string[]>): FlatFileColumnGroup {
+  // parentage_level comes from the schema as ["Child","Parent"] via enumNames
+  const parentageOpts = schemaEnums['parentage_level'] ?? ['Child', 'Parent']
   return {
     id: 'variations',
     labelEn: 'Variations',
@@ -195,9 +197,9 @@ function variationsGroup(variationThemes: string[], ll: LL, lang: LangTag): Flat
     color: 'purple',
     columns: [
       { id: 'parentage_level', fieldRef: 'parentage_level[marketplace_id]#1.value', labelEn: 'Parent/Child', labelLocal: ll('parentage_level', 'Parentage Level'), required: false, kind: 'enum', width: 110,
-        options: ['', 'parent', 'child'], description: 'Leave blank for standalone. "parent" = non-buyable variation parent. "child" = variant.' },
+        options: ['', ...parentageOpts], description: 'Leave blank for standalone. "Parent" = non-buyable variation parent. "Child" = variant.' },
       { id: 'parent_sku', fieldRef: 'child_parent_sku_relationship[marketplace_id]#1.parent_sku', labelEn: 'Parent SKU', labelLocal: ll('parent_sku', 'Parent SKU'), required: false, kind: 'text', width: 170,
-        description: 'Required when parentage_level = child' },
+        description: 'Required when parentage_level = Child' },
       { id: 'variation_theme', fieldRef: 'variation_theme#1.name', labelEn: 'Variation Theme', labelLocal: ll('variation_theme', 'Variation Theme'), required: false, kind: 'enum', width: 170,
         options: ['', ...variationThemes],
         description: 'Required on parent rows.' },
@@ -251,8 +253,13 @@ function productDetailsGroup(schemaEnums: Record<string, string[]>, ll: LL, lang
   function col(id: string, ref: string, labelEn: string, overrides: Partial<FlatFileColumn> = {}): FlatFileColumn {
     return { id, fieldRef: ref, labelEn, labelLocal: ll(id, labelEn), required: false, kind: 'text', width: 160, ...overrides }
   }
-  function enumCol(id: string, ref: string, labelEn: string, options: string[], overrides: Partial<FlatFileColumn> = {}): FlatFileColumn {
-    return col(id, ref, labelEn, { kind: 'enum', options: ['', ...options.filter(Boolean)], width: 150, ...overrides })
+  // Only use enum kind when the schema actually provides options for this product type
+  function schemaCol(id: string, ref: string, labelEn: string, schemaKey: string, overrides: Partial<FlatFileColumn> = {}): FlatFileColumn {
+    const opts = schemaEnums[schemaKey]
+    if (opts && opts.length > 0) {
+      return col(id, ref, labelEn, { kind: 'enum', options: ['', ...opts], width: 150, ...overrides })
+    }
+    return col(id, ref, labelEn, { width: 150, ...overrides })
   }
   return {
     id: 'product_details',
@@ -270,16 +277,18 @@ function productDetailsGroup(schemaEnums: Record<string, string[]>, ll: LL, lang
       col('special_feature1','special_feature[marketplace_id][language_tag]#1.value','Special Feature 1', { width: 180 }),
       col('special_feature2','special_feature[marketplace_id][language_tag]#2.value','Special Feature 2', { width: 180 }),
       col('special_feature3','special_feature[marketplace_id][language_tag]#3.value','Special Feature 3', { width: 180 }),
-      enumCol('lifestyle','lifestyle[marketplace_id][language_tag]#1.value','Lifestyle', schemaEnums['lifestyle'] ?? []),
-      enumCol('style','style[marketplace_id][language_tag]#1.value','Style', schemaEnums['style'] ?? []),
+      // lifestyle / style / fit_type are free-text in the schema (no enum) — do NOT force enum
+      col('lifestyle','lifestyle[marketplace_id][language_tag]#1.value','Lifestyle', { width: 150 }),
+      col('style','style[marketplace_id][language_tag]#1.value','Style', { width: 150 }),
       col('department','department[marketplace_id][language_tag]#1.value','Target Audience', { width: 180 }),
-      enumCol('target_gender','target_gender[marketplace_id]#1.value','Target Gender', schemaEnums['target_gender'] ?? ['male','female','unisex'], { width: 120 }),
+      schemaCol('target_gender','target_gender[marketplace_id]#1.value','Target Gender','target_gender', { width: 130 }),
       col('age_range_description','age_range_description[marketplace_id][language_tag]#1.value','Age Range', { width: 130 }),
-      enumCol('apparel_size_system','apparel_size[marketplace_id]#1.size_system','Size System', schemaEnums['apparel_size.size_system'] ?? ['IT','FR','DE','UK','US','JP'], { width: 120 }),
-      enumCol('apparel_size_class','apparel_size[marketplace_id]#1.size_class','Size Format', schemaEnums['apparel_size.size_class'] ?? [], { width: 130 }),
+      // apparel_size sub-fields: only show enum if schema has them (product-type specific)
+      schemaCol('apparel_size_system','apparel_size[marketplace_id]#1.size_system','Size System','apparel_size.size_system', { width: 130 }),
+      schemaCol('apparel_size_class','apparel_size[marketplace_id]#1.size_class','Size Format','apparel_size.size_class', { width: 130 }),
       col('apparel_size','apparel_size[marketplace_id]#1.size','Size', { width: 100 }),
       col('apparel_size_to','apparel_size[marketplace_id]#1.size_to','Size To', { width: 90 }),
-      enumCol('apparel_body_type','apparel_size[marketplace_id]#1.body_type','Body Type', schemaEnums['apparel_size.body_type'] ?? ['Regular','Plus','Petite'], { width: 110 }),
+      schemaCol('apparel_body_type','apparel_size[marketplace_id]#1.body_type','Body Type','apparel_size.body_type', { width: 120 }),
       col('material1','material[marketplace_id][language_tag]#1.value','Material 1', { width: 140 }),
       col('material2','material[marketplace_id][language_tag]#2.value','Material 2', { width: 140 }),
       col('material3','material[marketplace_id][language_tag]#3.value','Material 3', { width: 140 }),
@@ -287,11 +296,11 @@ function productDetailsGroup(schemaEnums: Record<string, string[]>, ll: LL, lang
       col('lining_description','lining_description[marketplace_id][language_tag]#1.value','Lining', { width: 150 }),
       col('color_map','color[marketplace_id][language_tag]#1.standardized_values#1','Color Map', { width: 120 }),
       col('color','color[marketplace_id][language_tag]#1.value','Color', { width: 130 }),
-      enumCol('fit_type','fit_type[marketplace_id][language_tag]#1.value','Fit Type', schemaEnums['fit_type'] ?? [], { width: 130 }),
+      col('fit_type','fit_type[marketplace_id][language_tag]#1.value','Fit Type', { width: 130 }),
       col('pattern','pattern[marketplace_id][language_tag]#1.value','Pattern', { width: 130 }),
       col('care_instructions','care_instructions[marketplace_id][language_tag]#1.value','Care Instructions', { width: 200 }),
       col('item_type_name','item_type_name[marketplace_id][language_tag]#1.value','Product Type Name', { width: 160 }),
-      enumCol('water_resistance_level','water_resistance_level[marketplace_id]#1.value','Water Resistance', schemaEnums['water_resistance_level'] ?? [], { width: 160 }),
+      schemaCol('water_resistance_level','water_resistance_level[marketplace_id]#1.value','Water Resistance','water_resistance_level', { width: 170 }),
       col('part_number','part_number[marketplace_id]#1.value','Part Number / MPN', { width: 140 }),
       col('number_of_items','number_of_items[marketplace_id]#1.value','Number of Items', { kind: 'number', width: 100 }),
     ],
@@ -305,8 +314,8 @@ function offerGroup(schemaEnums: Record<string, string[]>, ll: LL, lang: LangTag
     labelLocal: GROUP_LOCAL_LABELS.offer[lang] ?? 'Offer',
     color: 'amber',
     columns: [
-      { id: 'skip_offer',   fieldRef: 'skip_offer[marketplace_id]#1.value',    labelEn: 'Skip Offer',    labelLocal: ll('skip_offer', 'Skip Offer'),       required: false, kind: 'enum',   width: 100, options: ['', 'true', 'false'] },
-      { id: 'condition_type',fieldRef:'condition_type[marketplace_id]#1.value', labelEn: 'Condition',     labelLocal: ll('condition_type', 'Condition'),     required: false, kind: 'enum',   width: 120, options: ['', 'new_new', ...(schemaEnums['condition_type'] ?? ['new_new'])] },
+      { id: 'skip_offer',   fieldRef: 'skip_offer[marketplace_id]#1.value',    labelEn: 'Skip Offer',    labelLocal: ll('skip_offer', 'Skip Offer'),       required: false, kind: 'enum',   width: 100, options: ['', ...(schemaEnums['skip_offer'] ?? ['No','Yes'])] },
+      { id: 'condition_type',fieldRef:'condition_type[marketplace_id]#1.value', labelEn: 'Condition',     labelLocal: ll('condition_type', 'Condition'),     required: false, kind: 'enum',   width: 130, options: ['', ...(schemaEnums['condition_type'] ?? ['New'])] },
       { id: 'condition_note',fieldRef:'condition_note[marketplace_id][language_tag]#1.value', labelEn: 'Condition Note', labelLocal: ll('condition_note', 'Condition Note'), required: false, kind: 'text', width: 180 },
       { id: 'list_price',   fieldRef: 'list_price[marketplace_id]#1.value_with_tax', labelEn: 'RRP (incl. VAT)', labelLocal: ll('list_price', 'RRP (incl. VAT)'), required: false, kind: 'number', width: 120 },
       { id: 'product_tax_code', fieldRef: 'product_tax_code#1.value', labelEn: 'Tax Code', labelLocal: ll('product_tax_code', 'Tax Code'), required: false, kind: 'text', width: 110 },
@@ -373,9 +382,9 @@ function complianceGroup(schemaEnums: Record<string, string[]>, ll: LL, lang: La
     labelLocal: GROUP_LOCAL_LABELS.compliance[lang] ?? 'Compliance & Safety',
     color: 'red',
     columns: [
-      col('country_of_origin', 'country_of_origin[marketplace_id]#1.value', 'Country of Origin', { kind: 'enum', width: 140, options: ['', 'IT', 'CN', 'DE', 'FR', 'ES', 'PT', 'IN', 'BD', 'TR', 'VN', 'PK', 'ID'] }),
-      col('batteries_required','batteries_required[marketplace_id]#1.value','Batteries Required', { kind: 'enum', width: 140, options: ['', 'true', 'false'] }),
-      col('batteries_included','batteries_included[marketplace_id]#1.value','Batteries Included', { kind: 'enum', width: 140, options: ['', 'true', 'false'] }),
+      col('country_of_origin', 'country_of_origin[marketplace_id]#1.value', 'Country of Origin', { kind: 'enum', width: 155, options: ['', ...(schemaEnums['country_of_origin'] ?? ['Italy','Germany','France','Spain','China','United Kingdom'])] }),
+      col('batteries_required','batteries_required[marketplace_id]#1.value','Batteries Required', { kind: 'enum', width: 140, options: ['', ...(schemaEnums['batteries_required'] ?? ['No','Yes'])] }),
+      col('batteries_included','batteries_included[marketplace_id]#1.value','Batteries Included', { kind: 'enum', width: 140, options: ['', ...(schemaEnums['batteries_included'] ?? ['No','Yes'])] }),
       col('item_weight',       'item_weight[marketplace_id]#1.value',       'Item Weight',        { kind: 'number', width: 100 }),
       col('item_weight_unit',  'item_weight[marketplace_id]#1.unit',        'Item Weight Unit',   { kind: 'enum', width: 120, options: ['', 'grams', 'kilograms', 'pounds', 'ounces'] }),
     ],
@@ -422,68 +431,88 @@ const SCHEMA_FIELDS_SKIP = new Set([
 // ── Schema enum extraction ─────────────────────────────────────────────
 
 /**
- * Extract enum values from a single schema node.
- * Amazon uses two locations: `enum` (API values) and
- * `x-amazon-attributes.validValues` (localized display values).
- * We prefer `validValues` when present (they're market-specific and match
- * what Amazon shows in their Excel dropdowns), falling back to `enum`.
+ * Extract enum options from a single schema value node.
+ *
+ * Amazon's real schema structure (confirmed from DB inspection):
+ *   - `enumNames` — human-readable display labels (what Amazon shows in
+ *     their Excel flat file dropdowns, e.g. "Female", "New", "Afghanistan")
+ *   - `enum`      — machine API codes (e.g. "female", "new_new", "AF")
+ *   - `x-amazon-attributes.validValues` — older/alternative location (rare)
+ *
+ * We prefer `enumNames` because they match what Amazon's flat-file format
+ * expects for submission and what users recognise from Seller Central.
  */
 function extractEnumOptions(inner: Record<string, any>): string[] {
+  // 1. enumNames — the display labels shown in Amazon's Excel template
+  const enumNames: string[] = inner?.enumNames ?? []
+  if (enumNames.length > 0) return enumNames.map(String).filter(Boolean)
+  // 2. x-amazon-attributes.validValues — older schema format
   const validValues: string[] = inner?.['x-amazon-attributes']?.validValues ?? []
+  if (validValues.length > 0) return validValues.map(String).filter(Boolean)
+  // 3. enum — raw API codes (least preferred for display)
   const enumValues: string[] = inner?.enum ?? []
-  const chosen = validValues.length > 0 ? validValues : enumValues
-  return chosen.map(String).filter(Boolean)
+  return enumValues.map(String).filter(Boolean)
 }
 
 /**
- * Walk all properties in a schema and build a flat map of field IDs →
- * enum options. Handles:
- *   - Top-level `value` enums  (e.g. target_gender → ['male','female','unisex'])
- *   - Sub-property enums       (e.g. apparel_size.size_system → ['IT','DE',...])
- *   - `anyOf` / `oneOf` unions (pick the first branch that has an enum)
+ * Recursively find the first node in a schema subtree that has enum values.
+ * Handles:
+ *   - Direct value node:  items.properties.value.enumNames
+ *   - Nested arrays:      items.properties.type.items.properties.value.enumNames
+ *   - anyOf / oneOf unions
+ */
+function findEnumNode(node: Record<string, any>, depth = 0): string[] {
+  if (!node || typeof node !== 'object' || depth > 4) return []
+
+  // Direct enum on this node
+  const direct = extractEnumOptions(node)
+  if (direct.length) return direct
+
+  // anyOf / oneOf — try each branch
+  for (const key of ['anyOf', 'oneOf']) {
+    if (Array.isArray(node[key])) {
+      for (const branch of node[key]) {
+        const v = findEnumNode(branch as Record<string, any>, depth + 1)
+        if (v.length) return v
+      }
+    }
+  }
+
+  // Unwrap wrapped array (items.properties.value)
+  const valueNode = node?.items?.properties?.value
+  if (valueNode) {
+    const v = findEnumNode(valueNode, depth + 1)
+    if (v.length) return v
+  }
+
+  return []
+}
+
+/**
+ * Walk all top-level schema properties and build a flat enum map:
+ *   fieldId → string[]            (e.g. "target_gender" → ["Female","Male","Unisex"])
+ *   fieldId.subProp → string[]    (e.g. "closure.type" → ["Button","Drawstring",...])
  */
 function buildSchemaEnums(properties: Record<string, any>): Record<string, string[]> {
   const result: Record<string, string[]> = {}
-
-  function tryEnum(node: Record<string, any>): string[] {
-    if (!node || typeof node !== 'object') return []
-    const direct = extractEnumOptions(node)
-    if (direct.length) return direct
-    // anyOf / oneOf: try each branch
-    for (const key of ['anyOf', 'oneOf']) {
-      if (Array.isArray(node[key])) {
-        for (const branch of node[key]) {
-          const v = extractEnumOptions(branch as Record<string, any>)
-          if (v.length) return v
-        }
-      }
-    }
-    return []
-  }
+  const SKIP_SUB = new Set(['marketplace_id', 'language_tag', 'value'])
 
   for (const [fieldId, prop] of Object.entries(properties)) {
     const p = prop as Record<string, any>
 
-    // 1. Top-level value node (wrapped array pattern)
+    // 1. Resolve the primary "value" node (wrapped-array pattern)
     const valueNode = p?.items?.properties?.value ?? p
-    const topOpts = tryEnum(valueNode)
+    const topOpts = findEnumNode(valueNode)
     if (topOpts.length) result[fieldId] = topOpts
 
-    // 2. Sub-properties of items (e.g. apparel_size.size_system)
-    const subProps = p?.items?.properties ?? {}
+    // 2. Sub-properties of items — handles complex fields like closure, inner, etc.
+    //    Amazon schema pattern: items.properties.<subId> may itself be an array
+    //    with its own items.properties.value.enumNames
+    const subProps: Record<string, any> = p?.items?.properties ?? {}
     for (const [subId, subProp] of Object.entries(subProps)) {
-      if (subId === 'value' || subId === 'marketplace_id' || subId === 'language_tag') continue
-      const subOpts = tryEnum(subProp as Record<string, any>)
+      if (SKIP_SUB.has(subId)) continue
+      const subOpts = findEnumNode(subProp as Record<string, any>)
       if (subOpts.length) result[`${fieldId}.${subId}`] = subOpts
-
-      // 3. Three levels deep (e.g. apparel_size.size_system.value)
-      const deepNode = (subProp as any)?.items?.properties?.value
-      if (deepNode) {
-        const deepOpts = tryEnum(deepNode)
-        if (deepOpts.length && !result[`${fieldId}.${subId}`]) {
-          result[`${fieldId}.${subId}`] = deepOpts
-        }
-      }
     }
   }
 
@@ -495,22 +524,29 @@ function schemaFieldToColumn(
   prop: Record<string, any>,
   isRequired: boolean,
   schemaLabels: Record<string, string>,
+  schemaEnums: Record<string, string[]>,
 ): FlatFileColumn | null {
   const inner = prop?.items?.properties?.value ?? prop
+  const topType = prop?.type
   const t = inner?.type
   let kind: FlatFileColumnKind = 'text'
   let options: string[] | undefined
 
-  if (inner?.enum || inner?.['x-amazon-attributes']?.validValues) {
+  // Check for enum values via the deep extractor
+  const enumOpts = schemaEnums[fieldId]
+  if (enumOpts && enumOpts.length > 0) {
     kind = 'enum'
-    options = extractEnumOptions(inner)
-  } else if (t === 'number' || t === 'integer') {
+    options = enumOpts
+  } else if (t === 'number' || t === 'integer' || topType === 'number' || topType === 'integer') {
     kind = 'number'
   } else if (t === 'boolean') {
     kind = 'enum'
     options = ['', 'true', 'false']
   } else if (t === 'string') {
     kind = (inner?.maxLength ?? 0) > 500 ? 'longtext' : 'text'
+  } else if (topType === 'array' || topType === 'object') {
+    // Complex nested field — render as text for now (user types manually)
+    kind = 'text'
   } else {
     return null
   }
@@ -576,7 +612,7 @@ export class AmazonFlatFileService {
     const dynamicCols: FlatFileColumn[] = []
     for (const [fieldId, prop] of Object.entries(properties)) {
       if (SCHEMA_FIELDS_SKIP.has(fieldId)) continue
-      const col = schemaFieldToColumn(fieldId, prop as Record<string, any>, requiredSet.has(fieldId), schemaLabels)
+      const col = schemaFieldToColumn(fieldId, prop as Record<string, any>, requiredSet.has(fieldId), schemaLabels, schemaEnums)
       if (col) dynamicCols.push(col)
     }
     dynamicCols.sort((a, b) => {
@@ -588,7 +624,7 @@ export class AmazonFlatFileService {
 
     const groups: FlatFileColumnGroup[] = [
       offerIdentityGroup(variationThemes, ll, lang, mp),
-      variationsGroup(variationThemes, ll, lang),
+      variationsGroup(variationThemes, ll, lang, schemaEnums),
       productIdentityGroup(schemaEnums, ll, lang),
       imagesGroup(ll, lang),
       productDetailsGroup(schemaEnums, ll, lang),
