@@ -25,6 +25,7 @@ interface PreviewVariant {
   width: number
   height: number
   cropMode: 'fit' | 'fill' | 'pad'
+  mediaType?: 'image' | 'video'
   url: string | null
   notes: string | null
 }
@@ -182,14 +183,25 @@ function ChannelFrame({
         </span>
       </header>
       <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-800">
-        <Image
-          src={variant.url}
-          alt={variant.label}
-          fill
-          sizes="(max-width: 768px) 100vw, 380px"
-          className="object-contain"
-          unoptimized
-        />
+        {variant.mediaType === 'video' ? (
+          <video
+            src={variant.url}
+            controls
+            preload="metadata"
+            className="h-full w-full object-contain"
+          >
+            <track kind="captions" />
+          </video>
+        ) : (
+          <Image
+            src={variant.url}
+            alt={variant.label}
+            fill
+            sizes="(max-width: 768px) 100vw, 380px"
+            className="object-contain"
+            unoptimized
+          />
+        )}
       </div>
     </figure>
   )

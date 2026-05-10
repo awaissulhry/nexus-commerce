@@ -91,6 +91,9 @@ export interface ChannelVariant {
   width: number
   height: number
   cropMode: 'fit' | 'fill' | 'pad'
+  /// MC.7.4 — 'video' renders the variant as a <video> element
+  /// instead of an <img>; null for legacy image-only assets.
+  mediaType?: 'image' | 'video'
   url: string | null
   notes: string | null
 }

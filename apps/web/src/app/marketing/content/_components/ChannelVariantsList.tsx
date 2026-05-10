@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react'
 import Image from 'next/image'
-import { ChevronDown, Copy, ExternalLink, Layers } from 'lucide-react'
+import { ChevronDown, Copy, ExternalLink, Film, Layers } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useToast } from '@/components/ui/Toast'
 import type { ChannelVariant } from '../_lib/types'
@@ -95,14 +95,20 @@ export default function ChannelVariantsList({ variants }: Props) {
                   >
                     <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
                       {variant.url ? (
-                        <Image
-                          src={variant.url}
-                          alt={variant.label}
-                          fill
-                          sizes="40px"
-                          className="object-cover"
-                          unoptimized
-                        />
+                        variant.mediaType === 'video' ? (
+                          <div className="flex h-full w-full items-center justify-center bg-slate-200 dark:bg-slate-700">
+                            <Film className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+                          </div>
+                        ) : (
+                          <Image
+                            src={variant.url}
+                            alt={variant.label}
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                            unoptimized
+                          />
+                        )
                       ) : null}
                     </div>
                     <div className="flex-1 min-w-0">

@@ -640,6 +640,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             storageProvider: asset.storageProvider,
             storageId: asset.storageId,
             url: asset.url,
+            type: asset.type,
           }),
           originalFilename: asset.originalFilename,
           storageProvider: asset.storageProvider,
@@ -703,6 +704,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
             storageProvider: row.publicId ? 'cloudinary' : 'external',
             storageId: row.publicId,
             url: row.url,
+            type: 'image',
           }),
           originalFilename: null,
           storageProvider: row.publicId ? 'cloudinary' : 'external',
@@ -1098,6 +1100,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       select: {
         id: true,
         url: true,
+        type: true,
         storageProvider: true,
         storageId: true,
         localeOverlays: {

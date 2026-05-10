@@ -44,6 +44,10 @@ export interface ChannelVariantSpec {
   background?: string
   /** Optional commentary surfaced in the detail drawer. */
   notes?: string
+  /** MC.7.4 — 'image' (default) or 'video'. Routes the URL through
+   *  Cloudinary's /image/upload/ or /video/upload/ segment and
+   *  filters specs to the matching asset type. */
+  mediaType?: 'image' | 'video'
 }
 
 export const CHANNEL_VARIANTS: ChannelVariantSpec[] = [
@@ -170,6 +174,67 @@ export const CHANNEL_VARIANTS: ChannelVariantSpec[] = [
     notes:
       'Used by Twitter / Facebook / LinkedIn / Telegram link previews.',
   },
+
+  // ── MC.7.4 — Video presets ─────────────────────────────────
+  {
+    id: 'AMAZON_VIDEO_HERO',
+    label: 'Amazon promo video',
+    channel: 'Amazon',
+    width: 1920,
+    height: 1080,
+    cropMode: 'fit',
+    mediaType: 'video',
+    notes: 'Amazon Brand Story / A+ Premium 16:9 promo video.',
+  },
+  {
+    id: 'EBAY_VIDEO',
+    label: 'eBay listing video',
+    channel: 'eBay',
+    width: 1280,
+    height: 720,
+    cropMode: 'fit',
+    mediaType: 'video',
+    notes: 'eBay Vault video listing (max 150MB; 720p baseline).',
+  },
+  {
+    id: 'SHOPIFY_VIDEO',
+    label: 'Shopify product video',
+    channel: 'Shopify',
+    width: 1920,
+    height: 1080,
+    cropMode: 'fit',
+    mediaType: 'video',
+  },
+  {
+    id: 'INSTAGRAM_REEL',
+    label: 'Instagram Reel',
+    channel: 'Instagram',
+    width: 1080,
+    height: 1920,
+    cropMode: 'fill',
+    mediaType: 'video',
+    notes: '9:16 vertical Reel / Story video.',
+  },
+  {
+    id: 'INSTAGRAM_VIDEO_FEED',
+    label: 'Instagram feed video',
+    channel: 'Instagram',
+    width: 1080,
+    height: 1080,
+    cropMode: 'fill',
+    mediaType: 'video',
+    notes: 'Square in-feed video.',
+  },
+  {
+    id: 'SOCIAL_VIDEO_OG',
+    label: 'Open Graph video',
+    channel: 'Social',
+    width: 1280,
+    height: 720,
+    cropMode: 'fill',
+    mediaType: 'video',
+    notes: 'Twitter / LinkedIn link-preview video card.',
+  },
 ]
 
 const CROP_TOKEN: Record<ChannelVariantSpec['cropMode'], string> = {
@@ -186,12 +251,23 @@ const CROP_TOKEN: Record<ChannelVariantSpec['cropMode'], string> = {
  */
 export function buildVariantUrl(
   spec: ChannelVariantSpec,
-  asset: { storageProvider: string; storageId: string | null; url: string },
+  asset: {
+    storageProvider: string
+    storageId: string | null
+    url: string
+    /** MC.7.4 — when present, must match the spec's mediaType. */
+    type?: string
+  },
   profile?: DeliveryProfileId,
 ): string | null {
   if (asset.storageProvider !== 'cloudinary' || !asset.storageId) return null
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME
   if (!cloudName) return null
+
+  // Spec/asset media type must agree — image specs only render image
+  // assets; video specs only render video assets.
+  const specMedia = spec.mediaType ?? 'image'
+  if (asset.type && asset.type !== specMedia) return null
 
   const transforms = [
     `w_${spec.width}`,
@@ -203,11 +279,18 @@ export function buildVariantUrl(
     transforms.push(`b_${spec.background}`)
   }
 
-  return `https://res.cloudinary.com/${cloudName}/image/upload/${transforms.join(',')}/${asset.storageId}`
+  const segment = specMedia === 'video' ? 'video' : 'image'
+  return `https://res.cloudinary.com/${cloudName}/${segment}/upload/${transforms.join(',')}/${asset.storageId}`
 }
 
 export function buildAllVariants(
-  asset: { storageProvider: string; storageId: string | null; url: string },
+  asset: {
+    storageProvider: string
+    storageId: string | null
+    url: string
+    /** MC.7.4 — when present, filters specs to the matching mediaType. */
+    type?: string
+  },
   profile?: DeliveryProfileId,
 ): Array<{
   id: string
@@ -216,17 +299,25 @@ export function buildAllVariants(
   width: number
   height: number
   cropMode: ChannelVariantSpec['cropMode']
+  mediaType: 'image' | 'video'
   url: string | null
   notes: string | null
 }> {
   const resolved = profile ?? defaultProfile()
-  return CHANNEL_VARIANTS.map((spec) => ({
+  return CHANNEL_VARIANTS.filter((spec) => {
+    // MC.7.4 — when the asset declares a type, hide specs that don't
+    // match. When asset.type is missing (legacy callers), fall through
+    // to the historical behavior of returning all specs.
+    if (!asset.type) return true
+    return (spec.mediaType ?? 'image') === asset.type
+  }).map((spec) => ({
     id: spec.id,
     channel: spec.channel,
     label: spec.label,
     width: spec.width,
     height: spec.height,
     cropMode: spec.cropMode,
+    mediaType: spec.mediaType ?? 'image',
     url: buildVariantUrl(spec, asset, resolved),
     notes: spec.notes ?? null,
   }))
