@@ -287,6 +287,11 @@ export default function MatrixVariantBuilder({
               sku: v.sku,
               name: v.name,
               optionValues: v.optionValues,
+              // LWV.2 — per-variant overrides flow through. The API
+              // falls back to globalPrice/globalStock when these are
+              // missing or invalid.
+              price: v.priceOverride,
+              stock: v.stockOverride,
             })),
             globalPrice: price,
             globalStock: stock,
@@ -651,10 +656,9 @@ export default function MatrixVariantBuilder({
                 </tbody>
               </table>
               <p className="text-xs text-slate-500 dark:text-slate-400 px-2 py-1.5 border-t border-slate-100 dark:border-slate-800">
-                Per-row Price/Stock overrides apply via post-create
-                PATCH (handled in v2). For now, defaults above apply to
-                every row — adjust per-variant from the edit page after
-                creation.
+                Empty cells fall back to the defaults above. Per-variant
+                price / stock are applied at create time — the edit page
+                handles further per-listing overrides.
               </p>
             </div>
           )}

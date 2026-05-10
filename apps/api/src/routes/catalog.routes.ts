@@ -1307,6 +1307,12 @@ export async function catalogRoutes(app: FastifyInstance) {
         sku: string;
         name: string;
         optionValues: Record<string, string>;
+        // LWV.2 — per-variant overrides. Undefined → fall back to
+        // globalPrice / globalStock; defined → use the per-variant
+        // value. Same validation as globalPrice (positive number)
+        // / globalStock (non-negative integer).
+        price?: number;
+        stock?: number;
       }>;
       globalPrice: number;
       globalStock: number;
@@ -1409,15 +1415,32 @@ export async function catalogRoutes(app: FastifyInstance) {
           });
         }
 
-        // Create all child products
+        // Create all child products. LWV.2 — per-variant price/stock
+        // overrides take precedence over the global defaults; this
+        // matters for catalogs with size- or material-tiered pricing
+        // (e.g. helmets where XXL ships in a larger box and costs
+        // more, or premium lining variants).
         const createdVariations = await Promise.all(
-          variations.map((variation) =>
-            tx.product.create({
+          variations.map((variation) => {
+            const perVariantPrice =
+              typeof variation.price === 'number' &&
+              Number.isFinite(variation.price) &&
+              variation.price > 0
+                ? variation.price
+                : globalPrice
+            const perVariantStock =
+              typeof variation.stock === 'number' &&
+              Number.isFinite(variation.stock) &&
+              variation.stock >= 0 &&
+              Number.isInteger(variation.stock)
+                ? variation.stock
+                : globalStock
+            return tx.product.create({
               data: {
                 sku: variation.sku,
                 name: variation.name,
-                basePrice: globalPrice,
-                totalStock: globalStock,
+                basePrice: perVariantPrice,
+                totalStock: perVariantStock,
                 parentId,
                 masterProductId: parentId,
                 isParent: false,
@@ -1433,7 +1456,7 @@ export async function catalogRoutes(app: FastifyInstance) {
                 validationStatus: "VALID",
               },
             })
-          )
+          })
         );
 
         return createdVariations;
