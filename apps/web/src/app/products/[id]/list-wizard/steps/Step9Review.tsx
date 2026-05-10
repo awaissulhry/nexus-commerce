@@ -18,6 +18,51 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
+// C.2 (list-wizard) — per-channel compliance status returned by
+// /:id/compliance-status. Mirrors the backend shape so the response
+// can flow directly into the UI without remapping.
+interface ComplianceIssue {
+  code: string
+  message: string
+  severity: 'block' | 'warn'
+}
+interface ChannelCompliance {
+  channelKey: string
+  platform: string
+  marketplace: string
+  ready: boolean
+  blockingCount: number
+  warningCount: number
+  issues: ComplianceIssue[]
+}
+interface ComplianceCertificate {
+  id: string
+  certType: string
+  certNumber: string | null
+  expiresAt: string | null
+  isExpired: boolean
+}
+interface ComplianceStatusResponse {
+  product: {
+    sku: string
+    name: string
+    hsCode: string | null
+    countryOfOrigin: string | null
+    ppeCategory: string | null
+    hazmatClass: string | null
+    hazmatUnNumber: string | null
+    certificateCount: number
+    certificates: ComplianceCertificate[]
+  }
+  perChannel: ChannelCompliance[]
+  summary: {
+    allReady: boolean
+    blockingChannels: string[]
+    channelCount: number
+    readyCount: number
+  }
+}
+
 // AI-6.4 — per-channel quality score returned by /score-quality.
 interface AiQualityDimension {
   name: string
@@ -306,6 +351,14 @@ export default function Step9Review({
   const [aiQualityError, setAiQualityError] = useState<string | null>(null)
   const [aiQuality, setAiQuality] = useState<AiQualityResponse | null>(null)
 
+  // C.2 — compliance status. Fetched alongside the review payload;
+  // null when the endpoint failed (rare — read-only DB query). The
+  // card hides cleanly in that case so a compliance-fetch outage
+  // doesn't block the operator from reviewing the rest.
+  const [compliance, setCompliance] = useState<ComplianceStatusResponse | null>(
+    null,
+  )
+
   const askAiToScore = useCallback(async () => {
     if (!data) return
     const channels = data.payloads
@@ -357,15 +410,27 @@ export default function Step9Review({
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}/review`)
-      .then(async (r) => ({ ok: r.ok, status: r.status, json: await r.json() }))
-      .then(({ ok, status, json }) => {
+    // C.2 — fetch compliance-status alongside review so the card
+    // renders without a second round-trip. Compliance never blocks
+    // first-paint (its 503 / cert-fetch failures fall through to a
+    // null state that hides the card cleanly).
+    Promise.all([
+      fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}/review`)
+        .then(async (r) => ({ ok: r.ok, status: r.status, json: await r.json() })),
+      fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}/compliance-status`)
+        .then(async (r) => ({ ok: r.ok, json: r.ok ? await r.json() : null }))
+        .catch(() => ({ ok: false, json: null })),
+    ])
+      .then(([reviewResult, complianceResult]) => {
         if (cancelled) return
-        if (!ok) {
-          setError(json?.error ?? `HTTP ${status}`)
+        if (!reviewResult.ok) {
+          setError(reviewResult.json?.error ?? `HTTP ${reviewResult.status}`)
           return
         }
-        setData(json as ReviewResponse)
+        setData(reviewResult.json as ReviewResponse)
+        if (complianceResult.ok) {
+          setCompliance(complianceResult.json as ComplianceStatusResponse)
+        }
       })
       .catch((err) => {
         if (cancelled) return
@@ -511,6 +576,19 @@ export default function Step9Review({
           topImprovements, and a per-channel sub-score table. Purely
           informational — operator goes back to the relevant step to
           fix anything the scorer flagged. */}
+
+      {/* C.2 — compliance status. Reads master Product compliance
+          fields (W7.1 schema: ppeCategory / hsCode / hazmatClass /
+          countryOfOrigin) + ProductCertificate rows and surfaces
+          per-channel readiness. Doesn't block submit at the chrome
+          level; the operator sees what's missing per channel and
+          can deep-link to /products/[id]/edit#compliance to fix
+          master data, or proceed knowing which channels won't
+          publish cleanly. */}
+      {compliance && compliance.perChannel.length > 0 && (
+        <ComplianceCard compliance={compliance} />
+      )}
+
       {(aiQuality || aiQualityError || aiQualityBusy) && (
         <div className="mb-5 border border-purple-200 dark:border-purple-900 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg overflow-hidden">
           <div className="px-4 py-2.5 border-b border-purple-100 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/40 flex items-center justify-between gap-3">
@@ -1375,5 +1453,167 @@ function ReadyBadge({ allReady }: { allReady: boolean }) {
     <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-2 py-0.5 rounded">
       <AlertCircle className="w-3 h-3" /> Not ready
     </span>
+  )
+}
+
+// C.2 — per-channel compliance card. Surfaces what's blocking each
+// channel based on master product compliance + cert state. Operators
+// see the issue codes + plain-language messages; deep-link to
+// /products/[id]/edit#compliance to fix master data without leaving
+// the wizard's flow.
+function ComplianceCard({
+  compliance,
+}: {
+  compliance: ComplianceStatusResponse
+}) {
+  const summary = compliance.summary
+  const expiredCount = compliance.product.certificates.filter(
+    (c) => c.isExpired,
+  ).length
+  return (
+    <div
+      className={cn(
+        'mb-5 border rounded-lg overflow-hidden',
+        summary.allReady
+          ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20'
+          : 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20',
+      )}
+    >
+      <div
+        className={cn(
+          'px-4 py-2.5 border-b flex items-center justify-between gap-3',
+          summary.allReady
+            ? 'border-emerald-100 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40'
+            : 'border-amber-100 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40',
+        )}
+      >
+        <div className="flex items-center gap-2">
+          {summary.allReady ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          )}
+          <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
+            Compliance{' '}
+            <span className="text-sm font-normal text-slate-500 dark:text-slate-400 tabular-nums">
+              · {summary.readyCount}/{summary.channelCount} channels ready
+              {expiredCount > 0 && ` · ${expiredCount} cert${expiredCount === 1 ? '' : 's'} expired`}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-3 space-y-2.5">
+        {compliance.product.ppeCategory && (
+          <div className="text-sm text-slate-600 dark:text-slate-400">
+            PPE Category{' '}
+            <span className="font-mono text-slate-900 dark:text-slate-100">
+              {compliance.product.ppeCategory}
+            </span>
+            {compliance.product.hsCode && (
+              <>
+                {' '}· HS{' '}
+                <span className="font-mono text-slate-900 dark:text-slate-100">
+                  {compliance.product.hsCode}
+                </span>
+              </>
+            )}
+            {compliance.product.countryOfOrigin && (
+              <>
+                {' '}· Origin{' '}
+                <span className="font-mono text-slate-900 dark:text-slate-100">
+                  {compliance.product.countryOfOrigin}
+                </span>
+              </>
+            )}
+            {(compliance.product.hazmatClass ||
+              compliance.product.hazmatUnNumber) && (
+              <>
+                {' '}·{' '}
+                <span className="text-amber-700 dark:text-amber-300">
+                  Hazmat {compliance.product.hazmatClass ?? ''}{' '}
+                  {compliance.product.hazmatUnNumber ?? ''}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {compliance.perChannel.map((c) => (
+          <div
+            key={c.channelKey}
+            className={cn(
+              'border rounded-md px-3 py-2',
+              c.ready
+                ? 'border-emerald-200 dark:border-emerald-900 bg-white dark:bg-slate-900'
+                : c.blockingCount > 0
+                  ? 'border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/20'
+                  : 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20',
+            )}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100">
+                {c.channelKey}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs">
+                {c.ready ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Ready
+                  </span>
+                ) : (
+                  <>
+                    {c.blockingCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
+                        <AlertCircle className="w-3 h-3" />
+                        {c.blockingCount} blocker{c.blockingCount === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {c.warningCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                        <AlertCircle className="w-3 h-3" />
+                        {c.warningCount} warning{c.warningCount === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </>
+                )}
+              </span>
+            </div>
+            {c.issues.length > 0 && (
+              <ul className="space-y-0.5">
+                {c.issues.map((issue) => (
+                  <li
+                    key={issue.code}
+                    className={cn(
+                      'text-sm leading-snug flex items-start gap-1.5',
+                      issue.severity === 'block'
+                        ? 'text-rose-800 dark:text-rose-200'
+                        : 'text-amber-800 dark:text-amber-200',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'mt-1 inline-block w-1 h-1 rounded-full flex-shrink-0',
+                        issue.severity === 'block'
+                          ? 'bg-rose-500'
+                          : 'bg-amber-500',
+                      )}
+                    />
+                    <span>{issue.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+
+        {!summary.allReady && (
+          <div className="text-sm text-slate-500 dark:text-slate-400 italic">
+            Fix master compliance data on the product edit page;
+            issues here re-evaluate on the next wizard load.
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
