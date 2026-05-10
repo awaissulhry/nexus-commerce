@@ -19,6 +19,7 @@
 
 import { runOrdersPoll as runAmazonOrdersPoll } from './amazon-orders-sync.job.js'
 import { runFinancialSync as runAmazonFinancialSync } from './amazon-financial-sync.job.js'
+import { runEbayFinancialSync } from './ebay-financial-sync.job.js'
 import { runInventorySweep as runAmazonInventorySweep } from './amazon-inventory-sync.job.js'
 import { runOrdersPoll as runEbayOrdersPoll } from './ebay-orders-sync.job.js'
 import { runRefreshSweep as runEbayTokenRefresh } from './ebay-token-refresh.job.js'
@@ -75,6 +76,7 @@ import { runAllWooCommerceSyncJobs } from './woocommerce-sync.job.js'
 export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'amazon-orders-sync': () => runAmazonOrdersPoll(),
   'amazon-financial-sync': () => runAmazonFinancialSync(),
+  'ebay-financial-sync': () => runEbayFinancialSync(),
   'amazon-inventory-sync': () => runAmazonInventorySweep(),
   'amazon-mcf-status': () => runMCFStatusSyncOnce(),
   'amazon-returns-poll': () => runAmazonReturnsPoll(),

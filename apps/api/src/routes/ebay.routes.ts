@@ -662,4 +662,27 @@ export async function ebayRoutes(app: FastifyInstance) {
       return reply.status(500).send({ success: false, error: message });
     }
   });
+
+  // POST /api/ebay/financials/sync — pull eBay Sell Finances transactions
+  // Body: { start?, end?, daysBack? }. Defaults to yesterday.
+  app.post<{ Body?: { start?: string; end?: string; daysBack?: number } }>('/ebay/financials/sync', async (request, reply) => {
+    const { syncEbayFinancialEvents, syncEbayYesterdayFinancials } = await import('../services/ebay-financial-events.service.js')
+    try {
+      const body = request.body ?? {}
+      let summary
+      if (body.start && body.end) {
+        summary = await syncEbayFinancialEvents(new Date(body.start), new Date(body.end))
+      } else if (typeof body.daysBack === 'number') {
+        const end = new Date()
+        summary = await syncEbayFinancialEvents(new Date(end.getTime() - body.daysBack * 86400000), end)
+      } else {
+        summary = await syncEbayYesterdayFinancials()
+      }
+      return reply.send({ success: true, ...summary })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('[ebay/financials/sync] failed', { error: msg })
+      return reply.code(500).send({ success: false, error: msg })
+    }
+  })
 }

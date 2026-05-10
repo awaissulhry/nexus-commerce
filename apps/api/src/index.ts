@@ -128,6 +128,7 @@ import { startRefundDeadlineTrackerCron } from "./jobs/refund-deadline-tracker.j
 import { startAmazonOrdersCron } from "./jobs/amazon-orders-sync.job.js";
 import { startEbayOrdersCron } from "./jobs/ebay-orders-sync.job.js";
 import { startAmazonFinancialSyncCron } from "./jobs/amazon-financial-sync.job.js";
+import { startEbayFinancialSyncCron } from "./jobs/ebay-financial-sync.job.js";
 import { startAmazonInventoryCron } from "./jobs/amazon-inventory-sync.job.js";
 import { startReservationSweepCron } from "./jobs/reservation-sweep.job.js";
 import { startLateShipmentFlagCron } from "./jobs/late-shipment-flag.job.js";
@@ -718,6 +719,13 @@ async function start() {
     // Idempotent. Gated behind NEXUS_ENABLE_AMAZON_FINANCIAL_CRON=1.
     if (process.env.NEXUS_ENABLE_AMAZON_FINANCIAL_CRON === '1') {
       startAmazonFinancialSyncCron();
+    }
+
+    // eBay financial events — daily 03:30 UTC, pulls yesterday's
+    // Sell Finances transactions → FinancialTransaction rows.
+    // Gated behind NEXUS_ENABLE_EBAY_FINANCIAL_CRON=1.
+    if (process.env.NEXUS_ENABLE_EBAY_FINANCIAL_CRON === '1') {
+      startEbayFinancialSyncCron();
     }
 
     // FBA inventory polling — every 15 min, full SP-API
