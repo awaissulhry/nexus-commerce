@@ -4733,5 +4733,17 @@
   "automation.historyBtn": "History",
   "automation.fireNowAria": "Run now (manual fire)",
   "automation.firedToast": "Ran \"{name}\" — status: {status}",
-  "automation.fireError": "Couldn't fire the rule — try again"
+  "automation.fireError": "Couldn't fire the rule — try again",
+  "templates.title": "Image templates",
+  "templates.description": "Cloudinary composition recipes — size, crop, overlays. Apply against an asset URL to preview the rendered output.",
+  "templates.previewLabel": "Preview against your own asset",
+  "templates.previewPlaceholder": "Paste a Cloudinary image URL — leave blank to use the demo sample…",
+  "templates.previewHint": "Cloudinary URLs only. Templates render via on-the-fly transformations + don't store an extra copy.",
+  "templates.aiDeferredTitle": "AI-generated templates arrive with MC.4",
+  "templates.aiDeferredBody": "Today's templates are deterministic Cloudinary recipes. AI auto-generation (lifestyle scene synthesis, variant color swap) ships when MC.4 lands per docs/MC-AI-DEFERRED.md.",
+  "templates.recipeCopied": "Cloudinary recipe copied to clipboard",
+  "templates.copyFailed": "Couldn't copy — clipboard blocked",
+  "templates.copyRecipeAria": "Copy Cloudinary recipe",
+  "templates.openExternal": "Open rendered preview",
+  "templates.urlNotCloudinary": "Preview needs a Cloudinary URL"
 }

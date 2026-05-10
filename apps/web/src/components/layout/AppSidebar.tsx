@@ -38,6 +38,7 @@ import {
   BookOpen,
   Palette,
   Zap,
+  LayoutTemplate,
   ShoppingCart,
   Cable,
   Sun,
@@ -575,6 +576,12 @@ export default function AppSidebar() {
             icon={Zap}
             label="Automation"
             active={pathname.startsWith('/marketing/automation')}
+          />
+          <NavItem
+            href="/marketing/templates"
+            icon={LayoutTemplate}
+            label="Templates"
+            active={pathname.startsWith('/marketing/templates')}
           />
           <NavItem
             href="/marketing/reviews"

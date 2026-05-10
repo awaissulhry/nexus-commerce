@@ -4784,5 +4784,17 @@
   "automation.historyBtn": "Cronologia",
   "automation.fireNowAria": "Esegui ora (manuale)",
   "automation.firedToast": "Eseguita \"{name}\" — stato: {status}",
-  "automation.fireError": "Impossibile eseguire la regola — riprova"
+  "automation.fireError": "Impossibile eseguire la regola — riprova",
+  "templates.title": "Template immagini",
+  "templates.description": "Ricette di composizione Cloudinary — dimensione, crop, overlay. Applica a un URL asset per vedere l'output.",
+  "templates.previewLabel": "Anteprima su un tuo asset",
+  "templates.previewPlaceholder": "Incolla un URL immagine Cloudinary — lascia vuoto per usare il sample…",
+  "templates.previewHint": "Solo URL Cloudinary. I template renderizzano tramite trasformazioni on-the-fly + non memorizzano una copia extra.",
+  "templates.aiDeferredTitle": "I template AI arrivano con MC.4",
+  "templates.aiDeferredBody": "I template odierni sono ricette Cloudinary deterministiche. La generazione automatica AI (scene lifestyle, variazione colore) arriva con MC.4 secondo docs/MC-AI-DEFERRED.md.",
+  "templates.recipeCopied": "Ricetta Cloudinary copiata negli appunti",
+  "templates.copyFailed": "Impossibile copiare — appunti bloccati",
+  "templates.copyRecipeAria": "Copia ricetta Cloudinary",
+  "templates.openExternal": "Apri anteprima",
+  "templates.urlNotCloudinary": "L'anteprima richiede un URL Cloudinary"
 }
