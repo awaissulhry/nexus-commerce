@@ -43,6 +43,7 @@ import {
   type SharedRuleRow,
 } from './_lib/types'
 import PresetsModal from './_components/PresetsModal'
+import CronField from './_components/CronField'
 
 interface Props {
   rules: RuleRow[]
@@ -663,6 +664,17 @@ function FieldEditor({
       {field.required && <span className="ml-0.5 text-red-500">*</span>}
     </label>
   )
+  // MC.11.6 — special-case the `cron` field with the helper UI.
+  if (field.key === 'cron') {
+    return (
+      <CronField
+        value={(value as string) ?? ''}
+        onChange={(v) => onChange(v)}
+        label={field.label}
+        required={field.required}
+      />
+    )
+  }
   if (field.kind === 'text' || field.kind === 'asset_kind_select') {
     return (
       <div>

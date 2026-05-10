@@ -4813,5 +4813,7 @@
   "bulkTemplate.noCloudinaryUrls": "Nessun asset Cloudinary nella selezione",
   "bulkTemplate.downloadAll": "Scarica {n}",
   "bulkTemplate.downloadKicked": "Avviato il download di {n} file",
-  "bulkTemplate.allReady": "Tutti gli asset sono renderizzabili"
+  "bulkTemplate.allReady": "Tutti gli asset sono renderizzabili",
+  "cron.presetsBtn": "Preset",
+  "cron.nextRunsLabel": "Prossime 5 esecuzioni:"
 }

@@ -4762,5 +4762,7 @@
   "bulkTemplate.noCloudinaryUrls": "No Cloudinary-backed assets in selection — nothing to copy",
   "bulkTemplate.downloadAll": "Download {n}",
   "bulkTemplate.downloadKicked": "Started downloading {n} files",
-  "bulkTemplate.allReady": "All assets renderable"
+  "bulkTemplate.allReady": "All assets renderable",
+  "cron.presetsBtn": "Presets",
+  "cron.nextRunsLabel": "Next 5 runs:"
 }
