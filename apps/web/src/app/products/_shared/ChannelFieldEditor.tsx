@@ -155,6 +155,9 @@ export default function ChannelFieldEditor({
   const [manifest, setManifest] = useState<UnionManifest | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // When the API returns code='no_ebay_category' or 'no_product_type' we show
+  // a friendly nudge rather than a generic error block.
+  const [noCategorySet, setNoCategorySet] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [forceRefresh, setForceRefresh] = useState(false)
   const [showAllOptional, setShowAllOptional] = useState(false)
@@ -246,6 +249,7 @@ export default function ChannelFieldEditor({
     let cancelled = false
     setLoading(true)
     setError(null)
+    setNoCategorySet(false)
     const url = new URL(
       `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/schema`,
     )
@@ -256,6 +260,16 @@ export default function ChannelFieldEditor({
       .then(({ ok, status: httpStatus, json }) => {
         if (cancelled) return
         if (!ok) {
+          // 409 with code='no_ebay_category' or 'no_product_type' → friendly nudge,
+          // not a generic error. The setup card above already shows the picker.
+          if (
+            httpStatus === 409 &&
+            (json?.code === 'no_ebay_category' || json?.code === 'no_product_type')
+          ) {
+            setNoCategorySet(true)
+            setManifest(null)
+            return
+          }
           setError(json?.error ?? `HTTP ${httpStatus}`)
           setManifest(null)
           return
@@ -1074,6 +1088,12 @@ export default function ChannelFieldEditor({
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-6 py-12 text-center text-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading schema…
+        </div>
+      )}
+
+      {noCategorySet && !loading && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-4 py-6 text-center text-md text-slate-500 dark:text-slate-400">
+          Select a {channel} category in the <strong>Channel Setup</strong> card above to load the attribute fields.
         </div>
       )}
 

@@ -3175,10 +3175,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         : (listingProductType || product.productType || '')
 
       if (!productType) {
-        const msg = isEbay
-          ? 'No eBay category set for this listing. Use the product type picker in the Channel Setup card to select an eBay category for this marketplace.'
-          : 'No product type set on the master product. Pick a product type before configuring channel attributes.'
-        return reply.code(409).send({ error: msg, code: 'no_ebay_category' })
+        const [msg, code] = isEbay
+          ? ['No eBay category set for this listing.', 'no_ebay_category']
+          : ['No product type set. Pick one in the Channel Setup above.', 'no_product_type']
+        return reply.code(409).send({ error: msg, code })
       }
 
       // Seed baseAttributes from the existing listing so the editor
