@@ -1227,6 +1227,107 @@ export class AmazonService {
   }
 
   /**
+   * Detect the real Amazon product type and variation theme for a SKU by
+   * calling getListingsItem. Used by the "Detect from Amazon" button in the
+   * channel listing editor so sellers don't have to guess the type — they
+   * just look up one existing live SKU and Nexus pre-fills both fields.
+   *
+   * Returns null for each field that isn't present in the API response.
+   */
+  async detectProductTypeFromSku(
+    sku: string,
+    marketplaceId: string,
+  ): Promise<{
+    productType: string | null
+    variationTheme: string | null
+    asin: string | null
+    title: string | null
+  }> {
+    const sellerId =
+      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    if (!sellerId) {
+      throw new Error(
+        'AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set.',
+      )
+    }
+    const sp = await this.getClient()
+    const res: any = await sp.callAPI({
+      operation: 'getListingsItem',
+      endpoint: 'listingsItems',
+      path: { sellerId, sku },
+      query: {
+        marketplaceIds: [marketplaceId],
+        includedData: ['summaries', 'attributes', 'relationships'],
+      },
+    })
+
+    const summary =
+      Array.isArray(res?.summaries) && res.summaries.length > 0
+        ? res.summaries[0]
+        : null
+
+    // Amazon productType is on summaries[0].productType
+    const productType =
+      typeof summary?.productType === 'string' ? summary.productType : null
+
+    // Variation theme is in attributes.variation_theme[0].name
+    const vtArr = res?.attributes?.variation_theme
+    const variationTheme =
+      Array.isArray(vtArr) && vtArr.length > 0 && typeof vtArr[0]?.name === 'string'
+        ? vtArr[0].name
+        : null
+
+    return {
+      productType,
+      variationTheme,
+      asin: typeof res?.asin === 'string' ? res.asin : null,
+      title: typeof summary?.itemName === 'string' ? summary.itemName : null,
+    }
+  }
+
+  /**
+   * Same detection via getCatalogItem for when we have an ASIN but no SKU
+   * (e.g. the user enters a reference ASIN from a competitor or a sibling
+   * listing). Returns productType from summaries[0].productTypes[0].productTypeId.
+   */
+  async detectProductTypeFromAsin(
+    asin: string,
+    marketplaceId: string,
+  ): Promise<{
+    productType: string | null
+    title: string | null
+  }> {
+    const sp = await this.getClient()
+    const res: any = await (sp as any).callAPI({
+      operation: 'getCatalogItem',
+      endpoint: 'catalogItems',
+      version: '2022-04-01',
+      path: { asin },
+      query: {
+        marketplaceIds: [marketplaceId],
+        includedData: ['summaries'],
+      },
+    })
+
+    const summary =
+      Array.isArray(res?.summaries) && res.summaries.length > 0
+        ? res.summaries[0]
+        : null
+
+    // v2022 shape: summaries[0].productTypes[0].productTypeId
+    const productTypes = summary?.productTypes
+    const productType =
+      Array.isArray(productTypes) && productTypes.length > 0
+        ? (productTypes[0].productTypeId ?? productTypes[0].productType ?? null)
+        : null
+
+    return {
+      productType: typeof productType === 'string' ? productType : null,
+      title: typeof summary?.itemName === 'string' ? summary.itemName : null,
+    }
+  }
+
+  /**
    * Fallback catalog fetch using the Listings Items API (getListingsItem
    * per SKU) for marketplaces where GET_MERCHANT_LISTINGS_ALL_DATA report
    * is unavailable (e.g. FR/ES/UK on Pan-EU FBA accounts where the seller

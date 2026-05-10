@@ -1,5 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { AmazonService } from '../services/marketplaces/amazon.service.js'
+import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+
+const amazonService = new AmazonService()
 
 const MARKETPLACES = [
   // Amazon EU
@@ -607,6 +611,76 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       return listing
+    }
+  )
+
+  // GET /api/products/:id/listings/AMAZON/:marketplace/detect-type
+  //
+  // Calls getListingsItem on the product's master SKU (or a user-supplied
+  // reference SKU) and returns the real Amazon productType + variationTheme.
+  // Also accepts ?asin= to look up via getCatalogItem instead.
+  //
+  // This powers the "Detect from Amazon" button in the channel listing editor
+  // so the operator doesn't have to guess the product type — they pull it from
+  // an existing live listing.
+  fastify.get<{
+    Params: { id: string; channel: string; marketplace: string }
+    Querystring: { sku?: string; asin?: string }
+  }>(
+    '/products/:id/listings/:channel/:marketplace/detect-type',
+    async (request, reply) => {
+      const { id, channel, marketplace } = request.params
+      const { sku: qSku, asin: qAsin } = request.query
+
+      if (channel.toUpperCase() !== 'AMAZON') {
+        return reply.code(400).send({ error: 'detect-type is only supported for AMAZON' })
+      }
+
+      if (!amazonService.isConfigured()) {
+        return reply.code(503).send({ error: 'Amazon SP-API not configured' })
+      }
+
+      const mpId = amazonMarketplaceId(marketplace)
+
+      // ASIN path — user explicitly provided one (e.g. a reference/sibling)
+      if (qAsin) {
+        try {
+          const result = await amazonService.detectProductTypeFromAsin(qAsin, mpId)
+          return reply.send({ ...result, source: 'catalog_api', asin: qAsin })
+        } catch (err: any) {
+          return reply.code(500).send({ error: err?.message ?? String(err) })
+        }
+      }
+
+      // SKU path — use provided SKU or fall back to master product SKU
+      let sku = qSku
+      if (!sku) {
+        const product = await prisma.product.findUnique({ where: { id }, select: { sku: true } })
+        if (!product?.sku) return reply.code(404).send({ error: 'Product not found or has no SKU' })
+        sku = product.sku
+      }
+
+      try {
+        const result = await amazonService.detectProductTypeFromSku(sku, mpId)
+        return reply.send({ ...result, source: 'listings_api', sku })
+      } catch (err: any) {
+        // If the master SKU isn't listed on this marketplace, try finding a
+        // variation SKU that is (first child variation of this product)
+        try {
+          const firstVariation = await prisma.productVariation.findFirst({
+            where: { productId: id },
+            select: { sku: true },
+            orderBy: { createdAt: 'asc' },
+          })
+          if (firstVariation?.sku && firstVariation.sku !== sku) {
+            const result = await amazonService.detectProductTypeFromSku(firstVariation.sku, mpId)
+            return reply.send({ ...result, source: 'listings_api', sku: firstVariation.sku })
+          }
+        } catch {
+          // ignore inner error, return original
+        }
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
     }
   )
 }

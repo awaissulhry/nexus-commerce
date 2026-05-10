@@ -1087,6 +1087,7 @@ export default function ChannelFieldEditor({
 
       {/* Q.5 — Listing setup: per-channel productType + variation theme */}
       <ListingSetupCard
+        productId={productId}
         productType={setupValues.productType}
         variationTheme={setupValues.variationTheme}
         masterProductType={(product?.productType as string | undefined) ?? ''}
@@ -1431,6 +1432,7 @@ function GtinStatusBanner({
 }
 
 function ListingSetupCard({
+  productId,
   productType,
   variationTheme,
   masterProductType,
@@ -1438,6 +1440,7 @@ function ListingSetupCard({
   marketplace,
   onChange,
 }: {
+  productId: string
   productType: string
   variationTheme: string
   masterProductType: string
@@ -1448,18 +1451,96 @@ function ListingSetupCard({
   const inheriting =
     productType === '' ||
     (productType === masterProductType && masterProductType !== '')
-  // X.4 — Picker is Amazon-only today; for other channels keep the
-  // free-text fallback. Cast through the picker's union so non-Amazon
-  // channels render the manual-entry path it ships with.
+
   const pickerChannel = channel.toUpperCase() as
     | 'AMAZON'
     | 'EBAY'
     | 'SHOPIFY'
     | 'WOOCOMMERCE'
     | 'ETSY'
+
+  const isAmazon = pickerChannel === 'AMAZON'
+  const effectiveType = productType || masterProductType
+
+  // Live variation themes from the Amazon schema for this (marketplace, productType)
+  const [schemaThemes, setSchemaThemes] = useState<string[]>([])
+  const [themesLoading, setThemesLoading] = useState(false)
+
+  useEffect(() => {
+    if (!isAmazon || !effectiveType) {
+      setSchemaThemes([])
+      return
+    }
+    let cancelled = false
+    setThemesLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/categories/schema?channel=AMAZON&marketplace=${marketplace}&productType=${encodeURIComponent(effectiveType)}&lite=1`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return
+        const themes: string[] =
+          Array.isArray(data?.variationThemes?.themes)
+            ? data.variationThemes.themes
+            : []
+        setSchemaThemes(themes)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setThemesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isAmazon, effectiveType, marketplace])
+
+  // "Detect from Amazon" — fetches the real productType + variationTheme
+  // from a live listing via getListingsItem / getCatalogItem
+  const [detecting, setDetecting] = useState(false)
+  const [detectMsg, setDetectMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [refAsin, setRefAsin] = useState('')
+  const [showAsinInput, setShowAsinInput] = useState(false)
+
+  async function detect(asin?: string) {
+    setDetecting(true)
+    setDetectMsg(null)
+    try {
+      const url = new URL(
+        `${getBackendUrl()}/api/products/${productId}/listings/${channel}/${marketplace}/detect-type`,
+      )
+      if (asin) url.searchParams.set('asin', asin)
+      const res = await fetch(url.toString())
+      const json = await res.json()
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+
+      let changed = false
+      if (json.productType) {
+        onChange('productType', json.productType)
+        changed = true
+      }
+      if (json.variationTheme) {
+        onChange('variationTheme', json.variationTheme)
+        changed = true
+      }
+      if (!changed) {
+        setDetectMsg({ kind: 'error', text: 'Amazon returned no productType for this listing. It may not be live yet.' })
+      } else {
+        const parts: string[] = []
+        if (json.productType) parts.push(`type → ${json.productType}`)
+        if (json.variationTheme) parts.push(`theme → ${json.variationTheme}`)
+        setDetectMsg({ kind: 'success', text: `Detected: ${parts.join(', ')} (source: ${json.source})` })
+      }
+    } catch (e) {
+      setDetectMsg({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setDetecting(false)
+    }
+  }
+
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3 space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+        {/* Product type */}
         <div className="space-y-1">
           <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {channel} product type
@@ -1477,27 +1558,111 @@ function ListingSetupCard({
           />
           <p className="text-xs text-slate-400 dark:text-slate-500">
             {inheriting
-              ? 'Using the master product’s product type. Override here if this listing should map to a different category.'
-              : 'Per-listing override active. Schema below reflects this product type.'}
+              ? 'Using the master product type. Override here if this channel listing maps to a different Amazon category.'
+              : 'Per-listing override active — schema fields reflect this type.'}
           </p>
         </div>
+
+        {/* Variation theme */}
         <div className="space-y-1">
-          <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
             Variation theme
+            {themesLoading && <span className="text-slate-300 dark:text-slate-600 text-xs">(loading…)</span>}
           </label>
-          <input
-            type="text"
-            value={variationTheme}
-            onChange={(e) => onChange('variationTheme', e.target.value)}
-            placeholder="e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME"
-            className="w-full h-8 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
+
+          {isAmazon && schemaThemes.length > 0 ? (
+            <select
+              value={variationTheme}
+              onChange={(e) => onChange('variationTheme', e.target.value)}
+              className="w-full h-8 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            >
+              <option value="">— none / single variant —</option>
+              {schemaThemes.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={variationTheme}
+              onChange={(e) => onChange('variationTheme', e.target.value)}
+              placeholder={
+                isAmazon && effectiveType
+                  ? 'Loading from schema…'
+                  : 'e.g. SIZE, COLOR, SIZE_NAME/COLOR_NAME'
+              }
+              className="w-full h-8 px-2 text-md font-mono border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            />
+          )}
+
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            Defines how this listing’s variant axes are reported to the
-            channel. Leave empty for non-variant listings.
+            {isAmazon && schemaThemes.length > 0
+              ? `${schemaThemes.length} theme${schemaThemes.length !== 1 ? 's' : ''} supported by ${effectiveType} on Amazon ${marketplace}.`
+              : 'Defines how variant axes are reported to the channel. Leave empty for single-variation listings.'}
           </p>
         </div>
       </div>
+
+      {/* Detect from Amazon */}
+      {isAmazon && (
+        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => detect()}
+              disabled={detecting}
+              className="text-xs px-2.5 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-50 transition-colors"
+            >
+              {detecting ? 'Detecting…' : '⟳ Detect from my live listing'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAsinInput((s) => !s)}
+              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
+            >
+              {showAsinInput ? 'Hide' : 'Or enter a reference ASIN'}
+            </button>
+          </div>
+
+          {showAsinInput && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={refAsin}
+                onChange={(e) => setRefAsin(e.target.value.trim())}
+                placeholder="B0... reference ASIN"
+                className="flex-1 h-7 px-2 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                disabled={!refAsin || detecting}
+                onClick={() => detect(refAsin)}
+                className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                Detect
+              </button>
+            </div>
+          )}
+
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            Looks up your live listing on Amazon {marketplace} via SP-API and fills the product type and variation theme automatically.
+            If the master SKU isn't listed there yet, enter any ASIN from the same category.
+          </p>
+
+          {detectMsg && (
+            <div
+              className={cn(
+                'text-xs px-3 py-2 rounded',
+                detectMsg.kind === 'success'
+                  ? 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300'
+                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300',
+              )}
+            >
+              {detectMsg.text}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
