@@ -12,6 +12,7 @@
 import type { FastifyInstance } from 'fastify'
 import {
   runAmazonReconciliation,
+  runEbayReconciliation,
   confirmReconRow,
   linkReconRow,
   setReconRowStatus,
@@ -26,13 +27,15 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
   fastify.post('/reconciliation/run', async (req, reply) => {
     const { channel = 'AMAZON', marketplace = 'IT' } = req.body as Record<string, string> ?? {}
 
-    if (channel !== 'AMAZON') {
-      return reply.code(400).send({ error: 'Only AMAZON channel is supported in this phase' })
+    if (channel !== 'AMAZON' && channel !== 'EBAY') {
+      return reply.code(400).send({ error: 'channel must be AMAZON or EBAY' })
     }
 
     try {
       logger.info('[recon] Manual run triggered', { channel, marketplace })
-      const summary = await runAmazonReconciliation(marketplace)
+      const summary = channel === 'EBAY'
+        ? await runEbayReconciliation(marketplace)
+        : await runAmazonReconciliation(marketplace)
       return reply.code(200).send({ ok: true, summary })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

@@ -63,6 +63,7 @@ interface Props {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+const CHANNEL_OPTIONS = ['AMAZON', 'EBAY']
 const MARKETPLACE_OPTIONS = ['IT', 'DE', 'FR', 'ES', 'UK']
 const STATUS_OPTIONS = ['PENDING', 'CONFIRMED', 'CONFLICT', 'IGNORE', 'CREATE_NEW']
 
@@ -107,7 +108,7 @@ export default function ReconciliationClient({
 }: Props) {
   const backend = getBackendUrl()
 
-  const [channel] = useState(initialChannel)
+  const [channel, setChannel] = useState(initialChannel)
   const [marketplace, setMarketplace] = useState(initialMarketplace)
   const [statusFilter, setStatusFilter] = useState('PENDING')
   const [stats, setStats] = useState<ReconStats | null>(initialStats)
@@ -261,8 +262,20 @@ export default function ReconciliationClient({
       </div>
 
       <div className="px-6 py-4 max-w-screen-xl mx-auto">
-        {/* Marketplace selector */}
-        <div className="flex gap-2 mb-5">
+        {/* Channel + Marketplace selector */}
+        <div className="flex gap-4 mb-5">
+          <div className="flex gap-1">
+            {CHANNEL_OPTIONS.map(ch => (
+              <button
+                key={ch}
+                onClick={() => { setChannel(ch); setPage(1); startTransition(async () => { const [sr, ir] = await Promise.all([fetch(`${backend}/api/reconciliation/stats?channel=${ch}&marketplace=${marketplace}`, { cache: 'no-store' }).catch(() => null), fetch(`${backend}/api/reconciliation/items?channel=${ch}&marketplace=${marketplace}&status=${statusFilter}&page=1&pageSize=50`, { cache: 'no-store' }).catch(() => null)]); if (sr?.ok) setStats(await sr.json().catch(() => null)); if (ir?.ok) setItemPage(await ir.json().catch(() => null)) }) }}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${channel === ch ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1">
           {MARKETPLACE_OPTIONS.map(mp => (
             <button
               key={mp}
@@ -272,6 +285,7 @@ export default function ReconciliationClient({
               {mp}
             </button>
           ))}
+          </div>
         </div>
 
         {/* Stats strip */}

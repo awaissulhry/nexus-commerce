@@ -19,6 +19,7 @@
 
 import prisma from '../db.js'
 import { AmazonService } from './marketplaces/amazon.service.js'
+import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
@@ -437,4 +438,132 @@ export async function getReconStats(channel: string, marketplace: string) {
   }
 
   return { byStatus, matchMethods, total: Object.values(byStatus).reduce((a, b) => a + b, 0) }
+}
+
+// ── eBay Reconciliation ───────────────────────────────────────────────────
+
+interface EbayOffer {
+  offerId: string
+  sku: string
+  listingId?: string
+  status?: string
+  pricingSummary?: { price?: { value?: string; currency?: string } }
+  listingDescription?: string
+  [key: string]: unknown
+}
+
+async function fetchAllEbayOffers(accessToken: string, marketplaceId: string): Promise<EbayOffer[]> {
+  const base = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+  const all: EbayOffer[] = []
+  let offset = 0
+  const limit = 200
+
+  while (true) {
+    const res = await fetch(
+      `${base}/sell/inventory/v1/offer?marketplace_id=${marketplaceId}&limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+    )
+    if (!res.ok) {
+      const body = await res.text().catch(() => '(no body)')
+      throw new Error(`eBay GET /offer failed: ${res.status} ${body}`)
+    }
+    const data: any = await res.json()
+    const offers: EbayOffer[] = data.offers ?? []
+    all.push(...offers)
+    if (all.length >= (data.total ?? 0) || offers.length < limit) break
+    offset += limit
+  }
+
+  return all
+}
+
+const EBAY_MARKETPLACE_ID_MAP: Record<string, string> = {
+  IT: 'EBAY_IT',
+  DE: 'EBAY_DE',
+  FR: 'EBAY_FR',
+  ES: 'EBAY_ES',
+  UK: 'EBAY_GB',
+}
+
+export async function runEbayReconciliation(marketplace: string = 'IT'): Promise<ReconRunSummary> {
+  const t0 = Date.now()
+  const runId = `EBAY-${marketplace}-${Date.now()}`
+
+  // Find the active eBay connection
+  const connection = await prisma.channelConnection.findFirst({
+    where: { channelType: 'EBAY', isActive: true },
+    select: { id: true, displayName: true },
+  })
+  if (!connection) throw new Error('No active eBay ChannelConnection found')
+
+  const accessToken = await ebayAuthService.getValidToken(connection.id)
+  const ebayMarketplaceId = EBAY_MARKETPLACE_ID_MAP[marketplace] ?? `EBAY_${marketplace}`
+
+  logger.info('[recon/ebay] Fetching offers', { marketplace, ebayMarketplaceId, runId })
+  const offers = await fetchAllEbayOffers(accessToken, ebayMarketplaceId)
+  logger.info('[recon/ebay] Offers fetched', { count: offers.length, runId })
+
+  if (offers.length === 0) {
+    return { runId, channel: 'EBAY', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0 }
+  }
+
+  // Skip already-CONFIRMED rows
+  const existingConfirmed = await prisma.listingReconciliation.findMany({
+    where: { channel: 'EBAY', marketplace, reconciliationStatus: 'CONFIRMED' },
+    select: { externalSku: true },
+  })
+  const confirmedSkus = new Set(existingConfirmed.map(r => r.externalSku))
+  const toProcess = offers.filter(o => !confirmedSkus.has(o.sku))
+  const skipped = offers.length - toProcess.length
+
+  const skus = toProcess.map(o => o.sku)
+  const skuMap = await matchBySku(skus)
+
+  let matched = 0
+  let unmatched = 0
+
+  const ops = toProcess.map(offer => {
+    const match = resolveMatch(offer.sku, null, skuMap, new Map())
+    if (match.matchedProductId) matched++; else unmatched++
+
+    const price = offer.pricingSummary?.price?.value ? parseFloat(offer.pricingSummary.price.value) : null
+
+    return prisma.listingReconciliation.upsert({
+      where: { channel_marketplace_externalSku: { channel: 'EBAY', marketplace, externalSku: offer.sku } },
+      create: {
+        channel: 'EBAY',
+        marketplace,
+        externalSku: offer.sku,
+        externalListingId: offer.offerId,
+        title: offer.listingDescription?.slice(0, 200) ?? null,
+        channelPrice: price,
+        channelStatus: offer.status ?? null,
+        matchedProductId: match.matchedProductId,
+        matchedVariationId: match.matchedVariationId,
+        matchMethod: match.matchMethod,
+        matchConfidence: match.matchConfidence,
+        reconciliationStatus: 'PENDING',
+        runId,
+      },
+      update: {
+        externalListingId: offer.offerId,
+        channelPrice: price,
+        channelStatus: offer.status ?? null,
+        matchedProductId: match.matchedProductId,
+        matchedVariationId: match.matchedVariationId,
+        matchMethod: match.matchMethod,
+        matchConfidence: match.matchConfidence,
+        runId,
+      },
+    })
+  })
+
+  const BATCH = 50
+  for (let i = 0; i < ops.length; i += BATCH) {
+    await prisma.$transaction(ops.slice(i, i + BATCH))
+  }
+
+  const summary: ReconRunSummary = { runId, channel: 'EBAY', marketplace, totalDiscovered: offers.length, matched, unmatched, skipped, durationMs: Date.now() - t0 }
+  logger.info('[recon/ebay] Complete', summary)
+  return summary
 }

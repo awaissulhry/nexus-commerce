@@ -1,277 +1,175 @@
 /**
- * Phase 25: eBay Ingestion Engine
- * Imports eBay catalog and maps to SSOT database
- * Similar structure to amazon-import.service.ts
+ * eBay Inventory Import Service
+ *
+ * Pulls live inventory items from the eBay Inventory API and upserts them
+ * as Nexus Product records. Use this when eBay is the source of truth for
+ * a product — i.e. you have eBay listings but no Nexus product yet.
+ *
+ * For reconciling EXISTING Nexus products to eBay listings, use
+ * listing-reconciliation.service.ts (runEbayReconciliation).
+ *
+ * API used: GET /sell/inventory/v1/inventory_item (paginated, limit 200)
+ * Auth: user-level OAuth via EbayAuthService.getValidToken()
  */
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { ebayAuthService } from './ebay-auth.service.js'
 
-/**
- * Mock eBay API response structure
- * In production, this would come from actual eBay API calls
- */
-interface EbayProduct {
+const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+
+interface EbayInventoryItem {
   sku: string
-  title: string
-  price: number
-  productType: string
-  attributes: {
-    Condition?: string
-    Brand?: string
-    Manufacturer?: string
-    Color?: string
-    Material?: string
-    [key: string]: string | undefined
+  product?: {
+    title?: string
+    description?: string
+    aspects?: Record<string, string[]>
+    imageUrls?: string[]
+    ean?: string[]
+    upc?: string[]
+    mpn?: string
   }
-  bulletPoints?: string[]
+  availability?: {
+    shipToLocationAvailability?: { quantity?: number }
+  }
+  condition?: string
+  packageWeightAndSize?: {
+    weight?: { value?: number; unit?: string }
+    dimensions?: { length?: number; width?: number; height?: number; unit?: string }
+  }
 }
 
-/**
- * Reverse mapper: Converts eBay attribute names to our generic categoryAttributes
- * Maps eBay's specific field names back to our schema-agnostic format
- */
-function reverseMapEbayAttributes(
-  ebayAttributes: Record<string, string | undefined>,
-  productType: string
-): Record<string, any> {
-  const categoryAttributes: Record<string, any> = {}
+async function fetchAllInventoryItems(accessToken: string): Promise<EbayInventoryItem[]> {
+  const all: EbayInventoryItem[] = []
+  let offset = 0
+  const limit = 200
 
-  // Map eBay Condition → condition
-  if (ebayAttributes.Condition) {
-    categoryAttributes.condition = ebayAttributes.Condition
+  while (true) {
+    const res = await fetch(
+      `${EBAY_API_BASE}/sell/inventory/v1/inventory_item?limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+    )
+    if (!res.ok) {
+      const body = await res.text().catch(() => '(no body)')
+      throw new Error(`eBay GET /inventory_item failed: ${res.status} ${body}`)
+    }
+    const data: any = await res.json()
+    const items: EbayInventoryItem[] = data.inventoryItems ?? []
+    all.push(...items)
+    if (all.length >= (data.total ?? 0) || items.length < limit) break
+    offset += limit
   }
 
-  // Map eBay Brand → brand
-  if (ebayAttributes.Brand) {
-    categoryAttributes.brand = ebayAttributes.Brand
-  }
-
-  // Map eBay Color → color
-  if (ebayAttributes.Color) {
-    categoryAttributes.color = ebayAttributes.Color
-  }
-
-  // Map eBay Material → material
-  if (ebayAttributes.Material) {
-    categoryAttributes.material = ebayAttributes.Material
-  }
-
-  // Map eBay Manufacturer → manufacturer
-  if (ebayAttributes.Manufacturer) {
-    categoryAttributes.manufacturer = ebayAttributes.Manufacturer
-  }
-
-  return categoryAttributes
+  return all
 }
 
-/**
- * Mock eBay catalog data for demonstration
- * In production, this would be fetched from actual eBay API
- */
-function getMockEbayCatalog(): EbayProduct[] {
-  return [
-    {
-      sku: 'EBAY-RETRO-CAMERA-001',
-      title: 'Vintage Retro Film Camera - 35mm',
-      price: 79.99,
-      productType: 'ELECTRONICS',
-      attributes: {
-        Condition: 'Used',
-        Brand: 'Canon',
-        Manufacturer: 'Canon Inc.',
-        Color: 'Black',
-        Material: 'Metal and Glass',
-      },
-      bulletPoints: [
-        'Classic 35mm film camera',
-        'Fully functional',
-        'Includes original lens',
-        'Great for photography enthusiasts',
-        'Vintage condition',
-      ],
-    },
-    {
-      sku: 'EBAY-MOUNTAIN-BIKE-001',
-      title: 'Mountain Bike - 21 Speed All-Terrain',
-      price: 249.99,
-      productType: 'SPORTS',
-      attributes: {
-        Condition: 'New',
-        Brand: 'Trek',
-        Manufacturer: 'Trek Bicycle Corporation',
-        Color: 'Red',
-        Material: 'Aluminum Frame',
-      },
-      bulletPoints: [
-        '21-speed gear system',
-        'All-terrain tires',
-        'Aluminum frame',
-        'Front suspension',
-        'Perfect for trails and roads',
-      ],
-    },
-    {
-      sku: 'EBAY-GAMING-CHAIR-001',
-      title: 'Professional Gaming Chair - Ergonomic Design',
-      price: 199.99,
-      productType: 'FURNITURE',
-      attributes: {
-        Condition: 'New',
-        Brand: 'SecretLab',
-        Manufacturer: 'SecretLab Pte Ltd',
-        Color: 'Black',
-        Material: 'PU Leather and Steel',
-      },
-      bulletPoints: [
-        'Ergonomic design for long gaming sessions',
-        'Adjustable height and armrests',
-        'Premium PU leather',
-        'Steel frame construction',
-        'Lumbar support included',
-      ],
-    },
-  ]
+function extractAspect(aspects: Record<string, string[]> | undefined, keys: string[]): string | undefined {
+  if (!aspects) return undefined
+  for (const k of keys) {
+    const val = aspects[k]?.[0]
+    if (val) return val
+  }
+  return undefined
 }
 
-/**
- * Import eBay catalog and save as Master Products in SSOT database
- * Uses upsert to handle both new products and updates
- */
 export async function importEbayCatalog(): Promise<{
   created: number
   updated: number
   total: number
   products: any[]
 }> {
-  try {
-    logger.info('Starting eBay catalog import...')
-
-    // Get mock eBay catalog (in production, call actual eBay API)
-    const ebayProducts = getMockEbayCatalog()
-    logger.info(`Retrieved ${ebayProducts.length} products from eBay`)
-
-    const results: any[] = []
-    let created = 0
-    let updated = 0
-
-    // Process each eBay product
-    for (const ebayProduct of ebayProducts) {
-      try {
-        // Reverse map eBay attributes to our generic categoryAttributes
-        const categoryAttributes = reverseMapEbayAttributes(
-          ebayProduct.attributes,
-          ebayProduct.productType
-        )
-
-        // Upsert product: create if doesn't exist, update if it does
-        const product = await prisma.product.upsert({
-          where: { sku: ebayProduct.sku },
-          update: {
-            name: ebayProduct.title,
-            basePrice: ebayProduct.price,
-            productType: ebayProduct.productType,
-            categoryAttributes,
-            bulletPoints: ebayProduct.bulletPoints || [],
-            brand: ebayProduct.attributes.Brand,
-            manufacturer: ebayProduct.attributes.Manufacturer,
-            // Mark as master product from eBay
-            isMasterProduct: true,
-            validationStatus: 'VALID',
-            status: 'ACTIVE',
-            // Phase 20 SSOT fields
-            syncChannels: ['EBAY'],
-            validationErrors: [],
-            hasChannelOverrides: false,
-          },
-          create: {
-            sku: ebayProduct.sku,
-            name: ebayProduct.title,
-            basePrice: ebayProduct.price,
-            productType: ebayProduct.productType,
-            categoryAttributes,
-            bulletPoints: ebayProduct.bulletPoints || [],
-            brand: ebayProduct.attributes.Brand,
-            manufacturer: ebayProduct.attributes.Manufacturer,
-            // Mark as master product from eBay
-            isMasterProduct: true,
-            validationStatus: 'VALID',
-            status: 'ACTIVE',
-            // Phase 20 SSOT defaults
-            syncChannels: ['EBAY'],
-            validationErrors: [],
-            hasChannelOverrides: false,
-            totalStock: 0,
-            costPrice: 0,
-            minPrice: ebayProduct.price,
-            maxPrice: ebayProduct.price,
-          },
-        })
-
-        // Track if created or updated
-        const isNew = !results.find((r) => r.sku === ebayProduct.sku)
-        if (isNew) {
-          created++
-        } else {
-          updated++
-        }
-
-        results.push({
-          id: product.id,
-          sku: product.sku,
-          name: product.name,
-          basePrice: product.basePrice,
-          productType: product.productType,
-          categoryAttributes: product.categoryAttributes,
-        })
-
-        logger.info(`Imported product: ${ebayProduct.sku}`)
-      } catch (error: any) {
-        logger.error(`Failed to import product ${ebayProduct.sku}:`, error.message)
-      }
-    }
-
-    const total = created + updated
-    logger.info(
-      `eBay import complete: ${created} created, ${updated} updated, ${total} total`
-    )
-
-    return {
-      created,
-      updated,
-      total,
-      products: results,
-    }
-  } catch (error: any) {
-    logger.error('eBay catalog import failed:', error.message)
-    throw new Error(`eBay import failed: ${error.message}`)
+  // Get the active eBay connection
+  const connection = await prisma.channelConnection.findFirst({
+    where: { channelType: 'EBAY', isActive: true },
+    select: { id: true, displayName: true },
+  })
+  if (!connection) {
+    throw new Error('No active eBay ChannelConnection found. Complete eBay OAuth first.')
   }
+
+  const accessToken = await ebayAuthService.getValidToken(connection.id)
+  logger.info('[ebay-import] Fetching inventory items', { connection: connection.displayName })
+
+  const items = await fetchAllInventoryItems(accessToken)
+  logger.info('[ebay-import] Items fetched', { count: items.length })
+
+  const results: any[] = []
+  let created = 0
+  let updated = 0
+
+  for (const item of items) {
+    try {
+      const aspects = item.product?.aspects ?? {}
+      const title = item.product?.title ?? item.sku
+      const brand = extractAspect(aspects, ['Brand', 'Marke', 'Marca'])
+      const manufacturer = extractAspect(aspects, ['Manufacturer', 'Hersteller', 'Produttore'])
+      const material = extractAspect(aspects, ['Material', 'Materiale', 'Werkstoff'])
+      const color = extractAspect(aspects, ['Color', 'Colour', 'Colore', 'Farbe'])
+
+      const categoryAttributes: Record<string, string> = {}
+      if (material) categoryAttributes.material = material
+      if (color) categoryAttributes.color = color
+      if (extractAspect(aspects, ['Size', 'Größe', 'Taglia'])) {
+        categoryAttributes.apparel_size = extractAspect(aspects, ['Size', 'Größe', 'Taglia'])!
+      }
+
+      const weight = item.packageWeightAndSize?.weight
+      const dims = item.packageWeightAndSize?.dimensions
+      const ean = item.product?.ean?.[0] ?? undefined
+      const upc = item.product?.upc?.[0] ?? undefined
+
+      const existing = await prisma.product.findUnique({ where: { sku: item.sku }, select: { id: true } })
+
+      const data = {
+        name: title,
+        productType: 'APPAREL',
+        categoryAttributes: Object.keys(categoryAttributes).length > 0 ? categoryAttributes : undefined,
+        brand: brand ?? undefined,
+        manufacturer: manufacturer ?? undefined,
+        ean: ean ?? undefined,
+        upc: upc ?? undefined,
+        bulletPoints: [],
+        weightValue: weight?.value ? weight.value : undefined,
+        weightUnit: weight?.unit ?? undefined,
+        dimLength: dims?.length ?? undefined,
+        dimWidth: dims?.width ?? undefined,
+        dimHeight: dims?.height ?? undefined,
+        dimUnit: dims?.unit ?? undefined,
+      }
+
+      if (existing) {
+        await prisma.product.update({ where: { id: existing.id }, data })
+        updated++
+        results.push({ sku: item.sku, action: 'updated', id: existing.id })
+      } else {
+        const created_ = await prisma.product.create({
+          data: {
+            sku: item.sku,
+            name: title,
+            basePrice: 0,
+            ...data,
+          },
+        })
+        created++
+        results.push({ sku: item.sku, action: 'created', id: created_.id })
+      }
+    } catch (err: any) {
+      logger.error('[ebay-import] Failed to upsert product', { sku: item.sku, error: err.message })
+      results.push({ sku: item.sku, action: 'error', error: err.message })
+    }
+  }
+
+  logger.info('[ebay-import] Done', { created, updated, total: items.length })
+  return { created, updated, total: items.length, products: results }
 }
 
-/**
- * Get import statistics
- */
 export async function getEbayImportStats(): Promise<{
   totalProducts: number
   ebayProducts: number
 }> {
-  try {
-    const totalProducts = await prisma.product.count()
-    const ebayProducts = await prisma.product.count({
-      where: {
-        isMasterProduct: true,
-        syncChannels: {
-          has: 'EBAY',
-        },
-      },
-    })
-
-    return {
-      totalProducts,
-      ebayProducts,
-    }
-  } catch (error: any) {
-    logger.error('Failed to get eBay import stats:', error.message)
-    throw error
-  }
+  const [totalProducts, ebayProducts] = await Promise.all([
+    prisma.product.count(),
+    prisma.channelListing.count({ where: { channel: 'EBAY' } }),
+  ])
+  return { totalProducts, ebayProducts }
 }
