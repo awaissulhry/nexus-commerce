@@ -51,6 +51,61 @@ const VALID_ASSET_TYPES = new Set(['image', 'video', 'document', 'model3d'])
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── DigitalAsset ────────────────────────────────────────────
 
+  // MC.1.1 — DAM hub KPI overview. Single roundtrip for the
+  // /marketing/content header strip: total counts, type breakdown,
+  // storage usage, in-use vs orphaned, plus a parallel count of
+  // ProductImage rows so the operator sees the legacy + canonical
+  // gallery state in one number until the W4.7 migration cuts over.
+  // Returns shape consumed by ContentHubClient.
+  fastify.get('/assets/overview', async () => {
+    const [
+      totalAssets,
+      byTypeRaw,
+      sizeAgg,
+      inUseDistinct,
+      productImageCount,
+      videoCount,
+      missingAltImages,
+    ] = await Promise.all([
+      prisma.digitalAsset.count(),
+      prisma.digitalAsset.groupBy({
+        by: ['type'],
+        _count: { _all: true },
+      }),
+      prisma.digitalAsset.aggregate({
+        _sum: { sizeBytes: true },
+      }),
+      prisma.assetUsage.findMany({
+        select: { assetId: true },
+        distinct: ['assetId'],
+      }),
+      prisma.productImage.count(),
+      prisma.digitalAsset.count({ where: { type: 'video' } }),
+      prisma.productImage.count({
+        where: { OR: [{ alt: null }, { alt: '' }] },
+      }),
+    ])
+
+    const byType: Record<string, number> = {}
+    for (const row of byTypeRaw) byType[row.type] = row._count._all
+
+    const inUseCount = inUseDistinct.length
+    const orphanedCount = Math.max(totalAssets - inUseCount, 0)
+
+    return {
+      totalAssets,
+      productImageCount,
+      videoCount,
+      byType,
+      storageBytes: sizeAgg._sum.sizeBytes ?? 0,
+      inUseCount,
+      orphanedCount,
+      needsAttention: {
+        missingAltImages,
+      },
+    }
+  })
+
   fastify.get('/assets', async (request) => {
     const q = request.query as {
       type?: string
