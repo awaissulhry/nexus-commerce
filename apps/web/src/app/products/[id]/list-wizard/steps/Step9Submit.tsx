@@ -505,6 +505,14 @@ export default function Step9Submit({
             Submit listings
           </Button>
 
+          {/* SP.4 — Schedule for later. Sits ABOVE Save-as-template
+              so the operator's eye lands on it after Submit. Only
+              renders pre-submit (this entire block is gated by
+              !submissions). */}
+          <div className="mt-3">
+            <ScheduleForLaterButton wizardId={wizardId} />
+          </div>
+
           {/* WT.4 — Save current wizard configuration as a template
               for re-use. Sits below Submit so it's discoverable
               without competing with the primary action. Only
@@ -1162,6 +1170,208 @@ function SaveAsTemplateButton({ wizardId }: { wizardId: string }) {
         (SKU strategy, variations, pricing). Identifiers / content /
         images stay product-specific and aren&apos;t saved.
       </p>
+    </div>
+  )
+}
+
+// SP.4 — schedule the publish for a future date / time. Operator
+// expands the inline form, picks a datetime, hits Schedule. Cron
+// fires the orchestration when scheduledFor <= now (default-OFF;
+// requires NEXUS_ENABLE_SCHEDULED_WIZARD_PUBLISH=1 on the API
+// host — operators on a fresh deploy get a clear "scheduled but
+// cron disabled" hint via SP.5 follow-up). PENDING schedules
+// list below the form with per-row Cancel.
+interface SchedulePublishRow {
+  id: string
+  scheduledFor: string
+  status: string
+  firedAt: string | null
+  cancelledAt: string | null
+  fireError: string | null
+}
+function ScheduleForLaterButton({ wizardId }: { wizardId: string }) {
+  const [open, setOpen] = useState(false)
+  const [scheduledFor, setScheduledFor] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<SchedulePublishRow[]>([])
+  const [refreshing, setRefreshing] = useState(false)
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}/scheduled-publishes`,
+      )
+      if (res.ok) {
+        const json = await res.json()
+        setPending(Array.isArray(json?.rows) ? json.rows : [])
+      }
+    } finally {
+      setRefreshing(false)
+    }
+  }, [wizardId])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const reset = useCallback(() => {
+    setScheduledFor('')
+    setError(null)
+    setOpen(false)
+  }, [])
+
+  const onSchedule = useCallback(async () => {
+    if (scheduledFor.trim().length === 0) {
+      setError('Pick a date / time first.')
+      return
+    }
+    const parsed = new Date(scheduledFor)
+    if (!Number.isFinite(parsed.getTime())) {
+      setError('Invalid date / time.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/listing-wizard/${wizardId}/schedule-publish`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduledFor: parsed.toISOString() }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json?.error ?? `HTTP ${res.status}`)
+      }
+      reset()
+      void refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [scheduledFor, wizardId, refresh, reset])
+
+  const onCancel = useCallback(
+    async (row: SchedulePublishRow) => {
+      try {
+        const res = await fetch(
+          `${getBackendUrl()}/api/listing-wizard/scheduled-publishes/${row.id}`,
+          { method: 'DELETE' },
+        )
+        if (res.ok) {
+          void refresh()
+        }
+      } catch {
+        // suppressed; refresh still runs to surface server state
+        void refresh()
+      }
+    },
+    [refresh],
+  )
+
+  // Compute a sensible min for the datetime input — 5 minutes from
+  // now to absorb clock skew + give the operator a chance to
+  // double-click.
+  const datetimeMin = (() => {
+    const d = new Date(Date.now() + 5 * 60 * 1000)
+    // datetime-local needs YYYY-MM-DDTHH:mm in local TZ
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  })()
+
+  const pendingRows = pending.filter((p) => p.status === 'PENDING')
+
+  return (
+    <div className="text-left">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+        >
+          Schedule for later…
+        </button>
+      ) : (
+        <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/40 px-3 py-3 space-y-2">
+          <div className="text-md font-medium text-slate-900 dark:text-slate-100">
+            Schedule publish
+          </div>
+          <input
+            type="datetime-local"
+            value={scheduledFor}
+            min={datetimeMin}
+            onChange={(e) => setScheduledFor(e.target.value)}
+            className="w-full h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+            autoFocus
+          />
+          {error && (
+            <div className="text-sm text-rose-700 dark:text-rose-300 inline-flex items-start gap-1">
+              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => void onSchedule()}
+              disabled={busy || scheduledFor.trim().length === 0}
+            >
+              {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              Schedule
+            </Button>
+            <button
+              type="button"
+              onClick={reset}
+              disabled={busy}
+              className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            The cron picks PENDING rows once a minute and fires the
+            same publish flow as Submit. Cancel a pending schedule
+            below before it fires.
+          </p>
+        </div>
+      )}
+
+      {pendingRows.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {pendingRows.map((row) => (
+            <li
+              key={row.id}
+              className="text-sm flex items-center justify-between gap-3 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
+            >
+              <span className="text-slate-700 dark:text-slate-300">
+                Pending —{' '}
+                <span className="font-mono">
+                  {new Date(row.scheduledFor).toLocaleString()}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => void onCancel(row)}
+                className="text-rose-600 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 text-xs"
+              >
+                Cancel
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {refreshing && pendingRows.length === 0 && open === false && (
+        <span className="ml-2 text-xs text-slate-400 dark:text-slate-500 inline-flex items-center gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          checking…
+        </span>
+      )}
     </div>
   )
 }
