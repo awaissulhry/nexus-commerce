@@ -65,6 +65,95 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/categories/browse-path?channel=AMAZON&marketplace=IT&productType=OUTERWEAR
+  //
+  // Returns the Amazon category breadcrumb (categoryPath) and browse node IDs
+  // for a given (channel, marketplace, productType) combination.
+  //
+  // Strategy (in order):
+  //   1. Return a cached path if one was stored on an existing ChannelListing
+  //      that belongs to this (channel, marketplace) — fast, no SP-API call.
+  //   2. Find any ASIN already stored in a ChannelListing or ListingReconciliation
+  //      for this (channel, marketplace) and run searchCatalogItems on it to
+  //      get classifications → category path. Cache the result back on the row.
+  //   3. If no ASIN is available return null (the UI will ask the user to detect).
+  //
+  // Response: { categoryPath: string | null, browseNodes: number[] | null }
+  fastify.get('/categories/browse-path', async (request, reply) => {
+    const q = request.query as {
+      channel?: string
+      marketplace?: string
+      productType?: string
+    }
+    if (!q.channel || !q.marketplace || !q.productType) {
+      return reply.code(400).send({ error: 'channel, marketplace and productType are required' })
+    }
+
+    const channel = q.channel.toUpperCase()
+    const marketplace = q.marketplace.toUpperCase()
+    const productType = q.productType.toUpperCase()
+
+    if (channel !== 'AMAZON') {
+      return reply.send({ categoryPath: null, browseNodes: null })
+    }
+
+    // 1 — Check ChannelListing for a cached detectedCategoryPath
+    const listingWithPath = await prisma.channelListing.findFirst({
+      where: {
+        channel,
+        marketplace,
+        platformAttributes: { path: ['detectedCategoryPath'], not: null },
+      },
+      select: { platformAttributes: true },
+    }).catch(() => null)
+
+    if (listingWithPath?.platformAttributes) {
+      const pa = listingWithPath.platformAttributes as Record<string, any>
+      if (pa.detectedCategoryPath) {
+        const nodes =
+          Array.isArray((pa.attributes as any)?.recommended_browse_nodes)
+            ? (pa.attributes as any).recommended_browse_nodes as number[]
+            : null
+        return reply.send({ categoryPath: pa.detectedCategoryPath, browseNodes: nodes })
+      }
+    }
+
+    // 2 — Find any ASIN for this (channel, marketplace) to look up classifications
+    if (!amazon.isConfigured()) {
+      return reply.send({ categoryPath: null, browseNodes: null })
+    }
+
+    // First try ChannelListings with a stored externalListingId (ASIN)
+    const listingWithAsin = await prisma.channelListing.findFirst({
+      where: { channel, marketplace, externalListingId: { not: null } },
+      select: { externalListingId: true },
+    }).catch(() => null)
+
+    const asin = listingWithAsin?.externalListingId ??
+      // Fall back to reconciliation rows
+      (await prisma.listingReconciliation.findFirst({
+        where: { channel, marketplace, externalListingId: { not: null } },
+        select: { externalListingId: true },
+      }).catch(() => null))?.externalListingId
+
+    if (!asin) {
+      return reply.send({ categoryPath: null, browseNodes: null })
+    }
+
+    try {
+      const { amazonMarketplaceId } = await import('../services/categories/marketplace-ids.js')
+      const mpId = amazonMarketplaceId(marketplace)
+      const result = await amazon.detectProductTypeFromAsin(asin, mpId)
+      return reply.send({
+        categoryPath: result.categoryPath,
+        browseNodes: result.browseNodes,
+      })
+    } catch (err: any) {
+      fastify.log.warn({ err }, '[categories/browse-path] detection failed')
+      return reply.send({ categoryPath: null, browseNodes: null })
+    }
+  })
+
   // GET /api/categories/changes?channel=AMAZON&marketplace=IT&productType=OUTERWEAR&since=ISO
   //
   // Surfaces the SchemaChange log for a given (channel, marketplace,

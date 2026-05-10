@@ -1485,7 +1485,38 @@ function ListingSetupCard({
     (initialBrowseNodes ?? []).join(', '),
   )
   const [categoryPath, setCategoryPath] = useState<string | null>(initialCategoryPath ?? null)
+  const [categoryPathLoading, setCategoryPathLoading] = useState(false)
   const [savingNodes, setSavingNodes] = useState(false)
+
+  // Auto-fetch the category breadcrumb whenever the effective product type changes.
+  // Uses GET /api/categories/browse-path which finds a known ASIN from the DB
+  // and looks up its classifications — no user action required.
+  useEffect(() => {
+    if (!isAmazon || !effectiveType) return
+    // Don't re-fetch if we already have a path for this type (from detection or prior load)
+    if (categoryPath) return
+    let cancelled = false
+    setCategoryPathLoading(true)
+    fetch(
+      `${getBackendUrl()}/api/categories/browse-path?channel=AMAZON&marketplace=${marketplace}&productType=${encodeURIComponent(effectiveType)}`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return
+        if (data?.categoryPath) {
+          setCategoryPath(data.categoryPath)
+          if (Array.isArray(data.browseNodes) && data.browseNodes.length > 0) {
+            setBrowseNodes(data.browseNodes)
+            setBrowseNodesInput(data.browseNodes.join(', '))
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCategoryPathLoading(false) })
+    return () => { cancelled = true }
+    // Only re-run when the effective type or marketplace changes, not on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAmazon, effectiveType, marketplace])
 
   async function saveBrowseNodes(nodes: number[], path: string | null) {
     setSavingNodes(true)
@@ -1599,18 +1630,45 @@ function ListingSetupCard({
             channel={pickerChannel}
             marketplace={marketplace}
             value={productType}
-            onChange={(v) => onChange('productType', v)}
+            onChange={(v) => {
+              onChange('productType', v)
+              // Clear the cached path — it may not match the new type.
+              // The useEffect will refetch if we have a live ASIN in the DB.
+              setCategoryPath(null)
+              setBrowseNodes([])
+              setBrowseNodesInput('')
+            }}
             placeholder={
               masterProductType
                 ? `Inherits master: ${masterProductType}`
                 : `Pick a ${channel} product type`
             }
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            {inheriting
-              ? 'Using the master product type. Override here if this channel listing maps to a different Amazon category.'
-              : 'Per-listing override active — schema fields reflect this type.'}
-          </p>
+          {/* Category navigation path — auto-fetched or from detection */}
+          {isAmazon && (
+            <div className="mt-1 min-h-[1.25rem]">
+              {categoryPathLoading ? (
+                <p className="text-xs text-slate-400 dark:text-slate-500 italic">Fetching category…</p>
+              ) : categoryPath ? (
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 font-mono leading-relaxed">
+                  {categoryPath}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {inheriting
+                    ? 'Using master product type — category path shown after detection.'
+                    : 'Category path shown after detection below.'}
+                </p>
+              )}
+            </div>
+          )}
+          {!isAmazon && (
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              {inheriting
+                ? 'Using the master product type. Override here if this channel listing maps to a different category.'
+                : 'Per-listing override active — schema fields reflect this type.'}
+            </p>
+          )}
         </div>
 
         {/* Variation theme */}
@@ -1659,11 +1717,6 @@ function ListingSetupCard({
           <label className="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Browse nodes
           </label>
-          {categoryPath && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate" title={categoryPath}>
-              📂 {categoryPath}
-            </p>
-          )}
           <div className="flex items-center gap-2">
             <input
               type="text"
