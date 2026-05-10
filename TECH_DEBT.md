@@ -497,16 +497,16 @@ The strict mode is intended for a future prepush hook addition — not wired in 
 
 ---
 
-## 39. 🟢 Per-seller primary marketplace setting
+## 39. ✅ Per-seller primary marketplace setting — resolved 2026-05-10 (PSM.1+PSM.2)
 
-**Symptom:** Two places in the multi-marketplace work hardcode `'IT'` as the primary marketplace because Xavia is the only live tenant:
+**Resolution:** New `primaryMarketplace` nullable column on `AccountSettings`. Free-form ISO country code (Amazon supports far more marketplaces than any pre-canned list). UI on `/settings/account` next to Currency; empty collapses to null.
 
-1. The E.9 backfill migration (`20260505_e9_..._backfill_fix`) prefers `AMAZON:IT` over alphabetic-MIN when correcting VCL marketplace tagging.
-2. (Implicit) The audit-fix #5 follow-up logic only knows IT is primary.
+Consumers wired:
+- **List-wizard Step 1** ✅ — violet hint banner above the channel grid surfaces "Default-select Amazon:<primary>?" when the operator hasn't picked anything yet AND Amazon is connected with that marketplace available. One-click Apply adds AMAZON:<primary>; X dismisses for the session.
 
-This works for Xavia. The minute Nexus has a second seller whose primary is DE / US / UK, the IT preference is wrong for them — both at backfill time and anywhere else "primary marketplace" surfaces (defaults for new wizards, fallback in resolvers, etc.).
+Read endpoint: `GET /api/settings/primary-marketplace` for places that don't already have AccountSettings on hand.
 
-**Surfaced at:** E.9 audit fixes, 2026-05-05.
+The two original hardcoded-IT consumers (E.9 backfill, audit-fix #5) are not retroactively rewired — they remain Xavia-correct for the live tenant. New multi-tenant consumers should read the column instead of hardcoding.
 
 **Workaround:** Hardcoded to IT. For a Xavia-only deployment this is correct; ignore until a second tenant lands.
 
