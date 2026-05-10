@@ -5,9 +5,14 @@ import {
   CategorySchemaService,
   type SupportedChannel,
 } from '../services/categories/schema-sync.service.js'
+import { ProductTypesService } from '../services/listing-wizard/product-types.service.js'
+import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 
 const amazon = new AmazonService()
 const service = new CategorySchemaService(prisma as any, amazon)
+// ProductTypesService uses searchDefinitionsProductTypes which is an allowed SP-API operation.
+// We instantiate it here to reuse the 24h in-memory cache across requests.
+const productTypesService = new ProductTypesService(prisma as any, amazon, service)
 
 const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/categories/schema?channel=AMAZON&marketplace=IT&productType=OUTERWEAR&force=1
@@ -156,162 +161,115 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /api/categories/suggestions?channel=AMAZON&marketplace=IT&keyword=moto+jacket
   //
-  // Two-step search mirroring Amazon Seller Central's "Choose product type":
+  // Category search matching Amazon Seller Central's "Choose product type" UI.
   //
-  //   Step 1 — searchCatalogItems(keyword) → get up to 10 ASINs + product types.
-  //            classifications are NOT reliably returned for keyword searches
-  //            across all marketplaces, so we don't rely on them here.
+  // searchCatalogItems with `keywords` is a RESTRICTED operation (returns
+  // "Access denied"). The working approach:
   //
-  //   Step 2 — For each unique ASIN (up to 8), call searchCatalogItems(ASIN,
-  //            identifiersType=ASIN, includedData=[classifications]) in parallel.
-  //            This is the same path that "Detect from competitor" uses and is
-  //            known to return full classification trees reliably.
+  //   Step 1 — searchDefinitionsProductTypes(keyword) — allowed, powers the
+  //            product type picker. Returns matching product type codes.
   //
-  //   Step 3 — Deduplicate by leaf browse node, sort by frequency, return ≤20.
+  //   Step 2 — For each product type (up to 6), find a real ASIN from the DB
+  //            (ChannelListing or ListingReconciliation) for a product of that
+  //            type, then call searchCatalogItems(ASIN, identifiersType=ASIN,
+  //            classifications) — also allowed, used by competitor detection.
+  //
+  //   Fallback — if no DB ASIN exists for a type, use any ASIN from the
+  //              marketplace to get at least one category tree path.
+  //
+  // Result: each suggestion has { productType, pathParts[], browseNodes[] }.
   fastify.get('/categories/suggestions', async (request, reply) => {
     const q = request.query as {
       channel?: string
       marketplace?: string
       keyword?: string
-      debug?: string
     }
-    const debugMode = q.debug === '1'
     if (!q.keyword?.trim()) {
       return reply.code(400).send({ error: 'keyword is required' })
     }
     if ((q.channel ?? 'AMAZON').toUpperCase() !== 'AMAZON') {
       return reply.send({ suggestions: [] })
     }
-    if (!amazon.isConfigured()) {
-      return reply.code(503).send({ error: 'Amazon SP-API not configured' })
-    }
+
+    const keyword = q.keyword.trim()
+    const marketplace = (q.marketplace ?? 'IT').toUpperCase()
+    const mpId = amazonMarketplaceId(marketplace)
 
     try {
-      const { amazonMarketplaceId } = await import('../services/categories/marketplace-ids.js')
-      const mpId = amazonMarketplaceId(q.marketplace ?? 'IT')
-      const sp = await (amazon as any).getClient()
-
-      // ── Step 1: keyword search ────────────────────────────────────────
-      const searchRes: any = await (sp as any).callAPI({
-        operation: 'searchCatalogItems',
-        endpoint: 'catalogItems',
-        version: '2022-04-01',
-        query: {
-          keywords: q.keyword.trim(),
-          marketplaceIds: [mpId],
-          includedData: ['summaries', 'productTypes'],
-          pageSize: 10,
-        },
+      // ── Step 1: find matching product types ──────────────────────────
+      // Uses searchDefinitionsProductTypes (allowed) or bundled fallback.
+      const matchingTypes = await productTypesService.listProductTypes({
+        channel: 'AMAZON',
+        marketplace,
+        search: keyword,
       })
 
-      const rawItems: any[] = searchRes?.items ?? []
-
-      if (debugMode) {
-        return reply.send({
-          debug: true,
-          step1_keys: Object.keys(searchRes ?? {}),
-          step1_itemCount: rawItems.length,
-          step1_firstItem: rawItems[0] ? {
-            asin: rawItems[0].asin,
-            hasClassifications: !!rawItems[0].classifications,
-            classificationCount: rawItems[0].classifications?.length ?? 0,
-            summaryKeys: Object.keys(rawItems[0].summaries?.[0] ?? {}),
-            productTypes: rawItems[0].summaries?.[0]?.productTypes,
-          } : null,
-        })
+      if (matchingTypes.length === 0) {
+        return reply.send({ suggestions: [], keyword })
       }
 
-      if (rawItems.length === 0) {
-        return reply.send({ suggestions: [], keyword: q.keyword.trim() })
-      }
+      const typesToCheck = matchingTypes.slice(0, 6)
 
-      // Collect unique ASINs and their product types from the search results
-      const asinMeta = new Map<string, string>() // asin → productType
-      for (const item of rawItems) {
-        const asin: string = item.asin
-        if (!asin || asinMeta.has(asin)) continue
-        const rawPt =
-          item.summaries?.[0]?.productTypes?.[0]?.productTypeId ??
-          item.summaries?.[0]?.productTypes?.[0]?.productType ??
-          item.productTypes?.[0]?.productTypeId ??
-          null
-        asinMeta.set(asin, typeof rawPt === 'string' ? rawPt : 'UNKNOWN')
-      }
+      // ── Step 2: for each type, find an ASIN and classify it ──────────
+      // We look for a real ASIN from our catalog for products of that type,
+      // then call detectProductTypeFromAsin (ASIN identifier lookup, allowed).
 
-      const asins = Array.from(asinMeta.keys()).slice(0, 8)
+      // Preload any ASIN from this marketplace as a last-resort fallback
+      const fallbackAsin = (await prisma.channelListing.findFirst({
+        where: { channel: 'AMAZON', marketplace, externalListingId: { not: null } },
+        select: { externalListingId: true },
+      }))?.externalListingId ?? (await prisma.listingReconciliation.findFirst({
+        where: { channel: 'AMAZON', marketplace, externalListingId: { not: null } },
+        select: { externalListingId: true },
+      }))?.externalListingId ?? null
 
-      // ── Step 2: batch classify each ASIN ─────────────────────────────
-      const classified = await Promise.all(
-        asins.map(async (asin) => {
-          try {
-            const r: any = await (sp as any).callAPI({
-              operation: 'searchCatalogItems',
-              endpoint: 'catalogItems',
-              version: '2022-04-01',
-              query: {
-                marketplaceIds: [mpId],
-                identifiers: [asin],
-                identifiersType: 'ASIN',
-                includedData: ['classifications', 'summaries'],
-              },
-            })
-            const item = Array.isArray(r?.items) && r.items.length > 0 ? r.items[0] : null
-            if (!item) return null
-
-            // Prefer productType from this full response, fall back to step-1 value
-            const rawPt =
-              item.summaries?.[0]?.productTypes?.[0]?.productTypeId ??
-              item.summaries?.[0]?.productTypes?.[0]?.productType ??
-              asinMeta.get(asin) ?? 'UNKNOWN'
-
-            return {
-              asin,
-              productType: rawPt,
-              classifications: item.classifications ?? [],
-            }
-          } catch {
-            return null
-          }
-        }),
-      )
-
-      // ── Step 3: deduplicate by leaf browse node ───────────────────────
-      const byLeafId = new Map<string, {
+      const suggestions: Array<{
         productType: string
+        displayName: string
         pathParts: string[]
         browseNodes: number[]
         count: number
-      }>()
+      }> = []
 
-      for (const result of classified) {
-        if (!result) continue
-        const classifications: any[] = result.classifications
-        if (!classifications.length) continue
+      await Promise.all(typesToCheck.map(async (pt) => {
+        try {
+          // Find an ASIN whose product has this product type
+          const listing = await prisma.channelListing.findFirst({
+            where: {
+              channel: 'AMAZON',
+              marketplace,
+              externalListingId: { not: null },
+              product: { productType: pt.productType },
+            },
+            select: { externalListingId: true },
+          })
 
-        for (const cls of classifications) {
-          const { pathParts, browseNodes } = buildPath(cls)
-          if (!pathParts.length) continue
+          const asin = listing?.externalListingId ?? fallbackAsin
+          if (!asin || !amazon.isConfigured()) return
 
-          const leafId = browseNodes[browseNodes.length - 1]?.toString() ?? pathParts.join('|')
-          const existing = byLeafId.get(leafId)
-          if (existing) {
-            existing.count++
-          } else {
-            byLeafId.set(leafId, {
-              productType: result.productType,
-              pathParts,
-              browseNodes,
-              count: 1,
-            })
-          }
+          const result = await amazon.detectProductTypeFromAsin(asin, mpId)
+          if (!result.categoryPath && (!result.browseNodes || result.browseNodes.length === 0)) return
+
+          const pathParts = result.categoryPath
+            ? result.categoryPath.split(' › ').map((s) => s.trim()).filter(Boolean)
+            : []
+
+          suggestions.push({
+            productType: pt.productType,
+            displayName: pt.displayName,
+            pathParts,
+            browseNodes: result.browseNodes ?? [],
+            count: listing ? 2 : 1, // prefer types we have in the DB
+          })
+        } catch {
+          // skip this type if classification fails
         }
-      }
+      }))
 
-      const suggestions = Array.from(byLeafId.values())
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 20)
+      // Sort: DB-matched types first, then alphabetically
+      suggestions.sort((a, b) => b.count - a.count || a.productType.localeCompare(b.productType))
 
-      return reply.send({ suggestions, keyword: q.keyword.trim() })
+      return reply.send({ suggestions: suggestions.slice(0, 12), keyword })
     } catch (err: any) {
       fastify.log.error({ err }, '[categories/suggestions] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
