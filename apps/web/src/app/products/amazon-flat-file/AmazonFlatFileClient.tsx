@@ -196,7 +196,6 @@ export default function AmazonFlatFileClient({
   const [fillDragEnd,    setFillDragEnd]    = useState<{ ri: number; ci: number } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
-  const [editClickPos, setEditClickPos] = useState<{ x: number; y: number } | null>(null)
   const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
@@ -245,7 +244,6 @@ export default function AmazonFlatFileClient({
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current = selEnd }, [selEnd])
   useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
-  useEffect(() => { if (!isEditing) setEditClickPos(null) }, [isEditing])
   useEffect(() => { try { localStorage.setItem('ff-smart-paste', smartPasteEnabled ? '1' : '0') } catch {} }, [smartPasteEnabled])
 
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
@@ -660,12 +658,11 @@ export default function AmazonFlatFileClient({
     }
   }, [selAnchor])
 
-  const handleCellDoubleClick = useCallback((ri: number, ci: number, x: number, y: number) => {
+  const handleCellDoubleClick = useCallback((ri: number, ci: number) => {
     setSelAnchor({ ri, ci })
     setSelEnd({ ri, ci })
     setIsEditing(true)
     setEditInitialChar(null)
-    setEditClickPos({ x, y })
     const row = displayRowsRef.current[ri]
     const col = allColumnsRef.current[ci]
     if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
@@ -961,6 +958,10 @@ export default function AmazonFlatFileClient({
 
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
     pushSnapshot()
+    setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
+  }, [])
+
+  const liveUpdateCell = useCallback((rowId: string, colId: string, value: unknown) => {
     setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
   }, [])
 
@@ -1759,11 +1760,12 @@ export default function AmazonFlatFileClient({
                   isFillDragging={isFillDragging}
                   isEditing={isEditing}
                   editInitialChar={editInitialChar}
-                  editClickPos={editClickPos}
                   clipboardRange={clipboardRange}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
                   onDeactivate={() => setIsEditing(false)}
                   onChange={(colId, val) => updateCell(row._rowId as string, colId, val)}
+                  onLiveChange={(colId, val) => liveUpdateCell(row._rowId as string, colId, val)}
+                  onPushSnapshot={pushSnapshot}
                   onNavigate={(colId, dir) => navigate(row._rowId as string, colId, dir)}
                   onRowResizeStart={(e) => startRowResize(e, rowHeight)}
                   onRowDragStart={() => setDraggingRowId(row._rowId as string)}
@@ -2031,7 +2033,6 @@ interface RowProps {
   isFillDragging: boolean
   isEditing: boolean
   editInitialChar: string | null
-  editClickPos: { x: number; y: number } | null
   clipboardRange: NormSel | null
   stickyLeftByColIdx: Record<number, number>
   cellErrors: Map<string, ValidationIssue>
@@ -2039,6 +2040,8 @@ interface RowProps {
   onToggleCollapse: (rowId: string) => void
   onSelect: (c: boolean) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
+  onLiveChange: (colId: string, val: string) => void
+  onPushSnapshot: () => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
   onRowResizeStart: (e: React.MouseEvent) => void
   onRowDragStart: () => void
@@ -2046,7 +2049,7 @@ interface RowProps {
   onRowDragOver: (half: 'top' | 'bottom') => void
   onRowDrop: (half: 'top' | 'bottom') => void
   onCellPointerDown: (ri: number, ci: number, shiftKey: boolean) => void
-  onCellDoubleClick: (ri: number, ci: number, x: number, y: number) => void
+  onCellDoubleClick: (ri: number, ci: number) => void
   onRowSelect: (ri: number) => void
   onFillHandlePointerDown: (ri: number, ci: number) => void
   onFillDrop: () => void
@@ -2054,9 +2057,9 @@ interface RowProps {
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
   marketplace, colWidths, rowHeight, isDraggingRow, dropIndicator,
-  normSel, fillTarget, isFillDragging, isEditing, editInitialChar, editClickPos, clipboardRange,
+  normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
   stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
-  onSelect, onDeactivate, onChange, onNavigate, onRowResizeStart,
+  onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop }: RowProps) {
   const rowId = row._rowId as string
@@ -2231,13 +2234,14 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             clipboardEdges={clipboardEdges}
             ri={rowIdx}
             ci={ci}
-            editClickPos={isCellEditing ? editClickPos : null}
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
-            onCellDoubleClick={(x, y) => onCellDoubleClick(rowIdx, ci, x, y)}
+            onCellDoubleClick={() => onCellDoubleClick(rowIdx, ci)}
             onFillHandlePointerDown={() => onFillHandlePointerDown(rowIdx, ci)}
             onFillDrop={onFillDrop}
             onDeactivate={onDeactivate}
             onChange={(v) => onChange(col.id, v)}
+            onLiveChange={(val) => onLiveChange(col.id, val)}
+            onPushSnapshot={onPushSnapshot}
             onNavigate={(dir) => onNavigate(col.id, dir)}
             validIssue={validIssue}
             stickyLeft={stickyLeft}
@@ -2407,17 +2411,18 @@ interface CellProps {
   fillTargetEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   isEditing: boolean
   editInitialChar: string | null
-  editClickPos: { x: number; y: number } | null
   isClipboard: boolean
   clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   validIssue?: ValidationIssue
   stickyLeft?: number
   onCellPointerDown: (shiftKey: boolean) => void
-  onCellDoubleClick: (x: number, y: number) => void
+  onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
   onFillDrop: () => void
   onDeactivate: () => void
   onChange: (val: unknown) => void
+  onLiveChange: (val: string) => void
+  onPushSnapshot: () => void
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
@@ -2449,42 +2454,52 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 
 function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
-  isEditing, editInitialChar, editClickPos, isClipboard, clipboardEdges,
+  isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
-  onDeactivate, onChange, onNavigate }: CellProps) {
+  onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [liveLen, setLiveLen] = useState(displayValue.length)
   const cancelledRef = useRef(false)
+  const pendingWordSelRef = useRef<{ start: number; end: number } | null | undefined>(undefined)
+  // undefined = F2 entry (select all), null = dblclick but no word found (cursor end), {start,end} = word found
+  const originalValueRef = useRef('')
+  const snapshotPushedRef = useRef(false)
 
   useEffect(() => {
     if (!isEditing || col.kind === 'enum' || !inputRef.current) return
     inputRef.current.focus()
-    if (editInitialChar !== null) return // key mode — initial char replaces content; browser handles selection
+    if (editInitialChar !== null) return // key-triggered entry: browser handles selection
 
-    if (editClickPos) {
-      // Double-click: select the word at the click position
-      const charPos = getCharIndexFromPoint(editClickPos.x, editClickPos.y)
-      const input = inputRef.current as HTMLInputElement | null
+    const pending = pendingWordSelRef.current
+    if (pending !== undefined) {
+      // Double-click triggered: apply stored word selection
       requestAnimationFrame(() => {
-        if (!input) return
-        if (charPos >= 0) {
-          const [wStart, wEnd] = wordBoundsAt(displayValue, charPos)
-          input.setSelectionRange(wStart, wEnd)
+        const inp = inputRef.current as HTMLInputElement | null
+        if (!inp) return
+        if (pending !== null) {
+          inp.setSelectionRange(pending.start, pending.end)
         } else {
-          input.setSelectionRange(displayValue.length, displayValue.length)
+          inp.setSelectionRange(displayValue.length, displayValue.length)
         }
+        pendingWordSelRef.current = undefined // reset for next time
       })
       return
     }
 
-    // F2 / programmatic entry: select all
+    // F2 / programmatic: select all
     if ('select' in inputRef.current) {
       (inputRef.current as HTMLInputElement).select()
     }
-  }, [isEditing, col.kind, editInitialChar, editClickPos])
+  }, [isEditing, col.kind, editInitialChar])
+
+  useEffect(() => {
+    if (isEditing) {
+      snapshotPushedRef.current = false
+    }
+  }, [isEditing])
 
   // Reset counter to committed value length each time cell becomes editing
   useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
@@ -2539,6 +2554,10 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     if (e.key === 'Tab') { e.preventDefault(); onNavigate(e.shiftKey ? 'left' : 'right') }
     else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); onNavigate(e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') {
+      if (snapshotPushedRef.current) {
+        onLiveChange(originalValueRef.current) // revert to pre-edit value
+        snapshotPushedRef.current = false
+      }
       cancelledRef.current = true
       onDeactivate(); setDropdownOpen(false)
     }
@@ -2563,7 +2582,17 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     'data-ri': ri, 'data-ci': ci,
     onPointerDown: tdPointerDown,
     onPointerUp: onFillDrop,
-    onDoubleClick: (e: React.MouseEvent) => onCellDoubleClick(e.clientX, e.clientY),
+    onDoubleClick: (e: React.MouseEvent) => {
+      // Compute word bounds NOW while static text node is still in DOM
+      const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
+      if (charPos >= 0) {
+        const [s, end] = wordBoundsAt(displayValue, charPos)
+        pendingWordSelRef.current = { start: s, end }
+      } else {
+        pendingWordSelRef.current = null // dblclick but no word — cursor at end
+      }
+      onCellDoubleClick()
+    },
   }
 
   // Enum cell: custom dropdown
@@ -2571,7 +2600,14 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
-        onDoubleClick={(e) => { onCellDoubleClick(e.clientX, e.clientY); setDropdownOpen(true) }}>
+        onDoubleClick={(e) => {
+          const charPos = getCharIndexFromPoint(e.clientX, e.clientY)
+          pendingWordSelRef.current = charPos >= 0
+            ? (() => { const [s, end] = wordBoundsAt(displayValue, charPos); return { start: s, end } })()
+            : null
+          onCellDoubleClick()
+          setDropdownOpen(true)
+        }}>
         <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
           <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
             {displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}
@@ -2600,9 +2636,17 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
         <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
           {fillHandle}
           <textarea ref={inputRef as any} defaultValue={editInitialChar !== null ? editInitialChar : displayValue}
-            onInput={(e) => setLiveLen((e.target as HTMLTextAreaElement).value.length)}
-            onBlur={(e) => {
-              if (!cancelledRef.current) onChange(e.target.value)
+            onInput={(e) => {
+              const val = (e.target as HTMLTextAreaElement).value
+              setLiveLen(val.length)
+              if (!snapshotPushedRef.current) {
+                originalValueRef.current = displayValue
+                onPushSnapshot()
+                snapshotPushedRef.current = true
+              }
+              onLiveChange(val)
+            }}
+            onBlur={() => {
               cancelledRef.current = false
               onDeactivate()
             }}
@@ -2641,9 +2685,17 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
         {fillHandle}
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
           defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
-          onInput={(e) => setLiveLen((e.target as HTMLInputElement).value.length)}
-          onBlur={(e) => {
-            if (!cancelledRef.current) onChange(e.target.value)
+          onInput={(e) => {
+            const val = (e.target as HTMLInputElement).value
+            setLiveLen(val.length)
+            if (!snapshotPushedRef.current) {
+              originalValueRef.current = displayValue
+              onPushSnapshot()
+              snapshotPushedRef.current = true
+            }
+            onLiveChange(val)
+          }}
+          onBlur={() => {
             cancelledRef.current = false
             onDeactivate()
           }}
