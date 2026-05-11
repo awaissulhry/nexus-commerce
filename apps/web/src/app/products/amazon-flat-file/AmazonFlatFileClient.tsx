@@ -6,9 +6,10 @@ import {
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  AlertCircle, CheckCircle2, ChevronDown, ChevronLeft,
   Copy, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine,
+  Undo2, Redo2, GripVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -168,7 +169,6 @@ export default function AmazonFlatFileClient({
   const [groupOrder, setGroupOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('ff-group-order') ?? '[]') } catch { return [] }
   })
-  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -185,6 +185,7 @@ export default function AmazonFlatFileClient({
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [copyPanelOpen, setCopyPanelOpen] = useState(false)
+  // copying state used by handleCopyToMarket
 
   // ── Column + row resize ────────────────────────────────────────────
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
@@ -198,9 +199,53 @@ export default function AmazonFlatFileClient({
     type: 'col' | 'row'; colId?: string
     startX: number; startY: number; startVal: number
   } | null>(null)
-  const [copying, setCopying] = useState(false)
   const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
   const [fetching, setFetching] = useState(false)
+
+  // ── Undo / Redo ────────────────────────────────────────────────────
+  const rowsRef = useRef<Row[]>(rows)
+  useEffect(() => { rowsRef.current = rows }, [rows])
+  const [history, setHistory] = useState<Row[][]>([])
+  const [future, setFuture] = useState<Row[][]>([])
+
+  const pushSnapshot = useCallback(() => {
+    setHistory((prev) => [...prev.slice(-49), rowsRef.current])
+    setFuture([])
+  }, [])
+
+  const undo = useCallback(() => {
+    setHistory((prev) => {
+      if (!prev.length) return prev
+      const next = [...prev]
+      const snapshot = next.pop()!
+      setFuture((f) => [rowsRef.current, ...f.slice(0, 49)])
+      setRows(snapshot)
+      return next
+    })
+  }, [])
+
+  const redo = useCallback(() => {
+    setFuture((prev) => {
+      if (!prev.length) return prev
+      const next = [...prev]
+      const snapshot = next.shift()!
+      setHistory((h) => [...h.slice(-49), rowsRef.current])
+      setRows(snapshot)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    function handle(e: globalThis.KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      if (e.key === 'z' && e.shiftKey)  { e.preventDefault(); redo() }
+      if (e.key === 'y')                 { e.preventDefault(); redo() }
+    }
+    document.addEventListener('keydown', handle)
+    return () => document.removeEventListener('keydown', handle)
+  }, [undo, redo])
 
   // Persist resize state to localStorage
   useEffect(() => { try { localStorage.setItem('ff-col-widths', JSON.stringify(colWidths)) } catch {} }, [colWidths])
@@ -423,17 +468,20 @@ export default function AmazonFlatFileClient({
   // ── Row operations ─────────────────────────────────────────────────
 
   const addRow = useCallback((parentage = '') => {
+    pushSnapshot()
     const row = makeEmptyRow(productType, marketplace, parentage)
     setRows((prev) => [...prev, row])
     setTimeout(() => setActiveCell({ rowId: row._rowId as string, colId: 'item_sku' }), 30)
   }, [productType, marketplace])
 
   const deleteSelected = useCallback(() => {
+    pushSnapshot()
     setRows((prev) => prev.filter((r) => !selectedRows.has(r._rowId as string)))
     setSelectedRows(new Set())
   }, [selectedRows])
 
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
+    pushSnapshot()
     setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
   }, [])
 
@@ -541,6 +589,7 @@ export default function AmazonFlatFileClient({
     if (!res.ok) { const e = await res.json().catch(() => ({})); setLoadError(e.error ?? 'Import failed'); return }
     const data = await res.json()
     const imported: Row[] = (data.rows ?? []).map((r: any) => ({ ...r, _dirty: true, _isNew: !r._productId }))
+    pushSnapshot()
     setRows((prev) => {
       const bySku = new Map(prev.map((r) => [String(r.item_sku), r]))
       for (const ir of imported) {
@@ -557,7 +606,6 @@ export default function AmazonFlatFileClient({
     colIds: Set<string>,
   ) => {
     if (!manifest || !rows.length) return
-    setCopying(true)
     setCopyPanelOpen(false)
     try {
       const res = await fetch(
@@ -590,8 +638,6 @@ export default function AmazonFlatFileClient({
       setFeedEntries([])
     } catch (e: any) {
       setLoadError(e.message ?? 'Copy failed')
-    } finally {
-      setCopying(false)
     }
   }, [manifest, rows, productType])
 
@@ -684,124 +730,153 @@ export default function AmazonFlatFileClient({
       {/* ── Sticky header ────────────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
 
-        {/* Top bar */}
-        <div className="px-4 h-13 flex items-center gap-3 py-2">
-          <IconButton aria-label="Back" size="sm" onClick={() => router.push('/products')} className="!h-auto !w-auto p-1 -m-1">
+        {/* ── Bar 1: App chrome + menus + primary actions ───── */}
+        <div className="px-3 h-10 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
+
+          {/* Back */}
+          <IconButton aria-label="Back" size="sm" onClick={() => router.push('/products')} className="!h-auto !w-auto p-1 -ml-0.5 mr-0.5 flex-shrink-0">
             <ChevronLeft className="w-4 h-4" />
           </IconButton>
-          <FileSpreadsheet className="w-5 h-5 text-orange-500 flex-shrink-0" />
-          <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
-            <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100">Amazon Flat File Editor</h1>
-            {manifest && <><Badge variant="info">{manifest.productType}</Badge><Badge variant="default">{manifest.marketplace}</Badge></>}
-            {familyId && (
-              <span className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-2 py-0.5">
-                <FileSpreadsheet className="w-3 h-3" />
-                Product family
-              </span>
+
+          {/* Title + status badges */}
+          <FileSpreadsheet className="w-4 h-4 text-orange-500 flex-shrink-0" />
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">Amazon Flat File</span>
+          {manifest && <><Badge variant="info">{manifest.productType}</Badge><Badge variant="default">{manifest.marketplace}</Badge></>}
+          {familyId && (
+            <span className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-1.5 py-0.5 flex-shrink-0">
+              <FileSpreadsheet className="w-3 h-3" />Family
+            </span>
+          )}
+          {dirtyRows.length > 0 && <Badge variant="warning" className="flex-shrink-0"><AlertCircle className="w-3 h-3 mr-1" />{dirtyRows.length} unsaved</Badge>}
+          {newCount > 0 && <Badge variant="info" className="flex-shrink-0">{newCount} new</Badge>}
+
+          {/* Flex spacer */}
+          <div className="flex-1 min-w-0" />
+
+          {/* ── Menu bar ── */}
+          <div className="flex items-center gap-0.5">
+            {/* File menu */}
+            <MenuDropdown label="File" items={[
+              { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
+              { label: 'Export TSV', icon: <Download className="w-3.5 h-3.5" />, onClick: exportTsv, disabled: !rows.length },
+              { separator: true },
+              { label: 'Reload rows from server', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: !productType || !rows.length,
+                onClick: () => {
+                  if (!confirm('Reload rows from server? Your unsaved local edits will be lost.')) return
+                  try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
+                  void loadData(marketplace, productType, false)
+                }},
+            ]} />
+            {/* Edit menu */}
+            <MenuDropdown label="Edit" items={[
+              { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
+              { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: !future.length, shortcut: '⌘⇧Z' },
+              { separator: true },
+              { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setCopyPanelOpen((o) => !o), disabled: !manifest || !rows.length },
+              { separator: true },
+              { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
+              { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
+            ]} />
+            {/* View menu — groups with toggle + drag-to-reorder */}
+            {manifest && (
+              <ViewMenuDropdown
+                orderedGroups={orderedGroups}
+                openGroups={openGroups}
+                hasCustomOrder={groupOrder.length > 0 || closedGroups.size > 0}
+                onToggleGroup={(id) => setClosedGroups((prev) => {
+                  const n = new Set(prev)
+                  openGroups.has(id) ? n.add(id) : n.delete(id)
+                  try { localStorage.setItem('ff-closed-groups', JSON.stringify([...n])) } catch {}
+                  return n
+                })}
+                onReorderGroups={(ids) => {
+                  setGroupOrder(ids)
+                  try { localStorage.setItem('ff-group-order', JSON.stringify(ids)) } catch {}
+                }}
+                onResetView={() => {
+                  setGroupOrder([])
+                  setClosedGroups(new Set())
+                  try { localStorage.removeItem('ff-group-order'); localStorage.removeItem('ff-closed-groups') } catch {}
+                }}
+              />
             )}
-            {dirtyRows.length > 0 && <Badge variant="warning"><AlertCircle className="w-3 h-3 mr-1" />{dirtyRows.length} unsaved</Badge>}
-            {newCount > 0 && <Badge variant="info">{newCount} new rows</Badge>}
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {feedEntries.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {feedEntries.map((e) => (
-                  <span key={e.market} className={cn(
-                    'text-xs font-medium px-2 py-0.5 rounded-full border',
-                    e.status === 'DONE'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
-                      : e.status === 'FATAL'
-                      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
-                      : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-                  )}>
-                    {e.market}: {e.status ?? '…'}
-                  </span>
-                ))}
-                {feedEntries.some((e) => e.status !== 'DONE' && e.status !== 'FATAL') && (
-                  <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
-                    <RefreshCw className="w-3 h-3 mr-1" />Check
-                  </Button>
-                )}
-              </div>
-            )}
-            {selectedRows.size > 0 && (
-              <div className="relative">
-                <Button size="sm" variant="ghost"
-                  onClick={() => setFetchPanelOpen((o) => !o)}
-                  loading={fetching}
-                  className={fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800' : ''}>
-                  <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />
-                  Fetch from Amazon ({selectedRows.size})
+
+          {/* Separator */}
+          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* Hidden file input for Import */}
+          <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
+
+          {/* Feed status badges */}
+          {feedEntries.length > 0 && (
+            <div className="flex items-center gap-1">
+              {feedEntries.map((e) => (
+                <span key={e.market} className={cn(
+                  'text-xs font-medium px-2 py-0.5 rounded-full border',
+                  e.status === 'DONE'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
+                    : e.status === 'FATAL'
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+                )}>
+                  {e.market}: {e.status ?? '…'}
+                </span>
+              ))}
+              {feedEntries.some((e) => e.status !== 'DONE' && e.status !== 'FATAL') && (
+                <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
+                  <RefreshCw className="w-3 h-3 mr-1" />Check
                 </Button>
-                {fetchPanelOpen && (
-                  <FetchFromAmazonPanel
-                    selectedCount={selectedRows.size}
-                    currentMarket={marketplace}
-                    onFetch={handleFetchFromAmazon}
-                    onClose={() => setFetchPanelOpen(false)}
-                  />
-                )}
-              </div>
-            )}
-            {manifest && rows.length > 0 && (
-              <div className="relative">
-                <Button size="sm" variant="ghost"
-                  onClick={() => setCopyPanelOpen((o) => !o)}
-                  loading={copying}
-                  className={copyPanelOpen ? 'bg-slate-100 dark:bg-slate-800' : ''}>
-                  <Copy className="w-3.5 h-3.5 mr-1.5" />Copy to market
-                </Button>
-                {copyPanelOpen && (
-                  <CopyToMarketPanel
-                    manifest={manifest}
-                    rows={rows}
-                    currentMarket={marketplace}
-                    onCopy={handleCopyToMarket}
-                    onClose={() => setCopyPanelOpen(false)}
-                  />
-                )}
-              </div>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="w-3.5 h-3.5 mr-1.5" />Import TSV
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} />
-            <Button size="sm" variant="ghost" onClick={exportTsv} disabled={!rows.length}>
-              <Download className="w-3.5 h-3.5 mr-1.5" />Export TSV
-            </Button>
-            <div className="relative">
-              <Button
-                size="sm"
-                onClick={() => setSubmitPanelOpen((o) => !o)}
-                disabled={submitting || loading}
-                loading={submitting}
-                className={submitPanelOpen ? 'bg-blue-700' : ''}
-              >
-                <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{dirtyRows.length > 0 && ` (${dirtyRows.length})`}
-              </Button>
-              {submitPanelOpen && (
-                <SubmitToAmazonPanel
-                  currentMarket={marketplace}
-                  productType={productType}
-                  familyId={familyId}
-                  currentDirtyRows={dirtyRows}
-                  onSubmit={handleSubmitToMarkets}
-                  onClose={() => setSubmitPanelOpen(false)}
-                />
               )}
             </div>
+          )}
+
+          {/* Fetch from Amazon (visible when rows are selected) */}
+          {selectedRows.size > 0 && (
+            <div className="relative">
+              <Button size="sm" variant="ghost" onClick={() => setFetchPanelOpen((o) => !o)} loading={fetching}
+                className={fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800' : ''}>
+                <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />Fetch ({selectedRows.size})
+              </Button>
+              {fetchPanelOpen && (
+                <FetchFromAmazonPanel selectedCount={selectedRows.size} currentMarket={marketplace}
+                  onFetch={handleFetchFromAmazon} onClose={() => setFetchPanelOpen(false)} />
+              )}
+            </div>
+          )}
+
+          {/* Copy to market panel anchor */}
+          {copyPanelOpen && manifest && rows.length > 0 && (
+            <div className="relative">
+              <CopyToMarketPanel manifest={manifest} rows={rows} currentMarket={marketplace}
+                onCopy={handleCopyToMarket} onClose={() => setCopyPanelOpen(false)} />
+            </div>
+          )}
+
+          {/* Submit to Amazon */}
+          <div className="relative">
+            <Button size="sm" onClick={() => setSubmitPanelOpen((o) => !o)}
+              disabled={submitting || loading} loading={submitting}
+              className={submitPanelOpen ? 'bg-blue-700' : ''}>
+              <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{dirtyRows.length > 0 && ` (${dirtyRows.length})`}
+            </Button>
+            {submitPanelOpen && (
+              <SubmitToAmazonPanel currentMarket={marketplace} productType={productType}
+                familyId={familyId} currentDirtyRows={dirtyRows}
+                onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
+            )}
           </div>
         </div>
 
-        {/* Toolbar: marketplace + product type + group toggles */}
-        <div className="px-4 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 flex-wrap">
+        {/* ── Bar 2: Marketplace · Product type · Search ────── */}
+        <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Marketplace</span>
+            <span className="text-xs text-slate-400 font-medium">Market</span>
             <div className="flex gap-0.5">
               {MARKETPLACES.map((mp) => (
                 <button key={mp} type="button"
-                  onClick={() => { setMarketplace(mp); void loadData(mp, productType) /* product types fetched via useEffect */ }}
+                  onClick={() => { setMarketplace(mp); void loadData(mp, productType) }}
                   className={cn('text-xs font-medium px-2 py-0.5 rounded border transition-colors',
                     marketplace === mp
                       ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
@@ -813,164 +888,53 @@ export default function AmazonFlatFileClient({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Product Type</span>
-            <ProductTypeDropdown
-              value={productType}
-              options={productTypes}
-              loading={ptLoading || loading}
-              onChange={(pt) => {
-                setProductType(pt)
-                void loadData(marketplace, pt)
-              }}
-            />
-            {/* Refresh schema — updates columns/groups only, keeps row edits */}
+            <ProductTypeDropdown value={productType} options={productTypes} loading={ptLoading || loading}
+              onChange={(pt) => { setProductType(pt); void loadData(marketplace, pt) }} />
             {productType && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => void loadData(marketplace, productType, true)}
-                loading={loading}
-                title="Refresh schema from Amazon — updates columns and groups but keeps your row edits"
-              >
-                <RefreshCw className="w-3 h-3 mr-1" />
-                Refresh schema
-              </Button>
-            )}
-            {/* Reload rows — explicitly pulls fresh rows from server (discards local draft) */}
-            {productType && rows.length > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  if (!confirm('Reload rows from server? Your unsaved local edits will be lost.')) return
-                  try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
-                  void loadData(marketplace, productType, false)
-                }}
-                title="Reload rows from server — discards local draft"
-                className="text-slate-400 hover:text-slate-700"
-              >
-                <RefreshCw className="w-3 h-3 mr-1 opacity-50" />
-                Reload rows
+              <Button size="sm" variant="ghost"
+                onClick={() => void loadData(marketplace, productType, true)} loading={loading}
+                title="Refresh schema from Amazon — updates columns/groups, keeps row edits">
+                <RefreshCw className="w-3 h-3 mr-1" />Refresh schema
               </Button>
             )}
           </div>
 
-          {/* Search bar */}
+          {/* Search */}
           {manifest && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 ml-auto">
               <div className="relative flex items-center">
                 <Search className="absolute left-2 w-3 h-3 text-slate-400 pointer-events-none" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  value={searchQuery}
+                <input ref={searchRef} type="text" value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
-                  placeholder={searchMode === 'rows' ? 'Search rows, SKUs, ASINs…' : 'Search columns, fields…'}
-                  className="pl-6 pr-6 py-0.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-52"
-                />
+                  placeholder={searchMode === 'rows' ? 'Search rows…' : 'Search columns…'}
+                  className="pl-6 pr-6 py-0.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-44" />
                 {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-1.5 text-slate-400 hover:text-slate-600"
-                  >
+                  <button onClick={() => setSearchQuery('')} className="absolute right-1.5 text-slate-400 hover:text-slate-600">
                     <X className="w-3 h-3" />
                   </button>
                 )}
               </div>
-              {/* Mode toggle */}
               <div className="flex border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('rows')}
+                <button type="button" onClick={() => setSearchMode('rows')}
                   className={cn('text-xs px-2 py-0.5 transition-colors', searchMode === 'rows'
                     ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
-                  title="Filter rows"
-                >
-                  Rows
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchMode('columns')}
+                  title="Filter rows">Rows</button>
+                <button type="button" onClick={() => setSearchMode('columns')}
                   className={cn('text-xs px-2 py-0.5 transition-colors border-l border-slate-200 dark:border-slate-700', searchMode === 'columns'
                     ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
-                  title="Filter columns"
-                >
-                  Cols
-                </button>
+                  title="Filter columns">Cols</button>
               </div>
-              {/* Match count */}
               {searchQuery && (
                 <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">
-                  {searchMode === 'rows'
-                    ? `${displayRows.length} / ${rows.length}`
-                    : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
+                  {searchMode === 'rows' ? `${displayRows.length}/${rows.length}` : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
                 </span>
               )}
             </div>
           )}
 
-          {/* Group toggles — draggable to reorder */}
-          {manifest && (
-            <div className="flex items-center gap-1 flex-wrap ml-auto">
-              <span className="text-xs text-slate-400 mr-1">Columns:</span>
-              {orderedGroups.map((g) => {
-                const c = gColor(g.color)
-                const open = openGroups.has(g.id)
-                const isDragging = draggingGroupId === g.id
-                return (
-                  <button key={g.id} type="button"
-                    draggable
-                    onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
-                    onDragEnd={() => setDraggingGroupId(null)}
-                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      if (!draggingGroupId || draggingGroupId === g.id) return
-                      const ids = orderedGroups.map((x) => x.id)
-                      const from = ids.indexOf(draggingGroupId)
-                      const to = ids.indexOf(g.id)
-                      const next = [...ids]
-                      next.splice(from, 1)
-                      next.splice(to, 0, draggingGroupId)
-                      setGroupOrder(next)
-                      try { localStorage.setItem('ff-group-order', JSON.stringify(next)) } catch {}
-                      setDraggingGroupId(null)
-                    }}
-                    onClick={() => setClosedGroups((prev) => {
-                      const n = new Set(prev)
-                      open ? n.add(g.id) : n.delete(g.id)
-                      try { localStorage.setItem('ff-closed-groups', JSON.stringify([...n])) } catch {}
-                      return n
-                    })}
-                    title={g.labelEn !== g.labelLocal ? `${g.labelLocal} — ${g.labelEn}` : g.labelEn}
-                    className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
-                      c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
-                      isDragging && 'opacity-30 scale-95')}>
-                    <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
-                    <span className="font-medium">{g.labelLocal}</span>
-                    {g.labelEn !== g.labelLocal && (
-                      <span className="opacity-50 font-normal">({g.labelEn})</span>
-                    )}
-                    <span className="opacity-60 tabular-nums">{g.columns.length}</span>
-                  </button>
-                )
-              })}
-              {(groupOrder.length > 0 || closedGroups.size > 0) && (
-                <button type="button"
-                  onClick={() => {
-                    setGroupOrder([])
-                    setClosedGroups(new Set())
-                    try { localStorage.removeItem('ff-group-order'); localStorage.removeItem('ff-closed-groups') } catch {}
-                  }}
-                  className="text-xs text-slate-400 hover:text-slate-600 px-1"
-                  title="Reset group order and visibility to Amazon's default">
-                  ↺
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Error */}
@@ -2052,6 +2016,204 @@ function SubmitToAmazonPanel({
           <Send className="w-3.5 h-3.5 mr-1.5" />Submit
         </Button>
       </div>
+    </div>
+  )
+}
+
+// ── MenuDropdown ───────────────────────────────────────────────────────
+// Generic menu-bar dropdown. Items can have icons, shortcuts, separators.
+
+interface MenuItem {
+  label?: string
+  icon?: React.ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  shortcut?: string
+  separator?: boolean
+}
+
+interface MenuDropdownProps {
+  label: string
+  items: MenuItem[]
+}
+
+function MenuDropdown({ label, items }: MenuDropdownProps) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'h-7 px-2.5 text-xs font-medium rounded transition-colors',
+          open
+            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+        )}
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-0.5 z-50 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 overflow-hidden">
+          {items.map((item, i) =>
+            item.separator ? (
+              <div key={i} className="my-1 border-t border-slate-100 dark:border-slate-800" />
+            ) : (
+              <button
+                key={i}
+                type="button"
+                disabled={item.disabled}
+                onClick={() => {
+                  if (!item.disabled && item.onClick) { item.onClick(); setOpen(false) }
+                }}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left transition-colors',
+                  item.disabled
+                    ? 'text-slate-300 dark:text-slate-600 cursor-default'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                )}
+              >
+                {item.icon && <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center">{item.icon}</span>}
+                <span className="flex-1">{item.label}</span>
+                {item.shortcut && <span className="text-[10px] font-mono text-slate-400">{item.shortcut}</span>}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ViewMenuDropdown ───────────────────────────────────────────────────
+// Specialised View menu: group checkboxes + drag-to-reorder inside the
+// dropdown. Stays open while toggling or dragging.
+
+interface ViewMenuProps {
+  orderedGroups: ColumnGroup[]
+  openGroups: Set<string>
+  hasCustomOrder: boolean
+  onToggleGroup: (id: string) => void
+  onReorderGroups: (ids: string[]) => void
+  onResetView: () => void
+}
+
+function ViewMenuDropdown({
+  orderedGroups, openGroups, hasCustomOrder, onToggleGroup, onReorderGroups, onResetView,
+}: ViewMenuProps) {
+  const [open, setOpen] = useState(false)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [])
+
+  const visibleCount = orderedGroups.filter((g) => openGroups.has(g.id)).length
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'h-7 px-2.5 text-xs font-medium rounded transition-colors',
+          open
+            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+        )}
+      >
+        View
+        {visibleCount < orderedGroups.length && (
+          <span className="ml-1 opacity-60 text-[10px]">({visibleCount}/{orderedGroups.length})</span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-0.5 z-50 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Column groups</span>
+            <span className="text-[10px] text-slate-400">drag to reorder</span>
+          </div>
+          <div className="max-h-72 overflow-y-auto py-1">
+            {orderedGroups.map((g) => {
+              const isOpen = openGroups.has(g.id)
+              const isDragging = draggingId === g.id
+              const c = gColor(g.color)
+              return (
+                <div
+                  key={g.id}
+                  draggable
+                  onDragStart={(e) => { setDraggingId(g.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragEnd={() => setDraggingId(null)}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (!draggingId || draggingId === g.id) return
+                    const ids = orderedGroups.map((x) => x.id)
+                    const from = ids.indexOf(draggingId)
+                    const to = ids.indexOf(g.id)
+                    const next = [...ids]; next.splice(from, 1); next.splice(to, 0, draggingId)
+                    onReorderGroups(next)
+                    setDraggingId(null)
+                  }}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 transition-colors select-none',
+                    isDragging ? 'opacity-40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                  )}
+                >
+                  <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 cursor-grab flex-shrink-0" />
+                  <input
+                    type="checkbox"
+                    checked={isOpen}
+                    onChange={() => onToggleGroup(g.id)}
+                    className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0 cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span
+                    className={cn('text-xs flex-1 truncate cursor-pointer', isOpen ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600')}
+                    onClick={() => onToggleGroup(g.id)}
+                  >
+                    {g.labelLocal}
+                    {g.labelEn !== g.labelLocal && (
+                      <span className="ml-1 opacity-50 text-[10px]">({g.labelEn})</span>
+                    )}
+                  </span>
+                  <span className={cn('text-[10px] tabular-nums font-medium px-1 rounded flex-shrink-0', c.badge)}>
+                    {g.columns.length}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          {hasCustomOrder && (
+            <>
+              <div className="border-t border-slate-100 dark:border-slate-800" />
+              <button
+                type="button"
+                onClick={() => { onResetView(); setOpen(false) }}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reset order &amp; visibility
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
