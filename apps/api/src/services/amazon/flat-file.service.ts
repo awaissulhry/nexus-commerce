@@ -455,20 +455,27 @@ function extractEnumOptions(inner: Record<string, any>): string[] {
 }
 
 /**
- * Recursively find the first node in a schema subtree that has enum values.
- * Handles:
- *   - Direct value node:  items.properties.value.enumNames
- *   - Nested arrays:      items.properties.type.items.properties.value.enumNames
- *   - anyOf / oneOf unions
+ * Recursively find enum values anywhere in a schema subtree.
+ *
+ * Amazon schema patterns encountered in practice:
+ *   A) Direct:        { enumNames: [...] }                           target_gender
+ *   B) Wrapped value: items.properties.value.enumNames               condition_type
+ *   C) anyOf branch:  items.properties.value.anyOf[n].enumNames      closure.type
+ *   D) Non-value sub: items.properties.class.enumNames               ghs.classification
+ *   E) Unit sub:      items.properties.unit.enumNames                battery.weight
+ *   F) Direct sub:    items.properties.type.enumNames                num_batteries
+ *
+ * We check value first (B/C) — most common — then fall through to all
+ * other sub-properties (D/E/F) so no enum is missed regardless of depth.
  */
 function findEnumNode(node: Record<string, any>, depth = 0): string[] {
-  if (!node || typeof node !== 'object' || depth > 4) return []
+  if (!node || typeof node !== 'object' || depth > 5) return []
 
-  // Direct enum on this node
+  // A. Direct enum on this node
   const direct = extractEnumOptions(node)
   if (direct.length) return direct
 
-  // anyOf / oneOf — try each branch
+  // B/C. anyOf / oneOf — try each branch
   for (const key of ['anyOf', 'oneOf']) {
     if (Array.isArray(node[key])) {
       for (const branch of node[key]) {
@@ -478,10 +485,21 @@ function findEnumNode(node: Record<string, any>, depth = 0): string[] {
     }
   }
 
-  // Unwrap wrapped array (items.properties.value)
-  const valueNode = node?.items?.properties?.value
+  // Gather items.properties once
+  const itemProps: Record<string, any> = node?.items?.properties ?? {}
+
+  // B. Standard wrapped-array: items.properties.value
+  const valueNode = itemProps.value
   if (valueNode) {
     const v = findEnumNode(valueNode, depth + 1)
+    if (v.length) return v
+  }
+
+  // D/E/F. All OTHER sub-properties (class, unit, type, can_be_wrapped …)
+  const SKIP_PROPS = new Set(['value', 'marketplace_id', 'language_tag'])
+  for (const [subId, subNode] of Object.entries(itemProps)) {
+    if (SKIP_PROPS.has(subId)) continue
+    const v = findEnumNode(subNode as Record<string, any>, depth + 1)
     if (v.length) return v
   }
 
