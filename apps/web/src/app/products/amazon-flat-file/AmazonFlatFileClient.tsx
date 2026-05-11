@@ -259,6 +259,31 @@ export default function AmazonFlatFileClient({
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
 
+  // ── Row persistence (localStorage) ────────────────────────────────
+  // Autosave rows keyed by market+productType so edits survive navigation
+  // and schema refreshes. Only overwritten when the user explicitly loads
+  // fresh rows (marketplace/product type change) or reloads rows manually.
+
+  function rowStorageKey(mp: string, pt: string) {
+    return `ff-rows-${mp.toUpperCase()}-${pt.toUpperCase()}`
+  }
+  function saveRows(mp: string, pt: string, r: Row[]) {
+    try { localStorage.setItem(rowStorageKey(mp, pt), JSON.stringify(r)) } catch {}
+  }
+  function loadSavedRows(mp: string, pt: string): Row[] | null {
+    try {
+      const raw = localStorage.getItem(rowStorageKey(mp, pt))
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  }
+
+  // Debounced autosave — fires 1 s after last edit
+  useEffect(() => {
+    if (!productType || !rows.length) return
+    const t = setTimeout(() => saveRows(marketplace, productType, rows), 1000)
+    return () => clearTimeout(t)
+  }, [rows, marketplace, productType])
+
   // ── Load data ──────────────────────────────────────────────────────
 
   const loadData = useCallback(async (mp: string, pt: string, force = false) => {
@@ -272,18 +297,34 @@ export default function AmazonFlatFileClient({
     const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
     if (productId) rowsQs.set('productId', productId)
     try {
-      const [mRes, rRes] = await Promise.all([
-        fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
-        fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
-      ])
-      if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
-      const m: Manifest = await mRes.json()
-      setManifest(m)
-      if (rRes.ok) { const d = await rRes.json(); setRows(d.rows ?? []) }
-      else setRows([])
-      const p = new URLSearchParams(searchParams?.toString() ?? '')
-      p.set('marketplace', mp); p.set('productType', pt)
-      router.replace(`?${p.toString()}`, { scroll: false })
+      if (force) {
+        // Schema refresh — update manifest only, keep current rows unchanged.
+        // User's edits must not be overwritten by a schema change.
+        const mRes = await fetch(`${backend}/api/amazon/flat-file/template?${qs}`)
+        if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
+        setManifest(await mRes.json())
+      } else {
+        // Full load (marketplace or product type change) — fetch manifest + rows.
+        // Use localStorage draft if available, otherwise fall back to server rows.
+        const [mRes, rRes] = await Promise.all([
+          fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
+          fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
+        ])
+        if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
+        setManifest(await mRes.json())
+        const saved = loadSavedRows(mp, pt)
+        if (saved && saved.length > 0) {
+          setRows(saved)
+        } else if (rRes.ok) {
+          const d = await rRes.json()
+          setRows(d.rows ?? [])
+        } else {
+          setRows([])
+        }
+        const p = new URLSearchParams(searchParams?.toString() ?? '')
+        p.set('marketplace', mp); p.set('productType', pt)
+        router.replace(`?${p.toString()}`, { scroll: false })
+      }
     } catch (e: any) {
       setLoadError(e.message ?? 'Failed to load')
     } finally {
@@ -554,17 +595,34 @@ export default function AmazonFlatFileClient({
                 void loadData(marketplace, pt)
               }}
             />
-            {/* Reload/refresh — re-fetches schema from Amazon SP-API (bypasses cache) */}
+            {/* Refresh schema — updates columns/groups only, keeps row edits */}
             {productType && (
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => void loadData(marketplace, productType, true)}
                 loading={loading}
-                title="Force-refresh schema from Amazon (bypasses 24h cache)"
+                title="Refresh schema from Amazon — updates columns and groups but keeps your row edits"
               >
                 <RefreshCw className="w-3 h-3 mr-1" />
                 Refresh schema
+              </Button>
+            )}
+            {/* Reload rows — explicitly pulls fresh rows from server (discards local draft) */}
+            {productType && rows.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (!confirm('Reload rows from server? Your unsaved local edits will be lost.')) return
+                  try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
+                  void loadData(marketplace, productType, false)
+                }}
+                title="Reload rows from server — discards local draft"
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <RefreshCw className="w-3 h-3 mr-1 opacity-50" />
+                Reload rows
               </Button>
             )}
           </div>
