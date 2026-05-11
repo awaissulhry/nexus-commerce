@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Copy, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
-  Search, Send, Trash2, Upload, X,
+  Search, Send, Trash2, Upload, X, ArrowDownToLine,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -177,6 +177,8 @@ export default function AmazonFlatFileClient({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [copyPanelOpen, setCopyPanelOpen] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
+  const [fetching, setFetching] = useState(false)
 
   // ── Fetch known product types whenever marketplace changes ─────────
   useEffect(() => {
@@ -477,6 +479,68 @@ export default function AmazonFlatFileClient({
     }
   }, [manifest, rows, productType])
 
+  // ── Fetch from Amazon ───────────────────────────────────────────────
+  const handleFetchFromAmazon = useCallback(async (targetMarkets: string[]) => {
+    const selectedSkus = [...selectedRows]
+      .map((id) => rows.find((r) => r._rowId === id)?.item_sku as string | undefined)
+      .filter((s): s is string => !!s)
+    if (!selectedSkus.length) return
+
+    setFetching(true)
+    setFetchPanelOpen(false)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/fetch-listings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus: selectedSkus, marketplaces: targetMarkets }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Fetch failed')
+
+      const results: Record<string, Record<string, { asin?: string; status?: string }>> =
+        data.results ?? {}
+
+      // 1. Update current market rows in state
+      const currentResults = results[marketplace] ?? {}
+      setRows((prev) =>
+        prev.map((row) => {
+          const fetched = currentResults[row.item_sku as string]
+          if (!fetched) return row
+          return {
+            ...row,
+            ...(fetched.asin ? { _asin: fetched.asin } : {}),
+            ...(fetched.status ? { _listingStatus: fetched.status } : {}),
+          }
+        }),
+      )
+
+      // 2. Merge into other markets' localStorage drafts
+      for (const [mp, mpResults] of Object.entries(results)) {
+        if (mp === marketplace) continue
+        const key = rowStorageKey(mp, productType)
+        try {
+          const existingRaw = localStorage.getItem(key)
+          const existing: Row[] = existingRaw ? JSON.parse(existingRaw) : []
+          if (!existing.length) continue
+          const updated = existing.map((row) => {
+            const fetched = mpResults[row.item_sku as string]
+            if (!fetched) return row
+            return {
+              ...row,
+              ...(fetched.asin ? { _asin: fetched.asin } : {}),
+              ...(fetched.status ? { _listingStatus: fetched.status } : {}),
+            }
+          })
+          localStorage.setItem(key, JSON.stringify(updated))
+        } catch { /* quota exceeded — skip */ }
+      }
+    } catch (e: any) {
+      setLoadError(e.message ?? 'Fetch from Amazon failed')
+    } finally {
+      setFetching(false)
+    }
+  }, [selectedRows, rows, marketplace, productType])
+
   const exportTsv = useCallback(async () => {
     if (!manifest) return
     const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export-tsv`, {
@@ -527,6 +591,25 @@ export default function AmazonFlatFileClient({
                 </span>
                 {feedStatus !== 'DONE' && feedStatus !== 'FATAL' && (
                   <Button size="sm" variant="ghost" onClick={pollStatus} loading={polling}><RefreshCw className="w-3 h-3 mr-1" />Check</Button>
+                )}
+              </div>
+            )}
+            {selectedRows.size > 0 && (
+              <div className="relative">
+                <Button size="sm" variant="ghost"
+                  onClick={() => setFetchPanelOpen((o) => !o)}
+                  loading={fetching}
+                  className={fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800' : ''}>
+                  <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />
+                  Fetch from Amazon ({selectedRows.size})
+                </Button>
+                {fetchPanelOpen && (
+                  <FetchFromAmazonPanel
+                    selectedCount={selectedRows.size}
+                    currentMarket={marketplace}
+                    onFetch={handleFetchFromAmazon}
+                    onClose={() => setFetchPanelOpen(false)}
+                  />
                 )}
               </div>
             )}
@@ -931,8 +1014,22 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
-      {/* Row # */}
-      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 text-xs text-slate-400 tabular-nums text-right w-7">{rowIdx + 1}</td>
+      {/* Row # + ASIN badge when fetched */}
+      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px]">
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="text-xs text-slate-400 tabular-nums">{rowIdx + 1}</span>
+          {row._asin ? (() => { const asin = String(row._asin); return (
+            <a
+              href={`https://www.amazon.com/dp/${asin}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none"
+              title={`ASIN: ${asin} — click to open on Amazon`}
+              onClick={(e) => e.stopPropagation()}
+            >{asin}</a>
+          )})() : null}
+        </div>
+      </td>
 
       {/* Data cells */}
       {columns.map((col) => {
@@ -1483,6 +1580,116 @@ function CopyToMarketPanel({ manifest, rows, currentMarket, onCopy, onClose }: C
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
           Copy {rows.length} row{rows.length !== 1 ? 's' : ''}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ── FetchFromAmazonPanel ───────────────────────────────────────────────
+// Lets the user pull selected fields from Amazon for the selected rows.
+// Current market is pre-selected; other markets can be ticked to save time.
+
+const ALL_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK']
+
+interface FetchPanelProps {
+  selectedCount: number
+  currentMarket: string
+  onFetch: (markets: string[]) => void
+  onClose: () => void
+}
+
+function FetchFromAmazonPanel({ selectedCount, currentMarket, onFetch, onClose }: FetchPanelProps) {
+  const [markets, setMarkets] = useState<Set<string>>(() => new Set([currentMarket]))
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  function toggleMarket(mp: string) {
+    setMarkets((prev) => {
+      const n = new Set(prev)
+      n.has(mp) ? n.delete(mp) : n.add(mp)
+      return n
+    })
+  }
+
+  return (
+    <div
+      ref={panelRef}
+      className="absolute right-0 top-full mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Fetch from Amazon
+          </div>
+          <div className="text-xs text-slate-400">
+            {selectedCount} SKU{selectedCount !== 1 ? 's' : ''} selected
+          </div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* What to fetch */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="text-xs font-medium text-slate-500 mb-2">What to fetch</div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked readOnly className="w-3.5 h-3.5 accent-blue-600" />
+          <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">ASIN</span>
+          <span className="text-xs text-slate-400">Amazon's assigned identifier</span>
+        </label>
+        <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+          ASINs are assigned by Amazon after publishing. The ASIN will appear
+          as a clickable link on each row, opening the Amazon listing directly.
+        </p>
+      </div>
+
+      {/* Markets */}
+      <div className="px-4 py-3">
+        <div className="text-xs font-medium text-slate-500 mb-2">Markets</div>
+        <div className="flex flex-wrap gap-1.5">
+          {ALL_MARKETS.map((mp) => {
+            const isCurrent = mp === currentMarket
+            const checked = markets.has(mp)
+            return (
+              <button
+                key={mp}
+                type="button"
+                onClick={() => toggleMarket(mp)}
+                className={cn(
+                  'text-xs font-medium px-2.5 py-1 rounded border transition-colors',
+                  checked
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-400',
+                )}
+              >
+                {mp}{isCurrent && <span className="ml-1 opacity-70 text-[10px]">current</span>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+        <Button
+          size="sm"
+          className="w-full justify-center"
+          onClick={() => onFetch([...markets])}
+          disabled={markets.size === 0}
+        >
+          <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />
+          Fetch {selectedCount} SKU{selectedCount !== 1 ? 's' : ''}
+          {markets.size > 1 ? ` × ${markets.size} markets` : ` (${[...markets][0]})`}
         </Button>
       </div>
     </div>

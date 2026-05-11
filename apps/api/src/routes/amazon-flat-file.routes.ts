@@ -316,6 +316,83 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ── POST /api/amazon/flat-file/fetch-listings ───────────────────────
+  // Pull live listing data from Amazon for a set of SKUs across one or more
+  // marketplaces. Currently returns ASIN + listing status per SKU per market.
+  // Uses the Listings Items API (2021-08-01).
+  fastify.post<{
+    Body: { skus: string[]; marketplaces: string[] }
+  }>('/amazon/flat-file/fetch-listings', async (request, reply) => {
+    const { skus, marketplaces } = request.body
+    if (!skus?.length || !marketplaces?.length) {
+      return reply.code(400).send({ error: 'skus and marketplaces are required' })
+    }
+    if (skus.length > 100) {
+      return reply.code(400).send({ error: 'Max 100 SKUs per request' })
+    }
+
+    const sellerId = getSellerId()
+    if (!sellerId) {
+      return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
+    }
+
+    const marketplaceIds = marketplaces
+      .map((mp) => MARKETPLACE_ID_MAP[mp.toUpperCase()])
+      .filter(Boolean)
+
+    if (!marketplaceIds.length) {
+      return reply.code(400).send({ error: 'No valid marketplace codes provided' })
+    }
+
+    try {
+      const sp = await getSpClient()
+
+      // Fetch each SKU in parallel — Listings Items API is per-SKU
+      const settled = await Promise.allSettled(
+        skus.map(async (sku) => {
+          const res: any = await sp.callAPI({
+            operation: 'getListingsItem',
+            endpoint: 'listingsItems',
+            path: { sellerId, sku: encodeURIComponent(sku) },
+            query: {
+              marketplaceIds,
+              includedData: ['summaries'],
+            },
+          })
+
+          const byMarket: Record<string, { asin?: string; status?: string }> = {}
+          for (const summary of res?.summaries ?? []) {
+            const mp = Object.entries(MARKETPLACE_ID_MAP).find(
+              ([, id]) => id === summary.marketplaceId,
+            )?.[0]
+            if (!mp) continue
+            byMarket[mp] = {
+              asin: summary.asin ?? undefined,
+              status: Array.isArray(summary.status) ? summary.status[0] : summary.status,
+            }
+          }
+          return { sku, byMarket }
+        }),
+      )
+
+      // Shape: { results: { IT: { SKU: { asin, status } }, DE: { ... } } }
+      const results: Record<string, Record<string, { asin?: string; status?: string }>> = {}
+      for (const outcome of settled) {
+        if (outcome.status !== 'fulfilled') continue
+        const { sku, byMarket } = outcome.value
+        for (const [mp, data] of Object.entries(byMarket)) {
+          results[mp] = results[mp] ?? {}
+          results[mp][sku] = data
+        }
+      }
+
+      return reply.send({ results })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/fetch-listings failed')
+      return reply.code(500).send({ error: err?.message ?? 'Fetch failed' })
+    }
+  })
+
   // ── POST /api/amazon/flat-file/export-tsv ───────────────────────────
   // Server-side TSV generation (client can also do this locally).
   fastify.post<{
