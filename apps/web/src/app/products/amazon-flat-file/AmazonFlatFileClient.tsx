@@ -99,20 +99,6 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
     parentage_level: parentage,
     parent_sku: '',
     variation_theme: '',
-    item_name: '',
-    brand: '',
-    external_product_id_type: '',
-    external_product_id: '',
-    product_description: '',
-    bullet_point1: '', bullet_point2: '', bullet_point3: '',
-    bullet_point4: '', bullet_point5: '',
-    generic_keyword: '',
-    price_eur: '',
-    quantity: '',
-    fulfillment_channel_code: 'DEFAULT',
-    skip_offer: 'false',
-    main_image_url: '',
-    color: '',
   }
 }
 
@@ -153,7 +139,7 @@ export default function AmazonFlatFileClient({
 
   // Groups that are open (visible)
   const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(['offer_identity', 'variations', 'product_identity', 'product_details', 'offer_it'])
+    () => new Set(['offer_identity', 'variations', 'required_fields'])
   )
 
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
@@ -230,7 +216,7 @@ export default function AmazonFlatFileClient({
       if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
       const m: Manifest = await mRes.json()
       setManifest(m)
-      setOpenGroups(new Set(['offer_identity', 'variations', 'product_identity', 'product_details', 'offer_it']))
+      setOpenGroups(new Set(['offer_identity', 'variations', 'required_fields']))
       if (rRes.ok) { const d = await rRes.json(); setRows(d.rows ?? []) }
       else setRows([])
       const p = new URLSearchParams(searchParams?.toString() ?? '')

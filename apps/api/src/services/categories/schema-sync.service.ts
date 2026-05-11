@@ -18,7 +18,7 @@
 
 import type { PrismaClient } from '@prisma/client'
 import { AmazonService } from '../marketplaces/amazon.service.js'
-import { amazonMarketplaceId } from './marketplace-ids.js'
+import { amazonMarketplaceId, amazonLocale } from './marketplace-ids.js'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
@@ -130,7 +130,7 @@ export class CategorySchemaService {
       query: {
         marketplaceIds: [marketplaceId],
         requirements: 'LISTING',
-        locale: 'en_US',
+        locale: amazonLocale(query.marketplace),
       },
     })) as AmazonProductTypeMeta
 
