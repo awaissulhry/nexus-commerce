@@ -262,7 +262,12 @@ export default function AmazonFlatFileClient({
   const [imageSize, setImageSize] = useState<number>(() => {
     try { return parseInt(localStorage.getItem('ff-image-size') ?? '48', 10) || 48 } catch { return 48 }
   })
-  const [imagesByAsin, setImagesByAsin] = useState<Record<string, string | null>>({})
+  const [imagesByAsin, setImagesByAsin] = useState<Record<string, string | null>>(() => {
+    try {
+      const raw = localStorage.getItem('ff-images-cache')
+      return raw ? JSON.parse(raw) : {}
+    } catch { return {} }
+  })
   const [pushPanel, setPushPanel] = useState<{ tab: 'copy' | 'translate'; preselectedCol?: Column } | null>(null)
 
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
@@ -963,7 +968,14 @@ export default function AmazonFlatFileClient({
       body: JSON.stringify({ asins: uncached, marketplace }),
     })
       .then((r) => (r.ok ? r.json() : { images: {} }))
-      .then((data) => setImagesByAsin((prev) => ({ ...prev, ...(data.images ?? {}) })))
+      .then((data) => {
+        const incoming = data.images ?? {}
+        setImagesByAsin((prev) => {
+          const next = { ...prev, ...incoming }
+          try { localStorage.setItem('ff-images-cache', JSON.stringify(next)) } catch {}
+          return next
+        })
+      })
       .catch(() => {})
   // imagesByAsin is intentionally NOT in the dep array (it's updated inside the effect)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2549,8 +2561,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             <span className="text-[9px] text-slate-400 tabular-nums leading-none">{rowIdx + 1}</span>
           )}
 
-          {/* ASIN link */}
-          {!showRowImages && row._asin ? (() => {
+          {/* ASIN link — always when images off; also for M/L/XL when images on */}
+          {(!showRowImages || imageSize >= 48) && row._asin ? (() => {
             const asin = String(row._asin)
             const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
             return (
@@ -2565,8 +2577,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             )
           })() : null}
 
-          {/* Listing status */}
-          {!showRowImages && row._listingStatus != null && (() => {
+          {/* Listing status — same visibility rule as ASIN */}
+          {(!showRowImages || imageSize >= 48) && row._listingStatus != null && (() => {
             const s = String(row._listingStatus)
             const cls = (s === 'ACTIVE' || s === 'BUYABLE')
               ? 'text-emerald-600 dark:text-emerald-400'
