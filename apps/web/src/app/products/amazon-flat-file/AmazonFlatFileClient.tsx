@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Copy, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
-  Send, Trash2, Upload, X,
+  Search, Send, Trash2, Upload, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -149,6 +149,11 @@ export default function AmazonFlatFileClient({
   })
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
 
+  // Search
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMode, setSearchMode] = useState<'rows' | 'columns'>('rows')
+  const searchRef = useRef<HTMLInputElement>(null)
+
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
 
@@ -199,18 +204,47 @@ export default function AmazonFlatFileClient({
     [orderedGroups, openGroups],
   )
 
+  // Column-mode search: filter columns within visible groups
+  const displayGroups = useMemo<ColumnGroup[]>(() => {
+    if (!searchQuery || searchMode !== 'columns') return visibleGroups
+    const q = searchQuery.toLowerCase()
+    return visibleGroups
+      .map((g) => ({
+        ...g,
+        columns: g.columns.filter(
+          (c) =>
+            c.id.toLowerCase().includes(q) ||
+            c.labelEn.toLowerCase().includes(q) ||
+            c.labelLocal.toLowerCase().includes(q) ||
+            c.fieldRef.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.columns.length > 0)
+  }, [visibleGroups, searchQuery, searchMode])
+
   const allColumns = useMemo<Column[]>(
-    () => visibleGroups.flatMap((g) => g.columns),
-    [visibleGroups],
+    () => displayGroups.flatMap((g) => g.columns),
+    [displayGroups],
   )
+
+  // Row-mode search: filter rows by any cell value
+  const displayRows = useMemo<Row[]>(() => {
+    if (!searchQuery || searchMode !== 'rows') return rows
+    const q = searchQuery.toLowerCase()
+    return rows.filter((row) =>
+      Object.entries(row).some(
+        ([k, v]) => !k.startsWith('_') && v != null && String(v).toLowerCase().includes(q),
+      ),
+    )
+  }, [rows, searchQuery, searchMode])
 
   const colToGroup = useMemo<Map<string, ColumnGroup>>(() => {
     const m = new Map<string, ColumnGroup>()
-    for (const g of manifest?.groups ?? []) {
+    for (const g of orderedGroups) {
       for (const c of g.columns) m.set(c.id, g)
     }
     return m
-  }, [manifest])
+  }, [orderedGroups])
 
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
@@ -268,7 +302,7 @@ export default function AmazonFlatFileClient({
 
   const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
     const colIds = allColumns.map((c) => c.id)
-    const rowIds = rows.map((r) => r._rowId as string)
+    const rowIds = displayRows.map((r) => r._rowId as string)
     let ci = colIds.indexOf(colId), ri = rowIds.indexOf(rowId)
     if (dir === 'right') ci = Math.min(ci + 1, colIds.length - 1)
     else if (dir === 'left') ci = Math.max(ci - 1, 0)
@@ -528,6 +562,63 @@ export default function AmazonFlatFileClient({
             )}
           </div>
 
+          {/* Search bar */}
+          {manifest && (
+            <div className="flex items-center gap-1">
+              <div className="relative flex items-center">
+                <Search className="absolute left-2 w-3 h-3 text-slate-400 pointer-events-none" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
+                  placeholder={searchMode === 'rows' ? 'Search rows, SKUs, ASINs…' : 'Search columns, fields…'}
+                  className="pl-6 pr-6 py-0.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-52"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-1.5 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              {/* Mode toggle */}
+              <div className="flex border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setSearchMode('rows')}
+                  className={cn('text-xs px-2 py-0.5 transition-colors', searchMode === 'rows'
+                    ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
+                  title="Filter rows"
+                >
+                  Rows
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSearchMode('columns')}
+                  className={cn('text-xs px-2 py-0.5 transition-colors border-l border-slate-200 dark:border-slate-700', searchMode === 'columns'
+                    ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')}
+                  title="Filter columns"
+                >
+                  Cols
+                </button>
+              </div>
+              {/* Match count */}
+              {searchQuery && (
+                <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">
+                  {searchMode === 'rows'
+                    ? `${displayRows.length} / ${rows.length}`
+                    : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Group toggles — draggable to reorder */}
           {manifest && (
             <div className="flex items-center gap-1 flex-wrap ml-auto">
@@ -619,7 +710,7 @@ export default function AmazonFlatFileClient({
                 <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px]" rowSpan={3} />
                 <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-7 min-w-[28px] text-xs text-slate-400 text-center font-normal" rowSpan={3}>#</th>
 
-                {visibleGroups.map((g) => {
+                {displayGroups.map((g) => {
                   const c = gColor(g.color)
                   return (
                     <th key={g.id} colSpan={g.columns.length}
@@ -662,7 +753,7 @@ export default function AmazonFlatFileClient({
             </thead>
 
             <tbody>
-              {rows.map((row, rowIdx) => (
+              {displayRows.map((row, rowIdx) => (
                 <SpreadsheetRow
                   key={row._rowId as string}
                   row={row}
@@ -678,6 +769,15 @@ export default function AmazonFlatFileClient({
                   onNavigate={(colId, dir) => navigate(row._rowId as string, colId, dir)}
                 />
               ))}
+
+              {/* Empty search result */}
+              {searchQuery && searchMode === 'rows' && displayRows.length === 0 && (
+                <tr>
+                  <td colSpan={allColumns.length + 2} className="px-6 py-6 text-center text-sm text-slate-400 italic">
+                    No rows match &ldquo;{searchQuery}&rdquo;
+                  </td>
+                </tr>
+              )}
 
               {/* Add-row bar */}
               <tr>
