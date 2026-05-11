@@ -6,8 +6,8 @@ import {
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Copy, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
+  AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  Copy, Download, FileSpreadsheet, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine,
   Undo2, Redo2, GripVertical, SlidersHorizontal,
 } from 'lucide-react'
@@ -83,6 +83,8 @@ interface FeedEntry {
   results: FeedResult[]
   error?: string
 }
+
+interface ValidationIssue { level: 'error' | 'warn'; msg: string }
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -197,6 +199,12 @@ export default function AmazonFlatFileClient({
   const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
+  const [frozenColCount, setFrozenColCount] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
+  })
+  const [showValidPanel, setShowValidPanel] = useState(false)
+
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
@@ -269,6 +277,7 @@ export default function AmazonFlatFileClient({
   // Persist resize state to localStorage
   useEffect(() => { try { localStorage.setItem('ff-col-widths', JSON.stringify(colWidths)) } catch {} }, [colWidths])
   useEffect(() => { try { localStorage.setItem('ff-row-height', String(rowHeight)) } catch {} }, [rowHeight])
+  useEffect(() => { try { localStorage.setItem('ff-frozen-cols', String(frozenColCount)) } catch {} }, [frozenColCount])
 
   // Global mouse handlers for drag-resize
   useEffect(() => {
@@ -360,6 +369,32 @@ export default function AmazonFlatFileClient({
   )
   useEffect(() => { allColumnsRef.current = allColumns }, [allColumns])
 
+  const manifestColumns = useMemo<Column[]>(
+    () => (manifest?.groups ?? []).flatMap((g) => g.columns),
+    [manifest],
+  )
+
+  const cellErrors = useMemo<Map<string, ValidationIssue>>(() => {
+    const m = new Map<string, ValidationIssue>()
+    for (const row of rows) {
+      for (const col of manifestColumns) {
+        const rawVal = row[col.id]
+        const val = rawVal != null ? String(rawVal) : ''
+        if (col.required && !val) {
+          m.set(`${row._rowId as string}:${col.id}`, { level: 'error', msg: `${col.labelEn} is required` })
+        } else if (col.maxLength && val.length > col.maxLength) {
+          m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `Exceeds max ${col.maxLength} chars (${val.length})` })
+        } else if (col.options?.length && val && !col.options.includes(val)) {
+          m.set(`${row._rowId as string}:${col.id}`, { level: 'warn', msg: `"${val}" is not a valid option` })
+        }
+      }
+    }
+    return m
+  }, [rows, manifestColumns])
+
+  const validErrorCount = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'error').length, [cellErrors])
+  const validWarnCount  = useMemo(() => [...cellErrors.values()].filter((e) => e.level === 'warn').length, [cellErrors])
+
   // Row-mode search + multi-level sort (display-only, never mutates rows)
   const displayRows = useMemo<Row[]>(() => {
     let result: Row[]
@@ -395,9 +430,34 @@ export default function AmazonFlatFileClient({
         return 0
       })
     }
+    // FF.40: parent/child hierarchy grouping
+    if (result.some((r) => r.parentage_level === 'parent' || r.parentage_level === 'child')) {
+      const grouped: Row[] = []
+      const processedChildIds = new Set<string>()
+      for (const row of result) {
+        if (row.parentage_level === 'child') continue
+        grouped.push(row)
+        if (row.parentage_level === 'parent' && !collapsedParents.has(row._rowId as string)) {
+          const pSku = String(row.item_sku ?? '')
+          for (const child of result) {
+            if (child.parentage_level === 'child' && String(child.parent_sku ?? '') === pSku) {
+              grouped.push(child)
+              processedChildIds.add(child._rowId as string)
+            }
+          }
+        }
+      }
+      for (const row of result) {
+        if (row.parentage_level === 'child' && !processedChildIds.has(row._rowId as string)) {
+          grouped.push(row)
+        }
+      }
+      result = grouped
+    }
+
     displayRowsRef.current = result
     return result
-  }, [rows, searchQuery, searchMode, sortConfig])
+  }, [rows, searchQuery, searchMode, sortConfig, collapsedParents])
 
   const normSel = useMemo<NormSel | null>(() => {
     if (!selAnchor || !selEnd) return null
@@ -464,25 +524,55 @@ export default function AmazonFlatFileClient({
     if (!selAnchor) return
     const text = await navigator.clipboard.readText().catch(() => '')
     if (!text) return
-    const pasteRows = text.split('\n').map(line => line.split('\t'))
-    pushSnapshot()
+    const pasteLines = text.split('\n').filter((l) => l.trim())
+    if (!pasteLines.length) return
+
+    // FF.42: detect header row — if ≥2 cells in first row match known column ids/labels
+    const firstRow = pasteLines[0].split('\t')
+    const colLookup = new Map<string, number>()
+    allColumnsRef.current.forEach((c, i) => {
+      colLookup.set(c.id.toLowerCase(), i)
+      colLookup.set(c.labelEn.toLowerCase(), i)
+      colLookup.set(c.labelLocal.toLowerCase(), i)
+      if (c.fieldRef) colLookup.set(c.fieldRef.toLowerCase(), i)
+    })
+    const headerMap = new Map<number, number>() // pasteColIdx → allColumns index
+    let matchCount = 0
+    firstRow.forEach((cell, pi) => {
+      const ci = colLookup.get(cell.trim().toLowerCase())
+      if (ci !== undefined) { headerMap.set(pi, ci); matchCount++ }
+    })
+    const hasHeaders = matchCount >= 2
+
+    const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
     const { ri: startRi, ci: startCi } = selAnchor
-    setRows(prev => {
+    pushSnapshot()
+    setRows((prev) => {
       const next = [...prev]
-      pasteRows.forEach((pasteRow, riOffset) => {
+      dataRows.forEach((line, riOffset) => {
+        const pasteRow = line.split('\t')
         const dr = displayRowsRef.current[startRi + riOffset]; if (!dr) return
-        const idx = prev.findIndex(r => r._rowId === dr._rowId); if (idx === -1) return
-        let updated: Row = { ...prev[idx], _dirty: true }
-        pasteRow.forEach((val, ciOffset) => {
-          const col = allColumnsRef.current[startCi + ciOffset]; if (col) updated[col.id] = val
-        })
+        const idx = prev.findIndex((r) => r._rowId === dr._rowId); if (idx === -1) return
+        const updated: Row = { ...prev[idx], _dirty: true }
+        if (hasHeaders) {
+          pasteRow.forEach((val, pi) => {
+            const ci = headerMap.get(pi)
+            if (ci !== undefined) { const col = allColumnsRef.current[ci]; if (col) updated[col.id] = val }
+          })
+        } else {
+          pasteRow.forEach((val, ciOffset) => {
+            const col = allColumnsRef.current[startCi + ciOffset]; if (col) updated[col.id] = val
+          })
+        }
         next[idx] = updated
       })
       return next
     })
-    const lastR = pasteRows.length - 1
-    const lastC = Math.max(...pasteRows.map(r => r.length)) - 1
-    setSelEnd({ ri: startRi + lastR, ci: startCi + lastC })
+    const lastR = dataRows.length - 1
+    const lastC = hasHeaders
+      ? Math.max(0, ...headerMap.values())
+      : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
+    setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
   }, [selAnchor, pushSnapshot])
 
   const handleFillDown = useCallback(() => {
@@ -760,6 +850,15 @@ export default function AmazonFlatFileClient({
     return m
   }, [orderedGroups])
 
+  const stickyLeftByColIdx = useMemo<Record<number, number>>(() => {
+    const out: Record<number, number> = {}
+    let left = 64 // 36px checkbox + 28px row#
+    for (let i = 0; i < Math.min(frozenColCount, allColumns.length); i++) {
+      out[i] = left
+      left += colWidths[allColumns[i].id] ?? allColumns[i].width
+    }
+    return out
+  }, [frozenColCount, allColumns, colWidths])
 
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
@@ -1283,6 +1382,20 @@ export default function AmazonFlatFileClient({
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
+          {/* FF.38 Validation toggle */}
+          <TbBtn
+            icon={<AlertTriangle className="w-3.5 h-3.5" />}
+            title={validErrorCount + validWarnCount > 0
+              ? `Validation: ${validErrorCount} error${validErrorCount !== 1 ? 's' : ''}, ${validWarnCount} warning${validWarnCount !== 1 ? 's' : ''}`
+              : 'Validation — no issues'}
+            onClick={() => setShowValidPanel((o) => !o)}
+            disabled={!manifest}
+            active={showValidPanel}
+            badge={(validErrorCount + validWarnCount) || undefined}
+          />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
           {/* Sort */}
           <div className="relative">
             <TbBtn
@@ -1540,24 +1653,41 @@ export default function AmazonFlatFileClient({
 
               {/* Row 2: English column labels + column resize handles */}
               <tr>
-                {allColumns.map((col, ci) => {
+                {allColumns.map((col, colIdx) => {
                   const c = gColor(colToGroup.get(col.id)?.color ?? 'slate')
                   const w = colWidths[col.id] ?? col.width
                   return (
                     <th key={`en-${col.id}`}
-                      style={{ minWidth: w, width: w, cursor: 'pointer' }}
-                      className={cn('relative px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/10', c.text,
+                      style={{ minWidth: w, width: w, cursor: 'pointer', ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
+                      className={cn('relative group/th px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/10', c.text,
                         col.required && 'font-bold')}
                       title={col.description}
                       onClick={() => {
                         const maxRi = displayRows.length - 1
-                        setSelAnchor({ ri: 0, ci })
-                        setSelEnd({ ri: maxRi, ci })
+                        setSelAnchor({ ri: 0, ci: colIdx })
+                        setSelEnd({ ri: maxRi, ci: colIdx })
                         setIsEditing(false)
                         const firstRow = displayRows[0]
                         if (firstRow) setActiveCell({ rowId: firstRow._rowId as string, colId: col.id })
                       }}>
                       {col.labelEn}{col.required && <span className="ml-0.5 text-red-500">*</span>}
+                      {/* FF.41 Freeze pin */}
+                      <button
+                        type="button"
+                        className={cn(
+                          'ml-1 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0',
+                          colIdx < frozenColCount
+                            ? 'text-blue-500 opacity-100'
+                            : 'text-slate-400 hover:text-blue-500',
+                        )}
+                        title={colIdx < frozenColCount ? 'Unfreeze columns' : 'Freeze columns up to here'}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setFrozenColCount(colIdx < frozenColCount ? colIdx : colIdx + 1)
+                        }}
+                      >
+                        <Pin className="w-3 h-3" />
+                      </button>
                       {/* Resize handle — drag to resize, double-click to reset */}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/colresize flex items-center justify-center z-10"
@@ -1574,11 +1704,11 @@ export default function AmazonFlatFileClient({
 
               {/* Row 3: Italian column labels + max-length hint */}
               <tr>
-                {allColumns.map((col) => {
+                {allColumns.map((col, colIdx) => {
                   const w = colWidths[col.id] ?? col.width
                   return (
                     <th key={`it-${col.id}`}
-                      style={{ minWidth: w, width: w }}
+                      style={{ minWidth: w, width: w, ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
                       className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
                       {col.labelLocal}
                       {col.maxLength != null && (
@@ -1637,6 +1767,15 @@ export default function AmazonFlatFileClient({
                   }}
                   onFillHandlePointerDown={handleFillHandlePointerDown}
                   onFillDrop={handleFillDrop}
+                  stickyLeftByColIdx={stickyLeftByColIdx}
+                  cellErrors={cellErrors}
+                  collapsedParents={collapsedParents}
+                  onToggleCollapse={(rowId) => setCollapsedParents((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(rowId)) next.delete(rowId)
+                    else next.add(rowId)
+                    return next
+                  })}
                 />
               ))}
 
@@ -1698,6 +1837,20 @@ export default function AmazonFlatFileClient({
               {(clipboardRange.rMax - clipboardRange.rMin + 1) * (clipboardRange.cMax - clipboardRange.cMin + 1)} cells in clipboard
             </span>
           )}
+          {(validErrorCount > 0 || validWarnCount > 0) && (
+            <button
+              type="button"
+              onClick={() => setShowValidPanel((o) => !o)}
+              className={cn(
+                'flex items-center gap-1 ml-auto',
+                validErrorCount > 0 ? 'text-red-500' : 'text-amber-500',
+              )}
+            >
+              <AlertTriangle className="w-3 h-3" />
+              {validErrorCount > 0 && <span>{validErrorCount} error{validErrorCount !== 1 ? 's' : ''}</span>}
+              {validWarnCount > 0 && <span>{validWarnCount} warning{validWarnCount !== 1 ? 's' : ''}</span>}
+            </button>
+          )}
         </div>
       )}
 
@@ -1731,6 +1884,64 @@ export default function AmazonFlatFileClient({
           })}
         </div>
       )}
+      {/* FF.38 Validation panel */}
+      {showValidPanel && manifest && (
+        <div className="fixed right-4 bottom-12 w-80 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50">
+          <div className="sticky top-0 bg-white dark:bg-slate-900 px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+              Validation
+              {validErrorCount > 0 && <span className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 rounded-full text-[10px]">{validErrorCount} error{validErrorCount !== 1 ? 's' : ''}</span>}
+              {validWarnCount > 0 && <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 rounded-full text-[10px]">{validWarnCount} warning{validWarnCount !== 1 ? 's' : ''}</span>}
+            </span>
+            <button type="button" onClick={() => setShowValidPanel(false)} className="text-slate-400 hover:text-slate-600"><X className="w-3.5 h-3.5" /></button>
+          </div>
+          {cellErrors.size === 0 ? (
+            <div className="px-3 py-4 text-xs text-center text-slate-400">No issues found</div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {[...cellErrors.entries()].slice(0, 200).map(([key, issue]) => {
+                const [rowId, colId] = key.split(':')
+                const rowIdx = displayRowsRef.current.findIndex((r) => r._rowId === rowId)
+                const colIdx = allColumnsRef.current.findIndex((c) => c.id === colId)
+                const col = allColumnsRef.current.find((c) => c.id === colId) ?? manifestColumns.find((c) => c.id === colId)
+                const rowLabel = rowIdx >= 0 ? `Row ${rowIdx + 1}` : 'Row ?'
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-start gap-2"
+                    onClick={() => {
+                      if (rowIdx < 0 || colIdx < 0) return
+                      setSelAnchor({ ri: rowIdx, ci: colIdx })
+                      setSelEnd({ ri: rowIdx, ci: colIdx })
+                      const row = displayRowsRef.current[rowIdx]
+                      if (row) setActiveCell({ rowId: row._rowId as string, colId })
+                      requestAnimationFrame(() =>
+                        document.querySelector(`[data-ri="${rowIdx}"][data-ci="${colIdx}"]`)
+                          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                      )
+                    }}
+                  >
+                    <span className={cn('mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0',
+                      issue.level === 'error' ? 'bg-red-500' : 'bg-amber-400')} />
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-slate-400">{rowLabel} · {col?.labelEn ?? colId}</span>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 truncate">{issue.msg}</p>
+                    </div>
+                  </button>
+                )
+              })}
+              {cellErrors.size > 200 && (
+                <div className="px-3 py-2 text-[10px] text-slate-400 text-center">
+                  +{cellErrors.size - 200} more — fix shown issues first
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -1803,6 +2014,10 @@ interface RowProps {
   isEditing: boolean
   editInitialChar: string | null
   clipboardRange: NormSel | null
+  stickyLeftByColIdx: Record<number, number>
+  cellErrors: Map<string, ValidationIssue>
+  collapsedParents: Set<string>
+  onToggleCollapse: (rowId: string) => void
   onSelect: (c: boolean) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
@@ -1821,12 +2036,15 @@ interface RowProps {
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
   marketplace, colWidths, rowHeight, isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
+  stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
   onSelect, onDeactivate, onChange, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
+  const isParent = row.parentage_level === 'parent'
+  const isChild  = row.parentage_level === 'child'
 
   const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
     : status === 'error' ? 'bg-red-50/70 dark:bg-red-950/20'
@@ -1872,10 +2090,28 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
       {/* Row # + ASIN badge + row-height resize handle */}
-      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/10"
+      <td className={cn(
+        'sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/10',
+        isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
+      )}
         onClick={() => onRowSelect(rowIdx)}>
         <div className="flex flex-col items-end gap-0.5" style={{ height: rowHeight, justifyContent: 'center' }}>
-          <span className="text-xs text-slate-400 tabular-nums">{rowIdx + 1}</span>
+          <div className="flex items-center gap-0.5 w-full justify-end">
+            {isParent && (
+              <button
+                type="button"
+                className="p-0 text-slate-400 hover:text-slate-600 flex-shrink-0"
+                onClick={(e) => { e.stopPropagation(); onToggleCollapse(rowId) }}
+                title={collapsedParents.has(rowId) ? 'Expand children' : 'Collapse children'}
+              >
+                {collapsedParents.has(rowId)
+                  ? <ChevronRight className="w-3 h-3" />
+                  : <ChevronDown className="w-3 h-3" />}
+              </button>
+            )}
+            {isChild && <span className="w-3 flex-shrink-0" />}
+            <span className={cn('text-xs text-slate-400 tabular-nums', isChild && 'ml-1')}>{rowIdx + 1}</span>
+          </div>
           {row._asin ? (() => {
             const asin = String(row._asin)
             const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
@@ -1890,6 +2126,14 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
               >{asin}</a>
             )
           })() : null}
+          {row._listingStatus != null && (() => {
+            const s = String(row._listingStatus)
+            const cls = (s === 'ACTIVE' || s === 'BUYABLE')
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : s === 'INACTIVE' ? 'text-amber-500 dark:text-amber-400'
+              : 'text-red-500 dark:text-red-400'
+            return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
+          })()}
         </div>
         {/* Row height resize handle at the bottom edge */}
         <div
@@ -1906,6 +2150,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         const isActive = activeCell?.rowId === rowId && activeCell?.colId === col.id
         const groupColor = colToGroup.get(col.id)?.color ?? 'slate'
         const w = colWidths[col.id] ?? col.width
+        const validIssue = cellErrors.get(`${rowId}:${col.id}`)
+        const stickyLeft = stickyLeftByColIdx[ci]
 
         const isSelected = normSel
           ? rowIdx >= normSel.rMin && rowIdx <= normSel.rMax && ci >= normSel.cMin && ci <= normSel.cMax
@@ -1973,6 +2219,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             onDeactivate={onDeactivate}
             onChange={(v) => onChange(col.id, v)}
             onNavigate={(dir) => onNavigate(col.id, dir)}
+            validIssue={validIssue}
+            stickyLeft={stickyLeft}
           />
         )
       })}
@@ -2141,6 +2389,8 @@ interface CellProps {
   editInitialChar: string | null
   isClipboard: boolean
   clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
+  validIssue?: ValidationIssue
+  stickyLeft?: number
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
@@ -2153,6 +2403,7 @@ interface CellProps {
 function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
+  validIssue, stickyLeft,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
@@ -2174,7 +2425,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
 
   const isEmpty = !displayValue
-  const cellStyle = { minWidth: width, width }
+  const cellStyle: React.CSSProperties = { minWidth: width, width, ...(stickyLeft !== undefined ? { position: 'sticky' as const, left: stickyLeft, zIndex: 4 } : {}) }
   const hStyle = { height: cellHeight }
 
   const selStyle: React.CSSProperties = selEdges ? {
@@ -2202,7 +2453,11 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     : cellBg,
     isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
     isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
-    !isActive && !isSelected && col.required && isEmpty && 'bg-red-50/70 dark:bg-red-950/20',
+    !isActive && !isSelected && (
+      validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
+      : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
+      : ''
+    ),
   )
 
   const tdPointerDown = (e: React.PointerEvent<HTMLTableCellElement>) => {
@@ -2336,7 +2591,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
 
   return (
     <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ ...cellStyle, ...selStyle }} title={col.description}>
+      style={{ ...cellStyle, ...selStyle }} title={validIssue?.msg ?? col.description}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
         isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
