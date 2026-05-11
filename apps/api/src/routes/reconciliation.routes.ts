@@ -26,6 +26,7 @@ import {
   bulkSetReconRowStatus,
   type ReconStatus,
 } from '../services/listing-reconciliation.service.js'
+import { startPullJob, getJobStatus } from '../services/amazon/flat-file-pull.service.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 
@@ -214,5 +215,32 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
     }
+  })
+
+  // ── POST /api/reconciliation/flat-file-pull/start ────────────────────────
+  // Kick off a background job that calls getListingsItem for every product
+  // SKU in the given marketplace + productType, writes full attributes to
+  // ChannelListing.platformAttributes, and returns a jobId to poll.
+  fastify.post<{
+    Body: { marketplace?: string; productType?: string }
+  }>('/reconciliation/flat-file-pull/start', async (request, reply) => {
+    const { marketplace = 'IT', productType = '' } = request.body ?? {}
+    if (!productType?.trim()) {
+      return reply.code(400).send({ error: 'productType is required' })
+    }
+    const jobId = startPullJob(marketplace, productType)
+    return reply.send({ jobId })
+  })
+
+  // ── GET /api/reconciliation/flat-file-pull/status/:jobId ─────────────────
+  // Poll job progress. When status='done', rows[] is populated and the client
+  // can write them to localStorage and open the flat file.
+  fastify.get<{
+    Params: { jobId: string }
+  }>('/reconciliation/flat-file-pull/status/:jobId', async (request, reply) => {
+    const { jobId } = request.params
+    const job = getJobStatus(jobId)
+    if (!job) return reply.code(404).send({ error: 'Job not found or expired' })
+    return reply.send(job)
   })
 }

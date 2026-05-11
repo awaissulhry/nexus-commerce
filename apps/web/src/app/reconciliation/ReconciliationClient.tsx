@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, useTransition } from 'react'
+import { useState, useCallback, useTransition, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
   CheckCircle2,
@@ -12,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Download,
+  ExternalLink,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -608,7 +611,236 @@ export default function ReconciliationClient({
             </ol>
           </div>
         )}
+
+        {/* Flat File Sync */}
+        <FlatFileSyncPanel />
       </div>
+    </div>
+  )
+}
+
+// ── Flat File Sync Panel ───────────────────────────────────────────────────
+
+interface PullJob {
+  jobId: string
+  marketplace: string
+  productType: string
+  status: 'running' | 'done' | 'failed'
+  progress: number
+  total: number
+  pulled: number
+  skipped: number
+  failed: number
+  errors: Array<{ sku: string; error: string }>
+  rows: any[]
+  startedAt: string
+  doneAt?: string
+  fatalError?: string
+}
+
+const MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK']
+
+function FlatFileSyncPanel() {
+  const backend = getBackendUrl()
+  const router = useRouter()
+
+  const [market, setMarket] = useState('IT')
+  const [productType, setProductType] = useState('')
+  const [job, setJob] = useState<PullJob | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
+  const [showErrors, setShowErrors] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Poll while job is running
+  useEffect(() => {
+    if (!job || job.status !== 'running') {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      return
+    }
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/status/${job.jobId}`)
+        if (res.ok) {
+          const updated: PullJob = await res.json()
+          setJob(updated)
+        }
+      } catch { /* ignore */ }
+    }, 3000)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [job?.jobId, job?.status, backend]) // eslint-disable-line
+
+  async function handleStart() {
+    if (!productType.trim()) { setErrMsg('Enter a product type (e.g. OUTERWEAR)'); return }
+    setErrMsg(null)
+    setStarting(true)
+    setJob(null)
+    setShowErrors(false)
+    try {
+      const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplace: market, productType: productType.trim().toUpperCase() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Start failed')
+      // Fetch initial status immediately
+      const statusRes = await fetch(`${backend}/api/reconciliation/flat-file-pull/status/${data.jobId}`)
+      setJob(statusRes.ok ? await statusRes.json() : { ...data, status: 'running', progress: 0, total: 0, pulled: 0, skipped: 0, failed: 0, errors: [], rows: [] })
+    } catch (e: any) {
+      setErrMsg(e?.message ?? 'Failed to start job')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  function openFlatFile() {
+    if (!job?.rows?.length) return
+    try {
+      const key = `ff-rows-${job.marketplace.toUpperCase()}-${job.productType.toUpperCase()}`
+      localStorage.setItem(key, JSON.stringify(job.rows))
+    } catch { /* storage full — navigate anyway */ }
+    router.push(`/products/amazon-flat-file?marketplace=${job.marketplace}&productType=${job.productType}`)
+  }
+
+  const pct = job && job.total > 0 ? Math.round((job.progress / job.total) * 100) : 0
+  const isDone = job?.status === 'done'
+  const isFailed = job?.status === 'failed'
+  const isRunning = job?.status === 'running'
+
+  return (
+    <div className="mt-8 border border-violet-200 dark:border-violet-800 rounded-xl bg-violet-50 dark:bg-violet-950/20 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Download className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+        <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-200">Pull from Amazon → Flat File</h3>
+        <span className="text-xs text-violet-500 dark:text-violet-400">Fetches all attributes for every SKU and pre-fills the flat file editor</span>
+      </div>
+
+      <div className="flex items-end gap-3 flex-wrap">
+        {/* Market */}
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Marketplace</label>
+          <div className="flex gap-1">
+            {MARKETS.map((mp) => (
+              <button key={mp} type="button"
+                onClick={() => setMarket(mp)}
+                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                  market === mp
+                    ? 'bg-violet-600 text-white border-violet-600'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'
+                }`}>
+                {mp}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Product type */}
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Product Type</label>
+          <input
+            type="text"
+            value={productType}
+            onChange={(e) => setProductType(e.target.value.toUpperCase())}
+            placeholder="e.g. OUTERWEAR"
+            className="px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 w-36"
+            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+          />
+        </div>
+
+        {/* Start button */}
+        <button
+          type="button"
+          onClick={handleStart}
+          disabled={starting || isRunning}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white text-xs font-medium rounded transition-colors">
+          {starting || isRunning
+            ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            : <Download className="w-3.5 h-3.5" />}
+          {isRunning ? 'Pulling…' : 'Pull from Amazon'}
+        </button>
+
+        {/* Open flat file button */}
+        {isDone && job.rows.length > 0 && (
+          <button
+            type="button"
+            onClick={openFlatFile}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded transition-colors">
+            <ExternalLink className="w-3.5 h-3.5" />
+            Open flat file →
+          </button>
+        )}
+      </div>
+
+      {errMsg && (
+        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{errMsg}</p>
+      )}
+
+      {/* Progress */}
+      {job && (
+        <div className="mt-4 space-y-2">
+          {isRunning && (
+            <>
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>Pulling SKUs… {job.progress} / {job.total || '?'}</span>
+                <span>{pct}%</span>
+              </div>
+              <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-violet-500 rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </>
+          )}
+
+          {isDone && (
+            <div className="flex items-center gap-4 text-xs">
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {job.pulled} pulled
+              </span>
+              {job.skipped > 0 && (
+                <span className="text-slate-400">{job.skipped} not on Amazon {market}</span>
+              )}
+              {job.failed > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowErrors((v) => !v)}
+                  className="flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:underline">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {job.failed} failed {showErrors ? '▲' : '▼'}
+                </button>
+              )}
+              <span className="text-slate-400">
+                {job.rows.length} rows ready for flat file
+              </span>
+            </div>
+          )}
+
+          {isFailed && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              ⚠ Job failed: {job.fatalError ?? 'Unknown error'}
+            </p>
+          )}
+
+          {showErrors && job.errors.length > 0 && (
+            <div className="mt-2 max-h-32 overflow-y-auto rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 space-y-1">
+              {job.errors.map((e, i) => (
+                <div key={i} className="text-[11px] flex gap-2">
+                  <span className="font-mono text-amber-700 dark:text-amber-300 flex-shrink-0">{e.sku}</span>
+                  <span className="text-amber-600 dark:text-amber-400">{e.error}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
+        Calls Amazon's Listings Items API per SKU — rate-limited automatically. Large catalogs may take 2–5 minutes.
+        Existing platform data is updated; the flat file editor opens pre-populated when done.
+      </p>
     </div>
   )
 }

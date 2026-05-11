@@ -1672,6 +1672,68 @@ export class AmazonService {
       return null
     }
   }
+
+  /**
+   * Fetch the full listing attributes for a single SKU from the Listings
+   * Items API. Used by the flat-file pull reconciliation flow to hydrate
+   * ChannelListing.platformAttributes with 100% accurate Amazon data.
+   *
+   * Returns null when the SKU is not listed in the given marketplace.
+   */
+  async fetchListingForFlatFile(
+    sku: string,
+    marketplaceId: string,
+  ): Promise<{
+    asin: string
+    attributes: Record<string, any>
+    title: string | null
+    listingStatus: string | null
+    productType: string | null
+    relationships: Array<{ type: string; parentAsin?: string; childAsins?: string[] }>
+  } | null> {
+    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    if (!sellerId) throw new Error('AMAZON_SELLER_ID not configured')
+
+    const sp = await this.getClient()
+    try {
+      const res: any = await sp.callAPI({
+        operation: 'getListingsItem',
+        endpoint: 'listingsItems',
+        path: { sellerId, sku },
+        query: {
+          marketplaceIds: [marketplaceId],
+          includedData: ['attributes', 'summaries', 'relationships'],
+        },
+      })
+
+      const asin: string = typeof res?.asin === 'string' ? res.asin : ''
+      if (!asin) return null // not listed in this marketplace
+
+      const summaries: any[] = res?.summaries ?? []
+      const summary = summaries[0] ?? null
+      const rawStatus =
+        (Array.isArray(summary?.status) ? summary.status[0] : summary?.status) ??
+        summary?.itemStatus ?? null
+      const title: string | null =
+        typeof summary?.itemName === 'string' ? summary.itemName : null
+      const productType: string | null =
+        typeof summary?.productType === 'string' ? summary.productType : null
+
+      const attributes: Record<string, any> = (res?.attributes as Record<string, any>) ?? {}
+      const relationships: any[] = res?.relationships ?? []
+
+      return {
+        asin,
+        attributes,
+        title,
+        listingStatus: typeof rawStatus === 'string' ? rawStatus : null,
+        productType,
+        relationships,
+      }
+    } catch {
+      return null // 404 or rate-limit exhaustion — treat as not listed
+    }
+  }
 }
 
 // ── Module-level helpers ────────────────────────────────────────────────
