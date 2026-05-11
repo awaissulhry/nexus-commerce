@@ -6,10 +6,10 @@ import {
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertCircle, CheckCircle2, ChevronDown, ChevronLeft,
+  AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Copy, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine,
-  Undo2, Redo2, GripVertical,
+  Undo2, Redo2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -169,6 +169,7 @@ export default function AmazonFlatFileClient({
   const [groupOrder, setGroupOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('ff-group-order') ?? '[]') } catch { return [] }
   })
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -777,29 +778,6 @@ export default function AmazonFlatFileClient({
               { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
               { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
             ]} />
-            {/* View menu — groups with toggle + drag-to-reorder */}
-            {manifest && (
-              <ViewMenuDropdown
-                orderedGroups={orderedGroups}
-                openGroups={openGroups}
-                hasCustomOrder={groupOrder.length > 0 || closedGroups.size > 0}
-                onToggleGroup={(id) => setClosedGroups((prev) => {
-                  const n = new Set(prev)
-                  openGroups.has(id) ? n.add(id) : n.delete(id)
-                  try { localStorage.setItem('ff-closed-groups', JSON.stringify([...n])) } catch {}
-                  return n
-                })}
-                onReorderGroups={(ids) => {
-                  setGroupOrder(ids)
-                  try { localStorage.setItem('ff-group-order', JSON.stringify(ids)) } catch {}
-                }}
-                onResetView={() => {
-                  setGroupOrder([])
-                  setClosedGroups(new Set())
-                  try { localStorage.removeItem('ff-group-order'); localStorage.removeItem('ff-closed-groups') } catch {}
-                }}
-              />
-            )}
           </div>
 
           {/* Separator */}
@@ -935,6 +913,66 @@ export default function AmazonFlatFileClient({
             </div>
           )}
 
+          {/* Group toggles — draggable to reorder */}
+          {manifest && (
+            <div className="flex items-center gap-1 flex-wrap ml-auto">
+              <span className="text-xs text-slate-400 mr-1">Columns:</span>
+              {orderedGroups.map((g) => {
+                const c = gColor(g.color)
+                const open = openGroups.has(g.id)
+                const isDragging = draggingGroupId === g.id
+                return (
+                  <button key={g.id} type="button"
+                    draggable
+                    onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
+                    onDragEnd={() => setDraggingGroupId(null)}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (!draggingGroupId || draggingGroupId === g.id) return
+                      const ids = orderedGroups.map((x) => x.id)
+                      const from = ids.indexOf(draggingGroupId)
+                      const to = ids.indexOf(g.id)
+                      const next = [...ids]
+                      next.splice(from, 1)
+                      next.splice(to, 0, draggingGroupId)
+                      setGroupOrder(next)
+                      try { localStorage.setItem('ff-group-order', JSON.stringify(next)) } catch {}
+                      setDraggingGroupId(null)
+                    }}
+                    onClick={() => setClosedGroups((prev) => {
+                      const n = new Set(prev)
+                      open ? n.add(g.id) : n.delete(g.id)
+                      try { localStorage.setItem('ff-closed-groups', JSON.stringify([...n])) } catch {}
+                      return n
+                    })}
+                    title={g.labelEn !== g.labelLocal ? `${g.labelLocal} — ${g.labelEn}` : g.labelEn}
+                    className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
+                      c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
+                      isDragging && 'opacity-30 scale-95')}>
+                    <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
+                    <span className="font-medium">{g.labelLocal}</span>
+                    {g.labelEn !== g.labelLocal && (
+                      <span className="opacity-50 font-normal">({g.labelEn})</span>
+                    )}
+                    <span className="opacity-60 tabular-nums">{g.columns.length}</span>
+                  </button>
+                )
+              })}
+              {(groupOrder.length > 0 || closedGroups.size > 0) && (
+                <button type="button"
+                  onClick={() => {
+                    setGroupOrder([])
+                    setClosedGroups(new Set())
+                    try { localStorage.removeItem('ff-group-order'); localStorage.removeItem('ff-closed-groups') } catch {}
+                  }}
+                  className="text-xs text-slate-400 hover:text-slate-600 px-1"
+                  title="Reset group order and visibility to Amazon's default">
+                  ↺
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Error */}
@@ -2095,125 +2133,3 @@ function MenuDropdown({ label, items }: MenuDropdownProps) {
   )
 }
 
-// ── ViewMenuDropdown ───────────────────────────────────────────────────
-// Specialised View menu: group checkboxes + drag-to-reorder inside the
-// dropdown. Stays open while toggling or dragging.
-
-interface ViewMenuProps {
-  orderedGroups: ColumnGroup[]
-  openGroups: Set<string>
-  hasCustomOrder: boolean
-  onToggleGroup: (id: string) => void
-  onReorderGroups: (ids: string[]) => void
-  onResetView: () => void
-}
-
-function ViewMenuDropdown({
-  orderedGroups, openGroups, hasCustomOrder, onToggleGroup, onReorderGroups, onResetView,
-}: ViewMenuProps) {
-  const [open, setOpen] = useState(false)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [])
-
-  const visibleCount = orderedGroups.filter((g) => openGroups.has(g.id)).length
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          'h-7 px-2.5 text-xs font-medium rounded transition-colors',
-          open
-            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
-        )}
-      >
-        View
-        {visibleCount < orderedGroups.length && (
-          <span className="ml-1 opacity-60 text-[10px]">({visibleCount}/{orderedGroups.length})</span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-0.5 z-50 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Column groups</span>
-            <span className="text-[10px] text-slate-400">drag to reorder</span>
-          </div>
-          <div className="max-h-72 overflow-y-auto py-1">
-            {orderedGroups.map((g) => {
-              const isOpen = openGroups.has(g.id)
-              const isDragging = draggingId === g.id
-              const c = gColor(g.color)
-              return (
-                <div
-                  key={g.id}
-                  draggable
-                  onDragStart={(e) => { setDraggingId(g.id); e.dataTransfer.effectAllowed = 'move' }}
-                  onDragEnd={() => setDraggingId(null)}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    if (!draggingId || draggingId === g.id) return
-                    const ids = orderedGroups.map((x) => x.id)
-                    const from = ids.indexOf(draggingId)
-                    const to = ids.indexOf(g.id)
-                    const next = [...ids]; next.splice(from, 1); next.splice(to, 0, draggingId)
-                    onReorderGroups(next)
-                    setDraggingId(null)
-                  }}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 transition-colors select-none',
-                    isDragging ? 'opacity-40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
-                  )}
-                >
-                  <GripVertical className="w-3 h-3 text-slate-300 dark:text-slate-600 cursor-grab flex-shrink-0" />
-                  <input
-                    type="checkbox"
-                    checked={isOpen}
-                    onChange={() => onToggleGroup(g.id)}
-                    className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0 cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <span
-                    className={cn('text-xs flex-1 truncate cursor-pointer', isOpen ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600')}
-                    onClick={() => onToggleGroup(g.id)}
-                  >
-                    {g.labelLocal}
-                    {g.labelEn !== g.labelLocal && (
-                      <span className="ml-1 opacity-50 text-[10px]">({g.labelEn})</span>
-                    )}
-                  </span>
-                  <span className={cn('text-[10px] tabular-nums font-medium px-1 rounded flex-shrink-0', c.badge)}>
-                    {g.columns.length}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          {hasCustomOrder && (
-            <>
-              <div className="border-t border-slate-100 dark:border-slate-800" />
-              <button
-                type="button"
-                onClick={() => { onResetView(); setOpen(false) }}
-                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Reset order &amp; visibility
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
