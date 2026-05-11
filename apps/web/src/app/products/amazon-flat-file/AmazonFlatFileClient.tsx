@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Copy, Download, FileSpreadsheet, Loader2, Pin, Plus, RefreshCw,
+  ClipboardPaste, Copy, Download, FileSpreadsheet, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine,
   Undo2, Redo2, GripVertical, SlidersHorizontal,
 } from 'lucide-react'
@@ -196,8 +196,12 @@ export default function AmazonFlatFileClient({
   const [fillDragEnd,    setFillDragEnd]    = useState<{ ri: number; ci: number } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
+  const [editClickPos, setEditClickPos] = useState<{ x: number; y: number } | null>(null)
   const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
+    try { return localStorage.getItem('ff-smart-paste') === '1' } catch { return false }
+  })
 
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
   const [frozenColCount, setFrozenColCount] = useState<number>(() => {
@@ -241,6 +245,8 @@ export default function AmazonFlatFileClient({
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current = selEnd }, [selEnd])
   useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
+  useEffect(() => { if (!isEditing) setEditClickPos(null) }, [isEditing])
+  useEffect(() => { try { localStorage.setItem('ff-smart-paste', smartPasteEnabled ? '1' : '0') } catch {} }, [smartPasteEnabled])
 
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
@@ -542,7 +548,7 @@ export default function AmazonFlatFileClient({
       const ci = colLookup.get(cell.trim().toLowerCase())
       if (ci !== undefined) { headerMap.set(pi, ci); matchCount++ }
     })
-    const hasHeaders = matchCount >= 2
+    const hasHeaders = smartPasteEnabled && matchCount >= 2
 
     const dataRows = hasHeaders ? pasteLines.slice(1) : pasteLines
     const { ri: startRi, ci: startCi } = selAnchor
@@ -573,7 +579,7 @@ export default function AmazonFlatFileClient({
       ? Math.max(0, ...headerMap.values())
       : startCi + Math.max(...dataRows.map((r) => r.split('\t').length)) - 1
     setSelEnd({ ri: startRi + lastR, ci: Math.min(lastC, allColumnsRef.current.length - 1) })
-  }, [selAnchor, pushSnapshot])
+  }, [selAnchor, pushSnapshot, smartPasteEnabled])
 
   const handleFillDown = useCallback(() => {
     if (!normSel) return
@@ -654,11 +660,12 @@ export default function AmazonFlatFileClient({
     }
   }, [selAnchor])
 
-  const handleCellDoubleClick = useCallback((ri: number, ci: number) => {
+  const handleCellDoubleClick = useCallback((ri: number, ci: number, x: number, y: number) => {
     setSelAnchor({ ri, ci })
     setSelEnd({ ri, ci })
     setIsEditing(true)
     setEditInitialChar(null)
+    setEditClickPos({ x, y })
     const row = displayRowsRef.current[ri]
     const col = allColumnsRef.current[ci]
     if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
@@ -1394,6 +1401,16 @@ export default function AmazonFlatFileClient({
             badge={(validErrorCount + validWarnCount) || undefined}
           />
 
+          {/* FF.42 Smart paste toggle */}
+          <TbBtn
+            icon={<ClipboardPaste className="w-3.5 h-3.5" />}
+            title={smartPasteEnabled
+              ? 'Smart paste ON — first row treated as column headers when ≥2 columns match. Click to turn off.'
+              : 'Smart paste OFF — positional paste (default). Click to turn on header-mapping mode.'}
+            onClick={() => setSmartPasteEnabled((o) => !o)}
+            active={smartPasteEnabled}
+          />
+
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
           {/* Sort */}
@@ -1742,6 +1759,7 @@ export default function AmazonFlatFileClient({
                   isFillDragging={isFillDragging}
                   isEditing={isEditing}
                   editInitialChar={editInitialChar}
+                  editClickPos={editClickPos}
                   clipboardRange={clipboardRange}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
                   onDeactivate={() => setIsEditing(false)}
@@ -2013,6 +2031,7 @@ interface RowProps {
   isFillDragging: boolean
   isEditing: boolean
   editInitialChar: string | null
+  editClickPos: { x: number; y: number } | null
   clipboardRange: NormSel | null
   stickyLeftByColIdx: Record<number, number>
   cellErrors: Map<string, ValidationIssue>
@@ -2027,7 +2046,7 @@ interface RowProps {
   onRowDragOver: (half: 'top' | 'bottom') => void
   onRowDrop: (half: 'top' | 'bottom') => void
   onCellPointerDown: (ri: number, ci: number, shiftKey: boolean) => void
-  onCellDoubleClick: (ri: number, ci: number) => void
+  onCellDoubleClick: (ri: number, ci: number, x: number, y: number) => void
   onRowSelect: (ri: number) => void
   onFillHandlePointerDown: (ri: number, ci: number) => void
   onFillDrop: () => void
@@ -2035,7 +2054,7 @@ interface RowProps {
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
   marketplace, colWidths, rowHeight, isDraggingRow, dropIndicator,
-  normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
+  normSel, fillTarget, isFillDragging, isEditing, editInitialChar, editClickPos, clipboardRange,
   stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
   onSelect, onDeactivate, onChange, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
@@ -2212,8 +2231,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             clipboardEdges={clipboardEdges}
             ri={rowIdx}
             ci={ci}
+            editClickPos={isCellEditing ? editClickPos : null}
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
-            onCellDoubleClick={() => onCellDoubleClick(rowIdx, ci)}
+            onCellDoubleClick={(x, y) => onCellDoubleClick(rowIdx, ci, x, y)}
             onFillHandlePointerDown={() => onFillHandlePointerDown(rowIdx, ci)}
             onFillDrop={onFillDrop}
             onDeactivate={onDeactivate}
@@ -2387,12 +2407,13 @@ interface CellProps {
   fillTargetEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   isEditing: boolean
   editInitialChar: string | null
+  editClickPos: { x: number; y: number } | null
   isClipboard: boolean
   clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   validIssue?: ValidationIssue
   stickyLeft?: number
   onCellPointerDown: (shiftKey: boolean) => void
-  onCellDoubleClick: () => void
+  onCellDoubleClick: (x: number, y: number) => void
   onFillHandlePointerDown: () => void
   onFillDrop: () => void
   onDeactivate: () => void
@@ -2400,9 +2421,35 @@ interface CellProps {
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
+// ── Text editing helpers ───────────────────────────────────────────────
+
+function getCharIndexFromPoint(x: number, y: number): number {
+  if (typeof document === 'undefined') return -1
+  if ('caretRangeFromPoint' in document) {
+    const range = (document as any).caretRangeFromPoint(x, y) as Range | null
+    if (range?.startContainer?.nodeType === Node.TEXT_NODE) return range.startOffset
+  }
+  if ('caretPositionFromPoint' in document) {
+    const pos = (document as any).caretPositionFromPoint(x, y) as { offsetNode: Node; offset: number } | null
+    if (pos?.offsetNode?.nodeType === Node.TEXT_NODE) return pos.offset
+  }
+  return -1
+}
+
+function wordBoundsAt(text: string, pos: number): [number, number] {
+  if (!text) return [0, 0]
+  const p = Math.min(Math.max(pos, 0), text.length)
+  const isWordChar = /\w/
+  let start = p
+  while (start > 0 && isWordChar.test(text[start - 1])) start--
+  let end = p
+  while (end < text.length && isWordChar.test(text[end])) end++
+  return start === end ? [p, p] : [start, end]
+}
+
 function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
-  isEditing, editInitialChar, isClipboard, clipboardEdges,
+  isEditing, editInitialChar, editClickPos, isClipboard, clipboardEdges,
   validIssue, stickyLeft,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onNavigate }: CellProps) {
@@ -2413,13 +2460,31 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   const cancelledRef = useRef(false)
 
   useEffect(() => {
-    if (isEditing && col.kind !== 'enum' && inputRef.current) {
-      inputRef.current.focus()
-      if (editInitialChar === null && 'select' in inputRef.current) {
-        (inputRef.current as HTMLInputElement).select()
-      }
+    if (!isEditing || col.kind === 'enum' || !inputRef.current) return
+    inputRef.current.focus()
+    if (editInitialChar !== null) return // key mode — initial char replaces content; browser handles selection
+
+    if (editClickPos) {
+      // Double-click: select the word at the click position
+      const charPos = getCharIndexFromPoint(editClickPos.x, editClickPos.y)
+      const input = inputRef.current as HTMLInputElement | null
+      requestAnimationFrame(() => {
+        if (!input) return
+        if (charPos >= 0) {
+          const [wStart, wEnd] = wordBoundsAt(displayValue, charPos)
+          input.setSelectionRange(wStart, wEnd)
+        } else {
+          input.setSelectionRange(displayValue.length, displayValue.length)
+        }
+      })
+      return
     }
-  }, [isEditing, col.kind, editInitialChar])
+
+    // F2 / programmatic entry: select all
+    if ('select' in inputRef.current) {
+      (inputRef.current as HTMLInputElement).select()
+    }
+  }, [isEditing, col.kind, editInitialChar, editClickPos])
 
   // Reset counter to committed value length each time cell becomes editing
   useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
@@ -2462,7 +2527,10 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
 
   const tdPointerDown = (e: React.PointerEvent<HTMLTableCellElement>) => {
     if (e.button !== 0) return
-    // Release pointer capture so pointermove on the container fires on every cell
+    const tag = (e.target as HTMLElement).tagName
+    // While editing, let clicks on the input/textarea pass through so the browser
+    // can reposition the cursor naturally — don't exit edit mode or reset selection.
+    if (isEditing && (tag === 'INPUT' || tag === 'TEXTAREA')) return
     e.currentTarget.releasePointerCapture(e.pointerId)
     onCellPointerDown(e.shiftKey)
   }
@@ -2491,14 +2559,19 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   ) : null
 
   // Shared td props — data-ri/ci let the container's pointermove identify which cell the pointer is over
-  const tdShared = { 'data-ri': ri, 'data-ci': ci, onPointerDown: tdPointerDown, onPointerUp: onFillDrop, onDoubleClick: onCellDoubleClick }
+  const tdShared = {
+    'data-ri': ri, 'data-ci': ci,
+    onPointerDown: tdPointerDown,
+    onPointerUp: onFillDrop,
+    onDoubleClick: (e: React.MouseEvent) => onCellDoubleClick(e.clientX, e.clientY),
+  }
 
   // Enum cell: custom dropdown
   if (col.kind === 'enum' && col.options && col.options.length > 0) {
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
         onClick={() => { if (isActive) setDropdownOpen(true) }}
-        onDoubleClick={() => { onCellDoubleClick(); setDropdownOpen(true) }}>
+        onDoubleClick={(e) => { onCellDoubleClick(e.clientX, e.clientY); setDropdownOpen(true) }}>
         <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
           <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
             {displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}
