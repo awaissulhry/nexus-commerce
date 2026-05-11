@@ -178,9 +178,55 @@ export default function AmazonFlatFileClient({
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [copyPanelOpen, setCopyPanelOpen] = useState(false)
+
+  // ── Column + row resize ────────────────────────────────────────────
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('ff-col-widths') ?? '{}') } catch { return {} }
+  })
+  const [rowHeight, setRowHeight] = useState<number>(() => {
+    try { return Math.max(24, parseInt(localStorage.getItem('ff-row-height') ?? '28', 10) || 28) } catch { return 28 }
+  })
+  const [resizingType, setResizingType] = useState<'col' | 'row' | null>(null)
+  const resizeDragRef = useRef<{
+    type: 'col' | 'row'; colId?: string
+    startX: number; startY: number; startVal: number
+  } | null>(null)
   const [copying, setCopying] = useState(false)
   const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
   const [fetching, setFetching] = useState(false)
+
+  // Persist resize state to localStorage
+  useEffect(() => { try { localStorage.setItem('ff-col-widths', JSON.stringify(colWidths)) } catch {} }, [colWidths])
+  useEffect(() => { try { localStorage.setItem('ff-row-height', String(rowHeight)) } catch {} }, [rowHeight])
+
+  // Global mouse handlers for drag-resize
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      const d = resizeDragRef.current
+      if (!d) return
+      if (d.type === 'col' && d.colId) {
+        setColWidths((p) => ({ ...p, [d.colId!]: Math.max(60, d.startVal + e.clientX - d.startX) }))
+      } else if (d.type === 'row') {
+        setRowHeight(Math.max(24, d.startVal + e.clientY - d.startY))
+      }
+    }
+    function onUp() { resizeDragRef.current = null; setResizingType(null) }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  const startColResize = useCallback((e: React.MouseEvent, colId: string, curW: number) => {
+    e.preventDefault(); e.stopPropagation()
+    resizeDragRef.current = { type: 'col', colId, startX: e.clientX, startY: 0, startVal: curW }
+    setResizingType('col')
+  }, [])
+
+  const startRowResize = useCallback((e: React.MouseEvent, curH: number) => {
+    e.preventDefault(); e.stopPropagation()
+    resizeDragRef.current = { type: 'row', startX: 0, startY: e.clientY, startVal: curH }
+    setResizingType('row')
+  }, [])
 
   // ── Fetch known product types whenever marketplace changes ─────────
   useEffect(() => {
@@ -591,6 +637,11 @@ export default function AmazonFlatFileClient({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
+      {/* Full-screen overlay while resizing — locks cursor, prevents text selection */}
+      {resizingType && (
+        <div className={cn('fixed inset-0 z-[9999] select-none', resizingType === 'col' ? 'cursor-col-resize' : 'cursor-row-resize')} />
+      )}
+
       {/* ── Sticky header ────────────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
 
@@ -925,17 +976,27 @@ export default function AmazonFlatFileClient({
                 })}
               </tr>
 
-              {/* Row 2: English column labels */}
+              {/* Row 2: English column labels + column resize handles */}
               <tr>
                 {allColumns.map((col) => {
                   const c = gColor(colToGroup.get(col.id)?.color ?? 'slate')
+                  const w = colWidths[col.id] ?? col.width
                   return (
                     <th key={`en-${col.id}`}
-                      style={{ minWidth: col.width, width: col.width }}
-                      className={cn('px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap', c.text,
+                      style={{ minWidth: w, width: w }}
+                      className={cn('relative px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none', c.text,
                         col.required && 'font-bold')}
                       title={col.description}>
                       {col.labelEn}{col.required && <span className="ml-0.5 text-red-500">*</span>}
+                      {/* Resize handle — drag to resize, double-click to reset */}
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/colresize flex items-center justify-center z-10"
+                        onMouseDown={(e) => startColResize(e, col.id, w)}
+                        onDoubleClick={() => setColWidths((p) => { const n = { ...p }; delete n[col.id]; return n })}
+                        title="Drag to resize · Double-click to reset"
+                      >
+                        <div className="w-px h-3/4 rounded-full bg-slate-300/50 group-hover/colresize:bg-blue-400 dark:bg-slate-600/50 dark:group-hover/colresize:bg-blue-500 transition-colors" />
+                      </div>
                     </th>
                   )
                 })}
@@ -943,13 +1004,16 @@ export default function AmazonFlatFileClient({
 
               {/* Row 3: Italian column labels (Amazon native) */}
               <tr>
-                {allColumns.map((col) => (
-                  <th key={`it-${col.id}`}
-                    style={{ minWidth: col.width, width: col.width }}
-                    className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
-                    {col.labelLocal}
-                  </th>
-                ))}
+                {allColumns.map((col) => {
+                  const w = colWidths[col.id] ?? col.width
+                  return (
+                    <th key={`it-${col.id}`}
+                      style={{ minWidth: w, width: w }}
+                      className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
+                      {col.labelLocal}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
 
@@ -964,6 +1028,8 @@ export default function AmazonFlatFileClient({
                   selected={selectedRows.has(row._rowId as string)}
                   activeCell={activeCell}
                   marketplace={marketplace}
+                  colWidths={colWidths}
+                  rowHeight={rowHeight}
                   productExclusiveCols={productExclusiveColIds}
                   offerExclusiveCols={offerExclusiveColIds}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
@@ -971,6 +1037,7 @@ export default function AmazonFlatFileClient({
                   onDeactivate={() => setActiveCell(null)}
                   onChange={(colId, val) => updateCell(row._rowId as string, colId, val)}
                   onNavigate={(colId, dir) => navigate(row._rowId as string, colId, dir)}
+                  onRowResizeStart={(e) => startRowResize(e, rowHeight)}
                 />
               ))}
 
@@ -1041,16 +1108,19 @@ interface RowProps {
   row: Row; rowIdx: number; columns: Column[]; colToGroup: Map<string, ColumnGroup>
   selected: boolean; activeCell: { rowId: string; colId: string } | null
   marketplace: string
+  colWidths: Record<string, number>
+  rowHeight: number
   productExclusiveCols: Set<string>
   offerExclusiveCols: Set<string>
   onSelect: (c: boolean) => void; onActivate: (colId: string) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
+  onRowResizeStart: (e: React.MouseEvent) => void
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  marketplace, productExclusiveCols, offerExclusiveCols,
-  onSelect, onActivate, onDeactivate, onChange, onNavigate }: RowProps) {
+  marketplace, colWidths, rowHeight, productExclusiveCols, offerExclusiveCols,
+  onSelect, onActivate, onDeactivate, onChange, onNavigate, onRowResizeStart }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
@@ -1063,8 +1133,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   // Determine which columns don't apply to this row's parentage level
   const parentage = String(row.parentage_level ?? '').toLowerCase()
   const grayedCols: Set<string> =
-    parentage === 'parent' ? offerExclusiveCols  // offer-only fields → gray on parent rows
-    : parentage === 'child' ? productExclusiveCols  // product-only fields → gray on child rows
+    parentage === 'parent' ? offerExclusiveCols
+    : parentage === 'child' ? productExclusiveCols
     : new Set()
 
   return (
@@ -1076,9 +1146,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
-      {/* Row # + ASIN badge when fetched */}
-      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px]">
-        <div className="flex flex-col items-end gap-0.5">
+      {/* Row # + ASIN badge + row-height resize handle */}
+      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize">
+        <div className="flex flex-col items-end gap-0.5" style={{ height: rowHeight, justifyContent: 'center' }}>
           <span className="text-xs text-slate-400 tabular-nums">{rowIdx + 1}</span>
           {row._asin ? (() => {
             const asin = String(row._asin)
@@ -1095,6 +1165,14 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             )
           })() : null}
         </div>
+        {/* Row height resize handle at the bottom edge */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize flex items-end justify-center pb-px opacity-0 group-hover/rowresize:opacity-100 transition-opacity"
+          onMouseDown={onRowResizeStart}
+          title="Drag to resize rows"
+        >
+          <div className="w-4 h-px rounded-full bg-blue-400" />
+        </div>
       </td>
 
       {/* Data cells */}
@@ -1102,10 +1180,13 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         const isActive = activeCell?.rowId === rowId && activeCell?.colId === col.id
         const groupColor = colToGroup.get(col.id)?.color ?? 'slate'
         const grayed = grayedCols.has(col.id)
+        const w = colWidths[col.id] ?? col.width
         return (
           <SpreadsheetCell key={col.id} col={col} value={row[col.id]} isActive={isActive}
             cellBg={gColor(groupColor).cell}
             grayed={grayed}
+            width={w}
+            cellHeight={rowHeight}
             onActivate={() => onActivate(col.id)}
             onDeactivate={onDeactivate}
             onChange={(v) => onChange(col.id, v)}
@@ -1266,12 +1347,14 @@ function ProductTypeDropdown({ value, options, loading, onChange }: ProductTypeD
 interface CellProps {
   col: Column; value: unknown; isActive: boolean; cellBg: string
   grayed?: boolean
+  width: number
+  cellHeight: number
   onActivate: () => void; onDeactivate: () => void
   onChange: (val: unknown) => void
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
-function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onDeactivate, onChange, onNavigate }: CellProps) {
+function SpreadsheetCell({ col, value, isActive, cellBg, grayed, width, cellHeight, onActivate, onDeactivate, onChange, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -1284,6 +1367,8 @@ function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onD
   }, [isActive, col.kind])
 
   const isEmpty = !displayValue
+  const cellStyle = { minWidth: width, width }
+  const hStyle = { height: cellHeight }
 
   const baseCls = cn(
     'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
@@ -1304,10 +1389,10 @@ function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onD
     return (
       <td
         className="border-b border-r border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/50 cursor-not-allowed"
-        style={{ minWidth: col.width, width: col.width }}
+        style={cellStyle}
         title="Not applicable for this parentage level"
       >
-        <div className="h-[28px] px-1.5 flex items-center">
+        <div className="px-1.5 flex items-center overflow-hidden" style={hStyle}>
           {displayValue
             ? <span className="text-xs text-slate-400 dark:text-slate-600 truncate">{displayValue}</span>
             : <span className="text-xs text-slate-300 dark:text-slate-700">—</span>}
@@ -1319,9 +1404,9 @@ function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onD
   // Enum cell: custom dropdown
   if (col.kind === 'enum' && col.options && col.options.length > 0) {
     return (
-      <td className={baseCls} style={{ minWidth: col.width, width: col.width }}
+      <td className={baseCls} style={cellStyle}
         onClick={() => { onActivate(); setDropdownOpen(true) }}>
-        <div className="h-[28px] px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell">
+        <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
           <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
             {displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}
           </span>
@@ -1343,20 +1428,19 @@ function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onD
   if (col.kind === 'longtext') {
     if (isActive) {
       return (
-        <td className={baseCls} style={{ minWidth: col.width, width: col.width }}>
+        <td className={baseCls} style={cellStyle}>
           <textarea ref={inputRef as any} defaultValue={displayValue}
             onBlur={(e) => { onChange(e.target.value); onDeactivate() }}
             onKeyDown={handleKeyDown}
-            rows={3}
             className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
-            style={{ minWidth: col.width }} />
+            style={{ minWidth: width, minHeight: Math.max(cellHeight, 60) }} />
         </td>
       )
     }
     return (
       <td className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-        style={{ minWidth: col.width, width: col.width }} onClick={onActivate}>
-        <div className="h-[28px] px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate">
+        style={cellStyle} onClick={onActivate}>
+        <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
           {displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{col.required ? '⚠ required' : ''}</span>}
         </div>
       </td>
@@ -1366,21 +1450,23 @@ function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onD
   // Text / number cell
   if (isActive) {
     return (
-      <td className={baseCls} style={{ minWidth: col.width, width: col.width }}>
+      <td className={baseCls} style={cellStyle}>
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
           defaultValue={displayValue} maxLength={col.maxLength}
           onBlur={(e) => { onChange(e.target.value); onDeactivate() }}
           onKeyDown={handleKeyDown}
-          className="w-full h-[28px] px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200" />
+          className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
+          style={hStyle} />
       </td>
     )
   }
 
   return (
     <td className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ minWidth: col.width, width: col.width }} onClick={onActivate} title={col.description}>
-      <div className={cn('h-[28px] px-1.5 flex items-center text-xs truncate',
-        isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}>
+      style={cellStyle} onClick={onActivate} title={col.description}>
+      <div className={cn('px-1.5 flex items-center text-xs truncate',
+        isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
+        style={hStyle}>
         {displayValue || (col.required ? '⚠ required' : '')}
       </div>
     </td>
