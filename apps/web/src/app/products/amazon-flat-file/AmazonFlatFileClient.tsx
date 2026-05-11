@@ -550,20 +550,10 @@ export default function AmazonFlatFileClient({
     }
   }, [selAnchor])
 
-  const handleCellPointerEnter = useCallback((ri: number, ci: number) => {
-    // Only called while pointer button is held — extends selection
-    setSelEnd({ ri, ci })
-    setActiveCell(null)
-  }, [])
-
   const handleFillHandlePointerDown = useCallback((ri: number, ci: number) => {
     setIsFillDragging(true)
     setFillDragEnd({ ri, ci })
   }, [])
-
-  const handleFillPointerEnter = useCallback((ri: number, ci: number) => {
-    if (isFillDragging) setFillDragEnd({ ri, ci })
-  }, [isFillDragging])
 
   const handleFillDrop = useCallback(() => {
     if (isFillDragging) executeFill()
@@ -1312,7 +1302,26 @@ export default function AmazonFlatFileClient({
 
       {/* ── Spreadsheet ───────────────────────────────────────── */}
       {manifest && !loading && (
-        <div className="flex-1 overflow-auto" onPointerUp={() => { if (isFillDragging) executeFill() }}>
+        <div
+          className="flex-1 overflow-auto"
+          onPointerMove={(e) => {
+            if (e.buttons !== 1) return
+            // Use elementFromPoint so tracking works regardless of pointer capture
+            const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+            const td = el?.closest('[data-ri]') as HTMLElement | null
+            if (!td) return
+            const ri = parseInt(td.dataset.ri ?? '', 10)
+            const ci = parseInt(td.dataset.ci ?? '', 10)
+            if (isNaN(ri) || isNaN(ci)) return
+            if (isFillDragging) {
+              setFillDragEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
+            } else if (selAnchor) {
+              setSelEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
+              setActiveCell(null)
+            }
+          }}
+          onPointerUp={() => { if (isFillDragging) executeFill() }}
+        >
           <table className="border-collapse text-sm w-max min-w-full">
             <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
 
@@ -1424,12 +1433,12 @@ export default function AmazonFlatFileClient({
                   onRowResizeStart={(e) => startRowResize(e, rowHeight)}
                   onRowDragStart={() => setDraggingRowId(row._rowId as string)}
                   onRowDragEnd={() => { setDraggingRowId(null); setDropTarget(null) }}
-                  onRowDragOver={(half) => setDropTarget({ rowId: row._rowId as string, half })}
+                  onRowDragOver={(half) => setDropTarget((p) =>
+                    p?.rowId === (row._rowId as string) && p?.half === half ? p : { rowId: row._rowId as string, half }
+                  )}
                   onRowDrop={(half) => draggingRowId && reorderRow(draggingRowId, row._rowId as string, half)}
                   onCellPointerDown={handleCellPointerDown}
-                  onCellPointerEnter={handleCellPointerEnter}
                   onFillHandlePointerDown={handleFillHandlePointerDown}
-                  onFillPointerEnter={handleFillPointerEnter}
                   onFillDrop={handleFillDrop}
                 />
               ))}
@@ -1526,9 +1535,7 @@ interface RowProps {
   onRowDragOver: (half: 'top' | 'bottom') => void
   onRowDrop: (half: 'top' | 'bottom') => void
   onCellPointerDown: (ri: number, ci: number, shiftKey: boolean) => void
-  onCellPointerEnter: (ri: number, ci: number) => void
   onFillHandlePointerDown: (ri: number, ci: number) => void
-  onFillPointerEnter: (ri: number, ci: number) => void
   onFillDrop: () => void
 }
 
@@ -1537,7 +1544,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   normSel, fillTarget, isFillDragging,
   onSelect, onDeactivate, onChange, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
-  onCellPointerDown, onCellPointerEnter, onFillHandlePointerDown, onFillPointerEnter, onFillDrop }: RowProps) {
+  onCellPointerDown, onFillHandlePointerDown, onFillDrop }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -1660,10 +1667,10 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             isCorner={isCorner}
             isFillTarget={isFillTarget}
             fillTargetEdges={fillTargetEdges}
+            ri={rowIdx}
+            ci={ci}
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
-            onCellPointerEnter={() => onCellPointerEnter(rowIdx, ci)}
             onFillHandlePointerDown={() => onFillHandlePointerDown(rowIdx, ci)}
-            onFillPointerEnter={() => onFillPointerEnter(rowIdx, ci)}
             onFillDrop={onFillDrop}
             onDeactivate={onDeactivate}
             onChange={(v) => onChange(col.id, v)}
@@ -1826,24 +1833,23 @@ interface CellProps {
   grayed: boolean
   width: number
   cellHeight: number
+  ri: number; ci: number
   isSelected: boolean
   selEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   isCorner: boolean
   isFillTarget: boolean
   fillTargetEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   onCellPointerDown: (shiftKey: boolean) => void
-  onCellPointerEnter: () => void
   onFillHandlePointerDown: () => void
-  onFillPointerEnter: () => void
   onFillDrop: () => void
   onDeactivate: () => void
   onChange: (val: unknown) => void
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
-function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
+function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
-  onCellPointerDown, onCellPointerEnter, onFillHandlePointerDown, onFillPointerEnter, onFillDrop,
+  onCellPointerDown, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
@@ -1884,10 +1890,10 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
   )
 
   const tdPointerDown = (e: React.PointerEvent<HTMLTableCellElement>) => {
-    if (e.button === 0) onCellPointerDown(e.shiftKey)
-  }
-  const tdPointerEnter = (e: React.PointerEvent<HTMLTableCellElement>) => {
-    if (e.buttons === 1) { onCellPointerEnter(); onFillPointerEnter() }
+    if (e.button !== 0) return
+    // Release pointer capture so pointermove on the container fires on every cell
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    onCellPointerDown(e.shiftKey)
   }
 
   function handleKeyDown(e: KeyboardEvent) {
@@ -1900,17 +1906,23 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
   const fillHandle = isCorner ? (
     <div
       className="absolute bottom-[-3px] right-[-3px] w-[7px] h-[7px] bg-blue-500 border-[1.5px] border-white dark:border-slate-900 z-20 cursor-crosshair"
-      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onFillHandlePointerDown() }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        // Release capture so container pointermove tracks the fill drag
+        e.currentTarget.releasePointerCapture(e.pointerId)
+        onFillHandlePointerDown()
+      }}
     />
   ) : null
+
+  // Shared td props — data-ri/ci let the container's pointermove identify which cell the pointer is over
+  const tdShared = { 'data-ri': ri, 'data-ci': ci, onPointerDown: tdPointerDown, onPointerUp: onFillDrop }
 
   // Enum cell: custom dropdown
   if (col.kind === 'enum' && col.options && col.options.length > 0) {
     return (
-      <td className={baseCls} style={{ ...cellStyle, ...selStyle }}
-        onPointerDown={tdPointerDown}
-        onPointerEnter={tdPointerEnter}
-        onPointerUp={onFillDrop}
+      <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
         onClick={() => setDropdownOpen(true)}>
         <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
           <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
@@ -1937,10 +1949,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
       const atLimit = col.maxLength != null && liveLen >= col.maxLength
       const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
       return (
-        <td className={baseCls} style={{ ...cellStyle, ...selStyle }}
-          onPointerDown={tdPointerDown}
-          onPointerEnter={tdPointerEnter}
-          onPointerUp={onFillDrop}>
+        <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
           {fillHandle}
           <textarea ref={inputRef as any} defaultValue={displayValue}
             onInput={(e) => setLiveLen((e.target as HTMLTextAreaElement).value.length)}
@@ -1961,11 +1970,8 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
       )
     }
     return (
-      <td className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
+      <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
         style={{ ...cellStyle, ...selStyle }}
-        onPointerDown={tdPointerDown}
-        onPointerEnter={tdPointerEnter}
-        onPointerUp={onFillDrop}
         onClick={() => onCellPointerDown(false)}>
         {fillHandle}
         <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
@@ -1980,10 +1986,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
     const atLimit = col.maxLength != null && liveLen >= col.maxLength
     const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
     return (
-      <td className={baseCls} style={{ ...cellStyle, ...selStyle }}
-        onPointerDown={tdPointerDown}
-        onPointerEnter={tdPointerEnter}
-        onPointerUp={onFillDrop}>
+      <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
           defaultValue={displayValue} maxLength={col.maxLength}
@@ -2005,12 +2008,8 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight,
   }
 
   return (
-    <td className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ ...cellStyle, ...selStyle }}
-      onPointerDown={tdPointerDown}
-      onPointerEnter={tdPointerEnter}
-      onPointerUp={onFillDrop}
-      title={col.description}>
+    <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
+      style={{ ...cellStyle, ...selStyle }} title={col.description}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
         isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
