@@ -138,9 +138,19 @@ export default function AmazonFlatFileClient({
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Groups that are open (visible)
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(['offer_identity', 'variations', 'schema_fields', 'required_fields', 'images'])
+  // Groups the user has explicitly CLOSED — persisted in localStorage.
+  // Everything not in this set is open by default (including new groups
+  // that appear after a schema refresh). This way the user's choices survive
+  // refreshes without any explicit reset.
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ff-closed-groups') ?? '[]')) }
+    catch { return new Set() }
+  })
+
+  // Derived: open = all manifest groups minus whatever the user has closed
+  const openGroups = useMemo(
+    () => new Set((manifest?.groups ?? []).map((g) => g.id).filter((id) => !closedGroups.has(id))),
+    [manifest, closedGroups],
   )
 
   // User-defined group order — persisted in localStorage
@@ -269,8 +279,6 @@ export default function AmazonFlatFileClient({
       if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
       const m: Manifest = await mRes.json()
       setManifest(m)
-      // Open all groups by default when manifest loads
-      setOpenGroups(new Set(m.groups.map((g) => g.id)))
       if (rRes.ok) { const d = await rRes.json(); setRows(d.rows ?? []) }
       else setRows([])
       const p = new URLSearchParams(searchParams?.toString() ?? '')
@@ -415,7 +423,6 @@ export default function AmazonFlatFileClient({
 
       setMarketplace(targetMarket)
       setManifest(targetManifest)
-      setOpenGroups(new Set(targetManifest.groups.map((g) => g.id)))
       setRows(copiedRows)
       setFeedId(null)
       setFeedResults([])
@@ -646,7 +653,12 @@ export default function AmazonFlatFileClient({
                       try { localStorage.setItem('ff-group-order', JSON.stringify(next)) } catch {}
                       setDraggingGroupId(null)
                     }}
-                    onClick={() => setOpenGroups((prev) => { const n = new Set(prev); open ? n.delete(g.id) : n.add(g.id); return n })}
+                    onClick={() => setClosedGroups((prev) => {
+                      const n = new Set(prev)
+                      open ? n.add(g.id) : n.delete(g.id)
+                      try { localStorage.setItem('ff-closed-groups', JSON.stringify([...n])) } catch {}
+                      return n
+                    })}
                     title={g.labelEn !== g.labelLocal ? `${g.labelLocal} — ${g.labelEn}` : g.labelEn}
                     className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
                       c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
@@ -660,11 +672,15 @@ export default function AmazonFlatFileClient({
                   </button>
                 )
               })}
-              {groupOrder.length > 0 && (
+              {(groupOrder.length > 0 || closedGroups.size > 0) && (
                 <button type="button"
-                  onClick={() => { setGroupOrder([]); try { localStorage.removeItem('ff-group-order') } catch {} }}
+                  onClick={() => {
+                    setGroupOrder([])
+                    setClosedGroups(new Set())
+                    try { localStorage.removeItem('ff-group-order'); localStorage.removeItem('ff-closed-groups') } catch {}
+                  }}
                   className="text-xs text-slate-400 hover:text-slate-600 px-1"
-                  title="Reset group order to Amazon's default">
+                  title="Reset group order and visibility to Amazon's default">
                   ↺
                 </button>
               )}
