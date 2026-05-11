@@ -120,18 +120,25 @@ const GROUP_COLOR_PALETTE = [
 // English names for Amazon's well-known group IDs.
 // Amazon's API returns localised titles; we keep English separately so
 // the spreadsheet can show both (e.g. "Immagini (Images)").
+// Amazon's standard group order: Offer Identity → Variations → Product Identity
+// → Images → Product Details → Offer → Shipping → Safety and Compliance.
+// Market-specific offer groups (offer_{marketplaceId}) handled in groupIdToEnglish.
 const KNOWN_GROUP_EN: Record<string, string> = {
-  offer_identity:    'Offer Identity',
-  variations:        'Variations',
-  product_identity:  'Product Identity',
-  images:            'Images',
-  product_details:   'Product Details',
-  offer:             'Offer',
-  shipping:          'Shipping',
-  compliance:        'Compliance & Safety',
-  fulfillment:       'Fulfillment',
-  schema_fields:     'Schema Fields',
-  other_attributes:  'Other Attributes',
+  offer_identity:        'Offer Identity',
+  variations:            'Variations',
+  product_identity:      'Product Identity',
+  images:                'Images',
+  product_description:   'Product Description',
+  product_details:       'Product Details',
+  offer:                 'Offer',
+  selling_on_amazon:     'Selling on Amazon',
+  shipping:              'Shipping',
+  compliance:            'Safety and Compliance',
+  safety_and_compliance: 'Safety and Compliance',
+  safety_compliance:     'Safety and Compliance',
+  fulfillment:           'Fulfillment',
+  schema_fields:         'Schema Fields',
+  other_attributes:      'Other Attributes',
 }
 
 function groupIdToEnglish(groupId: string): string {
