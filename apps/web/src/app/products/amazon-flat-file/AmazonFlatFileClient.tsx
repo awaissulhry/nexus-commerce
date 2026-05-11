@@ -230,7 +230,24 @@ export default function AmazonFlatFileClient({
   const [ptLoading, setPtLoading] = useState(false)
 
   const [manifest, setManifest] = useState<Manifest | null>(initialManifest)
-  const [rows, setRows] = useState<Row[]>(initialRows)
+  const [rows, setRows] = useState<Row[]>(() => {
+    // On hard refresh the server passes initialRows, but the user's local
+    // edits live in localStorage. Prefer the local draft if it exists so
+    // that Cmd+S → hard-refresh round-trips don't lose work.
+    if (typeof window === 'undefined') return initialRows
+    try {
+      const base = `ff-rows-${initialMarketplace.toUpperCase()}-${initialProductType.toUpperCase()}`
+      const key = familyId ? `${base}-family-${familyId}` : base
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw) as Row[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return mergeAsinCache(parsed, initialMarketplace)
+        }
+      }
+    } catch {}
+    return initialRows
+  })
 
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
