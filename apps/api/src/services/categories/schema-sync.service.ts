@@ -182,12 +182,19 @@ export class CategorySchemaService {
       },
     })
     if (existing) {
+      // Also write schemaDefinition when __propertyGroups is now available
+      // but wasn't stored yet (schemas cached before FF.10 won't have it).
+      const needsDefinitionUpdate =
+        envelope.propertyGroups &&
+        !(existing.schemaDefinition as any)?.__propertyGroups
+
       return this.prisma.categorySchema.update({
         where: { id: existing.id },
         data: {
           fetchedAt: new Date(),
           expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
           isActive: true,
+          ...(needsDefinitionUpdate ? { schemaDefinition: schemaDefinition as any } : {}),
         },
       })
     }
