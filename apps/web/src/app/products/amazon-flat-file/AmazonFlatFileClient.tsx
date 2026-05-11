@@ -110,7 +110,8 @@ interface Props {
   initialRows: Row[]
   initialMarketplace: string
   initialProductType: string
-  productId?: string
+  /** Present when opened from a product page — scopes this to one product family. */
+  familyId?: string
 }
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ export default function AmazonFlatFileClient({
   initialRows,
   initialMarketplace,
   initialProductType,
-  productId,
+  familyId,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -265,7 +266,9 @@ export default function AmazonFlatFileClient({
   // fresh rows (marketplace/product type change) or reloads rows manually.
 
   function rowStorageKey(mp: string, pt: string) {
-    return `ff-rows-${mp.toUpperCase()}-${pt.toUpperCase()}`
+    const base = `ff-rows-${mp.toUpperCase()}-${pt.toUpperCase()}`
+    // Family sessions get their own key, independent from the global file
+    return familyId ? `${base}-family-${familyId}` : base
   }
   function saveRows(mp: string, pt: string, r: Row[]) {
     try { localStorage.setItem(rowStorageKey(mp, pt), JSON.stringify(r)) } catch {}
@@ -295,7 +298,7 @@ export default function AmazonFlatFileClient({
     const backend = getBackendUrl()
     const qs = new URLSearchParams({ marketplace: mp, productType: pt, ...(force ? { force: '1' } : {}) })
     const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
-    if (productId) rowsQs.set('productId', productId)
+    if (familyId) rowsQs.set('productId', familyId)
     try {
       if (force) {
         // Schema refresh — update manifest only, keep current rows unchanged.
@@ -505,17 +508,10 @@ export default function AmazonFlatFileClient({
           <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
             <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100">Amazon Flat File Editor</h1>
             {manifest && <><Badge variant="info">{manifest.productType}</Badge><Badge variant="default">{manifest.marketplace}</Badge></>}
-            {productId && (
-              <span className="inline-flex items-center gap-1 text-xs bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded px-2 py-0.5">
+            {familyId && (
+              <span className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded px-2 py-0.5">
                 <FileSpreadsheet className="w-3 h-3" />
-                Filtered to {rows.length} row{rows.length !== 1 ? 's' : ''}
-                <button
-                  onClick={() => router.push(`/products/amazon-flat-file?marketplace=${marketplace}&productType=${productType}`)}
-                  className="ml-1 opacity-60 hover:opacity-100"
-                  title="Show all products"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+                Product family
               </span>
             )}
             {dirtyRows.length > 0 && <Badge variant="warning"><AlertCircle className="w-3 h-3 mr-1" />{dirtyRows.length} unsaved</Badge>}

@@ -5,19 +5,21 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 interface PageProps {
-  searchParams: Promise<{ marketplace?: string; productType?: string; productId?: string }>
+  // familyId = parent product ID for a named family session.
+  // When absent, this is the global flat file (all products).
+  searchParams: Promise<{ marketplace?: string; productType?: string; familyId?: string }>
 }
 
 const DEFAULT_MARKETPLACE = 'IT'
 const DEFAULT_PRODUCT_TYPE = 'OUTERWEAR'
 
 export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
-  const { marketplace = DEFAULT_MARKETPLACE, productType = DEFAULT_PRODUCT_TYPE, productId } =
+  const { marketplace = DEFAULT_MARKETPLACE, productType = DEFAULT_PRODUCT_TYPE, familyId } =
     await searchParams
   const backend = getBackendUrl()
 
   const rowsQs = new URLSearchParams({ marketplace, productType })
-  if (productId) rowsQs.set('productId', productId)
+  if (familyId) rowsQs.set('productId', familyId)
 
   const [manifestRes, rowsRes] = await Promise.all([
     fetch(
@@ -40,7 +42,7 @@ export default async function AmazonFlatFilePage({ searchParams }: PageProps) {
       initialRows={rows}
       initialMarketplace={marketplace.toUpperCase()}
       initialProductType={productType.toUpperCase()}
-      productId={productId}
+      familyId={familyId}
     />
   )
 }

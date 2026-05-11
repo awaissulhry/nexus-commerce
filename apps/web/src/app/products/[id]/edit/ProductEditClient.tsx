@@ -524,9 +524,10 @@ export default function ProductEditClient({
               size="sm"
               onClick={() => {
                 const pt = (product.productType as string | null) ?? 'OUTERWEAR'
-                router.push(`/products/amazon-flat-file?productId=${product.id}&productType=${pt}&marketplace=IT`)
+                const familyId = (product as any).parentId ?? product.id
+                router.push(`/products/amazon-flat-file?familyId=${familyId}&productType=${pt}&marketplace=IT`)
               }}
-              title="Open this product in the Amazon Flat File Editor"
+              title="Open this product family in the Amazon Flat File Editor"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
               Flat File
