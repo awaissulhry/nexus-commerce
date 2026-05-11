@@ -328,8 +328,11 @@ function expandSchemaField(
 ): FlatFileColumn[] {
   const max: number = prop?.maxUniqueItems ?? 0
   if (max >= 2 && max <= 20) {
+    // maxUniqueItems is what Amazon accepts; their flat-file template shows at
+    // most 5 instances per field (e.g. bullet_point allows 10 but shows 5).
+    const count = Math.min(max, 5)
     const base = schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)
-    return Array.from({ length: max }, (_, i) => {
+    return Array.from({ length: count }, (_, i) => {
       const idx = i + 1
       const id = `${fieldId}_${idx}`
       expandedFields[id] = fieldId
