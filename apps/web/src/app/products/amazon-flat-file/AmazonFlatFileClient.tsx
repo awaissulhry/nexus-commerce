@@ -352,7 +352,11 @@ export default function AmazonFlatFileClient({
 
   // Auto row height when images toggled on or size changed
   useEffect(() => {
-    if (showRowImages) setRowHeight(imageSize + 12)
+    if (showRowImages) {
+      // For M/L/XL the ASIN + status badge appear below the image — add extra space
+      const asinExtra = imageSize >= 48 ? 24 : 0
+      setRowHeight(imageSize + 14 + asinExtra)
+    }
   }, [showRowImages, imageSize])
 
   // Global mouse handlers for drag-resize
@@ -926,15 +930,21 @@ export default function AmazonFlatFileClient({
     return m
   }, [orderedGroups])
 
+  // # cell width adapts to image size so images never overflow the column
+  const rowHeaderWidth = useMemo(
+    () => showRowImages ? Math.max(28, imageSize + 8) : 28,
+    [showRowImages, imageSize],
+  )
+
   const stickyLeftByColIdx = useMemo<Record<number, number>>(() => {
     const out: Record<number, number> = {}
-    let left = 64 // 36px checkbox + 28px row#
+    let left = 36 + rowHeaderWidth // checkbox(36) + row# (dynamic)
     for (let i = 0; i < Math.min(frozenColCount, allColumns.length); i++) {
       out[i] = left
       left += colWidths[allColumns[i].id] ?? allColumns[i].width
     }
     return out
-  }, [frozenColCount, allColumns, colWidths])
+  }, [frozenColCount, allColumns, colWidths, rowHeaderWidth])
 
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
@@ -1960,7 +1970,10 @@ export default function AmazonFlatFileClient({
                     title={selectedRows.size === displayRows.length ? 'Deselect all' : 'Select all'}
                   />
                 </th>
-                <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-7 min-w-[28px] text-xs text-slate-400 text-center font-normal" rowSpan={3}>#</th>
+                <th
+                  className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal"
+                  style={{ width: rowHeaderWidth, minWidth: rowHeaderWidth }}
+                  rowSpan={3}>#</th>
 
                 {displayGroups.map((g) => {
                   const c = gColor(g.color)
@@ -2073,6 +2086,7 @@ export default function AmazonFlatFileClient({
                   marketplace={marketplace}
                   colWidths={colWidths}
                   rowHeight={rowHeight}
+                  rowHeaderWidth={rowHeaderWidth}
                   showRowImages={showRowImages}
                   imageSize={imageSize}
                   imagesByAsin={imagesByAsin}
@@ -2385,6 +2399,7 @@ interface RowProps {
   marketplace: string
   colWidths: Record<string, number>
   rowHeight: number
+  rowHeaderWidth: number
   showRowImages: boolean
   imageSize: number
   imagesByAsin: Record<string, string | null>
@@ -2418,7 +2433,7 @@ interface RowProps {
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  marketplace, colWidths, rowHeight, showRowImages, imageSize, imagesByAsin,
+  marketplace, colWidths, rowHeight, rowHeaderWidth, showRowImages, imageSize, imagesByAsin,
   isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
   stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
@@ -2486,7 +2501,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
       <td
         data-row-ri={rowIdx}
         className={cn(
-          'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize select-none',
+          'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rowresize select-none overflow-hidden',
           frozenBg,
           isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
         )}
@@ -2495,9 +2510,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           e.currentTarget.releasePointerCapture(e.pointerId)
           onRowSelect(rowIdx)
         }}
-        style={{ cursor: 'ns-resize' }}>
+        style={{ cursor: 'ns-resize', width: rowHeaderWidth, minWidth: rowHeaderWidth }}>
         <div
-          className={cn('flex flex-col gap-0.5', showRowImages ? 'items-center' : 'items-end')}
+          className={cn('flex flex-col gap-0.5 w-full overflow-hidden', showRowImages ? 'items-center' : 'items-end')}
           style={{ height: rowHeight, justifyContent: 'center' }}
         >
           {/* Product image */}
@@ -2570,7 +2585,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
                 href={`https://www.${domain}/dp/${asin}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none"
+                className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none block w-full truncate text-center"
                 title={`ASIN: ${asin} — open on ${domain}`}
                 onClick={(e) => e.stopPropagation()}
               >{asin}</a>
