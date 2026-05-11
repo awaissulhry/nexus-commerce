@@ -214,6 +214,10 @@ export default function AmazonFlatFileClient({
   // ── Undo / Redo ────────────────────────────────────────────────────
   const rowsRef = useRef<Row[]>(rows)
   useEffect(() => { rowsRef.current = rows }, [rows])
+  const displayRowsRef = useRef<Row[]>([])
+
+  const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
   const [history, setHistory] = useState<Row[][]>([])
   const [future, setFuture] = useState<Row[][]>([])
 
@@ -384,8 +388,30 @@ export default function AmazonFlatFileClient({
         return 0
       })
     }
+    displayRowsRef.current = result
     return result
   }, [rows, searchQuery, searchMode, sortConfig])
+
+  const reorderRow = useCallback((fromId: string, toId: string, half: 'top' | 'bottom') => {
+    if (fromId === toId) return
+    pushSnapshot()
+    setSortConfig([])
+    setRows((prev) => {
+      const displayed = displayRowsRef.current.map((r) => r._rowId as string)
+      const rowMap = new Map(prev.map((r) => [r._rowId as string, r]))
+      const next = [...displayed]
+      const fi = next.indexOf(fromId)
+      const ti = next.indexOf(toId)
+      if (fi === -1 || ti === -1) return prev
+      next.splice(fi, 1)
+      const adj = fi < ti ? ti - 1 : ti
+      next.splice(half === 'top' ? adj : adj + 1, 0, fromId)
+      const notDisplayed = prev.filter((r) => !displayed.includes(r._rowId as string))
+      return [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
+    })
+    setDraggingRowId(null)
+    setDropTarget(null)
+  }, [pushSnapshot])
 
   const colToGroup = useMemo<Map<string, ColumnGroup>>(() => {
     const m = new Map<string, ColumnGroup>()
@@ -1163,12 +1189,18 @@ export default function AmazonFlatFileClient({
                   marketplace={marketplace}
                   colWidths={colWidths}
                   rowHeight={rowHeight}
+                  isDraggingRow={draggingRowId === (row._rowId as string)}
+                  dropIndicator={dropTarget?.rowId === (row._rowId as string) ? dropTarget.half : null}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
                   onActivate={(colId) => setActiveCell({ rowId: row._rowId as string, colId })}
                   onDeactivate={() => setActiveCell(null)}
                   onChange={(colId, val) => updateCell(row._rowId as string, colId, val)}
                   onNavigate={(colId, dir) => navigate(row._rowId as string, colId, dir)}
                   onRowResizeStart={(e) => startRowResize(e, rowHeight)}
+                  onRowDragStart={() => setDraggingRowId(row._rowId as string)}
+                  onRowDragEnd={() => { setDraggingRowId(null); setDropTarget(null) }}
+                  onRowDragOver={(half) => setDropTarget({ rowId: row._rowId as string, half })}
+                  onRowDrop={(half) => draggingRowId && reorderRow(draggingRowId, row._rowId as string, half)}
                 />
               ))}
 
@@ -1250,17 +1282,26 @@ interface RowProps {
   marketplace: string
   colWidths: Record<string, number>
   rowHeight: number
+  isDraggingRow: boolean
+  dropIndicator: 'top' | 'bottom' | null
   onSelect: (c: boolean) => void; onActivate: (colId: string) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
   onRowResizeStart: (e: React.MouseEvent) => void
+  onRowDragStart: () => void
+  onRowDragEnd: () => void
+  onRowDragOver: (half: 'top' | 'bottom') => void
+  onRowDrop: (half: 'top' | 'bottom') => void
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  marketplace, colWidths, rowHeight,
-  onSelect, onActivate, onDeactivate, onChange, onNavigate, onRowResizeStart }: RowProps) {
+  marketplace, colWidths, rowHeight, isDraggingRow, dropIndicator,
+  onSelect, onActivate, onDeactivate, onChange, onNavigate, onRowResizeStart,
+  onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
+  const canDragRef = useRef(false)
+
   const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
     : status === 'error' ? 'bg-red-50/70 dark:bg-red-950/20'
     : status === 'pending' ? 'bg-amber-50/70 dark:bg-amber-950/20'
@@ -1269,9 +1310,36 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
     : ''
 
   return (
-    <tr className={cn('group/row transition-colors', rowBg, 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
-      {/* Status + checkbox */}
-      <td className="sticky left-0 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center">
+    <tr
+      draggable
+      onDragStart={(e) => {
+        if (!canDragRef.current) { e.preventDefault(); return }
+        e.dataTransfer.effectAllowed = 'move'
+        onRowDragStart()
+      }}
+      onDragEnd={() => { canDragRef.current = false; onRowDragEnd() }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        const rect = e.currentTarget.getBoundingClientRect()
+        onRowDragOver(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        const rect = e.currentTarget.getBoundingClientRect()
+        onRowDrop(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
+      }}
+      style={{
+        borderTop: dropIndicator === 'top' ? '2px solid #3b82f6' : undefined,
+        borderBottom: dropIndicator === 'bottom' ? '2px solid #3b82f6' : undefined,
+      }}
+      className={cn('group/row transition-colors', rowBg,
+        isDraggingRow ? 'opacity-40' : 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
+      {/* Checkbox — also the drag handle (mousedown initiates drag) */}
+      <td
+        className="sticky left-0 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing"
+        onMouseDown={() => { canDragRef.current = true }}
+        onMouseUp={() => { canDragRef.current = false }}
+      >
         {status === 'success' ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
           : status === 'error' ? <span title={row._feedMessage as string | undefined}><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></span>
           : status === 'pending' ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
