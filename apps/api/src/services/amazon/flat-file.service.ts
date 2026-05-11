@@ -986,6 +986,358 @@ export class AmazonFlatFileService {
     return [meta, hdrEn, hdrIt, hdrRef, hdrReq, ...data].join('\r\n')
   }
 
+  // ── Platform sync ──────────────────────────────────────────────────
+
+  /**
+   * Sync flat-file rows back into the platform DB.
+   *
+   * For each row (matched by item_sku → Product.sku):
+   *   • Upsert ChannelListing (title, description, bullets, price, qty,
+   *     platformAttributes, ASIN)
+   *   • Update Product hierarchy (isParent, parentId, amazonProductType)
+   *   • Adjust StockLevel + write a StockMovement audit row if qty changed
+   *
+   * Called on Save (isPublished = false) and after a feed is DONE
+   * (isPublished = true). Non-blocking on the client — errors are reported
+   * but never throw.
+   */
+  async syncRowsToPlatform(
+    rows: FlatFileRow[],
+    marketplace: string,
+    expandedFields: Record<string, string> = {},
+    opts: { isPublished?: boolean } = {},
+  ): Promise<{ synced: number; created: number; skipped: number; errors: Array<{ sku: string; error: string }> }> {
+    const mp = marketplace.toUpperCase()
+    const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
+    const languageTag   = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
+    const channelMarket = `AMAZON_${mp}`
+    const result = { synced: 0, created: 0, skipped: 0, errors: [] as Array<{ sku: string; error: string }> }
+
+    const validRows = rows.filter((r) => {
+      const sku = String(r.item_sku ?? '').trim()
+      return sku && String(r.record_action ?? '').toLowerCase() !== 'delete'
+    })
+    if (!validRows.length) return result
+
+    // Bulk SKU → product lookup
+    const skus = [...new Set(validRows.map((r) => String(r.item_sku).trim()))]
+    const products = await this.prisma.product.findMany({
+      where: { sku: { in: skus }, deletedAt: null },
+      select: { id: true, sku: true, isParent: true, parentId: true, productType: true },
+    })
+    const productBySku = new Map(products.map((p) => [p.sku, p]))
+
+    // Bulk parent-SKU → parentId lookup for child rows
+    const parentSkus = [...new Set(
+      validRows
+        .filter((r) => String(r.parentage_level ?? '').toLowerCase() === 'child' && r.parent_sku)
+        .map((r) => String(r.parent_sku).trim()),
+    )]
+    const parentProducts = parentSkus.length
+      ? await this.prisma.product.findMany({
+          where: { sku: { in: parentSkus }, deletedAt: null },
+          select: { id: true, sku: true },
+        })
+      : []
+    const parentIdBySku = new Map(parentProducts.map((p) => [p.sku, p.id]))
+
+    // Primary warehouse location for StockLevel updates
+    const primaryLocation = await this.prisma.stockLocation.findFirst({
+      where: { type: 'WAREHOUSE', isActive: true },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    await Promise.allSettled(validRows.map(async (row) => {
+      const sku = String(row.item_sku).trim()
+      const product = productBySku.get(sku)
+      if (!product) {
+        result.errors.push({ sku, error: 'Product not found — create it in the platform first.' })
+        return
+      }
+
+      try {
+        const parentageLevel = String(row.parentage_level ?? '').toLowerCase()
+        const isParentRow = parentageLevel === 'parent'
+        const isChildRow  = parentageLevel === 'child'
+        const parentSku   = String(row.parent_sku ?? '').trim()
+        const parentId    = isChildRow && parentSku ? (parentIdBySku.get(parentSku) ?? null) : undefined
+        const productType = String(row.product_type ?? '').toUpperCase() || undefined
+
+        // Bullet points (bullet_point_1..5 or bare bullet_point)
+        const bullets: string[] = []
+        for (let i = 1; i <= 5; i++) {
+          const key = i === 1 && !row[`bullet_point_1`] ? 'bullet_point' : `bullet_point_${i}`
+          const b = String(row[key] ?? '').trim()
+          if (b) bullets.push(b)
+        }
+        // also capture bare bullet_point if not already included
+        const bareBullet = String(row.bullet_point ?? '').trim()
+        if (bareBullet && !bullets.includes(bareBullet)) bullets.unshift(bareBullet)
+
+        // Price / qty
+        const priceRaw = row.purchasable_offer ?? row.standard_price
+        const price    = priceRaw !== undefined && priceRaw !== '' ? parseFloat(String(priceRaw)) : null
+        const salePriceRaw = row.sale_price
+        const salePrice = salePriceRaw !== undefined && salePriceRaw !== '' ? parseFloat(String(salePriceRaw)) : null
+        const qtyRaw   = row.fulfillment_availability ?? row.quantity
+        const qty      = qtyRaw !== undefined && qtyRaw !== '' ? parseInt(String(qtyRaw), 10) : null
+
+        // Collapsed attributes (same format getExistingRows reads back)
+        const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag)
+
+        // ── Upsert ChannelListing ───────────────────────────────────
+        const existing = await this.prisma.channelListing.findFirst({
+          where: { productId: product.id, channel: 'AMAZON', marketplace: mp },
+          select: { id: true, quantity: true, version: true },
+        })
+
+        const listingPayload: Record<string, any> = {
+          channel: 'AMAZON',
+          marketplace: mp,
+          region: mp,
+          channelMarket,
+          ...(row.item_name        ? { title: String(row.item_name), followMasterTitle: false }               : {}),
+          ...(row.product_description ? { description: String(row.product_description), followMasterDescription: false } : {}),
+          ...(bullets.length       ? { bulletPointsOverride: bullets, followMasterBulletPoints: false }       : {}),
+          ...(price !== null && !isNaN(price)         ? { price, followMasterPrice: false }      : {}),
+          ...(salePrice !== null && !isNaN(salePrice) ? { salePrice }                            : {}),
+          ...(qty !== null && !isNaN(qty)             ? { quantity: qty, followMasterQuantity: false } : {}),
+          platformAttributes: { attributes: collapsedAttrs },
+          syncStatus: opts.isPublished ? 'SYNCED' : 'PENDING',
+          lastSyncedAt: new Date(),
+          lastSyncStatus: opts.isPublished ? 'SUCCESS' : null,
+          ...(opts.isPublished ? { isPublished: true, listingStatus: 'ACTIVE' } : {}),
+          ...(row._asin ? { externalListingId: String(row._asin) } : {}),
+        }
+
+        if (existing) {
+          await this.prisma.channelListing.update({
+            where: { id: existing.id },
+            data: { ...listingPayload, version: { increment: 1 } },
+          })
+          result.synced++
+        } else {
+          await this.prisma.channelListing.create({
+            data: { productId: product.id, ...listingPayload } as any,
+          })
+          result.created++
+        }
+
+        // ── Product hierarchy + type ────────────────────────────────
+        const productUpdates: Record<string, any> = {}
+        if (productType && product.productType !== productType) productUpdates.productType = productType
+        if (isParentRow && !product.isParent)              productUpdates.isParent = true
+        if (isChildRow && parentId && product.parentId !== parentId) productUpdates.parentId = parentId
+        if (Object.keys(productUpdates).length) {
+          await this.prisma.product.update({ where: { id: product.id }, data: productUpdates })
+        }
+
+        // ── ASIN on ProductVariation ────────────────────────────────
+        if (row._asin) {
+          await this.prisma.productVariation.updateMany({
+            where: { productId: product.id },
+            data: { amazonAsin: String(row._asin) },
+          })
+        }
+
+        // ── StockLevel + StockMovement ──────────────────────────────
+        if (primaryLocation && qty !== null && !isNaN(qty) && qty >= 0) {
+          const existingStock = await this.prisma.stockLevel.findUnique({
+            where: {
+              locationId_productId_variationId: {
+                locationId: primaryLocation.id,
+                productId:  product.id,
+                variationId: null as any,
+              },
+            },
+          })
+
+          if (existingStock) {
+            const delta = qty - existingStock.quantity
+            if (delta !== 0) {
+              await this.prisma.$transaction([
+                this.prisma.stockLevel.update({
+                  where: { id: existingStock.id },
+                  data: {
+                    quantity:  qty,
+                    available: Math.max(0, qty - existingStock.reserved),
+                  },
+                }),
+                this.prisma.stockMovement.create({
+                  data: {
+                    productId:      product.id,
+                    locationId:     primaryLocation.id,
+                    change:         delta,
+                    balanceAfter:   qty,
+                    quantityBefore: existingStock.quantity,
+                    reason:         'MANUAL_ADJUSTMENT',
+                    referenceType:  'FlatFileSync',
+                    notes:          `Amazon ${mp} flat-file sync`,
+                    actor:          'system',
+                  },
+                }),
+                this.prisma.product.update({
+                  where: { id: product.id },
+                  data: { totalStock: qty },
+                }),
+              ])
+            }
+          } else {
+            await this.prisma.$transaction([
+              this.prisma.stockLevel.create({
+                data: {
+                  locationId:  primaryLocation.id,
+                  productId:   product.id,
+                  variationId: null as any,
+                  quantity:    qty,
+                  reserved:    0,
+                  available:   qty,
+                },
+              }),
+              this.prisma.stockMovement.create({
+                data: {
+                  productId:     product.id,
+                  locationId:    primaryLocation.id,
+                  change:        qty,
+                  balanceAfter:  qty,
+                  quantityBefore: 0,
+                  reason:        'MANUAL_ADJUSTMENT',
+                  referenceType: 'FlatFileSync',
+                  notes:         `Amazon ${mp} flat-file sync (initial)`,
+                  actor:         'system',
+                },
+              }),
+              this.prisma.product.update({
+                where: { id: product.id },
+                data: { totalStock: qty },
+              }),
+            ])
+          }
+        }
+      } catch (err: any) {
+        result.errors.push({ sku, error: err?.message ?? 'Sync failed' })
+      }
+    }))
+
+    return result
+  }
+
+  /** Re-collapse expanded flat-file columns into the SP-API attribute structure
+   *  that getExistingRows reads back from platformAttributes.attributes. */
+  private buildCollapsedAttrs(
+    row: FlatFileRow,
+    expandedFields: Record<string, string>,
+    mp: string,
+    marketplaceId: string,
+    languageTag: string,
+  ): Record<string, any> {
+    const attrs: Record<string, any> = {}
+    const wrap  = (v: string) => [{ value: v, marketplace_id: marketplaceId }]
+    const wrapL = (v: string) => [{ value: v, language_tag: languageTag, marketplace_id: marketplaceId }]
+
+    if (row.item_name)           attrs.item_name           = wrapL(String(row.item_name))
+    if (row.brand)               attrs.brand               = wrapL(String(row.brand))
+    if (row.product_description) attrs.product_description = wrapL(String(row.product_description))
+    if (row.generic_keyword)     attrs.generic_keyword     = wrapL(String(row.generic_keyword))
+    if (row.color)               attrs.color               = wrapL(String(row.color))
+    if (row.main_product_image_locator) {
+      attrs.main_product_image_locator = wrap(String(row.main_product_image_locator))
+    }
+
+    // Bullet points — consolidate numbered variants
+    const bulletMap = new Map<number, string>()
+    if (row.bullet_point) bulletMap.set(0, String(row.bullet_point))
+    for (let i = 1; i <= 5; i++) {
+      const b = String(row[`bullet_point_${i}`] ?? '').trim()
+      if (b) bulletMap.set(i, b)
+    }
+    if (bulletMap.size) {
+      attrs.bullet_point = [...bulletMap.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, v]) => ({ value: v, language_tag: languageTag, marketplace_id: marketplaceId }))
+    }
+
+    // Price
+    const priceRaw = row.purchasable_offer ?? row.standard_price
+    if (priceRaw !== undefined && priceRaw !== '') {
+      attrs.purchasable_offer = [{
+        currency: CURRENCY_MAP[mp] ?? 'EUR',
+        our_price: [{ schedule: [{ value_with_tax: parseFloat(String(priceRaw)) }] }],
+        marketplace_id: marketplaceId,
+      }]
+    }
+
+    // Quantity
+    const qtyRaw = row.fulfillment_availability ?? row.quantity
+    if (qtyRaw !== undefined && qtyRaw !== '') {
+      attrs.fulfillment_availability = [{
+        fulfillment_channel_code: 'DEFAULT',
+        quantity: parseInt(String(qtyRaw), 10),
+        marketplace_id: marketplaceId,
+      }]
+    }
+
+    // Variation structure
+    const parentageLevel = String(row.parentage_level ?? '').toLowerCase()
+    if (parentageLevel === 'parent' && row.variation_theme) {
+      attrs.variation_theme = wrap(String(row.variation_theme))
+    }
+    if (parentageLevel === 'child' && row.parent_sku) {
+      attrs.parentage_level               = [{ value: 'child', marketplace_id: marketplaceId }]
+      attrs.child_parent_sku_relationship = [{ parent_sku: String(row.parent_sku), marketplace_id: marketplaceId }]
+    }
+
+    // All other expanded columns — same collapse logic as buildJsonFeedBody
+    const EXPLICIT = new Set([
+      'item_sku', 'product_type', 'record_action',
+      'parentage_level', 'parent_sku', 'variation_theme',
+      'item_name', 'brand', 'product_description',
+      'bullet_point', 'generic_keyword', 'color',
+      'purchasable_offer', 'standard_price', 'fulfillment_availability',
+      'main_product_image_locator',
+    ])
+    const pendingArrays: Record<string, Array<{ idx: number; value: string }>> = {}
+    const subPropMap: Record<string, Record<string, any>> = {}
+
+    for (const [k, v] of Object.entries(row)) {
+      if (k.startsWith('_') || !v || EXPLICIT.has(k)) continue
+      const path = expandedFields[k]
+      if (path) {
+        if (!path.includes('.')) {
+          const idx = parseInt(k.slice(path.length + 1), 10)
+          if (!isNaN(idx)) (pendingArrays[path] ??= []).push({ idx, value: String(v) })
+        } else {
+          const parts = path.split('.')
+          const base  = parts[0]
+          const obj   = (subPropMap[base] ??= {})
+          const numV  = Number(String(v))
+          const typedV = !isNaN(numV) && String(v).trim() !== '' ? numV : String(v)
+          if (parts.length === 2) {
+            obj[parts[1]] = typedV
+          } else if (parts.length === 3) {
+            obj[parts[1]] = { ...(obj[parts[1]] as Record<string, any> ?? {}), [parts[2]]: typedV }
+          }
+        }
+        continue
+      }
+      if (k.includes('image_locator')) {
+        attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
+      } else {
+        attrs[k] = [{ value: String(v), marketplace_id: marketplaceId, language_tag: languageTag }]
+      }
+    }
+
+    for (const [base, items] of Object.entries(pendingArrays)) {
+      items.sort((a, b) => a.idx - b.idx)
+      attrs[base] = items.map((item) => ({ value: item.value, marketplace_id: marketplaceId, language_tag: languageTag }))
+    }
+    for (const [base, val] of Object.entries(subPropMap)) {
+      attrs[base] = [{ ...val, marketplace_id: marketplaceId }]
+    }
+
+    return attrs
+  }
+
   parseTsv(content: string, productType: string): FlatFileRow[] {
     const lines = content.split(/\r?\n/).filter((l) => l.trim())
     if (lines.length < 2) return []

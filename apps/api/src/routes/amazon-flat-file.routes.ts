@@ -471,6 +471,39 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ── POST /api/amazon/flat-file/sync-rows ───────────────────────────
+  // Sync flat-file rows into the platform DB (ChannelListing, StockLevel,
+  // Product hierarchy). Called on Save and after a feed is DONE.
+  fastify.post<{
+    Body: {
+      rows: any[]
+      marketplace?: string
+      productType?: string
+      expandedFields?: Record<string, string>
+      isPublished?: boolean
+    }
+  }>('/amazon/flat-file/sync-rows', async (request, reply) => {
+    const { rows, marketplace = 'IT', expandedFields = {}, isPublished = false } = request.body
+    if (!rows || rows.length === 0) {
+      return reply.code(400).send({ error: 'rows must be non-empty' })
+    }
+    if (rows.length > 2000) {
+      return reply.code(400).send({ error: 'Max 2000 rows per sync' })
+    }
+    try {
+      const result = await flatFileService.syncRowsToPlatform(
+        rows,
+        (marketplace ?? 'IT').toUpperCase(),
+        expandedFields,
+        { isPublished },
+      )
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/sync-rows failed')
+      return reply.code(500).send({ error: err?.message ?? 'Sync failed' })
+    }
+  })
+
   // ── POST /api/amazon/flat-file/translate-values ─────────────────────
   // Cross-market enum value mapping via constrained AI translation.
   // Takes a column's source values from one market and finds the

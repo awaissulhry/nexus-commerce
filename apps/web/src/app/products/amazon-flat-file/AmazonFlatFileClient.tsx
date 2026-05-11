@@ -1332,6 +1332,34 @@ export default function AmazonFlatFileClient({
     setSubmitting(false)
   }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion])
 
+  // ── Platform sync ──────────────────────────────────────────────────
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
+
+  const syncToPlatform = useCallback(async (rowsToSync: Row[], isPublished = false) => {
+    if (!manifest) return
+    setSyncStatus('syncing')
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/sync-rows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: rowsToSync,
+          marketplace,
+          productType,
+          expandedFields: manifest.expandedFields ?? {},
+          isPublished,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Sync failed')
+      setSyncStatus('synced')
+      setTimeout(() => setSyncStatus('idle'), 4000)
+    } catch {
+      setSyncStatus('error')
+      setTimeout(() => setSyncStatus('idle'), 6000)
+    }
+  }, [manifest, marketplace, productType])
+
   const pollAllFeeds = useCallback(async () => {
     if (!feedEntries.length) return
     setPolling(true)
@@ -1352,7 +1380,7 @@ export default function AmazonFlatFileClient({
         })
       )
       setFeedEntries(updated)
-      // Persist completed submissions to history
+      // Persist completed submissions to history + sync to platform when DONE
       for (const entry of updated) {
         if (entry.status === 'DONE' || entry.status === 'FATAL') {
           const ok = entry.results.filter((r: FeedResult) => r.status === 'success').length
@@ -1363,13 +1391,25 @@ export default function AmazonFlatFileClient({
             errorCount: err,
             results: entry.results,
           })
+          // On DONE: sync all rows for this market to the platform with isPublished=true
+          if (entry.status === 'DONE') {
+            const mpRows = entry.market === marketplace
+              ? rows
+              : (() => {
+                  try {
+                    const raw = localStorage.getItem(rowStorageKey(entry.market, productType))
+                    return raw ? JSON.parse(raw) as Row[] : []
+                  } catch { return [] }
+                })()
+            void syncToPlatform(mpRows, true)
+          }
         } else {
           updateSubmissionRecord(entry.feedId, { status: entry.status as 'IN_QUEUE' | 'PROCESSING' })
         }
       }
     } catch (e: any) { setLoadError(e.message) }
     finally { setPolling(false) }
-  }, [feedEntries, marketplace, updateSubmissionRecord])
+  }, [feedEntries, marketplace, productType, rows, updateSubmissionRecord, syncToPlatform])
 
   // ── Import / Export ────────────────────────────────────────────────
 
@@ -1537,7 +1577,8 @@ export default function AmazonFlatFileClient({
     saveRows(marketplace, productType, rows)
     setSaveFlash(true)
     setTimeout(() => setSaveFlash(false), 2000)
-  }, [rows, marketplace, productType, createVersion])
+    void syncToPlatform(rows, false)
+  }, [rows, marketplace, productType, createVersion, syncToPlatform])
 
   const handleDiscard = useCallback(() => {
     if (!confirm('Discard all local changes? Your edits will be lost and rows will reload from the server.')) return
@@ -1709,6 +1750,18 @@ export default function AmazonFlatFileClient({
             className={saveFlash ? 'text-emerald-600 dark:text-emerald-400' : ''}>
             {saveFlash ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Saved</> : 'Save'}
           </Button>
+          {syncStatus !== 'idle' && (
+            <span className={cn(
+              'text-[11px] flex items-center gap-1 flex-shrink-0 transition-opacity',
+              syncStatus === 'syncing' && 'text-slate-400',
+              syncStatus === 'synced'  && 'text-emerald-600 dark:text-emerald-400',
+              syncStatus === 'error'   && 'text-red-500 dark:text-red-400',
+            )}>
+              {syncStatus === 'syncing' && <><RefreshCw className="w-3 h-3 animate-spin" />Syncing…</>}
+              {syncStatus === 'synced'  && <><CheckCircle2 className="w-3 h-3" />Synced</>}
+              {syncStatus === 'error'   && <>⚠ Sync failed</>}
+            </span>
+          )}
 
           {/* Submit to Amazon */}
           <div className="relative">
