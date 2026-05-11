@@ -915,6 +915,7 @@ export default function AmazonFlatFileClient({
                   colToGroup={colToGroup}
                   selected={selectedRows.has(row._rowId as string)}
                   activeCell={activeCell}
+                  marketplace={marketplace}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
                   onActivate={(colId) => setActiveCell({ rowId: row._rowId as string, colId })}
                   onDeactivate={() => setActiveCell(null)}
@@ -989,13 +990,14 @@ export default function AmazonFlatFileClient({
 interface RowProps {
   row: Row; rowIdx: number; columns: Column[]; colToGroup: Map<string, ColumnGroup>
   selected: boolean; activeCell: { rowId: string; colId: string } | null
+  marketplace: string
   onSelect: (c: boolean) => void; onActivate: (colId: string) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  onSelect, onActivate, onDeactivate, onChange, onNavigate }: RowProps) {
+  marketplace, onSelect, onActivate, onDeactivate, onChange, onNavigate }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
@@ -1018,16 +1020,20 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
       <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px]">
         <div className="flex flex-col items-end gap-0.5">
           <span className="text-xs text-slate-400 tabular-nums">{rowIdx + 1}</span>
-          {row._asin ? (() => { const asin = String(row._asin); return (
-            <a
-              href={`https://www.amazon.com/dp/${asin}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none"
-              title={`ASIN: ${asin} — click to open on Amazon`}
-              onClick={(e) => e.stopPropagation()}
-            >{asin}</a>
-          )})() : null}
+          {row._asin ? (() => {
+            const asin = String(row._asin)
+            const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
+            return (
+              <a
+                href={`https://www.${domain}/dp/${asin}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none"
+                title={`ASIN: ${asin} — open on ${domain}`}
+                onClick={(e) => e.stopPropagation()}
+              >{asin}</a>
+            )
+          })() : null}
         </div>
       </td>
 
@@ -1591,6 +1597,10 @@ function CopyToMarketPanel({ manifest, rows, currentMarket, onCopy, onClose }: C
 // Current market is pre-selected; other markets can be ticked to save time.
 
 const ALL_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK']
+const AMAZON_DOMAIN: Record<string, string> = {
+  IT: 'amazon.it', DE: 'amazon.de', FR: 'amazon.fr',
+  ES: 'amazon.es', UK: 'amazon.co.uk',
+}
 
 interface FetchPanelProps {
   selectedCount: number
