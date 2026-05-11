@@ -220,7 +220,7 @@ export default function AmazonFlatFileClient({
     try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
   })
   const [showValidPanel, setShowValidPanel] = useState(false)
-  const [translatePanel, setTranslatePanel] = useState<Column | null>(null)
+  const [translatePanelOpen, setTranslatePanelOpen] = useState(false)
 
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -1237,33 +1237,55 @@ export default function AmazonFlatFileClient({
   }, [marketplace, productType, loadData])
 
   const handleApplyTranslations = useCallback((
-    col: Column,
-    appliedMappings: Record<string, Record<string, string | null>>,
+    columnMappings: Array<{
+      col: Column
+      appliedMappings: Record<string, Record<string, string | null>>
+    }>,
   ) => {
-    for (const [mp, mappingForMarket] of Object.entries(appliedMappings)) {
-      if (mp === marketplace) {
-        pushSnapshot()
-        setRows((prev) => prev.map((row) => {
+    // Current market — one snapshot for all columns
+    const currentMarketMappings = columnMappings.filter(({ appliedMappings }) => appliedMappings[marketplace])
+    if (currentMarketMappings.length > 0) {
+      pushSnapshot()
+      setRows((prev) => prev.map((row) => {
+        let updated = { ...row }
+        let changed = false
+        for (const { col, appliedMappings } of currentMarketMappings) {
+          const mapping = appliedMappings[marketplace]
+          if (!mapping) continue
           const srcVal = String(row[col.id] ?? '')
-          const mapped = mappingForMarket[srcVal]
-          if (mapped == null) return row
-          return { ...row, [col.id]: mapped, _dirty: true }
-        }))
-      } else {
-        const key = rowStorageKey(mp, productType)
-        try {
-          const raw = localStorage.getItem(key)
-          if (!raw) continue
-          const otherRows: Row[] = JSON.parse(raw)
-          const updated = otherRows.map((row) => {
+          const mapped = mapping[srcVal]
+          if (mapped != null) { updated[col.id] = mapped; updated._dirty = true; changed = true }
+        }
+        return changed ? updated : row
+      }))
+    }
+
+    // Other markets — write to localStorage drafts
+    const otherMps = new Set(
+      columnMappings.flatMap(({ appliedMappings }) =>
+        Object.keys(appliedMappings).filter((m) => m !== marketplace),
+      ),
+    )
+    for (const mp of otherMps) {
+      const key = rowStorageKey(mp, productType)
+      try {
+        const raw = localStorage.getItem(key)
+        if (!raw) continue
+        const otherRows: Row[] = JSON.parse(raw)
+        const updated = otherRows.map((row) => {
+          let updRow = { ...row }
+          let changed = false
+          for (const { col, appliedMappings } of columnMappings) {
+            const mapping = appliedMappings[mp]
+            if (!mapping) continue
             const srcVal = String(row[col.id] ?? '')
-            const mapped = mappingForMarket[srcVal]
-            if (mapped == null) return row
-            return { ...row, [col.id]: mapped, _dirty: true }
-          })
-          localStorage.setItem(key, JSON.stringify(updated))
-        } catch { /* quota exceeded */ }
-      }
+            const mapped = mapping[srcVal]
+            if (mapped != null) { updRow[col.id] = mapped; updRow._dirty = true; changed = true }
+          }
+          return changed ? updRow : row
+        })
+        localStorage.setItem(key, JSON.stringify(updated))
+      } catch { /* quota exceeded */ }
     }
   }, [marketplace, productType, pushSnapshot])
 
@@ -1455,6 +1477,16 @@ export default function AmazonFlatFileClient({
               : 'Smart paste OFF — positional paste (default). Click to turn on header-mapping mode.'}
             onClick={() => setSmartPasteEnabled((o) => !o)}
             active={smartPasteEnabled}
+          />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* FF.45 Push values to markets */}
+          <TbBtn
+            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+            title="Push enum values to other markets — translate column values across marketplaces"
+            onClick={() => setTranslatePanelOpen(true)}
+            disabled={!manifest || !rows.length}
           />
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
@@ -1751,17 +1783,6 @@ export default function AmazonFlatFileClient({
                       >
                         <Pin className="w-3 h-3" />
                       </button>
-                      {/* Value translate — only for enum columns */}
-                      {col.kind === 'enum' && col.options && col.options.length > 0 && (
-                        <button
-                          type="button"
-                          className="ml-0.5 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0 text-slate-400 hover:text-violet-500"
-                          title="Push values to other markets…"
-                          onClick={(e) => { e.stopPropagation(); setTranslatePanel(col) }}
-                        >
-                          <ArrowRightLeft className="w-3 h-3" />
-                        </button>
-                      )}
                       {/* Resize handle — drag to resize, double-click to reset */}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/colresize flex items-center justify-center z-10"
@@ -2018,17 +2039,17 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
-      {translatePanel && (
+      {translatePanelOpen && (
         <ValueTranslatePanel
-          col={translatePanel}
+          enumColumns={manifestColumns.filter((c) => c.kind === 'enum' && c.options && c.options.length > 0)}
           sourceMarket={marketplace}
           productType={productType}
           rows={rows}
-          onApply={(col, mappings) => {
-            handleApplyTranslations(col, mappings)
-            setTranslatePanel(null)
+          onApply={(columnMappings) => {
+            handleApplyTranslations(columnMappings)
+            setTranslatePanelOpen(false)
           }}
-          onClose={() => setTranslatePanel(null)}
+          onClose={() => setTranslatePanelOpen(false)}
         />
       )}
 
@@ -3649,85 +3670,132 @@ function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
 
 // ── ValueTranslatePanel ────────────────────────────────────────────────
 
-interface ValueTranslatePanelProps {
+interface ColumnMappingEntry {
   col: Column
+  appliedMappings: Record<string, Record<string, string | null>>
+}
+
+interface ValueTranslatePanelProps {
+  enumColumns: Column[]
   sourceMarket: string
   productType: string
   rows: Row[]
-  onApply: (col: Column, mappings: Record<string, Record<string, string | null>>) => void
+  onApply: (columnMappings: ColumnMappingEntry[]) => void
   onClose: () => void
 }
 
-function ValueTranslatePanel({ col, sourceMarket, productType, rows, onApply, onClose }: ValueTranslatePanelProps) {
+function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onApply, onClose }: ValueTranslatePanelProps) {
   const allMarkets = ['IT', 'DE', 'FR', 'ES', 'UK']
   const otherMarkets = allMarkets.filter((m) => m !== sourceMarket.toUpperCase())
 
-  // Distinct non-empty values for this column in current rows
-  const sourceValues = useMemo(() => {
-    const seen = new Set<string>()
-    for (const row of rows) {
-      const v = row[col.id]
-      if (v != null && String(v).trim()) seen.add(String(v).trim())
+  // Default: select all enum columns that have values in current rows
+  const [selectedColIds, setSelectedColIds] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    for (const col of enumColumns) {
+      for (const row of rows) {
+        if (row[col.id] != null && String(row[col.id]).trim()) { s.add(col.id); break }
+      }
     }
-    return [...seen].sort()
-  }, [rows, col.id])
-
+    return s
+  })
   const [selectedMarkets, setSelectedMarkets] = useState<Set<string>>(new Set(otherMarkets))
   const [translating, setTranslating] = useState(false)
-  const [result, setResult] = useState<TranslateResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  // overrides: market → srcVal → chosen value (null = skip this value for this market)
-  const [overrides, setOverrides] = useState<Record<string, Record<string, string | null>>>({})
-  const [openDropdown, setOpenDropdown] = useState<{ market: string; srcVal: string } | null>(null)
+  // colId → TranslateResult
+  const [colResults, setColResults] = useState<Record<string, TranslateResult>>({})
+  const [globalError, setGlobalError] = useState<string | null>(null)
+  // colId → market → srcVal → override value (null = skip)
+  const [overrides, setOverrides] = useState<Record<string, Record<string, Record<string, string | null>>>>({})
+  const [openDropdown, setOpenDropdown] = useState<{ colId: string; market: string; srcVal: string } | null>(null)
+  // which column sections are collapsed in results view
+  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set())
+
+  // Distinct values per column
+  const valuesByCol = useMemo<Record<string, string[]>>(() => {
+    const out: Record<string, string[]> = {}
+    for (const col of enumColumns) {
+      const seen = new Set<string>()
+      for (const row of rows) {
+        const v = row[col.id]
+        if (v != null && String(v).trim()) seen.add(String(v).trim())
+      }
+      out[col.id] = [...seen].sort()
+    }
+    return out
+  }, [enumColumns, rows])
+
+  const selectedCols = enumColumns.filter((c) => selectedColIds.has(c.id))
 
   async function handleTranslate() {
-    if (!sourceValues.length || !selectedMarkets.size) return
+    if (!selectedCols.length || !selectedMarkets.size) return
     setTranslating(true)
-    setResult(null)
-    setError(null)
+    setGlobalError(null)
     setOverrides({})
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/translate-values`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceMarket,
-          productType,
-          colId: col.id,
-          colLabelEn: col.labelEn,
-          values: sourceValues,
-          targetMarkets: [...selectedMarkets],
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Translation failed')
-      setResult(data as TranslateResult)
-    } catch (e: any) {
-      setError(e.message ?? 'Translation failed')
-    } finally {
-      setTranslating(false)
+    setColResults({})
+    setCollapsedCols(new Set())
+
+    // One API call per selected column, all in parallel
+    const settled = await Promise.allSettled(
+      selectedCols.map(async (col) => {
+        const values = valuesByCol[col.id]
+        if (!values?.length) return { colId: col.id, result: null }
+        const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/translate-values`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceMarket,
+            productType,
+            colId: col.id,
+            colLabelEn: col.labelEn,
+            values,
+            targetMarkets: [...selectedMarkets],
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(`[${col.labelEn}] ${data.error ?? 'failed'}`)
+        return { colId: col.id, result: data as TranslateResult }
+      }),
+    )
+
+    const newResults: Record<string, TranslateResult> = {}
+    const errors: string[] = []
+    for (const s of settled) {
+      if (s.status === 'fulfilled' && s.value.result) {
+        newResults[s.value.colId] = s.value.result
+      } else if (s.status === 'rejected') {
+        errors.push(s.reason?.message ?? 'Unknown error')
+      }
     }
+    setColResults(newResults)
+    if (errors.length) setGlobalError(errors.join(' · '))
+    setTranslating(false)
   }
 
-  function getEffectiveValue(market: string, srcVal: string): string | null {
-    if (overrides[market]?.[srcVal] !== undefined) return overrides[market][srcVal]
-    return result?.mappings[market]?.[srcVal]?.match ?? null
+  function getEffectiveValue(colId: string, market: string, srcVal: string): string | null {
+    if (overrides[colId]?.[market]?.[srcVal] !== undefined) return overrides[colId][market][srcVal]
+    return colResults[colId]?.mappings[market]?.[srcVal]?.match ?? null
   }
 
   function handleApply() {
-    const appliedMappings: Record<string, Record<string, string | null>> = {}
-    for (const market of selectedMarkets) {
-      if (!result?.mappings[market] && !overrides[market]) continue
-      appliedMappings[market] = {}
-      for (const srcVal of sourceValues) {
-        appliedMappings[market][srcVal] = getEffectiveValue(market, srcVal)
+    const columnMappings: ColumnMappingEntry[] = []
+    for (const col of selectedCols) {
+      const result = colResults[col.id]
+      if (!result) continue
+      const appliedMappings: Record<string, Record<string, string | null>> = {}
+      for (const market of selectedMarkets) {
+        if (!result.mappings[market]) continue
+        appliedMappings[market] = {}
+        for (const srcVal of valuesByCol[col.id] ?? []) {
+          appliedMappings[market][srcVal] = getEffectiveValue(col.id, market, srcVal)
+        }
+      }
+      if (Object.keys(appliedMappings).length > 0) {
+        columnMappings.push({ col, appliedMappings })
       }
     }
-    onApply(col, appliedMappings)
+    onApply(columnMappings)
   }
 
-  const activeMarkets = [...selectedMarkets].filter((m) => result?.mappings[m] || result?.errors[m])
-  const hasAnyResult = result !== null
+  const hasResults = Object.keys(colResults).length > 0
 
   const confidenceCls = (c: ValueMapping['confidence']) =>
     c === 'high' ? 'text-emerald-600 dark:text-emerald-400'
@@ -3741,227 +3809,278 @@ function ValueTranslatePanel({ col, sourceMarket, productType, rows, onApply, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl max-h-[90vh] flex flex-col mx-4">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-4xl max-h-[92vh] flex flex-col mx-4">
 
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-start justify-between gap-4 flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <ArrowRightLeft className="w-4 h-4 text-violet-500" />
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Push values to other markets</h2>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Column: <span className="font-medium text-slate-700 dark:text-slate-300">{col.labelEn}</span>
-              <span className="ml-2 font-mono text-slate-400">({col.id})</span>
-              · Source: <span className="font-medium">{sourceMarket}</span>
-              {sourceValues.length === 0 && <span className="ml-2 text-amber-500">No values found in current rows</span>}
-            </p>
+        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <ArrowRightLeft className="w-4 h-4 text-violet-500" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Push values to other markets</h2>
+            <span className="text-xs text-slate-400">· Source: <span className="font-medium text-slate-600 dark:text-slate-300">{sourceMarket}</span></span>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+        <div className="overflow-y-auto flex-1">
 
-          {/* Source values list */}
-          {sourceValues.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
-                Values found in current rows ({sourceValues.length})
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {sourceValues.map((v) => (
-                  <span key={v} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded text-xs font-mono">
-                    {v}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Config section */}
+          {!hasResults && (
+            <div className="px-5 py-4 space-y-4">
 
-          {/* Target market selection */}
-          <div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Target markets</p>
-            <div className="flex gap-2 flex-wrap">
-              {otherMarkets.map((m) => (
-                <label key={m} className="flex items-center gap-1.5 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={selectedMarkets.has(m)}
-                    onChange={(e) => {
-                      setSelectedMarkets((prev) => {
-                        const next = new Set(prev)
-                        if (e.target.checked) next.add(m); else next.delete(m)
-                        return next
-                      })
-                      setResult(null)
-                    }}
-                    className="w-3.5 h-3.5 accent-violet-600"
-                  />
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-violet-600">{m}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-400">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              {error}
-            </div>
-          )}
-
-          {/* Results table */}
-          {hasAnyResult && activeMarkets.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                Mapped values — click any cell to override
-              </p>
-              <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-800/60">
-                      <th className="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 w-36">
-                        {sourceMarket} value
-                      </th>
-                      {activeMarkets.filter((m) => !result.errors[m]).map((m) => (
-                        <th key={m} className="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 last:border-r-0">
-                          {m}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sourceValues.map((srcVal, ri) => (
-                      <tr key={srcVal} className={ri % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-800/20'}>
-                        <td className="px-3 py-2 font-mono border-r border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
-                          {srcVal}
-                        </td>
-                        {activeMarkets.filter((m) => !result.errors[m]).map((market) => {
-                          const mapping = result.mappings[market]?.[srcVal]
-                          const effective = getEffectiveValue(market, srcVal)
-                          const isOverridden = overrides[market]?.[srcVal] !== undefined
-                          const targetOpts = result.targetOptions[market] ?? []
-                          const isOpen = openDropdown?.market === market && openDropdown?.srcVal === srcVal
-
-                          return (
-                            <td key={market}
-                              className="px-2 py-1.5 border-r border-b border-slate-200 dark:border-slate-700 last:border-r-0 relative"
-                            >
-                              {isOpen ? (
-                                <div className="absolute left-0 top-0 z-20 min-w-[180px]">
-                                  <div className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto py-1">
-                                    <button
-                                      type="button"
-                                      className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 italic"
-                                      onClick={() => {
-                                        setOverrides((prev) => ({ ...prev, [market]: { ...(prev[market] ?? {}), [srcVal]: null } }))
-                                        setOpenDropdown(null)
-                                      }}
-                                    >Skip (no mapping)</button>
-                                    <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                                    {targetOpts.map((opt) => (
-                                      <button
-                                        key={opt}
-                                        type="button"
-                                        className={cn(
-                                          'w-full px-3 py-1 text-left text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30',
-                                          opt === effective ? 'bg-blue-50 dark:bg-blue-950/30 font-medium text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300',
-                                        )}
-                                        onClick={() => {
-                                          setOverrides((prev) => ({ ...prev, [market]: { ...(prev[market] ?? {}), [srcVal]: opt } }))
-                                          setOpenDropdown(null)
-                                        }}
-                                      >{opt}</button>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="w-full text-left flex items-center justify-between gap-2 px-1 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors group/cell"
-                                  onClick={() => setOpenDropdown(isOpen ? null : { market, srcVal })}
-                                  title={`Click to override — valid options: ${targetOpts.length}`}
-                                >
-                                  {effective ? (
-                                    <>
-                                      <span className={cn('font-mono text-xs', isOverridden && 'underline decoration-dashed decoration-violet-400')}>
-                                        {effective}
-                                      </span>
-                                      <span className={cn('text-[10px] flex-shrink-0', isOverridden ? 'text-violet-500' : confidenceCls(mapping?.confidence ?? 'none'))}>
-                                        {isOverridden ? 'override' : confidenceLabel(mapping?.confidence ?? 'none')}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600 italic text-[11px]">
-                                      {mapping?.confidence === 'none' ? 'no match' : '—'}
-                                    </span>
-                                  )}
-                                  <ChevronDown className="w-3 h-3 text-slate-300 flex-shrink-0 opacity-0 group-hover/cell:opacity-100" />
-                                </button>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* Column picker */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Columns to translate ({selectedColIds.size} selected)</p>
+                  <div className="flex gap-2">
+                    <button type="button" className="text-[11px] text-violet-600 hover:text-violet-700 dark:text-violet-400"
+                      onClick={() => setSelectedColIds(new Set(enumColumns.filter((c) => (valuesByCol[c.id]?.length ?? 0) > 0).map((c) => c.id)))}>
+                      Select all with values
+                    </button>
+                    <span className="text-slate-300">·</span>
+                    <button type="button" className="text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                      onClick={() => setSelectedColIds(new Set())}>
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                  {enumColumns.map((col) => {
+                    const vals = valuesByCol[col.id] ?? []
+                    const checked = selectedColIds.has(col.id)
+                    return (
+                      <label key={col.id} className={cn(
+                        'flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors',
+                        checked ? 'bg-violet-50/60 dark:bg-violet-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
+                        !vals.length && 'opacity-50',
+                      )}>
+                        <input type="checkbox" checked={checked} disabled={!vals.length}
+                          className="w-3.5 h-3.5 accent-violet-600 flex-shrink-0"
+                          onChange={(e) => setSelectedColIds((prev) => {
+                            const next = new Set(prev)
+                            if (e.target.checked) next.add(col.id); else next.delete(col.id)
+                            return next
+                          })} />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{col.labelEn}</span>
+                          <span className="ml-1.5 text-[10px] font-mono text-slate-400">{col.id}</span>
+                        </div>
+                        {vals.length > 0 ? (
+                          <div className="flex gap-1 flex-wrap justify-end max-w-[200px]">
+                            {vals.slice(0, 3).map((v) => (
+                              <span key={v} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-[10px] font-mono truncate max-w-[80px]">{v}</span>
+                            ))}
+                            {vals.length > 3 && <span className="text-[10px] text-slate-400">+{vals.length - 3}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">no values</span>
+                        )}
+                      </label>
+                    )
+                  })}
+                  {enumColumns.length === 0 && (
+                    <div className="px-3 py-4 text-xs text-slate-400 text-center italic">No enum columns in current view</div>
+                  )}
+                </div>
               </div>
 
-              {/* Per-market errors */}
-              {Object.entries(result.errors).some(([m]) => selectedMarkets.has(m)) && (
-                <div className="mt-2 space-y-1">
-                  {Object.entries(result.errors)
-                    .filter(([m]) => selectedMarkets.has(m))
-                    .map(([m, msg]) => (
-                      <div key={m} className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                        <span><strong>{m}:</strong> {msg}</span>
-                      </div>
-                    ))}
+              {/* Target markets */}
+              <div>
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Target markets</p>
+                <div className="flex gap-3 flex-wrap">
+                  {otherMarkets.map((m) => (
+                    <label key={m} className="flex items-center gap-1.5 cursor-pointer group">
+                      <input type="checkbox" checked={selectedMarkets.has(m)}
+                        className="w-3.5 h-3.5 accent-violet-600"
+                        onChange={(e) => setSelectedMarkets((prev) => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(m); else next.delete(m)
+                          return next
+                        })} />
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-violet-600">{m}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {globalError && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-400">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{globalError}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Results — one section per column */}
+          {hasResults && (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+
+              {/* Summary bar */}
+              <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between gap-4">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {Object.keys(colResults).length} column{Object.keys(colResults).length !== 1 ? 's' : ''} translated
+                  · click any cell to override
+                </span>
+                <button type="button" className="text-[11px] text-violet-600 hover:text-violet-700 dark:text-violet-400"
+                  onClick={() => { setColResults({}); setGlobalError(null) }}>
+                  ← Edit selection
+                </button>
+              </div>
+
+              {selectedCols.map((col) => {
+                const result = colResults[col.id]
+                if (!result) return null
+                const vals = valuesByCol[col.id] ?? []
+                const activeMarkets = [...selectedMarkets].filter((m) => result.mappings[m])
+                const isCollapsed = collapsedCols.has(col.id)
+                const matchCount = activeMarkets.reduce((n, m) =>
+                  n + vals.filter((v) => getEffectiveValue(col.id, m, v) !== null).length, 0)
+                const totalPossible = activeMarkets.length * vals.length
+
+                return (
+                  <div key={col.id}>
+                    {/* Column section header */}
+                    <button type="button"
+                      className="w-full flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/30 text-left transition-colors"
+                      onClick={() => setCollapsedCols((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(col.id)) next.delete(col.id); else next.add(col.id)
+                        return next
+                      })}>
+                      <div className="flex items-center gap-2">
+                        <ChevronDown className={cn('w-3.5 h-3.5 text-slate-400 transition-transform', isCollapsed && '-rotate-90')} />
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{col.labelEn}</span>
+                        <span className="text-[10px] font-mono text-slate-400">{col.id}</span>
+                      </div>
+                      <span className={cn('text-[10px]', matchCount === totalPossible ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500 dark:text-amber-400')}>
+                        {matchCount}/{totalPossible} matched
+                      </span>
+                    </button>
+
+                    {/* Mapping table */}
+                    {!isCollapsed && (
+                      <div className="px-5 pb-3">
+                        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                          <table className="w-full text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 dark:bg-slate-800/60">
+                                <th className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 w-32">
+                                  {sourceMarket}
+                                </th>
+                                {activeMarkets.map((m) => (
+                                  <th key={m} className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 last:border-r-0">
+                                    {m}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {vals.map((srcVal, ri) => (
+                                <tr key={srcVal} className={ri % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-800/20'}>
+                                  <td className="px-3 py-1.5 font-mono border-r border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 truncate max-w-[120px]" title={srcVal}>
+                                    {srcVal}
+                                  </td>
+                                  {activeMarkets.map((market) => {
+                                    const mapping = result.mappings[market]?.[srcVal]
+                                    const effective = getEffectiveValue(col.id, market, srcVal)
+                                    const isOverridden = overrides[col.id]?.[market]?.[srcVal] !== undefined
+                                    const targetOpts = result.targetOptions[market] ?? []
+                                    const isOpen = openDropdown?.colId === col.id && openDropdown?.market === market && openDropdown?.srcVal === srcVal
+
+                                    return (
+                                      <td key={market} className="px-2 py-1 border-r border-b border-slate-200 dark:border-slate-700 last:border-r-0 relative">
+                                        {isOpen ? (
+                                          <div className="absolute left-0 top-0 z-20 min-w-[180px]">
+                                            <div className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto py-1">
+                                              <button type="button"
+                                                className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 italic"
+                                                onClick={() => {
+                                                  setOverrides((p) => ({ ...p, [col.id]: { ...(p[col.id] ?? {}), [market]: { ...(p[col.id]?.[market] ?? {}), [srcVal]: null } } }))
+                                                  setOpenDropdown(null)
+                                                }}>Skip (no mapping)</button>
+                                              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                                              {targetOpts.map((opt) => (
+                                                <button key={opt} type="button"
+                                                  className={cn('w-full px-3 py-1 text-left text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30',
+                                                    opt === effective ? 'bg-blue-50 dark:bg-blue-950/30 font-medium text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300')}
+                                                  onClick={() => {
+                                                    setOverrides((p) => ({ ...p, [col.id]: { ...(p[col.id] ?? {}), [market]: { ...(p[col.id]?.[market] ?? {}), [srcVal]: opt } } }))
+                                                    setOpenDropdown(null)
+                                                  }}>{opt}</button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <button type="button"
+                                            className="w-full text-left flex items-center justify-between gap-1 px-1 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 group/cell"
+                                            onClick={() => setOpenDropdown({ colId: col.id, market, srcVal })}>
+                                            {effective ? (
+                                              <>
+                                                <span className={cn('font-mono text-[11px] truncate', isOverridden && 'underline decoration-dashed decoration-violet-400')}>{effective}</span>
+                                                <span className={cn('text-[9px] flex-shrink-0', isOverridden ? 'text-violet-500' : confidenceCls(mapping?.confidence ?? 'none'))}>
+                                                  {isOverridden ? 'ovr' : confidenceLabel(mapping?.confidence ?? 'none')}
+                                                </span>
+                                              </>
+                                            ) : (
+                                              <span className="text-slate-300 dark:text-slate-600 italic text-[10px]">no match</span>
+                                            )}
+                                            <ChevronDown className="w-3 h-3 text-slate-300 flex-shrink-0 opacity-0 group-hover/cell:opacity-100" />
+                                          </button>
+                                        )}
+                                      </td>
+                                    )
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Per-market schema errors for this column */}
+                        {Object.entries(result.errors).some(([m]) => selectedMarkets.has(m)) && (
+                          <div className="mt-1.5 space-y-0.5">
+                            {Object.entries(result.errors).filter(([m]) => selectedMarkets.has(m)).map(([m, msg]) => (
+                              <div key={m} className="flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                                <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                <span><strong>{m}:</strong> {msg}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl">
-          <div className="text-[11px] text-slate-400">
-            {hasAnyResult && (
-              <>
-                {activeMarkets.filter((m) => result.mappings[m]).reduce((total, m) => {
-                  const mapped = Object.values(result.mappings[m] ?? {}).filter((v) => v.match !== null).length
-                  return total + mapped
-                }, 0)} of {sourceValues.length * activeMarkets.filter((m) => result.mappings[m]).length} values matched
-              </>
-            )}
-          </div>
+          <span className="text-[11px] text-slate-400">
+            {hasResults
+              ? `${Object.keys(colResults).length} column${Object.keys(colResults).length !== 1 ? 's' : ''} · ${[...selectedMarkets].length} market${[...selectedMarkets].length !== 1 ? 's' : ''}`
+              : `${selectedColIds.size} column${selectedColIds.size !== 1 ? 's' : ''} · ${selectedMarkets.size} market${selectedMarkets.size !== 1 ? 's' : ''} selected`}
+          </span>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
-            {!hasAnyResult ? (
-              <Button
-                size="sm"
-                onClick={handleTranslate}
-                loading={translating}
-                disabled={!sourceValues.length || !selectedMarkets.size}
-              >
+            {!hasResults ? (
+              <Button size="sm" onClick={handleTranslate} loading={translating}
+                disabled={!selectedColIds.size || !selectedMarkets.size}>
                 <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" />
                 Translate
               </Button>
             ) : (
               <>
+                <Button size="sm" variant="ghost" onClick={() => { setColResults({}); setGlobalError(null) }}>
+                  ← Edit selection
+                </Button>
                 <Button size="sm" variant="ghost" onClick={handleTranslate} loading={translating}>
                   Retranslate
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleApply}
-                  disabled={!activeMarkets.some((m) => result.mappings[m])}
-                >
+                <Button size="sm" onClick={handleApply} disabled={Object.keys(colResults).length === 0}>
                   Apply to drafts
                 </Button>
               </>
@@ -3969,7 +4088,6 @@ function ValueTranslatePanel({ col, sourceMarket, productType, rows, onApply, on
           </div>
         </div>
 
-        {/* Close dropdown on outside click */}
         {openDropdown && (
           <div className="fixed inset-0 z-10" onClick={() => setOpenDropdown(null)} />
         )}
