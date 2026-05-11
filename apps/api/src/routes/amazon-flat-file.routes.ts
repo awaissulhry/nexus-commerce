@@ -417,6 +417,60 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ── POST /api/amazon/flat-file/fetch-images ─────────────────────────
+  // Fetch main product images from SP-API Catalog Items API for a list of ASINs.
+  fastify.post<{
+    Body: { asins: string[]; marketplace: string }
+  }>('/amazon/flat-file/fetch-images', async (request, reply) => {
+    const { asins, marketplace } = request.body
+    if (!asins?.length) return reply.code(400).send({ error: 'asins required' })
+    if (asins.length > 100) return reply.code(400).send({ error: 'Max 100 ASINs per request' })
+
+    const marketplaceId = MARKETPLACE_ID_MAP[(marketplace ?? 'IT').toUpperCase()] ?? MARKETPLACE_ID_MAP.IT
+
+    // If SP-API not configured, return empty gracefully
+    const dryRun = process.env.NEXUS_AMAZON_BATCH_DRYRUN === '1'
+    if (dryRun) return reply.send({ images: {} })
+
+    try {
+      const sp = await getSpClient()
+      const images: Record<string, string> = {}
+
+      // Batch in chunks of 20 (API limit)
+      const CHUNK = 20
+      for (let i = 0; i < asins.length; i += CHUNK) {
+        const chunk = asins.slice(i, i + CHUNK)
+        try {
+          const res: any = await sp.callAPI({
+            operation: 'searchCatalogItems',
+            endpoint: 'catalogItems',
+            version: '2022-04-01',
+            query: {
+              marketplaceIds: [marketplaceId],
+              identifiers: chunk,
+              identifierType: 'ASIN',
+              includedData: ['images'],
+            },
+          })
+          for (const item of res?.items ?? []) {
+            const asin: string = item.asin
+            // Find images for the requested marketplace
+            const mpImages = item.images?.find((img: any) => img.marketplaceId === marketplaceId)?.images
+              ?? item.images?.[0]?.images  // fallback to first marketplace
+              ?? []
+            const mainImg = mpImages.find((img: any) => img.variant === 'MAIN')
+            if (mainImg?.link) images[asin] = mainImg.link
+          }
+        } catch { /* skip failed chunk */ }
+      }
+
+      return reply.send({ images })
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/fetch-images failed')
+      return reply.code(500).send({ error: err?.message ?? 'Failed to fetch images' })
+    }
+  })
+
   // ── POST /api/amazon/flat-file/translate-values ─────────────────────
   // Cross-market enum value mapping via constrained AI translation.
   // Takes a column's source values from one market and finds the

@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Copy, Download, FileSpreadsheet, Loader2, Pin, Plus, RefreshCw,
+  ClipboardPaste, Copy, Download, FileSpreadsheet, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
   Undo2, Redo2, GripVertical, SlidersHorizontal,
 } from 'lucide-react'
@@ -136,6 +136,38 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
   }
 }
 
+// ── ASIN cache helpers ─────────────────────────────────────────────────
+
+function asinCacheKey(mp: string) {
+  return `ff-asin-cache-${mp.toUpperCase()}`
+}
+
+function readAsinCache(mp: string): Record<string, { asin?: string; status?: string }> {
+  try { return JSON.parse(localStorage.getItem(asinCacheKey(mp)) ?? '{}') } catch { return {} }
+}
+
+function writeAsinCache(mp: string, entries: Record<string, { asin?: string; status?: string }>) {
+  try {
+    const existing = readAsinCache(mp)
+    localStorage.setItem(asinCacheKey(mp), JSON.stringify({ ...existing, ...entries }))
+  } catch { /* quota */ }
+}
+
+function mergeAsinCache(rows: Row[], mp: string): Row[] {
+  const cache = readAsinCache(mp)
+  if (!Object.keys(cache).length) return rows
+  return rows.map((row) => {
+    const sku = String(row.item_sku ?? '')
+    const cached = sku ? cache[sku] : undefined
+    if (!cached) return row
+    return {
+      ...row,
+      ...(cached.asin ? { _asin: cached.asin } : {}),
+      ...(cached.status ? { _listingStatus: cached.status } : {}),
+    }
+  })
+}
+
 // ── Props ──────────────────────────────────────────────────────────────
 
 interface Props {
@@ -224,6 +256,13 @@ export default function AmazonFlatFileClient({
     try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
   })
   const [showValidPanel, setShowValidPanel] = useState(false)
+  const [showRowImages, setShowRowImages] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-show-images') === '1' } catch { return false }
+  })
+  const [imageSize, setImageSize] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem('ff-image-size') ?? '48', 10) || 48 } catch { return 48 }
+  })
+  const [imagesByAsin, setImagesByAsin] = useState<Record<string, string | null>>({})
   const [pushPanel, setPushPanel] = useState<{ tab: 'copy' | 'translate'; preselectedCol?: Column } | null>(null)
 
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
@@ -301,6 +340,15 @@ export default function AmazonFlatFileClient({
   useEffect(() => { try { localStorage.setItem('ff-col-widths', JSON.stringify(colWidths)) } catch {} }, [colWidths])
   useEffect(() => { try { localStorage.setItem('ff-row-height', String(rowHeight)) } catch {} }, [rowHeight])
   useEffect(() => { try { localStorage.setItem('ff-frozen-cols', String(frozenColCount)) } catch {} }, [frozenColCount])
+
+  // Persist image preferences
+  useEffect(() => { try { localStorage.setItem('ff-show-images', showRowImages ? '1' : '0') } catch {} }, [showRowImages])
+  useEffect(() => { try { localStorage.setItem('ff-image-size', String(imageSize)) } catch {} }, [imageSize])
+
+  // Auto row height when images toggled on or size changed
+  useEffect(() => {
+    if (showRowImages) setRowHeight(imageSize + 12)
+  }, [showRowImages, imageSize])
 
   // Global mouse handlers for drag-resize
   useEffect(() => {
@@ -886,6 +934,41 @@ export default function AmazonFlatFileClient({
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
 
+  // Memoised string of all unique ASINs in current rows — used as dep to avoid
+  // refetching on every keystroke while still catching newly-fetched ASINs.
+  const rowAsinString = useMemo(() => {
+    const s = new Set<string>()
+    for (const row of rows) {
+      if (row._asin) s.add(String(row._asin))
+    }
+    return [...s].sort().join(',')
+  }, [rows])
+
+  useEffect(() => {
+    if (!showRowImages || !rowAsinString) return
+    const allAsins = rowAsinString.split(',').filter(Boolean)
+    const uncached = allAsins.filter((a) => !(a in imagesByAsin))
+    if (!uncached.length) return
+
+    // Mark as pending immediately (null = loading)
+    setImagesByAsin((prev) => {
+      const update: Record<string, string | null> = {}
+      for (const a of uncached) update[a] = null
+      return { ...prev, ...update }
+    })
+
+    fetch(`${getBackendUrl()}/api/amazon/flat-file/fetch-images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asins: uncached, marketplace }),
+    })
+      .then((r) => (r.ok ? r.json() : { images: {} }))
+      .then((data) => setImagesByAsin((prev) => ({ ...prev, ...(data.images ?? {}) })))
+      .catch(() => {})
+  // imagesByAsin is intentionally NOT in the dep array (it's updated inside the effect)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRowImages, rowAsinString, marketplace])
+
   // ── Row persistence (localStorage) ────────────────────────────────
   // Autosave rows keyed by market+productType so edits survive navigation
   // and schema refreshes. Only overwritten when the user explicitly loads
@@ -942,10 +1025,10 @@ export default function AmazonFlatFileClient({
         setManifest(await mRes.json())
         const saved = loadSavedRows(mp, pt)
         if (saved && saved.length > 0) {
-          setRows(saved)
+          setRows(mergeAsinCache(saved, mp))
         } else if (rRes.ok) {
           const d = await rRes.json()
-          setRows(d.rows ?? [])
+          setRows(mergeAsinCache(d.rows ?? [], mp))
         } else {
           setRows([])
         }
@@ -1237,6 +1320,15 @@ export default function AmazonFlatFileClient({
         }),
       )
 
+      // Persist ASIN data so it survives row reloads
+      const cacheEntries: Record<string, { asin?: string; status?: string }> = {}
+      for (const [sku, data] of Object.entries(currentResults)) {
+        if (data.asin || data.status) {
+          cacheEntries[sku] = { asin: data.asin, status: data.status }
+        }
+      }
+      if (Object.keys(cacheEntries).length) writeAsinCache(marketplace, cacheEntries)
+
       // 2. Merge into other markets' localStorage drafts
       for (const [mp, mpResults] of Object.entries(results)) {
         if (mp === marketplace) continue
@@ -1256,6 +1348,14 @@ export default function AmazonFlatFileClient({
           })
           localStorage.setItem(key, JSON.stringify(updated))
         } catch { /* quota exceeded — skip */ }
+        // Persist ASIN data for other markets too
+        const mpCacheEntries: Record<string, { asin?: string; status?: string }> = {}
+        for (const [sku, data] of Object.entries(mpResults)) {
+          if (data.asin || data.status) {
+            mpCacheEntries[sku] = { asin: data.asin, status: data.status }
+          }
+        }
+        if (Object.keys(mpCacheEntries).length) writeAsinCache(mp, mpCacheEntries)
       }
     } catch (e: any) {
       setLoadError(e.message ?? 'Fetch from Amazon failed')
@@ -1540,6 +1640,34 @@ export default function AmazonFlatFileClient({
             disabled={!manifest || !rows.length}
             active={pushPanel?.tab === 'translate'}
           />
+
+          {/* Row images toggle */}
+          <TbBtn
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
+            title={showRowImages ? 'Hide product images' : 'Show product images in rows (fetches from Amazon by ASIN)'}
+            onClick={() => setShowRowImages((o) => !o)}
+            disabled={!manifest}
+            active={showRowImages}
+          />
+          {showRowImages && (
+            <>
+              {([24, 32, 48, 64, 96] as const).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setImageSize(size)}
+                  className={cn(
+                    'h-6 px-1.5 rounded text-[10px] font-medium transition-colors',
+                    imageSize === size
+                      ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+                  )}
+                >
+                  {size === 24 ? 'XS' : size === 32 ? 'S' : size === 48 ? 'M' : size === 64 ? 'L' : 'XL'}
+                </button>
+              ))}
+            </>
+          )}
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
@@ -1933,6 +2061,9 @@ export default function AmazonFlatFileClient({
                   marketplace={marketplace}
                   colWidths={colWidths}
                   rowHeight={rowHeight}
+                  showRowImages={showRowImages}
+                  imageSize={imageSize}
+                  imagesByAsin={imagesByAsin}
                   isDraggingRow={draggingRowId === (row._rowId as string)}
                   dropIndicator={dropTarget?.rowId === (row._rowId as string) ? dropTarget.half : null}
                   normSel={normSel}
@@ -2242,6 +2373,9 @@ interface RowProps {
   marketplace: string
   colWidths: Record<string, number>
   rowHeight: number
+  showRowImages: boolean
+  imageSize: number
+  imagesByAsin: Record<string, string | null>
   isDraggingRow: boolean
   dropIndicator: 'top' | 'bottom' | null
   normSel: NormSel | null
@@ -2272,7 +2406,8 @@ interface RowProps {
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  marketplace, colWidths, rowHeight, isDraggingRow, dropIndicator,
+  marketplace, colWidths, rowHeight, showRowImages, imageSize, imagesByAsin,
+  isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
   stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
@@ -2349,24 +2484,73 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           onRowSelect(rowIdx)
         }}
         style={{ cursor: 'ns-resize' }}>
-        <div className="flex flex-col items-end gap-0.5" style={{ height: rowHeight, justifyContent: 'center' }}>
-          <div className="flex items-center gap-0.5 w-full justify-end">
-            {isParent && (
-              <button
-                type="button"
-                className="p-0 text-slate-400 hover:text-slate-600 flex-shrink-0"
-                onClick={(e) => { e.stopPropagation(); onToggleCollapse(rowId) }}
-                title={collapsedParents.has(rowId) ? 'Expand children' : 'Collapse children'}
-              >
-                {collapsedParents.has(rowId)
-                  ? <ChevronRight className="w-3 h-3" />
-                  : <ChevronDown className="w-3 h-3" />}
-              </button>
-            )}
-            {isChild && <span className="w-3 flex-shrink-0" />}
-            <span className={cn('text-xs text-slate-400 tabular-nums', isChild && 'ml-1')}>{rowIdx + 1}</span>
-          </div>
-          {row._asin ? (() => {
+        <div
+          className={cn('flex flex-col gap-0.5', showRowImages ? 'items-center' : 'items-end')}
+          style={{ height: rowHeight, justifyContent: 'center' }}
+        >
+          {/* Product image */}
+          {showRowImages && (() => {
+            const asin = row._asin ? String(row._asin) : null
+            const imgUrl = asin ? imagesByAsin[asin] : null
+            if (asin && imgUrl) {
+              return (
+                <img
+                  src={imgUrl}
+                  alt=""
+                  className="object-contain rounded flex-shrink-0"
+                  style={{ width: imageSize, height: imageSize }}
+                  draggable={false}
+                />
+              )
+            }
+            if (asin && imgUrl === null) {
+              // loading (null = pending)
+              return (
+                <div
+                  className="rounded bg-slate-100 dark:bg-slate-800 animate-pulse flex-shrink-0"
+                  style={{ width: imageSize, height: imageSize }}
+                />
+              )
+            }
+            if (showRowImages) {
+              // no ASIN — grey placeholder
+              return (
+                <div
+                  className="rounded border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0"
+                  style={{ width: imageSize, height: imageSize }}
+                >
+                  <ImageIcon className="text-slate-300 dark:text-slate-600" style={{ width: imageSize * 0.4, height: imageSize * 0.4 }} />
+                </div>
+              )
+            }
+            return null
+          })()}
+
+          {/* Row number + collapse toggle */}
+          {!showRowImages && (
+            <div className="flex items-center gap-0.5 w-full justify-end">
+              {isParent && (
+                <button
+                  type="button"
+                  className="p-0 text-slate-400 hover:text-slate-600 flex-shrink-0"
+                  onClick={(e) => { e.stopPropagation(); onToggleCollapse(rowId) }}
+                  title={collapsedParents.has(rowId) ? 'Expand children' : 'Collapse children'}
+                >
+                  {collapsedParents.has(rowId)
+                    ? <ChevronRight className="w-3 h-3" />
+                    : <ChevronDown className="w-3 h-3" />}
+                </button>
+              )}
+              {isChild && <span className="w-3 flex-shrink-0" />}
+              <span className={cn('text-xs text-slate-400 tabular-nums', isChild && 'ml-1')}>{rowIdx + 1}</span>
+            </div>
+          )}
+          {showRowImages && (
+            <span className="text-[9px] text-slate-400 tabular-nums leading-none">{rowIdx + 1}</span>
+          )}
+
+          {/* ASIN link */}
+          {!showRowImages && row._asin ? (() => {
             const asin = String(row._asin)
             const domain = AMAZON_DOMAIN[marketplace] ?? 'amazon.com'
             return (
@@ -2380,7 +2564,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
               >{asin}</a>
             )
           })() : null}
-          {row._listingStatus != null && (() => {
+
+          {/* Listing status */}
+          {!showRowImages && row._listingStatus != null && (() => {
             const s = String(row._listingStatus)
             const cls = (s === 'ACTIVE' || s === 'BUYABLE')
               ? 'text-emerald-600 dark:text-emerald-400'
