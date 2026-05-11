@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Copy, Download, FileSpreadsheet, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
+  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
   Undo2, Redo2, GripVertical, SlidersHorizontal,
 } from 'lucide-react'
@@ -84,6 +84,27 @@ interface FeedEntry {
   error?: string
 }
 
+interface SubmissionRecord {
+  id: string            // feedId
+  market: string
+  productType: string
+  submittedAt: string   // ISO
+  rowCount: number
+  status: 'IN_QUEUE' | 'PROCESSING' | 'DONE' | 'FATAL'
+  successCount?: number
+  errorCount?: number
+  results?: Array<{ sku: string; status: string; message: string }>
+  dryRun?: boolean
+}
+
+interface VersionRecord {
+  id: string
+  label: string         // e.g. "Manual save", "Before submit · IT"
+  savedAt: string       // ISO
+  rowCount: number
+  rows: Row[]
+}
+
 interface ValueMapping {
   match: string | null
   confidence: 'high' | 'medium' | 'low' | 'none'
@@ -134,6 +155,16 @@ function makeEmptyRow(productType: string, _marketplace: string, parentage = '')
     parent_sku: '',
     variation_theme: '',
   }
+}
+
+// ── Storage key helpers ────────────────────────────────────────────────
+
+function submissionHistoryKey(mp: string, pt: string) {
+  return `ff-submissions-${mp.toUpperCase()}-${pt.toUpperCase()}`
+}
+
+function versionHistoryKey(mp: string, pt: string) {
+  return `ff-versions-${mp.toUpperCase()}-${pt.toUpperCase()}`
 }
 
 // ── ASIN cache helpers ─────────────────────────────────────────────────
@@ -274,6 +305,9 @@ export default function AmazonFlatFileClient({
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionRecord[]>([])
+  const [submissionPanelOpen, setSubmissionPanelOpen] = useState(false)
+  const [versionPanelOpen, setVersionPanelOpen] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1018,6 +1052,15 @@ export default function AmazonFlatFileClient({
     return () => clearTimeout(t)
   }, [rows, marketplace, productType])
 
+  // Load submission history when marketplace/productType change
+  useEffect(() => {
+    if (!productType) return
+    try {
+      const raw = localStorage.getItem(submissionHistoryKey(marketplace, productType))
+      setSubmissionHistory(raw ? JSON.parse(raw) : [])
+    } catch { setSubmissionHistory([]) }
+  }, [marketplace, productType])
+
   // ── Load data ──────────────────────────────────────────────────────
 
   const loadData = useCallback(async (mp: string, pt: string, force = false) => {
@@ -1163,6 +1206,41 @@ export default function AmazonFlatFileClient({
     }
   }, [])
 
+  // ── Submission + version history ──────────────────────────────────
+
+  const createVersion = useCallback((label: string) => {
+    if (!productType || !marketplace) return
+    const record: VersionRecord = {
+      id: `v-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      label,
+      savedAt: new Date().toISOString(),
+      rowCount: rowsRef.current.length,
+      rows: rowsRef.current,
+    }
+    try {
+      const key = versionHistoryKey(marketplace, productType)
+      const existing: VersionRecord[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+      const trimmed = [record, ...existing].slice(0, 15)
+      localStorage.setItem(key, JSON.stringify(trimmed))
+    } catch { /* quota */ }
+  }, [marketplace, productType])
+
+  const saveSubmissionRecord = useCallback((record: SubmissionRecord) => {
+    setSubmissionHistory((prev) => {
+      const updated = [record, ...prev].slice(0, 50)
+      try { localStorage.setItem(submissionHistoryKey(marketplace, productType), JSON.stringify(updated)) } catch {}
+      return updated
+    })
+  }, [marketplace, productType])
+
+  const updateSubmissionRecord = useCallback((feedId: string, patch: Partial<SubmissionRecord>) => {
+    setSubmissionHistory((prev) => {
+      const updated = prev.map((r) => r.id === feedId ? { ...r, ...patch } : r)
+      try { localStorage.setItem(submissionHistoryKey(marketplace, productType), JSON.stringify(updated)) } catch {}
+      return updated
+    })
+  }, [marketplace, productType])
+
   // ── Submit ─────────────────────────────────────────────────────────
 
   const handleSubmitToMarkets = useCallback(async (markets: Set<string>) => {
@@ -1211,13 +1289,31 @@ export default function AmazonFlatFileClient({
     setFeedEntries(entries)
     if (errors.length) setLoadError(errors.join(' · '))
 
+    // Save submission records to history
+    const now = new Date().toISOString()
+    for (const entry of entries) {
+      saveSubmissionRecord({
+        id: entry.feedId,
+        market: entry.market,
+        productType,
+        submittedAt: now,
+        rowCount: entry.market === marketplace
+          ? rows.filter((r) => r._dirty || r._isNew).length
+          : 0,
+        status: 'IN_QUEUE',
+        dryRun: false,
+      })
+    }
+    // Create a version snapshot
+    createVersion(`Before submit · ${[...markets].join(', ')}`)
+
     if (markets.has(marketplace)) {
       setRows((prev) => prev.map((r) =>
         r._dirty || r._isNew ? { ...r, _dirty: false, _isNew: false, _status: 'pending' } : r
       ))
     }
     setSubmitting(false)
-  }, [rows, marketplace, productType, manifest])
+  }, [rows, marketplace, productType, manifest, saveSubmissionRecord, createVersion])
 
   const pollAllFeeds = useCallback(async () => {
     if (!feedEntries.length) return
@@ -1239,13 +1335,29 @@ export default function AmazonFlatFileClient({
         })
       )
       setFeedEntries(updated)
+      // Persist completed submissions to history
+      for (const entry of updated) {
+        if (entry.status === 'DONE' || entry.status === 'FATAL') {
+          const ok = entry.results.filter((r: FeedResult) => r.status === 'success').length
+          const err = entry.results.filter((r: FeedResult) => r.status === 'error').length
+          updateSubmissionRecord(entry.feedId, {
+            status: entry.status as 'DONE' | 'FATAL',
+            successCount: ok,
+            errorCount: err,
+            results: entry.results,
+          })
+        } else {
+          updateSubmissionRecord(entry.feedId, { status: entry.status as 'IN_QUEUE' | 'PROCESSING' })
+        }
+      }
     } catch (e: any) { setLoadError(e.message) }
     finally { setPolling(false) }
-  }, [feedEntries, marketplace])
+  }, [feedEntries, marketplace, updateSubmissionRecord])
 
   // ── Import / Export ────────────────────────────────────────────────
 
   const importFile = useCallback(async (file: File) => {
+    createVersion('Before import')
     const content = await file.text()
     const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/parse-tsv`, {
       method: 'POST',
@@ -1264,7 +1376,7 @@ export default function AmazonFlatFileClient({
       }
       return Array.from(bySku.values())
     })
-  }, [productType, marketplace])
+  }, [productType, marketplace, createVersion])
 
   // ── Copy to market ─────────────────────────────────────────────────
   const handleCopyToMarket = useCallback(async (
@@ -1404,16 +1516,18 @@ export default function AmazonFlatFileClient({
   const [saveFlash, setSaveFlash] = useState(false)
 
   const handleSave = useCallback(() => {
+    createVersion('Manual save')
     saveRows(marketplace, productType, rows)
     setSaveFlash(true)
     setTimeout(() => setSaveFlash(false), 2000)
-  }, [rows, marketplace, productType])
+  }, [rows, marketplace, productType, createVersion])
 
   const handleDiscard = useCallback(() => {
     if (!confirm('Discard all local changes? Your edits will be lost and rows will reload from the server.')) return
+    createVersion('Before discard')
     try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
     void loadData(marketplace, productType, false)
-  }, [marketplace, productType, loadData])
+  }, [marketplace, productType, loadData, createVersion])
 
   const handleApplyTranslations = useCallback((
     columnMappings: Array<{
@@ -1501,6 +1615,8 @@ export default function AmazonFlatFileClient({
                   try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
                   void loadData(marketplace, productType, false)
                 }},
+              { separator: true },
+              { label: 'Version history…', icon: <Clock className="w-3.5 h-3.5" />, onClick: () => setVersionPanelOpen(true), disabled: !manifest },
             ]} />
             <MenuDropdown label="Edit" items={[
               { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
@@ -1590,6 +1706,22 @@ export default function AmazonFlatFileClient({
                 onSubmit={handleSubmitToMarkets} onClose={() => setSubmitPanelOpen(false)} />
             )}
           </div>
+          {submissionHistory.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSubmissionPanelOpen((o) => !o)}
+              className={cn(
+                'flex items-center gap-1 text-xs px-2 py-0.5 rounded transition-colors flex-shrink-0',
+                submissionPanelOpen
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300',
+              )}
+              title="Submission history"
+            >
+              <History className="w-3 h-3" />
+              <span>{submissionHistory.length}</span>
+            </button>
+          )}
         </div>
 
         {/* ── Icon toolbar ─────────────────────────────────── */}
@@ -2215,36 +2347,6 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
-      {/* ── Feed results ─────────────────────────────────────── */}
-      {feedEntries.some((e) => e.results.length > 0) && (
-        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-          {feedEntries.filter((e) => e.results.length > 0).map((e) => {
-            const ok = e.results.filter((r) => r.status === 'success').length
-            const err = e.results.filter((r) => r.status === 'error').length
-            return (
-              <div key={e.market} className="mb-2 last:mb-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {e.market} — {ok} ok, {err} error{err !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                {err > 0 && (
-                  <div className="max-h-24 overflow-y-auto text-xs space-y-0.5 pl-6">
-                    {e.results.filter((r) => r.status === 'error').map((r) => (
-                      <div key={r.sku} className="flex items-start gap-2 text-red-600 dark:text-red-400">
-                        <X className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                        <span className="font-mono font-medium">{r.sku}</span>
-                        <span>{r.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
       {/* FF.38 Validation panel */}
       {showValidPanel && manifest && (
         <div className="fixed right-4 bottom-12 w-80 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50">
@@ -2328,6 +2430,31 @@ export default function AmazonFlatFileClient({
           marketplace={marketplace}
           onAdd={handleAddRows}
           onClose={() => setAddRowsPanel(null)}
+        />
+      )}
+
+      {submissionPanelOpen && (
+        <SubmissionHistoryPanel
+          history={submissionHistory}
+          onClear={() => {
+            setSubmissionHistory([])
+            try { localStorage.removeItem(submissionHistoryKey(marketplace, productType)) } catch {}
+          }}
+          onClose={() => setSubmissionPanelOpen(false)}
+        />
+      )}
+
+      {versionPanelOpen && (
+        <VersionHistoryPanel
+          marketplace={marketplace}
+          productType={productType}
+          currentRows={rows}
+          onRestore={(versionRows) => {
+            pushSnapshot()
+            setRows(versionRows)
+            setVersionPanelOpen(false)
+          }}
+          onClose={() => setVersionPanelOpen(false)}
         />
       )}
 
@@ -4577,6 +4704,253 @@ function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, produc
               <Plus className="w-3.5 h-3.5 mr-1" />Add {count > 1 ? `${count} ` : ''}row{count !== 1 ? 's' : ''}
             </Button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── SubmissionHistoryPanel ─────────────────────────────────────────────────
+
+interface SubmissionHistoryPanelProps {
+  history: SubmissionRecord[]
+  onClear: () => void
+  onClose: () => void
+}
+
+function SubmissionHistoryPanel({ history, onClear, onClose }: SubmissionHistoryPanelProps) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function statusColor(s: string) {
+    if (s === 'DONE') return 'text-emerald-600 dark:text-emerald-400'
+    if (s === 'FATAL') return 'text-red-500 dark:text-red-400'
+    return 'text-amber-500 dark:text-amber-400'
+  }
+
+  function formatTime(iso: string) {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    } catch { return iso }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-blue-500" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Submission History</h2>
+            <span className="text-xs text-slate-400">({history.length})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {history.length > 0 && (
+              <button type="button" onClick={onClear}
+                className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300">
+                Clear all
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="overflow-y-auto flex-1">
+          {history.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-slate-400 italic">No submissions yet</div>
+          ) : (
+            history.map((rec) => {
+              const isExpanded = expanded.has(rec.id)
+              const hasErrors = (rec.errorCount ?? 0) > 0
+              return (
+                <div key={rec.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                  {/* Summary row */}
+                  <div className="px-4 py-2.5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded">{rec.market}</span>
+                        {rec.dryRun && <span className="text-[10px] text-slate-400 italic">dry run</span>}
+                        <span className={cn('text-[10px] font-semibold', statusColor(rec.status))}>{rec.status}</span>
+                        {rec.status === 'DONE' && (
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {rec.successCount ?? 0} ok
+                            {hasErrors && <span className="ml-1 text-red-500 dark:text-red-400">· {rec.errorCount} error{rec.errorCount !== 1 ? 's' : ''}</span>}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                        <span>{formatTime(rec.submittedAt)}</span>
+                        <span>·</span>
+                        <span>{rec.rowCount} row{rec.rowCount !== 1 ? 's' : ''}</span>
+                        <span>·</span>
+                        <span className="font-mono truncate max-w-[120px]" title={rec.id}>{rec.id.slice(0, 16)}…</span>
+                      </div>
+                    </div>
+                    {(rec.results?.length ?? 0) > 0 && (
+                      <button type="button" onClick={() => toggle(rec.id)}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-0.5 flex-shrink-0 mt-0.5">
+                        <ChevronDown className={cn('w-3 h-3 transition-transform', isExpanded && 'rotate-180')} />
+                        {isExpanded ? 'Hide' : 'Details'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Expanded results */}
+                  {isExpanded && rec.results && rec.results.length > 0 && (
+                    <div className="px-4 pb-2.5 space-y-0.5 max-h-48 overflow-y-auto">
+                      {rec.results.filter((r) => r.status === 'error').map((r) => (
+                        <div key={r.sku} className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1">
+                          <X className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <span className="font-mono font-medium flex-shrink-0">{r.sku}</span>
+                          <span className="text-[11px] text-red-500/80">{r.message}</span>
+                        </div>
+                      ))}
+                      {rec.results.filter((r) => r.status !== 'error').slice(0, 3).map((r) => (
+                        <div key={r.sku} className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 px-2 py-0.5">
+                          <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                          <span className="font-mono">{r.sku}</span>
+                        </div>
+                      ))}
+                      {rec.results.filter((r) => r.status !== 'error').length > 3 && (
+                        <p className="text-[10px] text-slate-400 px-2">+{rec.results.filter((r) => r.status !== 'error').length - 3} more ok</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── VersionHistoryPanel ────────────────────────────────────────────────────
+
+interface VersionHistoryPanelProps {
+  marketplace: string
+  productType: string
+  currentRows: Row[]
+  onRestore: (rows: Row[]) => void
+  onClose: () => void
+}
+
+function VersionHistoryPanel({ marketplace, productType, currentRows, onRestore, onClose }: VersionHistoryPanelProps) {
+  const [versions, setVersions] = useState<VersionRecord[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(versionHistoryKey(marketplace, productType)) ?? '[]')
+    } catch { return [] }
+  })
+  const [restoring, setRestoring] = useState<string | null>(null)
+
+  function formatTime(iso: string) {
+    try {
+      const d = new Date(iso)
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+        + ' · ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    } catch { return iso }
+  }
+
+  function diff(version: VersionRecord) {
+    const currentSkus = new Set(currentRows.map((r) => String(r.item_sku ?? r._rowId)))
+    const versionSkus = new Set(version.rows.map((r) => String(r.item_sku ?? r._rowId)))
+    const added   = currentRows.filter((r) => !versionSkus.has(String(r.item_sku ?? r._rowId))).length
+    const removed = version.rows.filter((r) => !currentSkus.has(String(r.item_sku ?? r._rowId))).length
+    const parts: string[] = []
+    if (added > 0) parts.push(`+${added} row${added !== 1 ? 's' : ''} now`)
+    if (removed > 0) parts.push(`−${removed} row${removed !== 1 ? 's' : ''} then`)
+    if (parts.length === 0) parts.push(`${version.rowCount} rows`)
+    return parts.join(' · ')
+  }
+
+  function clearAll() {
+    if (!confirm('Delete all saved versions? This cannot be undone.')) return
+    try { localStorage.removeItem(versionHistoryKey(marketplace, productType)) } catch {}
+    setVersions([])
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-end pt-16 pr-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-violet-500" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Version History</h2>
+            <span className="text-xs text-slate-400">{marketplace} · {productType}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {versions.length > 0 && (
+              <button type="button" onClick={clearAll}
+                className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300">
+                Clear all
+              </button>
+            )}
+            <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Version list */}
+        <div className="overflow-y-auto flex-1">
+          {versions.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <Clock className="w-8 h-8 mx-auto mb-2 text-slate-200 dark:text-slate-700" />
+              <p className="text-sm text-slate-400 italic">No versions saved yet</p>
+              <p className="text-xs text-slate-300 dark:text-slate-600 mt-1">Versions are created automatically on Save, Submit, Import and Discard</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {versions.map((v, i) => (
+                <div key={v.id} className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {i === 0 && (
+                        <span className="text-[10px] bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded font-medium">latest</span>
+                      )}
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{v.label}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                      <span>{formatTime(v.savedAt)}</span>
+                      <span>·</span>
+                      <span className="text-slate-500 dark:text-slate-400">{diff(v)}</span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={restoring === v.id}
+                    onClick={() => {
+                      if (!confirm(`Restore to "${v.label}"? Current rows will be replaced (you can undo).`)) return
+                      setRestoring(v.id)
+                      onRestore(v.rows)
+                    }}
+                    className="text-xs flex-shrink-0"
+                  >
+                    Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-[10px] text-slate-400 flex-shrink-0">
+          Up to 15 versions saved per marketplace + product type
         </div>
       </div>
     </div>
