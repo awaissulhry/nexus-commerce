@@ -211,6 +211,10 @@ export default function AmazonFlatFileClient({
   const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
   const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [addRowsPanel, setAddRowsPanel] = useState<{
+    type: 'row' | 'parent' | 'variant'
+    position: 'end' | 'above' | 'below'
+  } | null>(null)
   const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
     try { return localStorage.getItem('ff-smart-paste') === '1' } catch { return false }
   })
@@ -958,18 +962,70 @@ export default function AmazonFlatFileClient({
 
   // ── Row operations ─────────────────────────────────────────────────
 
-  const addRow = useCallback((parentage = '') => {
-    pushSnapshot()
-    const row = makeEmptyRow(productType, marketplace, parentage)
-    setRows((prev) => [...prev, row])
-    setTimeout(() => setActiveCell({ rowId: row._rowId as string, colId: 'item_sku' }), 30)
-  }, [productType, marketplace])
-
   const deleteSelected = useCallback(() => {
     pushSnapshot()
     setRows((prev) => prev.filter((r) => !selectedRows.has(r._rowId as string)))
     setSelectedRows(new Set())
   }, [selectedRows])
+
+  const handleAddRows = useCallback((params: {
+    type: 'row' | 'parent' | 'variant'
+    count: number
+    position: 'end' | 'above' | 'below'
+    replicateFromId?: string
+    parentSku?: string
+  }) => {
+    const { type, count, position, replicateFromId, parentSku } = params
+    const sourceRow = replicateFromId ? rowsRef.current.find((r) => r._rowId === replicateFromId) : null
+
+    // Fields that should not be copied (identity + internal)
+    const SKIP = new Set([
+      'item_sku', 'parent_sku', 'parentage_level', 'product_type',
+      'record_action', 'variation_theme',
+      '_rowId', '_isNew', '_dirty', '_status', '_feedMessage',
+      '_productId', '_asin', '_listingStatus',
+    ])
+
+    const newRows: Row[] = Array.from({ length: count }, () => {
+      const base = makeEmptyRow(
+        productType, marketplace,
+        type === 'parent' ? 'parent' : type === 'variant' ? 'child' : '',
+      )
+      if (sourceRow) {
+        for (const [k, v] of Object.entries(sourceRow)) {
+          if (!SKIP.has(k)) base[k] = v
+        }
+      }
+      if (type === 'variant' && parentSku) base.parent_sku = parentSku
+      return base
+    })
+
+    pushSnapshot()
+    setRows((prev) => {
+      if (position === 'end') return [...prev, ...newRows]
+
+      const displayed = displayRowsRef.current
+      const anchorRi = selAnchorRef.current?.ri ?? 0
+      const endRi = selEndRef.current?.ri ?? anchorRi
+      const targetRi = position === 'above'
+        ? Math.min(anchorRi, endRi)
+        : Math.max(anchorRi, endRi)
+      const targetRow = displayed[targetRi]
+      if (!targetRow) return [...prev, ...newRows]
+      const idx = prev.findIndex((r) => r._rowId === targetRow._rowId)
+      if (idx === -1) return [...prev, ...newRows]
+      const insertAt = position === 'above' ? idx : idx + 1
+      const next = [...prev]
+      next.splice(insertAt, 0, ...newRows)
+      return next
+    })
+
+    setAddRowsPanel(null)
+
+    // Focus the first new row's SKU cell
+    const firstNew = newRows[0]
+    if (firstNew) setTimeout(() => setActiveCell({ rowId: firstNew._rowId as string, colId: 'item_sku' }), 30)
+  }, [productType, marketplace, pushSnapshot])
 
   const updateCell = useCallback((rowId: string, colId: string, value: unknown) => {
     pushSnapshot()
@@ -1670,6 +1726,30 @@ export default function AmazonFlatFileClient({
           onContextMenu={(e) => {
             e.preventDefault()
             const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+
+            // Right-click on the # (row number) cell
+            const rowEl = el?.closest('[data-row-ri]') as HTMLElement | null
+            if (rowEl) {
+              const ri = parseInt(rowEl.dataset.rowRi ?? '', 10)
+              if (!isNaN(ri)) {
+                // Select the full row if not already in selection
+                const alreadySelected = normSel
+                  ? ri >= normSel.rMin && ri <= normSel.rMax
+                  : false
+                if (!alreadySelected) {
+                  const maxCi = allColumnsRef.current.length - 1
+                  setSelAnchor({ ri, ci: 0 })
+                  setSelEnd({ ri, ci: maxCi })
+                  const row = displayRowsRef.current[ri]
+                  const col = allColumnsRef.current[0]
+                  if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+                }
+                setContextMenu({ x: e.clientX, y: e.clientY })
+              }
+              return
+            }
+
+            // Right-click on a data cell
             const td = el?.closest('[data-ri]') as HTMLElement | null
             if (td) {
               const ri = parseInt(td.dataset.ri ?? '', 10)
@@ -1912,15 +1992,18 @@ export default function AmazonFlatFileClient({
               {/* Add-row bar */}
               <tr>
                 <td colSpan={allColumns.length + 2} className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => addRow()}>
+                  <div className="flex items-center gap-2 relative">
+                    <Button size="sm" variant="ghost"
+                      onClick={() => setAddRowsPanel({ type: 'row', position: normSel ? 'below' : 'end' })}>
                       <Plus className="w-3.5 h-3.5 mr-1" />Add row
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => addRow('parent')}>
+                    <Button size="sm" variant="ghost"
+                      onClick={() => setAddRowsPanel({ type: 'parent', position: normSel ? 'below' : 'end' })}>
                       <Plus className="w-3.5 h-3.5 mr-1" />Add parent
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => addRow('child')}>
-                      <Plus className="w-3.5 h-3.5 mr-1" />Add variant (child)
+                    <Button size="sm" variant="ghost"
+                      onClick={() => setAddRowsPanel({ type: 'variant', position: normSel ? 'below' : 'end' })}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />Add variant
                     </Button>
                     {selectedRows.size > 0 && (
                       <Button size="sm" variant="ghost" onClick={deleteSelected}
@@ -2078,6 +2161,19 @@ export default function AmazonFlatFileClient({
         />
       )}
 
+      {addRowsPanel && (
+        <AddRowsPanel
+          initialType={addRowsPanel.type}
+          initialPosition={addRowsPanel.position}
+          rows={rows}
+          hasSelection={!!normSel}
+          productType={productType}
+          marketplace={marketplace}
+          onAdd={handleAddRows}
+          onClose={() => setAddRowsPanel(null)}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -2088,6 +2184,10 @@ export default function AmazonFlatFileClient({
           onCut={() => { handleCut(); setClipboardRange(normSel) }}
           onCopy={() => { handleCopy(); setClipboardRange(normSel) }}
           onPaste={() => void handlePaste()}
+          onAddRows={() => {
+            setContextMenu(null)
+            setAddRowsPanel({ type: 'row', position: 'below' })
+          }}
           onInsertAbove={() => {
             if (!selAnchor) return
             pushSnapshot()
@@ -4080,6 +4180,195 @@ function TranslateTabContent({ enumColumns, sourceMarket, productType, rows, pre
   )
 }
 
+// ── AddRowsPanel ───────────────────────────────────────────────────────────
+
+interface AddRowsParams {
+  type: 'row' | 'parent' | 'variant'
+  count: number
+  position: 'end' | 'above' | 'below'
+  replicateFromId?: string
+  parentSku?: string
+}
+
+interface AddRowsPanelProps {
+  initialType: 'row' | 'parent' | 'variant'
+  initialPosition: 'end' | 'above' | 'below'
+  rows: Row[]
+  hasSelection: boolean
+  productType: string
+  marketplace: string
+  onAdd: (params: AddRowsParams) => void
+  onClose: () => void
+}
+
+function AddRowsPanel({ initialType, initialPosition, rows, hasSelection, productType: _productType, marketplace: _marketplace, onAdd, onClose }: AddRowsPanelProps) {
+  const [type, setType] = useState<'row' | 'parent' | 'variant'>(initialType)
+  const [count, setCount] = useState(1)
+  const [position, setPosition] = useState<'end' | 'above' | 'below'>(initialPosition)
+  const [replicateFromId, setReplicateFromId] = useState('')
+  const [parentSku, setParentSku] = useState('')
+
+  // Source rows for replication picker
+  const parentRows = useMemo(() => rows.filter((r) => r.parentage_level === 'parent' && r.item_sku), [rows])
+  const variantRows = useMemo(() => rows.filter((r) => r.parentage_level === 'child' && r.item_sku), [rows])
+  const allWithSku  = useMemo(() => rows.filter((r) => r.item_sku), [rows])
+
+  const sourceOptions = type === 'parent' ? parentRows : type === 'variant' ? variantRows : allWithSku
+  const parentOptions = parentRows
+
+  function handleAdd() {
+    onAdd({
+      type, count,
+      position,
+      replicateFromId: replicateFromId || undefined,
+      parentSku: type === 'variant' ? (parentSku || undefined) : undefined,
+    })
+  }
+
+  const tabCls = (t: typeof type) => cn(
+    'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+    type === t
+      ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-sm'
+      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700',
+  )
+
+  const selectCls = 'w-full text-xs border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-[1px]"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-sm mx-4">
+
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Plus className="w-4 h-4 text-blue-500" />Add rows
+          </h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-4">
+
+          {/* Row type */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Row type</label>
+            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 gap-0.5">
+              {(['row', 'parent', 'variant'] as const).map((t) => (
+                <button key={t} type="button" onClick={() => { setType(t); setReplicateFromId(''); setParentSku('') }}
+                  className={tabCls(t)}>
+                  {t === 'row' ? 'Row' : t === 'parent' ? 'Parent' : 'Variant'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Count */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">How many</label>
+            <div className="flex items-center gap-2">
+              <button type="button"
+                onClick={() => setCount((c) => Math.max(1, c - 1))}
+                className="w-7 h-7 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-bold flex items-center justify-center flex-shrink-0">
+                −
+              </button>
+              <input
+                type="number" min={1} max={500} value={count}
+                onChange={(e) => setCount(Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
+                className="w-16 text-center text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-md py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button type="button"
+                onClick={() => setCount((c) => Math.min(500, c + 1))}
+                className="w-7 h-7 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-bold flex items-center justify-center flex-shrink-0">
+                +
+              </button>
+              <span className="text-xs text-slate-400">row{count !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+
+          {/* Position */}
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Where</label>
+            <div className="flex gap-1.5">
+              {(['end', 'above', 'below'] as const).map((p) => {
+                const label = p === 'end' ? 'End of table' : p === 'above' ? 'Above selection' : 'Below selection'
+                const disabled = (p === 'above' || p === 'below') && !hasSelection
+                return (
+                  <button key={p} type="button" disabled={disabled}
+                    onClick={() => setPosition(p)}
+                    className={cn(
+                      'flex-1 text-xs px-2 py-1.5 rounded-lg border transition-colors',
+                      position === p
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : disabled
+                        ? 'border-slate-100 dark:border-slate-800 text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400',
+                    )}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Replicate from (parent + variant types) */}
+          {(type === 'parent' || type === 'variant') && (
+            <div>
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
+                Copy fields from
+                <span className="ml-1 font-normal opacity-70">(optional — leaves item_sku blank)</span>
+              </label>
+              <select value={replicateFromId} onChange={(e) => setReplicateFromId(e.target.value)}
+                className={selectCls}>
+                <option value="">— None (empty row) —</option>
+                {sourceOptions.map((r) => (
+                  <option key={r._rowId as string} value={r._rowId as string}>
+                    {String(r.item_sku || r._rowId).slice(0, 60)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Attach to parent (variant only) */}
+          {type === 'variant' && (
+            <div>
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
+                Attach to parent
+                <span className="ml-1 font-normal opacity-70">(pre-fills parent_sku)</span>
+              </label>
+              <select value={parentSku} onChange={(e) => setParentSku(e.target.value)}
+                className={selectCls}>
+                <option value="">— None —</option>
+                {parentOptions.map((r) => (
+                  <option key={r._rowId as string} value={String(r.item_sku)}>
+                    {String(r.item_sku).slice(0, 60)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl">
+          <span className="text-[11px] text-slate-400">
+            {count} {type === 'parent' ? `parent row${count !== 1 ? 's' : ''}` : type === 'variant' ? `variant${count !== 1 ? 's' : ''}` : `row${count !== 1 ? 's' : ''}`}
+            {' · '}{position === 'end' ? 'end of table' : position === 'above' ? 'above selection' : 'below selection'}
+          </span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button size="sm" onClick={handleAdd}>
+              <Plus className="w-3.5 h-3.5 mr-1" />Add {count > 1 ? `${count} ` : ''}row{count !== 1 ? 's' : ''}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── ContextMenu ────────────────────────────────────────────────────────
 
 interface ContextMenuProps {
@@ -4094,11 +4383,12 @@ interface ContextMenuProps {
   onInsertAbove: () => void
   onInsertBelow: () => void
   onDeleteRows: () => void
+  onAddRows: () => void
   onClearCells: () => void
   onClose: () => void
 }
 
-function ContextMenu({ x, y, canPaste, hasSelection, selRowCount, onCut, onCopy, onPaste, onInsertAbove, onInsertBelow, onDeleteRows, onClearCells, onClose }: ContextMenuProps) {
+function ContextMenu({ x, y, canPaste, hasSelection, selRowCount, onCut, onCopy, onPaste, onInsertAbove, onInsertBelow, onDeleteRows, onAddRows, onClearCells, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -4139,6 +4429,8 @@ function ContextMenu({ x, y, canPaste, hasSelection, selRowCount, onCut, onCopy,
       {item('Insert row above', undefined, onInsertAbove)}
       {item('Insert row below', undefined, onInsertBelow)}
       {item(`Delete row${selRowCount !== 1 ? 's' : ''}`, undefined, onDeleteRows, !hasSelection)}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      {item('Add rows here…', undefined, onAddRows)}
       <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
       {item('Clear cells', 'Del', onClearCells, !hasSelection)}
     </div>
