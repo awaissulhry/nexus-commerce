@@ -192,6 +192,10 @@ export default function AmazonFlatFileClient({
   const [selEnd,    setSelEnd]    = useState<{ ri: number; ci: number } | null>(null)
   const [isFillDragging, setIsFillDragging] = useState(false)
   const [fillDragEnd,    setFillDragEnd]    = useState<{ ri: number; ci: number } | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
+  const [clipboardRange, setClipboardRange] = useState<NormSel | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -222,6 +226,13 @@ export default function AmazonFlatFileClient({
   useEffect(() => { rowsRef.current = rows }, [rows])
   const displayRowsRef = useRef<Row[]>([])
   const allColumnsRef = useRef<Column[]>([])
+  const selAnchorRef = useRef<{ ri: number; ci: number } | null>(null)
+  const selEndRef = useRef<{ ri: number; ci: number } | null>(null)
+  const isEditingRef = useRef(false)
+
+  useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
+  useEffect(() => { selEndRef.current = selEnd }, [selEnd])
+  useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
 
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
@@ -540,15 +551,55 @@ export default function AmazonFlatFileClient({
   const handleCellPointerDown = useCallback((ri: number, ci: number, shiftKey: boolean) => {
     if (shiftKey && selAnchor) {
       setSelEnd({ ri, ci })
+      setIsEditing(false)
       setActiveCell(null)
     } else {
       setSelAnchor({ ri, ci })
       setSelEnd({ ri, ci })
+      setIsEditing(false)
+      setEditInitialChar(null)
       const row = displayRowsRef.current[ri]
       const col = allColumnsRef.current[ci]
       if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
     }
   }, [selAnchor])
+
+  const handleCellDoubleClick = useCallback((ri: number, ci: number) => {
+    setSelAnchor({ ri, ci })
+    setSelEnd({ ri, ci })
+    setIsEditing(true)
+    setEditInitialChar(null)
+    const row = displayRowsRef.current[ri]
+    const col = allColumnsRef.current[ci]
+    if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+  }, [])
+
+  const moveSelection = useCallback((dCol: number, dRow: number, extend = false) => {
+    const maxRi = displayRowsRef.current.length - 1
+    const maxCi = allColumnsRef.current.length - 1
+    const anchor = selAnchorRef.current
+    if (!anchor) return
+    setIsEditing(false)
+    setEditInitialChar(null)
+    if (extend) {
+      const e = selEndRef.current ?? anchor
+      const newRi = Math.max(0, Math.min(maxRi, e.ri + dRow))
+      const newCi = Math.max(0, Math.min(maxCi, e.ci + dCol))
+      setSelEnd({ ri: newRi, ci: newCi })
+    } else {
+      const newRi = Math.max(0, Math.min(maxRi, anchor.ri + dRow))
+      const newCi = Math.max(0, Math.min(maxCi, anchor.ci + dCol))
+      setSelAnchor({ ri: newRi, ci: newCi })
+      setSelEnd({ ri: newRi, ci: newCi })
+      const row = displayRowsRef.current[newRi]
+      const col = allColumnsRef.current[newCi]
+      if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-ri="${newRi}"][data-ci="${newCi}"]`)
+          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      })
+    }
+  }, [])
 
   const handleFillHandlePointerDown = useCallback((ri: number, ci: number) => {
     setIsFillDragging(true)
@@ -564,46 +615,121 @@ export default function AmazonFlatFileClient({
   useEffect(() => {
     function handle(e: globalThis.KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey
-      // Undo/redo — always active
+      // Undo/redo always work
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
       if (mod && e.key === 'z' && e.shiftKey)  { e.preventDefault(); redo(); return }
       if (mod && e.key === 'y')                 { e.preventDefault(); redo(); return }
 
-      // When editing a cell, browser handles C/X/V natively
-      if (activeCell) {
-        if (e.key === 'Escape') { setActiveCell(null) }
+      // In edit mode: only handle Escape (let input handle everything else)
+      if (isEditingRef.current) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setIsEditing(false)
+          setEditInitialChar(null)
+          // revert is handled in SpreadsheetCell via cancelledRef
+        }
         return
       }
 
+      // Close context menu on any key
+      if (contextMenu) { setContextMenu(null) }
+
+      // Select all
       if (mod && e.key === 'a') { e.preventDefault(); handleSelectAll(); return }
-      if (!selAnchor) return
 
-      if (mod && e.key === 'c') { e.preventDefault(); handleCopy(); return }
-      if (mod && e.key === 'x') { e.preventDefault(); handleCut(); return }
-      if (mod && e.key === 'v') { e.preventDefault(); void handlePaste(); return }
-      if (mod && e.key === 'd') { e.preventDefault(); handleFillDown(); return }
-      if (e.key === 'Delete' || (e.key === 'Backspace' && !activeCell)) {
-        e.preventDefault(); handleDeleteCells(); return
+      if (!selAnchorRef.current) return
+
+      // Clipboard ops
+      if (mod && e.key === 'c') {
+        e.preventDefault()
+        handleCopy()
+        setClipboardRange(normSel)
+        return
       }
-      if (e.key === 'Escape') { setSelAnchor(null); setSelEnd(null); return }
+      if (mod && e.key === 'x') {
+        e.preventDefault()
+        handleCut()
+        setClipboardRange(normSel)
+        return
+      }
+      if (mod && e.key === 'v') {
+        e.preventDefault()
+        void handlePaste()
+        setClipboardRange(null)
+        return
+      }
+      if (mod && e.key === 'd') { e.preventDefault(); handleFillDown(); return }
 
-      // Shift+Arrow to extend selection
+      // Ctrl+Home / Ctrl+End
+      if (mod && e.key === 'Home') {
+        e.preventDefault()
+        setSelAnchor({ ri: 0, ci: 0 }); setSelEnd({ ri: 0, ci: 0 })
+        const row = displayRowsRef.current[0]; const col = allColumnsRef.current[0]
+        if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+        requestAnimationFrame(() => document.querySelector('[data-ri="0"][data-ci="0"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+        return
+      }
+      if (mod && e.key === 'End') {
+        e.preventDefault()
+        const ri = displayRowsRef.current.length - 1; const ci = allColumnsRef.current.length - 1
+        setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
+        const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
+        if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+        requestAnimationFrame(() => document.querySelector(`[data-ri="${ri}"][data-ci="${ci}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
+        return
+      }
+
+      // Ctrl+Arrow: jump to edge
+      if (mod && e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, displayRowsRef.current.length - 1 - (selAnchorRef.current?.ri ?? 0)); return }
+      if (mod && e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -(selAnchorRef.current?.ri ?? 0)); return }
+      if (mod && e.key === 'ArrowRight') { e.preventDefault(); moveSelection(allColumnsRef.current.length - 1 - (selAnchorRef.current?.ci ?? 0), 0); return }
+      if (mod && e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-(selAnchorRef.current?.ci ?? 0), 0); return }
+
+      // Arrow navigation
+      if (!e.shiftKey && !mod) {
+        if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, 1); return }
+        if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1); return }
+        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, 0); return }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0); return }
+        if (e.key === 'Enter')      { e.preventDefault(); moveSelection(0, 1); return }
+        if (e.key === 'Tab')        { e.preventDefault(); moveSelection(1, 0); return }
+      }
       if (e.shiftKey && !mod) {
-        const maxRi = displayRowsRef.current.length - 1
-        const maxCi = allColumnsRef.current.length - 1
-        setSelEnd(prev => {
-          if (!prev) return prev
-          if (e.key === 'ArrowDown')  { e.preventDefault(); return { ri: Math.min(prev.ri + 1, maxRi), ci: prev.ci } }
-          if (e.key === 'ArrowUp')    { e.preventDefault(); return { ri: Math.max(prev.ri - 1, 0),    ci: prev.ci } }
-          if (e.key === 'ArrowRight') { e.preventDefault(); return { ri: prev.ri, ci: Math.min(prev.ci + 1, maxCi) } }
-          if (e.key === 'ArrowLeft')  { e.preventDefault(); return { ri: prev.ri, ci: Math.max(prev.ci - 1, 0)    } }
-          return prev
-        })
+        if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelection(0, 1, true); return }
+        if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelection(0, -1, true); return }
+        if (e.key === 'ArrowRight') { e.preventDefault(); moveSelection(1, 0, true); return }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelection(-1, 0, true); return }
+        if (e.key === 'Tab')        { e.preventDefault(); moveSelection(-1, 0, true); return }
+        if (e.key === 'Enter')      { e.preventDefault(); moveSelection(0, -1, true); return }
+      }
+
+      // F2: enter edit mode (preserve content)
+      if (e.key === 'F2') {
+        e.preventDefault()
+        setIsEditing(true)
+        setEditInitialChar(null)
+        return
+      }
+
+      // Delete/Backspace: clear cells
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDeleteCells(); return }
+
+      // Escape: clear selection and clipboard marker
+      if (e.key === 'Escape') {
+        setSelAnchor(null); setSelEnd(null)
+        setClipboardRange(null)
+        return
+      }
+
+      // Printable key: enter edit mode replacing content
+      if (e.key.length === 1 && !mod) {
+        setIsEditing(true)
+        setEditInitialChar(e.key)
       }
     }
     document.addEventListener('keydown', handle)
     return () => document.removeEventListener('keydown', handle)
-  }, [undo, redo, activeCell, selAnchor, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll])
+  }, [undo, redo, contextMenu, normSel, handleCopy, handleCut, handlePaste, handleFillDown, handleDeleteCells, handleSelectAll, moveSelection])
 
   const reorderRow = useCallback((fromId: string, toId: string, half: 'top' | 'bottom') => {
     if (fromId === toId) return
@@ -733,16 +859,26 @@ export default function AmazonFlatFileClient({
   }, [])
 
   const navigate = useCallback((rowId: string, colId: string, dir: 'right' | 'left' | 'down' | 'up') => {
-    const colIds = allColumns.map((c) => c.id)
-    const rowIds = displayRows.map((r) => r._rowId as string)
+    const colIds = allColumnsRef.current.map((c) => c.id)
+    const rowIds = displayRowsRef.current.map((r) => r._rowId as string)
     let ci = colIds.indexOf(colId), ri = rowIds.indexOf(rowId)
     if (dir === 'right') ci = Math.min(ci + 1, colIds.length - 1)
     else if (dir === 'left') ci = Math.max(ci - 1, 0)
     else if (dir === 'down') ri = Math.min(ri + 1, rowIds.length - 1)
     else ri = Math.max(ri - 1, 0)
     const nc = colIds[ci], nr = rowIds[ri]
-    if (nc && nr) setActiveCell({ rowId: nr, colId: nc })
-  }, [allColumns, rows])
+    if (nc && nr) {
+      setActiveCell({ rowId: nr, colId: nc })
+      setSelAnchor({ ri, ci })
+      setSelEnd({ ri, ci })
+      setIsEditing(false)
+      setEditInitialChar(null)
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-ri="${ri}"][data-ci="${ci}"]`)
+          ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      })
+    }
+  }, [])
 
   // ── Submit ─────────────────────────────────────────────────────────
 
@@ -1327,6 +1463,23 @@ export default function AmazonFlatFileClient({
       {manifest && !loading && (
         <div
           className="flex-1 overflow-auto"
+          onContextMenu={(e) => {
+            e.preventDefault()
+            const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+            const td = el?.closest('[data-ri]') as HTMLElement | null
+            if (td) {
+              const ri = parseInt(td.dataset.ri ?? '', 10)
+              const ci = parseInt(td.dataset.ci ?? '', 10)
+              if (!isNaN(ri) && !isNaN(ci)) {
+                if (!normSel) {
+                  setSelAnchor({ ri, ci }); setSelEnd({ ri, ci })
+                  const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
+                  if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+                }
+                setContextMenu({ x: e.clientX, y: e.clientY })
+              }
+            }
+          }}
           onPointerMove={(e) => {
             if (e.buttons !== 1) return
             // Use elementFromPoint so tracking works regardless of pointer capture
@@ -1387,21 +1540,29 @@ export default function AmazonFlatFileClient({
 
               {/* Row 2: English column labels + column resize handles */}
               <tr>
-                {allColumns.map((col) => {
+                {allColumns.map((col, ci) => {
                   const c = gColor(colToGroup.get(col.id)?.color ?? 'slate')
                   const w = colWidths[col.id] ?? col.width
                   return (
                     <th key={`en-${col.id}`}
-                      style={{ minWidth: w, width: w }}
-                      className={cn('relative px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none', c.text,
+                      style={{ minWidth: w, width: w, cursor: 'pointer' }}
+                      className={cn('relative px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/10', c.text,
                         col.required && 'font-bold')}
-                      title={col.description}>
+                      title={col.description}
+                      onClick={() => {
+                        const maxRi = displayRows.length - 1
+                        setSelAnchor({ ri: 0, ci })
+                        setSelEnd({ ri: maxRi, ci })
+                        setIsEditing(false)
+                        const firstRow = displayRows[0]
+                        if (firstRow) setActiveCell({ rowId: firstRow._rowId as string, colId: col.id })
+                      }}>
                       {col.labelEn}{col.required && <span className="ml-0.5 text-red-500">*</span>}
                       {/* Resize handle — drag to resize, double-click to reset */}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/colresize flex items-center justify-center z-10"
-                        onMouseDown={(e) => startColResize(e, col.id, w)}
-                        onDoubleClick={() => setColWidths((p) => { const n = { ...p }; delete n[col.id]; return n })}
+                        onMouseDown={(e) => { e.stopPropagation(); startColResize(e, col.id, w) }}
+                        onDoubleClick={(e) => { e.stopPropagation(); setColWidths((p) => { const n = { ...p }; delete n[col.id]; return n }) }}
                         title="Drag to resize · Double-click to reset"
                       >
                         <div className="w-px h-3/4 rounded-full bg-slate-300/50 group-hover/colresize:bg-blue-400 dark:bg-slate-600/50 dark:group-hover/colresize:bg-blue-500 transition-colors" />
@@ -1449,8 +1610,11 @@ export default function AmazonFlatFileClient({
                   normSel={normSel}
                   fillTarget={fillTarget}
                   isFillDragging={isFillDragging}
+                  isEditing={isEditing}
+                  editInitialChar={editInitialChar}
+                  clipboardRange={clipboardRange}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
-                  onDeactivate={() => setActiveCell(null)}
+                  onDeactivate={() => setIsEditing(false)}
                   onChange={(colId, val) => updateCell(row._rowId as string, colId, val)}
                   onNavigate={(colId, dir) => navigate(row._rowId as string, colId, dir)}
                   onRowResizeStart={(e) => startRowResize(e, rowHeight)}
@@ -1461,6 +1625,16 @@ export default function AmazonFlatFileClient({
                   )}
                   onRowDrop={(half) => draggingRowId && reorderRow(draggingRowId, row._rowId as string, half)}
                   onCellPointerDown={handleCellPointerDown}
+                  onCellDoubleClick={handleCellDoubleClick}
+                  onRowSelect={(ri) => {
+                    const maxCi = allColumns.length - 1
+                    setSelAnchor({ ri, ci: 0 })
+                    setSelEnd({ ri, ci: maxCi })
+                    setIsEditing(false)
+                    const row = displayRows[ri]
+                    const col = allColumns[0]
+                    if (row && col) setActiveCell({ rowId: row._rowId as string, colId: col.id })
+                  }}
                   onFillHandlePointerDown={handleFillHandlePointerDown}
                   onFillDrop={handleFillDrop}
                 />
@@ -1502,6 +1676,31 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
+      {/* ── Status bar ─────────────────────────────────────── */}
+      {manifest && (
+        <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-400 select-none flex-shrink-0">
+          <span>{displayRows.length} row{displayRows.length !== 1 ? 's' : ''}</span>
+          {normSel && (() => {
+            const rCount = normSel.rMax - normSel.rMin + 1
+            const cCount = normSel.cMax - normSel.cMin + 1
+            const total = rCount * cCount
+            return (
+              <span className="text-blue-500">
+                {total === 1 ? '1 cell' : `${rCount} × ${cCount} = ${total} cells`} selected
+              </span>
+            )
+          })()}
+          {dirtyRows.length > 0 && (
+            <span className="text-amber-500 ml-auto">{dirtyRows.length} unsaved change{dirtyRows.length !== 1 ? 's' : ''}</span>
+          )}
+          {clipboardRange && (
+            <span className="text-green-500">
+              {(clipboardRange.rMax - clipboardRange.rMin + 1) * (clipboardRange.cMax - clipboardRange.cMin + 1)} cells in clipboard
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ── Feed results ─────────────────────────────────────── */}
       {feedEntries.some((e) => e.results.length > 0) && (
         <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
@@ -1532,6 +1731,58 @@ export default function AmazonFlatFileClient({
           })}
         </div>
       )}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          canPaste={true}
+          hasSelection={!!normSel}
+          selRowCount={normSel ? normSel.rMax - normSel.rMin + 1 : 0}
+          onCut={() => { handleCut(); setClipboardRange(normSel) }}
+          onCopy={() => { handleCopy(); setClipboardRange(normSel) }}
+          onPaste={() => void handlePaste()}
+          onInsertAbove={() => {
+            if (!selAnchor) return
+            pushSnapshot()
+            const ri = selAnchor.ri
+            const newRow = makeEmptyRow(productType, marketplace)
+            setRows(prev => {
+              const displayed = displayRowsRef.current
+              if (ri >= displayed.length) return [...prev, newRow]
+              const targetId = displayed[ri]._rowId as string
+              const idx = prev.findIndex(r => r._rowId === targetId)
+              if (idx === -1) return prev
+              const next = [...prev]; next.splice(idx, 0, newRow); return next
+            })
+          }}
+          onInsertBelow={() => {
+            if (!selAnchor) return
+            pushSnapshot()
+            const ri = selAnchor.ri
+            const newRow = makeEmptyRow(productType, marketplace)
+            setRows(prev => {
+              const displayed = displayRowsRef.current
+              const targetRi = Math.min(ri + 1, displayed.length - 1)
+              if (targetRi >= displayed.length) return [...prev, newRow]
+              const targetId = displayed[targetRi]._rowId as string
+              const idx = prev.findIndex(r => r._rowId === targetId)
+              if (idx === -1) return [...prev, newRow]
+              const next = [...prev]; next.splice(idx, 0, newRow); return next
+            })
+          }}
+          onDeleteRows={() => {
+            if (!normSel) return
+            pushSnapshot()
+            const toDelete = new Set(
+              displayRowsRef.current.slice(normSel.rMin, normSel.rMax + 1).map(r => r._rowId as string)
+            )
+            setRows(prev => prev.filter(r => !toDelete.has(r._rowId as string)))
+            setSelAnchor(null); setSelEnd(null)
+          }}
+          onClearCells={handleDeleteCells}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1549,6 +1800,9 @@ interface RowProps {
   normSel: NormSel | null
   fillTarget: NormSel | null
   isFillDragging: boolean
+  isEditing: boolean
+  editInitialChar: string | null
+  clipboardRange: NormSel | null
   onSelect: (c: boolean) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
@@ -1558,16 +1812,18 @@ interface RowProps {
   onRowDragOver: (half: 'top' | 'bottom') => void
   onRowDrop: (half: 'top' | 'bottom') => void
   onCellPointerDown: (ri: number, ci: number, shiftKey: boolean) => void
+  onCellDoubleClick: (ri: number, ci: number) => void
+  onRowSelect: (ri: number) => void
   onFillHandlePointerDown: (ri: number, ci: number) => void
   onFillDrop: () => void
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
   marketplace, colWidths, rowHeight, isDraggingRow, dropIndicator,
-  normSel, fillTarget, isFillDragging,
+  normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
   onSelect, onDeactivate, onChange, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
-  onCellPointerDown, onFillHandlePointerDown, onFillDrop }: RowProps) {
+  onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -1616,7 +1872,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
       {/* Row # + ASIN badge + row-height resize handle */}
-      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize">
+      <td className="sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/10"
+        onClick={() => onRowSelect(rowIdx)}>
         <div className="flex flex-col items-end gap-0.5" style={{ height: rowHeight, justifyContent: 'center' }}>
           <span className="text-xs text-slate-400 tabular-nums">{rowIdx + 1}</span>
           {row._asin ? (() => {
@@ -1675,12 +1932,27 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           right:  ci === fillTarget.cMax,
         } : null
 
+        const isCellEditing = isEditing && isActive
+
+        const isClipboard = !!(clipboardRange
+          && rowIdx >= clipboardRange.rMin && rowIdx <= clipboardRange.rMax
+          && ci >= clipboardRange.cMin && ci <= clipboardRange.cMax)
+
+        const clipboardEdges = isClipboard && clipboardRange ? {
+          top:    rowIdx === clipboardRange.rMin,
+          bottom: rowIdx === clipboardRange.rMax,
+          left:   ci === clipboardRange.cMin,
+          right:  ci === clipboardRange.cMax,
+        } : null
+
         return (
           <SpreadsheetCell
             key={col.id}
             col={col}
             value={row[col.id]}
             isActive={isActive}
+            isEditing={isCellEditing}
+            editInitialChar={isCellEditing ? editInitialChar : null}
             cellBg={gColor(groupColor).cell}
             grayed={false}
             width={w}
@@ -1690,9 +1962,12 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             isCorner={isCorner}
             isFillTarget={isFillTarget}
             fillTargetEdges={fillTargetEdges}
+            isClipboard={isClipboard}
+            clipboardEdges={clipboardEdges}
             ri={rowIdx}
             ci={ci}
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
+            onCellDoubleClick={() => onCellDoubleClick(rowIdx, ci)}
             onFillHandlePointerDown={() => onFillHandlePointerDown(rowIdx, ci)}
             onFillDrop={onFillDrop}
             onDeactivate={onDeactivate}
@@ -1862,7 +2137,12 @@ interface CellProps {
   isCorner: boolean
   isFillTarget: boolean
   fillTargetEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
+  isEditing: boolean
+  editInitialChar: string | null
+  isClipboard: boolean
+  clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   onCellPointerDown: (shiftKey: boolean) => void
+  onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
   onFillDrop: () => void
   onDeactivate: () => void
@@ -1872,22 +2152,26 @@ interface CellProps {
 
 function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
-  onCellPointerDown, onFillHandlePointerDown, onFillDrop,
+  isEditing, editInitialChar, isClipboard, clipboardEdges,
+  onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [liveLen, setLiveLen] = useState(displayValue.length)
+  const cancelledRef = useRef(false)
 
   useEffect(() => {
-    if (isActive && col.kind !== 'enum' && inputRef.current) {
+    if (isEditing && col.kind !== 'enum' && inputRef.current) {
       inputRef.current.focus()
-      if ('select' in inputRef.current) (inputRef.current as HTMLInputElement).select()
+      if (editInitialChar === null && 'select' in inputRef.current) {
+        (inputRef.current as HTMLInputElement).select()
+      }
     }
-  }, [isActive, col.kind])
+  }, [isEditing, col.kind, editInitialChar])
 
-  // Reset counter to committed value length each time cell becomes active
-  useEffect(() => { if (isActive) setLiveLen(displayValue.length) }, [isActive])
+  // Reset counter to committed value length each time cell becomes editing
+  useEffect(() => { if (isEditing) setLiveLen(displayValue.length) }, [isEditing])
 
   const isEmpty = !displayValue
   const cellStyle = { minWidth: width, width }
@@ -1903,12 +2187,21 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     borderRight:  fillTargetEdges.right  ? '2px dashed #3b82f6' : undefined,
     borderBottom: fillTargetEdges.bottom ? '2px dashed #3b82f6' : undefined,
     borderLeft:   fillTargetEdges.left   ? '2px dashed #3b82f6' : undefined,
+  } : clipboardEdges ? {
+    borderTop:    clipboardEdges.top    ? '2px dashed #22c55e' : undefined,
+    borderRight:  clipboardEdges.right  ? '2px dashed #22c55e' : undefined,
+    borderBottom: clipboardEdges.bottom ? '2px dashed #22c55e' : undefined,
+    borderLeft:   clipboardEdges.left   ? '2px dashed #22c55e' : undefined,
   } : {}
 
   const baseCls = cn(
     'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
-    isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20' : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10' : cellBg,
-    isActive && 'ring-2 ring-inset ring-blue-500 z-[5]',
+    isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20'
+    : isClipboard ? 'bg-green-50/40 dark:bg-green-900/10'
+    : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10'
+    : cellBg,
+    isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
+    isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
     !isActive && !isSelected && col.required && isEmpty && 'bg-red-50/70 dark:bg-red-950/20',
   )
 
@@ -1922,7 +2215,10 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Tab') { e.preventDefault(); onNavigate(e.shiftKey ? 'left' : 'right') }
     else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); onNavigate(e.shiftKey ? 'up' : 'down') }
-    else if (e.key === 'Escape') { onDeactivate(); setDropdownOpen(false) }
+    else if (e.key === 'Escape') {
+      cancelledRef.current = true
+      onDeactivate(); setDropdownOpen(false)
+    }
     else if (e.key === 'ArrowDown' && col.kind === 'enum') { e.preventDefault(); setDropdownOpen(true) }
   }
 
@@ -1940,13 +2236,14 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   ) : null
 
   // Shared td props — data-ri/ci let the container's pointermove identify which cell the pointer is over
-  const tdShared = { 'data-ri': ri, 'data-ci': ci, onPointerDown: tdPointerDown, onPointerUp: onFillDrop }
+  const tdShared = { 'data-ri': ri, 'data-ci': ci, onPointerDown: tdPointerDown, onPointerUp: onFillDrop, onDoubleClick: onCellDoubleClick }
 
   // Enum cell: custom dropdown
   if (col.kind === 'enum' && col.options && col.options.length > 0) {
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}
-        onClick={() => setDropdownOpen(true)}>
+        onClick={() => { if (isActive) setDropdownOpen(true) }}
+        onDoubleClick={() => { onCellDoubleClick(); setDropdownOpen(true) }}>
         <div className="px-1.5 flex items-center justify-between gap-1 cursor-pointer group/cell" style={hStyle}>
           <span className={cn('text-xs truncate flex-1', isEmpty ? 'text-slate-300 dark:text-slate-600 italic' : 'text-slate-800 dark:text-slate-200')}>
             {displayValue || (col.required ? '⚠ required' : col.options[0] ? `e.g. ${col.options[0]}` : '—')}
@@ -1968,15 +2265,19 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
 
   // Longtext cell
   if (col.kind === 'longtext') {
-    if (isActive) {
+    if (isEditing) {
       const atLimit = col.maxLength != null && liveLen >= col.maxLength
       const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
       return (
         <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
           {fillHandle}
-          <textarea ref={inputRef as any} defaultValue={displayValue}
+          <textarea ref={inputRef as any} defaultValue={editInitialChar !== null ? editInitialChar : displayValue}
             onInput={(e) => setLiveLen((e.target as HTMLTextAreaElement).value.length)}
-            onBlur={(e) => { onChange(e.target.value); onDeactivate() }}
+            onBlur={(e) => {
+              if (!cancelledRef.current) onChange(e.target.value)
+              cancelledRef.current = false
+              onDeactivate()
+            }}
             onKeyDown={handleKeyDown}
             maxLength={col.maxLength}
             className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
@@ -1994,8 +2295,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     }
     return (
       <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-        style={{ ...cellStyle, ...selStyle }}
-        onClick={() => onCellPointerDown(false)}>
+        style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
         <div className="px-1.5 flex items-center text-xs text-slate-800 dark:text-slate-200 truncate" style={hStyle}>
           {displayValue || <span className="text-slate-300 dark:text-slate-600 italic">{col.required ? '⚠ required' : ''}</span>}
@@ -2005,16 +2305,20 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   }
 
   // Text / number cell
-  if (isActive) {
+  if (isEditing) {
     const atLimit = col.maxLength != null && liveLen >= col.maxLength
     const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
     return (
       <td {...tdShared} className={baseCls} style={{ ...cellStyle, ...selStyle }}>
         {fillHandle}
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
-          defaultValue={displayValue} maxLength={col.maxLength}
+          defaultValue={editInitialChar !== null ? editInitialChar : displayValue} maxLength={col.maxLength}
           onInput={(e) => setLiveLen((e.target as HTMLInputElement).value.length)}
-          onBlur={(e) => { onChange(e.target.value); onDeactivate() }}
+          onBlur={(e) => {
+            if (!cancelledRef.current) onChange(e.target.value)
+            cancelledRef.current = false
+            onDeactivate()
+          }}
           onKeyDown={handleKeyDown}
           className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
           style={hStyle} />
@@ -2890,6 +3194,71 @@ function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
         </span>
       )}
     </button>
+  )
+}
+
+// ── ContextMenu ────────────────────────────────────────────────────────
+
+interface ContextMenuProps {
+  x: number
+  y: number
+  canPaste: boolean
+  hasSelection: boolean
+  selRowCount: number
+  onCut: () => void
+  onCopy: () => void
+  onPaste: () => void
+  onInsertAbove: () => void
+  onInsertBelow: () => void
+  onDeleteRows: () => void
+  onClearCells: () => void
+  onClose: () => void
+}
+
+function ContextMenu({ x, y, canPaste, hasSelection, selRowCount, onCut, onCopy, onPaste, onInsertAbove, onInsertBelow, onDeleteRows, onClearCells, onClose }: ContextMenuProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  function item(label: string, shortcut: string | undefined, onClick: () => void, disabled = false) {
+    return (
+      <button type="button" disabled={disabled}
+        onClick={() => { onClick(); onClose() }}
+        className={cn(
+          'w-full flex items-center justify-between gap-6 px-3 py-1.5 text-xs text-left transition-colors',
+          disabled ? 'text-slate-300 dark:text-slate-600 cursor-default'
+          : 'text-slate-700 dark:text-slate-300 hover:bg-blue-500 hover:text-white',
+        )}>
+        <span>{label}</span>
+        {shortcut && <span className="text-[10px] font-mono opacity-60">{shortcut}</span>}
+      </button>
+    )
+  }
+
+  // Adjust position to not overflow viewport
+  const menuW = 200, menuH = 260
+  const left = Math.min(x, window.innerWidth - menuW - 8)
+  const top = Math.min(y, window.innerHeight - menuH - 8)
+
+  return (
+    <div ref={ref}
+      className="fixed z-[9999] w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl py-1 overflow-hidden"
+      style={{ left, top }}>
+      {item('Cut', '⌘X', onCut, !hasSelection)}
+      {item('Copy', '⌘C', onCopy, !hasSelection)}
+      {item('Paste', '⌘V', onPaste, !canPaste)}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      {item('Insert row above', undefined, onInsertAbove)}
+      {item('Insert row below', undefined, onInsertBelow)}
+      {item(`Delete row${selRowCount !== 1 ? 's' : ''}`, undefined, onDeleteRows, !hasSelection)}
+      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+      {item('Clear cells', 'Del', onClearCells, !hasSelection)}
+    </div>
   )
 }
 
