@@ -1040,7 +1040,7 @@ export default function AmazonFlatFileClient({
                 })}
               </tr>
 
-              {/* Row 3: Italian column labels (Amazon native) */}
+              {/* Row 3: Italian column labels + max-length hint */}
               <tr>
                 {allColumns.map((col) => {
                   const w = colWidths[col.id] ?? col.width
@@ -1049,6 +1049,11 @@ export default function AmazonFlatFileClient({
                       style={{ minWidth: w, width: w }}
                       className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
                       {col.labelLocal}
+                      {col.maxLength != null && (
+                        <span className="ml-1.5 not-italic font-mono text-[10px] text-slate-300 dark:text-slate-600">
+                          max&nbsp;{col.maxLength}
+                        </span>
+                      )}
                     </th>
                   )
                 })}
@@ -1391,6 +1396,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, onAc
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [liveLen, setLiveLen] = useState(displayValue.length)
 
   useEffect(() => {
     if (isActive && col.kind !== 'enum' && inputRef.current) {
@@ -1398,6 +1404,9 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, onAc
       if ('select' in inputRef.current) (inputRef.current as HTMLInputElement).select()
     }
   }, [isActive, col.kind])
+
+  // Reset counter to committed value length each time cell becomes active
+  useEffect(() => { if (isActive) setLiveLen(displayValue.length) }, [isActive])
 
   const isEmpty = !displayValue
   const cellStyle = { minWidth: width, width }
@@ -1443,13 +1452,25 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, onAc
   // Longtext cell
   if (col.kind === 'longtext') {
     if (isActive) {
+      const atLimit = col.maxLength != null && liveLen >= col.maxLength
+      const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
       return (
         <td className={baseCls} style={cellStyle}>
           <textarea ref={inputRef as any} defaultValue={displayValue}
+            onInput={(e) => setLiveLen((e.target as HTMLTextAreaElement).value.length)}
             onBlur={(e) => { onChange(e.target.value); onDeactivate() }}
             onKeyDown={handleKeyDown}
+            maxLength={col.maxLength}
             className="w-full px-1.5 py-1 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200 resize-none"
             style={{ minWidth: width, minHeight: Math.max(cellHeight, 60) }} />
+          {col.maxLength != null && (
+            <div className={cn('absolute bottom-1 right-1.5 text-[9px] tabular-nums font-mono pointer-events-none select-none',
+              atLimit ? 'text-red-500 dark:text-red-400 font-bold'
+              : nearLimit ? 'text-amber-500 dark:text-amber-400'
+              : 'text-slate-300 dark:text-slate-600')}>
+              {liveLen}/{col.maxLength}
+            </div>
+          )}
         </td>
       )
     }
@@ -1465,14 +1486,25 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, onAc
 
   // Text / number cell
   if (isActive) {
+    const atLimit = col.maxLength != null && liveLen >= col.maxLength
+    const nearLimit = col.maxLength != null && liveLen >= col.maxLength * 0.8
     return (
       <td className={baseCls} style={cellStyle}>
         <input ref={inputRef as any} type={col.kind === 'number' ? 'number' : 'text'}
           defaultValue={displayValue} maxLength={col.maxLength}
+          onInput={(e) => setLiveLen((e.target as HTMLInputElement).value.length)}
           onBlur={(e) => { onChange(e.target.value); onDeactivate() }}
           onKeyDown={handleKeyDown}
           className="w-full px-1.5 text-xs bg-white dark:bg-slate-800 focus:outline-none text-slate-800 dark:text-slate-200"
           style={hStyle} />
+        {col.maxLength != null && (
+          <div className={cn('absolute bottom-0.5 right-1 text-[9px] tabular-nums font-mono pointer-events-none select-none leading-none',
+            atLimit ? 'text-red-500 dark:text-red-400 font-bold'
+            : nearLimit ? 'text-amber-500 dark:text-amber-400'
+            : 'text-slate-300 dark:text-slate-600')}>
+            {liveLen}/{col.maxLength}
+          </div>
+        )}
       </td>
     )
   }
