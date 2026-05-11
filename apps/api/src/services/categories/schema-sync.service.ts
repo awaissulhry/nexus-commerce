@@ -51,6 +51,15 @@ interface AmazonProductTypeMeta {
   /** Optional requirements descriptor. */
   requirements?: string
   requirementsEnforced?: string
+  /**
+   * Amazon's property grouping metadata — maps group IDs to their
+   * localized title and the list of property names they contain.
+   * This drives the exact flat-file column grouping per marketplace.
+   */
+  propertyGroups?: Record<string, {
+    title: string
+    propertyNames: string[]
+  }>
 }
 
 export class CategorySchemaService {
@@ -148,6 +157,15 @@ export class CategorySchemaService {
       )
     }
     const schemaDefinition = (await schemaRes.json()) as Record<string, unknown>
+
+    // Embed Amazon's group metadata into the schema so the flat-file
+    // service can reproduce the exact grouping per marketplace without
+    // an extra API call. Using a private key (__propertyGroups) to
+    // avoid colliding with JSON Schema keywords.
+    if (envelope.propertyGroups) {
+      schemaDefinition.__propertyGroups = envelope.propertyGroups
+    }
+
     const schemaVersion = envelope.productTypeVersion?.version ?? 'unknown'
     const variationThemes = extractVariationThemes(schemaDefinition)
 

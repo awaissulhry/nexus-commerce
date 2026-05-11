@@ -104,6 +104,13 @@ const GROUP_LOCAL_LABELS: Record<string, Partial<Record<LangTag, string>>> = {
   optional_fields: { it_IT: 'Campi facoltativi', de_DE: 'Optionale Felder', fr_FR: 'Champs facultatifs', es_ES: 'Campos opcionales', en_GB: 'Optional Fields' },
 }
 
+// Group color palette — assigned by position so Amazon's group order
+// always gets a consistent colour regardless of group ID/title.
+const GROUP_COLOR_PALETTE = [
+  'blue', 'purple', 'emerald', 'orange', 'teal',
+  'amber', 'yellow', 'sky', 'red', 'violet', 'slate',
+]
+
 // ── Schema enum extraction ─────────────────────────────────────────────
 
 /**
@@ -366,68 +373,102 @@ export class AmazonFlatFileService {
       ],
     }
 
-    // ── Groups 3-5: 100% schema-derived ───────────────────────────────────
-    // Only skip the 3 fields already handled in the Variations group above.
-    const SKIP_SCHEMA = new Set([
-      'parentage_level',
-      'child_parent_sku_relationship',
-      'variation_theme',
+    // ── Groups 3+: Amazon's exact grouping when available ────────────────
+    //
+    // After the first "Refresh schema" hit, the schema-sync service embeds
+    // Amazon's propertyGroups metadata (from the API envelope) into the
+    // stored schemaDefinition as __propertyGroups. Each group has:
+    //   { title: string (already localised), propertyNames: string[] }
+    //
+    // When __propertyGroups is present we reproduce Amazon's exact group
+    // order and names for the selected marketplace. When it isn't (old
+    // cached schemas), we fall back to Required / Images / Optional.
+
+    const SKIP_FIXED = new Set([
+      'parentage_level', 'child_parent_sku_relationship', 'variation_theme',
     ])
 
-    const requiredCols: FlatFileColumn[] = []
-    const imageCols: FlatFileColumn[] = []
-    const optionalCols: FlatFileColumn[] = []
+    const amazonGroups = def.__propertyGroups as
+      | Record<string, { title: string; propertyNames: string[] }>
+      | undefined
 
-    for (const [fieldId, prop] of Object.entries(properties)) {
-      if (SKIP_SCHEMA.has(fieldId)) continue
-      const col = schemaFieldToColumn(
-        fieldId,
-        prop as Record<string, any>,
-        requiredSet.has(fieldId),
-        schemaLabels,
-        schemaEnums,
-        lang,
-      )
-      if (fieldId.includes('image_locator')) {
-        imageCols.push(col)
-      } else if (col.required) {
-        requiredCols.push(col)
-      } else {
-        optionalCols.push(col)
+    let schemaGroups: FlatFileColumnGroup[]
+
+    if (amazonGroups && Object.keys(amazonGroups).length > 0) {
+      // ── Path A: exact Amazon grouping ──────────────────────────────────
+      const coveredFields = new Set<string>()
+      schemaGroups = Object.entries(amazonGroups).map(([groupId, groupMeta], idx) => {
+        const color = GROUP_COLOR_PALETTE[idx + 2] ?? 'slate'
+        const columns: FlatFileColumn[] = []
+        for (const fieldId of groupMeta.propertyNames) {
+          if (SKIP_FIXED.has(fieldId)) continue
+          const prop = properties[fieldId]
+          if (!prop) continue
+          coveredFields.add(fieldId)
+          columns.push(schemaFieldToColumn(
+            fieldId, prop, requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
+          ))
+        }
+        return { id: groupId, labelEn: groupMeta.title, labelLocal: groupMeta.title, color, columns }
+      }).filter((g) => g.columns.length > 0)
+
+      // Catch any schema properties not assigned to any Amazon group
+      const uncoveredCols: FlatFileColumn[] = []
+      for (const [fieldId, prop] of Object.entries(properties)) {
+        if (SKIP_FIXED.has(fieldId) || coveredFields.has(fieldId)) continue
+        uncoveredCols.push(schemaFieldToColumn(
+          fieldId, prop as Record<string, any>,
+          requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
+        ))
       }
-    }
+      if (uncoveredCols.length > 0) {
+        schemaGroups.push({
+          id: 'other_attributes',
+          labelEn: 'Other Attributes',
+          labelLocal: lang === 'it_IT' ? 'Altri attributi'
+            : lang === 'de_DE' ? 'Weitere Attribute'
+            : lang === 'fr_FR' ? 'Autres attributs'
+            : lang === 'es_ES' ? 'Otros atributos' : 'Other Attributes',
+          color: 'violet',
+          columns: uncoveredCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn)),
+        })
+      }
+    } else {
+      // ── Path B: fallback grouping (hit "Refresh schema" to get exact Amazon groups)
+      const requiredCols: FlatFileColumn[] = []
+      const imageCols: FlatFileColumn[] = []
+      const optionalCols: FlatFileColumn[] = []
 
-    requiredCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn))
-    imageCols.sort((a, b) => a.id.localeCompare(b.id))
-    optionalCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn))
+      for (const [fieldId, prop] of Object.entries(properties)) {
+        if (SKIP_FIXED.has(fieldId)) continue
+        const col = schemaFieldToColumn(
+          fieldId, prop as Record<string, any>,
+          requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
+        )
+        if (fieldId.includes('image_locator')) imageCols.push(col)
+        else if (col.required) requiredCols.push(col)
+        else optionalCols.push(col)
+      }
 
-    const groups: FlatFileColumnGroup[] = [infraGroup, variationsGroup]
+      requiredCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn))
+      imageCols.sort((a, b) => a.id.localeCompare(b.id))
+      optionalCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn))
 
-    if (requiredCols.length > 0) {
-      groups.push({
-        id: 'required_fields',
-        labelEn: 'Required Fields',
+      schemaGroups = []
+      if (requiredCols.length > 0) schemaGroups.push({
+        id: 'required_fields', labelEn: 'Required Fields',
         labelLocal: GROUP_LOCAL_LABELS.required_fields[lang] ?? 'Required Fields',
-        color: 'emerald',
-        columns: requiredCols,
+        color: 'emerald', columns: requiredCols,
       })
-    }
-    if (imageCols.length > 0) {
-      groups.push({
-        id: 'images',
-        labelEn: 'Images',
+      if (imageCols.length > 0) schemaGroups.push({
+        id: 'images', labelEn: 'Images',
         labelLocal: GROUP_LOCAL_LABELS.images[lang] ?? 'Images',
-        color: 'orange',
-        columns: imageCols,
+        color: 'orange', columns: imageCols,
       })
-    }
-    if (optionalCols.length > 0) {
-      groups.push({
-        id: 'optional_fields',
-        labelEn: 'Optional Fields',
+      if (optionalCols.length > 0) schemaGroups.push({
+        id: 'optional_fields', labelEn: 'Optional Fields',
         labelLocal: GROUP_LOCAL_LABELS.optional_fields[lang] ?? 'Optional Fields',
-        color: 'sky',
-        columns: optionalCols,
+        color: 'sky', columns: optionalCols,
       })
     }
 
@@ -436,7 +477,7 @@ export class AmazonFlatFileService {
       productType: pt,
       variationThemes,
       fetchedAt: new Date().toISOString(),
-      groups,
+      groups: [infraGroup, variationsGroup, ...schemaGroups],
     }
   }
 
