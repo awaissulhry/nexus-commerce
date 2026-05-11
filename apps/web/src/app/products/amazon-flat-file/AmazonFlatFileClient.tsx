@@ -244,6 +244,9 @@ export default function AmazonFlatFileClient({
   const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
   const [fetching, setFetching] = useState(false)
 
+  // Tracks the anchor row when user drags on the # column to select rows
+  const rowDragRef = useRef<number | null>(null)
+
   // ── Undo / Redo ────────────────────────────────────────────────────
   const rowsRef = useRef<Row[]>(rows)
   useEffect(() => { rowsRef.current = rows }, [rows])
@@ -1683,8 +1686,22 @@ export default function AmazonFlatFileClient({
           }}
           onPointerMove={(e) => {
             if (e.buttons !== 1) return
-            // Use elementFromPoint so tracking works regardless of pointer capture
             const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+
+            // Row # column drag — extend row selection vertically
+            if (rowDragRef.current !== null) {
+              const rowEl = el?.closest('[data-row-ri]') as HTMLElement | null
+              if (rowEl) {
+                const ri = parseInt(rowEl.dataset.rowRi ?? '', 10)
+                if (!isNaN(ri)) {
+                  const maxCi = allColumnsRef.current.length - 1
+                  setSelEnd((p) => (p?.ri === ri && p?.ci === maxCi ? p : { ri, ci: maxCi }))
+                }
+              }
+              return
+            }
+
+            // Regular cell selection / fill drag
             const td = el?.closest('[data-ri]') as HTMLElement | null
             if (!td) return
             const ri = parseInt(td.dataset.ri ?? '', 10)
@@ -1697,7 +1714,7 @@ export default function AmazonFlatFileClient({
               setActiveCell(null)
             }
           }}
-          onPointerUp={() => { if (isFillDragging) executeFill() }}
+          onPointerUp={() => { rowDragRef.current = null; if (isFillDragging) executeFill() }}
         >
           <table className="border-collapse text-sm w-max min-w-full">
             <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
@@ -1858,6 +1875,7 @@ export default function AmazonFlatFileClient({
                   onCellPointerDown={handleCellPointerDown}
                   onCellDoubleClick={handleCellDoubleClick}
                   onRowSelect={(ri) => {
+                    rowDragRef.current = ri
                     const maxCi = allColumns.length - 1
                     setSelAnchor({ ri, ci: 0 })
                     setSelEnd({ ri, ci: maxCi })
@@ -2171,6 +2189,14 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
     : row._dirty ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
     : ''
 
+  // Solid (opaque) equivalent for sticky cells — prevents content bleed-through on scroll
+  const frozenBg = status === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/60'
+    : status === 'error' ? 'bg-red-50 dark:bg-red-950/60'
+    : status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
+    : row._isNew ? 'bg-sky-50 dark:bg-sky-950/40'
+    : row._dirty ? 'bg-yellow-50 dark:bg-yellow-950/40'
+    : 'bg-white dark:bg-slate-900'
+
   return (
     <tr
       draggable
@@ -2198,7 +2224,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         isDraggingRow ? 'opacity-40' : 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
       {/* Checkbox — also the drag handle (mousedown initiates drag) */}
       <td
-        className="sticky left-0 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing"
+        className={cn('sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing', frozenBg)}
         onMouseDown={() => { canDragRef.current = true }}
         onMouseUp={() => { canDragRef.current = false }}
       >
@@ -2208,11 +2234,19 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           : <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />}
       </td>
       {/* Row # + ASIN badge + row-height resize handle */}
-      <td className={cn(
-        'sticky left-9 z-10 bg-inherit border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-950/10',
-        isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
-      )}
-        onClick={() => onRowSelect(rowIdx)}>
+      <td
+        data-row-ri={rowIdx}
+        className={cn(
+          'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1 w-7 min-w-[28px] relative group/rowresize select-none',
+          frozenBg,
+          isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
+        )}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          e.currentTarget.releasePointerCapture(e.pointerId)
+          onRowSelect(rowIdx)
+        }}
+        style={{ cursor: 'ns-resize' }}>
         <div className="flex flex-col items-end gap-0.5" style={{ height: rowHeight, justifyContent: 'center' }}>
           <div className="flex items-center gap-0.5 w-full justify-end">
             {isParent && (
@@ -2317,7 +2351,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             isActive={isActive}
             isEditing={isCellEditing}
             editInitialChar={isCellEditing ? editInitialChar : null}
-            cellBg={gColor(groupColor).cell}
+            cellBg={stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell}
             grayed={false}
             width={w}
             cellHeight={rowHeight}
