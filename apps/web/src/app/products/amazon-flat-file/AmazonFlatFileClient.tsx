@@ -142,6 +142,12 @@ export default function AmazonFlatFileClient({
     () => new Set(['offer_identity', 'variations', 'schema_fields', 'required_fields', 'images'])
   )
 
+  // User-defined group order — persisted in localStorage
+  const [groupOrder, setGroupOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('ff-group-order') ?? '[]') } catch { return [] }
+  })
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
+
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
 
@@ -175,9 +181,19 @@ export default function AmazonFlatFileClient({
 
   // ── Derived ────────────────────────────────────────────────────────
 
+  // Respect saved drag order; fall back to Amazon's order for new groups
+  const orderedGroups = useMemo<ColumnGroup[]>(() => {
+    const groups = manifest?.groups ?? []
+    if (!groupOrder.length) return groups
+    const byId = new Map(groups.map((g) => [g.id, g]))
+    const ordered = groupOrder.map((id) => byId.get(id)).filter(Boolean) as ColumnGroup[]
+    const rest = groups.filter((g) => !groupOrder.includes(g.id))
+    return [...ordered, ...rest]
+  }, [manifest, groupOrder])
+
   const visibleGroups = useMemo(
-    () => manifest?.groups.filter((g) => openGroups.has(g.id)) ?? [],
-    [manifest, openGroups],
+    () => orderedGroups.filter((g) => openGroups.has(g.id)),
+    [orderedGroups, openGroups],
   )
 
   const allColumns = useMemo<Column[]>(
@@ -216,7 +232,8 @@ export default function AmazonFlatFileClient({
       if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
       const m: Manifest = await mRes.json()
       setManifest(m)
-      setOpenGroups(new Set(['offer_identity', 'variations', 'schema_fields', 'required_fields', 'images']))
+      // Open all groups by default when manifest loads
+      setOpenGroups(new Set(m.groups.map((g) => g.id)))
       if (rRes.ok) { const d = await rRes.json(); setRows(d.rows ?? []) }
       else setRows([])
       const p = new URLSearchParams(searchParams?.toString() ?? '')
@@ -443,24 +460,55 @@ export default function AmazonFlatFileClient({
             )}
           </div>
 
-          {/* Group toggles */}
+          {/* Group toggles — draggable to reorder */}
           {manifest && (
             <div className="flex items-center gap-1 flex-wrap ml-auto">
               <span className="text-xs text-slate-400 mr-1">Columns:</span>
-              {manifest.groups.map((g) => {
+              {orderedGroups.map((g) => {
                 const c = gColor(g.color)
                 const open = openGroups.has(g.id)
+                const isDragging = draggingGroupId === g.id
                 return (
                   <button key={g.id} type="button"
+                    draggable
+                    onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
+                    onDragEnd={() => setDraggingGroupId(null)}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (!draggingGroupId || draggingGroupId === g.id) return
+                      const ids = orderedGroups.map((x) => x.id)
+                      const from = ids.indexOf(draggingGroupId)
+                      const to = ids.indexOf(g.id)
+                      const next = [...ids]
+                      next.splice(from, 1)
+                      next.splice(to, 0, draggingGroupId)
+                      setGroupOrder(next)
+                      try { localStorage.setItem('ff-group-order', JSON.stringify(next)) } catch {}
+                      setDraggingGroupId(null)
+                    }}
                     onClick={() => setOpenGroups((prev) => { const n = new Set(prev); open ? n.delete(g.id) : n.add(g.id); return n })}
-                    className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all',
-                      c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65')}>
+                    title={g.labelEn !== g.labelLocal ? `${g.labelLocal} — ${g.labelEn}` : g.labelEn}
+                    className={cn('inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
+                      c.badge, open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
+                      isDragging && 'opacity-30 scale-95')}>
                     <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
-                    <span className="font-medium">{g.labelEn}</span>
+                    <span className="font-medium">{g.labelLocal}</span>
+                    {g.labelEn !== g.labelLocal && (
+                      <span className="opacity-50 font-normal">({g.labelEn})</span>
+                    )}
                     <span className="opacity-60 tabular-nums">{g.columns.length}</span>
                   </button>
                 )
               })}
+              {groupOrder.length > 0 && (
+                <button type="button"
+                  onClick={() => { setGroupOrder([]); try { localStorage.removeItem('ff-group-order') } catch {} }}
+                  className="text-xs text-slate-400 hover:text-slate-600 px-1"
+                  title="Reset group order to Amazon's default">
+                  ↺
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -509,8 +557,8 @@ export default function AmazonFlatFileClient({
                     <th key={g.id} colSpan={g.columns.length}
                       className={cn('px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap', c.header)}>
                       {g.labelLocal}
-                      {g.labelLocal !== g.labelEn && (
-                        <span className="ml-1.5 font-normal opacity-60">({g.labelEn})</span>
+                      {g.labelEn && g.labelEn !== g.labelLocal && (
+                        <span className="ml-1.5 font-normal opacity-55 text-[11px]">({g.labelEn})</span>
                       )}
                     </th>
                   )

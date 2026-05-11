@@ -111,6 +111,32 @@ const GROUP_COLOR_PALETTE = [
   'amber', 'yellow', 'sky', 'red', 'violet', 'slate',
 ]
 
+// English names for Amazon's well-known group IDs.
+// Amazon's API returns localised titles; we keep English separately so
+// the spreadsheet can show both (e.g. "Immagini (Images)").
+const KNOWN_GROUP_EN: Record<string, string> = {
+  offer_identity:    'Offer Identity',
+  variations:        'Variations',
+  product_identity:  'Product Identity',
+  images:            'Images',
+  product_details:   'Product Details',
+  offer:             'Offer',
+  shipping:          'Shipping',
+  compliance:        'Compliance & Safety',
+  fulfillment:       'Fulfillment',
+  schema_fields:     'Schema Fields',
+  other_attributes:  'Other Attributes',
+}
+
+function groupIdToEnglish(groupId: string): string {
+  if (KNOWN_GROUP_EN[groupId]) return KNOWN_GROUP_EN[groupId]
+  // Handle market-specific offer groups like "offer_APJ6JRA9NG5V4"
+  if (/^offer_/.test(groupId)) return 'Offer — Selling on Amazon'
+  if (/^selling_/.test(groupId)) return 'Selling on Amazon'
+  // Convert snake_case to Title Case
+  return groupId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 // ── Schema enum extraction ─────────────────────────────────────────────
 
 /**
@@ -294,11 +320,18 @@ export class AmazonFlatFileService {
     const mp = marketplace.toUpperCase()
     const pt = productType.toUpperCase()
 
-    const cached = forceRefresh
+    let cached = forceRefresh
       ? await this.schemas.refreshSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
       : await this.schemas.getSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
 
-    const def = (cached.schemaDefinition ?? {}) as Record<string, any>
+    let def = (cached.schemaDefinition ?? {}) as Record<string, any>
+
+    // Auto-refresh schemas cached before FF.10 that lack __propertyGroups.
+    // This is a one-time backfill — subsequent calls use the cached version.
+    if (!def.__propertyGroups && !forceRefresh) {
+      cached = await this.schemas.refreshSchema({ channel: 'AMAZON', marketplace: mp, productType: pt })
+      def = (cached.schemaDefinition ?? {}) as Record<string, any>
+    }
     const properties = (def.properties ?? {}) as Record<string, any>
     const requiredSet = new Set<string>(Array.isArray(def.required) ? def.required : [])
 
@@ -409,7 +442,12 @@ export class AmazonFlatFileService {
             fieldId, prop, requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
           ))
         }
-        return { id: groupId, labelEn: groupMeta.title, labelLocal: groupMeta.title, color, columns }
+        // Amazon's title is already localised; derive English separately
+        const labelLocal = typeof groupMeta.title === 'string'
+          ? groupMeta.title
+          : (groupMeta.title as any)?.value ?? groupIdToEnglish(groupId)
+        const labelEn = groupIdToEnglish(groupId)
+        return { id: groupId, labelEn, labelLocal, color, columns }
       }).filter((g) => g.columns.length > 0)
 
       // Catch any schema properties not assigned to any Amazon group
