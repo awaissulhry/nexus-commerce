@@ -859,8 +859,25 @@ export default function AmazonFlatFileClient({
 
               {/* Row 1: Group color bands (English group names) */}
               <tr>
-                {/* Status col + row# col (frozen) */}
-                <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px]" rowSpan={3} />
+                {/* Select-all checkbox + row# col (frozen) */}
+                <th className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center" rowSpan={3}>
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 accent-blue-600"
+                    checked={displayRows.length > 0 && selectedRows.size === displayRows.length}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < displayRows.length
+                    }}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedRows(new Set(displayRows.map((r) => r._rowId as string)))
+                      } else {
+                        setSelectedRows(new Set())
+                      }
+                    }}
+                    title={selectedRows.size === displayRows.length ? 'Deselect all' : 'Select all'}
+                  />
+                </th>
                 <th className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-7 min-w-[28px] text-xs text-slate-400 text-center font-normal" rowSpan={3}>#</th>
 
                 {displayGroups.map((g) => {
