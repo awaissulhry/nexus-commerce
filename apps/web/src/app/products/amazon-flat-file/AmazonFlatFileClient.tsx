@@ -139,7 +139,7 @@ export default function AmazonFlatFileClient({
 
   // Groups that are open (visible)
   const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(['offer_identity', 'variations', 'required_fields'])
+    () => new Set(['offer_identity', 'variations', 'schema_fields', 'required_fields', 'images'])
   )
 
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
@@ -216,7 +216,7 @@ export default function AmazonFlatFileClient({
       if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
       const m: Manifest = await mRes.json()
       setManifest(m)
-      setOpenGroups(new Set(['offer_identity', 'variations', 'required_fields']))
+      setOpenGroups(new Set(['offer_identity', 'variations', 'schema_fields', 'required_fields', 'images']))
       if (rRes.ok) { const d = await rRes.json(); setRows(d.rows ?? []) }
       else setRows([])
       const p = new URLSearchParams(searchParams?.toString() ?? '')

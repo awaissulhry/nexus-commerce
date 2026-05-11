@@ -434,10 +434,10 @@ export class AmazonFlatFileService {
         })
       }
     } else {
-      // ── Path B: fallback grouping (hit "Refresh schema" to get exact Amazon groups)
-      const requiredCols: FlatFileColumn[] = []
+      // ── Path B: fallback grouping — hit "Refresh schema" to get exact Amazon groups.
+      // Required fields are highlighted in red in the spreadsheet; no separate group needed.
       const imageCols: FlatFileColumn[] = []
-      const optionalCols: FlatFileColumn[] = []
+      const otherCols: FlatFileColumn[] = []
 
       for (const [fieldId, prop] of Object.entries(properties)) {
         if (SKIP_FIXED.has(fieldId)) continue
@@ -446,29 +446,29 @@ export class AmazonFlatFileService {
           requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
         )
         if (fieldId.includes('image_locator')) imageCols.push(col)
-        else if (col.required) requiredCols.push(col)
-        else optionalCols.push(col)
+        else otherCols.push(col)
       }
 
-      requiredCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn))
+      // Sort: required first, then alphabetical
+      otherCols.sort((a, b) => {
+        if (a.required !== b.required) return a.required ? -1 : 1
+        return a.labelEn.localeCompare(b.labelEn)
+      })
       imageCols.sort((a, b) => a.id.localeCompare(b.id))
-      optionalCols.sort((a, b) => a.labelEn.localeCompare(b.labelEn))
 
       schemaGroups = []
-      if (requiredCols.length > 0) schemaGroups.push({
-        id: 'required_fields', labelEn: 'Required Fields',
-        labelLocal: GROUP_LOCAL_LABELS.required_fields[lang] ?? 'Required Fields',
-        color: 'emerald', columns: requiredCols,
+      if (otherCols.length > 0) schemaGroups.push({
+        id: 'schema_fields', labelEn: 'Schema Fields',
+        labelLocal: lang === 'it_IT' ? 'Campi schema'
+          : lang === 'de_DE' ? 'Schema-Felder'
+          : lang === 'fr_FR' ? 'Champs de schéma'
+          : lang === 'es_ES' ? 'Campos de esquema' : 'Schema Fields',
+        color: 'emerald', columns: otherCols,
       })
       if (imageCols.length > 0) schemaGroups.push({
         id: 'images', labelEn: 'Images',
         labelLocal: GROUP_LOCAL_LABELS.images[lang] ?? 'Images',
         color: 'orange', columns: imageCols,
-      })
-      if (optionalCols.length > 0) schemaGroups.push({
-        id: 'optional_fields', labelEn: 'Optional Fields',
-        labelLocal: GROUP_LOCAL_LABELS.optional_fields[lang] ?? 'Optional Fields',
-        color: 'sky', columns: optionalCols,
       })
     }
 
