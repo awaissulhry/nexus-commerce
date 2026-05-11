@@ -220,7 +220,7 @@ export default function AmazonFlatFileClient({
     try { return parseInt(localStorage.getItem('ff-frozen-cols') ?? '1', 10) || 1 } catch { return 1 }
   })
   const [showValidPanel, setShowValidPanel] = useState(false)
-  const [translatePanelOpen, setTranslatePanelOpen] = useState(false)
+  const [pushPanel, setPushPanel] = useState<{ tab: 'copy' | 'translate'; preselectedCol?: Column } | null>(null)
 
   const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -228,8 +228,6 @@ export default function AmazonFlatFileClient({
   const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [copyPanelOpen, setCopyPanelOpen] = useState(false)
-  // copying state used by handleCopyToMarket
 
   // ── Column + row resize ────────────────────────────────────────────
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
@@ -1110,7 +1108,7 @@ export default function AmazonFlatFileClient({
     colIds: Set<string>,
   ) => {
     if (!manifest || !rows.length) return
-    setCopyPanelOpen(false)
+    setPushPanel(null)
     try {
       const res = await fetch(
         `${getBackendUrl()}/api/amazon/flat-file/template?marketplace=${targetMarket}&productType=${productType}`,
@@ -1327,7 +1325,7 @@ export default function AmazonFlatFileClient({
               { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
               { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: !future.length, shortcut: '⌘⇧Z' },
               { separator: true },
-              { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setCopyPanelOpen((o) => !o), disabled: !manifest || !rows.length },
+              { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setPushPanel((p) => p ? null : { tab: 'copy' }), disabled: !manifest || !rows.length },
               { separator: true },
               { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
               { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
@@ -1422,20 +1420,14 @@ export default function AmazonFlatFileClient({
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* Copy to market */}
-          <div className="relative">
-            <TbBtn
-              icon={<Copy className="w-3.5 h-3.5" />}
-              title="Copy to market"
-              onClick={() => setCopyPanelOpen((o) => !o)}
-              disabled={!manifest || !rows.length}
-              active={copyPanelOpen}
-            />
-            {copyPanelOpen && manifest && rows.length > 0 && (
-              <CopyToMarketPanel manifest={manifest} rows={rows} currentMarket={marketplace}
-                onCopy={handleCopyToMarket} onClose={() => setCopyPanelOpen(false)} />
-            )}
-          </div>
+          {/* Push to markets — Copy tab */}
+          <TbBtn
+            icon={<Copy className="w-3.5 h-3.5" />}
+            title="Copy rows to another market"
+            onClick={() => setPushPanel((p) => p?.tab === 'copy' ? null : { tab: 'copy' })}
+            disabled={!manifest || !rows.length}
+            active={pushPanel?.tab === 'copy'}
+          />
 
           {/* Fetch from Amazon — always visible, disabled when no rows selected */}
           <div className="relative">
@@ -1481,12 +1473,13 @@ export default function AmazonFlatFileClient({
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* FF.45 Push values to markets */}
+          {/* Push to markets — Translate tab */}
           <TbBtn
             icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
-            title="Push enum values to other markets — translate column values across marketplaces"
-            onClick={() => setTranslatePanelOpen(true)}
+            title="Translate enum values to other markets"
+            onClick={() => setPushPanel((p) => p?.tab === 'translate' ? null : { tab: 'translate' })}
             disabled={!manifest || !rows.length}
+            active={pushPanel?.tab === 'translate'}
           />
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
@@ -1783,6 +1776,17 @@ export default function AmazonFlatFileClient({
                       >
                         <Pin className="w-3 h-3" />
                       </button>
+                      {/* Push values to markets — column shortcut */}
+                      {col.kind === 'enum' && col.options && col.options.length > 0 && (
+                        <button
+                          type="button"
+                          className="ml-0.5 p-0.5 rounded-sm opacity-0 group-hover/th:opacity-100 transition-opacity flex-shrink-0 text-slate-400 hover:text-violet-500"
+                          title="Translate values for this column to other markets…"
+                          onClick={(e) => { e.stopPropagation(); setPushPanel({ tab: 'translate', preselectedCol: col }) }}
+                        >
+                          <ArrowRightLeft className="w-3 h-3" />
+                        </button>
+                      )}
                       {/* Resize handle — drag to resize, double-click to reset */}
                       <div
                         className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize group/colresize flex items-center justify-center z-10"
@@ -2039,17 +2043,18 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
-      {translatePanelOpen && (
-        <ValueTranslatePanel
+      {pushPanel && manifest && (
+        <PushToMarketsPanel
+          initialTab={pushPanel.tab}
+          preselectedCol={pushPanel.preselectedCol}
+          manifest={manifest}
+          rows={rows}
           enumColumns={manifestColumns.filter((c) => c.kind === 'enum' && c.options && c.options.length > 0)}
           sourceMarket={marketplace}
           productType={productType}
-          rows={rows}
-          onApply={(columnMappings) => {
-            handleApplyTranslations(columnMappings)
-            setTranslatePanelOpen(false)
-          }}
-          onClose={() => setTranslatePanelOpen(false)}
+          onCopy={(targetMarket, colIds) => { handleCopyToMarket(targetMarket, colIds) }}
+          onApplyTranslations={(columnMappings) => { handleApplyTranslations(columnMappings); setPushPanel(null) }}
+          onClose={() => setPushPanel(null)}
         />
       )}
 
@@ -2896,11 +2901,7 @@ function EnumDropdown({ options, current, onSelect, onClose }: EnumDropdownProps
   )
 }
 
-// ── CopyToMarketPanel ──────────────────────────────────────────────────
-// Floating panel for copying rows from the current market to another.
-// Three modes: copy whole groups, exclude individual columns within a group,
-// or deselect groups entirely. Structural columns (SKU, parentage, etc.)
-// are always copied automatically.
+// ── PushToMarketsPanel helpers ─────────────────────────────────────────
 
 const MARKETPLACES_ALL = ['IT', 'DE', 'FR', 'ES', 'UK']
 
@@ -2909,29 +2910,109 @@ function isMarketSpecificGroup(id: string) {
   return /^offer_[A-Z0-9]/.test(id) || /^selling_/.test(id) || id === 'fulfillment'
 }
 
-interface CopyPanelProps {
+// ── PushToMarketsPanel ─────────────────────────────────────────────────────
+
+interface PushToMarketsPanelProps {
+  initialTab: 'copy' | 'translate'
+  preselectedCol?: Column
   manifest: Manifest
   rows: Row[]
-  currentMarket: string
+  enumColumns: Column[]
+  sourceMarket: string
+  productType: string
+  onCopy: (targetMarket: string, colIds: Set<string>) => void
+  onApplyTranslations: (columnMappings: ColumnMappingEntry[]) => void
+  onClose: () => void
+}
+
+function PushToMarketsPanel({
+  initialTab, preselectedCol, manifest, rows, enumColumns,
+  sourceMarket, productType, onCopy, onApplyTranslations, onClose,
+}: PushToMarketsPanelProps) {
+  const [tab, setTab] = useState<'copy' | 'translate'>(initialTab)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-4xl max-h-[92vh] flex flex-col mx-4">
+
+        {/* Header */}
+        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Push to Markets</h2>
+            <span className="text-xs text-slate-400">from <span className="font-medium text-slate-600 dark:text-slate-300">{sourceMarket}</span></span>
+            {/* Tabs */}
+            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 gap-0.5">
+              {(['copy', 'translate'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={cn(
+                    'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                    tab === t
+                      ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
+                  )}
+                >
+                  {t === 'copy' ? (
+                    <span className="flex items-center gap-1.5"><Copy className="w-3 h-3" />Copy rows</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5"><ArrowRightLeft className="w-3 h-3" />Translate values</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Tab content */}
+        {tab === 'copy' ? (
+          <CopyTabContent
+            manifest={manifest}
+            rows={rows}
+            sourceMarket={sourceMarket}
+            onCopy={onCopy}
+            onClose={onClose}
+          />
+        ) : (
+          <TranslateTabContent
+            enumColumns={enumColumns}
+            sourceMarket={sourceMarket}
+            productType={productType}
+            rows={rows}
+            preselectedCol={preselectedCol}
+            onApply={onApplyTranslations}
+            onClose={onClose}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── CopyTabContent ─────────────────────────────────────────────────────
+
+interface CopyTabContentProps {
+  manifest: Manifest
+  rows: Row[]
+  sourceMarket: string
   onCopy: (targetMarket: string, colIds: Set<string>) => void
   onClose: () => void
 }
 
-function CopyToMarketPanel({ manifest, rows, currentMarket, onCopy, onClose }: CopyPanelProps) {
-  const otherMarkets = MARKETPLACES_ALL.filter((m) => m !== currentMarket)
+function CopyTabContent({ manifest, rows, sourceMarket, onCopy, onClose }: CopyTabContentProps) {
+  const otherMarkets = MARKETPLACES_ALL.filter((m) => m !== sourceMarket)
   const [targetMarket, setTargetMarket] = useState(otherMarkets[0] ?? '')
-
-  // Group selection: default on for content groups, off for market-specific
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(
-    () => new Set(
-      manifest.groups
-        .filter((g) => !isMarketSpecificGroup(g.id))
-        .map((g) => g.id)
-    )
+    () => new Set(manifest.groups.filter((g) => !isMarketSpecificGroup(g.id)).map((g) => g.id))
   )
-  // Column-level exclusions within a selected group
   const [excludedCols, setExcludedCols] = useState<Set<string>>(new Set())
-  // Which group is expanded to show column-level toggles
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
   const selectedColIds = useMemo(() => {
@@ -2945,161 +3026,100 @@ function CopyToMarketPanel({ manifest, rows, currentMarket, onCopy, onClose }: C
     return ids
   }, [manifest, selectedGroups, excludedCols])
 
-  // Close on outside click
-  const panelRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!panelRef.current?.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [onClose])
-
   function toggleGroup(id: string) {
-    setSelectedGroups((prev) => {
-      const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
-      return n
-    })
+    setSelectedGroups((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
-
   function toggleCol(colId: string) {
-    setExcludedCols((prev) => {
-      const n = new Set(prev)
-      n.has(colId) ? n.delete(colId) : n.add(colId)
-      return n
-    })
+    setExcludedCols((prev) => { const n = new Set(prev); n.has(colId) ? n.delete(colId) : n.add(colId); return n })
   }
 
   return (
-    <div
-      ref={panelRef}
-      className="absolute right-0 top-full mt-1 z-50 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
-    >
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+    <>
+      <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+        {/* Target market */}
         <div>
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Copy to market
+          <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">Target market</div>
+          <div className="flex gap-1.5">
+            {otherMarkets.map((m) => (
+              <button key={m} type="button" onClick={() => setTargetMarket(m)}
+                className={cn('text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors',
+                  m === targetMarket
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400')}>
+                {m}
+              </button>
+            ))}
           </div>
-          <div className="text-xs text-slate-400">
-            {rows.length} row{rows.length !== 1 ? 's' : ''} from {currentMarket}
-          </div>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
 
-      {/* Target market */}
-      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
-        <div className="text-xs font-medium text-slate-500 mb-1.5">Target market</div>
-        <div className="flex gap-1">
-          {otherMarkets.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setTargetMarket(m)}
-              className={cn(
-                'text-xs font-medium px-2.5 py-1 rounded border transition-colors',
-                m === targetMarket
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400',
-              )}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Group + column selection */}
-      <div className="max-h-72 overflow-y-auto">
-        <div className="px-4 pt-2 pb-1">
-          <div className="text-xs font-medium text-slate-500">What to copy</div>
-        </div>
-        {manifest.groups.map((g) => {
-          const checked = selectedGroups.has(g.id)
-          const isExpanded = expandedGroup === g.id
-          const groupExcludedCount = g.columns.filter((c) => excludedCols.has(c.id)).length
-
-          return (
-            <div key={g.id}>
-              <div className="flex items-center gap-2 px-4 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleGroup(g.id)}
-                  className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <span className={cn('text-xs truncate', checked ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 line-through')}>
-                    {g.labelLocal}
-                    {g.labelEn !== g.labelLocal && (
-                      <span className="ml-1 opacity-50">({g.labelEn})</span>
+        {/* Group + column selection */}
+        <div>
+          <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">What to copy</div>
+          <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+            {manifest.groups.map((g) => {
+              const checked = selectedGroups.has(g.id)
+              const isExpanded = expandedGroup === g.id
+              const groupExcludedCount = g.columns.filter((c) => excludedCols.has(c.id)).length
+              return (
+                <div key={g.id}>
+                  <div className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <input type="checkbox" checked={checked} onChange={() => toggleGroup(g.id)}
+                      className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className={cn('text-xs truncate', checked ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 line-through')}>
+                        {g.labelLocal}
+                        {g.labelEn !== g.labelLocal && <span className="ml-1 opacity-50">({g.labelEn})</span>}
+                      </span>
+                      {checked && groupExcludedCount > 0 && (
+                        <span className="ml-1 text-xs text-amber-500">−{groupExcludedCount}</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-400 tabular-nums flex-shrink-0">
+                      {g.columns.length - (checked ? groupExcludedCount : 0)}
+                    </span>
+                    {checked && (
+                      <button type="button" onClick={() => setExpandedGroup(isExpanded ? null : g.id)}
+                        className="text-slate-400 hover:text-slate-600 flex-shrink-0" title="Expand to exclude specific columns">
+                        <ChevronDown className={cn('w-3 h-3 transition-transform', isExpanded && 'rotate-180')} />
+                      </button>
                     )}
-                  </span>
-                  {checked && groupExcludedCount > 0 && (
-                    <span className="ml-1 text-xs text-amber-500">−{groupExcludedCount}</span>
+                  </div>
+                  {isExpanded && checked && (
+                    <div className="ml-8 mr-4 mb-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 grid grid-cols-2 gap-0.5 max-h-36 overflow-y-auto">
+                      {g.columns.map((c) => {
+                        const excluded = excludedCols.has(c.id)
+                        return (
+                          <label key={c.id} className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" checked={!excluded} onChange={() => toggleCol(c.id)}
+                              className="w-3 h-3 accent-blue-600 flex-shrink-0" />
+                            <span className={cn('text-xs truncate', excluded ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-400')}>
+                              {c.labelLocal}{c.required && <span className="ml-0.5 text-red-400">*</span>}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
                   )}
                 </div>
-                <span className="text-xs text-slate-400 tabular-nums flex-shrink-0">
-                  {g.columns.length - (checked ? groupExcludedCount : 0)}
-                </span>
-                {checked && (
-                  <button
-                    type="button"
-                    onClick={() => setExpandedGroup(isExpanded ? null : g.id)}
-                    className="text-slate-400 hover:text-slate-600 flex-shrink-0"
-                    title="Expand to exclude specific columns"
-                  >
-                    <ChevronDown className={cn('w-3 h-3 transition-transform', isExpanded && 'rotate-180')} />
-                  </button>
-                )}
-              </div>
-
-              {/* Column-level toggles */}
-              {isExpanded && checked && (
-                <div className="ml-8 mr-4 mb-1 bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 grid grid-cols-1 gap-0.5 max-h-36 overflow-y-auto">
-                  {g.columns.map((c) => {
-                    const excluded = excludedCols.has(c.id)
-                    return (
-                      <label key={c.id} className="flex items-center gap-1.5 cursor-pointer group/col">
-                        <input
-                          type="checkbox"
-                          checked={!excluded}
-                          onChange={() => toggleCol(c.id)}
-                          className="w-3 h-3 accent-blue-600 flex-shrink-0"
-                        />
-                        <span className={cn('text-xs truncate', excluded ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-400')}>
-                          {c.labelLocal}
-                          {c.required && <span className="ml-0.5 text-red-400">*</span>}
-                        </span>
-                      </label>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-        <div className="text-xs text-slate-400">
-          {selectedColIds.size} column{selectedColIds.size !== 1 ? 's' : ''} → {targetMarket}
+      <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl">
+        <div className="text-xs text-slate-400">{selectedColIds.size} column{selectedColIds.size !== 1 ? 's' : ''} → {targetMarket}</div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={() => onCopy(targetMarket, selectedColIds)}
+            disabled={!targetMarket || selectedColIds.size === 0}>
+            <Copy className="w-3.5 h-3.5 mr-1.5" />
+            Copy {rows.length} row{rows.length !== 1 ? 's' : ''}
+          </Button>
         </div>
-        <Button
-          size="sm"
-          onClick={() => onCopy(targetMarket, selectedColIds)}
-          disabled={!targetMarket || selectedColIds.size === 0}
-        >
-          <Copy className="w-3.5 h-3.5 mr-1.5" />
-          Copy {rows.length} row{rows.length !== 1 ? 's' : ''}
-        </Button>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -3668,28 +3688,31 @@ function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
   )
 }
 
-// ── ValueTranslatePanel ────────────────────────────────────────────────
+// ── TranslateTabContent ────────────────────────────────────────────────
 
 interface ColumnMappingEntry {
   col: Column
   appliedMappings: Record<string, Record<string, string | null>>
 }
 
-interface ValueTranslatePanelProps {
+interface TranslateTabContentProps {
   enumColumns: Column[]
   sourceMarket: string
   productType: string
   rows: Row[]
+  preselectedCol?: Column
   onApply: (columnMappings: ColumnMappingEntry[]) => void
   onClose: () => void
 }
 
-function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onApply, onClose }: ValueTranslatePanelProps) {
+function TranslateTabContent({ enumColumns, sourceMarket, productType, rows, preselectedCol, onApply, onClose }: TranslateTabContentProps) {
   const allMarkets = ['IT', 'DE', 'FR', 'ES', 'UK']
   const otherMarkets = allMarkets.filter((m) => m !== sourceMarket.toUpperCase())
 
-  // Default: select all enum columns that have values in current rows
   const [selectedColIds, setSelectedColIds] = useState<Set<string>>(() => {
+    // If a specific column was pre-selected from the header button, select only that one
+    if (preselectedCol) return new Set([preselectedCol.id])
+    // Otherwise pre-select all columns that have values in current rows
     const s = new Set<string>()
     for (const col of enumColumns) {
       for (const row of rows) {
@@ -3700,16 +3723,12 @@ function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onA
   })
   const [selectedMarkets, setSelectedMarkets] = useState<Set<string>>(new Set(otherMarkets))
   const [translating, setTranslating] = useState(false)
-  // colId → TranslateResult
   const [colResults, setColResults] = useState<Record<string, TranslateResult>>({})
   const [globalError, setGlobalError] = useState<string | null>(null)
-  // colId → market → srcVal → override value (null = skip)
   const [overrides, setOverrides] = useState<Record<string, Record<string, Record<string, string | null>>>>({})
   const [openDropdown, setOpenDropdown] = useState<{ colId: string; market: string; srcVal: string } | null>(null)
-  // which column sections are collapsed in results view
   const [collapsedCols, setCollapsedCols] = useState<Set<string>>(new Set())
 
-  // Distinct values per column
   const valuesByCol = useMemo<Record<string, string[]>>(() => {
     const out: Record<string, string[]> = {}
     for (const col of enumColumns) {
@@ -3733,7 +3752,6 @@ function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onA
     setColResults({})
     setCollapsedCols(new Set())
 
-    // One API call per selected column, all in parallel
     const settled = await Promise.allSettled(
       selectedCols.map(async (col) => {
         const values = valuesByCol[col.id]
@@ -3741,14 +3759,7 @@ function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onA
         const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/translate-values`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourceMarket,
-            productType,
-            colId: col.id,
-            colLabelEn: col.labelEn,
-            values,
-            targetMarkets: [...selectedMarkets],
-          }),
+          body: JSON.stringify({ sourceMarket, productType, colId: col.id, colLabelEn: col.labelEn, values, targetMarkets: [...selectedMarkets] }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(`[${col.labelEn}] ${data.error ?? 'failed'}`)
@@ -3759,11 +3770,8 @@ function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onA
     const newResults: Record<string, TranslateResult> = {}
     const errors: string[] = []
     for (const s of settled) {
-      if (s.status === 'fulfilled' && s.value.result) {
-        newResults[s.value.colId] = s.value.result
-      } else if (s.status === 'rejected') {
-        errors.push(s.reason?.message ?? 'Unknown error')
-      }
+      if (s.status === 'fulfilled' && s.value.result) newResults[s.value.colId] = s.value.result
+      else if (s.status === 'rejected') errors.push(s.reason?.message ?? 'Unknown error')
     }
     setColResults(newResults)
     if (errors.length) setGlobalError(errors.join(' · '))
@@ -3788,9 +3796,7 @@ function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onA
           appliedMappings[market][srcVal] = getEffectiveValue(col.id, market, srcVal)
         }
       }
-      if (Object.keys(appliedMappings).length > 0) {
-        columnMappings.push({ col, appliedMappings })
-      }
+      if (Object.keys(appliedMappings).length > 0) columnMappings.push({ col, appliedMappings })
     }
     onApply(columnMappings)
   }
@@ -3802,297 +3808,239 @@ function ValueTranslatePanel({ enumColumns, sourceMarket, productType, rows, onA
     : c === 'medium' ? 'text-amber-500 dark:text-amber-400'
     : c === 'low' ? 'text-orange-500 dark:text-orange-400'
     : 'text-red-400 dark:text-red-500'
-
   const confidenceLabel = (c: ValueMapping['confidence']) =>
     c === 'high' ? '✓ high' : c === 'medium' ? '~ med' : c === 'low' ? '~ low' : '✗ none'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-4xl max-h-[92vh] flex flex-col mx-4">
-
-        {/* Header */}
-        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <ArrowRightLeft className="w-4 h-4 text-violet-500" />
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Push values to other markets</h2>
-            <span className="text-xs text-slate-400">· Source: <span className="font-medium text-slate-600 dark:text-slate-300">{sourceMarket}</span></span>
-          </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1">
-
-          {/* Config section */}
-          {!hasResults && (
-            <div className="px-5 py-4 space-y-4">
-
-              {/* Column picker */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Columns to translate ({selectedColIds.size} selected)</p>
-                  <div className="flex gap-2">
-                    <button type="button" className="text-[11px] text-violet-600 hover:text-violet-700 dark:text-violet-400"
-                      onClick={() => setSelectedColIds(new Set(enumColumns.filter((c) => (valuesByCol[c.id]?.length ?? 0) > 0).map((c) => c.id)))}>
-                      Select all with values
-                    </button>
-                    <span className="text-slate-300">·</span>
-                    <button type="button" className="text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400"
-                      onClick={() => setSelectedColIds(new Set())}>
-                      Clear
-                    </button>
-                  </div>
-                </div>
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                  {enumColumns.map((col) => {
-                    const vals = valuesByCol[col.id] ?? []
-                    const checked = selectedColIds.has(col.id)
-                    return (
-                      <label key={col.id} className={cn(
-                        'flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors',
-                        checked ? 'bg-violet-50/60 dark:bg-violet-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
-                        !vals.length && 'opacity-50',
-                      )}>
-                        <input type="checkbox" checked={checked} disabled={!vals.length}
-                          className="w-3.5 h-3.5 accent-violet-600 flex-shrink-0"
-                          onChange={(e) => setSelectedColIds((prev) => {
-                            const next = new Set(prev)
-                            if (e.target.checked) next.add(col.id); else next.delete(col.id)
-                            return next
-                          })} />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{col.labelEn}</span>
-                          <span className="ml-1.5 text-[10px] font-mono text-slate-400">{col.id}</span>
-                        </div>
-                        {vals.length > 0 ? (
-                          <div className="flex gap-1 flex-wrap justify-end max-w-[200px]">
-                            {vals.slice(0, 3).map((v) => (
-                              <span key={v} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-[10px] font-mono truncate max-w-[80px]">{v}</span>
-                            ))}
-                            {vals.length > 3 && <span className="text-[10px] text-slate-400">+{vals.length - 3}</span>}
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">no values</span>
-                        )}
-                      </label>
-                    )
-                  })}
-                  {enumColumns.length === 0 && (
-                    <div className="px-3 py-4 text-xs text-slate-400 text-center italic">No enum columns in current view</div>
-                  )}
+    <>
+      <div className="overflow-y-auto flex-1">
+        {!hasResults && (
+          <div className="px-5 py-4 space-y-4">
+            {/* Column picker */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Columns to translate ({selectedColIds.size} selected)</p>
+                <div className="flex gap-2">
+                  <button type="button" className="text-[11px] text-violet-600 hover:text-violet-700 dark:text-violet-400"
+                    onClick={() => setSelectedColIds(new Set(enumColumns.filter((c) => (valuesByCol[c.id]?.length ?? 0) > 0).map((c) => c.id)))}>
+                    Select all with values
+                  </button>
+                  <span className="text-slate-300">·</span>
+                  <button type="button" className="text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                    onClick={() => setSelectedColIds(new Set())}>Clear</button>
                 </div>
               </div>
-
-              {/* Target markets */}
-              <div>
-                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Target markets</p>
-                <div className="flex gap-3 flex-wrap">
-                  {otherMarkets.map((m) => (
-                    <label key={m} className="flex items-center gap-1.5 cursor-pointer group">
-                      <input type="checkbox" checked={selectedMarkets.has(m)}
-                        className="w-3.5 h-3.5 accent-violet-600"
-                        onChange={(e) => setSelectedMarkets((prev) => {
+              <div className="border border-slate-200 dark:border-slate-700 rounded-lg max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                {enumColumns.map((col) => {
+                  const vals = valuesByCol[col.id] ?? []
+                  const checked = selectedColIds.has(col.id)
+                  return (
+                    <label key={col.id} className={cn('flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors',
+                      checked ? 'bg-violet-50/60 dark:bg-violet-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
+                      !vals.length && 'opacity-50')}>
+                      <input type="checkbox" checked={checked} disabled={!vals.length}
+                        className="w-3.5 h-3.5 accent-violet-600 flex-shrink-0"
+                        onChange={(e) => setSelectedColIds((prev) => {
                           const next = new Set(prev)
-                          if (e.target.checked) next.add(m); else next.delete(m)
+                          if (e.target.checked) next.add(col.id); else next.delete(col.id)
                           return next
                         })} />
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-violet-600">{m}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {globalError && (
-                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-400">
-                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{globalError}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Results — one section per column */}
-          {hasResults && (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-
-              {/* Summary bar */}
-              <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between gap-4">
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {Object.keys(colResults).length} column{Object.keys(colResults).length !== 1 ? 's' : ''} translated
-                  · click any cell to override
-                </span>
-                <button type="button" className="text-[11px] text-violet-600 hover:text-violet-700 dark:text-violet-400"
-                  onClick={() => { setColResults({}); setGlobalError(null) }}>
-                  ← Edit selection
-                </button>
-              </div>
-
-              {selectedCols.map((col) => {
-                const result = colResults[col.id]
-                if (!result) return null
-                const vals = valuesByCol[col.id] ?? []
-                const activeMarkets = [...selectedMarkets].filter((m) => result.mappings[m])
-                const isCollapsed = collapsedCols.has(col.id)
-                const matchCount = activeMarkets.reduce((n, m) =>
-                  n + vals.filter((v) => getEffectiveValue(col.id, m, v) !== null).length, 0)
-                const totalPossible = activeMarkets.length * vals.length
-
-                return (
-                  <div key={col.id}>
-                    {/* Column section header */}
-                    <button type="button"
-                      className="w-full flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/30 text-left transition-colors"
-                      onClick={() => setCollapsedCols((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(col.id)) next.delete(col.id); else next.add(col.id)
-                        return next
-                      })}>
-                      <div className="flex items-center gap-2">
-                        <ChevronDown className={cn('w-3.5 h-3.5 text-slate-400 transition-transform', isCollapsed && '-rotate-90')} />
-                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{col.labelEn}</span>
-                        <span className="text-[10px] font-mono text-slate-400">{col.id}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{col.labelEn}</span>
+                        <span className="ml-1.5 text-[10px] font-mono text-slate-400">{col.id}</span>
                       </div>
-                      <span className={cn('text-[10px]', matchCount === totalPossible ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500 dark:text-amber-400')}>
-                        {matchCount}/{totalPossible} matched
-                      </span>
-                    </button>
-
-                    {/* Mapping table */}
-                    {!isCollapsed && (
-                      <div className="px-5 pb-3">
-                        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                          <table className="w-full text-xs border-collapse">
-                            <thead>
-                              <tr className="bg-slate-50 dark:bg-slate-800/60">
-                                <th className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 w-32">
-                                  {sourceMarket}
-                                </th>
-                                {activeMarkets.map((m) => (
-                                  <th key={m} className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 last:border-r-0">
-                                    {m}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {vals.map((srcVal, ri) => (
-                                <tr key={srcVal} className={ri % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-800/20'}>
-                                  <td className="px-3 py-1.5 font-mono border-r border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 truncate max-w-[120px]" title={srcVal}>
-                                    {srcVal}
-                                  </td>
-                                  {activeMarkets.map((market) => {
-                                    const mapping = result.mappings[market]?.[srcVal]
-                                    const effective = getEffectiveValue(col.id, market, srcVal)
-                                    const isOverridden = overrides[col.id]?.[market]?.[srcVal] !== undefined
-                                    const targetOpts = result.targetOptions[market] ?? []
-                                    const isOpen = openDropdown?.colId === col.id && openDropdown?.market === market && openDropdown?.srcVal === srcVal
-
-                                    return (
-                                      <td key={market} className="px-2 py-1 border-r border-b border-slate-200 dark:border-slate-700 last:border-r-0 relative">
-                                        {isOpen ? (
-                                          <div className="absolute left-0 top-0 z-20 min-w-[180px]">
-                                            <div className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto py-1">
-                                              <button type="button"
-                                                className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 italic"
-                                                onClick={() => {
-                                                  setOverrides((p) => ({ ...p, [col.id]: { ...(p[col.id] ?? {}), [market]: { ...(p[col.id]?.[market] ?? {}), [srcVal]: null } } }))
-                                                  setOpenDropdown(null)
-                                                }}>Skip (no mapping)</button>
-                                              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                                              {targetOpts.map((opt) => (
-                                                <button key={opt} type="button"
-                                                  className={cn('w-full px-3 py-1 text-left text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30',
-                                                    opt === effective ? 'bg-blue-50 dark:bg-blue-950/30 font-medium text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300')}
-                                                  onClick={() => {
-                                                    setOverrides((p) => ({ ...p, [col.id]: { ...(p[col.id] ?? {}), [market]: { ...(p[col.id]?.[market] ?? {}), [srcVal]: opt } } }))
-                                                    setOpenDropdown(null)
-                                                  }}>{opt}</button>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <button type="button"
-                                            className="w-full text-left flex items-center justify-between gap-1 px-1 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 group/cell"
-                                            onClick={() => setOpenDropdown({ colId: col.id, market, srcVal })}>
-                                            {effective ? (
-                                              <>
-                                                <span className={cn('font-mono text-[11px] truncate', isOverridden && 'underline decoration-dashed decoration-violet-400')}>{effective}</span>
-                                                <span className={cn('text-[9px] flex-shrink-0', isOverridden ? 'text-violet-500' : confidenceCls(mapping?.confidence ?? 'none'))}>
-                                                  {isOverridden ? 'ovr' : confidenceLabel(mapping?.confidence ?? 'none')}
-                                                </span>
-                                              </>
-                                            ) : (
-                                              <span className="text-slate-300 dark:text-slate-600 italic text-[10px]">no match</span>
-                                            )}
-                                            <ChevronDown className="w-3 h-3 text-slate-300 flex-shrink-0 opacity-0 group-hover/cell:opacity-100" />
-                                          </button>
-                                        )}
-                                      </td>
-                                    )
-                                  })}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                      {vals.length > 0 ? (
+                        <div className="flex gap-1 flex-wrap justify-end max-w-[200px]">
+                          {vals.slice(0, 3).map((v) => (
+                            <span key={v} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded text-[10px] font-mono truncate max-w-[80px]">{v}</span>
+                          ))}
+                          {vals.length > 3 && <span className="text-[10px] text-slate-400">+{vals.length - 3}</span>}
                         </div>
-
-                        {/* Per-market schema errors for this column */}
-                        {Object.entries(result.errors).some(([m]) => selectedMarkets.has(m)) && (
-                          <div className="mt-1.5 space-y-0.5">
-                            {Object.entries(result.errors).filter(([m]) => selectedMarkets.has(m)).map(([m, msg]) => (
-                              <div key={m} className="flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
-                                <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                <span><strong>{m}:</strong> {msg}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">no values</span>
+                      )}
+                    </label>
+                  )
+                })}
+                {enumColumns.length === 0 && (
+                  <div className="px-3 py-4 text-xs text-slate-400 text-center italic">No enum columns in current view</div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl">
-          <span className="text-[11px] text-slate-400">
-            {hasResults
-              ? `${Object.keys(colResults).length} column${Object.keys(colResults).length !== 1 ? 's' : ''} · ${[...selectedMarkets].length} market${[...selectedMarkets].length !== 1 ? 's' : ''}`
-              : `${selectedColIds.size} column${selectedColIds.size !== 1 ? 's' : ''} · ${selectedMarkets.size} market${selectedMarkets.size !== 1 ? 's' : ''} selected`}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
-            {!hasResults ? (
-              <Button size="sm" onClick={handleTranslate} loading={translating}
-                disabled={!selectedColIds.size || !selectedMarkets.size}>
-                <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" />
-                Translate
-              </Button>
-            ) : (
-              <>
-                <Button size="sm" variant="ghost" onClick={() => { setColResults({}); setGlobalError(null) }}>
-                  ← Edit selection
-                </Button>
-                <Button size="sm" variant="ghost" onClick={handleTranslate} loading={translating}>
-                  Retranslate
-                </Button>
-                <Button size="sm" onClick={handleApply} disabled={Object.keys(colResults).length === 0}>
-                  Apply to drafts
-                </Button>
-              </>
+            {/* Target markets */}
+            <div>
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Target markets</p>
+              <div className="flex gap-3 flex-wrap">
+                {otherMarkets.map((m) => (
+                  <label key={m} className="flex items-center gap-1.5 cursor-pointer group">
+                    <input type="checkbox" checked={selectedMarkets.has(m)} className="w-3.5 h-3.5 accent-violet-600"
+                      onChange={(e) => setSelectedMarkets((prev) => {
+                        const next = new Set(prev); if (e.target.checked) next.add(m); else next.delete(m); return next
+                      })} />
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-violet-600">{m}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {globalError && (
+              <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-400">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{globalError}
+              </div>
             )}
           </div>
-        </div>
+        )}
 
-        {openDropdown && (
-          <div className="fixed inset-0 z-10" onClick={() => setOpenDropdown(null)} />
+        {hasResults && (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="px-5 py-2.5 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between gap-4">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {Object.keys(colResults).length} column{Object.keys(colResults).length !== 1 ? 's' : ''} translated · click any cell to override
+              </span>
+              <button type="button" className="text-[11px] text-violet-600 hover:text-violet-700 dark:text-violet-400"
+                onClick={() => { setColResults({}); setGlobalError(null) }}>← Edit selection</button>
+            </div>
+
+            {selectedCols.map((col) => {
+              const result = colResults[col.id]
+              if (!result) return null
+              const vals = valuesByCol[col.id] ?? []
+              const activeMarkets = [...selectedMarkets].filter((m) => result.mappings[m])
+              const isCollapsed = collapsedCols.has(col.id)
+              const matchCount = activeMarkets.reduce((n, m) =>
+                n + vals.filter((v) => getEffectiveValue(col.id, m, v) !== null).length, 0)
+              const totalPossible = activeMarkets.length * vals.length
+
+              return (
+                <div key={col.id}>
+                  <button type="button"
+                    className="w-full flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/30 text-left"
+                    onClick={() => setCollapsedCols((prev) => { const next = new Set(prev); next.has(col.id) ? next.delete(col.id) : next.add(col.id); return next })}>
+                    <div className="flex items-center gap-2">
+                      <ChevronDown className={cn('w-3.5 h-3.5 text-slate-400 transition-transform', isCollapsed && '-rotate-90')} />
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{col.labelEn}</span>
+                      <span className="text-[10px] font-mono text-slate-400">{col.id}</span>
+                    </div>
+                    <span className={cn('text-[10px]', matchCount === totalPossible ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500 dark:text-amber-400')}>
+                      {matchCount}/{totalPossible} matched
+                    </span>
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="px-5 pb-3">
+                      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 dark:bg-slate-800/60">
+                              <th className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 w-32">{sourceMarket}</th>
+                              {activeMarkets.map((m) => (
+                                <th key={m} className="px-3 py-1.5 text-left font-medium text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-700 last:border-r-0">{m}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {vals.map((srcVal, ri) => (
+                              <tr key={srcVal} className={ri % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-800/20'}>
+                                <td className="px-3 py-1.5 font-mono border-r border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 truncate max-w-[120px]" title={srcVal}>{srcVal}</td>
+                                {activeMarkets.map((market) => {
+                                  const mapping = result.mappings[market]?.[srcVal]
+                                  const effective = getEffectiveValue(col.id, market, srcVal)
+                                  const isOverridden = overrides[col.id]?.[market]?.[srcVal] !== undefined
+                                  const targetOpts = result.targetOptions[market] ?? []
+                                  const isOpen = openDropdown?.colId === col.id && openDropdown?.market === market && openDropdown?.srcVal === srcVal
+
+                                  return (
+                                    <td key={market} className="px-2 py-1 border-r border-b border-slate-200 dark:border-slate-700 last:border-r-0 relative">
+                                      {isOpen ? (
+                                        <div className="absolute left-0 top-0 z-20 min-w-[180px]">
+                                          <div className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto py-1">
+                                            <button type="button"
+                                              className="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 italic"
+                                              onClick={() => { setOverrides((p) => ({ ...p, [col.id]: { ...(p[col.id] ?? {}), [market]: { ...(p[col.id]?.[market] ?? {}), [srcVal]: null } } })); setOpenDropdown(null) }}>
+                                              Skip (no mapping)
+                                            </button>
+                                            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                                            {targetOpts.map((opt) => (
+                                              <button key={opt} type="button"
+                                                className={cn('w-full px-3 py-1 text-left text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30',
+                                                  opt === effective ? 'bg-blue-50 dark:bg-blue-950/30 font-medium text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300')}
+                                                onClick={() => { setOverrides((p) => ({ ...p, [col.id]: { ...(p[col.id] ?? {}), [market]: { ...(p[col.id]?.[market] ?? {}), [srcVal]: opt } } })); setOpenDropdown(null) }}>
+                                                {opt}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button type="button"
+                                          className="w-full text-left flex items-center justify-between gap-1 px-1 py-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 group/cell"
+                                          onClick={() => setOpenDropdown({ colId: col.id, market, srcVal })}>
+                                          {effective ? (
+                                            <>
+                                              <span className={cn('font-mono text-[11px] truncate', isOverridden && 'underline decoration-dashed decoration-violet-400')}>{effective}</span>
+                                              <span className={cn('text-[9px] flex-shrink-0', isOverridden ? 'text-violet-500' : confidenceCls(mapping?.confidence ?? 'none'))}>
+                                                {isOverridden ? 'ovr' : confidenceLabel(mapping?.confidence ?? 'none')}
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <span className="text-slate-300 dark:text-slate-600 italic text-[10px]">no match</span>
+                                          )}
+                                          <ChevronDown className="w-3 h-3 text-slate-300 flex-shrink-0 opacity-0 group-hover/cell:opacity-100" />
+                                        </button>
+                                      )}
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {Object.entries(result.errors).some(([m]) => selectedMarkets.has(m)) && (
+                        <div className="mt-1.5 space-y-0.5">
+                          {Object.entries(result.errors).filter(([m]) => selectedMarkets.has(m)).map(([m, msg]) => (
+                            <div key={m} className="flex items-start gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              <span><strong>{m}:</strong> {msg}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
-    </div>
+
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-800/30 rounded-b-xl">
+        <span className="text-[11px] text-slate-400">
+          {hasResults
+            ? `${Object.keys(colResults).length} column${Object.keys(colResults).length !== 1 ? 's' : ''} · ${[...selectedMarkets].length} market${[...selectedMarkets].length !== 1 ? 's' : ''}`
+            : `${selectedColIds.size} column${selectedColIds.size !== 1 ? 's' : ''} · ${selectedMarkets.size} market${selectedMarkets.size !== 1 ? 's' : ''} selected`}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+          {!hasResults ? (
+            <Button size="sm" onClick={handleTranslate} loading={translating}
+              disabled={!selectedColIds.size || !selectedMarkets.size}>
+              <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" />Translate
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => { setColResults({}); setGlobalError(null) }}>← Edit</Button>
+              <Button size="sm" variant="ghost" onClick={handleTranslate} loading={translating}>Retranslate</Button>
+              <Button size="sm" onClick={handleApply} disabled={Object.keys(colResults).length === 0}>Apply to drafts</Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {openDropdown && <div className="fixed inset-0 z-10" onClick={() => setOpenDropdown(null)} />}
+    </>
   )
 }
 
