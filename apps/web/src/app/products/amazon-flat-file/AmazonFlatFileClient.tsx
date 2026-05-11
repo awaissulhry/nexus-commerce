@@ -353,9 +353,9 @@ export default function AmazonFlatFileClient({
   // Auto row height when images toggled on or size changed
   useEffect(() => {
     if (showRowImages) {
-      // For M/L/XL the ASIN + status badge appear below the image — add extra space
-      const asinExtra = imageSize >= 48 ? 24 : 0
-      setRowHeight(imageSize + 14 + asinExtra)
+      // Row # always visible (12px) + image + padding; ASIN + status add ~28px for M/L/XL
+      const asinExtra = imageSize >= 48 ? 28 : 0
+      setRowHeight(imageSize + 24 + asinExtra)
     }
   }, [showRowImages, imageSize])
 
@@ -2501,7 +2501,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
       <td
         data-row-ri={rowIdx}
         className={cn(
-          'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rowresize select-none overflow-hidden',
+          'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rowresize select-none',
           frozenBg,
           isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
         )}
@@ -2510,10 +2510,10 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           e.currentTarget.releasePointerCapture(e.pointerId)
           onRowSelect(rowIdx)
         }}
-        style={{ cursor: 'ns-resize', width: rowHeaderWidth, minWidth: rowHeaderWidth }}>
+        style={{ cursor: 'ns-resize', width: rowHeaderWidth, minWidth: rowHeaderWidth, height: rowHeight }}>
         <div
-          className={cn('flex flex-col gap-0.5 w-full overflow-hidden', showRowImages ? 'items-center' : 'items-end')}
-          style={{ height: rowHeight, justifyContent: 'center' }}
+          className={cn('flex flex-col gap-0.5 w-full', showRowImages ? 'items-center' : 'items-end')}
+          style={{ minHeight: rowHeight, justifyContent: 'center', padding: '4px 1px' }}
         >
           {/* Product image */}
           {showRowImages && (() => {
@@ -2525,7 +2525,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
                   src={imgUrl}
                   alt=""
                   className="object-contain rounded flex-shrink-0"
-                  style={{ width: imageSize, height: imageSize }}
+                  style={{ width: imageSize, height: imageSize, maxWidth: rowHeaderWidth - 4 }}
                   draggable={false}
                 />
               )
@@ -2585,8 +2585,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
                 href={`https://www.${domain}/dp/${asin}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none block w-full truncate text-center"
+                className="text-[9px] font-mono text-blue-500 hover:text-blue-700 hover:underline leading-none block w-full truncate text-center z-10 relative"
                 title={`ASIN: ${asin} — open on ${domain}`}
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >{asin}</a>
             )
