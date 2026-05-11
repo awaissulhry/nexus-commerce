@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
+  Copy, Download, FileSpreadsheet, Loader2, Plus, RefreshCw,
   Send, Trash2, Upload, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -158,6 +158,8 @@ export default function AmazonFlatFileClient({
   const [polling, setPolling] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [copyPanelOpen, setCopyPanelOpen] = useState(false)
+  const [copying, setCopying] = useState(false)
 
   // ── Fetch known product types whenever marketplace changes ─────────
   useEffect(() => {
@@ -343,6 +345,52 @@ export default function AmazonFlatFileClient({
     })
   }, [productType, marketplace])
 
+  // ── Copy to market ─────────────────────────────────────────────────
+  const handleCopyToMarket = useCallback(async (
+    targetMarket: string,
+    colIds: Set<string>,
+  ) => {
+    if (!manifest || !rows.length) return
+    setCopying(true)
+    setCopyPanelOpen(false)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/amazon/flat-file/template?marketplace=${targetMarket}&productType=${productType}`,
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const targetManifest: Manifest = await res.json()
+
+      const STRUCTURAL = new Set([
+        'item_sku', 'product_type', 'record_action',
+        'parentage_level', 'parent_sku', 'variation_theme',
+      ])
+      const copiedRows = rows.map((row) => {
+        const newRow: Row = {
+          _rowId: `copy-${row._rowId}-${Date.now()}`,
+          _isNew: true, _dirty: true, _status: 'idle',
+        }
+        for (const key of STRUCTURAL) {
+          if (row[key] != null) newRow[key] = row[key]
+        }
+        for (const colId of colIds) {
+          if (row[colId] != null) newRow[colId] = row[colId]
+        }
+        return newRow
+      })
+
+      setMarketplace(targetMarket)
+      setManifest(targetManifest)
+      setOpenGroups(new Set(targetManifest.groups.map((g) => g.id)))
+      setRows(copiedRows)
+      setFeedId(null)
+      setFeedResults([])
+    } catch (e: any) {
+      setLoadError(e.message ?? 'Copy failed')
+    } finally {
+      setCopying(false)
+    }
+  }, [manifest, rows, productType])
+
   const exportTsv = useCallback(async () => {
     if (!manifest) return
     const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export-tsv`, {
@@ -400,6 +448,25 @@ export default function AmazonFlatFileClient({
                 </span>
                 {feedStatus !== 'DONE' && feedStatus !== 'FATAL' && (
                   <Button size="sm" variant="ghost" onClick={pollStatus} loading={polling}><RefreshCw className="w-3 h-3 mr-1" />Check</Button>
+                )}
+              </div>
+            )}
+            {manifest && rows.length > 0 && (
+              <div className="relative">
+                <Button size="sm" variant="ghost"
+                  onClick={() => setCopyPanelOpen((o) => !o)}
+                  loading={copying}
+                  className={copyPanelOpen ? 'bg-slate-100 dark:bg-slate-800' : ''}>
+                  <Copy className="w-3.5 h-3.5 mr-1.5" />Copy to market
+                </Button>
+                {copyPanelOpen && (
+                  <CopyToMarketPanel
+                    manifest={manifest}
+                    rows={rows}
+                    currentMarket={marketplace}
+                    onCopy={handleCopyToMarket}
+                    onClose={() => setCopyPanelOpen(false)}
+                  />
                 )}
               </div>
             )}
@@ -1039,6 +1106,213 @@ function EnumDropdown({ options, current, onSelect, onClose }: EnumDropdownProps
               {opt === '' ? <span className="italic opacity-60">— empty —</span> : opt}
             </div>
           ))}
+      </div>
+    </div>
+  )
+}
+
+// ── CopyToMarketPanel ──────────────────────────────────────────────────
+// Floating panel for copying rows from the current market to another.
+// Three modes: copy whole groups, exclude individual columns within a group,
+// or deselect groups entirely. Structural columns (SKU, parentage, etc.)
+// are always copied automatically.
+
+const MARKETPLACES_ALL = ['IT', 'DE', 'FR', 'ES', 'UK']
+
+// Groups that are typically market-specific — pre-deselected by default
+function isMarketSpecificGroup(id: string) {
+  return /^offer_[A-Z0-9]/.test(id) || /^selling_/.test(id) || id === 'fulfillment'
+}
+
+interface CopyPanelProps {
+  manifest: Manifest
+  rows: Row[]
+  currentMarket: string
+  onCopy: (targetMarket: string, colIds: Set<string>) => void
+  onClose: () => void
+}
+
+function CopyToMarketPanel({ manifest, rows, currentMarket, onCopy, onClose }: CopyPanelProps) {
+  const otherMarkets = MARKETPLACES_ALL.filter((m) => m !== currentMarket)
+  const [targetMarket, setTargetMarket] = useState(otherMarkets[0] ?? '')
+
+  // Group selection: default on for content groups, off for market-specific
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(
+    () => new Set(
+      manifest.groups
+        .filter((g) => !isMarketSpecificGroup(g.id))
+        .map((g) => g.id)
+    )
+  )
+  // Column-level exclusions within a selected group
+  const [excludedCols, setExcludedCols] = useState<Set<string>>(new Set())
+  // Which group is expanded to show column-level toggles
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
+
+  const selectedColIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const g of manifest.groups) {
+      if (!selectedGroups.has(g.id)) continue
+      for (const c of g.columns) {
+        if (!excludedCols.has(c.id)) ids.add(c.id)
+      }
+    }
+    return ids
+  }, [manifest, selectedGroups, excludedCols])
+
+  // Close on outside click
+  const panelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  function toggleGroup(id: string) {
+    setSelectedGroups((prev) => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+
+  function toggleCol(colId: string) {
+    setExcludedCols((prev) => {
+      const n = new Set(prev)
+      n.has(colId) ? n.delete(colId) : n.add(colId)
+      return n
+    })
+  }
+
+  return (
+    <div
+      ref={panelRef}
+      className="absolute right-0 top-full mt-1 z-50 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Copy to market
+          </div>
+          <div className="text-xs text-slate-400">
+            {rows.length} row{rows.length !== 1 ? 's' : ''} from {currentMarket}
+          </div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Target market */}
+      <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+        <div className="text-xs font-medium text-slate-500 mb-1.5">Target market</div>
+        <div className="flex gap-1">
+          {otherMarkets.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setTargetMarket(m)}
+              className={cn(
+                'text-xs font-medium px-2.5 py-1 rounded border transition-colors',
+                m === targetMarket
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400',
+              )}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Group + column selection */}
+      <div className="max-h-72 overflow-y-auto">
+        <div className="px-4 pt-2 pb-1">
+          <div className="text-xs font-medium text-slate-500">What to copy</div>
+        </div>
+        {manifest.groups.map((g) => {
+          const checked = selectedGroups.has(g.id)
+          const isExpanded = expandedGroup === g.id
+          const groupExcludedCount = g.columns.filter((c) => excludedCols.has(c.id)).length
+
+          return (
+            <div key={g.id}>
+              <div className="flex items-center gap-2 px-4 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleGroup(g.id)}
+                  className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className={cn('text-xs truncate', checked ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 line-through')}>
+                    {g.labelLocal}
+                    {g.labelEn !== g.labelLocal && (
+                      <span className="ml-1 opacity-50">({g.labelEn})</span>
+                    )}
+                  </span>
+                  {checked && groupExcludedCount > 0 && (
+                    <span className="ml-1 text-xs text-amber-500">−{groupExcludedCount}</span>
+                  )}
+                </div>
+                <span className="text-xs text-slate-400 tabular-nums flex-shrink-0">
+                  {g.columns.length - (checked ? groupExcludedCount : 0)}
+                </span>
+                {checked && (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedGroup(isExpanded ? null : g.id)}
+                    className="text-slate-400 hover:text-slate-600 flex-shrink-0"
+                    title="Expand to exclude specific columns"
+                  >
+                    <ChevronDown className={cn('w-3 h-3 transition-transform', isExpanded && 'rotate-180')} />
+                  </button>
+                )}
+              </div>
+
+              {/* Column-level toggles */}
+              {isExpanded && checked && (
+                <div className="ml-8 mr-4 mb-1 bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2 grid grid-cols-1 gap-0.5 max-h-36 overflow-y-auto">
+                  {g.columns.map((c) => {
+                    const excluded = excludedCols.has(c.id)
+                    return (
+                      <label key={c.id} className="flex items-center gap-1.5 cursor-pointer group/col">
+                        <input
+                          type="checkbox"
+                          checked={!excluded}
+                          onChange={() => toggleCol(c.id)}
+                          className="w-3 h-3 accent-blue-600 flex-shrink-0"
+                        />
+                        <span className={cn('text-xs truncate', excluded ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-400')}>
+                          {c.labelLocal}
+                          {c.required && <span className="ml-0.5 text-red-400">*</span>}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+        <div className="text-xs text-slate-400">
+          {selectedColIds.size} column{selectedColIds.size !== 1 ? 's' : ''} → {targetMarket}
+        </div>
+        <Button
+          size="sm"
+          onClick={() => onCopy(targetMarket, selectedColIds)}
+          disabled={!targetMarket || selectedColIds.size === 0}
+        >
+          <Copy className="w-3.5 h-3.5 mr-1.5" />
+          Copy {rows.length} row{rows.length !== 1 ? 's' : ''}
+        </Button>
       </div>
     </div>
   )
