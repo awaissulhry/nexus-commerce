@@ -68,6 +68,14 @@ interface FeedResult {
   message: string
 }
 
+interface FeedEntry {
+  market: string
+  feedId: string
+  status: string | null
+  results: FeedResult[]
+  error?: string
+}
+
 // ── Constants ──────────────────────────────────────────────────────────
 
 const MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
@@ -170,11 +178,10 @@ export default function AmazonFlatFileClient({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [activeCell, setActiveCell] = useState<{ rowId: string; colId: string } | null>(null)
 
-  const [feedId, setFeedId] = useState<string | null>(null)
-  const [feedStatus, setFeedStatus] = useState<string | null>(null)
-  const [feedResults, setFeedResults] = useState<FeedResult[]>([])
+  const [feedEntries, setFeedEntries] = useState<FeedEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [polling, setPolling] = useState(false)
+  const [submitPanelOpen, setSubmitPanelOpen] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [copyPanelOpen, setCopyPanelOpen] = useState(false)
@@ -372,8 +379,7 @@ export default function AmazonFlatFileClient({
     if (!pt.trim()) return
     setLoading(true)
     setLoadError(null)
-    setFeedId(null)
-    setFeedResults([])
+    setFeedEntries([])
     const backend = getBackendUrl()
     const qs = new URLSearchParams({ marketplace: mp, productType: pt, ...(force ? { force: '1' } : {}) })
     const rowsQs = new URLSearchParams({ marketplace: mp, productType: pt })
@@ -445,49 +451,83 @@ export default function AmazonFlatFileClient({
 
   // ── Submit ─────────────────────────────────────────────────────────
 
-  const handleSubmit = useCallback(async () => {
-    const toSend = rows.filter((r) => r._dirty || r._isNew)
-    if (!toSend.length) return
+  const handleSubmitToMarkets = useCallback(async (markets: Set<string>) => {
     setSubmitting(true)
-    setFeedId(null); setFeedResults([]); setFeedStatus(null)
-    setRows((prev) => prev.map((r) => r._dirty || r._isNew ? { ...r, _status: 'pending' } : r))
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: toSend, marketplace, expandedFields: manifest?.expandedFields ?? {} }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Submit failed')
-      setFeedId(data.feedId)
-      setFeedStatus('IN_QUEUE')
-      setRows((prev) => prev.map((r) => r._dirty || r._isNew ? { ...r, _dirty: false, _isNew: false, _status: 'pending' } : r))
-    } catch (e: any) {
-      setRows((prev) => prev.map((r) => r._status === 'pending' ? { ...r, _status: 'idle', _dirty: true } : r))
-      setLoadError(e.message ?? 'Submit failed')
-    } finally {
-      setSubmitting(false)
-    }
-  }, [rows, marketplace])
+    setSubmitPanelOpen(false)
+    setFeedEntries([])
 
-  const pollStatus = useCallback(async () => {
-    if (!feedId) return
+    if (markets.has(marketplace)) {
+      setRows((prev) => prev.map((r) => r._dirty || r._isNew ? { ...r, _status: 'pending' } : r))
+    }
+
+    const settled = await Promise.allSettled(
+      [...markets].map(async (mp) => {
+        let toSend: Row[]
+        if (mp === marketplace) {
+          toSend = rows.filter((r) => r._dirty || r._isNew)
+        } else {
+          const key = rowStorageKey(mp, productType)
+          try {
+            const raw = localStorage.getItem(key)
+            const saved: Row[] = raw ? JSON.parse(raw) : []
+            toSend = saved.filter((r) => r._dirty || r._isNew)
+          } catch { toSend = [] }
+        }
+        if (!toSend.length) return { mp, feedId: '', skipped: true }
+        const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: toSend, marketplace: mp, expandedFields: manifest?.expandedFields ?? {} }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(`[${mp}] ${data.error ?? 'Submit failed'}`)
+        return { mp, feedId: data.feedId, skipped: false }
+      })
+    )
+
+    const entries: FeedEntry[] = []
+    const errors: string[] = []
+    for (const result of settled) {
+      if (result.status === 'fulfilled' && !result.value.skipped) {
+        entries.push({ market: result.value.mp, feedId: result.value.feedId, status: 'IN_QUEUE', results: [] })
+      } else if (result.status === 'rejected') {
+        errors.push(result.reason?.message ?? 'Submit failed')
+      }
+    }
+    setFeedEntries(entries)
+    if (errors.length) setLoadError(errors.join(' · '))
+
+    if (markets.has(marketplace)) {
+      setRows((prev) => prev.map((r) =>
+        r._dirty || r._isNew ? { ...r, _dirty: false, _isNew: false, _status: 'pending' } : r
+      ))
+    }
+    setSubmitting(false)
+  }, [rows, marketplace, productType, manifest])
+
+  const pollAllFeeds = useCallback(async () => {
+    if (!feedEntries.length) return
     setPolling(true)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/feeds/${feedId}`)
-      const data = await res.json()
-      setFeedStatus(data.processingStatus)
-      if (data.processingStatus === 'DONE') {
-        setFeedResults(data.results ?? [])
-        const bySkU = new Map<string, FeedResult>((data.results as FeedResult[]).map((r) => [r.sku, r]))
-        setRows((prev) => prev.map((r) => {
-          const res = bySkU.get(r.item_sku as string)
-          return res ? { ...r, _status: res.status as any, _feedMessage: res.message } : r
-        }))
-      }
+      const updated = await Promise.all(
+        feedEntries.map(async (entry) => {
+          if (entry.status === 'DONE' || entry.status === 'FATAL') return entry
+          const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/feeds/${entry.feedId}`)
+          const data = await res.json()
+          if (data.processingStatus === 'DONE' && entry.market === marketplace) {
+            const bySkU = new Map<string, FeedResult>((data.results as FeedResult[]).map((r: FeedResult) => [r.sku, r]))
+            setRows((prev) => prev.map((r) => {
+              const fr = bySkU.get(r.item_sku as string)
+              return fr ? { ...r, _status: fr.status as any, _feedMessage: fr.message } : r
+            }))
+          }
+          return { ...entry, status: data.processingStatus, results: data.results ?? [] }
+        })
+      )
+      setFeedEntries(updated)
     } catch (e: any) { setLoadError(e.message) }
     finally { setPolling(false) }
-  }, [feedId])
+  }, [feedEntries, marketplace])
 
   // ── Import / Export ────────────────────────────────────────────────
 
@@ -547,8 +587,7 @@ export default function AmazonFlatFileClient({
       setMarketplace(targetMarket)
       setManifest(targetManifest)
       setRows(copiedRows)
-      setFeedId(null)
-      setFeedResults([])
+      setFeedEntries([])
     } catch (e: any) {
       setLoadError(e.message ?? 'Copy failed')
     } finally {
@@ -664,15 +703,24 @@ export default function AmazonFlatFileClient({
             {newCount > 0 && <Badge variant="info">{newCount} new rows</Badge>}
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {feedId && (
-              <div className="flex items-center gap-1.5">
-                <span className={cn('text-xs font-medium px-2 py-1 rounded-full',
-                  feedStatus === 'DONE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                  : feedStatus === 'FATAL' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')}>
-                  Feed: {feedStatus ?? '…'}
-                </span>
-                {feedStatus !== 'DONE' && feedStatus !== 'FATAL' && (
-                  <Button size="sm" variant="ghost" onClick={pollStatus} loading={polling}><RefreshCw className="w-3 h-3 mr-1" />Check</Button>
+            {feedEntries.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {feedEntries.map((e) => (
+                  <span key={e.market} className={cn(
+                    'text-xs font-medium px-2 py-0.5 rounded-full border',
+                    e.status === 'DONE'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
+                      : e.status === 'FATAL'
+                      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
+                      : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+                  )}>
+                    {e.market}: {e.status ?? '…'}
+                  </span>
+                ))}
+                {feedEntries.some((e) => e.status !== 'DONE' && e.status !== 'FATAL') && (
+                  <Button size="sm" variant="ghost" onClick={pollAllFeeds} loading={polling}>
+                    <RefreshCw className="w-3 h-3 mr-1" />Check
+                  </Button>
                 )}
               </div>
             )}
@@ -722,9 +770,27 @@ export default function AmazonFlatFileClient({
             <Button size="sm" variant="ghost" onClick={exportTsv} disabled={!rows.length}>
               <Download className="w-3.5 h-3.5 mr-1.5" />Export TSV
             </Button>
-            <Button size="sm" onClick={handleSubmit} disabled={!dirtyRows.length || submitting || loading} loading={submitting}>
-              <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{dirtyRows.length > 0 && ` (${dirtyRows.length})`}
-            </Button>
+            <div className="relative">
+              <Button
+                size="sm"
+                onClick={() => setSubmitPanelOpen((o) => !o)}
+                disabled={submitting || loading}
+                loading={submitting}
+                className={submitPanelOpen ? 'bg-blue-700' : ''}
+              >
+                <Send className="w-3.5 h-3.5 mr-1.5" />Submit to Amazon{dirtyRows.length > 0 && ` (${dirtyRows.length})`}
+              </Button>
+              {submitPanelOpen && (
+                <SubmitToAmazonPanel
+                  currentMarket={marketplace}
+                  productType={productType}
+                  familyId={familyId}
+                  currentDirtyRows={dirtyRows}
+                  onSubmit={handleSubmitToMarkets}
+                  onClose={() => setSubmitPanelOpen(false)}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -1078,24 +1144,33 @@ export default function AmazonFlatFileClient({
       )}
 
       {/* ── Feed results ─────────────────────────────────────── */}
-      {feedResults.length > 0 && (
+      {feedEntries.some((e) => e.results.length > 0) && (
         <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Processing report — {feedResults.filter((r) => r.status === 'success').length} ok,{' '}
-              {feedResults.filter((r) => r.status === 'error').length} errors
-            </span>
-          </div>
-          <div className="max-h-28 overflow-y-auto text-xs space-y-1">
-            {feedResults.filter((r) => r.status === 'error').map((r) => (
-              <div key={r.sku} className="flex items-start gap-2 text-red-600 dark:text-red-400">
-                <X className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                <span className="font-mono font-medium">{r.sku}</span>
-                <span>{r.message}</span>
+          {feedEntries.filter((e) => e.results.length > 0).map((e) => {
+            const ok = e.results.filter((r) => r.status === 'success').length
+            const err = e.results.filter((r) => r.status === 'error').length
+            return (
+              <div key={e.market} className="mb-2 last:mb-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {e.market} — {ok} ok, {err} error{err !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {err > 0 && (
+                  <div className="max-h-24 overflow-y-auto text-xs space-y-0.5 pl-6">
+                    {e.results.filter((r) => r.status === 'error').map((r) => (
+                      <div key={r.sku} className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                        <X className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <span className="font-mono font-medium">{r.sku}</span>
+                        <span>{r.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -1866,6 +1941,115 @@ function FetchFromAmazonPanel({ selectedCount, currentMarket, onFetch, onClose }
           <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />
           Fetch {selectedCount} SKU{selectedCount !== 1 ? 's' : ''}
           {markets.size > 1 ? ` × ${markets.size} markets` : ` (${[...markets][0]})`}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ── SubmitToAmazonPanel ────────────────────────────────────────────────
+// Market selector for multi-market submit. Shows dirty row count per
+// market (current market from state, others from localStorage draft).
+
+interface SubmitPanelProps {
+  currentMarket: string
+  productType: string
+  familyId?: string
+  currentDirtyRows: Row[]
+  onSubmit: (markets: Set<string>) => void
+  onClose: () => void
+}
+
+function SubmitToAmazonPanel({
+  currentMarket, productType, familyId, currentDirtyRows, onSubmit, onClose,
+}: SubmitPanelProps) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set([currentMarket]))
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Compute dirty-row counts per market from localStorage (non-current markets)
+  useEffect(() => {
+    const out: Record<string, number> = {}
+    for (const mp of ALL_MARKETS) {
+      if (mp === currentMarket) { out[mp] = currentDirtyRows.length; continue }
+      try {
+        const key = familyId
+          ? `ff-rows-${mp.toUpperCase()}-${productType.toUpperCase()}-family-${familyId}`
+          : `ff-rows-${mp.toUpperCase()}-${productType.toUpperCase()}`
+        const saved: Row[] = JSON.parse(localStorage.getItem(key) ?? '[]')
+        out[mp] = saved.filter((r) => r._dirty || r._isNew).length
+      } catch { out[mp] = 0 }
+    }
+    setCounts(out)
+  }, [currentMarket, productType, familyId, currentDirtyRows.length])
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  function toggle(mp: string) {
+    setSelected((prev) => { const n = new Set(prev); n.has(mp) ? n.delete(mp) : n.add(mp); return n })
+  }
+
+  const totalRows = [...selected].reduce((s, mp) => s + (counts[mp] ?? 0), 0)
+
+  return (
+    <div
+      ref={panelRef}
+      className="absolute right-0 top-full mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
+    >
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Submit to Amazon</div>
+          <div className="text-xs text-slate-400">Select which markets to submit</div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+      </div>
+
+      <div className="px-4 py-3 space-y-2.5">
+        {ALL_MARKETS.map((mp) => {
+          const count = counts[mp] ?? 0
+          const isCurrent = mp === currentMarket
+          const checked = selected.has(mp)
+          return (
+            <label key={mp} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(mp)}
+                className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0"
+              />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+                {mp}
+                {isCurrent && <span className="ml-1.5 text-xs font-normal text-slate-400">current</span>}
+              </span>
+              <span className={cn(
+                'text-xs tabular-nums px-1.5 py-0.5 rounded font-medium',
+                count > 0
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600',
+              )}>
+                {count} unsaved
+              </span>
+            </label>
+          )
+        })}
+      </div>
+
+      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+        <div className="text-xs text-slate-400">
+          {totalRows} row{totalRows !== 1 ? 's' : ''} · {selected.size} market{selected.size !== 1 ? 's' : ''}
+        </div>
+        <Button
+          size="sm"
+          onClick={() => onSubmit(selected)}
+          disabled={selected.size === 0 || totalRows === 0}
+        >
+          <Send className="w-3.5 h-3.5 mr-1.5" />Submit
         </Button>
       </div>
     </div>
