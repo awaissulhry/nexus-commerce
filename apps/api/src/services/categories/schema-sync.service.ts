@@ -121,34 +121,6 @@ export class CategorySchemaService {
     })
   }
 
-  private async fetchRequirementsFieldIds(
-    sp: any,
-    query: SchemaQuery,
-    marketplaceId: string,
-    requirements: 'LISTING_PRODUCT_ONLY' | 'LISTING_OFFER_ONLY',
-  ): Promise<string[] | null> {
-    try {
-      const env = (await sp.callAPI({
-        operation: 'getDefinitionsProductType',
-        endpoint: 'productTypeDefinitions',
-        version: '2020-09-01',
-        path: { productType: query.productType },
-        query: {
-          marketplaceIds: [marketplaceId],
-          requirements,
-          locale: amazonLocale(query.marketplace),
-        },
-      })) as AmazonProductTypeMeta
-      if (!env?.schema?.link?.resource) return null
-      const res = await fetch(env.schema.link.resource)
-      if (!res.ok) return null
-      const schema = await res.json()
-      return Object.keys((schema as any).properties ?? {})
-    } catch {
-      return null
-    }
-  }
-
   private async fetchAndCacheAmazon(query: SchemaQuery) {
     if (!this.amazon.isConfigured()) {
       throw new Error(
@@ -194,17 +166,6 @@ export class CategorySchemaService {
       schemaDefinition.__propertyGroups = envelope.propertyGroups
     }
 
-    // Fetch LISTING_PRODUCT_ONLY + LISTING_OFFER_ONLY schemas in parallel
-    // so the flat-file editor can gray out fields that don't apply to a
-    // row's parentage level. We store only the property key lists, not the
-    // full schema, to keep the DB payload small.
-    const [productOnlyFields, offerOnlyFields] = await Promise.all([
-      this.fetchRequirementsFieldIds(sp, query, marketplaceId, 'LISTING_PRODUCT_ONLY'),
-      this.fetchRequirementsFieldIds(sp, query, marketplaceId, 'LISTING_OFFER_ONLY'),
-    ])
-    if (productOnlyFields) schemaDefinition.__productOnlyFields = productOnlyFields
-    if (offerOnlyFields) schemaDefinition.__offerOnlyFields = offerOnlyFields
-
     const schemaVersion = envelope.productTypeVersion?.version ?? 'unknown'
     const variationThemes = extractVariationThemes(schemaDefinition)
 
@@ -221,12 +182,11 @@ export class CategorySchemaService {
       },
     })
     if (existing) {
-      // Update schemaDefinition when newly-embedded keys are missing from
-      // the stored version (schemas cached before FF.10/FF.27 won't have them).
-      const existingDef = (existing.schemaDefinition as any) ?? {}
+      // Also write schemaDefinition when __propertyGroups is now available
+      // but wasn't stored yet (schemas cached before FF.10 won't have it).
       const needsDefinitionUpdate =
-        (envelope.propertyGroups && !existingDef.__propertyGroups) ||
-        (schemaDefinition.__productOnlyFields !== undefined && !existingDef.__productOnlyFields)
+        envelope.propertyGroups &&
+        !(existing.schemaDefinition as any)?.__propertyGroups
 
       return this.prisma.categorySchema.update({
         where: { id: existing.id },

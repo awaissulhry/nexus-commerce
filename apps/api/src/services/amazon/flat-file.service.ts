@@ -76,16 +76,6 @@ export interface FlatFileManifest {
    * Used by buildJsonFeedBody to reassemble multi-instance columns into arrays.
    */
   expandedFields: Record<string, string>
-  /**
-   * Schema field IDs that exist only in LISTING_PRODUCT_ONLY (parent rows).
-   * Columns for these fields are grayed out on child/variant rows.
-   */
-  productExclusiveFields: string[]
-  /**
-   * Schema field IDs that exist only in LISTING_OFFER_ONLY (child/offer rows).
-   * Columns for these fields are grayed out on parent rows.
-   */
-  offerExclusiveFields: string[]
 }
 
 export interface FlatFileRow {
@@ -522,13 +512,6 @@ export class AmazonFlatFileService {
     const properties = (def.properties ?? {}) as Record<string, any>
     const requiredSet = new Set<string>(Array.isArray(def.required) ? def.required : [])
 
-    // Parent/child field graying — compute exclusive field sets.
-    // productOnlyFields: present only in LISTING_PRODUCT_ONLY → gray for child rows.
-    // offerOnlyFields: present only in LISTING_OFFER_ONLY → gray for parent rows.
-    const rawProductOnly = new Set<string>((def.__productOnlyFields as string[] | undefined) ?? [])
-    const rawOfferOnly   = new Set<string>((def.__offerOnlyFields  as string[] | undefined) ?? [])
-    const productExclusiveFields = [...rawProductOnly].filter((f) => !rawOfferOnly.has(f))
-    const offerExclusiveFields   = [...rawOfferOnly].filter((f) => !rawProductOnly.has(f))
 
     const lang = (LANGUAGE_TAG_MAP[mp] ?? 'en_GB') as LangTag
     const schemaLabels = buildSchemaLabels(properties)
@@ -716,8 +699,6 @@ export class AmazonFlatFileService {
       fetchedAt: new Date().toISOString(),
       groups: [infraGroup, variationsGroup, ...schemaGroups],
       expandedFields,
-      productExclusiveFields,
-      offerExclusiveFields,
     }
   }
 
