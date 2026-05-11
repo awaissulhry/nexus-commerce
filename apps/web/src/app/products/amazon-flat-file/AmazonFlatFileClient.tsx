@@ -688,6 +688,21 @@ export default function AmazonFlatFileClient({
     URL.revokeObjectURL(url)
   }, [manifest, rows, productType, marketplace])
 
+  // ── Save / Discard ────────────────────────────────────────────────
+  const [saveFlash, setSaveFlash] = useState(false)
+
+  const handleSave = useCallback(() => {
+    saveRows(marketplace, productType, rows)
+    setSaveFlash(true)
+    setTimeout(() => setSaveFlash(false), 2000)
+  }, [rows, marketplace, productType])
+
+  const handleDiscard = useCallback(() => {
+    if (!confirm('Discard all local changes? Your edits will be lost and rows will reload from the server.')) return
+    try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
+    void loadData(marketplace, productType, false)
+  }, [marketplace, productType, loadData])
+
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
@@ -705,9 +720,36 @@ export default function AmazonFlatFileClient({
         <div className="px-3 h-10 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
 
           {/* Back */}
-          <IconButton aria-label="Back" size="sm" onClick={() => router.push('/products')} className="!h-auto !w-auto p-1 -ml-0.5 mr-0.5 flex-shrink-0">
+          <IconButton aria-label="Back" size="sm" onClick={() => router.push('/products')} className="!h-auto !w-auto p-1 -ml-0.5 flex-shrink-0">
             <ChevronLeft className="w-4 h-4" />
           </IconButton>
+
+          {/* ── Menus — left side ── */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <MenuDropdown label="File" items={[
+              { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
+              { label: 'Export TSV', icon: <Download className="w-3.5 h-3.5" />, onClick: exportTsv, disabled: !rows.length },
+              { separator: true },
+              { label: 'Reload rows from server', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: !productType || !rows.length,
+                onClick: () => {
+                  if (!confirm('Reload rows from server? Your unsaved local edits will be lost.')) return
+                  try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
+                  void loadData(marketplace, productType, false)
+                }},
+            ]} />
+            <MenuDropdown label="Edit" items={[
+              { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
+              { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: !future.length, shortcut: '⌘⇧Z' },
+              { separator: true },
+              { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setCopyPanelOpen((o) => !o), disabled: !manifest || !rows.length },
+              { separator: true },
+              { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
+              { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
+            ]} />
+          </div>
+
+          {/* Separator */}
+          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
 
           {/* Title + status badges */}
           <FileSpreadsheet className="w-4 h-4 text-orange-500 flex-shrink-0" />
@@ -723,35 +765,6 @@ export default function AmazonFlatFileClient({
 
           {/* Flex spacer */}
           <div className="flex-1 min-w-0" />
-
-          {/* ── Menu bar ── */}
-          <div className="flex items-center gap-0.5">
-            {/* File menu */}
-            <MenuDropdown label="File" items={[
-              { label: 'Import TSV…', icon: <Upload className="w-3.5 h-3.5" />, onClick: () => fileInputRef.current?.click() },
-              { label: 'Export TSV', icon: <Download className="w-3.5 h-3.5" />, onClick: exportTsv, disabled: !rows.length },
-              { separator: true },
-              { label: 'Reload rows from server', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: !productType || !rows.length,
-                onClick: () => {
-                  if (!confirm('Reload rows from server? Your unsaved local edits will be lost.')) return
-                  try { localStorage.removeItem(rowStorageKey(marketplace, productType)) } catch {}
-                  void loadData(marketplace, productType, false)
-                }},
-            ]} />
-            {/* Edit menu */}
-            <MenuDropdown label="Edit" items={[
-              { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: !history.length, shortcut: '⌘Z' },
-              { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: !future.length, shortcut: '⌘⇧Z' },
-              { separator: true },
-              { label: 'Copy to market…', icon: <Copy className="w-3.5 h-3.5" />, onClick: () => setCopyPanelOpen((o) => !o), disabled: !manifest || !rows.length },
-              { separator: true },
-              { label: 'Reset column widths', onClick: () => { setColWidths({}); try { localStorage.removeItem('ff-col-widths') } catch {} }, disabled: !Object.keys(colWidths).length },
-              { label: 'Reset row height', onClick: () => { setRowHeight(28); try { localStorage.setItem('ff-row-height', '28') } catch {} }, disabled: rowHeight === 28 },
-            ]} />
-          </div>
-
-          {/* Separator */}
-          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
           {/* Hidden file input for Import */}
           <input ref={fileInputRef} type="file" accept=".txt,.tsv,.csv,.xlsm,.xlsx" className="hidden"
@@ -801,6 +814,25 @@ export default function AmazonFlatFileClient({
                 onCopy={handleCopyToMarket} onClose={() => setCopyPanelOpen(false)} />
             </div>
           )}
+
+          {/* Separator before save/discard/submit */}
+          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
+
+          {/* Discard */}
+          <Button size="sm" variant="ghost"
+            onClick={handleDiscard}
+            disabled={!dirtyRows.length || loading}
+            className="text-slate-500 hover:text-red-600 dark:hover:text-red-400">
+            Discard
+          </Button>
+
+          {/* Save */}
+          <Button size="sm" variant="ghost"
+            onClick={handleSave}
+            disabled={loading}
+            className={saveFlash ? 'text-emerald-600 dark:text-emerald-400' : ''}>
+            {saveFlash ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Saved</> : 'Save'}
+          </Button>
 
           {/* Submit to Amazon */}
           <div className="relative">
