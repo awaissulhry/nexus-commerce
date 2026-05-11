@@ -205,7 +205,7 @@ function findEnumNode(node: Record<string, any>, depth = 0): string[] {
  *   fieldId → string[]            e.g. "target_gender" → ["Female","Male","Unisex"]
  *   fieldId.subProp → string[]    e.g. "closure.type" → ["Button","Drawstring",...]
  */
-function buildSchemaEnums(properties: Record<string, any>): Record<string, string[]> {
+export function buildSchemaEnums(properties: Record<string, any>): Record<string, string[]> {
   const result: Record<string, string[]> = {}
   const SKIP_SUB = new Set(['marketplace_id', 'language_tag', 'value'])
 

@@ -3,12 +3,13 @@
  *
  * Endpoints that power the /products/amazon-flat-file page:
  *
- *   GET  /api/amazon/flat-file/product-types — known product types for marketplace
- *   GET  /api/amazon/flat-file/template      — column manifest from live schema
- *   GET  /api/amazon/flat-file/rows          — existing products as pre-filled rows
- *   POST /api/amazon/flat-file/submit        — rows → JSON_LISTINGS_FEED → feedId
- *   GET  /api/amazon/flat-file/feeds/:id     — poll feed status + processing report
- *   POST /api/amazon/flat-file/parse-tsv     — upload TSV → parsed rows
+ *   GET  /api/amazon/flat-file/product-types    — known product types for marketplace
+ *   GET  /api/amazon/flat-file/template         — column manifest from live schema
+ *   GET  /api/amazon/flat-file/rows             — existing products as pre-filled rows
+ *   POST /api/amazon/flat-file/submit           — rows → JSON_LISTINGS_FEED → feedId
+ *   GET  /api/amazon/flat-file/feeds/:id        — poll feed status + processing report
+ *   POST /api/amazon/flat-file/parse-tsv        — upload TSV → parsed rows
+ *   POST /api/amazon/flat-file/translate-values — cross-market enum value mapping via AI
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -19,6 +20,7 @@ import {
   AmazonFlatFileService,
   MARKETPLACE_ID_MAP,
 } from '../services/amazon/flat-file.service.js'
+import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -412,6 +414,51 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.send(tsv)
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? 'Export failed' })
+    }
+  })
+
+  // ── POST /api/amazon/flat-file/translate-values ─────────────────────
+  // Cross-market enum value mapping via constrained AI translation.
+  // Takes a column's source values from one market and finds the
+  // semantically equivalent options in each target market's schema.
+  fastify.post<{
+    Body: {
+      sourceMarket: string
+      productType: string
+      colId: string
+      colLabelEn?: string
+      values: string[]
+      targetMarkets: string[]
+    }
+  }>('/amazon/flat-file/translate-values', async (request, reply) => {
+    const { sourceMarket, productType, colId, colLabelEn, values, targetMarkets } = request.body
+
+    if (!sourceMarket || !productType || !colId) {
+      return reply.code(400).send({ error: 'sourceMarket, productType, and colId are required' })
+    }
+    if (!Array.isArray(values) || values.length === 0) {
+      return reply.code(400).send({ error: 'values must be a non-empty array' })
+    }
+    if (values.length > 50) {
+      return reply.code(400).send({ error: 'Max 50 values per request' })
+    }
+    if (!Array.isArray(targetMarkets) || targetMarkets.length === 0) {
+      return reply.code(400).send({ error: 'targetMarkets must be a non-empty array' })
+    }
+
+    try {
+      const result = await translateEnumValues(prisma, {
+        sourceMarket: sourceMarket.toUpperCase(),
+        productType: productType.toUpperCase(),
+        colId,
+        colLabelEn,
+        values,
+        targetMarkets: targetMarkets.map((m) => m.toUpperCase()),
+      })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error(err, 'flat-file/translate-values failed')
+      return reply.code(500).send({ error: err?.message ?? 'Translation failed' })
     }
   })
 }
