@@ -1765,7 +1765,8 @@ export default function AmazonFlatFileClient({
                     <th key={`en-${col.id}`}
                       style={{ minWidth: w, width: w, cursor: 'pointer', ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
                       className={cn('relative group/th px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none hover:bg-blue-50/50 dark:hover:bg-blue-950/10', c.text,
-                        col.required && 'font-bold')}
+                        col.required && 'font-bold',
+                        colIdx < frozenColCount && 'bg-white dark:bg-slate-900')}
                       title={col.description}
                       onClick={() => {
                         const maxRi = displayRows.length - 1
@@ -1825,7 +1826,8 @@ export default function AmazonFlatFileClient({
                   return (
                     <th key={`it-${col.id}`}
                       style={{ minWidth: w, width: w, ...(colIdx < frozenColCount ? { position: 'sticky' as const, left: stickyLeftByColIdx[colIdx] ?? 0, zIndex: 25 } : {}) }}
-                      className="px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic">
+                      className={cn('px-2 py-0.5 text-left text-xs font-normal border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap text-slate-400 dark:text-slate-500 italic',
+                        colIdx < frozenColCount && 'bg-white dark:bg-slate-900')}>
                       {col.labelLocal}
                       {col.maxLength != null && (
                         <span className="ml-1.5 not-italic font-mono text-[10px] text-slate-300 dark:text-slate-600">
