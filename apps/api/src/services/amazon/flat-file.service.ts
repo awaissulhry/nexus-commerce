@@ -512,15 +512,16 @@ export class AmazonFlatFileService {
     const properties = (def.properties ?? {}) as Record<string, any>
     const requiredSet = new Set<string>(Array.isArray(def.required) ? def.required : [])
 
-    const rawThemes = (cached.variationThemes as any)?.themes ?? []
-    const variationThemes: string[] = Array.isArray(rawThemes) ? rawThemes.map(String) : []
-
     const lang = (LANGUAGE_TAG_MAP[mp] ?? 'en_GB') as LangTag
     const schemaLabels = buildSchemaLabels(properties)
     const schemaEnums = buildSchemaEnums(properties)
 
     const ll = (id: string, fallbackEn: string): string =>
       schemaLabels[id] ?? FIXED_FIELD_LABELS[id]?.[lang] ?? fallbackEn
+
+    // Variation themes come from the schema enum — same source as every other
+    // enum field. The separately-stored variationThemes column is redundant now.
+    const variationThemes: string[] = schemaEnums['variation_theme'] ?? []
 
     // ── Group 1: Infrastructure (fixed — not in Amazon's schema) ─────────
     const infraGroup: FlatFileColumnGroup = {
@@ -549,7 +550,10 @@ export class AmazonFlatFileService {
       ],
     }
 
-    // ── Group 2: Variations (fixed structure + schema-derived enums) ──────
+    // ── Group 2: Variations — all three columns are schema-derived ────────
+    // parentage_level enum, variation_theme enum, and parent_sku (sub-prop of
+    // child_parent_sku_relationship) all come from schemaEnums, so they
+    // automatically reflect the correct values for any marketplace + product type.
     const parentageOpts = schemaEnums['parentage_level'] ?? ['Child', 'Parent']
     const variationsGroup: FlatFileColumnGroup = {
       id: 'variations',
@@ -560,7 +564,8 @@ export class AmazonFlatFileService {
         {
           id: 'parentage_level',
           fieldRef: 'parentage_level[marketplace_id]#1.value',
-          labelEn: 'Parent/Child', labelLocal: ll('parentage_level', 'Parentage Level'),
+          labelEn: 'Parent/Child',
+          labelLocal: schemaLabels['parentage_level'] ?? ll('parentage_level', 'Parentage Level'),
           required: false, kind: 'enum', width: 130,
           options: ['', ...parentageOpts],
           description: 'Blank = standalone; Parent = non-buyable variation parent; Child = variant',
@@ -568,17 +573,21 @@ export class AmazonFlatFileService {
         {
           id: 'parent_sku',
           fieldRef: 'child_parent_sku_relationship[marketplace_id]#1.parent_sku',
-          labelEn: 'Parent SKU', labelLocal: ll('parent_sku', 'Parent SKU'),
+          labelEn: 'Parent SKU',
+          labelLocal: schemaLabels['child_parent_sku_relationship'] ?? ll('parent_sku', 'Parent SKU'),
           required: false, kind: 'text', width: 180,
           description: 'Required when parentage_level = Child',
         },
         {
           id: 'variation_theme',
-          fieldRef: 'variation_theme#1.name',
-          labelEn: 'Variation Theme', labelLocal: ll('variation_theme', 'Variation Theme'),
-          required: false, kind: 'enum', width: 200,
+          fieldRef: 'variation_theme[marketplace_id]#1.name',
+          labelEn: 'Variation Theme',
+          labelLocal: schemaLabels['variation_theme'] ?? ll('variation_theme', 'Variation Theme'),
+          required: false,
+          kind: variationThemes.length > 0 ? 'enum' : 'text',
           options: variationThemes.length > 0 ? ['', ...variationThemes] : undefined,
-          description: 'Required on Parent rows. Values from live schema.',
+          width: 200,
+          description: 'Required on Parent rows. Values from live schema for this product type.',
         },
       ],
     }
