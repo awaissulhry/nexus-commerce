@@ -70,6 +70,12 @@ export interface FlatFileManifest {
   variationThemes: string[]
   fetchedAt: string
   groups: FlatFileColumnGroup[]
+  /**
+   * Maps expanded column IDs back to their base schema field ID.
+   * e.g. { "bullet_point_1": "bullet_point", "material_2": "material" }
+   * Used by buildJsonFeedBody to reassemble multi-instance columns into arrays.
+   */
+  expandedFields: Record<string, string>
 }
 
 export interface FlatFileRow {
@@ -290,7 +296,7 @@ function schemaFieldToColumn(
 }
 
 /** Best-effort Amazon attribute path for TSV export. */
-function buildFieldRef(fieldId: string): string {
+function buildFieldRef(fieldId: string, index = 1): string {
   const LOCALIZED = new Set([
     'item_name', 'brand', 'product_description', 'bullet_point',
     'generic_keyword', 'special_feature', 'item_type_name',
@@ -298,10 +304,47 @@ function buildFieldRef(fieldId: string): string {
     'lining_description', 'material',
   ])
   if (LOCALIZED.has(fieldId))
-    return `${fieldId}[marketplace_id][language_tag]#1.value`
+    return `${fieldId}[marketplace_id][language_tag]#${index}.value`
   if (fieldId.includes('image_locator'))
-    return `${fieldId}[marketplace_id]#1.media_location`
-  return `${fieldId}[marketplace_id]#1.value`
+    return `${fieldId}[marketplace_id]#${index}.media_location`
+  return `${fieldId}[marketplace_id]#${index}.value`
+}
+
+/**
+ * Expand a schema field into 1 or N columns.
+ * Fields with `maxUniqueItems` between 2 and 20 (inclusive) get expanded into
+ * that many numbered columns — matching Amazon's flat-file structure where
+ * bullet_point becomes Bullet Point 1 … Bullet Point 10, etc.
+ * Fields with maxUniqueItems > 20 stay as a single column.
+ */
+function expandSchemaField(
+  fieldId: string,
+  prop: Record<string, any>,
+  isRequired: boolean,
+  schemaLabels: Record<string, string>,
+  schemaEnums: Record<string, string[]>,
+  lang: LangTag,
+  expandedFields: Record<string, string>,
+): FlatFileColumn[] {
+  const max: number = prop?.maxUniqueItems ?? 0
+  if (max >= 2 && max <= 20) {
+    const base = schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)
+    return Array.from({ length: max }, (_, i) => {
+      const idx = i + 1
+      const id = `${fieldId}_${idx}`
+      expandedFields[id] = fieldId
+      return {
+        ...base,
+        id,
+        fieldRef: buildFieldRef(fieldId, idx),
+        labelEn: `${base.labelEn} ${idx}`,
+        labelLocal: `${base.labelLocal} ${idx}`,
+        // Only first instance keeps the required flag; rest are optional
+        required: isRequired && idx === 1,
+      }
+    })
+  }
+  return [schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)]
 }
 
 // ── Main service ───────────────────────────────────────────────────────
@@ -421,6 +464,15 @@ export class AmazonFlatFileService {
       'parentage_level', 'child_parent_sku_relationship', 'variation_theme',
     ])
 
+    // expandedFields maps each numbered col ID back to its base schema field ID.
+    // e.g. { "bullet_point_1": "bullet_point", "material_2": "material" }
+    // Needed by buildJsonFeedBody to reassemble them into SP-API arrays.
+    const expandedFields: Record<string, string> = {}
+
+    // Helper: expand one schema property into 1 or N columns
+    const expand = (fieldId: string, prop: Record<string, any>, isReq: boolean) =>
+      expandSchemaField(fieldId, prop, isReq, schemaLabels, schemaEnums, lang, expandedFields)
+
     const amazonGroups = def.__propertyGroups as
       | Record<string, { title: string; propertyNames: string[] }>
       | undefined
@@ -438,26 +490,19 @@ export class AmazonFlatFileService {
           const prop = properties[fieldId]
           if (!prop) continue
           coveredFields.add(fieldId)
-          columns.push(schemaFieldToColumn(
-            fieldId, prop, requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
-          ))
+          columns.push(...expand(fieldId, prop, requiredSet.has(fieldId)))
         }
-        // Amazon's title is already localised; derive English separately
         const labelLocal = typeof groupMeta.title === 'string'
           ? groupMeta.title
           : (groupMeta.title as any)?.value ?? groupIdToEnglish(groupId)
-        const labelEn = groupIdToEnglish(groupId)
-        return { id: groupId, labelEn, labelLocal, color, columns }
+        return { id: groupId, labelEn: groupIdToEnglish(groupId), labelLocal, color, columns }
       }).filter((g) => g.columns.length > 0)
 
-      // Catch any schema properties not assigned to any Amazon group
+      // Any schema properties not assigned to an Amazon group
       const uncoveredCols: FlatFileColumn[] = []
       for (const [fieldId, prop] of Object.entries(properties)) {
         if (SKIP_FIXED.has(fieldId) || coveredFields.has(fieldId)) continue
-        uncoveredCols.push(schemaFieldToColumn(
-          fieldId, prop as Record<string, any>,
-          requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
-        ))
+        uncoveredCols.push(...expand(fieldId, prop as Record<string, any>, requiredSet.has(fieldId)))
       }
       if (uncoveredCols.length > 0) {
         schemaGroups.push({
@@ -472,22 +517,15 @@ export class AmazonFlatFileService {
         })
       }
     } else {
-      // ── Path B: fallback grouping — hit "Refresh schema" to get exact Amazon groups.
-      // Required fields are highlighted in red in the spreadsheet; no separate group needed.
+      // ── Path B: fallback grouping (refresh schema to get exact Amazon groups)
       const imageCols: FlatFileColumn[] = []
       const otherCols: FlatFileColumn[] = []
-
       for (const [fieldId, prop] of Object.entries(properties)) {
         if (SKIP_FIXED.has(fieldId)) continue
-        const col = schemaFieldToColumn(
-          fieldId, prop as Record<string, any>,
-          requiredSet.has(fieldId), schemaLabels, schemaEnums, lang,
-        )
-        if (fieldId.includes('image_locator')) imageCols.push(col)
-        else otherCols.push(col)
+        const cols = expand(fieldId, prop as Record<string, any>, requiredSet.has(fieldId))
+        if (fieldId.includes('image_locator')) imageCols.push(...cols)
+        else otherCols.push(...cols)
       }
-
-      // Sort: required first, then alphabetical
       otherCols.sort((a, b) => {
         if (a.required !== b.required) return a.required ? -1 : 1
         return a.labelEn.localeCompare(b.labelEn)
@@ -516,6 +554,7 @@ export class AmazonFlatFileService {
       variationThemes,
       fetchedAt: new Date().toISOString(),
       groups: [infraGroup, variationsGroup, ...schemaGroups],
+      expandedFields,
     }
   }
 
@@ -602,15 +641,28 @@ export class AmazonFlatFileService {
       // Populate any remaining attributes from platformAttributes
       for (const [k, v] of Object.entries(attrs)) {
         if (k in row) continue  // already set above
-        const val = Array.isArray(v) ? (v[0]?.value ?? '') : v
-        if (val != null && val !== '') row[k] = String(val)
+        if (Array.isArray(v) && v.length > 1) {
+          // Multi-instance field — expand into numbered sub-fields
+          v.forEach((item, i) => {
+            const val = typeof item === 'object' ? (item?.value ?? '') : item
+            if (val != null && val !== '') row[`${k}_${i + 1}`] = String(val)
+          })
+        } else {
+          const val = Array.isArray(v) ? (v[0]?.value ?? '') : v
+          if (val != null && val !== '') row[k] = String(val)
+        }
       }
 
       return row
     })
   }
 
-  buildJsonFeedBody(rows: FlatFileRow[], marketplace: string, sellerId: string): string {
+  buildJsonFeedBody(
+    rows: FlatFileRow[],
+    marketplace: string,
+    sellerId: string,
+    expandedFields: Record<string, string> = {},
+  ): string {
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const languageTag = LANGUAGE_TAG_MAP[mp] ?? 'it_IT'
@@ -671,15 +723,26 @@ export class AmazonFlatFileService {
           attrs.child_parent_sku_relationship = [{ parent_sku: String(row.parent_sku), marketplace_id: marketplaceId }]
         }
 
-        // Generic handler for all other schema-derived fields
+        // Generic handler: reassemble expanded multi-instance columns into arrays,
+        // then handle regular schema-derived fields.
+        const pendingArrays: Record<string, Array<{ idx: number; value: string }>> = {}
         for (const [k, v] of Object.entries(row)) {
           if (k.startsWith('_') || !v || EXPLICIT_KEYS.has(k)) continue
-          // Image locators use media_location, not value
-          if (k.includes('image_locator')) {
+          const baseField = expandedFields[k]
+          if (baseField) {
+            const idx = parseInt(k.slice(baseField.length + 1), 10)
+            ;(pendingArrays[baseField] ??= []).push({ idx, value: String(v) })
+          } else if (k.includes('image_locator')) {
             attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
           } else {
             attrs[k] = [{ value: String(v), marketplace_id: marketplaceId, language_tag: languageTag }]
           }
+        }
+        for (const [base, items] of Object.entries(pendingArrays)) {
+          items.sort((a, b) => a.idx - b.idx)
+          attrs[base] = items.map((item) => ({
+            value: item.value, marketplace_id: marketplaceId, language_tag: languageTag,
+          }))
         }
 
         return {

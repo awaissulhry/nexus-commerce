@@ -151,9 +151,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── POST /api/amazon/flat-file/submit ───────────────────────────────
   // Accepts an array of rows, submits them as a JSON_LISTINGS_FEED to SP-API.
   fastify.post<{
-    Body: { rows: any[]; marketplace?: string }
+    Body: { rows: any[]; marketplace?: string; expandedFields?: Record<string, string> }
   }>('/amazon/flat-file/submit', async (request, reply) => {
-    const { rows, marketplace = 'IT' } = request.body
+    const { rows, marketplace = 'IT', expandedFields = {} } = request.body
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
     const sellerId = getSellerId()
@@ -178,7 +178,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId)
+    const body = flatFileService.buildJsonFeedBody(rows, mp, sellerId, expandedFields)
 
     try {
       const sp = await getSpClient()

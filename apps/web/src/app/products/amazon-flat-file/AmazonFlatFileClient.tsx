@@ -47,6 +47,7 @@ interface Manifest {
   variationThemes: string[]
   fetchedAt: string
   groups: ColumnGroup[]
+  expandedFields: Record<string, string>
 }
 
 interface Row {
@@ -289,7 +290,7 @@ export default function AmazonFlatFileClient({
       const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: toSend, marketplace }),
+        body: JSON.stringify({ rows: toSend, marketplace, expandedFields: manifest?.expandedFields ?? {} }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Submit failed')
