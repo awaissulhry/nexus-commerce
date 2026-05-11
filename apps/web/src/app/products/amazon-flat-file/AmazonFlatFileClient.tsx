@@ -48,6 +48,8 @@ interface Manifest {
   fetchedAt: string
   groups: ColumnGroup[]
   expandedFields: Record<string, string>
+  productExclusiveFields?: string[]
+  offerExclusiveFields?: string[]
 }
 
 interface Row {
@@ -258,6 +260,35 @@ export default function AmazonFlatFileClient({
     }
     return m
   }, [orderedGroups])
+
+  // Pre-compute sets of expanded column IDs that are exclusive to one parentage level.
+  // productExclusiveCols → only for parent rows (gray on child rows)
+  // offerExclusiveCols   → only for child/offer rows (gray on parent rows)
+  const productExclusiveColIds = useMemo<Set<string>>(() => {
+    const fields = new Set(manifest?.productExclusiveFields ?? [])
+    if (!fields.size) return new Set()
+    const ids = new Set<string>()
+    for (const g of (manifest?.groups ?? [])) {
+      for (const c of g.columns) {
+        const base = manifest?.expandedFields[c.id]?.split('.')[0] ?? c.id
+        if (fields.has(base)) ids.add(c.id)
+      }
+    }
+    return ids
+  }, [manifest])
+
+  const offerExclusiveColIds = useMemo<Set<string>>(() => {
+    const fields = new Set(manifest?.offerExclusiveFields ?? [])
+    if (!fields.size) return new Set()
+    const ids = new Set<string>()
+    for (const g of (manifest?.groups ?? [])) {
+      for (const c of g.columns) {
+        const base = manifest?.expandedFields[c.id]?.split('.')[0] ?? c.id
+        if (fields.has(base)) ids.add(c.id)
+      }
+    }
+    return ids
+  }, [manifest])
 
   const dirtyRows = useMemo(() => rows.filter((r) => r._dirty || r._isNew), [rows])
   const newCount  = useMemo(() => rows.filter((r) => r._isNew).length, [rows])
@@ -933,6 +964,8 @@ export default function AmazonFlatFileClient({
                   selected={selectedRows.has(row._rowId as string)}
                   activeCell={activeCell}
                   marketplace={marketplace}
+                  productExclusiveCols={productExclusiveColIds}
+                  offerExclusiveCols={offerExclusiveColIds}
                   onSelect={(checked) => setSelectedRows((prev) => { const n = new Set(prev); checked ? n.add(row._rowId as string) : n.delete(row._rowId as string); return n })}
                   onActivate={(colId) => setActiveCell({ rowId: row._rowId as string, colId })}
                   onDeactivate={() => setActiveCell(null)}
@@ -1008,13 +1041,16 @@ interface RowProps {
   row: Row; rowIdx: number; columns: Column[]; colToGroup: Map<string, ColumnGroup>
   selected: boolean; activeCell: { rowId: string; colId: string } | null
   marketplace: string
+  productExclusiveCols: Set<string>
+  offerExclusiveCols: Set<string>
   onSelect: (c: boolean) => void; onActivate: (colId: string) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
   onNavigate: (colId: string, dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
-  marketplace, onSelect, onActivate, onDeactivate, onChange, onNavigate }: RowProps) {
+  marketplace, productExclusiveCols, offerExclusiveCols,
+  onSelect, onActivate, onDeactivate, onChange, onNavigate }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const rowBg = status === 'success' ? 'bg-emerald-50/70 dark:bg-emerald-950/20'
@@ -1023,6 +1059,13 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
     : row._isNew ? 'bg-sky-50/40 dark:bg-sky-950/10'
     : row._dirty ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
     : ''
+
+  // Determine which columns don't apply to this row's parentage level
+  const parentage = String(row.parentage_level ?? '').toLowerCase()
+  const grayedCols: Set<string> =
+    parentage === 'parent' ? offerExclusiveCols  // offer-only fields → gray on parent rows
+    : parentage === 'child' ? productExclusiveCols  // product-only fields → gray on child rows
+    : new Set()
 
   return (
     <tr className={cn('group/row transition-colors', rowBg, 'hover:bg-white/60 dark:hover:bg-slate-800/40')}>
@@ -1058,9 +1101,11 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
       {columns.map((col) => {
         const isActive = activeCell?.rowId === rowId && activeCell?.colId === col.id
         const groupColor = colToGroup.get(col.id)?.color ?? 'slate'
+        const grayed = grayedCols.has(col.id)
         return (
           <SpreadsheetCell key={col.id} col={col} value={row[col.id]} isActive={isActive}
             cellBg={gColor(groupColor).cell}
+            grayed={grayed}
             onActivate={() => onActivate(col.id)}
             onDeactivate={onDeactivate}
             onChange={(v) => onChange(col.id, v)}
@@ -1220,12 +1265,13 @@ function ProductTypeDropdown({ value, options, loading, onChange }: ProductTypeD
 
 interface CellProps {
   col: Column; value: unknown; isActive: boolean; cellBg: string
+  grayed?: boolean
   onActivate: () => void; onDeactivate: () => void
   onChange: (val: unknown) => void
   onNavigate: (dir: 'right' | 'left' | 'down' | 'up') => void
 }
 
-function SpreadsheetCell({ col, value, isActive, cellBg, onActivate, onDeactivate, onChange, onNavigate }: CellProps) {
+function SpreadsheetCell({ col, value, isActive, cellBg, grayed, onActivate, onDeactivate, onChange, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -1251,6 +1297,23 @@ function SpreadsheetCell({ col, value, isActive, cellBg, onActivate, onDeactivat
     else if (e.key === 'Enter' && col.kind !== 'longtext') { e.preventDefault(); onNavigate(e.shiftKey ? 'up' : 'down') }
     else if (e.key === 'Escape') { onDeactivate(); setDropdownOpen(false) }
     else if (e.key === 'ArrowDown' && col.kind === 'enum') { e.preventDefault(); setDropdownOpen(true) }
+  }
+
+  // Grayed-out cell: field doesn't apply to this row's parentage level
+  if (grayed) {
+    return (
+      <td
+        className="border-b border-r border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/50 cursor-not-allowed"
+        style={{ minWidth: col.width, width: col.width }}
+        title="Not applicable for this parentage level"
+      >
+        <div className="h-[28px] px-1.5 flex items-center">
+          {displayValue
+            ? <span className="text-xs text-slate-400 dark:text-slate-600 truncate">{displayValue}</span>
+            : <span className="text-xs text-slate-300 dark:text-slate-700">—</span>}
+        </div>
+      </td>
+    )
   }
 
   // Enum cell: custom dropdown
