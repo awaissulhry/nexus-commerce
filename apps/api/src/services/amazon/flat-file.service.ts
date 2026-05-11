@@ -311,11 +311,30 @@ function buildFieldRef(fieldId: string, index = 1): string {
 }
 
 /**
- * Expand a schema field into 1 or N columns.
- * Fields with `maxUniqueItems` between 2 and 20 (inclusive) get expanded into
- * that many numbered columns — matching Amazon's flat-file structure where
- * bullet_point becomes Bullet Point 1 … Bullet Point 10, etc.
- * Fields with maxUniqueItems > 20 stay as a single column.
+ * Expand one schema property into 1 or more FlatFileColumns, handling all
+ * Amazon schema patterns without leaking fields:
+ *
+ *   A) Multi-instance arrays (bullet_point, special_feature, material…)
+ *      maxUniqueItems 2–20 → N numbered columns capped at 5.
+ *
+ *   B) Dimension pairs at the item level (item_package_weight, item_weight…)
+ *      items.properties = {value, unit} → two columns: value (number) + unit (enum).
+ *
+ *   C) Named sub-properties (apparel_size, item_package_dimensions,
+ *      fulfillment_availability, list_price, num_batteries…)
+ *      items.properties has ≥2 meaningful named keys → one column per sub-prop.
+ *      Where a sub-prop itself is a dimension pair ({value, unit}), it generates
+ *      two columns (e.g. item_package_dimensions__length + __length_unit).
+ *
+ *   D) Single column — everything else.
+ *
+ * Column IDs for expanded fields:
+ *   - Multi-instance: `{fieldId}_{n}` e.g. bullet_point_1
+ *   - Sub-property:   `{fieldId}__{subId}` e.g. apparel_size__size_system
+ *   - Unit of sub:    `{fieldId}__{subId}_unit` e.g. item_package_dimensions__length_unit
+ *   - Dimension val:  `{fieldId}__value` / `{fieldId}__unit`
+ *
+ * expandedFields is populated so buildJsonFeedBody can reassemble them.
  */
 function expandSchemaField(
   fieldId: string,
@@ -326,10 +345,23 @@ function expandSchemaField(
   lang: LangTag,
   expandedFields: Record<string, string>,
 ): FlatFileColumn[] {
+  // Fields whose sub-properties are too complex to auto-expand meaningfully.
+  const SKIP_SUB_EXPAND = new Set([
+    'purchasable_offer',         // deeply-nested price schedules
+    'sleeve',                    // sub-props are complex arrays
+    'compliance_media',
+    'supplemental_condition_information',
+    'child_parent_sku_relationship',  // handled in Variations group
+    'epr_product_packaging',
+  ])
+
+  const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
+  const subProps: Record<string, any> = prop?.items?.properties ?? {}
+  const meaningfulKeys = Object.keys(subProps).filter((k) => !INFRA.has(k))
+
+  // ── Pattern A: multi-instance ─────────────────────────────────────────
   const max: number = prop?.maxUniqueItems ?? 0
-  if (max >= 2 && max <= 20) {
-    // maxUniqueItems is what Amazon accepts; their flat-file template shows at
-    // most 5 instances per field (e.g. bullet_point allows 10 but shows 5).
+  if (max >= 2 && max <= 20 && meaningfulKeys.length <= 2) {
     const count = Math.min(max, 5)
     const base = schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)
     return Array.from({ length: count }, (_, i) => {
@@ -337,16 +369,115 @@ function expandSchemaField(
       const id = `${fieldId}_${idx}`
       expandedFields[id] = fieldId
       return {
-        ...base,
-        id,
+        ...base, id,
         fieldRef: buildFieldRef(fieldId, idx),
         labelEn: `${base.labelEn} ${idx}`,
         labelLocal: `${base.labelLocal} ${idx}`,
-        // Only first instance keeps the required flag; rest are optional
         required: isRequired && idx === 1,
       }
     })
   }
+
+  // ── Pattern B: top-level dimension pair {value, unit} ─────────────────
+  const isDimPair =
+    meaningfulKeys.length === 2 &&
+    meaningfulKeys.includes('value') &&
+    meaningfulKeys.includes('unit')
+
+  if (isDimPair && !SKIP_SUB_EXPAND.has(fieldId)) {
+    const unitProp = subProps.unit as Record<string, any>
+    const unitEnums: string[] = unitProp?.enum ?? unitProp?.enumNames ?? []
+    const fieldLabel = schemaLabels[fieldId] ?? FIXED_FIELD_LABELS[fieldId]?.[lang]
+      ?? fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    const unitLabel = (unitProp?.title as string | undefined) ?? `${fieldLabel} Unit`
+
+    const vId = `${fieldId}__value`
+    const uId = `${fieldId}__unit`
+    expandedFields[vId] = `${fieldId}.value`
+    expandedFields[uId] = `${fieldId}.unit`
+
+    return [
+      { id: vId, fieldRef: `${fieldId}[marketplace_id]#1.value`, labelEn: fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), labelLocal: fieldLabel, required: isRequired, kind: 'number', width: 100 },
+      { id: uId, fieldRef: `${fieldId}[marketplace_id]#1.unit`,  labelEn: `${fieldId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} Unit`, labelLocal: unitLabel, required: false, kind: unitEnums.length > 0 ? 'enum' : 'text', options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined, width: 140 },
+    ]
+  }
+
+  // ── Pattern C: named sub-properties ──────────────────────────────────
+  // At least 2 named keys, none of which is just "value" (standard wrapped).
+  const namedKeys = meaningfulKeys.filter((k) => k !== 'value')
+  if (namedKeys.length >= 2 && !SKIP_SUB_EXPAND.has(fieldId)) {
+    const columns: FlatFileColumn[] = []
+
+    for (const subId of namedKeys) {
+      const subProp = subProps[subId] as Record<string, any>
+      const subTitle = (subProp?.title as string | undefined) ??
+        (subProp?.items?.properties?.value?.title as string | undefined)
+      const subEnLabel = `${subId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`
+      const subLoLabel = subTitle ?? subEnLabel
+
+      // Check if the sub-prop itself is a dimension pair {value, unit}
+      const subSubProps: Record<string, any> =
+        subProp?.items?.properties ?? subProp?.properties ?? {}
+      const subSubKeys = Object.keys(subSubProps).filter((k) => !INFRA.has(k))
+      const subIsDim = subSubKeys.includes('value') && subSubKeys.includes('unit')
+
+      if (subIsDim) {
+        const unitProp = subSubProps.unit as Record<string, any>
+        const unitEnums: string[] = unitProp?.enum ?? unitProp?.enumNames ?? []
+        const unitTitle = (unitProp?.title as string | undefined) ?? `${subLoLabel} Unit`
+
+        const vId = `${fieldId}__${subId}`
+        const uId = `${fieldId}__${subId}_unit`
+        expandedFields[vId] = `${fieldId}.${subId}.value`
+        expandedFields[uId] = `${fieldId}.${subId}.unit`
+
+        columns.push({
+          id: vId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}.value`,
+          labelEn: subEnLabel, labelLocal: subLoLabel,
+          required: false, kind: 'number', width: 100,
+        })
+        columns.push({
+          id: uId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}.unit`,
+          labelEn: `${subEnLabel} Unit`, labelLocal: unitTitle,
+          required: false, kind: unitEnums.length > 0 ? 'enum' : 'text',
+          options: unitEnums.length > 0 ? ['', ...unitEnums.map(String)] : undefined,
+          width: 140,
+        })
+        continue
+      }
+
+      // Simple or array-with-enum sub-property
+      const subType = subProp?.type as string | undefined
+      // Skip deeply complex sub-props (unenumerated arrays, objects)
+      if (subType === 'object') continue
+      if (subType === 'array') {
+        const subEnums = schemaEnums[`${fieldId}.${subId}`] ?? []
+        if (subEnums.length === 0) continue
+      }
+
+      const colId = `${fieldId}__${subId}`
+      expandedFields[colId] = `${fieldId}.${subId}`
+
+      const opts = schemaEnums[`${fieldId}.${subId}`] ?? []
+      let kind: FlatFileColumnKind = 'text'
+      let options: string[] | undefined
+      if (opts.length > 0) { kind = 'enum'; options = ['', ...opts] }
+      else if (subType === 'integer' || subType === 'number') kind = 'number'
+      else if (subType === 'boolean') { kind = 'enum'; options = ['', 'true', 'false'] }
+
+      columns.push({
+        id: colId, fieldRef: `${fieldId}[marketplace_id]#1.${subId}`,
+        labelEn: subEnLabel, labelLocal: subLoLabel,
+        required: false, kind, options,
+        width: kind === 'enum' && (options?.length ?? 0) < 8 ? 140 : 180,
+      })
+    }
+
+    if (columns.length >= 1) return columns
+    // Fall through to single-column if we couldn't resolve any sub-props
+  }
+
+  // ── Pattern D: single column ──────────────────────────────────────────
   return [schemaFieldToColumn(fieldId, prop, isRequired, schemaLabels, schemaEnums, lang)]
 }
 
@@ -641,18 +772,55 @@ export class AmazonFlatFileService {
         main_product_image_locator: '',
       }
 
-      // Populate any remaining attributes from platformAttributes
+      // Populate remaining attributes from platformAttributes, expanding
+      // complex fields to match the column IDs generated by expandSchemaField.
+      const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
       for (const [k, v] of Object.entries(attrs)) {
-        if (k in row) continue  // already set above
-        if (Array.isArray(v) && v.length > 1) {
-          // Multi-instance field — expand into numbered sub-fields
-          v.forEach((item, i) => {
-            const val = typeof item === 'object' ? (item?.value ?? '') : item
-            if (val != null && val !== '') row[`${k}_${i + 1}`] = String(val)
-          })
+        if (k in row) continue
+
+        if (!Array.isArray(v)) {
+          if (v != null) row[k] = String(v)
+          continue
+        }
+        if (v.length === 0) continue
+
+        const first = v[0]
+        if (typeof first !== 'object' || first === null) {
+          // Primitive array: expand into numbered fields
+          v.forEach((item, i) => { if (item != null) row[`${k}_${i + 1}`] = String(item) })
+          continue
+        }
+
+        const keys = Object.keys(first).filter((fk) => !INFRA.has(fk))
+        if (keys.length === 0) continue
+
+        if (keys.length === 1 && keys[0] === 'value') {
+          // Standard wrapped {value: "..."}
+          if (v.length > 1) {
+            v.forEach((item, i) => { const val = item?.value; if (val != null) row[`${k}_${i + 1}`] = String(val) })
+          } else {
+            const val = first.value; if (val != null) row[k] = String(val)
+          }
+        } else if (keys.length === 2 && keys.includes('value') && keys.includes('unit')) {
+          // Top-level dimension {value, unit}
+          if (first.value != null) row[`${k}__value`] = String(first.value)
+          if (first.unit) row[`${k}__unit`] = String(first.unit)
+        } else if (v.length > 1 && keys.includes('value')) {
+          // Multi-instance {value: "..."}
+          v.forEach((item, i) => { const val = item?.value; if (val != null) row[`${k}_${i + 1}`] = String(val) })
         } else {
-          const val = Array.isArray(v) ? (v[0]?.value ?? '') : v
-          if (val != null && val !== '') row[k] = String(val)
+          // Sub-property object — extract each named key
+          for (const subKey of keys) {
+            if (subKey === 'value') continue
+            const subVal = first[subKey]
+            if (typeof subVal === 'object' && subVal !== null) {
+              // Dimension sub-prop {value, unit}
+              if (subVal.value != null) row[`${k}__${subKey}`] = String(subVal.value)
+              if (subVal.unit) row[`${k}__${subKey}_unit`] = String(subVal.unit)
+            } else if (subVal != null && subVal !== '') {
+              row[`${k}__${subKey}`] = String(subVal)
+            }
+          }
         }
       }
 
@@ -726,26 +894,53 @@ export class AmazonFlatFileService {
           attrs.child_parent_sku_relationship = [{ parent_sku: String(row.parent_sku), marketplace_id: marketplaceId }]
         }
 
-        // Generic handler: reassemble expanded multi-instance columns into arrays,
-        // then handle regular schema-derived fields.
+        // Generic handler: reassemble expanded columns into SP-API arrays.
+        //   - expandedFields[colId] = fieldId            → multi-instance (bullet_point_1)
+        //   - expandedFields[colId] = "field.sub"        → sub-property   (apparel_size__size_system)
+        //   - expandedFields[colId] = "field.sub.value"  → dimension value (item_package_dimensions__length)
+        //   - expandedFields[colId] = "field.sub.unit"   → dimension unit  (item_package_dimensions__length_unit)
         const pendingArrays: Record<string, Array<{ idx: number; value: string }>> = {}
+        const subPropMap: Record<string, Record<string, any>> = {}
+
         for (const [k, v] of Object.entries(row)) {
           if (k.startsWith('_') || !v || EXPLICIT_KEYS.has(k)) continue
-          const baseField = expandedFields[k]
-          if (baseField) {
-            const idx = parseInt(k.slice(baseField.length + 1), 10)
-            ;(pendingArrays[baseField] ??= []).push({ idx, value: String(v) })
-          } else if (k.includes('image_locator')) {
+          const path = expandedFields[k]
+          if (path) {
+            if (!path.includes('.')) {
+              // Multi-instance: path = "bullet_point", key = "bullet_point_1"
+              const idx = parseInt(k.slice(path.length + 1), 10)
+              if (!isNaN(idx)) (pendingArrays[path] ??= []).push({ idx, value: String(v) })
+            } else {
+              // Sub-property path: "field.sub" or "field.sub.value" or "field.sub.unit"
+              const parts = path.split('.')
+              const base = parts[0]
+              const obj = (subPropMap[base] ??= {})
+              const numV = Number(String(v))
+              const typedV = !isNaN(numV) && String(v).trim() !== '' ? numV : String(v)
+              if (parts.length === 2) {
+                obj[parts[1]] = typedV
+              } else if (parts.length === 3) {
+                obj[parts[1]] = { ...(obj[parts[1]] as Record<string, any> ?? {}), [parts[2]]: typedV }
+              }
+            }
+            continue
+          }
+          if (k.includes('image_locator')) {
             attrs[k] = [{ media_location: String(v), marketplace_id: marketplaceId }]
           } else {
             attrs[k] = [{ value: String(v), marketplace_id: marketplaceId, language_tag: languageTag }]
           }
         }
+        // Emit multi-instance arrays
         for (const [base, items] of Object.entries(pendingArrays)) {
           items.sort((a, b) => a.idx - b.idx)
           attrs[base] = items.map((item) => ({
             value: item.value, marketplace_id: marketplaceId, language_tag: languageTag,
           }))
+        }
+        // Emit sub-property objects
+        for (const [base, val] of Object.entries(subPropMap)) {
+          attrs[base] = [{ ...val, marketplace_id: marketplaceId }]
         }
 
         return {
