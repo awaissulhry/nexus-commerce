@@ -1069,28 +1069,6 @@ export default function AmazonFlatFileClient({
             </div>
           )}
 
-          {/* Fetch from Amazon (visible when rows are selected) */}
-          {selectedRows.size > 0 && (
-            <div className="relative">
-              <Button size="sm" variant="ghost" onClick={() => setFetchPanelOpen((o) => !o)} loading={fetching}
-                className={fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800' : ''}>
-                <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />Fetch ({selectedRows.size})
-              </Button>
-              {fetchPanelOpen && (
-                <FetchFromAmazonPanel selectedCount={selectedRows.size} currentMarket={marketplace}
-                  onFetch={handleFetchFromAmazon} onClose={() => setFetchPanelOpen(false)} />
-              )}
-            </div>
-          )}
-
-          {/* Copy to market panel anchor */}
-          {copyPanelOpen && manifest && rows.length > 0 && (
-            <div className="relative">
-              <CopyToMarketPanel manifest={manifest} rows={rows} currentMarket={marketplace}
-                onCopy={handleCopyToMarket} onClose={() => setCopyPanelOpen(false)} />
-            </div>
-          )}
-
           {/* Separator before save/discard/submit */}
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
 
@@ -1125,7 +1103,73 @@ export default function AmazonFlatFileClient({
           </div>
         </div>
 
-        {/* ── Bar 2: Marketplace · Product type · Search ────── */}
+        {/* ── Icon toolbar ─────────────────────────────────── */}
+        <div className="px-3 h-8 flex items-center gap-0.5 border-b border-slate-100 dark:border-slate-800/60">
+
+          {/* Undo / Redo */}
+          <TbBtn icon={<Undo2 className="w-3.5 h-3.5" />} title="Undo (⌘Z)" onClick={undo} disabled={!history.length} />
+          <TbBtn icon={<Redo2 className="w-3.5 h-3.5" />} title="Redo (⌘⇧Z)" onClick={redo} disabled={!future.length} />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* Copy to market */}
+          <div className="relative">
+            <TbBtn
+              icon={<Copy className="w-3.5 h-3.5" />}
+              title="Copy to market"
+              onClick={() => setCopyPanelOpen((o) => !o)}
+              disabled={!manifest || !rows.length}
+              active={copyPanelOpen}
+            />
+            {copyPanelOpen && manifest && rows.length > 0 && (
+              <CopyToMarketPanel manifest={manifest} rows={rows} currentMarket={marketplace}
+                onCopy={handleCopyToMarket} onClose={() => setCopyPanelOpen(false)} />
+            )}
+          </div>
+
+          {/* Fetch from Amazon — always visible, disabled when no rows selected */}
+          <div className="relative">
+            <TbBtn
+              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+              title={selectedRows.size > 0
+                ? `Fetch from Amazon (${selectedRows.size} SKU${selectedRows.size !== 1 ? 's' : ''})`
+                : 'Fetch from Amazon — select rows first'}
+              onClick={() => setFetchPanelOpen((o) => !o)}
+              disabled={selectedRows.size === 0 || fetching}
+              active={fetchPanelOpen}
+              badge={selectedRows.size || undefined}
+            />
+            {fetchPanelOpen && (
+              <FetchFromAmazonPanel selectedCount={selectedRows.size} currentMarket={marketplace}
+                onFetch={handleFetchFromAmazon} onClose={() => setFetchPanelOpen(false)} />
+            )}
+          </div>
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* Sort */}
+          <div className="relative">
+            <TbBtn
+              icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
+              title={sortConfig.length > 0
+                ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active`
+                : 'Sort rows'}
+              onClick={() => setSortPanelOpen((o) => !o)}
+              disabled={!manifest || !rows.length}
+              active={sortPanelOpen || sortConfig.length > 0}
+              badge={sortConfig.length || undefined}
+            />
+            {sortPanelOpen && (
+              <SortPanel
+                rows={rows} groups={orderedGroups} initial={sortConfig}
+                onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
+                onClose={() => setSortPanelOpen(false)}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* ── Bar 3: Marketplace · Product type · Search ────── */}
         <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 font-medium">Market</span>
@@ -1154,27 +1198,6 @@ export default function AmazonFlatFileClient({
               </Button>
             )}
           </div>
-
-          {/* Sort */}
-          {manifest && rows.length > 0 && (
-            <div className="relative">
-              <Button size="sm" variant="ghost"
-                onClick={() => setSortPanelOpen((o) => !o)}
-                className={cn(sortConfig.length > 0 && 'text-blue-600 dark:text-blue-400 font-semibold', sortPanelOpen && 'bg-slate-100 dark:bg-slate-800')}>
-                <SlidersHorizontal className="w-3 h-3 mr-1" />
-                Sort{sortConfig.length > 0 && ` (${sortConfig.length})`}
-              </Button>
-              {sortPanelOpen && (
-                <SortPanel
-                  rows={rows}
-                  groups={orderedGroups}
-                  initial={sortConfig}
-                  onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
-                  onClose={() => setSortPanelOpen(false)}
-                />
-              )}
-            </div>
-          )}
 
           {/* Search */}
           {manifest && (
@@ -2829,6 +2852,44 @@ function DraggableValueList({
         </div>
       ))}
     </div>
+  )
+}
+
+// ── TbBtn ──────────────────────────────────────────────────────────────
+// Compact icon button for the icon toolbar. Shows a badge count when
+// badge > 0. Tooltip via the native title attribute.
+
+interface TbBtnProps {
+  icon: React.ReactNode
+  title: string
+  onClick?: () => void
+  disabled?: boolean
+  active?: boolean
+  badge?: number
+}
+
+function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
+        active
+          ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+        'disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:hover:text-slate-600',
+      )}
+    >
+      {icon}
+      {badge != null && badge > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold bg-blue-500 text-white rounded-full flex items-center justify-center leading-none pointer-events-none">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </button>
   )
 }
 
