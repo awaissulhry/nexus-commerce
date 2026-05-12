@@ -137,15 +137,26 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const ch = (u.channel ?? 'AMAZON').toUpperCase()
 
       if (u.variantId) {
-        // Primary: update the child product's ChannelListing (what flat file reads)
-        const clData: Record<string, any> = { lastSyncedAt: new Date(), syncStatus: 'PENDING' }
-        if (u.price !== undefined && u.price !== null) { clData.price = u.price; clData.followMasterPrice = false }
-        if (u.salePrice !== undefined) clData.salePrice = u.salePrice
-        if (u.quantity !== undefined && u.quantity !== null) { clData.quantity = u.quantity; clData.followMasterQuantity = false }
+        // Primary: upsert the child product's ChannelListing (what flat file reads).
+        // Use upsert not updateMany so that child products without an existing
+        // ChannelListing row still get the price written — updateMany would silently
+        // match 0 records and the flat file would never see the change.
+        const clUpdate: Record<string, any> = { lastSyncedAt: new Date(), syncStatus: 'PENDING' }
+        if (u.price !== undefined && u.price !== null) { clUpdate.price = u.price; clUpdate.followMasterPrice = false }
+        if (u.salePrice !== undefined) clUpdate.salePrice = u.salePrice
+        if (u.quantity !== undefined && u.quantity !== null) { clUpdate.quantity = u.quantity; clUpdate.followMasterQuantity = false }
 
-        await prisma.channelListing.updateMany({
-          where: { productId: u.variantId, marketplace: mp, channel: ch },
-          data: clData,
+        await prisma.channelListing.upsert({
+          where: { productId_channel_marketplace: { productId: u.variantId, channel: ch, marketplace: mp } },
+          update: clUpdate,
+          create: {
+            productId: u.variantId,
+            channel: ch,
+            marketplace: mp,
+            channelMarket: `${ch}_${mp}`,
+            region: mp,
+            ...clUpdate,
+          },
         })
 
         // Secondary: also update VariantChannelListing for completeness

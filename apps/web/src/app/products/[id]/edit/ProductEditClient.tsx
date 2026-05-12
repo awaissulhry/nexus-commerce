@@ -543,23 +543,22 @@ export default function ProductEditClient({
               {t('products.edit.recover')}
             </Button>
             <ListOnChannelDropdown productId={product.id} />
-            {isDirty && (
-              <Button
-                size="sm"
-                onClick={handleHeaderSave}
-                loading={headerSaving}
-                title="Save all pending changes"
-                icon={
-                  headerSaved
-                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    : headerSaving
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Save className="w-3.5 h-3.5" />
-                }
-              >
-                {headerSaved ? 'Saved' : 'Save'}
-              </Button>
-            )}
+            <Button
+              size="sm"
+              onClick={handleHeaderSave}
+              loading={headerSaving}
+              disabled={!isDirty && !headerSaved}
+              title={isDirty ? 'Save all pending changes' : 'No unsaved changes'}
+              icon={
+                headerSaved
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  : headerSaving
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Save className="w-3.5 h-3.5" />
+              }
+            >
+              {headerSaved ? 'Saved' : 'Save'}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
