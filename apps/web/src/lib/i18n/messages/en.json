@@ -2538,6 +2538,8 @@
   "products.grid.action.listTitle": "Open the listing wizard for this product",
   "products.grid.collapseVariantsAria": "Collapse variants of {sku}",
   "products.grid.expandVariantsAria": "Expand variants of {sku} ({count})",
+  "products.col.product": "Product",
+  "products.col.listingStatus": "Listing status",
   "products.col.sku": "SKU",
   "products.col.name": "Name",
   "products.col.status": "Status",

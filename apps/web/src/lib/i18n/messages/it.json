@@ -2526,6 +2526,8 @@
   "products.grid.action.listTitle": "Apri il wizard di pubblicazione per questo prodotto",
   "products.grid.collapseVariantsAria": "Comprimi varianti di {sku}",
   "products.grid.expandVariantsAria": "Espandi varianti di {sku} ({count})",
+  "products.col.product": "Prodotto",
+  "products.col.listingStatus": "Stato inserzione",
   "products.col.sku": "SKU",
   "products.col.name": "Nome",
   "products.col.status": "Stato",
