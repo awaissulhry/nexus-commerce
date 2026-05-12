@@ -51,6 +51,7 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import ChannelPricingSection from './ChannelPricingSection'
 
 const ScheduleChangeModal = dynamic(
   () => import('../../../_modals/ScheduleChangeModal'),
@@ -234,6 +235,13 @@ export default function PricingTab({
 
   return (
     <div className="space-y-4">
+      {/* ── Channel pricing (per variant × market) ───────────── */}
+      <ChannelPricingSection
+        productId={product.id}
+        isParent={!!product.isParent}
+        channel="AMAZON"
+      />
+
       {/* ── Master snapshot bar ─────────────────────────────── */}
       <Card noPadding>
         <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">

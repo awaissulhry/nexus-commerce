@@ -77,6 +77,10 @@ export type InvalidationType =
   | 'schedule.created'
   | 'schedule.updated'
   | 'schedule.deleted'
+  // PE.1 — channel pricing updated from flat file or product edit page.
+  // Consumed by ChannelPricingSection + ChannelInventorySection to
+  // re-fetch without a full page reload.
+  | 'channel-pricing.updated'
 
 export interface InvalidationEvent {
   type: InvalidationType

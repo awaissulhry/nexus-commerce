@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  Download,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -163,6 +165,36 @@ export default function MasterDataTab({
     saveTimer.current = window.setTimeout(() => {
       void flush()
     }, SAVE_DEBOUNCE_MS)
+  }
+
+  // PE.1 — Sync master data from an existing Amazon ChannelListing.
+  const [amazonSyncing, setAmazonSyncing] = useState(false)
+  const [amazonSyncOpen, setAmazonSyncOpen] = useState(false)
+
+  const syncFromAmazon = async (marketplace: string) => {
+    setAmazonSyncing(true)
+    setAmazonSyncOpen(false)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/amazon-sync-data?marketplace=${marketplace}`
+      )
+      const data_ = await res.json()
+      if (!res.ok) throw new Error(data_.error ?? `HTTP ${res.status}`)
+      const updates: Partial<Record<MasterField, string>> = {}
+      if (data_.name) updates.name = data_.name
+      if (data_.description) updates.description = data_.description
+      if (data_.brand) updates.brand = data_.brand
+      if (data_.keywords) updates.keywords = data_.keywords
+      if (data_.bulletPoints?.length) updates.bulletPoints = (data_.bulletPoints as string[]).join('\n')
+      for (const [field, value] of Object.entries(updates) as [MasterField, string][]) {
+        update(field, value)
+      }
+      toast({ title: `Synced from Amazon ${marketplace}` })
+    } catch (e: any) {
+      toast({ title: e.message ?? 'Sync failed', tone: 'error' })
+    } finally {
+      setAmazonSyncing(false)
+    }
   }
 
   // W13.1 — AI suggest a value for one master content field. Hits the
@@ -402,6 +434,31 @@ export default function MasterDataTab({
       <Card
         title={t('products.edit.master.identityTitle')}
         description={t('products.edit.master.identityDesc')}
+        action={
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setAmazonSyncOpen((o) => !o)}
+              disabled={amazonSyncing}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-400 transition-colors disabled:opacity-50"
+            >
+              {amazonSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Sync from Amazon
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+            {amazonSyncOpen && (
+              <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[100px]">
+                {['IT', 'DE', 'FR', 'ES', 'UK'].map((mp) => (
+                  <button key={mp} type="button"
+                    onClick={() => syncFromAmazon(mp)}
+                    className="block w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                    {mp}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        }
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
           <Input

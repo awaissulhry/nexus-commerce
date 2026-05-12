@@ -166,6 +166,11 @@ export default function ProductEditClient({
     const initial = searchParams?.get('tab')
     return (initial as TopTab) || 'master'
   })
+
+  // PE.1 — hide low-traffic tabs by default; persisted to localStorage
+  const [showAllTabs, setShowAllTabs] = useState<boolean>(() => {
+    try { return localStorage.getItem('product-edit:show-all-tabs') === '1' } catch { return false }
+  })
   // W14.1 — sync state ← URL on every navigation. useState's function
   // initializer runs once, so without this effect a router.push to
   // the same path with a different ?tab would silently no-op. Also
@@ -637,49 +642,63 @@ export default function ProductEditClient({
             >
               {t('products.edit.tab.inventory')}
             </TopTabButton>
-            <TopTabButton
-              tabKey="locales"
-              active={topTab === 'locales'}
-              onClick={() => goToTab('locales')}
-              dirty={dirtyByTab.locales}
+            {showAllTabs && (<>
+              <TopTabButton
+                tabKey="locales"
+                active={topTab === 'locales'}
+                onClick={() => goToTab('locales')}
+                dirty={dirtyByTab.locales}
+              >
+                {t('products.edit.tab.locales')}
+              </TopTabButton>
+              <TopTabButton
+                tabKey="seo"
+                active={topTab === 'seo'}
+                onClick={() => goToTab('seo')}
+              >
+                {t('products.edit.tab.seo')}
+              </TopTabButton>
+              <TopTabButton
+                tabKey="compliance"
+                active={topTab === 'compliance'}
+                onClick={() => goToTab('compliance')}
+              >
+                {t('products.edit.tab.compliance')}
+              </TopTabButton>
+              <TopTabButton
+                tabKey="workflow"
+                active={topTab === 'workflow'}
+                onClick={() => goToTab('workflow')}
+              >
+                {t('products.edit.tab.workflow')}
+              </TopTabButton>
+              <TopTabButton
+                tabKey="relations"
+                active={topTab === 'relations'}
+                onClick={() => goToTab('relations')}
+              >
+                {t('products.edit.tab.relations')}
+              </TopTabButton>
+              <TopTabButton
+                tabKey="activity"
+                active={topTab === 'activity'}
+                onClick={() => goToTab('activity')}
+              >
+                {t('products.edit.tab.activity')}
+              </TopTabButton>
+            </>)}
+            {/* Toggle secondary tabs */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showAllTabs
+                setShowAllTabs(next)
+                try { localStorage.setItem('product-edit:show-all-tabs', next ? '1' : '0') } catch {}
+              }}
+              className="flex-shrink-0 px-3 py-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors"
             >
-              {t('products.edit.tab.locales')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="seo"
-              active={topTab === 'seo'}
-              onClick={() => goToTab('seo')}
-            >
-              {t('products.edit.tab.seo')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="compliance"
-              active={topTab === 'compliance'}
-              onClick={() => goToTab('compliance')}
-            >
-              {t('products.edit.tab.compliance')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="workflow"
-              active={topTab === 'workflow'}
-              onClick={() => goToTab('workflow')}
-            >
-              {t('products.edit.tab.workflow')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="relations"
-              active={topTab === 'relations'}
-              onClick={() => goToTab('relations')}
-            >
-              {t('products.edit.tab.relations')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="activity"
-              active={topTab === 'activity'}
-              onClick={() => goToTab('activity')}
-            >
-              {t('products.edit.tab.activity')}
-            </TopTabButton>
+              {showAllTabs ? 'Show less ←' : '+ More tabs'}
+            </button>
             {product.isParent && (
               <TopTabButton
                 tabKey="variations"

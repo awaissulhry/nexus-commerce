@@ -30,6 +30,7 @@ import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import ChannelInventorySection from './ChannelInventorySection'
 
 interface StockLevelRow {
   id: string
@@ -198,6 +199,13 @@ export default function InventoryTab({
 
   return (
     <div className="space-y-4">
+      {/* ── Channel inventory (per variant × market) ─────────── */}
+      <ChannelInventorySection
+        productId={product.id}
+        isParent={!!product.isParent}
+        channel="AMAZON"
+      />
+
       {/* ── Hero / sales velocity ─────────────────────────────── */}
       <Card noPadding>
         <div className="px-4 py-4 grid grid-cols-2 md:grid-cols-5 gap-4">
