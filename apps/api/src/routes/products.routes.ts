@@ -1073,6 +1073,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const ALLOWED_FIELDS = new Set([
+      'sku',   // editable from master-data tab; uniqueness validated below
       'name',
       'description', // D.5: ZIP upload + grid editing
       'basePrice',
@@ -1539,11 +1540,18 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       } else {
         // text fields — trim, coerce empty string to null only for
-        // optional fields. name is required, leave as-is.
+        // optional fields. name + sku are required, leave as-is.
         if (typeof value !== 'string' && value !== null && value !== undefined) {
           value = String(value)
         }
-        if (c.field === 'name') {
+        if (c.field === 'sku') {
+          const trimmed = typeof value === 'string' ? value.trim() : ''
+          if (!trimmed) {
+            errors.push({ id: c.id, field: c.field, error: 'SKU cannot be empty' })
+            continue
+          }
+          value = trimmed
+        } else if (c.field === 'name') {
           if (!value || (typeof value === 'string' && value.trim().length === 0)) {
             errors.push({ id: c.id, field: c.field, error: 'Name cannot be empty' })
             continue
@@ -1556,6 +1564,28 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade })
+    }
+
+    // Pre-validate SKU uniqueness — catches conflicts before the transaction
+    // so the user gets a clear "SKU already in use" error rather than a
+    // generic P2002 database exception.
+    const skuChanges = validated.filter((v) => v.field === 'sku' && typeof v.value === 'string')
+    if (skuChanges.length > 0) {
+      const conflicting = await prisma.product.findMany({
+        where: {
+          sku: { in: skuChanges.map((v) => String(v.value)) },
+          id: { notIn: skuChanges.map((v) => v.id) },
+          deletedAt: null,
+        },
+        select: { sku: true },
+      })
+      for (const conflict of conflicting) {
+        const idx = validated.findIndex((v) => v.field === 'sku' && v.value === conflict.sku)
+        if (idx !== -1) {
+          errors.push({ id: validated[idx].id, field: 'sku', error: `SKU "${conflict.sku}" is already used by another product` })
+          validated.splice(idx, 1)
+        }
+      }
     }
 
     // Nothing survived validation — do not open a transaction
