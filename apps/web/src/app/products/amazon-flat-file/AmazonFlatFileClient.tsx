@@ -17,6 +17,8 @@ import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/bulk-ope
 import { type FindCell } from '@/app/bulk-operations/lib/find-replace'
 import { FFFilterPanel, FF_FILTER_DEFAULT, type FFFilterState } from './FFFilterPanel'
 import { AIBulkModal } from './AIBulkModal'
+import { FFSavedViews, type FFViewState } from './FFSavedViews'
+import { FFReplicateModal } from './FFReplicateModal'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -337,6 +339,9 @@ export default function AmazonFlatFileClient({
 
   // BF.4 — AI bulk actions
   const [aiModalOpen, setAiModalOpen] = useState(false)
+
+  // BM.2 — Replicate modal
+  const [replicateOpen, setReplicateOpen] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1539,6 +1544,45 @@ export default function AmazonFlatFileClient({
   }, [productType, marketplace, createVersion])
 
   // ── Copy to market ─────────────────────────────────────────────────
+  // BM.2 — multi-target replicate used by FFReplicateModal
+  const handleReplicate = useCallback(async (
+    targets: string[],
+    groupIds: Set<string>,
+    selectedOnly: boolean,
+  ): Promise<{ copied: number; skipped: number }> => {
+    if (!manifest) return { copied: 0, skipped: 0 }
+    const allColIds = manifest.groups
+      .filter((g) => groupIds.has(g.id))
+      .flatMap((g) => g.columns.map((c) => c.id))
+    const colSet = new Set(allColIds)
+    const sourceRows = selectedOnly && selectedRows.size > 0
+      ? rows.filter((r) => selectedRows.has(r._rowId as string))
+      : rows
+    let copied = 0
+    let skipped = 0
+    for (const target of targets) {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/template?marketplace=${target}&productType=${productType}`)
+        if (!res.ok) { skipped += sourceRows.length; continue }
+        const targetManifest: Manifest = await res.json()
+        const targetColIds = new Set(targetManifest.groups.flatMap((g) => g.columns.map((c) => c.id)))
+        const STRUCTURAL = new Set(['item_sku', 'product_type', 'record_action', 'parentage_level', 'parent_sku', 'variation_theme'])
+        const copiedRows = sourceRows.map((row) => {
+          const newRow: Row = { _rowId: `copy-${row._rowId}-${target}-${Date.now()}`, _isNew: true, _dirty: true, _status: 'idle' }
+          for (const key of STRUCTURAL) { if (row[key] != null) newRow[key] = row[key] }
+          for (const colId of colSet) { if (targetColIds.has(colId) && row[colId] != null) newRow[colId] = row[colId] }
+          return newRow
+        })
+        // Persist to localStorage under the target market key
+        const base = `ff-rows-${target.toUpperCase()}-${productType.toUpperCase()}`
+        const key = familyId ? `${base}-family-${familyId}` : base
+        try { localStorage.setItem(key, JSON.stringify(copiedRows)) } catch {}
+        copied += copiedRows.length
+      } catch { skipped += sourceRows.length }
+    }
+    return { copied, skipped }
+  }, [manifest, rows, selectedRows, productType, familyId])
+
   const handleCopyToMarket = useCallback(async (
     targetMarket: string,
     colIds: Set<string>,
@@ -1915,6 +1959,15 @@ export default function AmazonFlatFileClient({
             active={pushPanel?.tab === 'copy'}
           />
 
+          {/* BM.2 — Replicate to multiple markets */}
+          <TbBtn
+            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+            title="Replicate to multiple markets"
+            onClick={() => setReplicateOpen(true)}
+            disabled={!manifest || !rows.length}
+            active={replicateOpen}
+          />
+
           {/* Fetch from Amazon — always visible, disabled when no rows selected */}
           <div className="relative">
             <TbBtn
@@ -2119,6 +2172,23 @@ export default function AmazonFlatFileClient({
                 onOpenChange={setFilterPanelOpen}
                 value={ffFilter}
                 onChange={setFFFilter}
+              />
+              {/* BM.1 — saved views */}
+              <FFSavedViews
+                currentState={{
+                  closedGroups: [...closedGroups],
+                  ffFilter,
+                  sortConfig,
+                  cfRules,
+                  frozenColCount,
+                }}
+                onApply={(state: FFViewState) => {
+                  setClosedGroups(new Set(state.closedGroups))
+                  setFFFilter(state.ffFilter)
+                  setSortConfig(state.sortConfig)
+                  setCfRules(state.cfRules)
+                  setFrozenColCount(state.frozenColCount)
+                }}
               />
             </div>
           )}
@@ -2689,6 +2759,17 @@ export default function AmazonFlatFileClient({
           />
         </div>
       )}
+
+      {/* BM.2 — Replicate to multiple markets */}
+      <FFReplicateModal
+        open={replicateOpen}
+        onClose={() => setReplicateOpen(false)}
+        sourceMarket={marketplace}
+        groups={manifest?.groups ?? []}
+        rowCount={rows.length}
+        selectedRowCount={selectedRows.size}
+        onReplicate={handleReplicate}
+      />
 
       {/* BF.4 — AI bulk actions */}
       <AIBulkModal
