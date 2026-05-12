@@ -9,8 +9,14 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
-  Undo2, Redo2, GripVertical, SlidersHorizontal,
+  Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
 } from 'lucide-react'
+import { FindReplaceBar } from '@/app/bulk-operations/components/FindReplaceBar'
+import { ConditionalFormatBar } from '@/app/bulk-operations/components/ConditionalFormatBar'
+import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/bulk-operations/lib/conditional-format'
+import { type FindCell } from '@/app/bulk-operations/lib/find-replace'
+import { FFFilterPanel, FF_FILTER_DEFAULT, type FFFilterState } from './FFFilterPanel'
+import { AIBulkModal } from './AIBulkModal'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -317,6 +323,21 @@ export default function AmazonFlatFileClient({
   const [submissionPanelOpen, setSubmissionPanelOpen] = useState(false)
   const [versionPanelOpen, setVersionPanelOpen] = useState(false)
 
+  // BF.1 — Find & Replace
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false)
+  const [matchKeys, setMatchKeys] = useState<Set<string>>(new Set())
+
+  // BF.2 — Conditional formatting
+  const [cfRules, setCfRules] = useState<ConditionalRule[]>([])
+  const [cfOpen, setCfOpen] = useState(false)
+
+  // BF.3 — Extended row filter
+  const [ffFilter, setFFFilter] = useState<FFFilterState>(FF_FILTER_DEFAULT)
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
+
+  // BF.4 — AI bulk actions
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Column + row resize ────────────────────────────────────────────
@@ -569,6 +590,28 @@ export default function AmazonFlatFileClient({
         return 0
       })
     }
+    // BF.3 — extended row filter
+    if (ffFilter.parentage !== 'any') {
+      result = result.filter((row) => {
+        if (ffFilter.parentage === 'parent') return row.parentage_level === 'parent'
+        return row.parentage_level === 'child'
+      })
+    }
+    if (ffFilter.hasAsin !== 'any') {
+      result = result.filter((row) =>
+        ffFilter.hasAsin === 'yes' ? !!row._asin : !row._asin,
+      )
+    }
+    if (ffFilter.missingRequired && manifest) {
+      const reqCols = manifestColumns.filter((c) => c.required)
+      result = result.filter((row) =>
+        reqCols.some((c) => {
+          const v = row[c.id]
+          return v === null || v === undefined || String(v).trim() === ''
+        }),
+      )
+    }
+
     // FF.40: parent/child hierarchy grouping
     if (result.some((r) => r.parentage_level === 'parent' || r.parentage_level === 'child')) {
       const grouped: Row[] = []
@@ -596,7 +639,42 @@ export default function AmazonFlatFileClient({
 
     displayRowsRef.current = result
     return result
-  }, [rows, searchQuery, searchMode, sortConfig, collapsedParents])
+  }, [rows, searchQuery, searchMode, sortConfig, collapsedParents, ffFilter, manifest, manifestColumns])
+
+  // BF.1 — flat list of every visible cell for FindReplaceBar
+  const findCells = useMemo<FindCell[]>(() => {
+    const out: FindCell[] = []
+    displayRows.forEach((row, ri) => {
+      allColumnsRef.current.forEach((col, ci) => {
+        out.push({ rowIdx: ri, colIdx: ci, rowId: row._rowId as string, columnId: col.id, value: row[col.id] })
+      })
+    })
+    return out
+  }, [displayRows])
+
+  // BF.2 — per-cell tone map from conditional formatting rules
+  const toneMap = useMemo(() => {
+    const out = new Map<string, string>()
+    if (cfRules.length === 0) return out
+    const active = cfRules.filter((r) => r.enabled)
+    const byCol = new Map<string, ConditionalRule[]>()
+    for (const rule of active) {
+      const arr = byCol.get(rule.columnId) ?? []
+      arr.push(rule)
+      byCol.set(rule.columnId, arr)
+    }
+    displayRows.forEach((row, ri) => {
+      for (const [colId, colRules] of byCol) {
+        for (const rule of colRules) {
+          if (evaluateRule(rule, row[colId])) {
+            out.set(`${ri}:${colId}`, rule.tone)
+            break
+          }
+        }
+      }
+    })
+    return out
+  }, [cfRules, displayRows])
 
   const normSel = useMemo<NormSel | null>(() => {
     if (!selAnchor || !selEnd) return null
@@ -848,6 +926,8 @@ export default function AmazonFlatFileClient({
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
       if (mod && e.key === 'z' && e.shiftKey)  { e.preventDefault(); redo(); return }
       if (mod && e.key === 'y')                 { e.preventDefault(); redo(); return }
+      // BF.1 — Find & Replace
+      if (mod && e.key === 'f') { e.preventDefault(); setFindReplaceOpen(true); return }
 
       // In edit mode: only handle Escape (let input handle everything else)
       if (isEditingRef.current) {
@@ -1938,6 +2018,36 @@ export default function AmazonFlatFileClient({
               />
             )}
           </div>
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* BF.1 — Find & Replace */}
+          <TbBtn
+            icon={<Replace className="w-3.5 h-3.5" />}
+            title="Find & Replace (⌘F)"
+            onClick={() => setFindReplaceOpen((o) => !o)}
+            disabled={!manifest}
+            active={findReplaceOpen}
+          />
+
+          {/* BF.2 — Conditional formatting */}
+          <TbBtn
+            icon={<Sparkles className="w-3.5 h-3.5" />}
+            title={cfRules.length > 0 ? `Conditional formatting (${cfRules.filter(r => r.enabled).length} active)` : 'Conditional formatting'}
+            onClick={() => setCfOpen((o) => !o)}
+            disabled={!manifest}
+            active={cfOpen}
+            badge={cfRules.filter(r => r.enabled).length || undefined}
+          />
+
+          {/* BF.4 — AI bulk actions */}
+          <TbBtn
+            icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+            title={selectedRows.size > 0 ? `AI bulk actions (${selectedRows.size} selected)` : 'AI bulk actions — select rows first'}
+            onClick={() => setAiModalOpen(true)}
+            disabled={selectedRows.size === 0 || !manifest}
+            badge={selectedRows.size || undefined}
+          />
         </div>
 
         {/* ── Bar 3: Marketplace · Product type · Search ────── */}
@@ -2003,6 +2113,13 @@ export default function AmazonFlatFileClient({
                   {searchMode === 'rows' ? `${displayRows.length}/${rows.length}` : `${allColumns.length} col${allColumns.length !== 1 ? 's' : ''}`}
                 </span>
               )}
+              {/* BF.3 — extended row filter */}
+              <FFFilterPanel
+                open={filterPanelOpen}
+                onOpenChange={setFilterPanelOpen}
+                value={ffFilter}
+                onChange={setFFFilter}
+              />
             </div>
           )}
 
@@ -2386,6 +2503,8 @@ export default function AmazonFlatFileClient({
                   stickyLeftByColIdx={stickyLeftByColIdx}
                   cellErrors={cellErrors}
                   collapsedParents={collapsedParents}
+                  matchKeys={matchKeys}
+                  toneMap={toneMap}
                   onToggleCollapse={(rowId) => setCollapsedParents((prev) => {
                     const next = new Set(prev)
                     if (next.has(rowId)) next.delete(rowId)
@@ -2531,6 +2650,57 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
+      {/* BF.1 — Find & Replace */}
+      {manifest && (
+        <div className="fixed top-16 right-4 z-50">
+          <FindReplaceBar
+            open={findReplaceOpen}
+            onClose={() => { setFindReplaceOpen(false); setMatchKeys(new Set()) }}
+            cells={findCells}
+            rangeBounds={normSel ? { minRow: normSel.rMin, maxRow: normSel.rMax, minCol: normSel.cMin, maxCol: normSel.cMax } : null}
+            visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
+            onActivate={(match) => {
+              setSelAnchor({ ri: match.rowIdx, ci: match.colIdx })
+              setSelEnd({ ri: match.rowIdx, ci: match.colIdx })
+              const row = displayRows[match.rowIdx]
+              if (row) setActiveCell({ rowId: row._rowId as string, colId: match.columnId })
+              requestAnimationFrame(() =>
+                document.querySelector(`[data-ri="${match.rowIdx}"][data-ci="${match.colIdx}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+              )
+            }}
+            onMatchSetChange={setMatchKeys}
+            onReplaceCell={(rowId, columnId, newValue) => {
+              pushSnapshot()
+              setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [columnId]: newValue, _dirty: true } : r))
+            }}
+          />
+        </div>
+      )}
+
+      {/* BF.2 — Conditional formatting */}
+      {manifest && (
+        <div className="fixed top-16 right-4 z-50">
+          <ConditionalFormatBar
+            open={cfOpen}
+            onClose={() => setCfOpen(false)}
+            rules={cfRules}
+            onChange={setCfRules}
+            visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
+          />
+        </div>
+      )}
+
+      {/* BF.4 — AI bulk actions */}
+      <AIBulkModal
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        selectedProductIds={[...selectedRows].flatMap((rowId) => {
+          const row = rows.find((r) => r._rowId === rowId)
+          return row?._productId ? [row._productId as string] : []
+        })}
+        marketplace={marketplace}
+      />
+
       {pushPanel && manifest && (
         <PushToMarketsPanel
           initialTab={pushPanel.tab}
@@ -2667,6 +2837,8 @@ interface RowProps {
   stickyLeftByColIdx: Record<number, number>
   cellErrors: Map<string, ValidationIssue>
   collapsedParents: Set<string>
+  matchKeys: Set<string>
+  toneMap: Map<string, string>
   onToggleCollapse: (rowId: string) => void
   onSelect: (c: boolean) => void
   onDeactivate: () => void; onChange: (colId: string, val: unknown) => void
@@ -2690,6 +2862,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   isDraggingRow, dropIndicator,
   normSel, fillTarget, isFillDragging, isEditing, editInitialChar, clipboardRange,
   stickyLeftByColIdx, cellErrors, collapsedParents, onToggleCollapse,
+  matchKeys, toneMap,
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop }: RowProps) {
@@ -2912,6 +3085,9 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           right:  ci === clipboardRange.cMax,
         } : null
 
+        const isMatch = matchKeys.has(`${rowIdx}:${ci}`)
+        const toneCls = toneMap.get(`${rowIdx}:${col.id}`) ? TONE_CLASSES[toneMap.get(`${rowIdx}:${col.id}`)! as keyof typeof TONE_CLASSES] : undefined
+
         return (
           <SpreadsheetCell
             key={col.id}
@@ -2931,6 +3107,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             fillTargetEdges={fillTargetEdges}
             isClipboard={isClipboard}
             clipboardEdges={clipboardEdges}
+            isMatch={isMatch}
+            toneCls={toneCls}
             ri={rowIdx}
             ci={ci}
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
@@ -3114,6 +3292,10 @@ interface CellProps {
   clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   validIssue?: ValidationIssue
   stickyLeft?: number
+  /** BF.1 — cell is a find-replace match */
+  isMatch?: boolean
+  /** BF.2 — conditional formatting tone class */
+  toneCls?: string
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
@@ -3154,7 +3336,7 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, ci,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
-  validIssue, stickyLeft,
+  validIssue, stickyLeft, isMatch, toneCls,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
@@ -3229,10 +3411,12 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20'
     : isClipboard ? 'bg-green-50/40 dark:bg-green-900/10'
     : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10'
+    : isMatch ? 'bg-yellow-100 dark:bg-yellow-900/30'
+    : toneCls ? toneCls
     : cellBg,
     isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
     isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
-    !isActive && !isSelected && (
+    !isActive && !isSelected && !isMatch && !toneCls && (
       validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
       : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
       : ''
