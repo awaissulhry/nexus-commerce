@@ -294,18 +294,31 @@ export async function runAmazonReconciliation(
     fetchMethod = 'listings-api'
     logger.info('[recon] Report returned 0 rows — trying Listings Items API fallback', { marketplace })
 
-    const knownSkus = await prisma.listingReconciliation.findMany({
+    // Prefer previously-reconciled SKUs; on a fresh install fall back to
+    // all Product.sku values in the DB so the first run can bootstrap.
+    const reconSkus = await prisma.listingReconciliation.findMany({
       where: { channel: 'AMAZON' },
       select: { externalSku: true },
       distinct: ['externalSku'],
     })
 
-    if (knownSkus.length === 0) {
-      logger.info('[recon] No known SKUs for fallback — run IT first', { marketplace })
-      return { runId, channel: 'AMAZON', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0, fetchMethod: 'empty' as const }
+    let skus: string[]
+    if (reconSkus.length > 0) {
+      skus = reconSkus.map(r => r.externalSku)
+    } else {
+      logger.info('[recon] No prior reconciliation — using Product SKUs from DB as fallback', { marketplace })
+      const products = await prisma.product.findMany({
+        where: { deletedAt: null },
+        select: { sku: true },
+        take: 2000,
+      })
+      skus = products.map(p => p.sku).filter(Boolean)
     }
 
-    const skus = knownSkus.map(r => r.externalSku)
+    if (skus.length === 0) {
+      logger.info('[recon] No SKUs available for fallback — add products first', { marketplace })
+      return { runId, channel: 'AMAZON', marketplace, totalDiscovered: 0, matched: 0, unmatched: 0, skipped: 0, durationMs: Date.now() - t0, fetchMethod: 'empty' as const }
+    }
     logger.info('[recon] Listings Items fallback: checking SKUs', { count: skus.length, marketplace })
 
     catalog = await amazonService.fetchCatalogViaListingsItems(skus, mpId)
