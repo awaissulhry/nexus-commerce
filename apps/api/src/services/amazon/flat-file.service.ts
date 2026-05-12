@@ -825,6 +825,10 @@ export class AmazonFlatFileService {
         brand:                 String(attrs.brand?.[0]?.value ?? ''),
         product_description:   listing?.description ?? attrs.product_description?.[0]?.value ?? '',
         bullet_point:          bullets[0] ?? '',
+        bullet_point_2:        bullets[1] ?? '',
+        bullet_point_3:        bullets[2] ?? '',
+        bullet_point_4:        bullets[3] ?? '',
+        bullet_point_5:        bullets[4] ?? '',
         generic_keyword:       String(attrs.generic_keyword?.[0]?.value ?? ''),
         color:                 String(attrs.color?.[0]?.value ?? ''),
         // purchasable_offer expanded — bare key kept as sentinel so generic loop skips it
@@ -840,7 +844,7 @@ export class AmazonFlatFileService {
         fulfillment_availability__fulfillment_channel_code: faCode,
         fulfillment_availability__quantity:              listing?.quantity != null ? String(listing.quantity) : '',
         fulfillment_availability__lead_time_to_ship_max_days: faLeadTime,
-        main_product_image_locator: '',
+        main_product_image_locator: String(attrs.main_product_image_locator?.[0]?.media_location ?? ''),
       }
 
       // Populate remaining attributes from platformAttributes, expanding
@@ -949,7 +953,7 @@ export class AmazonFlatFileService {
         if (row.bullet_point)        attrs.bullet_point        = [{ value: String(row.bullet_point), language_tag: languageTag, marketplace_id: marketplaceId }]
         if (row.generic_keyword)     attrs.generic_keyword     = wrapL(String(row.generic_keyword))
         if (row.color)               attrs.color               = wrapL(String(row.color))
-        if (row.main_product_image_locator) attrs.main_product_image_locator = wrap(String(row.main_product_image_locator))
+        if (row.main_product_image_locator) attrs.main_product_image_locator = [{ media_location: String(row.main_product_image_locator), marketplace_id: marketplaceId }]
 
         // purchasable_offer — read from expanded sub-columns, fall back to bare value
         const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
@@ -1332,7 +1336,7 @@ export class AmazonFlatFileService {
     if (row.generic_keyword)     attrs.generic_keyword     = wrapL(String(row.generic_keyword))
     if (row.color)               attrs.color               = wrapL(String(row.color))
     if (row.main_product_image_locator) {
-      attrs.main_product_image_locator = wrap(String(row.main_product_image_locator))
+      attrs.main_product_image_locator = [{ media_location: String(row.main_product_image_locator), marketplace_id: marketplaceId }]
     }
 
     // Bullet points — consolidate numbered variants
