@@ -42,6 +42,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -1487,6 +1488,7 @@ function EditableCell({
 // it can hold its own useState (calling useState inside a switch case
 // in ProductCell would violate the rules of hooks).
 // Parent: 4 actions. Child/standalone: 10 actions.
+// Dropdown renders via portal so it escapes overflow:hidden on grid cells/rows.
 // Smooth delete: inline confirm → spinner → POST bulk-soft-delete → onChanged().
 function EditSplitButton({
   product,
@@ -1498,6 +1500,9 @@ function EditSplitButton({
   const [open, setOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const chevronRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
   const needsFix = !product.isParent && product.status === 'ACTIVE' && (product.channelCount ?? 0) === 0
@@ -1506,6 +1511,42 @@ function EditSplitButton({
   const itemCls = 'w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed'
   const linkCls = 'block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
   const deleteCls = 'w-full text-left px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed'
+
+  // Close on outside click or scroll
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        chevronRef.current && !chevronRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+        setConfirmDelete(false)
+      }
+    }
+    const closeOnScroll = () => { setOpen(false); setConfirmDelete(false) }
+    document.addEventListener('mousedown', close)
+    window.addEventListener('scroll', closeOnScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      window.removeEventListener('scroll', closeOnScroll, true)
+    }
+  }, [open])
+
+  const handleChevron = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (open) {
+      setOpen(false)
+      setConfirmDelete(false)
+      return
+    }
+    const rect = chevronRef.current?.getBoundingClientRect()
+    if (rect) {
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setOpen(true)
+    setConfirmDelete(false)
+  }
 
   const handleDelete = async () => {
     setIsDeleting(true)
@@ -1560,131 +1601,113 @@ function EditSplitButton({
     }
   }
 
+  const divider = <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+
+  const deleteBlock = confirmDelete ? (
+    <div className="px-3 py-1.5 space-y-1.5">
+      <p className="text-xs text-slate-500 dark:text-slate-400">Delete this product?</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={isDeleting}
+          onClick={handleDelete}
+          className="flex-1 text-xs h-6 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center justify-center gap-1"
+        >
+          {isDeleting && <span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" />}
+          Yes, delete
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(false)}
+          className="flex-1 text-xs h-6 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : (
+    <button type="button" className={deleteCls} onClick={() => setConfirmDelete(true)}>
+      Delete
+    </button>
+  )
+
+  const menu = open && menuPos ? createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 9999 }}
+      className="w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 text-sm"
+    >
+      {product.isParent ? (
+        // ── Parent: 4 actions ──────────────────────────────────────
+        <>
+          <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
+            Edit images
+          </Link>
+          <button type="button" className={itemCls} onClick={handleCopy}>
+            Copy
+          </button>
+          {divider}
+          <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
+            Create ad
+          </Link>
+          {divider}
+          {deleteBlock}
+        </>
+      ) : (
+        // ── Child / standalone: 10 actions ────────────────────────
+        <>
+          <Link href={`/products/${product.id}/edit`} className={linkCls} onClick={() => setOpen(false)}>
+            Edit
+          </Link>
+          <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
+            Edit images
+          </Link>
+          <button type="button" className={itemCls} onClick={handleCopy}>
+            Copy
+          </button>
+          {divider}
+          <Link href={`/products/${product.id}/edit?tab=condition`} className={linkCls} onClick={() => setOpen(false)}>
+            Add condition
+          </Link>
+          <Link href={`/products/${product.id}/edit?tab=fulfillment`} className={linkCls} onClick={() => setOpen(false)}>
+            Switch to FBA
+          </Link>
+          <Link href={`/products/${product.id}/edit?tab=labels`} className={linkCls} onClick={() => setOpen(false)}>
+            Print labels
+          </Link>
+          <button type="button" className={itemCls} onClick={handleClose}>
+            Close
+          </button>
+          {divider}
+          <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
+            Create ad
+          </Link>
+          <Link href={`/products/${product.id}/edit?tab=shipping`} className={linkCls} onClick={() => setOpen(false)}>
+            Edit shipping
+          </Link>
+          {divider}
+          {deleteBlock}
+        </>
+      )}
+    </div>,
+    document.body,
+  ) : null
+
   return (
-    <div className="relative inline-flex rounded-md shadow-sm">
+    <div className="inline-flex rounded-md shadow-sm">
       <Link href={`/products/${product.id}/edit`} className={splitBtnCls}>
         {label}
       </Link>
       <button
+        ref={chevronRef}
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); setConfirmDelete(false) }}
+        onClick={handleChevron}
         className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
         aria-label="More actions"
       >
         <ChevronDown size={12} />
       </button>
-
-      {open && (
-        <div
-          className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1 text-sm"
-          onMouseLeave={() => { setOpen(false); setConfirmDelete(false) }}
-        >
-          {product.isParent ? (
-            // ── Parent: 4 actions ──────────────────────────────────────
-            <>
-              <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
-                Edit images
-              </Link>
-              <button type="button" className={itemCls} onClick={handleCopy}>
-                Copy
-              </button>
-              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-              <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
-                Create ad
-              </Link>
-              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-              {confirmDelete ? (
-                <div className="px-3 py-1.5 space-y-1.5">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Delete this product?</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={handleDelete}
-                      className="flex-1 text-xs h-6 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center justify-center gap-1"
-                    >
-                      {isDeleting ? <span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> : null}
-                      Yes, delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(false)}
-                      className="flex-1 text-xs h-6 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button type="button" className={deleteCls} onClick={() => setConfirmDelete(true)}>
-                  Delete
-                </button>
-              )}
-            </>
-          ) : (
-            // ── Child / standalone: 10 actions ────────────────────────
-            <>
-              <Link href={`/products/${product.id}/edit`} className={linkCls} onClick={() => setOpen(false)}>
-                Edit
-              </Link>
-              <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
-                Edit images
-              </Link>
-              <button type="button" className={itemCls} onClick={handleCopy}>
-                Copy
-              </button>
-              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-              <Link href={`/products/${product.id}/edit?tab=condition`} className={linkCls} onClick={() => setOpen(false)}>
-                Add condition
-              </Link>
-              <Link href={`/products/${product.id}/edit?tab=fulfillment`} className={linkCls} onClick={() => setOpen(false)}>
-                Switch to FBA
-              </Link>
-              <Link href={`/products/${product.id}/edit?tab=labels`} className={linkCls} onClick={() => setOpen(false)}>
-                Print labels
-              </Link>
-              <button type="button" className={itemCls} onClick={handleClose}>
-                Close
-              </button>
-              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-              <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
-                Create ad
-              </Link>
-              <Link href={`/products/${product.id}/edit?tab=shipping`} className={linkCls} onClick={() => setOpen(false)}>
-                Edit shipping
-              </Link>
-              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-              {confirmDelete ? (
-                <div className="px-3 py-1.5 space-y-1.5">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Delete this product?</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={handleDelete}
-                      className="flex-1 text-xs h-6 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center justify-center gap-1"
-                    >
-                      {isDeleting ? <span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> : null}
-                      Yes, delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDelete(false)}
-                      className="flex-1 text-xs h-6 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button type="button" className={deleteCls} onClick={() => setConfirmDelete(true)}>
-                  Delete
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      {menu}
     </div>
   )
 }
