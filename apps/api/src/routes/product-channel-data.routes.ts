@@ -185,41 +185,30 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
   })
 
   // ── GET /api/products/:id/channel-inventory ─────────────────────────────
+  //
+  // For parent products: variants = child Product rows + their ChannelListing
+  // quantity. This mirrors the channel-pricing endpoint so both use the same
+  // child Product IDs — matching what the Matrix tab and the flat file use.
+  // (Old approach used ProductVariation + VariantChannelListing whose IDs
+  // never matched child Product IDs, so listed qty always showed as 0.)
   fastify.get<{ Params: { id: string }; Querystring: { channel?: string } }>(
     '/products/:id/channel-inventory',
     async (request, reply) => {
       const { id } = request.params
       const channel = request.query.channel ?? 'AMAZON'
 
-      const [variants, channelListings, variantListings, stockLevels] = await Promise.all([
-        prisma.productVariation.findMany({
-          where: { productId: id },
-          select: { id: true, sku: true, variationAttributes: true, stock: true },
-          orderBy: { sku: 'asc' },
-        }),
-        prisma.channelListing.findMany({
-          where: { productId: id, channel },
-          select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true },
-          orderBy: { marketplace: 'asc' },
-        }),
-        prisma.variantChannelListing.findMany({
-          where: { variant: { productId: id }, channel },
-          select: { variantId: true, marketplace: true, channel: true, channelQuantity: true, quantity: true, listingStatus: true, lastSyncedAt: true },
-          orderBy: [{ variantId: 'asc' }, { marketplace: 'asc' }],
-        }),
-        prisma.stockLevel.findMany({
-          where: { productId: id },
-          select: { variationId: true, quantity: true, reserved: true, available: true, location: { select: { type: true } } },
-        }),
-      ])
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, isParent: true, totalStock: true },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
 
-      // Physical stock per variationId (sum across warehouse locations)
-      const physicalByVariant = new Map<string | null, number>()
-      for (const sl of stockLevels) {
-        if (sl.location.type !== 'WAREHOUSE') continue
-        const key = sl.variationId ?? null
-        physicalByVariant.set(key, (physicalByVariant.get(key) ?? 0) + sl.available)
-      }
+      // Product-level ChannelListing (used for non-parent + product summary row)
+      const channelListings = await prisma.channelListing.findMany({
+        where: { productId: id, channel },
+        select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true },
+        orderBy: { marketplace: 'asc' },
+      })
 
       const productMarkets = channelListings.map((cl) => ({
         marketplace: cl.marketplace,
@@ -230,44 +219,49 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
       }))
 
-      const variantListingsByVariant = new Map<string, typeof variantListings>()
-      for (const vl of variantListings) {
-        if (!variantListingsByVariant.has(vl.variantId)) variantListingsByVariant.set(vl.variantId, [])
-        variantListingsByVariant.get(vl.variantId)!.push(vl)
-      }
+      let variantRows: Array<{
+        variantId: string; sku: string
+        attributes: Record<string, string>
+        physicalStock: number
+        markets: typeof productMarkets
+      }> = []
 
-      const variantRows = variants.map((v) => {
-        const vListings = variantListingsByVariant.get(v.id) ?? []
-        const markets = vListings.map((vl) => ({
-          marketplace: vl.marketplace,
-          channel: vl.channel,
-          listedQty: vl.channelQuantity ?? vl.quantity ?? null,
-          buffer: 0,
-          listingStatus: vl.listingStatus,
-          lastSyncedAt: vl.lastSyncedAt?.toISOString() ?? null,
+      if (product.isParent) {
+        // Use child Product rows + their ChannelListing — same model the Matrix
+        // tab and the PATCH /channel-pricing endpoint both operate on.
+        const children = await prisma.product.findMany({
+          where: { parentId: id, deletedAt: null },
+          select: {
+            id: true, sku: true, totalStock: true, variantAttributes: true,
+            channelListings: {
+              where: { channel },
+              select: { marketplace: true, channel: true, quantity: true, stockBuffer: true, listingStatus: true, lastSyncedAt: true },
+            },
+          },
+          orderBy: { sku: 'asc' },
+        })
+
+        variantRows = children.map((c) => ({
+          variantId: c.id,
+          sku: c.sku,
+          attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
+          physicalStock: c.totalStock ?? 0,
+          markets: c.channelListings.map((cl) => ({
+            marketplace: cl.marketplace,
+            channel: cl.channel,
+            listedQty: cl.quantity ?? null,
+            buffer: cl.stockBuffer ?? 0,
+            listingStatus: cl.listingStatus,
+            lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
+          })),
         }))
-
-        // Fill markets not in variantListings from product-level
-        const covered = new Set(markets.map((m) => m.marketplace))
-        for (const pm of productMarkets) {
-          if (!covered.has(pm.marketplace)) markets.push(pm)
-        }
-        markets.sort((a, b) => a.marketplace.localeCompare(b.marketplace))
-
-        return {
-          variantId: v.id,
-          sku: v.sku,
-          attributes: (v.variationAttributes as Record<string, string> | null) ?? {},
-          physicalStock: physicalByVariant.get(v.id) ?? 0,
-          markets,
-        }
-      })
+      }
 
       return reply.send({
         productId: id,
         channel,
         product: {
-          physicalStock: physicalByVariant.get(null) ?? 0,
+          physicalStock: product.totalStock ?? 0,
           markets: productMarkets,
         },
         variants: variantRows,
