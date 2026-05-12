@@ -281,10 +281,15 @@ export default function ProductsWorkspace() {
       const saved = window.localStorage.getItem('products.visibleColumns')
       if (!saved) return DEFAULT_VISIBLE
       const parsed: string[] = JSON.parse(saved)
-      // AM.1 migration: if the user had the classic layout (no 'product' column)
-      // swap in the new defaults so the page doesn't look broken after the upgrade.
-      const hasNewCols = parsed.includes('product') || parsed.includes('listing-status')
-      return hasNewCols ? parsed : DEFAULT_VISIBLE
+      // AM.1 migration: reset to the new Amazon-style defaults whenever
+      // the saved set doesn't include the combined 'product' column.
+      // This clears any stale sku/name/thumb combination that was stored
+      // before the column overhaul so the page always opens cleanly.
+      if (!parsed.includes('product')) {
+        window.localStorage.removeItem('products.visibleColumns')
+        return DEFAULT_VISIBLE
+      }
+      return parsed
     } catch { return DEFAULT_VISIBLE }
   })
   useEffect(() => {
