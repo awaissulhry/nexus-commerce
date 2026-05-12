@@ -56,11 +56,12 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       // Each child has its own ChannelListing — that is exactly the source
       // getExistingRows reads for the flat file, so editing here = editing
       // what the flat file shows.
+      type MarketRow = { marketplace: string; channel: string; price: number | null; salePrice: number | null; listingStatus: string; lastSyncedAt: string | null; asin: string | null; source: 'product' | 'variant' }
       let variantRows: Array<{
         variantId: string; sku: string
         attributes: Record<string, string>
         basePrice: number | null
-        markets: typeof productMarkets
+        markets: MarketRow[]
       }> = []
 
       if (product.isParent) {
