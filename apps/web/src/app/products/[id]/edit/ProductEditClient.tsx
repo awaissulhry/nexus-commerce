@@ -27,7 +27,7 @@ import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
 import InventoryTab from './tabs/InventoryTab'
 import LocalesTab from './tabs/LocalesTab'
-import VariationsTab from './tabs/VariationsTab'
+import MatrixTab from './tabs/MatrixTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import ComplianceTab from './tabs/ComplianceTab'
 import ImagesTab from './tabs/ImagesTab'
@@ -885,7 +885,11 @@ export default function ProductEditClient({
             id="panel-variations"
             aria-labelledby="tab-variations"
           >
-            <VariationsTab parent={product} childrenList={childrenList} />
+            <MatrixTab
+              product={product}
+              onDirtyChange={() => {}}
+              discardSignal={0}
+            />
           </div>
         )}
 

@@ -116,6 +116,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         channel?: string
         price?: number | null
         salePrice?: number | null
+        quantity?: number | null
       }>
     }
   }>('/products/:id/channel-pricing', async (request, reply) => {
@@ -132,6 +133,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         // Variant-level update
         const data: Record<string, any> = { lastSyncedAt: new Date() }
         if (u.price !== undefined) data.channelPrice = u.price
+        if (u.quantity !== undefined && u.quantity !== null) data.channelQuantity = u.quantity
         await prisma.variantChannelListing.updateMany({
           where: { variantId: u.variantId, marketplace: mp, channel: ch },
           data,
@@ -141,6 +143,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         const data: Record<string, any> = { lastSyncedAt: new Date() }
         if (u.price !== undefined && u.price !== null) data.price = u.price
         if (u.salePrice !== undefined) data.salePrice = u.salePrice
+        if (u.quantity !== undefined && u.quantity !== null) data.quantity = u.quantity
         await prisma.channelListing.updateMany({
           where: { productId: id, marketplace: mp, channel: ch },
           data,
