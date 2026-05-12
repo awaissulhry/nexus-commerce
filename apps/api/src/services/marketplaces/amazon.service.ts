@@ -1706,11 +1706,16 @@ export class AmazonService {
         },
       })
 
-      const asin: string = typeof res?.asin === 'string' ? res.asin : ''
-      if (!asin) return null // not listed in this marketplace
-
       const summaries: any[] = res?.summaries ?? []
       const summary = summaries[0] ?? null
+
+      // ASIN is nested inside summaries[0].asin — not at the top level.
+      // Fall back to res.asin in case a library version surfaces it there.
+      const asin: string =
+        typeof summary?.asin === 'string' ? summary.asin :
+        typeof res?.asin === 'string' ? res.asin : ''
+      if (!asin) return null // not listed in this marketplace
+
       const rawStatus =
         (Array.isArray(summary?.status) ? summary.status[0] : summary?.status) ??
         summary?.itemStatus ?? null
