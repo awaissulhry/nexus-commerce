@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle, ArrowUpDown, Check, ChevronDown, Copy, Layers,
-  Loader2, Percent, Plus, RefreshCw, Trash2,
+  Loader2, Percent, Plus, Redo2, RefreshCw, Send, Trash2, Undo2,
 } from 'lucide-react'
 import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -212,6 +212,22 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   const [deleteListings, setDeleteListings] = useState<Record<string, number>>({})
   const [deleteLoading, setDeleteLoading] = useState(false)
 
+  // MX.1 — Undo/Redo history (refs to avoid extra renders on every cell save)
+  type HistoryEntry = { addr: CellAddr; before: number; after: number }
+  const historyStack = useRef<HistoryEntry[]>([])
+  const redoStack    = useRef<HistoryEntry[]>([])
+  const isUndoRedoRef = useRef(false)
+  const [historyLen, setHistoryLen] = useState(0) // mirrors historyStack.current.length for button state
+  const [redoLen, setRedoLen]       = useState(0)
+  // Stable refs so patchChannel can read current data without stale closures
+  const channelDataRef = useRef(channelData)
+  const invDataRef     = useRef(invData)
+  useEffect(() => { channelDataRef.current = channelData }, [channelData])
+  useEffect(() => { invDataRef.current     = invData     }, [invData])
+  // Publish state
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+
   // Bulk
   const [bulkMode, setBulkMode]         = useState<'none' | 'price' | 'pct' | 'copy' | 'qty'>('none')
   const [bulkValue, setBulkValue]       = useState('')
@@ -272,14 +288,17 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   // Background sync — grid stays visible, data updates silently.
   useInvalidationChannel(['product.updated', 'channel-pricing.updated'], () => { void refetch() })
 
-  // Discard — show spinner so user sees a fresh reload.
+  // Discard — show spinner so user sees a fresh reload; clear history.
   const discardSeen = useRef(discardSignal)
   useEffect(() => {
     if (discardSignal === discardSeen.current) return
     discardSeen.current = discardSignal
     hasLoadedRef.current = false
+    historyStack.current = []; redoStack.current = []
+    setHistoryLen(0); setRedoLen(0); setHasUnpublishedChanges(false)
     void refetch()
   }, [discardSignal, refetch])
+
 
   // ── Helpers for channel data lookup ──────────────────────────────────
   function getChannelPrice(variantId: string, market: string): number {
@@ -326,6 +345,13 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       flash(key)
       emitInvalidation({ type: 'product.updated', meta: { productIds: [addr.childId] } })
+      if (!isUndoRedoRef.current) {
+        historyStack.current = [...historyStack.current.slice(-49), { addr, before: prevVal, after: value }]
+        redoStack.current = []
+        setHistoryLen(historyStack.current.length)
+        setRedoLen(0)
+      }
+      setHasUnpublishedChanges(true)
     } catch (e: any) {
       setChildren((ch) => ch.map((c) => c.id === addr.childId ? { ...c, [addr.field]: prevVal } : c))
       errCell(key); setError(e.message)
@@ -335,6 +361,10 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   // ── Patch channel cell (price / listed qty) ──────────────────────────
   const patchChannel = useCallback(async (addr: ChanAddr, value: number) => {
     const key = cellKey(addr)
+    // Capture current value via refs (avoids stale closure — channelData not in deps)
+    const prevVal = addr.field === 'price'
+      ? (channelDataRef.current.find((v) => v.variantId === addr.childId)?.markets.find((m) => m.marketplace === addr.marketplace)?.price ?? 0)
+      : (invDataRef.current.find((v) => v.variantId === addr.childId)?.markets.find((m) => m.marketplace === addr.marketplace)?.listedQty ?? 0)
     setCellState((s) => ({ ...s, [key]: 'saving' }))
     // Optimistic update
     if (addr.field === 'price') {
@@ -367,6 +397,13 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       flash(key)
       emitInvalidation({ type: 'channel-pricing.updated', id: product.id })
+      if (!isUndoRedoRef.current) {
+        historyStack.current = [...historyStack.current.slice(-49), { addr, before: prevVal, after: value }]
+        redoStack.current = []
+        setHistoryLen(historyStack.current.length)
+        setRedoLen(0)
+      }
+      setHasUnpublishedChanges(true)
     } catch (e: any) {
       errCell(key); setError(e.message)
       void refetch() // revert by re-fetching
@@ -378,6 +415,80 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
     if (addr.kind === 'master') patchMaster(addr, value)
     else patchChannel(addr, value)
   }, [patchMaster, patchChannel])
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────
+  const handleUndo = useCallback(() => {
+    const entry = historyStack.current.pop()
+    if (!entry) return
+    setHistoryLen(historyStack.current.length)
+    redoStack.current.push(entry)
+    setRedoLen(redoStack.current.length)
+    isUndoRedoRef.current = true
+    void (async () => {
+      try {
+        if (entry.addr.kind === 'master') await patchMaster(entry.addr, entry.before)
+        else await patchChannel(entry.addr, entry.before)
+      } finally { isUndoRedoRef.current = false }
+    })()
+  }, [patchMaster, patchChannel])
+
+  const handleRedo = useCallback(() => {
+    const entry = redoStack.current.pop()
+    if (!entry) return
+    setRedoLen(redoStack.current.length)
+    historyStack.current.push(entry)
+    setHistoryLen(historyStack.current.length)
+    isUndoRedoRef.current = true
+    void (async () => {
+      try {
+        if (entry.addr.kind === 'master') await patchMaster(entry.addr, entry.after)
+        else await patchChannel(entry.addr, entry.after)
+      } finally { isUndoRedoRef.current = false }
+    })()
+  }, [patchMaster, patchChannel])
+
+  // ── Publish family to channels ───────────────────────────────────────
+  const handlePublish = useCallback(async () => {
+    setPublishing(true)
+    try {
+      const allListingIds: string[] = []
+      await Promise.all(children.map(async (child) => {
+        try {
+          const r = await fetch(`${backend}/api/products/${child.id}/all-listings`)
+          if (!r.ok) return
+          const grouped = await r.json() as Record<string, any[]>
+          for (const listings of Object.values(grouped)) {
+            for (const l of listings) { if (l.id) allListingIds.push(l.id) }
+          }
+        } catch {}
+      }))
+      if (allListingIds.length === 0) { setError('No listings found — sync via flat file first'); return }
+      const res = await fetch(`${backend}/api/listings/bulk-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'resync', listingIds: allListingIds }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setHasUnpublishedChanges(false)
+      emitInvalidation({ type: 'channel-pricing.updated', id: product.id })
+    } catch (e: any) {
+      setError(e.message ?? 'Publish failed')
+    } finally {
+      setPublishing(false)
+    }
+  }, [backend, children, product.id])
+
+  // Keyboard undo/redo — scoped to window while this tab is mounted.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? e.metaKey : e.ctrlKey
+      if (!mod) return
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo() }
+      if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); handleRedo() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleUndo, handleRedo])
 
   // ── Drag-fill ────────────────────────────────────────────────────────
   const startDrag = useCallback((addr: CellAddr, v: number) => {
@@ -533,6 +644,41 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* MX.1 — Action bar: undo/redo + discard + publish */}
+      <div className="flex items-center gap-1 pb-2 border-b border-slate-100 dark:border-slate-800">
+        <button
+          type="button" title="Undo (⌘Z)" aria-label="Undo"
+          disabled={historyLen === 0} onClick={handleUndo}
+          className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-default transition-colors"
+        ><Undo2 className="w-3.5 h-3.5" /></button>
+        <button
+          type="button" title="Redo (⌘⇧Z)" aria-label="Redo"
+          disabled={redoLen === 0} onClick={handleRedo}
+          className="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-default transition-colors"
+        ><Redo2 className="w-3.5 h-3.5" /></button>
+        <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5" />
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => { hasLoadedRef.current = false; historyStack.current = []; redoStack.current = []; setHistoryLen(0); setRedoLen(0); setHasUnpublishedChanges(false); void refetch() }}
+        >
+          Discard
+        </Button>
+        <Button
+          size="sm" loading={publishing}
+          icon={<Send className="w-3.5 h-3.5" />}
+          onClick={handlePublish}
+          title="Push saved changes to Amazon / eBay / Shopify"
+        >
+          Publish
+        </Button>
+        {hasUnpublishedChanges && !publishing && (
+          <span className="ml-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Changes saved — not yet published
+          </span>
+        )}
+      </div>
+
       {/* Stats strip */}
       <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
         <span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5" />{axes.join(' × ') || 'No axes'}</span>
@@ -759,6 +905,12 @@ export default function MatrixTab({ product, discardSignal = 0 }: Props) {
 
 // ── VariantFormModal ───────────────────────────────────────────────────────
 
+const COPY_GROUPS = [
+  { key: 'content',    label: 'Channel content',    desc: 'Title, description, bullet points' },
+  { key: 'attributes', label: 'Listing attributes',  desc: 'Schema fields (keywords, category data…)' },
+  { key: 'pricing',    label: 'Pricing',              desc: 'Price override and pricing rule' },
+] as const
+
 function VariantFormModal({
   mode, parent, variationAxes, existing, initial, onClose, onSaved, backend,
 }: {
@@ -775,8 +927,37 @@ function VariantFormModal({
     return out
   })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const idKey = useRef(`vc:${Date.now()}`)
+
+  // MX.1 — sibling copy state
+  const [copyFromId, setCopyFromId] = useState<string | null>(null)
+  const [copyGroups, setCopyGroups] = useState<Set<string>>(new Set(['content', 'attributes']))
+  const [copyDismissed, setCopyDismissed] = useState(false)
+
+  // Detect the best-matching sibling whenever axis values change
+  const filledAxes = Object.entries(axisValues).filter(([, v]) => v.trim())
+  const candidateSiblings = useMemo(() => {
+    if (mode !== 'create' || filledAxes.length === 0) return []
+    return existing
+      .map((sib) => {
+        const score = filledAxes.reduce((s, [ax, val]) => {
+          const sibVal = getAttr(sib, ax)
+          return s + (sibVal && sibVal.toLowerCase() === val.trim().toLowerCase() ? 1 : 0)
+        }, 0)
+        return { sib, score }
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ sib }) => sib)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, JSON.stringify(axisValues), existing])
+
+  // Auto-select best sibling
+  useEffect(() => {
+    if (copyDismissed) return
+    setCopyFromId(candidateSiblings[0]?.id ?? null)
+  }, [candidateSiblings, copyDismissed])
 
   const existingSkus = new Set(existing.filter((c) => c.id !== initial?.id).map((c) => c.sku))
   const skuTrimmed = sku.trim()
@@ -785,14 +966,27 @@ function VariantFormModal({
 
   async function handleSubmit() {
     if (!canSave) return
-    setSaving(true); setError(null)
+    setSaving(true); setFormError(null)
     try {
       const variantAttrs: Record<string, string> = { ...axisValues }
       if (mode === 'create') {
-        await fetch(`${backend}/api/catalog/products/${parent.id}/children`, {
+        const body: Record<string, any> = {
+          sku: skuTrimmed, name: name.trim(),
+          basePrice: parseFloat(basePrice) || 0,
+          variantAttributes: variantAttrs,
+        }
+        if (copyFromId && copyGroups.size > 0) {
+          body.copyFromProductId = copyFromId
+          body.copyGroups = Array.from(copyGroups)
+        }
+        const res = await fetch(`${backend}/api/catalog/products/${parent.id}/children`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idKey.current },
-          body: JSON.stringify({ sku: skuTrimmed, name: name.trim(), basePrice: parseFloat(basePrice) || 0, variantAttributes: variantAttrs }),
+          body: JSON.stringify(body),
         })
+        if (!res.ok) {
+          const j = await res.json().catch(() => null)
+          throw new Error(j?.error?.message ?? j?.error ?? `HTTP ${res.status}`)
+        }
       } else if (initial) {
         await Promise.all([
           fetch(`${backend}/api/products/bulk`, {
@@ -807,16 +1001,18 @@ function VariantFormModal({
       }
       await onSaved()
     } catch (e: any) {
-      setError(e.message ?? 'Save failed')
+      setFormError(e.message ?? 'Save failed')
     } finally {
       setSaving(false)
     }
   }
 
+  const showCopySection = mode === 'create' && !copyDismissed && candidateSiblings.length > 0
+
   return (
     <Modal title={mode === 'create' ? 'Add variant' : 'Edit variant'} onClose={onClose} open>
       <div className="space-y-3">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {formError && <p className="text-sm text-red-600">{formError}</p>}
         <Input label="SKU" value={sku} onChange={(e) => setSku(e.target.value)} mono
           error={isDuplicateSku ? 'SKU already exists' : undefined} />
         <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -824,6 +1020,51 @@ function VariantFormModal({
         {variationAxes.map((ax) => (
           <Input key={ax} label={ax} value={axisValues[ax] ?? ''} onChange={(e) => setAxisValues((p) => ({ ...p, [ax]: e.target.value }))} />
         ))}
+
+        {/* MX.1 — Sibling copy section */}
+        {showCopySection && (
+          <div className="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                Copy from existing variant
+              </span>
+              <button type="button" onClick={() => { setCopyDismissed(true); setCopyFromId(null) }}
+                className="text-xs text-blue-500 hover:text-blue-700 dark:hover:text-blue-300">
+                Dismiss
+              </button>
+            </div>
+            <select
+              value={copyFromId ?? ''}
+              onChange={(e) => setCopyFromId(e.target.value || null)}
+              className="w-full text-sm border border-blue-200 dark:border-blue-700 rounded px-2 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            >
+              {candidateSiblings.map((s) => (
+                <option key={s.id} value={s.id}>{s.sku}{(s as any).name ? ` — ${(s as any).name}` : ''}</option>
+              ))}
+            </select>
+            <div className="space-y-1.5">
+              {COPY_GROUPS.map(({ key, label, desc }) => (
+                <label key={key} className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={copyGroups.has(key)}
+                    onChange={(e) => setCopyGroups((prev) => {
+                      const n = new Set(prev); e.target.checked ? n.add(key) : n.delete(key); return n
+                    })}
+                    className="mt-0.5 rounded border-blue-300"
+                  />
+                  <div>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+                    <span className="text-xs text-slate-400 ml-1.5">{desc}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-400">
+              SKU, ASIN, barcodes and variation axes always excluded.
+            </p>
+          </div>
+        )}
       </div>
       <ModalFooter>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>

@@ -1274,6 +1274,55 @@ export async function catalogRoutes(app: FastifyInstance) {
       // children (#43.1-#43.3). The child Product above already carries
       // variantAttributes, which is what the wizard now reads.
 
+      // MX.1 — clone ChannelListings from a sibling variant when requested.
+      // Copies content / attributes / pricing (per copyGroups) and strips
+      // all variation-specific SP-API fields (color, size, ASIN, offers, etc.)
+      // so the new variant starts with shared content but its own identifiers.
+      const { copyFromProductId, copyGroups: rawCopyGroups } = request.body as any
+      if (copyFromProductId && typeof copyFromProductId === 'string') {
+        const groups = new Set<string>(Array.isArray(rawCopyGroups) ? rawCopyGroups : ['content', 'attributes'])
+        const AXIS_ATTRS = new Set([
+          'color', 'color_name', 'colour_name',
+          'apparel_size', 'size', 'size_name', 'variation_size_base_size',
+          'parentage_level', 'child_parent_sku_relationship',
+          'purchasable_offer', 'fulfillment_availability', 'skip_offer',
+        ])
+        const siblings = await prisma.channelListing.findMany({ where: { productId: copyFromProductId } })
+        await Promise.allSettled(siblings.map(async (sib) => {
+          const platAttrs = sib.platformAttributes as Record<string, any> | null
+          const sibAttrs = (platAttrs?.attributes ?? {}) as Record<string, any>
+          const cleanedAttrs: Record<string, any> = {}
+          if (groups.has('attributes')) {
+            for (const [k, v] of Object.entries(sibAttrs)) {
+              if (!AXIS_ATTRS.has(k)) cleanedAttrs[k] = v
+            }
+          }
+          await prisma.channelListing.create({
+            data: {
+              productId: childProduct.id,
+              channel: sib.channel,
+              marketplace: sib.marketplace,
+              region: sib.region,
+              channelMarket: sib.channelMarket,
+              ...(groups.has('content') ? {
+                title: sib.title,
+                description: sib.description,
+                bulletPointsOverride: sib.bulletPointsOverride,
+              } : {}),
+              ...(groups.has('pricing') ? {
+                price: sib.price,
+                pricingRule: sib.pricingRule,
+                priceAdjustmentPercent: sib.priceAdjustmentPercent,
+              } : {}),
+              platformAttributes: { ...platAttrs, attributes: cleanedAttrs } as any,
+              variationTheme: sib.variationTheme,
+              listingStatus: 'DRAFT',
+              stockBuffer: sib.stockBuffer,
+            } as any,
+          })
+        }))
+      }
+
       return reply.status(201).send({
         success: true,
         data: childProduct,
