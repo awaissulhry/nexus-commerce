@@ -26,7 +26,11 @@ import {
   bulkSetReconRowStatus,
   type ReconStatus,
 } from '../services/listing-reconciliation.service.js'
-import { startPullJob, getJobStatus } from '../services/amazon/flat-file-pull.service.js'
+import {
+  startPullJob, getJobStatus,
+  startAllMarketsPullJob, getAllMarketsPullJobStatus,
+} from '../services/amazon/flat-file-pull.service.js'
+import { startPropagateJob, getPropagateJobStatus } from '../services/amazon/flat-file-propagate.service.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 
@@ -233,14 +237,82 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
   })
 
   // ── GET /api/reconciliation/flat-file-pull/status/:jobId ─────────────────
-  // Poll job progress. When status='done', rows[] is populated and the client
-  // can write them to localStorage and open the flat file.
-  fastify.get<{
-    Params: { jobId: string }
-  }>('/reconciliation/flat-file-pull/status/:jobId', async (request, reply) => {
-    const { jobId } = request.params
-    const job = getJobStatus(jobId)
-    if (!job) return reply.code(404).send({ error: 'Job not found or expired' })
-    return reply.send(job)
+  fastify.get<{ Params: { jobId: string } }>(
+    '/reconciliation/flat-file-pull/status/:jobId',
+    async (request, reply) => {
+      const job = getJobStatus(request.params.jobId)
+      if (!job) return reply.code(404).send({ error: 'Job not found or expired' })
+      return reply.send(job)
+    },
+  )
+
+  // ── POST /api/reconciliation/flat-file-pull/start-all ────────────────────
+  // Pull all markets sequentially for the given product type.
+  fastify.post<{ Body: { productType?: string; markets?: string[] } }>(
+    '/reconciliation/flat-file-pull/start-all',
+    async (request, reply) => {
+      const { productType = '', markets = ['IT', 'DE', 'FR', 'ES', 'UK'] } = request.body ?? {}
+      if (!productType.trim()) return reply.code(400).send({ error: 'productType is required' })
+      const jobId = startAllMarketsPullJob(productType, markets)
+      return reply.send({ jobId })
+    },
+  )
+
+  // ── GET /api/reconciliation/flat-file-pull/status-all/:jobId ─────────────
+  fastify.get<{ Params: { jobId: string } }>(
+    '/reconciliation/flat-file-pull/status-all/:jobId',
+    async (request, reply) => {
+      const job = getAllMarketsPullJobStatus(request.params.jobId)
+      if (!job) return reply.code(404).send({ error: 'Job not found or expired' })
+      return reply.send(job)
+    },
+  )
+
+  // ── POST /api/reconciliation/propagate/start ──────────────────────────────
+  // Copy + translate flat-file data from a source market to target markets.
+  fastify.post<{
+    Body: {
+      sourceMarket?: string
+      targetMarkets?: string[]
+      productType?: string
+      translateText?: boolean
+      translateEnums?: boolean
+    }
+  }>('/reconciliation/propagate/start', async (request, reply) => {
+    const {
+      sourceMarket = 'IT',
+      targetMarkets = [],
+      productType = '',
+      translateText = true,
+      translateEnums = true,
+    } = request.body ?? {}
+    if (!productType.trim()) return reply.code(400).send({ error: 'productType is required' })
+    if (!targetMarkets.length) return reply.code(400).send({ error: 'targetMarkets must be non-empty' })
+    const jobId = startPropagateJob(sourceMarket, targetMarkets, productType, { translateText, translateEnums })
+    return reply.send({ jobId })
+  })
+
+  // ── GET /api/reconciliation/propagate/status/:jobId ───────────────────────
+  fastify.get<{ Params: { jobId: string } }>(
+    '/reconciliation/propagate/status/:jobId',
+    async (request, reply) => {
+      const job = getPropagateJobStatus(request.params.jobId)
+      if (!job) return reply.code(404).send({ error: 'Job not found or expired' })
+      return reply.send(job)
+    },
+  )
+
+  // ── GET /api/reconciliation/product-types ────────────────────────────────
+  // Distinct product types from the products table — drives dropdowns on
+  // the Pull and Propagate tabs.
+  fastify.get('/reconciliation/product-types', async (_request, reply) => {
+    const rows = await prisma.product.findMany({
+      where: { deletedAt: null, productType: { not: null } },
+      select: { productType: true },
+      distinct: ['productType'],
+      orderBy: { productType: 'asc' },
+    })
+    const types = rows.map((r) => r.productType).filter(Boolean) as string[]
+    return reply.send({ types })
   })
 }

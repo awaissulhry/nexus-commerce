@@ -79,18 +79,82 @@ export function startPullJob(marketplace: string, productType: string): string {
     startedAt: new Date().toISOString(),
   }
   jobs.set(jobId, job)
-
   void runJob(job).catch((err) => {
     job.status = 'failed'
     job.fatalError = err instanceof Error ? err.message : String(err)
     job.doneAt = new Date().toISOString()
   })
-
   return jobId
 }
 
 export function getJobStatus(jobId: string): PullJob | null {
   return jobs.get(jobId) ?? null
+}
+
+// ── All-markets pull ───────────────────────────────────────────────────────
+
+export interface AllMarketsPullJob {
+  jobId: string
+  productType: string
+  markets: string[]
+  currentMarket: string | null
+  status: 'running' | 'done' | 'failed'
+  perMarket: Record<string, PullJob | null>
+  startedAt: string
+  doneAt?: string
+  fatalError?: string
+}
+
+const allMarketJobs = new Map<string, AllMarketsPullJob>()
+
+export function startAllMarketsPullJob(productType: string, markets: string[]): string {
+  pruneOldJobs()
+  const jobId = `ffpull-all-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const perMarket: Record<string, PullJob | null> = {}
+  for (const mp of markets) perMarket[mp.toUpperCase()] = null
+
+  const parentJob: AllMarketsPullJob = {
+    jobId,
+    productType: productType.toUpperCase(),
+    markets: markets.map((m) => m.toUpperCase()),
+    currentMarket: null,
+    status: 'running',
+    perMarket,
+    startedAt: new Date().toISOString(),
+  }
+  allMarketJobs.set(jobId, parentJob)
+
+  void runAllMarketsJob(parentJob).catch((err) => {
+    parentJob.status = 'failed'
+    parentJob.fatalError = err instanceof Error ? err.message : String(err)
+    parentJob.doneAt = new Date().toISOString()
+  })
+  return jobId
+}
+
+export function getAllMarketsPullJobStatus(jobId: string): AllMarketsPullJob | null {
+  return allMarketJobs.get(jobId) ?? null
+}
+
+async function runAllMarketsJob(parentJob: AllMarketsPullJob): Promise<void> {
+  for (const mp of parentJob.markets) {
+    parentJob.currentMarket = mp
+    const childJob: PullJob = {
+      jobId: `ffpull-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      marketplace: mp,
+      productType: parentJob.productType,
+      status: 'running',
+      progress: 0, total: 0, pulled: 0, skipped: 0, failed: 0,
+      errors: [], rows: [],
+      startedAt: new Date().toISOString(),
+    }
+    jobs.set(childJob.jobId, childJob)
+    parentJob.perMarket[mp] = childJob
+    await runJob(childJob) // sequential — rate-limit friendly
+  }
+  parentJob.currentMarket = null
+  parentJob.status = 'done'
+  parentJob.doneAt = new Date().toISOString()
 }
 
 // ── Core job logic ─────────────────────────────────────────────────────────

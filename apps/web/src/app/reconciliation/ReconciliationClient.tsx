@@ -140,6 +140,8 @@ export default function ReconciliationClient({
   const [isPending, startTransition] = useTransition()
   const [actionMsg, setActionMsg] = useState<Record<string, string>>({})
   const [linkTarget, setLinkTarget] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'reconciliation' | 'pull' | 'propagate'>('reconciliation')
+  const router = useRouter()
   const [linkProductId, setLinkProductId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkMsg, setBulkMsg] = useState<string | null>(null)
@@ -312,45 +314,71 @@ export default function ReconciliationClient({
   const highConfPending = rows.filter(r => r.reconciliationStatus === 'PENDING' && (r.matchConfidence ?? 0) >= 0.95 && r.matchedProductId && r.externalListingId).length
   const allSelected = selected.size === rows.length && rows.length > 0
 
+  const TABS = [
+    { id: 'reconciliation' as const, label: 'Reconciliation' },
+    { id: 'pull' as const, label: 'Pull from Amazon' },
+    { id: 'propagate' as const, label: 'Propagate to markets' },
+  ]
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="bg-white border-b px-6 pt-4">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Listing Reconciliation</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Match Amazon/eBay live listings to Nexus products before enabling write-back.
+              Match, pull, and propagate Amazon listing data across all markets.
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleRun(false)}
-              disabled={isPending || marketplace === 'ALL'}
-              className="flex items-center gap-2 px-3 py-2 border bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
-            >
-              {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              Run {marketplace !== 'ALL' ? marketplace : '…'}
-            </button>
-            <button
-              onClick={() => handleRun(true)}
-              disabled={isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              Run ALL markets
-            </button>
-          </div>
         </div>
-
-        {runMsg && (
-          <div className={`mt-3 px-4 py-2 rounded-lg text-sm ${runMsg.startsWith('Done') ? 'bg-green-50 text-green-800' : runMsg.startsWith('Error') ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
-            {runMsg}
-          </div>
-        )}
+        {/* Tab nav */}
+        <div className="flex gap-0">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="px-6 py-4 max-w-screen-xl mx-auto">
+
+      {/* ── Reconciliation tab ── */}
+      {activeTab === 'reconciliation' && (<>
+        {/* Run buttons */}
+        <div className="flex gap-2 mb-5">
+          <button
+            onClick={() => handleRun(false)}
+            disabled={isPending || marketplace === 'ALL'}
+            className="flex items-center gap-2 px-3 py-2 border bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+          >
+            {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Run {marketplace !== 'ALL' ? marketplace : '…'}
+          </button>
+          <button
+            onClick={() => handleRun(true)}
+            disabled={isPending}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Run ALL markets
+          </button>
+        </div>
+        {runMsg && (
+          <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${runMsg.startsWith('Done') ? 'bg-green-50 text-green-800' : runMsg.startsWith('Error') ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
+            {runMsg}
+          </div>
+        )}
+
         {/* Channel + Marketplace selector */}
         <div className="flex gap-4 mb-5 flex-wrap">
           <div className="flex gap-1">
@@ -612,235 +640,468 @@ export default function ReconciliationClient({
           </div>
         )}
 
-        {/* Flat File Sync */}
-        <FlatFileSyncPanel />
+      </>)}
+
+      {/* ── Pull from Amazon tab ── */}
+      {activeTab === 'pull' && <PullTab backend={backend} router={router} />}
+
+      {/* ── Propagate tab ── */}
+      {activeTab === 'propagate' && <PropagateTab backend={backend} router={router} />}
+
       </div>
     </div>
   )
 }
 
-// ── Flat File Sync Panel ───────────────────────────────────────────────────
+// ── Shared helpers ─────────────────────────────────────────────────────────
 
-interface PullJob {
-  jobId: string
-  marketplace: string
-  productType: string
+const ALL_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK']
+
+function useProductTypes(backend: string) {
+  const [types, setTypes] = useState<string[]>([])
+  useEffect(() => {
+    fetch(`${backend}/api/reconciliation/product-types`)
+      .then((r) => r.ok ? r.json() : { types: [] })
+      .then((d) => setTypes(d.types ?? []))
+      .catch(() => {})
+  }, [backend])
+  return types
+}
+
+function ProductTypeSelect({ value, onChange, types }: { value: string; onChange: (v: string) => void; types: string[] }) {
+  return types.length > 0 ? (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="px-2.5 py-1.5 text-sm border border-gray-300 rounded bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
+    >
+      <option value="">Select type…</option>
+      {types.map((t) => <option key={t} value={t}>{t}</option>)}
+    </select>
+  ) : (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value.toUpperCase())}
+      placeholder="e.g. OUTERWEAR"
+      className="px-2.5 py-1.5 text-sm border border-gray-300 rounded bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
+    />
+  )
+}
+
+function ProgressBar({ pct }: { pct: number }) {
+  return (
+    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+      <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
+// ── Pull from Amazon tab ───────────────────────────────────────────────────
+
+interface SinglePullJob {
+  jobId: string; marketplace: string; productType: string
   status: 'running' | 'done' | 'failed'
-  progress: number
-  total: number
-  pulled: number
-  skipped: number
-  failed: number
-  errors: Array<{ sku: string; error: string }>
-  rows: any[]
-  startedAt: string
-  doneAt?: string
+  progress: number; total: number; pulled: number; skipped: number; failed: number
+  errors: Array<{ sku: string; error: string }>; rows: any[]; fatalError?: string
+}
+
+interface AllMarketsPullJob {
+  jobId: string; productType: string; markets: string[]; currentMarket: string | null
+  status: 'running' | 'done' | 'failed'
+  perMarket: Record<string, SinglePullJob | null>; fatalError?: string
+}
+
+function PullTab({ backend, router }: { backend: string; router: ReturnType<typeof useRouter> }) {
+  const productTypes = useProductTypes(backend)
+  const [mode, setMode] = useState<'single' | 'all'>('all')
+  const [market, setMarket] = useState('IT')
+  const [productType, setProductType] = useState('')
+  const [singleJob, setSingleJob] = useState<SinglePullJob | null>(null)
+  const [allJob, setAllJob] = useState<AllMarketsPullJob | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Poll single job
+  useEffect(() => {
+    if (!singleJob || singleJob.status !== 'running') {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      return
+    }
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/status/${singleJob.jobId}`).catch(() => null)
+      if (res?.ok) setSingleJob(await res.json())
+    }, 3000)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [singleJob?.jobId, singleJob?.status, backend]) // eslint-disable-line
+
+  // Poll all-markets job
+  useEffect(() => {
+    if (!allJob || allJob.status !== 'running') {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      return
+    }
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/status-all/${allJob.jobId}`).catch(() => null)
+      if (res?.ok) setAllJob(await res.json())
+    }, 3000)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [allJob?.jobId, allJob?.status, backend]) // eslint-disable-line
+
+  async function handleStart() {
+    if (!productType.trim()) { setErrMsg('Select a product type'); return }
+    setErrMsg(null); setStarting(true); setSingleJob(null); setAllJob(null)
+    try {
+      if (mode === 'all') {
+        const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/start-all`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productType: productType.trim().toUpperCase(), markets: ALL_MARKETS }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Start failed')
+        const s = await fetch(`${backend}/api/reconciliation/flat-file-pull/status-all/${data.jobId}`).catch(() => null)
+        setAllJob(s?.ok ? await s.json() : { ...data, status: 'running', perMarket: {}, markets: ALL_MARKETS, currentMarket: null })
+      } else {
+        const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/start`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ marketplace: market, productType: productType.trim().toUpperCase() }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Start failed')
+        const s = await fetch(`${backend}/api/reconciliation/flat-file-pull/status/${data.jobId}`).catch(() => null)
+        setSingleJob(s?.ok ? await s.json() : { ...data, status: 'running', progress: 0, total: 0, pulled: 0, skipped: 0, failed: 0, errors: [], rows: [] })
+      }
+    } catch (e: any) {
+      setErrMsg(e?.message ?? 'Failed to start')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  function openFlatFile(mp: string, pt: string, rows: any[]) {
+    try { localStorage.setItem(`ff-rows-${mp.toUpperCase()}-${pt.toUpperCase()}`, JSON.stringify(rows)) } catch {}
+    router.push(`/products/amazon-flat-file?marketplace=${mp}&productType=${pt}`)
+  }
+
+  const isRunning = (singleJob?.status === 'running') || (allJob?.status === 'running')
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <Download className="w-4 h-4 text-blue-600" />
+          <h2 className="text-base font-semibold text-gray-900">Pull from Amazon</h2>
+          <span className="text-sm text-gray-400">Fetches all listing attributes per SKU and pre-fills the flat file editor</span>
+        </div>
+
+        {/* Mode toggle */}
+        <div className="flex gap-2 mb-5">
+          {[{ id: 'all', label: 'All markets (IT/DE/FR/ES/UK)' }, { id: 'single', label: 'Single market' }].map((m) => (
+            <button key={m.id} type="button" onClick={() => setMode(m.id as 'all' | 'single')}
+              className={`px-3 py-1.5 text-sm rounded border transition-colors ${mode === m.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-end gap-3 flex-wrap">
+          {mode === 'single' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Marketplace</label>
+              <div className="flex gap-1">
+                {ALL_MARKETS.map((mp) => (
+                  <button key={mp} type="button" onClick={() => setMarket(mp)}
+                    className={`px-2.5 py-1.5 text-sm rounded border transition-colors font-medium ${market === mp ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                    {mp}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Product Type</label>
+            <ProductTypeSelect value={productType} onChange={setProductType} types={productTypes} />
+          </div>
+
+          <button type="button" onClick={handleStart} disabled={starting || isRunning}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors">
+            {starting || isRunning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isRunning ? 'Pulling…' : 'Pull from Amazon'}
+          </button>
+        </div>
+
+        {errMsg && <p className="mt-3 text-sm text-red-600">{errMsg}</p>}
+
+        {/* Single job progress */}
+        {singleJob && (
+          <div className="mt-5 space-y-3">
+            {singleJob.status === 'running' && (
+              <>
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Pulling {singleJob.marketplace} · {singleJob.progress} / {singleJob.total || '?'} SKUs</span>
+                  <span>{singleJob.total > 0 ? Math.round(singleJob.progress / singleJob.total * 100) : 0}%</span>
+                </div>
+                <ProgressBar pct={singleJob.total > 0 ? singleJob.progress / singleJob.total * 100 : 0} />
+              </>
+            )}
+            {singleJob.status === 'done' && (
+              <div className="flex items-center gap-4 text-sm flex-wrap">
+                <span className="flex items-center gap-1 text-green-700"><CheckCircle2 className="w-4 h-4" />{singleJob.pulled} pulled</span>
+                {singleJob.skipped > 0 && <span className="text-gray-400">{singleJob.skipped} not on {singleJob.marketplace}</span>}
+                {singleJob.failed > 0 && <span className="text-amber-600">{singleJob.failed} failed</span>}
+                {singleJob.rows.length > 0 && (
+                  <button type="button" onClick={() => openFlatFile(singleJob.marketplace, singleJob.productType, singleJob.rows)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg">
+                    <ExternalLink className="w-4 h-4" />Open {singleJob.marketplace} flat file →
+                  </button>
+                )}
+              </div>
+            )}
+            {singleJob.status === 'failed' && <p className="text-sm text-red-600">⚠ {singleJob.fatalError ?? 'Job failed'}</p>}
+          </div>
+        )}
+
+        {/* All-markets job progress */}
+        {allJob && (
+          <div className="mt-5 space-y-3">
+            {allJob.status === 'running' && allJob.currentMarket && (
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Currently pulling {allJob.currentMarket}…
+              </p>
+            )}
+            <div className="space-y-2">
+              {ALL_MARKETS.map((mp) => {
+                const mJob = allJob.perMarket[mp]
+                if (!mJob) return (
+                  <div key={mp} className="flex items-center gap-3 text-sm text-gray-400">
+                    <span className="w-8 font-medium">{mp}</span>
+                    <span>{allJob.currentMarket === mp ? 'Starting…' : 'Waiting…'}</span>
+                  </div>
+                )
+                const pct = mJob.total > 0 ? Math.round(mJob.progress / mJob.total * 100) : 0
+                return (
+                  <div key={mp} className="space-y-1">
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="w-8 font-medium text-gray-700">{mp}</span>
+                      {mJob.status === 'running' && <span className="text-gray-500">{mJob.progress} / {mJob.total} · {pct}%</span>}
+                      {mJob.status === 'done' && <>
+                        <span className="text-green-700 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" />{mJob.pulled} pulled</span>
+                        {mJob.skipped > 0 && <span className="text-gray-400">{mJob.skipped} skipped</span>}
+                        {mJob.failed > 0 && <span className="text-amber-600">{mJob.failed} failed</span>}
+                        {mJob.rows.length > 0 && (
+                          <button type="button" onClick={() => openFlatFile(mp, allJob.productType, mJob.rows)}
+                            className="flex items-center gap-1 px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded">
+                            <ExternalLink className="w-3 h-3" />Open →
+                          </button>
+                        )}
+                      </>}
+                      {mJob.status === 'failed' && <span className="text-red-600">{mJob.fatalError ?? 'Failed'}</span>}
+                    </div>
+                    {mJob.status === 'running' && <ProgressBar pct={pct} />}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <p className="mt-5 text-xs text-gray-400">
+          Rate-limited automatically by the SP client. ~2–5 min per market for a ~280-SKU catalog.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ── Propagate to markets tab ───────────────────────────────────────────────
+
+interface PropagateMarketState {
+  status: 'pending' | 'running' | 'done' | 'failed'
+  phase: string; translated: number; total: number; errors: string[]; rows: any[]
+}
+interface PropagateJob {
+  jobId: string; sourceMarket: string; targetMarkets: string[]; productType: string
+  options: { translateText: boolean; translateEnums: boolean }
+  status: 'running' | 'done' | 'failed'
+  markets: Record<string, PropagateMarketState>
   fatalError?: string
 }
 
-const MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK']
-
-function FlatFileSyncPanel() {
-  const backend = getBackendUrl()
-  const router = useRouter()
-
-  const [market, setMarket] = useState('IT')
+function PropagateTab({ backend, router }: { backend: string; router: ReturnType<typeof useRouter> }) {
+  const productTypes = useProductTypes(backend)
+  const [sourceMarket, setSourceMarket] = useState('IT')
+  const [targetMarkets, setTargetMarkets] = useState<Set<string>>(new Set(['DE', 'FR', 'ES', 'UK']))
   const [productType, setProductType] = useState('')
-  const [job, setJob] = useState<PullJob | null>(null)
+  const [translateText, setTranslateText] = useState(true)
+  const [translateEnums, setTranslateEnums] = useState(true)
+  const [job, setJob] = useState<PropagateJob | null>(null)
   const [starting, setStarting] = useState(false)
   const [errMsg, setErrMsg] = useState<string | null>(null)
-  const [showErrors, setShowErrors] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Poll while job is running
   useEffect(() => {
     if (!job || job.status !== 'running') {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
       return
     }
     pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/status/${job.jobId}`)
-        if (res.ok) {
-          const updated: PullJob = await res.json()
-          setJob(updated)
-        }
-      } catch { /* ignore */ }
+      const res = await fetch(`${backend}/api/reconciliation/propagate/status/${job.jobId}`).catch(() => null)
+      if (res?.ok) setJob(await res.json())
     }, 3000)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [job?.jobId, job?.status, backend]) // eslint-disable-line
 
+  function toggleTarget(mp: string) {
+    setTargetMarkets((prev) => {
+      const next = new Set(prev)
+      if (next.has(mp)) next.delete(mp); else next.add(mp)
+      return next
+    })
+  }
+
   async function handleStart() {
-    if (!productType.trim()) { setErrMsg('Enter a product type (e.g. OUTERWEAR)'); return }
-    setErrMsg(null)
-    setStarting(true)
-    setJob(null)
-    setShowErrors(false)
+    if (!productType.trim()) { setErrMsg('Select a product type'); return }
+    if (!targetMarkets.size) { setErrMsg('Select at least one target market'); return }
+    setErrMsg(null); setStarting(true); setJob(null)
     try {
-      const res = await fetch(`${backend}/api/reconciliation/flat-file-pull/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketplace: market, productType: productType.trim().toUpperCase() }),
+      const res = await fetch(`${backend}/api/reconciliation/propagate/start`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceMarket,
+          targetMarkets: [...targetMarkets],
+          productType: productType.trim().toUpperCase(),
+          translateText,
+          translateEnums,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Start failed')
-      // Fetch initial status immediately
-      const statusRes = await fetch(`${backend}/api/reconciliation/flat-file-pull/status/${data.jobId}`)
-      setJob(statusRes.ok ? await statusRes.json() : { ...data, status: 'running', progress: 0, total: 0, pulled: 0, skipped: 0, failed: 0, errors: [], rows: [] })
+      const s = await fetch(`${backend}/api/reconciliation/propagate/status/${data.jobId}`).catch(() => null)
+      setJob(s?.ok ? await s.json() : { ...data, status: 'running', markets: {} })
     } catch (e: any) {
-      setErrMsg(e?.message ?? 'Failed to start job')
+      setErrMsg(e?.message ?? 'Failed to start')
     } finally {
       setStarting(false)
     }
   }
 
-  function openFlatFile() {
-    if (!job?.rows?.length) return
-    try {
-      const key = `ff-rows-${job.marketplace.toUpperCase()}-${job.productType.toUpperCase()}`
-      localStorage.setItem(key, JSON.stringify(job.rows))
-    } catch { /* storage full — navigate anyway */ }
-    router.push(`/products/amazon-flat-file?marketplace=${job.marketplace}&productType=${job.productType}`)
+  function openFlatFile(mp: string, rows: any[]) {
+    try { localStorage.setItem(`ff-rows-${mp.toUpperCase()}-${productType.toUpperCase()}`, JSON.stringify(rows)) } catch {}
+    router.push(`/products/amazon-flat-file?marketplace=${mp}&productType=${productType}`)
   }
 
-  const pct = job && job.total > 0 ? Math.round((job.progress / job.total) * 100) : 0
-  const isDone = job?.status === 'done'
-  const isFailed = job?.status === 'failed'
+  const PHASE_LABEL: Record<string, string> = {
+    copy: 'Copying fields…', text: 'Translating text…',
+    enums: 'Translating enum values…', sync: 'Syncing to platform…', idle: '',
+  }
+
   const isRunning = job?.status === 'running'
 
   return (
-    <div className="mt-8 border border-violet-200 dark:border-violet-800 rounded-xl bg-violet-50 dark:bg-violet-950/20 p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Download className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-        <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-200">Pull from Amazon → Flat File</h3>
-        <span className="text-xs text-violet-500 dark:text-violet-400">Fetches all attributes for every SKU and pre-fills the flat file editor</span>
-      </div>
+    <div className="space-y-6">
+      <div className="bg-white border rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <RefreshCw className="w-4 h-4 text-purple-600" />
+          <h2 className="text-base font-semibold text-gray-900">Propagate to markets</h2>
+          <span className="text-sm text-gray-400">Copy data from a pulled market to others with AI translation</span>
+        </div>
 
-      <div className="flex items-end gap-3 flex-wrap">
-        {/* Market */}
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Marketplace</label>
-          <div className="flex gap-1">
-            {MARKETS.map((mp) => (
-              <button key={mp} type="button"
-                onClick={() => setMarket(mp)}
-                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                  market === mp
-                    ? 'bg-violet-600 text-white border-violet-600'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'
-                }`}>
-                {mp}
-              </button>
-            ))}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-5">
+          {/* Source market */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Source market (already pulled)</label>
+            <div className="flex gap-1 flex-wrap">
+              {ALL_MARKETS.map((mp) => (
+                <button key={mp} type="button" onClick={() => setSourceMarket(mp)}
+                  className={`px-2.5 py-1.5 text-sm rounded border font-medium transition-colors ${sourceMarket === mp ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                  {mp}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Target markets */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Target markets</label>
+            <div className="flex gap-1 flex-wrap">
+              {ALL_MARKETS.filter((mp) => mp !== sourceMarket).map((mp) => (
+                <button key={mp} type="button" onClick={() => toggleTarget(mp)}
+                  className={`px-2.5 py-1.5 text-sm rounded border font-medium transition-colors ${targetMarkets.has(mp) ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                  {mp}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Product type */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Product Type</label>
+            <ProductTypeSelect value={productType} onChange={setProductType} types={productTypes} />
           </div>
         </div>
 
-        {/* Product type */}
-        <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Product Type</label>
-          <input
-            type="text"
-            value={productType}
-            onChange={(e) => setProductType(e.target.value.toUpperCase())}
-            placeholder="e.g. OUTERWEAR"
-            className="px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 w-36"
-            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-          />
+        {/* Translation options */}
+        <div className="flex gap-6 mb-5">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={translateText} onChange={(e) => setTranslateText(e.target.checked)}
+              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+            Translate text fields (AI)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={translateEnums} onChange={(e) => setTranslateEnums(e.target.checked)}
+              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+            Translate enum values (AI)
+          </label>
         </div>
 
-        {/* Start button */}
-        <button
-          type="button"
-          onClick={handleStart}
-          disabled={starting || isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white text-xs font-medium rounded transition-colors">
-          {starting || isRunning
-            ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            : <Download className="w-3.5 h-3.5" />}
-          {isRunning ? 'Pulling…' : 'Pull from Amazon'}
+        <button type="button" onClick={handleStart} disabled={starting || isRunning}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white text-sm font-medium rounded-lg transition-colors">
+          {starting || isRunning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          {isRunning ? 'Propagating…' : 'Propagate'}
         </button>
 
-        {/* Open flat file button */}
-        {isDone && job.rows.length > 0 && (
-          <button
-            type="button"
-            onClick={openFlatFile}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded transition-colors">
-            <ExternalLink className="w-3.5 h-3.5" />
-            Open flat file →
-          </button>
-        )}
-      </div>
+        {errMsg && <p className="mt-3 text-sm text-red-600">{errMsg}</p>}
 
-      {errMsg && (
-        <p className="mt-2 text-xs text-red-600 dark:text-red-400">{errMsg}</p>
-      )}
-
-      {/* Progress */}
-      {job && (
-        <div className="mt-4 space-y-2">
-          {isRunning && (
-            <>
-              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                <span>Pulling SKUs… {job.progress} / {job.total || '?'}</span>
-                <span>{pct}%</span>
-              </div>
-              <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-violet-500 rounded-full transition-all duration-500"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </>
-          )}
-
-          {isDone && (
-            <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {job.pulled} pulled
-              </span>
-              {job.skipped > 0 && (
-                <span className="text-slate-400">{job.skipped} not on Amazon {market}</span>
-              )}
-              {job.failed > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowErrors((v) => !v)}
-                  className="flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:underline">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {job.failed} failed {showErrors ? '▲' : '▼'}
-                </button>
-              )}
-              <span className="text-slate-400">
-                {job.rows.length} rows ready for flat file
-              </span>
-            </div>
-          )}
-
-          {isFailed && (
-            <p className="text-xs text-red-600 dark:text-red-400">
-              ⚠ Job failed: {job.fatalError ?? 'Unknown error'}
-            </p>
-          )}
-
-          {showErrors && job.errors.length > 0 && (
-            <div className="mt-2 max-h-32 overflow-y-auto rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 space-y-1">
-              {job.errors.map((e, i) => (
-                <div key={i} className="text-[11px] flex gap-2">
-                  <span className="font-mono text-amber-700 dark:text-amber-300 flex-shrink-0">{e.sku}</span>
-                  <span className="text-amber-600 dark:text-amber-400">{e.error}</span>
+        {/* Job progress */}
+        {job && (
+          <div className="mt-5 space-y-2">
+            {job.status === 'failed' && !Object.keys(job.markets).length && (
+              <p className="text-sm text-red-600">⚠ {job.fatalError ?? 'Job failed'}</p>
+            )}
+            {Object.entries(job.markets).map(([mp, state]) => (
+              <div key={mp} className="space-y-1">
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="w-8 font-medium text-gray-700">{mp}</span>
+                  {state.status === 'pending' && <span className="text-gray-400">Waiting…</span>}
+                  {state.status === 'running' && (
+                    <span className="text-gray-500 flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      {PHASE_LABEL[state.phase] ?? 'Processing…'}
+                    </span>
+                  )}
+                  {state.status === 'done' && <>
+                    <span className="text-green-700 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" />{state.translated} rows done</span>
+                    {state.rows.length > 0 && (
+                      <button type="button" onClick={() => openFlatFile(mp, state.rows)}
+                        className="flex items-center gap-1 px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded">
+                        <ExternalLink className="w-3 h-3" />Open →
+                      </button>
+                    )}
+                  </>}
+                  {state.status === 'failed' && <span className="text-red-600">{state.errors[0] ?? 'Failed'}</span>}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
 
-      <p className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
-        Calls Amazon's Listings Items API per SKU — rate-limited automatically. Large catalogs may take 2–5 minutes.
-        Existing platform data is updated; the flat file editor opens pre-populated when done.
-      </p>
+        <p className="mt-5 text-xs text-gray-400">
+          Requires the source market to have been pulled from Amazon first. Text + enum translation uses AI — one call per target market.
+        </p>
+      </div>
     </div>
   )
 }
