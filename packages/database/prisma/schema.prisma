@@ -1375,6 +1375,11 @@ model ChannelListing {
   // Master toggle: when false, this listing will not sync to the platform
   isPublished Boolean @default(true)
 
+  // MA.1 — operator offer control. When false the offer is paused for this
+  // channel+marketplace (listing data preserved; flat-file sync injects
+  // skip_offer=true so Amazon suppresses the buy box without delisting).
+  offerActive Boolean @default(true)
+
   // ── PHASE 20: SSOT Override Toggles ────────────────────────────
   // When true, use master product value; when false, use channel-specific override
   followMasterTitle        Boolean @default(true)

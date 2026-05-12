@@ -219,6 +219,105 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
+  // MA.1 — PATCH /api/products/:id/offer-availability
+  // Toggle offerActive per (channel, marketplace) for a single product.
+  // Body: { markets: Array<{ channel: string; marketplace: string; offerActive: boolean }> }
+  // Auto-creates ChannelListing rows that don't exist yet (with offerActive set).
+  fastify.patch<{
+    Params: { id: string }
+    Body: { markets: Array<{ channel: string; marketplace: string; offerActive: boolean }> }
+  }>(
+    '/products/:id/offer-availability',
+    async (request, reply) => {
+      try {
+        const { id } = request.params
+        const { markets } = request.body ?? {}
+        if (!Array.isArray(markets) || markets.length === 0) {
+          return reply.code(400).send({ error: 'markets array is required' })
+        }
+        const results = await Promise.all(
+          markets.map(({ channel, marketplace, offerActive }) =>
+            prisma.channelListing.upsert({
+              where: { productId_channel_marketplace: { productId: id, channel, marketplace } },
+              update: { offerActive },
+              create: {
+                productId: id,
+                channel,
+                marketplace,
+                region: marketplace,
+                channelMarket: `${channel}_${marketplace}`,
+                listingStatus: 'DRAFT',
+                offerActive,
+              },
+              select: { id: true, channel: true, marketplace: true, offerActive: true },
+            })
+          )
+        )
+        return { ok: true, updated: results }
+      } catch (error: any) {
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
+
+  // MA.1 — POST /api/products/bulk-offer-availability
+  // Toggle offerActive across many products × many markets in one shot.
+  // Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }
+  fastify.post<{
+    Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }
+  }>(
+    '/products/bulk-offer-availability',
+    async (request, reply) => {
+      try {
+        const { productIds, markets, offerActive } = request.body ?? {}
+        if (!Array.isArray(productIds) || productIds.length === 0) {
+          return reply.code(400).send({ error: 'productIds is required' })
+        }
+        if (!Array.isArray(markets) || markets.length === 0) {
+          return reply.code(400).send({ error: 'markets array is required' })
+        }
+        if (typeof offerActive !== 'boolean') {
+          return reply.code(400).send({ error: 'offerActive must be a boolean' })
+        }
+        let upserted = 0
+        // Fan out: for each product × market, upsert the ChannelListing.
+        // Batched in chunks of 50 to avoid overwhelming the connection pool.
+        const pairs: Array<{ productId: string; channel: string; marketplace: string }> = []
+        for (const productId of productIds) {
+          for (const { channel, marketplace } of markets) {
+            pairs.push({ productId, channel, marketplace })
+          }
+        }
+        const CHUNK = 50
+        for (let i = 0; i < pairs.length; i += CHUNK) {
+          const chunk = pairs.slice(i, i + CHUNK)
+          await Promise.all(
+            chunk.map(({ productId, channel, marketplace }) =>
+              prisma.channelListing.upsert({
+                where: { productId_channel_marketplace: { productId, channel, marketplace } },
+                update: { offerActive },
+                create: {
+                  productId,
+                  channel,
+                  marketplace,
+                  region: marketplace,
+                  channelMarket: `${channel}_${marketplace}`,
+                  listingStatus: 'DRAFT',
+                  offerActive,
+                },
+                select: { id: true },
+              })
+            )
+          )
+          upserted += chunk.length
+        }
+        return { ok: true, upserted, offerActive }
+      } catch (error: any) {
+        return reply.code(500).send({ error: error?.message ?? String(error) })
+      }
+    }
+  )
+
   // GET /api/products/:id/listings/:channel/:marketplace
   fastify.get<{
     Params: { id: string; channel: string; marketplace: string }

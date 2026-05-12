@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle,
   CheckCircle2,
+  Globe,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -276,6 +277,8 @@ export default function MasterDataTab({
           />
         </div>
       </Card>
+
+      <MarketAvailabilityCard productId={product.id} />
     </div>
   )
 }
@@ -394,5 +397,196 @@ function SelectField({ label, value, onChange, options }: {
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
+  )
+}
+
+// ── MA.1 Market Availability Card ─────────────────────────────────────────────
+type MarketRow = { channel: string; marketplace: string; offerActive: boolean; listingId: string | null }
+
+const CHANNEL_LABEL: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy' }
+
+function MarketAvailabilityCard({ productId }: { productId: string }) {
+  const [rows, setRows] = useState<MarketRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<Set<string>>(new Set())
+  const { toast } = useToast()
+
+  const rowKey = (r: Pick<MarketRow, 'channel' | 'marketplace'>) => `${r.channel}:${r.marketplace}`
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${getBackendUrl()}/api/products/${productId}/all-listings`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((grouped: Record<string, any[]> | null) => {
+        if (!grouped) return
+        const next: MarketRow[] = []
+        for (const [channel, listings] of Object.entries(grouped)) {
+          for (const l of listings) {
+            next.push({ channel, marketplace: l.marketplace, offerActive: l.offerActive ?? true, listingId: l.id })
+          }
+        }
+        next.sort((a, b) => a.channel.localeCompare(b.channel) || a.marketplace.localeCompare(b.marketplace))
+        setRows(next)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [productId])
+
+  const toggle = useCallback(async (channel: string, marketplace: string, next: boolean) => {
+    const key = `${channel}:${marketplace}`
+    setSaving((s) => new Set(s).add(key))
+    // Optimistic update
+    setRows((prev) => prev.map((r) => r.channel === channel && r.marketplace === marketplace ? { ...r, offerActive: next } : r))
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/offer-availability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markets: [{ channel, marketplace, offerActive: next }] }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      toast({ tone: 'success', title: `${CHANNEL_LABEL[channel] ?? channel} ${marketplace} ${next ? 'activated' : 'paused'}` })
+    } catch (e: any) {
+      // Rollback on error
+      setRows((prev) => prev.map((r) => r.channel === channel && r.marketplace === marketplace ? { ...r, offerActive: !next } : r))
+      toast({ tone: 'error', title: 'Update failed', description: e?.message ?? String(e) })
+    } finally {
+      setSaving((s) => { const n = new Set(s); n.delete(key); return n })
+    }
+  }, [productId, toast])
+
+  const setAll = useCallback(async (offerActive: boolean) => {
+    if (rows.length === 0) return
+    const markets = rows.map(({ channel, marketplace }) => ({ channel, marketplace, offerActive }))
+    setSaving(new Set(rows.map(rowKey)))
+    setRows((prev) => prev.map((r) => ({ ...r, offerActive })))
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/offer-availability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markets }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast({ tone: 'success', title: offerActive ? 'All markets activated' : 'All markets paused' })
+    } catch (e: any) {
+      // Rollback
+      setRows((prev) => prev.map((r) => ({ ...r, offerActive: !offerActive })))
+      toast({ tone: 'error', title: 'Update failed', description: e?.message ?? String(e) })
+    } finally {
+      setSaving(new Set())
+    }
+  }, [rows, productId, toast])
+
+  const pauseNonIT = useCallback(async () => {
+    const nonIT = rows.filter((r) => r.marketplace !== 'IT' && r.offerActive)
+    if (nonIT.length === 0) return
+    const markets = nonIT.map(({ channel, marketplace }) => ({ channel, marketplace, offerActive: false }))
+    const keys = new Set(nonIT.map(rowKey))
+    setSaving(keys)
+    setRows((prev) => prev.map((r) => nonIT.some((n) => n.channel === r.channel && n.marketplace === r.marketplace) ? { ...r, offerActive: false } : r))
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${productId}/offer-availability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markets }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      toast({ tone: 'success', title: `${nonIT.length} non-IT market${nonIT.length !== 1 ? 's' : ''} paused` })
+    } catch (e: any) {
+      setRows((prev) => prev.map((r) => nonIT.some((n) => n.channel === r.channel && n.marketplace === r.marketplace) ? { ...r, offerActive: true } : r))
+      toast({ tone: 'error', title: 'Update failed', description: e?.message ?? String(e) })
+    } finally {
+      setSaving(new Set())
+    }
+  }, [rows, productId, toast])
+
+  const activeCount = rows.filter((r) => r.offerActive).length
+
+  if (loading) return null
+  if (rows.length === 0) return null
+
+  return (
+    <Card noPadding>
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2 min-w-0">
+          <Globe className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <div>
+            <div className="text-md font-semibold text-slate-900 dark:text-slate-100">Market Availability</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {activeCount} of {rows.length} market{rows.length !== 1 ? 's' : ''} active
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
+          {rows.some((r) => r.marketplace !== 'IT' && r.offerActive) && (
+            <Button variant="secondary" size="sm" onClick={pauseNonIT} disabled={saving.size > 0}>
+              Pause non-IT
+            </Button>
+          )}
+          <Button variant="secondary" size="sm" onClick={() => void setAll(true)} disabled={saving.size > 0 || activeCount === rows.length}>
+            Activate all
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => void setAll(false)} disabled={saving.size > 0 || activeCount === 0}>
+            Pause all
+          </Button>
+        </div>
+      </div>
+
+      {/* Market rows */}
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        {rows.map((row) => {
+          const key = rowKey(row)
+          const busy = saving.has(key)
+          return (
+            <div key={key} className="px-4 py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={cn(
+                  'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
+                  row.channel === 'AMAZON'   && 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
+                  row.channel === 'EBAY'     && 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+                  row.channel === 'SHOPIFY'  && 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+                  !['AMAZON','EBAY','SHOPIFY'].includes(row.channel) && 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+                )}>
+                  {CHANNEL_LABEL[row.channel] ?? row.channel}
+                </span>
+                <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{row.marketplace}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  'text-sm',
+                  row.offerActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500',
+                )}>
+                  {row.offerActive ? 'Active' : 'Paused'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={row.offerActive}
+                  aria-label={`${row.offerActive ? 'Pause' : 'Activate'} offer on ${CHANNEL_LABEL[row.channel] ?? row.channel} ${row.marketplace}`}
+                  disabled={busy}
+                  onClick={() => void toggle(row.channel, row.marketplace, !row.offerActive)}
+                  className={cn(
+                    'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1',
+                    row.offerActive ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700',
+                    busy && 'opacity-50 cursor-wait',
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform',
+                      row.offerActive ? 'translate-x-4' : 'translate-x-0',
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }

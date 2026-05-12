@@ -35,6 +35,7 @@ import {
   Eye,
   Copy,
   GitCompare,
+  Globe,
   Sparkles,
   ExternalLink,
   X,
@@ -140,6 +141,7 @@ export function BulkActionBar({
   const [moveStageModalOpen, setMoveStageModalOpen] = useState(false)
   // U.28 — bulk-set-field modal state. Active scope only.
   const [setFieldModalOpen, setSetFieldModalOpen] = useState(false)
+  const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false)
   const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
   const compareSubjects = useMemo(() => {
     if (!compareEligible) return []
@@ -609,6 +611,19 @@ export function BulkActionBar({
             Set field
           </Button>
 
+          {/* MA.1 — bulk offer availability: pause or activate offers
+              across selected products for specific channel+market combos */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setAvailabilityModalOpen(true)}
+            disabled={busy || !hasSelection}
+            title="Pause or activate offers on specific channels and markets for all selected products"
+            icon={<Globe size={12} />}
+          >
+            Availability
+          </Button>
+
           {/* F.3.b — schedule a status flip or price change for a
               future moment. The cron worker applies the change at
               the chosen time via the same master*Service path as a
@@ -764,6 +779,150 @@ export function BulkActionBar({
           }}
         />
       )}
+      {availabilityModalOpen && (
+        <BulkAvailabilityModal
+          productIds={selectedIds}
+          onClose={() => setAvailabilityModalOpen(false)}
+          onComplete={() => { setAvailabilityModalOpen(false); onComplete() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── MA.1 Bulk Availability Modal ───────────────────────────────────────────────
+const MARKETS = [
+  { channel: 'AMAZON', marketplace: 'IT', label: 'Amazon IT' },
+  { channel: 'AMAZON', marketplace: 'DE', label: 'Amazon DE' },
+  { channel: 'AMAZON', marketplace: 'FR', label: 'Amazon FR' },
+  { channel: 'AMAZON', marketplace: 'ES', label: 'Amazon ES' },
+  { channel: 'AMAZON', marketplace: 'UK', label: 'Amazon UK' },
+  { channel: 'EBAY',   marketplace: 'IT', label: 'eBay IT' },
+  { channel: 'EBAY',   marketplace: 'DE', label: 'eBay DE' },
+  { channel: 'EBAY',   marketplace: 'FR', label: 'eBay FR' },
+  { channel: 'EBAY',   marketplace: 'ES', label: 'eBay ES' },
+  { channel: 'SHOPIFY', marketplace: 'GLOBAL', label: 'Shopify' },
+]
+
+function BulkAvailabilityModal({
+  productIds,
+  onClose,
+  onComplete,
+}: {
+  productIds: string[]
+  onClose: () => void
+  onComplete: () => void
+}) {
+  const { toast } = useToast()
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [offerActive, setOfferActive] = useState<boolean>(false)
+  const [busy, setBusy] = useState(false)
+
+  const marketKey = (m: { channel: string; marketplace: string }) => `${m.channel}:${m.marketplace}`
+
+  const toggle = (key: string) =>
+    setSelected((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+
+  const apply = async () => {
+    if (selected.size === 0) return
+    setBusy(true)
+    try {
+      const markets = MARKETS.filter((m) => selected.has(marketKey(m))).map(({ channel, marketplace }) => ({ channel, marketplace }))
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-offer-availability`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds, markets, offerActive }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const { upserted } = await res.json()
+      toast({ tone: 'success', title: `${upserted} listing${upserted !== 1 ? 's' : ''} ${offerActive ? 'activated' : 'paused'}` })
+      onComplete()
+    } catch (e: any) {
+      toast({ tone: 'error', title: 'Failed', description: e?.message ?? String(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Quick-select shortcuts
+  const selectNonIT = () => setSelected(new Set(MARKETS.filter((m) => m.marketplace !== 'IT').map(marketKey)))
+  const selectAll = () => setSelected(new Set(MARKETS.map(marketKey)))
+  const clearAll = () => setSelected(new Set())
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Market Availability</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{productIds.length} product{productIds.length !== 1 ? 's' : ''} selected</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Action */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setOfferActive(false)}
+              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${!offerActive ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-700 dark:bg-rose-950/40 dark:text-rose-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}
+            >
+              Pause offers
+            </button>
+            <button
+              type="button"
+              onClick={() => setOfferActive(true)}
+              className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${offerActive ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}
+            >
+              Activate offers
+            </button>
+          </div>
+
+          {/* Market selection */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Target markets</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={selectNonIT} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Non-IT</button>
+                <button type="button" onClick={selectAll} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">All</button>
+                <button type="button" onClick={clearAll} className="text-xs text-slate-500 hover:underline">Clear</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {MARKETS.map((m) => {
+                const key = marketKey(m)
+                const checked = selected.has(key)
+                return (
+                  <label key={key} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${checked ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(key)} className="rounded" />
+                    {m.label}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+          <Button
+            size="sm"
+            onClick={apply}
+            loading={busy}
+            disabled={selected.size === 0}
+            className={offerActive ? '' : 'bg-rose-600 hover:bg-rose-700 border-rose-600 text-white'}
+          >
+            {offerActive ? 'Activate' : 'Pause'} {selected.size > 0 ? `(${selected.size} market${selected.size !== 1 ? 's' : ''})` : ''}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

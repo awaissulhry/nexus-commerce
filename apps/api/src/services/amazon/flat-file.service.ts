@@ -1183,8 +1183,17 @@ export class AmazonFlatFileService {
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
           where: { productId: product.id, channel: 'AMAZON', marketplace: mp },
-          select: { id: true, quantity: true, version: true },
+          select: { id: true, quantity: true, version: true, offerActive: true },
         })
+
+        // MA.1 — when the operator has paused this market, inject skip_offer=true
+        // so Amazon suppresses the buy box without losing the listing data.
+        if (existing && existing.offerActive === false) {
+          collapsedAttrs.skip_offer = [{ value: true, marketplace_id: marketplaceId }]
+        } else if (existing?.offerActive !== false && collapsedAttrs.skip_offer === undefined) {
+          // Ensure a previously-paused listing that's now active clears skip_offer.
+          collapsedAttrs.skip_offer = [{ value: false, marketplace_id: marketplaceId }]
+        }
 
         const listingPayload: Record<string, any> = {
           channel: 'AMAZON',
