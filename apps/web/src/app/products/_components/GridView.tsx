@@ -55,7 +55,9 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Layers,
+  Pencil,
   Sparkles,
+  Star,
   X,
   XCircle,
 } from 'lucide-react'
@@ -974,9 +976,6 @@ const ProductRow = memo(function ProductRow({
                 : 'products.mobile.variants.other',
               { count: childCount },
             )}
-            // E.22 — single ChevronRight that rotates 90° on expand
-            // (was: swap between ChevronRight + ChevronDown). One
-            // element, smooth transform, no jitter on toggle.
             className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900"
           >
             <ChevronRight
@@ -987,6 +986,23 @@ const ProductRow = memo(function ProductRow({
         ) : isChild ? (
           <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
         ) : null}
+      </div>
+      {/* AM.1 — ★ favourite / star slot. Opens the tag editor so operators
+          can mark products; same slot Amazon uses for favourites. */}
+      <div
+        className={`px-0.5 py-2 flex items-center justify-center ${rowBg}`}
+        style={{ width: 22, minWidth: 22 }}
+        role="cell"
+      >
+        <button
+          type="button"
+          onClick={() => onTagEdit(product.id)}
+          aria-label="Star / tag product"
+          title="Star / tag product"
+          className="text-slate-300 hover:text-amber-400 dark:text-slate-600 dark:hover:text-amber-400 transition-colors"
+        >
+          <Star size={12} />
+        </button>
       </div>
       {visible.map((col) => (
         <div
@@ -1474,13 +1490,19 @@ function EditableCell({
 // in ProductCell would violate the rules of hooks).
 function EditSplitButton({ product, t }: { product: ProductRowType; t: (k: string) => string }) {
   const [open, setOpen] = useState(false)
+  // "Fix" when a child/standalone product is Active but not on any channel.
+  const needsFix = !product.isParent && product.status === 'ACTIVE' && (product.channelCount ?? 0) === 0
+  const label = needsFix ? 'Fix' : 'Edit'
+  const labelCls = needsFix
+    ? 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
+    : 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
   return (
     <div className="relative inline-flex rounded-md shadow-sm">
       <Link
         href={`/products/${product.id}/edit`}
-        className="h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
+        className={labelCls}
       >
-        Edit
+        {label}
       </Link>
       <button
         type="button"
@@ -1541,22 +1563,23 @@ const ProductCell = memo(function ProductCell({
   const p = product
 
   switch (col) {
-    // AM.1 — Amazon-style combined product cell:
-    //   [thumbnail] [Name — blue link]
-    //               [ASIN · SKU — mono secondary]
-    //               [Variations (N)] for parents
+    // AM.1 — Product cell: matches Amazon exactly per row type.
+    // Parent: thumbnail + name + ASIN (grey) + product-type link.
+    // Child:  thumbnail + name + ASIN | SKU (grey) + "Variation details" link.
+    // Standalone: thumbnail + name + SKU (grey).
     case 'product': {
       const childCount = p.childCount ?? 0
-      const isParentRow = !p.parentId && p.isParent && childCount > 0
+      const isParentRow = p.isParent && !p.parentId
+      const isChildRow  = !!p.parentId
       return (
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-start gap-2.5 min-w-0 py-0.5">
           {/* Thumbnail */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 mt-0.5">
             {p.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={p.imageUrl} alt="" className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800" />
             ) : (
-              <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600">
+              <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0">
                 <ImageIcon size={14} />
               </div>
             )}
@@ -1565,123 +1588,174 @@ const ProductCell = memo(function ProductCell({
           <div className="min-w-0 flex-1">
             <Link
               href={`/products/${p.id}/edit`}
-              className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline truncate leading-snug"
+              className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline leading-snug"
               title={p.name}
             >
               <Highlight text={p.name} query={searchQuery} />
             </Link>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              {p.amazonAsin && (
+            {/* ASIN / SKU line */}
+            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+              {p.amazonAsin ? (
                 <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                   {p.amazonAsin}
                 </span>
-              )}
-              {p.amazonAsin && (
+              ) : null}
+              {p.amazonAsin && !isParentRow ? (
                 <span className="text-xs text-slate-300 dark:text-slate-600">|</span>
-              )}
-              <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
-                <Highlight text={p.sku} query={searchQuery} />
-              </span>
-              {isParentRow && childCount > 0 && (
-                <>
-                  <span className="text-xs text-slate-300 dark:text-slate-600">·</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {childCount} variation{childCount !== 1 ? 's' : ''}
-                  </span>
-                </>
+              ) : null}
+              {!isParentRow && (
+                <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                  <Highlight text={p.sku} query={searchQuery} />
+                </span>
               )}
             </div>
+            {/* Third line: product-type link (parent) or Variation details (child) */}
+            {isParentRow && p.productType && (
+              <Link
+                href={`/products/${p.id}/edit`}
+                className="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-0.5 block"
+              >
+                {p.productType.toLowerCase().replace(/_/g, '-')}
+              </Link>
+            )}
+            {isParentRow && childCount > 0 && (
+              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                {childCount} variation{childCount !== 1 ? 's' : ''}
+              </div>
+            )}
+            {isChildRow && (
+              <Link
+                href={`/products/${p.id}/edit`}
+                className="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-0.5 block"
+              >
+                Variation details
+              </Link>
+            )}
           </div>
         </div>
       )
     }
 
-    // AM.1 — Listing status: coloured badge + coverage dots + readiness hint.
+    // AM.1 — Listing status.
+    // Parent: "Variations (N)" blue outlined pill only — no other content.
+    // Child/standalone: status pill + "⚠ Improve listing quality" link when no channel.
     case 'listing-status': {
-      const statusStyle =
-        p.status === 'ACTIVE'
-          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-          : p.status === 'INACTIVE'
-          ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
       const childCount = p.childCount ?? 0
-      const isParentRow = !p.parentId && p.isParent && childCount > 0
+      const isParentRow = p.isParent && !p.parentId
       const channelCount = p.channelCount ?? 0
-      const readinessLow = p.status === 'ACTIVE' && channelCount === 0
+      const needsFix = p.status === 'ACTIVE' && channelCount === 0
+      const statusBg =
+        p.status === 'ACTIVE'
+          ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+          : p.status === 'INACTIVE'
+          ? 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+          : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+      if (isParentRow) {
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700">
+            Variations ({childCount})
+          </span>
+        )
+      }
       return (
         <div className="space-y-1">
-          {isParentRow ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-              <Layers size={10} />
-              Variations ({childCount})
-            </span>
-          ) : (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle}`}>
-              {p.status === 'ACTIVE' ? 'Active' : p.status === 'INACTIVE' ? 'Inactive' : 'Draft'}
-            </span>
-          )}
-          {readinessLow && !isParentRow && (
-            <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBg}`}>
+            {p.status === 'ACTIVE' ? 'Active' : p.status === 'INACTIVE' ? 'Inactive' : 'Draft'}
+          </span>
+          {needsFix && (
+            <Link
+              href={`/products/${p.id}/edit`}
+              className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+            >
               <AlertCircle size={10} className="flex-shrink-0" />
-              <span>Not listed on any channel</span>
-            </div>
+              Improve listing quality
+            </Link>
           )}
         </div>
       )
     }
 
-    // AM.1 — Sales (Last 30 days). Placeholder until order revenue
-    // is aggregated into the products list endpoint.
+    // AM.1 — Sales (Last 30 days).
+    // Parent rows are blank; children show "—" until we aggregate order data.
     case 'sales':
-      return (
-        <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
-      )
+      if (p.isParent && !p.parentId) return null
+      return <span className="text-sm text-slate-600 dark:text-slate-300">—</span>
 
-    // AM.1 — Inventory (Available units): stock count + FBM/FBA badge.
+    // AM.1 — Inventory (Available units).
+    // Parent rows: blank. Children: count (FBM) + template + Edit prices link.
     case 'inventory': {
+      if (p.isParent && !p.parentId) return null
       const stock = p.totalStock ?? 0
       const method = p.fulfillmentMethod ?? 'FBM'
       const tone = stock === 0
         ? 'text-rose-600 dark:text-rose-400'
         : stock <= (p.lowStockThreshold ?? 10)
         ? 'text-amber-600 dark:text-amber-400'
-        : 'text-slate-700 dark:text-slate-200'
+        : 'text-slate-800 dark:text-slate-100'
       return (
         <div className="space-y-0.5">
           <div className={`text-sm font-medium tabular-nums ${tone}`}>
-            {stock.toLocaleString()}
+            {stock.toLocaleString()} ({method})
           </div>
-          <div className="text-xs text-slate-400 dark:text-slate-500">{method}</div>
+          <div className="text-xs text-slate-400 dark:text-slate-500">
+            Xavia {method} Shipping Template
+          </div>
+          <Link
+            href={`/products/${p.id}/edit?tab=matrix`}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Edit prices
+          </Link>
         </div>
       )
     }
 
-    // AM.1 — Price + shipping (Featured Offer): base price + €0.00 shipping.
+    // AM.1 — Price + shipping (Featured Offer).
+    // Parent rows: blank. Children: price + ✏ + ✅ price + €0.00 + Edit prices link.
     case 'price-shipping': {
+      if (p.isParent && !p.parentId) return null
       const bp = p.basePrice
       const formatted = bp != null && Number.isFinite(bp) && bp > 0
         ? `€${Number(bp).toFixed(2)}`
         : null
       return formatted ? (
         <div className="space-y-0.5">
-          <div className="text-sm font-medium text-slate-800 dark:text-slate-100 tabular-nums">
-            {formatted}
+          <div className="flex items-center gap-1">
+            <span className="text-sm font-medium text-slate-800 dark:text-slate-100 tabular-nums">
+              {formatted}
+            </span>
+            <Pencil size={10} className="text-slate-400 flex-shrink-0" />
           </div>
           <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-            <Check size={10} strokeWidth={2.5} />
+            <CheckCircle2 size={10} strokeWidth={2.5} />
             <span className="tabular-nums">{formatted} + €0.00</span>
           </div>
+          <Link
+            href={`/products/${p.id}/edit?tab=matrix`}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Edit prices
+          </Link>
         </div>
       ) : (
         <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
       )
     }
 
-    // AM.1 — Estimated fees (Per unit). Placeholder until SP-API fee
-    // estimates are fetched and cached per listing.
+    // AM.1 — Estimated fees (Per unit).
+    // Parent rows: blank. Children: "—" + Calculate revenue link.
     case 'estimated-fees':
+      if (p.isParent && !p.parentId) return null
       return (
-        <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
+        <div className="space-y-0.5">
+          <span className="text-sm text-slate-600 dark:text-slate-300">—</span>
+          <Link
+            href={`/products/${p.id}/edit`}
+            className="block text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Calculate revenue
+          </Link>
+        </div>
       )
 
     case 'thumb':

@@ -72,13 +72,13 @@ export const ALL_COLUMNS: ColumnDef[] = [
     width: 120,
   },
 
-  // ── Classic columns (hidden by default, available via column picker) ─
+  // ── Classic columns (available via column picker, hidden by default) ──
+  // thumb/sku/name: individual breakouts of the combined 'product' column.
+  // threshold/brand/productType/…: supplementary detail columns.
+  // status/price/stock removed — superseded by listing-status/price-shipping/inventory.
   { key: 'thumb',   label: '',         width: 64 },
   { key: 'sku',     label: 'SKU',      labelKey: 'products.col.sku',     width: 140 },
   { key: 'name',    label: 'Name',     labelKey: 'products.col.name',    width: 280 },
-  { key: 'status',  label: 'Status',   labelKey: 'products.col.status',  width: 110 },
-  { key: 'price',   label: 'Price',    labelKey: 'products.col.price',   width: 110 },
-  { key: 'stock',   label: 'Stock',    labelKey: 'products.col.stock',   width: 90 },
   { key: 'threshold',    label: 'Low @',    labelKey: 'products.col.threshold',    width: 80 },
   { key: 'brand',        label: 'Brand',    labelKey: 'products.col.brand',        width: 120 },
   { key: 'productType',  label: 'Type',     labelKey: 'products.col.productType',  width: 130 },
