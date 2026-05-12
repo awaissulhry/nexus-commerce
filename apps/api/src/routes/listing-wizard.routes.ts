@@ -3191,8 +3191,39 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         platformAttrs && typeof platformAttrs.attributes === 'object'
           ? (platformAttrs.attributes as Record<string, unknown>)
           : {}
+
+      // Unwrap SP-API array-of-objects format → plain primitive.
+      // The flat file writes e.g. item_name: [{value:"X", language_tag:"…"}]
+      // but schemaParserService expects currentValue to be a Primitive.
+      function unwrapSpApiValue(fieldId: string, raw: unknown): string | number | boolean | undefined {
+        if (raw === null || raw === undefined) return undefined
+        if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw
+        if (!Array.isArray(raw) || raw.length === 0) return undefined
+        const first = raw[0] as Record<string, any>
+        if (!first || typeof first !== 'object') return undefined
+        if (fieldId === 'purchasable_offer') {
+          const price = first?.our_price?.[0]?.schedule?.[0]?.value_with_tax
+          return typeof price === 'number' ? price : undefined
+        }
+        if (fieldId === 'fulfillment_availability') {
+          const qty = first?.quantity
+          return typeof qty === 'number' ? qty : undefined
+        }
+        if (fieldId === 'bullet_point') {
+          const bullets = (raw as any[])
+            .map((el: any) => (typeof el?.value === 'string' ? el.value : null))
+            .filter(Boolean) as string[]
+          return bullets.length > 0 ? JSON.stringify(bullets) : undefined
+        }
+        // Generic single-value wrapped: [{value: "...", ...}]
+        const v = first.value
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v
+        return undefined
+      }
+
       for (const [k, v] of Object.entries(storedAttrs)) {
-        baseAttributes[k] = v
+        const unwrapped = unwrapSpApiValue(k, v)
+        if (unwrapped !== undefined) baseAttributes[k] = unwrapped
       }
       if (listing?.title && baseAttributes['item_name'] === undefined) {
         baseAttributes['item_name'] = listing.title

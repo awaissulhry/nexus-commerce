@@ -307,6 +307,39 @@ export default function ChannelListingTab({
             </Button>
           </div>
         </div>
+        {/* ── Variant sub-tabs (parent products only) ───────────── */}
+        {childrenList.length > 0 && (
+          <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-1.5 flex items-center gap-1 flex-wrap overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedChildId(null)}
+              className={cn(
+                'px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap',
+                selectedChildId === null
+                  ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-200 dark:hover:border-slate-700',
+              )}
+            >
+              Parent
+            </button>
+            {childrenList.map((child) => (
+              <button
+                key={child.id}
+                type="button"
+                onClick={() => setSelectedChildId(child.id)}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap font-mono',
+                  selectedChildId === child.id
+                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-200 dark:hover:border-slate-700',
+                )}
+                title={child.name ?? child.sku}
+              >
+                {child.variantLabel ?? child.sku}
+              </button>
+            ))}
+          </div>
+        )}
         {statusMsg && (
           <div
             className={cn(
@@ -342,40 +375,6 @@ export default function ChannelListingTab({
           siblingMarkets={siblingMarkets}
           onDone={() => onSave(listing as Listing)}
         />
-      )}
-
-      {/* ── Variant sub-tabs (parent products only) ───────────── */}
-      {childrenList.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap border-b border-slate-200 dark:border-slate-800 pb-0 -mb-1">
-          <button
-            type="button"
-            onClick={() => setSelectedChildId(null)}
-            className={cn(
-              'px-3 py-1.5 text-sm font-medium rounded-t border-b-2 -mb-px transition-colors whitespace-nowrap',
-              selectedChildId === null
-                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
-                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
-            )}
-          >
-            Parent
-          </button>
-          {childrenList.map((child) => (
-            <button
-              key={child.id}
-              type="button"
-              onClick={() => setSelectedChildId(child.id)}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium rounded-t border-b-2 -mb-px transition-colors whitespace-nowrap font-mono',
-                selectedChildId === child.id
-                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
-                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
-              )}
-              title={child.name ?? child.sku}
-            >
-              {child.variantLabel ?? child.sku}
-            </button>
-          ))}
-        </div>
       )}
 
       {/* ── Readiness checklist (W5.1) ────────────────────────── */}
