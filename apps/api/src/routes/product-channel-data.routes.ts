@@ -68,7 +68,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
           where: { parentId: id, deletedAt: null },
           select: {
             id: true, sku: true, basePrice: true,
-            variationAttributes: true,
+            variantAttributes: true,
             channelListings: {
               where: { channel },
               select: { marketplace: true, channel: true, price: true, salePrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
@@ -80,7 +80,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         variantRows = children.map((c) => ({
           variantId: c.id, // child Product ID — matches Matrix tab's child.id
           sku: c.sku,
-          attributes: (c.variationAttributes as Record<string, string> | null) ?? {},
+          attributes: (c.variantAttributes as Record<string, string> | null) ?? {},
           basePrice: c.basePrice != null ? Number(c.basePrice) : null,
           markets: c.channelListings.map((cl) => ({
             marketplace: cl.marketplace,
