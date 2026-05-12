@@ -32,6 +32,8 @@ import ImagesTab from './tabs/ImagesTab'
 import SeoTab from './tabs/SeoTab'
 import { cn } from '@/lib/utils'
 import { useTrackRecentlyViewed } from '@/lib/use-recently-viewed'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { getBackendUrl } from '@/lib/backend-url'
 import { VariationFamilyBanner, type FamilyParent, type FamilySibling } from '../../_shared/VariationFamilyBanner'
 import { FileSpreadsheet } from 'lucide-react'
 
@@ -245,6 +247,17 @@ export default function ProductEditClient({
   // Per-channel selected marketplace (key by channel)
   const [marketSelection, setMarketSelection] = useState<Record<string, string>>({})
 
+  // Client-side listings cache — seeded from SSR prop, refreshed whenever
+  // the flat file (or any other source) writes to ChannelListing. This
+  // ensures the Amazon/eBay/Shopify tabs always show current data without
+  // needing a full page reload.
+  const [clientListings, setClientListings] = useState<Record<string, Listing[]>>(listings)
+  useInvalidationChannel('channel-pricing.updated', () => {
+    void fetch(`${getBackendUrl()}/api/products/${product.id}/all-listings`, { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setClientListings(data) })
+  })
+
   // W1.1 — accurate dirty tracking. Each tab reports its own count of
   // unsaved fields via onDirtyChange; the header badge shows the
   // aggregate. Replaces the old single boolean which never cleared
@@ -326,7 +339,7 @@ export default function ProductEditClient({
   // connected at some point and have data). Amazon / eBay / Shopify
   // appear whenever the marketplaces endpoint returns them.
   const orderedChannels = CHANNEL_ORDER.filter((c) => {
-    if (c === 'WOOCOMMERCE' || c === 'ETSY') return (listings[c]?.length ?? 0) > 0
+    if (c === 'WOOCOMMERCE' || c === 'ETSY') return (clientListings[c]?.length ?? 0) > 0
     return (marketplaces[c]?.length ?? 0) > 0
   })
 
@@ -432,10 +445,10 @@ export default function ProductEditClient({
   )
 
   const hasListing = (channel: string, marketplace: string) =>
-    listings[channel]?.some((l) => l.marketplace === marketplace) ?? false
+    clientListings[channel]?.some((l) => l.marketplace === marketplace) ?? false
 
   const getListing = (channel: string, marketplace: string) =>
-    listings[channel]?.find((l) => l.marketplace === marketplace)
+    clientListings[channel]?.find((l) => l.marketplace === marketplace)
 
   const ensureMarketSelected = (channel: string): string => {
     const existing = marketSelection[channel]
@@ -678,7 +691,7 @@ export default function ProductEditClient({
             </TopTabButton>
             {orderedChannels.map((channel) => {
               const isActive = topTab === channel
-              const channelListings = listings[channel] ?? []
+              const channelListings = clientListings[channel] ?? []
               const readiness = channelReadiness(channelListings)
               // W14.5 — sum dirty across every per-channel-marketplace
               // tab key so the channel button reflects unsaved across
