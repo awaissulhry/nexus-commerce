@@ -67,12 +67,28 @@ export const ALL_COLUMNS: ColumnDef[] = [
 ]
 
 export const DEFAULT_VISIBLE = [
-  'product',          // AM.1 — combined thumb+name+ASIN+SKU
-  'listing-status',   // AM.1 — status badge + coverage + readiness hint
+  'product',
+  'listing-status',
   'price',
   'stock',
   'coverage',
   'tags',
+  'updated',
+  'actions',
+]
+
+// Classic layout (pre-AM.1). Kept for reference; operators who saved
+// views with this set will see it restored from localStorage.
+export const CLASSIC_VISIBLE = [
+  'thumb',
+  'sku',
+  'name',
+  'status',
+  'price',
+  'stock',
+  'coverage',
+  'tags',
+  'photos',
   'updated',
   'actions',
 ]

@@ -279,7 +279,12 @@ export default function ProductsWorkspace() {
     if (typeof window === 'undefined') return DEFAULT_VISIBLE
     try {
       const saved = window.localStorage.getItem('products.visibleColumns')
-      return saved ? JSON.parse(saved) : DEFAULT_VISIBLE
+      if (!saved) return DEFAULT_VISIBLE
+      const parsed: string[] = JSON.parse(saved)
+      // AM.1 migration: if the user had the classic layout (no 'product' column)
+      // swap in the new defaults so the page doesn't look broken after the upgrade.
+      const hasNewCols = parsed.includes('product') || parsed.includes('listing-status')
+      return hasNewCols ? parsed : DEFAULT_VISIBLE
     } catch { return DEFAULT_VISIBLE }
   })
   useEffect(() => {

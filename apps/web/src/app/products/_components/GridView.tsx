@@ -1472,6 +1472,53 @@ function EditableCell({
 
 // E.1 — memo'd so a row that didn't change skips its 9-column
 // re-render. onTagEdit + onChanged come from useCallback'd refs in
+// AM.1 — "Edit ▼" split button. Extracted as its own component so
+// it can hold its own useState (calling useState inside a switch case
+// in ProductCell would violate the rules of hooks).
+function EditSplitButton({ product, t }: { product: ProductRowType; t: (k: string) => string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative inline-flex rounded-md shadow-sm">
+      <Link
+        href={`/products/${product.id}/edit`}
+        className="h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
+      >
+        Edit
+      </Link>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
+        className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
+        aria-label="More actions"
+      >
+        <ChevronDown size={12} />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1 text-sm"
+          onMouseLeave={() => setOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('nexus:open-product-drawer', { detail: { productId: product.id } })) }}
+            className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            {t('products.grid.action.view')}
+          </button>
+          <Link href={`/products/${product.id}/list-wizard`} className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+            {t('products.grid.action.list')}
+          </Link>
+          {product.isParent && (
+            <Link href={`/products/${product.id}/matrix`} className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+              {t('products.grid.action.matrix')}
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // the workspace, so they're stable across renders.
 const ProductCell = memo(function ProductCell({
   col,
@@ -1960,62 +2007,12 @@ const ProductCell = memo(function ProductCell({
           })}
         </span>
       )
-    case 'actions': {
-      // AM.1 — Amazon-style "Edit ▼" split button.
-      // Primary action → /products/:id/edit (most common operation).
-      // Chevron opens inline dropdown with View / List / Matrix.
-      const [dropOpen, setDropOpen] = useState(false)
+    case 'actions':
       return (
         <div className="flex items-center justify-end">
-          <div className="relative inline-flex rounded-md shadow-sm">
-            {/* Primary: Edit */}
-            <Link
-              href={`/products/${p.id}/edit`}
-              className="h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
-            >
-              Edit
-            </Link>
-            {/* Dropdown toggle */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setDropOpen((o) => !o) }}
-              className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
-              aria-label="More actions"
-            >
-              <ChevronDown size={12} />
-            </button>
-            {dropOpen && (
-              <div
-                className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1 text-sm"
-                onMouseLeave={() => setDropOpen(false)}
-              >
-                <button
-                  type="button"
-                  onClick={() => { setDropOpen(false); window.dispatchEvent(new CustomEvent('nexus:open-product-drawer', { detail: { productId: p.id } })) }}
-                  className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  {t('products.grid.action.view')}
-                </button>
-                <Link
-                  href={`/products/${p.id}/list-wizard`}
-                  className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  {t('products.grid.action.list')}
-                </Link>
-                {p.isParent && (
-                  <Link
-                    href={`/products/${p.id}/matrix`}
-                    className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    {t('products.grid.action.matrix')}
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
+          <EditSplitButton product={p} t={t} />
         </div>
       )
-    }
     default:
       return null
   }
