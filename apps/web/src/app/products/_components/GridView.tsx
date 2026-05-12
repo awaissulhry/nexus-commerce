@@ -1483,54 +1483,205 @@ function EditableCell({
   )
 }
 
-// E.1 — memo'd so a row that didn't change skips its 9-column
-// re-render. onTagEdit + onChanged come from useCallback'd refs in
 // AM.1 — "Edit ▼" split button. Extracted as its own component so
 // it can hold its own useState (calling useState inside a switch case
 // in ProductCell would violate the rules of hooks).
-function EditSplitButton({ product, t }: { product: ProductRowType; t: (k: string) => string }) {
+// Parent: 4 actions. Child/standalone: 10 actions.
+// Smooth delete: inline confirm → spinner → POST bulk-soft-delete → onChanged().
+function EditSplitButton({
+  product,
+  onChanged,
+}: {
+  product: ProductRowType
+  onChanged: () => void
+}) {
   const [open, setOpen] = useState(false)
-  // "Fix" when a child/standalone product is Active but not on any channel.
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const { toast } = useToast()
+
   const needsFix = !product.isParent && product.status === 'ACTIVE' && (product.channelCount ?? 0) === 0
   const label = needsFix ? 'Fix' : 'Edit'
-  const labelCls = needsFix
-    ? 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
-    : 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
+  const splitBtnCls = 'h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors'
+  const itemCls = 'w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed'
+  const linkCls = 'block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+  const deleteCls = 'w-full text-left px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed'
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-soft-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: [product.id] }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? `HTTP ${res.status}`)
+      }
+      emitInvalidation({ type: 'product.updated', meta: { productIds: [product.id], source: 'delete' } })
+      onChanged()
+    } catch (e) {
+      toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`)
+      setIsDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
+
+  const handleClose = async () => {
+    setOpen(false)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/${product.id}/offer-availability`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offerActive: false }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      emitInvalidation({ type: 'product.updated', meta: { productIds: [product.id], source: 'close-listing' } })
+      onChanged()
+    } catch (e) {
+      toast.error(`Close failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  const handleCopy = async () => {
+    setOpen(false)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk-duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: [product.id] }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      onChanged()
+      toast.success('Product copied')
+    } catch (e) {
+      toast.error(`Copy failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   return (
     <div className="relative inline-flex rounded-md shadow-sm">
-      <Link
-        href={`/products/${product.id}/edit`}
-        className={labelCls}
-      >
+      <Link href={`/products/${product.id}/edit`} className={splitBtnCls}>
         {label}
       </Link>
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); setConfirmDelete(false) }}
         className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
         aria-label="More actions"
       >
         <ChevronDown size={12} />
       </button>
+
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1 text-sm"
-          onMouseLeave={() => setOpen(false)}
+          className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1 text-sm"
+          onMouseLeave={() => { setOpen(false); setConfirmDelete(false) }}
         >
-          <button
-            type="button"
-            onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('nexus:open-product-drawer', { detail: { productId: product.id } })) }}
-            className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-          >
-            {t('products.grid.action.view')}
-          </button>
-          <Link href={`/products/${product.id}/list-wizard`} className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
-            {t('products.grid.action.list')}
-          </Link>
-          {product.isParent && (
-            <Link href={`/products/${product.id}/matrix`} className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
-              {t('products.grid.action.matrix')}
-            </Link>
+          {product.isParent ? (
+            // ── Parent: 4 actions ──────────────────────────────────────
+            <>
+              <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
+                Edit images
+              </Link>
+              <button type="button" className={itemCls} onClick={handleCopy}>
+                Copy
+              </button>
+              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+              <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
+                Create ad
+              </Link>
+              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+              {confirmDelete ? (
+                <div className="px-3 py-1.5 space-y-1.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Delete this product?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={handleDelete}
+                      className="flex-1 text-xs h-6 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center justify-center gap-1"
+                    >
+                      {isDeleting ? <span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> : null}
+                      Yes, delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 text-xs h-6 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className={deleteCls} onClick={() => setConfirmDelete(true)}>
+                  Delete
+                </button>
+              )}
+            </>
+          ) : (
+            // ── Child / standalone: 10 actions ────────────────────────
+            <>
+              <Link href={`/products/${product.id}/edit`} className={linkCls} onClick={() => setOpen(false)}>
+                Edit
+              </Link>
+              <Link href={`/products/${product.id}/edit?tab=images`} className={linkCls} onClick={() => setOpen(false)}>
+                Edit images
+              </Link>
+              <button type="button" className={itemCls} onClick={handleCopy}>
+                Copy
+              </button>
+              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+              <Link href={`/products/${product.id}/edit?tab=condition`} className={linkCls} onClick={() => setOpen(false)}>
+                Add condition
+              </Link>
+              <Link href={`/products/${product.id}/edit?tab=fulfillment`} className={linkCls} onClick={() => setOpen(false)}>
+                Switch to FBA
+              </Link>
+              <Link href={`/products/${product.id}/edit?tab=labels`} className={linkCls} onClick={() => setOpen(false)}>
+                Print labels
+              </Link>
+              <button type="button" className={itemCls} onClick={handleClose}>
+                Close
+              </button>
+              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+              <Link href={`/marketing/content?productId=${product.id}`} className={linkCls} onClick={() => setOpen(false)}>
+                Create ad
+              </Link>
+              <Link href={`/products/${product.id}/edit?tab=shipping`} className={linkCls} onClick={() => setOpen(false)}>
+                Edit shipping
+              </Link>
+              <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+              {confirmDelete ? (
+                <div className="px-3 py-1.5 space-y-1.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Delete this product?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={handleDelete}
+                      className="flex-1 text-xs h-6 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center justify-center gap-1"
+                    >
+                      {isDeleting ? <span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> : null}
+                      Yes, delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 text-xs h-6 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className={deleteCls} onClick={() => setConfirmDelete(true)}>
+                  Delete
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -2135,7 +2286,7 @@ const ProductCell = memo(function ProductCell({
     case 'actions':
       return (
         <div className="flex items-center justify-end">
-          <EditSplitButton product={p} t={t} />
+          <EditSplitButton product={p} onChanged={onChanged} />
         </div>
       )
     default:
