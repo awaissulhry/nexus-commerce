@@ -74,8 +74,10 @@ export default function ChannelListingTab({
 }: Props) {
   const { t } = useTranslations()
   // For parent products: which child's channel listing is active.
-  // null = parent-level view (all variants overview / parent listing).
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
+  // Default to the first child (parent rows rarely have their own listing data).
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(
+    childrenList.length > 0 ? (childrenList[0]?.id ?? null) : null,
+  )
   const activeProductId = selectedChildId ?? product.id
   const [pulling, setPulling] = useState(false)
   const [translating, setTranslating] = useState(false)

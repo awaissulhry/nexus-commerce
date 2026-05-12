@@ -3137,6 +3137,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           brand: true,
           description: true,
           productType: true,
+          bulletPoints: true,
         },
       })
       if (!product) {
@@ -3215,6 +3216,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             .filter(Boolean) as string[]
           return bullets.length > 0 ? JSON.stringify(bullets) : undefined
         }
+        // image_locator_* fields use media_location instead of value
+        if (typeof first.media_location === 'string') return first.media_location
         // Generic single-value wrapped: [{value: "...", ...}]
         const v = first.value
         if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return v
@@ -3225,6 +3228,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         const unwrapped = unwrapSpApiValue(k, v)
         if (unwrapped !== undefined) baseAttributes[k] = unwrapped
       }
+      // Direct listing columns — overwrite only when platformAttributes didn't have the value
       if (listing?.title && baseAttributes['item_name'] === undefined) {
         baseAttributes['item_name'] = listing.title
       }
@@ -3236,9 +3240,18 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         listing!.bulletPointsOverride.length > 0 &&
         baseAttributes['bullet_point'] === undefined
       ) {
-        baseAttributes['bullet_point'] = JSON.stringify(
-          listing!.bulletPointsOverride,
-        )
+        baseAttributes['bullet_point'] = JSON.stringify(listing!.bulletPointsOverride)
+      }
+      // Master product fallbacks — used when neither platformAttributes nor the
+      // listing's direct columns have a value (common for child variant listings
+      // where shared content lives on the master product record, not per-variant).
+      if (!baseAttributes['item_name'] && product.name) baseAttributes['item_name'] = product.name
+      if (!baseAttributes['brand'] && product.brand) baseAttributes['brand'] = product.brand
+      if (!baseAttributes['product_description'] && product.description) {
+        baseAttributes['product_description'] = product.description
+      }
+      if (!baseAttributes['bullet_point'] && Array.isArray(product.bulletPoints) && product.bulletPoints.length > 0) {
+        baseAttributes['bullet_point'] = JSON.stringify(product.bulletPoints)
       }
 
       // Z.2 — eBay branch. eBay's per-category aspects are the
