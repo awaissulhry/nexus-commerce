@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
-import { emitInvalidation } from '@/lib/sync/invalidation-channel'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
@@ -231,24 +231,14 @@ export default function AmazonFlatFileClient({
   const [ptLoading, setPtLoading] = useState(false)
 
   const [manifest, setManifest] = useState<Manifest | null>(initialManifest)
-  const [rows, setRows] = useState<Row[]>(() => {
-    // On hard refresh the server passes initialRows, but the user's local
-    // edits live in localStorage. Prefer the local draft if it exists so
-    // that Cmd+S → hard-refresh round-trips don't lose work.
-    if (typeof window === 'undefined') return initialRows
-    try {
-      const base = `ff-rows-${initialMarketplace.toUpperCase()}-${initialProductType.toUpperCase()}`
-      const key = familyId ? `${base}-family-${familyId}` : base
-      const raw = localStorage.getItem(key)
-      if (raw) {
-        const parsed = JSON.parse(raw) as Row[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return mergeAsinCache(parsed, initialMarketplace)
-        }
-      }
-    } catch {}
-    return initialRows
-  })
+  // Always start from the canonical DB state (SSR initialRows). If localStorage
+  // has dirty rows from a previous session we surface a restore banner instead
+  // of silently loading stale data — this ensures the flat file always opens
+  // showing what is actually in the DB.
+  const [rows, setRows] = useState<Row[]>(() => mergeAsinCache(initialRows, initialMarketplace))
+  // Non-null when localStorage has a draft with unsaved edits that differ from
+  // the DB rows loaded on this page open.
+  const [draftBanner, setDraftBanner] = useState<Row[] | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -350,6 +340,23 @@ export default function AmazonFlatFileClient({
   // ── Undo / Redo ────────────────────────────────────────────────────
   const rowsRef = useRef<Row[]>(rows)
   useEffect(() => { rowsRef.current = rows }, [rows])
+
+  // On mount: if localStorage has a draft with dirty rows from a previous
+  // session, offer to restore it rather than silently discarding it.
+  useEffect(() => {
+    if (!initialProductType) return
+    try {
+      const base = `ff-rows-${initialMarketplace.toUpperCase()}-${initialProductType.toUpperCase()}`
+      const key = familyId ? `${base}-family-${familyId}` : base
+      const raw = localStorage.getItem(key)
+      if (!raw) return
+      const saved = JSON.parse(raw) as Row[]
+      if (Array.isArray(saved) && saved.length > 0 && saved.some((r) => r._dirty)) {
+        setDraftBanner(saved)
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const displayRowsRef = useRef<Row[]>([])
   const allColumnsRef = useRef<Column[]>([])
   const selAnchorRef = useRef<{ ri: number; ci: number } | null>(null)
@@ -1070,6 +1077,15 @@ export default function AmazonFlatFileClient({
     return () => clearTimeout(t)
   }, [rows, marketplace, productType])
 
+  // Live sync: reload rows from DB when the Matrix or another tab updates
+  // channel prices. Skip if the user has unsaved edits — their work takes
+  // priority and will overwrite the external change on next Save.
+  useInvalidationChannel('channel-pricing.updated', () => {
+    if (!productType) return
+    if (rowsRef.current.some((r) => r._dirty)) return
+    void loadData(marketplace, productType, false, true)
+  })
+
   // Load submission history when marketplace/productType change
   useEffect(() => {
     if (!productType) return
@@ -1081,7 +1097,7 @@ export default function AmazonFlatFileClient({
 
   // ── Load data ──────────────────────────────────────────────────────
 
-  const loadData = useCallback(async (mp: string, pt: string, force = false) => {
+  const loadData = useCallback(async (mp: string, pt: string, force = false, fromDB = false) => {
     if (!pt.trim()) return
     setLoading(true)
     setLoadError(null)
@@ -1093,28 +1109,32 @@ export default function AmazonFlatFileClient({
     try {
       if (force) {
         // Schema refresh — update manifest only, keep current rows unchanged.
-        // User's edits must not be overwritten by a schema change.
         const mRes = await fetch(`${backend}/api/amazon/flat-file/template?${qs}`)
         if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
         setManifest(await mRes.json())
       } else {
-        // Full load (marketplace or product type change) — fetch manifest + rows.
-        // Use localStorage draft if available, otherwise fall back to server rows.
+        // Full load — fetch manifest + rows in parallel.
+        // fromDB=true: always use DB rows (called on external invalidation or
+        // explicit reload). fromDB=false: prefer localStorage draft if present.
         const [mRes, rRes] = await Promise.all([
           fetch(`${backend}/api/amazon/flat-file/template?${qs}`),
           fetch(`${backend}/api/amazon/flat-file/rows?${rowsQs}`),
         ])
         if (!mRes.ok) { const e = await mRes.json().catch(() => ({})); throw new Error(e.error ?? `HTTP ${mRes.status}`) }
         setManifest(await mRes.json())
-        const saved = loadSavedRows(mp, pt)
+        const saved = fromDB ? null : loadSavedRows(mp, pt)
         if (saved && saved.length > 0) {
           setRows(mergeAsinCache(saved, mp))
         } else if (rRes.ok) {
           const d = await rRes.json()
-          setRows(mergeAsinCache(d.rows ?? [], mp))
+          const freshRows = mergeAsinCache(d.rows ?? [], mp)
+          setRows(freshRows)
+          // Update localStorage so the next page open starts fresh too.
+          if (fromDB) saveRows(mp, pt, freshRows)
         } else {
           setRows([])
         }
+        if (fromDB) setDraftBanner(null)
         const p = new URLSearchParams(searchParams?.toString() ?? '')
         p.set('marketplace', mp); p.set('productType', pt)
         router.replace(`?${p.toString()}`, { scroll: false })
@@ -2055,6 +2075,39 @@ export default function AmazonFlatFileClient({
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{loadError}
             </div>
             <button onClick={() => setLoadError(null)}><X className="w-4 h-4 text-red-400 hover:text-red-600" /></button>
+          </div>
+        )}
+
+        {/* Draft restore banner — shown when localStorage has unsaved edits
+            from a previous session that differ from the DB rows loaded now. */}
+        {draftBanner && (
+          <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-t border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+              You have unsaved draft edits from a previous session ({draftBanner.filter((r) => r._dirty).length} rows).
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setRows(mergeAsinCache(draftBanner, marketplace))
+                  setDraftBanner(null)
+                }}
+                className="text-xs font-medium px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/60 transition-colors"
+              >
+                Restore draft
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  saveRows(marketplace, productType, rows)
+                  setDraftBanner(null)
+                }}
+                className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+              >
+                Discard
+              </button>
+            </div>
           </div>
         )}
       </header>
