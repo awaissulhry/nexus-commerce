@@ -913,6 +913,7 @@ export default function ProductEditClient({
                 listing={listing}
                 onDirtyChange={(count) => setTabDirty(tabKey, count)}
                 onSave={() => router.refresh()}
+                childrenList={childrenList}
               />
             </div>
           )

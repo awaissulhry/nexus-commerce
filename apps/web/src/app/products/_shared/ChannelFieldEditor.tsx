@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Copy, Loader2, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import ProductTypePicker from '@/components/products/ProductTypePicker'
@@ -428,6 +429,11 @@ export default function ChannelFieldEditor({
     // recreates the product object — the seed is one-shot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, channel, marketplace])
+
+  // Live-reload schema+values whenever the flat file or Matrix saves.
+  useInvalidationChannel('channel-pricing.updated', () => {
+    setReloadKey((k) => k + 1)
+  })
 
   // ── Auto-save dirty fields ───────────────────────────────────
   const flush = useCallback(async () => {

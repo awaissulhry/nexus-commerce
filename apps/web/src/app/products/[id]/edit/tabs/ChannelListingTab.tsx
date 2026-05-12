@@ -42,6 +42,13 @@ interface Listing {
   [key: string]: any
 }
 
+interface ChildProduct {
+  id: string
+  sku: string
+  name?: string | null
+  variantLabel?: string | null
+}
+
 interface Props {
   product: any
   channel: string
@@ -51,6 +58,7 @@ interface Props {
   listing: Listing | undefined
   onDirtyChange: (count: number) => void
   onSave: (updated: Listing) => void
+  childrenList?: ChildProduct[]
 }
 
 export default function ChannelListingTab({
@@ -62,8 +70,13 @@ export default function ChannelListingTab({
   listing,
   onDirtyChange,
   onSave,
+  childrenList = [],
 }: Props) {
   const { t } = useTranslations()
+  // For parent products: which child's channel listing is active.
+  // null = parent-level view (all variants overview / parent listing).
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
+  const activeProductId = selectedChildId ?? product.id
   const [pulling, setPulling] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -215,7 +228,8 @@ export default function ChannelListingTab({
 
   return (
     <div className="space-y-4">
-      {/* ── Status bar ─────────────────────────────────────────── */}
+      {/* ── Status bar (sticky) ────────────────────────────────── */}
+      <div className="sticky top-14 z-[5]">
       <Card noPadding>
         <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -307,6 +321,7 @@ export default function ChannelListingTab({
           </div>
         )}
       </Card>
+      </div>
 
       {/* ── Pricing panel ──────────────────────────────────────── */}
       <PricingPanel
@@ -329,12 +344,47 @@ export default function ChannelListingTab({
         />
       )}
 
+      {/* ── Variant sub-tabs (parent products only) ───────────── */}
+      {childrenList.length > 0 && (
+        <div className="flex items-center gap-1 flex-wrap border-b border-slate-200 dark:border-slate-800 pb-0 -mb-1">
+          <button
+            type="button"
+            onClick={() => setSelectedChildId(null)}
+            className={cn(
+              'px-3 py-1.5 text-sm font-medium rounded-t border-b-2 -mb-px transition-colors whitespace-nowrap',
+              selectedChildId === null
+                ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
+            )}
+          >
+            Parent
+          </button>
+          {childrenList.map((child) => (
+            <button
+              key={child.id}
+              type="button"
+              onClick={() => setSelectedChildId(child.id)}
+              className={cn(
+                'px-3 py-1.5 text-sm font-medium rounded-t border-b-2 -mb-px transition-colors whitespace-nowrap font-mono',
+                selectedChildId === child.id
+                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
+              )}
+              title={child.name ?? child.sku}
+            >
+              {child.variantLabel ?? child.sku}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Readiness checklist (W5.1) ────────────────────────── */}
       <ReadinessChecklist listing={listing} t={t} />
 
       {/* ── Schema-driven editor (Q.2 + Q.3) ──────────────────── */}
       <ChannelFieldEditor
-        productId={product.id}
+        key={activeProductId}
+        productId={activeProductId}
         channel={channel}
         marketplace={marketplace}
         product={product}
