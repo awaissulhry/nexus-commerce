@@ -28,6 +28,8 @@ import { Input } from '@/components/ui/Input'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
+import ChannelPricingSection from './ChannelPricingSection'
+import ChannelInventorySection from './ChannelInventorySection'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -494,6 +496,18 @@ export default function MatrixTab({ product }: Props) {
   }
 
   // ── Render ───────────────────────────────────────────────────────────
+
+  // Non-parent products have no variant grid — show the channel
+  // pricing + inventory sections which handle their own fetching.
+  if (!product.isParent) {
+    return (
+      <div className="space-y-4">
+        <ChannelPricingSection productId={product.id} isParent={false} />
+        <ChannelInventorySection productId={product.id} isParent={false} />
+      </div>
+    )
+  }
+
   if (loading) return (
     <div className="flex items-center gap-2 text-sm text-slate-400 py-8 px-4">
       <Loader2 className="w-4 h-4 animate-spin" /> Loading matrix…

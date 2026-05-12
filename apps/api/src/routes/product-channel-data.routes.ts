@@ -14,37 +14,33 @@ import prisma from '../db.js'
 export default async function productChannelDataRoutes(fastify: FastifyInstance) {
 
   // ── GET /api/products/:id/channel-pricing ───────────────────────────────
+  //
+  // For parent products: "variants" = child Product rows + their ChannelListing
+  // data. This aligns with what the Matrix tab displays (child product IDs) and
+  // what getExistingRows reads (ChannelListing.price) so the flat file
+  // round-trip works correctly.
+  //
+  // For non-parent products: "variants" is empty; product.markets covers the
+  // single product's listings.
   fastify.get<{ Params: { id: string }; Querystring: { channel?: string } }>(
     '/products/:id/channel-pricing',
     async (request, reply) => {
       const { id } = request.params
       const channel = request.query.channel ?? 'AMAZON'
 
-      const [product, variants, channelListings, variantListings] = await Promise.all([
-        prisma.product.findUnique({ where: { id }, select: { id: true, sku: true, isParent: true } }),
-        prisma.productVariation.findMany({
-          where: { productId: id },
-          select: { id: true, sku: true, price: true, variationAttributes: true },
-          orderBy: { sku: 'asc' },
-        }),
-        prisma.channelListing.findMany({
-          where: { productId: id, channel },
-          select: { id: true, marketplace: true, channel: true, price: true, salePrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
-          orderBy: { marketplace: 'asc' },
-        }),
-        prisma.variantChannelListing.findMany({
-          where: {
-            variant: { productId: id },
-            channel,
-          },
-          select: { id: true, variantId: true, marketplace: true, channel: true, channelPrice: true, currentPrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
-          orderBy: [{ variantId: 'asc' }, { marketplace: 'asc' }],
-        }),
-      ])
-
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, sku: true, isParent: true },
+      })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
-      // Product-level markets
+      // Product-level channel listings (used for non-parent and as fallback)
+      const channelListings = await prisma.channelListing.findMany({
+        where: { productId: id, channel },
+        select: { id: true, marketplace: true, channel: true, price: true, salePrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
+        orderBy: { marketplace: 'asc' },
+      })
+
       const productMarkets = channelListings.map((cl) => ({
         marketplace: cl.marketplace,
         channel: cl.channel,
@@ -56,44 +52,48 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
         source: 'product' as const,
       }))
 
-      // Variant-level markets grouped by variantId
-      const variantMap = new Map(variants.map((v) => [v.id, v]))
-      const variantListingsByVariant = new Map<string, typeof variantListings>()
-      for (const vl of variantListings) {
-        if (!variantListingsByVariant.has(vl.variantId)) variantListingsByVariant.set(vl.variantId, [])
-        variantListingsByVariant.get(vl.variantId)!.push(vl)
-      }
+      // For parent products: child Product rows are the "variants".
+      // Each child has its own ChannelListing — that is exactly the source
+      // getExistingRows reads for the flat file, so editing here = editing
+      // what the flat file shows.
+      let variantRows: Array<{
+        variantId: string; sku: string
+        attributes: Record<string, string>
+        basePrice: number | null
+        markets: typeof productMarkets
+      }> = []
 
-      const variantRows = variants.map((v) => {
-        const vListings = variantListingsByVariant.get(v.id) ?? []
-        const markets = vListings.map((vl) => ({
-          marketplace: vl.marketplace,
-          channel: vl.channel,
-          price: vl.channelPrice != null ? Number(vl.channelPrice) : (vl.currentPrice != null ? Number(vl.currentPrice) : null),
-          salePrice: null as number | null,
-          listingStatus: vl.listingStatus,
-          lastSyncedAt: vl.lastSyncedAt?.toISOString() ?? null,
-          asin: vl.externalListingId ?? null,
-          source: 'variant' as const,
+      if (product.isParent) {
+        const children = await prisma.product.findMany({
+          where: { parentId: id, deletedAt: null },
+          select: {
+            id: true, sku: true, basePrice: true,
+            variationAttributes: true,
+            channelListings: {
+              where: { channel },
+              select: { marketplace: true, channel: true, price: true, salePrice: true, listingStatus: true, lastSyncedAt: true, externalListingId: true },
+            },
+          },
+          orderBy: { sku: 'asc' },
+        })
+
+        variantRows = children.map((c) => ({
+          variantId: c.id, // child Product ID — matches Matrix tab's child.id
+          sku: c.sku,
+          attributes: (c.variationAttributes as Record<string, string> | null) ?? {},
+          basePrice: c.basePrice != null ? Number(c.basePrice) : null,
+          markets: c.channelListings.map((cl) => ({
+            marketplace: cl.marketplace,
+            channel: cl.channel,
+            price: cl.price != null ? Number(cl.price) : null,
+            salePrice: cl.salePrice != null ? Number(cl.salePrice) : null,
+            listingStatus: cl.listingStatus,
+            lastSyncedAt: cl.lastSyncedAt?.toISOString() ?? null,
+            asin: cl.externalListingId ?? null,
+            source: 'variant' as const,
+          })),
         }))
-
-        // Fill in any markets that have product-level pricing but no variant override
-        const coveredMarkets = new Set(markets.map((m) => m.marketplace))
-        for (const pm of productMarkets) {
-          if (!coveredMarkets.has(pm.marketplace)) {
-            markets.push({ ...pm, source: 'variant' as const })
-          }
-        }
-        markets.sort((a, b) => a.marketplace.localeCompare(b.marketplace))
-
-        return {
-          variantId: v.id,
-          sku: v.sku,
-          attributes: (v.variationAttributes as Record<string, string> | null) ?? {},
-          basePrice: v.price != null ? Number(v.price) : null,
-          markets,
-        }
-      })
+      }
 
       return reply.send({
         productId: id,
@@ -105,8 +105,14 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
   )
 
   // ── PATCH /api/products/:id/channel-pricing ─────────────────────────────
-  // Bulk update. Each update targets either a variant (variantId set) or
-  // the product-level ChannelListing (variantId absent/null).
+  //
+  // When variantId is provided it is a child Product ID (from the Matrix tab).
+  // We write to ChannelListing where productId = variantId — this is the same
+  // table getExistingRows reads, so the flat file reflects the change
+  // immediately on next load.
+  //
+  // We also attempt a secondary write to VariantChannelListing for the
+  // PE.1 ChannelPricingSection which still uses that table.
   fastify.patch<{
     Params: { id: string }
     Body: {
@@ -130,20 +136,31 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const ch = (u.channel ?? 'AMAZON').toUpperCase()
 
       if (u.variantId) {
-        // Variant-level update
-        const data: Record<string, any> = { lastSyncedAt: new Date() }
-        if (u.price !== undefined) data.channelPrice = u.price
-        if (u.quantity !== undefined && u.quantity !== null) data.channelQuantity = u.quantity
+        // Primary: update the child product's ChannelListing (what flat file reads)
+        const clData: Record<string, any> = { lastSyncedAt: new Date(), syncStatus: 'PENDING' }
+        if (u.price !== undefined && u.price !== null) { clData.price = u.price; clData.followMasterPrice = false }
+        if (u.salePrice !== undefined) clData.salePrice = u.salePrice
+        if (u.quantity !== undefined && u.quantity !== null) { clData.quantity = u.quantity; clData.followMasterQuantity = false }
+
+        await prisma.channelListing.updateMany({
+          where: { productId: u.variantId, marketplace: mp, channel: ch },
+          data: clData,
+        })
+
+        // Secondary: also update VariantChannelListing for completeness
+        const vclData: Record<string, any> = { lastSyncedAt: new Date() }
+        if (u.price !== undefined && u.price !== null) vclData.channelPrice = u.price
+        if (u.quantity !== undefined && u.quantity !== null) vclData.channelQuantity = u.quantity
         await prisma.variantChannelListing.updateMany({
           where: { variantId: u.variantId, marketplace: mp, channel: ch },
-          data,
-        })
+          data: vclData,
+        }).catch(() => { /* VariantChannelListing may not exist — non-fatal */ })
       } else {
-        // Product-level update
-        const data: Record<string, any> = { lastSyncedAt: new Date() }
-        if (u.price !== undefined && u.price !== null) data.price = u.price
+        // Product-level update (no variantId)
+        const data: Record<string, any> = { lastSyncedAt: new Date(), syncStatus: 'PENDING' }
+        if (u.price !== undefined && u.price !== null) { data.price = u.price; data.followMasterPrice = false }
         if (u.salePrice !== undefined) data.salePrice = u.salePrice
-        if (u.quantity !== undefined && u.quantity !== null) data.quantity = u.quantity
+        if (u.quantity !== undefined && u.quantity !== null) { data.quantity = u.quantity; data.followMasterQuantity = false }
         await prisma.channelListing.updateMany({
           where: { productId: id, marketplace: mp, channel: ch },
           data,

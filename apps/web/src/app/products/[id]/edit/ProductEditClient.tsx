@@ -21,11 +21,9 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
-import PricingTab from './tabs/PricingTab'
 import ActivityTab from './tabs/ActivityTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
-import InventoryTab from './tabs/InventoryTab'
 import LocalesTab from './tabs/LocalesTab'
 import MatrixTab from './tabs/MatrixTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
@@ -341,19 +339,17 @@ export default function ProductEditClient({
     const base = [
       'master',
       'images',
-      'pricing',
-      'inventory',
       'locales',
       'seo',
       'compliance',
       'workflow',
       'relations',
       'activity',
+      'matrix',
     ]
-    if (product.isParent) base.push('variations')
     return [...base, ...orderedChannels]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product.isParent, orderedChannels.join(',')])
+  }, [orderedChannels.join(',')])
 
   // W14.4 — mobile tab strip: scroll indicators + auto-scroll active
   // tab into view. Twelve tabs overflow on iPad portrait + every
@@ -628,20 +624,6 @@ export default function ProductEditClient({
             >
               {t('products.edit.tab.images')}
             </TopTabButton>
-            <TopTabButton
-              tabKey="pricing"
-              active={topTab === 'pricing'}
-              onClick={() => goToTab('pricing')}
-            >
-              {t('products.edit.tab.pricing')}
-            </TopTabButton>
-            <TopTabButton
-              tabKey="inventory"
-              active={topTab === 'inventory'}
-              onClick={() => goToTab('inventory')}
-            >
-              {t('products.edit.tab.inventory')}
-            </TopTabButton>
             {showAllTabs && (<>
               <TopTabButton
                 tabKey="locales"
@@ -687,28 +669,14 @@ export default function ProductEditClient({
                 {t('products.edit.tab.activity')}
               </TopTabButton>
             </>)}
-            {/* Toggle secondary tabs */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = !showAllTabs
-                setShowAllTabs(next)
-                try { localStorage.setItem('product-edit:show-all-tabs', next ? '1' : '0') } catch {}
-              }}
-              className="flex-shrink-0 px-3 py-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors"
+            <TopTabButton
+              tabKey="matrix"
+              active={topTab === 'matrix'}
+              onClick={() => goToTab('matrix')}
+              count={product.isParent ? childrenList.length : undefined}
             >
-              {showAllTabs ? 'Show less ←' : '+ More tabs'}
-            </button>
-            {product.isParent && (
-              <TopTabButton
-                tabKey="variations"
-                active={topTab === 'variations'}
-                onClick={() => goToTab('variations')}
-                count={childrenList.length}
-              >
-                {t('products.edit.tab.variations')}
-              </TopTabButton>
-            )}
+              Matrix
+            </TopTabButton>
             {orderedChannels.map((channel) => {
               const isActive = topTab === channel
               const channelListings = listings[channel] ?? []
@@ -741,6 +709,18 @@ export default function ProductEditClient({
                 </TopTabButton>
               )
             })}
+            {/* Toggle secondary tabs — at end of list */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showAllTabs
+                setShowAllTabs(next)
+                try { localStorage.setItem('product-edit:show-all-tabs', next ? '1' : '0') } catch {}
+              }}
+              className="flex-shrink-0 px-3 py-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 border-b-2 border-transparent whitespace-nowrap transition-colors"
+            >
+              {showAllTabs ? 'Show less ←' : '+ More tabs'}
+            </button>
           </div>
         </div>
       </header>
@@ -787,30 +767,6 @@ export default function ProductEditClient({
               product={product}
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('images', count)}
-            />
-          </div>
-        )}
-
-        {topTab === 'pricing' && (
-          <div role="tabpanel" id="panel-pricing" aria-labelledby="tab-pricing">
-            <PricingTab
-              product={product}
-              discardSignal={discardSignal}
-              onDirtyChange={(count) => setTabDirty('pricing', count)}
-            />
-          </div>
-        )}
-
-        {topTab === 'inventory' && (
-          <div
-            role="tabpanel"
-            id="panel-inventory"
-            aria-labelledby="tab-inventory"
-          >
-            <InventoryTab
-              product={product}
-              discardSignal={discardSignal}
-              onDirtyChange={(count) => setTabDirty('inventory', count)}
             />
           </div>
         )}
@@ -879,11 +835,11 @@ export default function ProductEditClient({
           </div>
         )}
 
-        {topTab === 'variations' && product.isParent && (
+        {topTab === 'matrix' && (
           <div
             role="tabpanel"
-            id="panel-variations"
-            aria-labelledby="tab-variations"
+            id="panel-matrix"
+            aria-labelledby="tab-matrix"
           >
             <MatrixTab
               product={product}
