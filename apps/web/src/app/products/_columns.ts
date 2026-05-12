@@ -26,12 +26,15 @@ export interface ColumnDef {
 }
 
 export const ALL_COLUMNS: ColumnDef[] = [
-  // U.35 — column width bumped from 56 → 64 to give the larger
-  // 48px thumbnail breathing room while keeping the cell's px-2
-  // padding readable.
+  // AM.1 — combined Amazon-style "Product" cell: thumbnail + name + ASIN · SKU.
+  // Replaces the separate thumb/sku/name trio as the default first column.
+  // The individual columns remain for operators who prefer the classic layout.
+  { key: 'product', label: 'Product', labelKey: 'products.col.product', width: 400, locked: true },
   { key: 'thumb', label: '', width: 64, locked: true },
   { key: 'sku', label: 'SKU', labelKey: 'products.col.sku', width: 140, locked: true },
   { key: 'name', label: 'Name', labelKey: 'products.col.name', width: 280, locked: true },
+  // AM.1 — richer listing-status column: badge + coverage dots + readiness hint.
+  { key: 'listing-status', label: 'Listing status', labelKey: 'products.col.listingStatus', width: 180 },
   { key: 'status', label: 'Status', labelKey: 'products.col.status', width: 110 },
   { key: 'price', label: 'Price', labelKey: 'products.col.price', width: 110 },
   { key: 'stock', label: 'Stock', labelKey: 'products.col.stock', width: 90 },
@@ -60,19 +63,16 @@ export const ALL_COLUMNS: ColumnDef[] = [
   // Empty for products without a family attached.
   { key: 'familyCompleteness', label: 'Family ✓', labelKey: 'products.col.familyCompleteness', width: 110 },
   { key: 'updated', label: 'Updated', labelKey: 'products.col.updated', width: 110 },
-  { key: 'actions', label: '', width: 110, locked: true },
+  { key: 'actions', label: '', width: 140, locked: true },
 ]
 
 export const DEFAULT_VISIBLE = [
-  'thumb',
-  'sku',
-  'name',
-  'status',
+  'product',          // AM.1 — combined thumb+name+ASIN+SKU
+  'listing-status',   // AM.1 — status badge + coverage + readiness hint
   'price',
   'stock',
   'coverage',
   'tags',
-  'photos',
   'updated',
   'actions',
 ]

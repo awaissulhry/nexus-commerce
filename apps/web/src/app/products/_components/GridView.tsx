@@ -46,6 +46,7 @@ import Link from 'next/link'
 import {
   AlertCircle,
   Check,
+  ChevronDown,
   ChevronRight,
   CheckCircle2,
   Copy,
@@ -1496,6 +1497,95 @@ const ProductCell = memo(function ProductCell({
   const p = product
 
   switch (col) {
+    // AM.1 — Amazon-style combined product cell:
+    //   [thumbnail] [Name — blue link]
+    //               [ASIN · SKU — mono secondary]
+    //               [Variations (N)] for parents
+    case 'product': {
+      const childCount = p.childCount ?? 0
+      const isParentRow = !p.parentId && p.isParent && childCount > 0
+      return (
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Thumbnail */}
+          <div className="flex-shrink-0">
+            {p.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.imageUrl} alt="" className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800" />
+            ) : (
+              <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600">
+                <ImageIcon size={14} />
+              </div>
+            )}
+          </div>
+          {/* Name + identifiers */}
+          <div className="min-w-0 flex-1">
+            <Link
+              href={`/products/${p.id}/edit`}
+              className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline truncate leading-snug"
+              title={p.name}
+            >
+              <Highlight text={p.name} query={searchQuery} />
+            </Link>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {p.amazonAsin && (
+                <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                  {p.amazonAsin}
+                </span>
+              )}
+              {p.amazonAsin && (
+                <span className="text-xs text-slate-300 dark:text-slate-600">|</span>
+              )}
+              <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                <Highlight text={p.sku} query={searchQuery} />
+              </span>
+              {isParentRow && childCount > 0 && (
+                <>
+                  <span className="text-xs text-slate-300 dark:text-slate-600">·</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {childCount} variation{childCount !== 1 ? 's' : ''}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // AM.1 — Listing status: coloured badge + coverage dots + readiness hint.
+    case 'listing-status': {
+      const statusStyle =
+        p.status === 'ACTIVE'
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : p.status === 'INACTIVE'
+          ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+      const childCount = p.childCount ?? 0
+      const isParentRow = !p.parentId && p.isParent && childCount > 0
+      const channelCount = p.channelCount ?? 0
+      const readinessLow = p.status === 'ACTIVE' && channelCount === 0
+      return (
+        <div className="space-y-1">
+          {isParentRow ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              <Layers size={10} />
+              Variations ({childCount})
+            </span>
+          ) : (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle}`}>
+              {p.status === 'ACTIVE' ? 'Active' : p.status === 'INACTIVE' ? 'Inactive' : 'Draft'}
+            </span>
+          )}
+          {readinessLow && !isParentRow && (
+            <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <AlertCircle size={10} className="flex-shrink-0" />
+              <span>Not listed on any channel</span>
+            </div>
+          )}
+        </div>
+      )
+    }
+
     case 'thumb':
       // U.35 — bumped from w-10/h-10 (40px) to w-12/h-12 (48px) so
       // the product photo reads at a glance without the operator
@@ -1870,54 +1960,62 @@ const ProductCell = memo(function ProductCell({
           })}
         </span>
       )
-    case 'actions':
-      // U.34 — View + List buttons were `<button h-6 px-2>` and
-      // `<Link h-6 px-2>` without inline-flex/justify, so the text
-      // baseline floated at the top of the 24px box and the two
-      // chips visually mismatched (button vs anchor have different
-      // baseline rendering). Now both are inline-flex with the
-      // same spec — fixed width, vertically + horizontally
-      // centered, identical hover tones in light and dark.
+    case 'actions': {
+      // AM.1 — Amazon-style "Edit ▼" split button.
+      // Primary action → /products/:id/edit (most common operation).
+      // Chevron opens inline dropdown with View / List / Matrix.
+      const [dropOpen, setDropOpen] = useState(false)
       return (
-        <div className="flex items-center gap-1 justify-end">
-          {/* F1 — "View" opens the drawer. */}
-          <button
-            type="button"
-            onClick={() => {
-              window.dispatchEvent(
-                new CustomEvent('nexus:open-product-drawer', {
-                  detail: { productId: p.id },
-                }),
-              )
-            }}
-            className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center justify-center transition-colors"
-            title={t('products.grid.action.viewTitle')}
-          >
-            {t('products.grid.action.view')}
-          </button>
-          <Link
-            href={`/products/${p.id}/list-wizard`}
-            className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded inline-flex items-center justify-center transition-colors"
-            title={t('products.grid.action.listTitle')}
-          >
-            {t('products.grid.action.list')}
-          </Link>
-          {/* W5.45 — Matrix view shortcut for parent products. Was
-              only reachable via drawer parent badge (3 clicks deep)
-              + variations tab footer link. Hot operator path for
-              variant editing — promote to inline grid action so a
-              single click on any parent row opens the matrix. */}
-          {p.isParent && (
+        <div className="flex items-center justify-end">
+          <div className="relative inline-flex rounded-md shadow-sm">
+            {/* Primary: Edit */}
             <Link
-              href={`/products/${p.id}/matrix`}
-              className="h-6 w-12 text-sm text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded inline-flex items-center justify-center transition-colors"
-              title={t('products.grid.action.matrixTitle')}
+              href={`/products/${p.id}/edit`}
+              className="h-7 px-3 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-md text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
             >
-              {t('products.grid.action.matrix')}
+              Edit
             </Link>
-          )}
+            {/* Dropdown toggle */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setDropOpen((o) => !o) }}
+              className="h-7 px-1.5 bg-white dark:bg-slate-800 border border-l-0 border-slate-300 dark:border-slate-600 rounded-r-md text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 inline-flex items-center transition-colors"
+              aria-label="More actions"
+            >
+              <ChevronDown size={12} />
+            </button>
+            {dropOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 py-1 text-sm"
+                onMouseLeave={() => setDropOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setDropOpen(false); window.dispatchEvent(new CustomEvent('nexus:open-product-drawer', { detail: { productId: p.id } })) }}
+                  className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  {t('products.grid.action.view')}
+                </button>
+                <Link
+                  href={`/products/${p.id}/list-wizard`}
+                  className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  {t('products.grid.action.list')}
+                </Link>
+                {p.isParent && (
+                  <Link
+                    href={`/products/${p.id}/matrix`}
+                    className="block px-3 py-1.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    {t('products.grid.action.matrix')}
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )
+    }
     default:
       return null
   }

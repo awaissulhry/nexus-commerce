@@ -919,8 +919,8 @@ export default function ProductsWorkspace() {
     // forwards them to <VirtualizedGrid>.
     <div className="space-y-5">
       <PageHeader
-        title="Products"
-        description={`${stats.total.toLocaleString()} master SKUs · ${stats.active} active · ${stats.draft} draft · ${stats.inStock} in stock · ${stats.outOfStock} out`}
+        title={`Manage products (${stats.total.toLocaleString()})`}
+        description={`${stats.active} active · ${stats.draft} draft · ${stats.inStock} in stock · ${stats.outOfStock} out of stock`}
         actions={
           <div className="flex items-center gap-2">
             {/* U.2a — page-header actions migrated to <Button> primitive.
@@ -1018,6 +1018,57 @@ export default function ProductsWorkspace() {
           </div>
         }
       />
+
+      {/* AM.1 — Amazon-style status tab pills: All · Fix · Draft */}
+      {lens === 'grid' && !showDeleted && (
+        <div className="flex items-center gap-2">
+          {/* All */}
+          <button
+            type="button"
+            onClick={() => updateUrl({ status: '', page: undefined })}
+            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium transition-colors border ${
+              statusFilters.length === 0
+                ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
+            }`}
+          >
+            All
+            <span className={`text-xs tabular-nums ${statusFilters.length === 0 ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+              ({stats.total.toLocaleString()})
+            </span>
+          </button>
+          {/* Fix — active products with 0 channel coverage */}
+          <button
+            type="button"
+            onClick={() => updateUrl({ status: 'ACTIVE', stockLevel: 'all', missingChannels: '', page: undefined })}
+            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium transition-colors border ${
+              statusFilters.includes('ACTIVE') && statusFilters.length === 1
+                ? 'bg-amber-600 text-white border-amber-600'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
+            }`}
+          >
+            Fix
+            <span className={`text-xs tabular-nums ${statusFilters.includes('ACTIVE') && statusFilters.length === 1 ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+              ({(stats.active - (facets?.hygiene?.total ?? 0) < 0 ? 0 : stats.active - stats.inStock).toLocaleString()})
+            </span>
+          </button>
+          {/* Draft */}
+          <button
+            type="button"
+            onClick={() => updateUrl({ status: 'DRAFT', page: undefined })}
+            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium transition-colors border ${
+              statusFilters.includes('DRAFT') && statusFilters.length === 1
+                ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
+            }`}
+          >
+            Draft
+            <span className={`text-xs tabular-nums ${statusFilters.includes('DRAFT') && statusFilters.length === 1 ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
+              ({stats.draft.toLocaleString()})
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* W5.5 — multi-column sort chip stack. Renders above lens
           switcher when active; hidden when sortStack is empty. */}

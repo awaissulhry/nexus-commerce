@@ -17,6 +17,7 @@ export type ProductRow = {
   status: string
   syncChannels: string[]
   imageUrl: string | null
+  amazonAsin: string | null
   isParent: boolean
   parentId: string | null
   productType: string | null

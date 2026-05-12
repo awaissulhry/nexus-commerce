@@ -650,6 +650,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           // P.7 — version for inline-edit If-Match.
           version: p.version,
           imageUrl: p.images[0]?.url ?? null,
+          amazonAsin: p.amazonAsin ?? null,
           photoCount,
           channelCount: p._count?.channelListings ?? 0,
           variantCount: p._count?.variations ?? 0,
