@@ -76,6 +76,10 @@ export default function MasterDataTab({
   const [status, setStatus] = useState<SaveStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const dirtyRef = useRef<Set<MasterField>>(new Set())
+  // Always holds the latest data so flush() doesn't read a stale
+  // closure snapshot from the render that set the debounce timer.
+  const dataRef = useRef(data)
+  useEffect(() => { dataRef.current = data }, [data])
   const saveTimer = useRef<number | null>(null)
   const reportDirty = () => onDirtyChange(dirtyRef.current.size)
 
@@ -123,7 +127,7 @@ export default function MasterDataTab({
     const fields = Array.from(dirtyRef.current)
     if (fields.length === 0) { setStatus('idle'); return }
     const changes = fields.map((field) => {
-      const raw = data[field]
+      const raw = dataRef.current[field]
       return { id: product.id, field, value: raw === '' ? null : raw }
     })
     try {
