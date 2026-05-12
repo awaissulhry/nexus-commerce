@@ -345,15 +345,45 @@ function expandSchemaField(
   lang: LangTag,
   expandedFields: Record<string, string>,
 ): FlatFileColumn[] {
-  // Fields whose sub-properties are too complex to auto-expand meaningfully.
+  // Fields handled by Variations group — skip from schema group iteration.
   const SKIP_SUB_EXPAND = new Set([
-    'purchasable_offer',         // deeply-nested price schedules
-    'sleeve',                    // sub-props are complex arrays
-    'compliance_media',
-    'supplemental_condition_information',
     'child_parent_sku_relationship',  // handled in Variations group
-    'epr_product_packaging',
   ])
+
+  // ── purchasable_offer: hardcoded expansion (nested price schedule) ────
+  if (fieldId === 'purchasable_offer') {
+    const condOpts: string[] = schemaEnums['purchasable_offer.condition_type']
+      ?? schemaEnums['condition_type']
+      ?? ['new_new', 'used_good', 'used_very_good', 'used_acceptable', 'collectible_good', 'refurbished_refurbished']
+    const curOpts = ['EUR', 'GBP', 'USD', 'CHF', 'SEK', 'PLN', 'CZK', 'DKK', 'NOK', 'HUF']
+    const ll = (key: string, fb: Record<LangTag, string>) => schemaLabels[key] ?? fb[lang] ?? fb.en_GB
+    expandedFields['purchasable_offer__condition_type'] = 'purchasable_offer.condition_type'
+    expandedFields['purchasable_offer__currency']       = 'purchasable_offer.currency'
+    expandedFields['purchasable_offer__our_price']      = 'purchasable_offer.our_price'
+    expandedFields['purchasable_offer__sale_price']     = 'purchasable_offer.sale_price'
+    expandedFields['purchasable_offer__sale_from_date'] = 'purchasable_offer.sale_from_date'
+    expandedFields['purchasable_offer__sale_end_date']  = 'purchasable_offer.sale_end_date'
+    return [
+      { id: 'purchasable_offer__condition_type',  fieldRef: 'purchasable_offer[marketplace_id]#1.condition_type',
+        labelEn: 'Condition', labelLocal: ll('purchasable_offer.condition_type', { it_IT: 'Condizione', de_DE: 'Zustand', fr_FR: 'État', es_ES: 'Condición', en_GB: 'Condition' }),
+        required: isRequired, kind: 'enum', options: ['', ...condOpts], width: 170 },
+      { id: 'purchasable_offer__currency',        fieldRef: 'purchasable_offer[marketplace_id]#1.currency',
+        labelEn: 'Currency', labelLocal: ll('purchasable_offer.currency', { it_IT: 'Valuta', de_DE: 'Währung', fr_FR: 'Devise', es_ES: 'Divisa', en_GB: 'Currency' }),
+        required: false, kind: 'enum', options: curOpts, width: 100 },
+      { id: 'purchasable_offer__our_price',       fieldRef: 'purchasable_offer[marketplace_id]#1.our_price.schedule.value_with_tax',
+        labelEn: 'Price (incl. tax)', labelLocal: ll('purchasable_offer.our_price', { it_IT: 'Prezzo (IVA incl.)', de_DE: 'Preis (inkl. MwSt.)', fr_FR: 'Prix (TVA incl.)', es_ES: 'Precio (IVA incl.)', en_GB: 'Price (incl. tax)' }),
+        required: isRequired, kind: 'number', width: 130 },
+      { id: 'purchasable_offer__sale_price',      fieldRef: 'purchasable_offer[marketplace_id]#1.sale_price.schedule.value_with_tax',
+        labelEn: 'Sale Price', labelLocal: ll('purchasable_offer.sale_price', { it_IT: 'Prezzo scontato', de_DE: 'Sonderpreis', fr_FR: 'Prix promo', es_ES: 'Precio oferta', en_GB: 'Sale Price' }),
+        required: false, kind: 'number', width: 120 },
+      { id: 'purchasable_offer__sale_from_date',  fieldRef: 'purchasable_offer[marketplace_id]#1.sale_from_date.value',
+        labelEn: 'Sale From Date', labelLocal: ll('purchasable_offer.sale_from_date', { it_IT: 'Inizio svendita', de_DE: 'Aktionsbeginn', fr_FR: 'Début promo', es_ES: 'Inicio oferta', en_GB: 'Sale From Date' }),
+        required: false, kind: 'text', width: 150 },
+      { id: 'purchasable_offer__sale_end_date',   fieldRef: 'purchasable_offer[marketplace_id]#1.sale_end_date.value',
+        labelEn: 'Sale End Date', labelLocal: ll('purchasable_offer.sale_end_date', { it_IT: 'Fine svendita', de_DE: 'Aktionsende', fr_FR: 'Fin promo', es_ES: 'Fin oferta', en_GB: 'Sale End Date' }),
+        required: false, kind: 'text', width: 150 },
+    ]
+  }
 
   const INFRA = new Set(['marketplace_id', 'language_tag', 'audience'])
   const subProps: Record<string, any> = prop?.items?.properties ?? {}
@@ -752,6 +782,9 @@ export class AmazonFlatFileService {
       })
     }
 
+    // Build id→sku map so child rows can resolve parent SKU without extra queries
+    const idToSku = new Map(products.filter(Boolean).map((p: any) => [p.id as string, p.sku as string]))
+
     return products.map((p) => {
       const listing = (p.channelListings as any[])[0]
       const attrs = ((listing?.platformAttributes as any)?.attributes ?? {}) as Record<string, any>
@@ -761,6 +794,23 @@ export class AmazonFlatFileService {
         ? (attrs.bullet_point as any[]).map((b: any) => b?.value ?? String(b))
         : []
 
+      // Resolve parent SKU from the products-in-scope map (not ASIN)
+      const parentSku = (p as any).parentId ? (idToSku.get((p as any).parentId) ?? '') : ''
+
+      // purchasable_offer sub-columns (expanded from nested price schedule)
+      const poAttrs = attrs.purchasable_offer?.[0] as Record<string, any> | undefined
+      const poCurrency = String(poAttrs?.currency ?? CURRENCY_MAP[mp] ?? 'EUR')
+      const poCondition = String(poAttrs?.condition_type ?? '')
+      const poSaleAttrs = poAttrs?.sale_price?.[0] as Record<string, any> | undefined
+      const poSalePrice = listing?.salePrice != null
+        ? String(listing.salePrice)
+        : (poSaleAttrs?.schedule?.[0]?.value_with_tax != null ? String(poSaleAttrs.schedule[0].value_with_tax) : '')
+
+      // fulfillment_availability sub-columns
+      const faAttrs = attrs.fulfillment_availability?.[0] as Record<string, any> | undefined
+      const faCode = String(faAttrs?.fulfillment_channel_code ?? 'DEFAULT')
+      const faLeadTime = faAttrs?.lead_time_to_ship_max_days != null ? String(faAttrs.lead_time_to_ship_max_days) : ''
+
       // Start with fixed structural fields
       const row: FlatFileRow = {
         _rowId: p.id, _productId: p.id, _isNew: false, _status: 'idle',
@@ -768,7 +818,7 @@ export class AmazonFlatFileService {
         product_type:          (p.productType as string | null) ?? productType ?? '',
         record_action:         'full_update',
         parentage_level:       p.isParent ? 'Parent' : (p as any).parentId ? 'Child' : '',
-        parent_sku:            (p as any).parentAsin ?? '',
+        parent_sku:            parentSku,
         variation_theme:       String(attrs.variation_theme?.[0]?.value ?? ''),
         // Common schema fields pre-populated from DB
         item_name:             listing?.title ?? attrs.item_name?.[0]?.value ?? p.name ?? '',
@@ -777,8 +827,19 @@ export class AmazonFlatFileService {
         bullet_point:          bullets[0] ?? '',
         generic_keyword:       String(attrs.generic_keyword?.[0]?.value ?? ''),
         color:                 String(attrs.color?.[0]?.value ?? ''),
-        purchasable_offer:     listing?.price != null ? String(listing.price) : '',
-        fulfillment_availability: listing?.quantity != null ? String(listing.quantity) : '',
+        // purchasable_offer expanded — bare key kept as sentinel so generic loop skips it
+        purchasable_offer:               '',
+        purchasable_offer__condition_type:  poCondition,
+        purchasable_offer__currency:        poCurrency,
+        purchasable_offer__our_price:       listing?.price != null ? String(listing.price) : '',
+        purchasable_offer__sale_price:      poSalePrice,
+        purchasable_offer__sale_from_date:  String(poSaleAttrs?.start_at?.[0]?.value ?? ''),
+        purchasable_offer__sale_end_date:   String(poSaleAttrs?.end_at?.[0]?.value ?? ''),
+        // fulfillment_availability expanded — bare key sentinel
+        fulfillment_availability:                        '',
+        fulfillment_availability__fulfillment_channel_code: faCode,
+        fulfillment_availability__quantity:              listing?.quantity != null ? String(listing.quantity) : '',
+        fulfillment_availability__lead_time_to_ship_max_days: faLeadTime,
         main_product_image_locator: '',
       }
 
@@ -854,8 +915,17 @@ export class AmazonFlatFileService {
       'parentage_level', 'parent_sku', 'variation_theme',
       'item_name', 'brand', 'product_description',
       'bullet_point', 'generic_keyword', 'color',
-      'purchasable_offer', 'fulfillment_availability',
       'main_product_image_locator',
+      // purchasable_offer and its expanded sub-columns
+      'purchasable_offer',
+      'purchasable_offer__condition_type', 'purchasable_offer__currency',
+      'purchasable_offer__our_price', 'purchasable_offer__sale_price',
+      'purchasable_offer__sale_from_date', 'purchasable_offer__sale_end_date',
+      // fulfillment_availability and its expanded sub-columns
+      'fulfillment_availability',
+      'fulfillment_availability__fulfillment_channel_code',
+      'fulfillment_availability__quantity',
+      'fulfillment_availability__lead_time_to_ship_max_days',
     ])
 
     const messages = rows
@@ -881,19 +951,40 @@ export class AmazonFlatFileService {
         if (row.color)               attrs.color               = wrapL(String(row.color))
         if (row.main_product_image_locator) attrs.main_product_image_locator = wrap(String(row.main_product_image_locator))
 
-        if (row.purchasable_offer) {
-          attrs.purchasable_offer = [{
-            currency: CURRENCY_MAP[mp] ?? 'EUR',
-            our_price: [{ schedule: [{ value_with_tax: parseFloat(String(row.purchasable_offer)) }] }],
+        // purchasable_offer — read from expanded sub-columns, fall back to bare value
+        const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
+        if (poPrice !== undefined && poPrice !== '') {
+          const poCurrency   = String(row['purchasable_offer__currency'] ?? CURRENCY_MAP[mp] ?? 'EUR')
+          const poCondition  = String(row['purchasable_offer__condition_type'] ?? '')
+          const poSalePrice  = row['purchasable_offer__sale_price']
+          const poSaleFrom   = String(row['purchasable_offer__sale_from_date'] ?? '')
+          const poSaleTo     = String(row['purchasable_offer__sale_end_date'] ?? '')
+          const offer: Record<string, any> = {
+            currency: poCurrency,
+            our_price: [{ schedule: [{ value_with_tax: parseFloat(String(poPrice)) }] }],
             marketplace_id: marketplaceId,
-          }]
+          }
+          if (poCondition) offer.condition_type = poCondition
+          if (poSalePrice !== undefined && poSalePrice !== '') {
+            const sp: Record<string, any> = { schedule: [{ value_with_tax: parseFloat(String(poSalePrice)) }] }
+            if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
+            if (poSaleTo)   sp.end_at   = [{ value: poSaleTo,   marketplace_id: marketplaceId }]
+            offer.sale_price = [sp]
+          }
+          attrs.purchasable_offer = [offer]
         }
-        if (row.fulfillment_availability) {
-          attrs.fulfillment_availability = [{
-            fulfillment_channel_code: 'DEFAULT',
-            quantity: parseInt(String(row.fulfillment_availability), 10),
+        // fulfillment_availability — read from expanded sub-columns, fall back to bare value
+        const faQty  = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
+        if (faQty !== undefined && faQty !== '') {
+          const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? 'DEFAULT')
+          const faLeadTime = row['fulfillment_availability__lead_time_to_ship_max_days']
+          const fa: Record<string, any> = {
+            fulfillment_channel_code: faCode,
+            quantity: parseInt(String(faQty), 10),
             marketplace_id: marketplaceId,
-          }]
+          }
+          if (faLeadTime !== undefined && faLeadTime !== '') fa.lead_time_to_ship_max_days = parseInt(String(faLeadTime), 10)
+          attrs.fulfillment_availability = [fa]
         }
 
         if (String(row.parentage_level).toLowerCase() === 'parent' && row.variation_theme) {
@@ -1074,13 +1165,13 @@ export class AmazonFlatFileService {
         const bareBullet = String(row.bullet_point ?? '').trim()
         if (bareBullet && !bullets.includes(bareBullet)) bullets.unshift(bareBullet)
 
-        // Price / qty
-        const priceRaw = row.purchasable_offer ?? row.standard_price
-        const price    = priceRaw !== undefined && priceRaw !== '' ? parseFloat(String(priceRaw)) : null
-        const salePriceRaw = row.sale_price
-        const salePrice = salePriceRaw !== undefined && salePriceRaw !== '' ? parseFloat(String(salePriceRaw)) : null
-        const qtyRaw   = row.fulfillment_availability ?? row.quantity
-        const qty      = qtyRaw !== undefined && qtyRaw !== '' ? parseInt(String(qtyRaw), 10) : null
+        // Price / qty — prefer expanded sub-columns, fall back to bare/legacy keys
+        const priceRaw    = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
+        const price       = priceRaw !== undefined && priceRaw !== '' ? parseFloat(String(priceRaw)) : null
+        const salePriceRaw = row['purchasable_offer__sale_price'] ?? row.sale_price
+        const salePrice   = salePriceRaw !== undefined && salePriceRaw !== '' ? parseFloat(String(salePriceRaw)) : null
+        const qtyRaw      = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
+        const qty         = qtyRaw !== undefined && qtyRaw !== '' ? parseInt(String(qtyRaw), 10) : null
 
         // Collapsed attributes (same format getExistingRows reads back)
         const collapsedAttrs = this.buildCollapsedAttrs(row, expandedFields, mp, marketplaceId, languageTag)
@@ -1257,24 +1348,41 @@ export class AmazonFlatFileService {
         .map(([, v]) => ({ value: v, language_tag: languageTag, marketplace_id: marketplaceId }))
     }
 
-    // Price
-    const priceRaw = row.purchasable_offer ?? row.standard_price
-    if (priceRaw !== undefined && priceRaw !== '') {
-      attrs.purchasable_offer = [{
-        currency: CURRENCY_MAP[mp] ?? 'EUR',
-        our_price: [{ schedule: [{ value_with_tax: parseFloat(String(priceRaw)) }] }],
+    // purchasable_offer — prefer expanded sub-columns, fall back to bare value
+    const poPrice = row['purchasable_offer__our_price'] ?? row.purchasable_offer ?? row.standard_price
+    if (poPrice !== undefined && poPrice !== '') {
+      const poCurrency  = String(row['purchasable_offer__currency'] ?? CURRENCY_MAP[mp] ?? 'EUR')
+      const poCondition = String(row['purchasable_offer__condition_type'] ?? '')
+      const poSalePrice = row['purchasable_offer__sale_price']
+      const poSaleFrom  = String(row['purchasable_offer__sale_from_date'] ?? '')
+      const poSaleTo    = String(row['purchasable_offer__sale_end_date'] ?? '')
+      const offer: Record<string, any> = {
+        currency: poCurrency,
+        our_price: [{ schedule: [{ value_with_tax: parseFloat(String(poPrice)) }] }],
         marketplace_id: marketplaceId,
-      }]
+      }
+      if (poCondition) offer.condition_type = poCondition
+      if (poSalePrice !== undefined && poSalePrice !== '') {
+        const sp: Record<string, any> = { schedule: [{ value_with_tax: parseFloat(String(poSalePrice)) }] }
+        if (poSaleFrom) sp.start_at = [{ value: poSaleFrom, marketplace_id: marketplaceId }]
+        if (poSaleTo)   sp.end_at   = [{ value: poSaleTo,   marketplace_id: marketplaceId }]
+        offer.sale_price = [sp]
+      }
+      attrs.purchasable_offer = [offer]
     }
 
-    // Quantity
-    const qtyRaw = row.fulfillment_availability ?? row.quantity
-    if (qtyRaw !== undefined && qtyRaw !== '') {
-      attrs.fulfillment_availability = [{
-        fulfillment_channel_code: 'DEFAULT',
-        quantity: parseInt(String(qtyRaw), 10),
+    // fulfillment_availability — prefer expanded sub-columns, fall back to bare value
+    const faQty = row['fulfillment_availability__quantity'] ?? row.fulfillment_availability ?? row.quantity
+    if (faQty !== undefined && faQty !== '') {
+      const faCode     = String(row['fulfillment_availability__fulfillment_channel_code'] ?? 'DEFAULT')
+      const faLeadTime = row['fulfillment_availability__lead_time_to_ship_max_days']
+      const fa: Record<string, any> = {
+        fulfillment_channel_code: faCode,
+        quantity: parseInt(String(faQty), 10),
         marketplace_id: marketplaceId,
-      }]
+      }
+      if (faLeadTime !== undefined && faLeadTime !== '') fa.lead_time_to_ship_max_days = parseInt(String(faLeadTime), 10)
+      attrs.fulfillment_availability = [fa]
     }
 
     // Variation structure
@@ -1293,8 +1401,15 @@ export class AmazonFlatFileService {
       'parentage_level', 'parent_sku', 'variation_theme',
       'item_name', 'brand', 'product_description',
       'bullet_point', 'generic_keyword', 'color',
-      'purchasable_offer', 'standard_price', 'fulfillment_availability',
-      'main_product_image_locator',
+      'main_product_image_locator', 'standard_price',
+      'purchasable_offer',
+      'purchasable_offer__condition_type', 'purchasable_offer__currency',
+      'purchasable_offer__our_price', 'purchasable_offer__sale_price',
+      'purchasable_offer__sale_from_date', 'purchasable_offer__sale_end_date',
+      'fulfillment_availability',
+      'fulfillment_availability__fulfillment_channel_code',
+      'fulfillment_availability__quantity',
+      'fulfillment_availability__lead_time_to_ship_max_days',
     ])
     const pendingArrays: Record<string, Array<{ idx: number; value: string }>> = {}
     const subPropMap: Record<string, Record<string, any>> = {}
