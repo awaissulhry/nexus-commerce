@@ -843,7 +843,7 @@ export default function ProductEditClient({
             <MatrixTab
               product={product}
               onDirtyChange={() => {}}
-              discardSignal={0}
+              discardSignal={discardSignal}
             />
           </div>
         )}

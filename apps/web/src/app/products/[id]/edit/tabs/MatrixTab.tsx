@@ -188,7 +188,7 @@ interface Props {
   discardSignal: number
 }
 
-export default function MatrixTab({ product }: Props) {
+export default function MatrixTab({ product, discardSignal = 0 }: Props) {
   const backend = getBackendUrl()
 
   // ── State ────────────────────────────────────────────────────────────
@@ -197,6 +197,9 @@ export default function MatrixTab({ product }: Props) {
   const [invData, setInvData]           = useState<ChannelVariantRow[]>([]) // reuse same shape for inventory
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState<string | null>(null)
+  // Track first load so background refreshes (BroadcastChannel) don't
+  // replace the grid with a spinner on every cell save.
+  const hasLoadedRef = useRef(false)
   const [selectedMarket, setSelectedMarket] = useState('IT')
   const [activeEdit, setActiveEdit]     = useState<CellAddr | null>(null)
   const [cellState, setCellState]       = useState<Record<string, 'saving' | 'flash' | 'error'>>({})
@@ -220,7 +223,11 @@ export default function MatrixTab({ product }: Props) {
 
   // ── Fetch ─────────────────────────────────────────────────────────────
   const refetch = useCallback(async () => {
-    setLoading(true); setError(null)
+    // Only show the full-grid spinner on initial load. Background refreshes
+    // (BroadcastChannel invalidations, Discard) update data in-place so
+    // the grid stays visible and doesn't flash.
+    if (!hasLoadedRef.current) setLoading(true)
+    setError(null)
     try {
       const [childRes, pricingRes, invRes] = await Promise.all([
         fetch(`${backend}/api/products/${product.id}/children`, { cache: 'no-store' }),
@@ -233,7 +240,6 @@ export default function MatrixTab({ product }: Props) {
 
       if (pricingRes.ok) {
         const pd = await pricingRes.json()
-        // Map to simpler shape for matrix use
         setChannelData((pd.variants ?? []).map((v: any) => ({
           variantId: v.variantId,
           markets: v.markets.map((m: any) => ({
@@ -256,13 +262,24 @@ export default function MatrixTab({ product }: Props) {
     } catch (e: any) {
       setError(e.message)
     } finally {
+      hasLoadedRef.current = true
       setLoading(false)
     }
   }, [backend, product.id])
 
   useEffect(() => { void refetch() }, [refetch])
 
+  // Background sync — grid stays visible, data updates silently.
   useInvalidationChannel(['product.updated', 'channel-pricing.updated'], () => { void refetch() })
+
+  // Discard — show spinner so user sees a fresh reload.
+  const discardSeen = useRef(discardSignal)
+  useEffect(() => {
+    if (discardSignal === discardSeen.current) return
+    discardSeen.current = discardSignal
+    hasLoadedRef.current = false
+    void refetch()
+  }, [discardSignal, refetch])
 
   // ── Helpers for channel data lookup ──────────────────────────────────
   function getChannelPrice(variantId: string, market: string): number {
