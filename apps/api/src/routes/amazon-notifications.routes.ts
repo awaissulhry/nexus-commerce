@@ -15,7 +15,30 @@ import type { FastifyInstance } from 'fastify'
 import { isSqsConfigured } from '../services/amazon-sqs.service.js'
 import { logger } from '../utils/logger.js'
 
-// SP-API helper — thin wrapper around LWA + REST
+const NOTIFICATIONS_SCOPE = 'sellingpartnerapi::notifications'
+
+// Grantless SP-API call — used for destination management (GET/POST /notifications/v1/destinations)
+async function spApiGrantless<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
+  const token = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
+  const slug = (amazonSpApiClient as any).region as string
+  const host = `sellingpartnerapi-${slug}.amazon.com`
+  const url = `https://${host}${path}`
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'x-amz-access-token': token,
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  })
+  const text = await res.text()
+  if (res.status === 204) return undefined as T
+  if (res.status >= 200 && res.status < 300) return text ? JSON.parse(text) as T : undefined as T
+  throw Object.assign(new Error(`HTTP ${res.status} — ${text.slice(0, 400)}`), { statusCode: res.status })
+}
+
+// Seller-token SP-API call — used for subscription management
 async function spApiRequest<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
@@ -99,19 +122,29 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       diag.sqs = { status: 'skipped', error: 'AMAZON_SQS_QUEUE_URL or AWS credentials missing' }
     }
 
-    // Test 2 — SP-API LWA token fetch (proves LWA creds + network to api.amazon.com)
+    // Test 2 — SP-API grantless token + GET /notifications/v1/destinations
+    // This is a grantless operation (client_credentials, notifications scope).
     if (lwaId) {
       try {
         const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
-        // getAccessToken is private — call a known cheap endpoint instead
-        await amazonSpApiClient.request('GET', '/notifications/v1/destinations')
-        diag.spApiLwa = { status: 'ok', host: spApiHost }
-      } catch (err: any) {
-        diag.spApiLwa = {
-          status: 'failed',
-          host: spApiHost,
-          error: err?.message ?? String(err),
+        const grantlessToken = await amazonSpApiClient.getGrantlessToken(NOTIFICATIONS_SCOPE)
+        const url = `https://${spApiHost}/notifications/v1/destinations`
+        const res = await fetch(url, {
+          headers: { 'x-amz-access-token': grantlessToken },
+        })
+        const body = await res.text()
+        if (res.ok) {
+          const parsed = body ? JSON.parse(body) : {}
+          diag.spApiLwa = {
+            status: 'ok',
+            host: spApiHost,
+            destinationCount: Array.isArray(parsed.payload) ? parsed.payload.length : null,
+          }
+        } else {
+          diag.spApiLwa = { status: 'failed', host: spApiHost, httpStatus: res.status, error: body.slice(0, 300) }
         }
+      } catch (err: any) {
+        diag.spApiLwa = { status: 'failed', host: spApiHost, error: err?.message ?? String(err) }
       }
     } else {
       diag.spApiLwa = { status: 'skipped', error: 'AMAZON_LWA_CLIENT_ID missing' }
@@ -139,9 +172,11 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       // 1. Create (or retrieve) the notification destination for this SQS queue.
       //    SP-API deduplicates by resourceSpecification so calling this twice
       //    returns the existing destination rather than creating a duplicate.
+      // Destination management uses grantless tokens (client_credentials +
+      // sellingpartnerapi::notifications scope) — not the seller refresh token.
       let destinationId: string
       try {
-        const destResp = await spApiRequest<any>('POST', '/notifications/v1/destinations', {
+        const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
           resourceSpecification: {
             sqs: { arn: sqsArn },
           },
@@ -150,7 +185,7 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       } catch (err: any) {
         // SP-API returns 409 if the destination already exists — fetch it instead.
         if (err?.statusCode === 409 || String(err?.message).includes('already exists')) {
-          const list = await spApiRequest<any>('GET', '/notifications/v1/destinations')
+          const list = await spApiGrantless<any>('GET', '/notifications/v1/destinations')
           const existing = (list.payload ?? []).find(
             (d: any) => d.resource?.sqs?.arn === sqsArn,
           )

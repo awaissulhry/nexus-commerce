@@ -101,6 +101,8 @@ export function mapAwsRegionToSpApiSlug(region: string): string {
 export class AmazonSpApiClient {
   private accessToken: string | null = null
   private tokenExpiresAt: number = 0
+  // Grantless token cache — keyed by scope string
+  private grantlessTokens: Map<string, { token: string; expiresAt: number }> = new Map()
   private lastRequestTime: number = 0
   private readonly REQUEST_DELAY_MS = 200 // 5 requests/second = 200ms between requests
 
@@ -180,6 +182,42 @@ export class AmazonSpApiClient {
       })
       throw error
     }
+  }
+
+  /**
+   * Grantless LWA token — uses client_credentials grant with the given scope.
+   * Required for SP-API operations that act on behalf of the application itself
+   * rather than a specific seller, e.g. Notifications destination management.
+   * Cached per-scope for 50 minutes (same as the seller token).
+   */
+  async getGrantlessToken(scope: string): Promise<string> {
+    const now = Date.now()
+    const cached = this.grantlessTokens.get(scope)
+    if (cached && now < cached.expiresAt) return cached.token
+
+    logger.info('Requesting grantless LWA token', { scope })
+    const response = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        scope,
+      }).toString(),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`Grantless LWA auth failed (${scope}): ${response.status} — ${text}`)
+    }
+
+    const data = (await response.json()) as LWATokenResponse
+    this.grantlessTokens.set(scope, {
+      token: data.access_token,
+      expiresAt: now + 50 * 60 * 1000,
+    })
+    return data.access_token
   }
 
   /**
