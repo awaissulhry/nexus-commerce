@@ -112,6 +112,9 @@ import connectionsRoutes from "./routes/connections.routes.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
 import reconciliationRoutes from "./routes/reconciliation.routes.js";
 import ebayPhase3Routes from "./routes/ebay-phase3.routes.js";
+import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
+import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
+import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
@@ -491,6 +494,9 @@ app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });
 app.register(ebayPhase3Routes, { prefix: '/api' });
+// IS.2 — real-time cross-channel inventory sync routes
+app.register(amazonNotificationsRoutes, { prefix: '/api' });
+app.register(ebayNotificationRoutes, { prefix: '/api' });
 // L.0d — BullMQ admin endpoints. Routes declare full /api/monitoring/...
 // paths inline, so register without a prefix. Coexists with
 // monitoringRoutes (which uses /monitoring/* without /api/).
@@ -721,6 +727,11 @@ async function start() {
     if (process.env.NEXUS_ENABLE_EBAY_ORDERS_CRON === '1') {
       startEbayOrdersCron();
     }
+
+    // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
+    // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.
+    // Run POST /api/admin/setup-amazon-notifications once first.
+    startAmazonSqsPollCron();
 
     // Amazon financial events — daily 02:00 UTC, pulls yesterday's
     // /finances/v0/financialEvents and writes FinancialTransaction rows.

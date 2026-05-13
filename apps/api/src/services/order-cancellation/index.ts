@@ -139,6 +139,14 @@ export async function handleOrderCancelled(
   // Idempotent on both branches: release/consume are no-ops on
   // already-settled reservations; the legacy branch checks for an
   // existing ORDER_CANCELLED movement before emitting.
+
+  // IS.2 — read order items upfront so we can cascade the stock
+  // release to other channels regardless of which restore path fires.
+  const orderItemsForCascade = await prisma.orderItem.findMany({
+    where: { orderId },
+    select: { productId: true, quantity: true },
+  })
+
   try {
     const released = await releaseOpenOrder({
       orderId,
@@ -146,6 +154,65 @@ export async function handleOrderCancelled(
       reason: 'order cancelled by channel',
     })
     result.reservationsReleased = released
+
+    // IS.2 — reservation path doesn't go through applyStockMovement so
+    // OutboundSyncQueue never fires automatically. After releasing, snapshot
+    // the updated available qty and push QUANTITY_UPDATE to all other-channel
+    // active listings so eBay/Shopify/Amazon see the restocked units immediately.
+    if (released > 0) {
+      void (async () => {
+        try {
+          for (const it of orderItemsForCascade) {
+            if (!it.productId) continue
+            const sl = await prisma.stockLevel.findFirst({
+              where: { productId: it.productId },
+              select: { available: true },
+            })
+            if (!sl) continue
+            const availableQty = sl.available
+
+            const listings = await prisma.channelListing.findMany({
+              where: {
+                productId: it.productId,
+                isPublished: true,
+                offerActive: true,
+              },
+              select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
+            })
+            for (const listing of listings) {
+              if (!(['AMAZON', 'EBAY', 'SHOPIFY'] as string[]).includes(listing.channel)) continue
+              const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0))
+              await prisma.outboundSyncQueue.create({
+                data: {
+                  productId: it.productId,
+                  channelListingId: listing.id,
+                  targetChannel: listing.channel as any,
+                  targetRegion: listing.region ?? undefined,
+                  syncType: 'QUANTITY_UPDATE',
+                  syncStatus: 'PENDING',
+                  payload: {
+                    quantity: bufferedQty,
+                    source: 'ORDER_CANCELLED',
+                    orderId,
+                  },
+                  externalListingId: listing.externalListingId ?? undefined,
+                  retryCount: 0,
+                  maxRetries: 3,
+                  holdUntil: new Date(Date.now() + 15_000),
+                } as any,
+              })
+            }
+          }
+        } catch (err) {
+          auditLogService.write({
+            entityType: 'Order',
+            entityId: orderId,
+            action: 'IS2-cascade-failed',
+            metadata: { error: err instanceof Error ? err.message : String(err) },
+          }).catch(() => {})
+        }
+      })()
+    }
   } catch (err: any) {
     result.errors.push({
       itemId: 'reservation-release',

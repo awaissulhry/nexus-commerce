@@ -535,6 +535,61 @@ export class AmazonOrdersService {
       }
     }
 
+    // IS.2 — after reserving, cascade the new available qty to eBay/Shopify so
+    // they don't oversell the same units. Mirrors the Shopify IS.1 block.
+    // Fire-and-forget; a cascade failure must not roll back the order ingestion.
+    void (async () => {
+      try {
+        for (const it of args.items) {
+          if (!it.productId) continue
+          const sl = await prisma.stockLevel.findFirst({
+            where: { productId: it.productId },
+            select: { available: true },
+          })
+          if (!sl) continue
+          const availableQty = sl.available
+
+          const listings = await prisma.channelListing.findMany({
+            where: {
+              productId: it.productId,
+              channel: { not: 'AMAZON' },
+              isPublished: true,
+              offerActive: true,
+            },
+            select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
+          })
+          for (const listing of listings) {
+            if (!(['EBAY', 'SHOPIFY'] as string[]).includes(listing.channel)) continue
+            const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0))
+            await prisma.outboundSyncQueue.create({
+              data: {
+                productId: it.productId,
+                channelListingId: listing.id,
+                targetChannel: listing.channel as any,
+                targetRegion: listing.region ?? undefined,
+                syncType: 'QUANTITY_UPDATE',
+                syncStatus: 'PENDING',
+                payload: {
+                  quantity: bufferedQty,
+                  source: 'AMAZON_ORDER_PLACED',
+                  orderId: args.orderId,
+                },
+                externalListingId: listing.externalListingId ?? undefined,
+                retryCount: 0,
+                maxRetries: 3,
+                holdUntil: new Date(Date.now() + 30_000),
+              } as any,
+            })
+          }
+        }
+      } catch (err) {
+        logger.warn('amazon-orders: IS.2 cascade failed', {
+          orderId: args.orderId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
     if (args.newlyShipped) {
       try {
         const consumed = await consumeOpenOrder({
