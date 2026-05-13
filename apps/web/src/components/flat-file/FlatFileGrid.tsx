@@ -151,14 +151,28 @@ function wordBoundsAt(text: string, pos: number): [number, number] {
 
 // ── EnumDropdown ───────────────────────────────────────────────────────────
 
-function EnumDropdown({ options, current, onSelect, onClose }: {
-  options: string[]; current: string; onSelect: (v: string) => void; onClose: () => void
+function EnumDropdown({ options, optionLabels, current, onSelect, onClose }: {
+  options: string[]; optionLabels?: Record<string, string>
+  current: string; onSelect: (v: string) => void; onClose: () => void
 }) {
   const [query, setQuery] = useState('')
   const [hi, setHi] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const filtered = useMemo(() => { const q = query.toLowerCase(); return options.filter((o) => !q || o.toLowerCase().includes(q)) }, [options, query])
+
+  const label = (opt: string) => optionLabels?.[opt] ?? opt
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase()
+    return options.filter((o) => !q || label(o).toLowerCase().includes(q) || o.toLowerCase().includes(q))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, optionLabels, query])
+
+  // Whether the typed query can be committed as a custom value
+  const hasCustom = query.trim() !== '' && !options.includes(query.trim())
+
+  const totalItems = filtered.length + (hasCustom ? 1 : 0)
+
   useEffect(() => { searchRef.current?.focus() }, [])
   useEffect(() => { setHi(0) }, [filtered])
   useEffect(() => { (listRef.current?.children[hi] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' }) }, [hi])
@@ -167,33 +181,58 @@ function EnumDropdown({ options, current, onSelect, onClose }: {
     document.addEventListener('mousedown', h, true)
     return () => document.removeEventListener('mousedown', h, true)
   }, [onClose])
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, filtered.length - 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); if (filtered[hi] != null) onSelect(filtered[hi]) }
-    else if (e.key === 'Escape') { e.preventDefault(); onClose() }
-    else if (e.key === 'Tab') { e.preventDefault(); if (filtered[hi] != null) onSelect(filtered[hi]) }
+
+  function commit(idx: number) {
+    if (idx === filtered.length && hasCustom) { onSelect(query.trim()); return }
+    if (filtered[idx] != null) onSelect(filtered[idx])
   }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(h + 1, totalItems - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); commit(hi) }
+    else if (e.key === 'Escape') { e.preventDefault(); onClose() }
+    else if (e.key === 'Tab') { e.preventDefault(); commit(hi) }
+  }
+
   return (
-    <div className="absolute left-0 top-full mt-0 z-50 w-48 min-w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg overflow-hidden" onKeyDown={handleKeyDown}>
+    <div className="absolute left-0 top-full mt-0 z-50 w-56 min-w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg overflow-hidden" onKeyDown={handleKeyDown}>
       <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
-        <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…"
+        <input ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search or type a value…"
           className="w-full text-xs px-1.5 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
       </div>
-      <div ref={listRef} className="max-h-48 overflow-y-auto">
-        {filtered.length === 0
-          ? <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
-          : filtered.map((opt, i) => (
-            <div key={opt || '_empty'} role="option" aria-selected={opt === current}
-              onMouseDown={(e) => { e.preventDefault(); onSelect(opt) }}
-              onMouseEnter={() => setHi(i)}
-              className={cn('px-3 py-1.5 text-xs cursor-pointer truncate',
-                i === hi ? 'bg-blue-500 text-white'
-                : opt === current ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
-              {opt === '' ? <span className="italic opacity-60">— empty —</span> : opt}
-            </div>
-          ))}
+      <div ref={listRef} className="max-h-52 overflow-y-auto">
+        {filtered.map((opt, i) => (
+          <div key={opt || '_empty'} role="option" aria-selected={opt === current}
+            onMouseDown={(e) => { e.preventDefault(); onSelect(opt) }}
+            onMouseEnter={() => setHi(i)}
+            className={cn('px-3 py-1.5 text-xs cursor-pointer',
+              i === hi ? 'bg-blue-500 text-white'
+              : opt === current ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium'
+              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
+            {opt === '' ? <span className="italic opacity-60">— empty —</span> : (
+              optionLabels?.[opt]
+                ? <span className="flex items-baseline gap-1.5 min-w-0">
+                    <span className="truncate">{optionLabels[opt]}</span>
+                    <span className={cn('text-[10px] font-mono shrink-0', i === hi ? 'text-blue-200' : 'text-slate-400')}>{opt}</span>
+                  </span>
+                : opt
+            )}
+          </div>
+        ))}
+        {filtered.length === 0 && !hasCustom && (
+          <div className="px-3 py-2 text-xs text-slate-400 italic">No matches</div>
+        )}
+        {hasCustom && (
+          <div role="option"
+            onMouseDown={(e) => { e.preventDefault(); onSelect(query.trim()) }}
+            onMouseEnter={() => setHi(filtered.length)}
+            className={cn('px-3 py-1.5 text-xs cursor-pointer border-t border-slate-100 dark:border-slate-700 flex items-center gap-1.5',
+              hi === filtered.length ? 'bg-blue-500 text-white' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
+            <span className="opacity-60">Use</span>
+            <span className="font-mono font-medium truncate">&ldquo;{query.trim()}&rdquo;</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -380,7 +419,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
         </div>
         {fillHandle}
         {isActive && dropdownOpen && (
-          <EnumDropdown options={enumOptions} current={displayValue}
+          <EnumDropdown options={enumOptions} optionLabels={col.optionLabels} current={displayValue}
             onSelect={(v) => { onChange(v); setDropdownOpen(false); onNavigate('right') }}
             onClose={() => { setDropdownOpen(false); onDeactivate() }} />
         )}

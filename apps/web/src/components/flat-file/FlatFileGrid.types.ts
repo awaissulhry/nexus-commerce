@@ -11,6 +11,8 @@ export interface FlatFileColumn {
   required?: boolean
   kind: FlatFileColumnKind
   options?: string[]
+  /** Display labels for option values — keys are option values, values are human-readable names */
+  optionLabels?: Record<string, string>
   maxLength?: number
   width: number
   frozen?: boolean

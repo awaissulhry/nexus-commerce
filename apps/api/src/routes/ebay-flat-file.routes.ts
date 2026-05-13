@@ -914,6 +914,55 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // ── GET /api/ebay/flat-file/policies ────────────────────────────────
+  // Returns the seller's eBay business policies (fulfillment, payment, return)
+  // for a given marketplace so the frontend can show them as dropdown options.
+  fastify.get<{
+    Querystring: { marketplace?: string }
+  }>('/ebay/flat-file/policies', async (request, reply) => {
+    const marketplace = toMarketplaceId(request.query.marketplace ?? 'IT');
+
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      select: { id: true },
+    });
+    if (!connection) {
+      return reply.code(503).send({ error: 'No active eBay connection' });
+    }
+
+    try {
+      const token = await ebayAuthService.getValidToken(connection.id);
+      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const base = `${EBAY_API_BASE}/sell/account/v1`;
+
+      const [fRes, pmRes, rRes] = await Promise.allSettled([
+        fetch(`${base}/fulfillment_policy?marketplace_id=${marketplace}`, { headers }),
+        fetch(`${base}/payment_policy?marketplace_id=${marketplace}`,     { headers }),
+        fetch(`${base}/return_policy?marketplace_id=${marketplace}`,      { headers }),
+      ]);
+
+      async function extract<T>(r: PromiseSettledResult<Response>, key: string): Promise<T[]> {
+        if (r.status !== 'fulfilled' || !r.value.ok) return [];
+        try { const d = await r.value.json() as Record<string, T[]>; return d[key] ?? []; } catch { return []; }
+      }
+
+      const [fulfillment, payment, ret] = await Promise.all([
+        extract<{ fulfillmentPolicyId: string; name: string }>(fRes,  'fulfillmentPolicies'),
+        extract<{ paymentPolicyId: string;     name: string }>(pmRes, 'paymentPolicies'),
+        extract<{ returnPolicyId: string;      name: string }>(rRes,  'returnPolicies'),
+      ]);
+
+      return reply.send({
+        fulfillment: fulfillment.map((p) => ({ id: p.fulfillmentPolicyId, name: p.name })),
+        payment:     payment.map((p)     => ({ id: p.paymentPolicyId,     name: p.name })),
+        return:      ret.map((p)         => ({ id: p.returnPolicyId,      name: p.name })),
+      });
+    } catch (err: unknown) {
+      request.log.error(err, 'ebay/flat-file/policies failed');
+      return reply.code(500).send({ error: err instanceof Error ? err.message : 'Failed to fetch policies' });
+    }
+  });
+
   // ── GET /api/ebay/flat-file/amazon-import ───────────────────────────
   // Returns Amazon ChannelListing data mapped to eBay fields for pre-fill.
   fastify.get<{

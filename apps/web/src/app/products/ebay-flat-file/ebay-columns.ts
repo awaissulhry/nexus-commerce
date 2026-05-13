@@ -15,6 +15,7 @@ export interface EbayColumn {
   required: boolean
   kind: EbayColumnKind
   options?: string[]
+  optionLabels?: Record<string, string>
   maxLength?: number
   width: number
   frozen?: boolean
@@ -29,14 +30,36 @@ export interface EbayColumnGroup {
 }
 
 // ── Condition options ──────────────────────────────────────────────────
+// Values are eBay Inventory API condition enums.
+// optionLabels maps each value to a human-readable display name.
 
 export const EBAY_CONDITION_OPTIONS = [
   'NEW',
   'LIKE_NEW',
-  'VERY_GOOD',
-  'GOOD',
-  'ACCEPTABLE',
+  'EXCELLENT_REFURBISHED',
+  'VERY_GOOD_REFURBISHED',
+  'GOOD_REFURBISHED',
+  'SELLER_REFURBISHED',
+  'USED_EXCELLENT',
+  'USED_VERY_GOOD',
+  'USED_GOOD',
+  'USED_ACCEPTABLE',
+  'FOR_PARTS_OR_NOT_WORKING',
 ] as const
+
+export const EBAY_CONDITION_LABELS: Record<string, string> = {
+  NEW:                      'New',
+  LIKE_NEW:                 'Like New',
+  EXCELLENT_REFURBISHED:    'Excellent – Refurbished',
+  VERY_GOOD_REFURBISHED:    'Very Good – Refurbished',
+  GOOD_REFURBISHED:         'Good – Refurbished',
+  SELLER_REFURBISHED:       'Seller Refurbished',
+  USED_EXCELLENT:           'Used – Excellent',
+  USED_VERY_GOOD:           'Used – Very Good',
+  USED_GOOD:                'Used – Good',
+  USED_ACCEPTABLE:          'Used – Acceptable',
+  FOR_PARTS_OR_NOT_WORKING: 'For Parts / Not Working',
+}
 
 export type EbayCondition = (typeof EBAY_CONDITION_OPTIONS)[number]
 
@@ -108,11 +131,12 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
       {
         id: 'condition',
         label: 'Condition',
-        description: 'Item condition',
+        description: 'Item condition (eBay Inventory API enum)',
         required: true,
         kind: 'enum',
         options: [...EBAY_CONDITION_OPTIONS],
-        width: 120,
+        optionLabels: EBAY_CONDITION_LABELS,
+        width: 160,
       },
       {
         id: 'category_id',

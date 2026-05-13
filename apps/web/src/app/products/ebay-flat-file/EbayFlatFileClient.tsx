@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
   AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, Loader2, Search, Send, X,
 } from 'lucide-react'
@@ -274,14 +274,50 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
   const [categoryColumns, setCategoryColumns] = useState<EbayColumnGroup | null>(null)
 
+  // ── Business policies (fulfillment / payment / return) ─────────────────
+  const [policyOptions, setPolicyOptions] = useState<{
+    fulfillment: Array<{ id: string; name: string }>
+    payment:     Array<{ id: string; name: string }>
+    return:      Array<{ id: string; name: string }>
+  }>({ fulfillment: [], payment: [], return: [] })
+
+  // Fetch policies once on mount (non-blocking — column options update when done)
+  useEffect(() => {
+    fetch(`${BACKEND}/api/ebay/flat-file/policies?marketplace=${marketplace}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) setPolicyOptions(d) })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marketplace])
+
+  // Inject policy IDs as enum options into the Policies column group
   const columnGroups = useMemo(() => {
-    const base = [...EBAY_FIXED_GROUPS, ...MARKET_COLUMN_GROUPS]
+    const patchPolicies = (groups: EbayColumnGroup[]): EbayColumnGroup[] =>
+      groups.map((g) => {
+        if (g.id !== 'policies') return g
+        return {
+          ...g,
+          columns: g.columns.map((col) => {
+            if (col.id === 'fulfillment_policy_id' && policyOptions.fulfillment.length) {
+              return { ...col, kind: 'enum' as const, options: policyOptions.fulfillment.map((p) => p.id), optionLabels: Object.fromEntries(policyOptions.fulfillment.map((p) => [p.id, p.name])) }
+            }
+            if (col.id === 'payment_policy_id' && policyOptions.payment.length) {
+              return { ...col, kind: 'enum' as const, options: policyOptions.payment.map((p) => p.id), optionLabels: Object.fromEntries(policyOptions.payment.map((p) => [p.id, p.name])) }
+            }
+            if (col.id === 'return_policy_id' && policyOptions.return.length) {
+              return { ...col, kind: 'enum' as const, options: policyOptions.return.map((p) => p.id), optionLabels: Object.fromEntries(policyOptions.return.map((p) => [p.id, p.name])) }
+            }
+            return col
+          }),
+        }
+      })
+    const base = patchPolicies([...EBAY_FIXED_GROUPS, ...MARKET_COLUMN_GROUPS])
     return categoryColumns ? [
-      ...EBAY_FIXED_GROUPS,
+      ...patchPolicies(EBAY_FIXED_GROUPS),
       categoryColumns,
-      ...MARKET_COLUMN_GROUPS,
+      ...patchPolicies(MARKET_COLUMN_GROUPS),
     ] : base
-  }, [categoryColumns])
+  }, [categoryColumns, policyOptions])
 
   // ── Category schema loading ────────────────────────────────────────────
 
