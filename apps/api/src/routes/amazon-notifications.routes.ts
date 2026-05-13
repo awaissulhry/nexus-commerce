@@ -204,6 +204,12 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
         await spApiRequest('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
           payloadVersion: '1.0',
           destinationId,
+          processingDirective: {
+            eventFilter: {
+              eventFilterType: 'ORDER_CHANGE',
+              orderChangeTypes: ['ORDER_STATUS_CHANGE', 'ORDER_FULFILLMENT_CHANGE'],
+            },
+          },
         })
         logger.info('[amazon-notifications] ORDER_CHANGE subscription created', { destinationId })
       } catch (err: any) {
