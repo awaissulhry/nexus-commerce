@@ -25,6 +25,7 @@ import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidatio
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
+import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -1799,6 +1800,9 @@ export default function AmazonFlatFileClient({
 
       {/* ── Sticky header ────────────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+
+        {/* ── Channel + Market strip ────────────────────────── */}
+        <ChannelStrip channel="amazon" marketplace={marketplace} familyId={familyId} />
 
         {/* ── Bar 1: App chrome + menus + primary actions ───── */}
         <div className="px-3 h-10 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
