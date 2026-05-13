@@ -5,9 +5,9 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlertCircle, CheckCircle2, ChevronDown, ChevronLeft,
+  AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Loader2, RefreshCw, Send, Undo2, Redo2,
-  Download, Search, ArrowDownToLine, Replace, SlidersHorizontal,
+  Search, ArrowDownToLine, Replace, SlidersHorizontal, Sparkles, Tag, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -19,12 +19,15 @@ import { ConditionalFormatBar } from '@/app/bulk-operations/components/Condition
 import { evaluateRule, TONE_CLASSES, type ConditionalRule } from '@/app/bulk-operations/lib/conditional-format'
 import { type FindCell } from '@/app/bulk-operations/lib/find-replace'
 import { FFFilterPanel, FF_FILTER_DEFAULT, type FFFilterState } from '../amazon-flat-file/FFFilterPanel'
+import { FFSavedViews, type FFViewState } from '../amazon-flat-file/FFSavedViews'
+import { AIBulkModal } from '../amazon-flat-file/AIBulkModal'
 import { ChannelStrip } from './ChannelStrip'
 import {
   EBAY_COLUMN_GROUPS,
   getAllEbayColumns,
   EBAY_MARKETPLACES,
   type EbayColumn,
+  type EbayColumnGroup,
 } from './ebay-columns'
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -465,6 +468,128 @@ function validateRows(rows: EbayRow[]): ValidationIssue[] {
   return issues
 }
 
+// ── Column group pill badge colours (mirrors Amazon flat file GROUP_COLORS) ──
+
+const GROUP_BADGE: Record<string, string> = {
+  slate:   'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700',
+  blue:    'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800',
+  purple:  'bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-800',
+  emerald: 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800',
+  orange:  'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-800',
+  teal:    'bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:border-teal-800',
+  amber:   'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800',
+  sky:     'bg-sky-100 text-sky-700 border border-sky-200 dark:bg-sky-900/40 dark:text-sky-300 dark:border-sky-800',
+  red:     'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800',
+  violet:  'bg-violet-100 text-violet-700 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-800',
+}
+
+function gBadge(color: string) { return GROUP_BADGE[color] ?? GROUP_BADGE.slate }
+
+// ── TbBtn ─────────────────────────────────────────────────────────────
+// Icon-only toolbar button — identical contract to Amazon flat file's TbBtn.
+
+interface TbBtnProps {
+  icon: React.ReactNode
+  title: string
+  onClick?: () => void
+  disabled?: boolean
+  active?: boolean
+  badge?: number
+}
+
+function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
+        active
+          ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+        'disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:hover:text-slate-600',
+      )}
+    >
+      {icon}
+      {badge != null && badge > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold bg-blue-500 text-white rounded-full flex items-center justify-center leading-none pointer-events-none">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// ── MenuDropdown ─────────────────────────────────────────────────────
+// App-menu style dropdown — identical contract to Amazon flat file's MenuDropdown.
+
+interface MenuItem {
+  label?: string
+  icon?: React.ReactNode
+  shortcut?: string
+  onClick?: () => void
+  disabled?: boolean
+  separator?: boolean
+}
+
+function MenuDropdown({ label, items }: { label: string; items: MenuItem[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'h-7 px-2.5 text-xs font-medium rounded transition-colors',
+          open
+            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
+        )}
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-0.5 z-50 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 overflow-hidden">
+          {items.map((item, i) =>
+            item.separator ? (
+              <div key={i} className="my-1 border-t border-slate-100 dark:border-slate-800" />
+            ) : (
+              <button
+                key={i}
+                type="button"
+                disabled={item.disabled}
+                onClick={() => { if (!item.disabled && item.onClick) { item.onClick(); setOpen(false) } }}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left transition-colors',
+                  item.disabled
+                    ? 'text-slate-300 dark:text-slate-600 cursor-default'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                )}
+              >
+                {item.icon && <span className="w-3.5 h-3.5 flex-shrink-0 flex items-center">{item.icon}</span>}
+                <span className="flex-1">{item.label}</span>
+                {item.shortcut && <span className="text-[10px] font-mono text-slate-400">{item.shortcut}</span>}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Props ──────────────────────────────────────────────────────────────
 
 interface Props {
@@ -498,8 +623,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [showValidation, setShowValidation] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Groups collapsed state
-  const [collapsedColumnGroups, setCollapsedColumnGroups] = useState<Set<string>>(new Set())
+  // BM.1 — column group pills (mirrors Amazon flat file)
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('eff-closed-groups') ?? '[]')) } catch { return new Set() }
+  })
+  const [groupOrder, setGroupOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('eff-group-order') ?? '[]') } catch { return [] }
+  })
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
+
+  // Sort
+  const [sortPanelOpen, setSortPanelOpen] = useState(false)
+  const [sortConfig, setSortConfig] = useState<Array<{ id: string; colId: string; mode: 'asc' | 'desc' }>>([])
+  void setSortConfig // wired when sort panel ships
+
+  // Save flash
+  const [saveFlash, setSaveFlash] = useState(false)
+
+  // AI modal
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+
   // Collapsed row groups (platformProductId)
   const [collapsedRowGroups, setCollapsedRowGroups] = useState<Set<string>>(new Set())
 
@@ -516,9 +659,23 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Derived ───────────────────────────────────────────────────────────
 
   const allColumns = useMemo(() => getAllEbayColumns(), [])
+
+  const orderedGroups = useMemo<EbayColumnGroup[]>(() => {
+    if (!groupOrder.length) return EBAY_COLUMN_GROUPS
+    const map = new Map(EBAY_COLUMN_GROUPS.map((g) => [g.id, g]))
+    const ordered = groupOrder.map((id) => map.get(id)).filter(Boolean) as EbayColumnGroup[]
+    const rest = EBAY_COLUMN_GROUPS.filter((g) => !groupOrder.includes(g.id))
+    return [...ordered, ...rest]
+  }, [groupOrder])
+
+  const openGroups = useMemo(
+    () => new Set(EBAY_COLUMN_GROUPS.map((g) => g.id).filter((id) => !closedGroups.has(id))),
+    [closedGroups],
+  )
+
   const visibleGroups = useMemo(
-    () => EBAY_COLUMN_GROUPS.filter((g) => !collapsedColumnGroups.has(g.id)),
-    [collapsedColumnGroups],
+    () => orderedGroups.filter((g) => openGroups.has(g.id)),
+    [orderedGroups, openGroups],
   )
   const visibleColumns = useMemo(
     () => visibleGroups.flatMap((g) => g.columns),
@@ -614,6 +771,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as { saved: number }
       setRows((prev) => prev.map((r) => ({ ...r, _dirty: false })))
+      setSaveFlash(true)
+      setTimeout(() => setSaveFlash(false), 2000)
       toast.success(`Saved ${json.saved} rows`)
     } catch (err) {
       toast.error('Save failed: ' + (err instanceof Error ? err.message : String(err)))
@@ -767,6 +926,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     loadRows(mp)
   }
 
+  function handleDiscard() {
+    if (!dirtyCount) return
+    if (!confirm('Discard all unsaved changes?')) return
+    void loadRows(marketplace)
+  }
+
   // ── Find/Replace cells helper ─────────────────────────────────────────
 
   const findCells = useMemo((): FindCell[] => {
@@ -792,161 +957,296 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const warnCount  = validationIssues.filter((i) => i.level === 'warn').length
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-slate-950 overflow-hidden">
-      {/* Channel strip */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+
+      {/* ── Channel strip — Amazon | eBay tabs ──────────────────── */}
       <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
 
-      {/* Header */}
-      <header className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
-        {/* Bar 1: nav + title */}
-        <div className="flex items-center gap-2 px-4 py-2">
+      {/* ── Sticky header ────────────────────────────────────────── */}
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+
+        {/* ── Bar 1: App chrome + menus + primary actions ───── */}
+        <div className="px-3 h-10 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
+
+          {/* Back */}
           <button
+            type="button"
             onClick={() => router.push('/products')}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            className="p-1 -ml-0.5 flex-shrink-0 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Back to products"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Products
+            <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-slate-300 dark:text-slate-600">/</span>
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            eBay Flat File
-          </span>
-          <Badge className="text-xs">
-            {rows.length} rows
-          </Badge>
-          {dirtyCount > 0 && (
-            <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-xs">
-              {dirtyCount} unsaved
-            </Badge>
+
+          {/* File / Edit menus */}
+          <MenuDropdown label="File" items={[
+            { label: `Reload from server`, icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: loading,
+              onClick: () => { if (confirm('Reload rows? Unsaved edits will be lost.')) void loadRows(marketplace) } },
+            { separator: true },
+            { label: 'Push history…', icon: <Send className="w-3.5 h-3.5" />, disabled: !feedStatus, onClick: () => {} },
+          ]} />
+          <MenuDropdown label="Edit" items={[
+            { label: 'Undo', icon: <Undo2 className="w-3.5 h-3.5" />, onClick: undo, disabled: historyIdx.current <= 0, shortcut: '⌘Z' },
+            { label: 'Redo', icon: <Redo2 className="w-3.5 h-3.5" />, onClick: redo, disabled: historyIdx.current >= historyRef.current.length - 1, shortcut: '⌘⇧Z' },
+            { separator: true },
+            { label: 'Import from Amazon', icon: <ArrowDownToLine className="w-3.5 h-3.5" />, onClick: importFromAmazon, disabled: loading },
+            { separator: true },
+            { label: 'Reset column group order', onClick: () => { setGroupOrder([]); try { localStorage.removeItem('eff-group-order') } catch {} }, disabled: !groupOrder.length },
+            { label: 'Show all column groups', onClick: () => { setClosedGroups(new Set()); try { localStorage.removeItem('eff-closed-groups') } catch {} }, disabled: !closedGroups.size },
+          ]} />
+
+          {/* Separator */}
+          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
+
+          {/* Title + status badges */}
+          <Tag className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">eBay Flat File</span>
+          <Badge variant="default">{marketplace}</Badge>
+          {dirtyCount > 0 && <Badge variant="warning" className="flex-shrink-0"><AlertCircle className="w-3 h-3 mr-1" />{dirtyCount} unsaved</Badge>}
+
+          {/* Spacer */}
+          <div className="flex-1 min-w-0" />
+
+          {/* Feed status badge */}
+          {feedStatus && (
+            <span className={cn(
+              'text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0',
+              ['COMPLETED', 'COMPLETED_WITH_ERROR'].includes(feedStatus.status)
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800'
+                : feedStatus.status === 'FAILED'
+                ? 'bg-red-50 text-red-700 border-red-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200',
+            )}>
+              Feed: {feedStatus.status}
+            </span>
           )}
 
-          <div className="ml-auto flex items-center gap-1.5">
-            {/* Market pills */}
-            {EBAY_MARKETPLACES.map((mp) => (
-              <button
-                key={mp}
-                onClick={() => handleMarketplaceChange(mp)}
-                className={cn(
-                  'rounded px-2 py-0.5 text-xs font-medium transition-colors',
-                  marketplace === mp
-                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400',
-                )}
-              >
-                {mp}
-              </button>
-            ))}
-          </div>
+          {/* Separator */}
+          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
+
+          {/* Discard */}
+          <Button size="sm" variant="ghost"
+            onClick={handleDiscard}
+            disabled={!dirtyCount || loading}
+            className="text-slate-500 hover:text-red-600 dark:hover:text-red-400">
+            Discard
+          </Button>
+
+          {/* Save */}
+          <Button size="sm" variant="ghost"
+            onClick={saveDraft}
+            disabled={loading || saving}
+            className={saveFlash ? 'text-emerald-600 dark:text-emerald-400' : ''}>
+            {saving
+              ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />Saving…</>
+              : saveFlash
+              ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Saved</>
+              : 'Save'}
+          </Button>
+
+          {/* Push to eBay */}
+          <Button size="sm" onClick={pushToEbay} disabled={pushing} loading={pushing}>
+            <Send className="w-3.5 h-3.5 mr-1.5" />
+            Push to eBay{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+          </Button>
         </div>
 
-        {/* Bar 2: toolbar */}
-        <div className="flex items-center gap-1 px-4 pb-2 flex-wrap">
-          <button
-            onClick={undo}
-            className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-            title="Undo"
-          >
-            <Undo2 className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={redo}
-            className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-            title="Redo"
-          >
-            <Redo2 className="h-3.5 w-3.5" />
-          </button>
+        {/* ── Icon toolbar ─────────────────────────────────── */}
+        <div className="px-3 h-8 flex items-center gap-0.5 border-b border-slate-100 dark:border-slate-800/60">
 
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+          {/* Undo / Redo */}
+          <TbBtn icon={<Undo2 className="w-3.5 h-3.5" />} title="Undo (⌘Z)" onClick={undo} disabled={historyIdx.current <= 0} />
+          <TbBtn icon={<Redo2 className="w-3.5 h-3.5" />} title="Redo (⌘⇧Z)" onClick={redo} disabled={historyIdx.current >= historyRef.current.length - 1} />
 
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={saveDraft}
-            disabled={saving || dirtyCount === 0}
-            className="h-7 text-xs gap-1"
-          >
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-            Save Draft {dirtyCount > 0 ? `(${dirtyCount})` : ''}
-          </Button>
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          <Button
-            size="sm"
-            onClick={pushToEbay}
-            disabled={pushing}
-            className="h-7 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {pushing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-            Push to eBay {rows.length > 50 ? '(Feed)' : '(API)'}
-          </Button>
-
-          <Button
-            size="sm"
-            variant="secondary"
+          {/* Import from Amazon */}
+          <TbBtn
+            icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
+            title="Import from Amazon — pre-fill empty eBay fields from matching Amazon listings"
             onClick={importFromAmazon}
             disabled={loading}
-            className="h-7 text-xs gap-1"
-          >
-            <ArrowDownToLine className="h-3 w-3" />
-            Import from Amazon
-          </Button>
+          />
 
-          <Button
-            size="sm"
-            variant="secondary"
+          {/* Refresh */}
+          <TbBtn
+            icon={loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            title="Refresh rows from server"
             onClick={() => loadRows(marketplace)}
             disabled={loading}
-            className="h-7 text-xs gap-1"
-          >
-            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-            Refresh
-          </Button>
+          />
 
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          <button
-            onClick={() => setShowFilter((v) => !v)}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
-              showFilter ? 'bg-blue-100 text-blue-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-            )}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filter
-          </button>
+          {/* Validation */}
+          <TbBtn
+            icon={<AlertTriangle className="w-3.5 h-3.5" />}
+            title={errorCount + warnCount > 0
+              ? `Validation: ${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warnCount} warning${warnCount !== 1 ? 's' : ''}`
+              : 'Validation — no issues'}
+            onClick={() => setShowValidation((o) => !o)}
+            active={showValidation}
+            badge={(errorCount + warnCount) || undefined}
+          />
 
-          <button
-            onClick={() => setShowFindReplace((v) => !v)}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
-              showFindReplace ? 'bg-blue-100 text-blue-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-            )}
-          >
-            <Replace className="h-3.5 w-3.5" />
-            Find/Replace
-          </button>
+          {/* Find & Replace */}
+          <TbBtn
+            icon={<Replace className="w-3.5 h-3.5" />}
+            title="Find & Replace (⌘F)"
+            onClick={() => setShowFindReplace((o) => !o)}
+            active={showFindReplace}
+          />
 
-          <button
-            onClick={() => setShowValidation((v) => !v)}
-            className={cn(
-              'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
-              errorCount > 0 ? 'text-red-600' : warnCount > 0 ? 'text-amber-600' : '',
-              showValidation ? 'bg-blue-100 text-blue-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-            )}
-          >
-            <AlertCircle className="h-3.5 w-3.5" />
-            Validate {errorCount > 0 && `(${errorCount}E)`}{warnCount > 0 && ` (${warnCount}W)`}
-          </button>
+          {/* Conditional formatting */}
+          <TbBtn
+            icon={<Sparkles className="w-3.5 h-3.5" />}
+            title={cfRules.length > 0 ? `Conditional formatting (${cfRules.filter((r) => r.enabled).length} active)` : 'Conditional formatting'}
+            onClick={() => setShowConditional((o) => !o)}
+            active={showConditional}
+            badge={cfRules.filter((r) => r.enabled).length || undefined}
+          />
 
-          {/* Search */}
-          <div className="ml-auto flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded px-2 py-1">
-            <Search className="h-3 w-3 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter rows…"
-              className="w-40 text-xs bg-transparent outline-none dark:text-slate-200 placeholder:text-slate-400"
+          {/* AI bulk actions */}
+          <TbBtn
+            icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+            title={selectedRows.size > 0 ? `AI bulk actions (${selectedRows.size} selected)` : 'AI bulk actions — select rows first'}
+            onClick={() => setAiModalOpen(true)}
+            disabled={selectedRows.size === 0}
+            badge={selectedRows.size || undefined}
+          />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* Sort */}
+          <TbBtn
+            icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
+            title={sortConfig.length > 0 ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active` : 'Sort rows'}
+            onClick={() => setSortPanelOpen((o) => !o)}
+            active={sortPanelOpen || sortConfig.length > 0}
+            badge={sortConfig.length || undefined}
+          />
+        </div>
+
+        {/* ── Bar 3: Market · Search · Filter · Saved Views · Column pills ── */}
+        <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
+
+          {/* Market selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 font-medium">Market</span>
+            <div className="flex gap-0.5">
+              {EBAY_MARKETPLACES.map((mp) => (
+                <button key={mp} type="button"
+                  onClick={() => handleMarketplaceChange(mp)}
+                  className={cn('text-xs font-medium px-2 py-0.5 rounded border transition-colors',
+                    marketplace === mp
+                      ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
+                  {mp}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Search — ml-auto pushes right */}
+          <div className="flex items-center gap-1 ml-auto">
+            <div className="relative flex items-center">
+              <Search className="absolute left-2 w-3 h-3 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
+                placeholder="Filter rows…"
+                className="pl-6 pr-6 py-0.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-1.5 text-slate-400 hover:text-slate-600">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Row filter */}
+            <FFFilterPanel
+              open={showFilter}
+              onOpenChange={setShowFilter}
+              value={filterState}
+              onChange={setFilterState}
             />
+
+            {/* Saved views */}
+            <FFSavedViews
+              currentState={{
+                closedGroups: [...closedGroups],
+                ffFilter: filterState,
+                sortConfig: sortConfig.map((s) => ({ ...s, mode: s.mode as 'asc' | 'desc' | 'custom', customOrder: [] })),
+                cfRules,
+                frozenColCount: 1,
+              }}
+              onApply={(state: FFViewState) => {
+                setClosedGroups(new Set(state.closedGroups))
+                setFilterState(state.ffFilter)
+                setCfRules(state.cfRules)
+              }}
+            />
+          </div>
+
+          {/* Column group pills — same UX as Amazon flat file */}
+          <div className="flex items-center gap-1 flex-wrap ml-auto">
+            <span className="text-xs text-slate-400 mr-1">Columns:</span>
+            {orderedGroups.map((g) => {
+              const open = openGroups.has(g.id)
+              const isDragging = draggingGroupId === g.id
+              return (
+                <button key={g.id} type="button"
+                  draggable
+                  onDragStart={(e) => { setDraggingGroupId(g.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragEnd={() => setDraggingGroupId(null)}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (!draggingGroupId || draggingGroupId === g.id) return
+                    const ids = orderedGroups.map((x) => x.id)
+                    const from = ids.indexOf(draggingGroupId)
+                    const to   = ids.indexOf(g.id)
+                    const next = [...ids]
+                    next.splice(from, 1)
+                    next.splice(to, 0, draggingGroupId)
+                    setGroupOrder(next)
+                    try { localStorage.setItem('eff-group-order', JSON.stringify(next)) } catch {}
+                    setDraggingGroupId(null)
+                  }}
+                  onClick={() => setClosedGroups((prev) => {
+                    const n = new Set(prev)
+                    open ? n.add(g.id) : n.delete(g.id)
+                    try { localStorage.setItem('eff-closed-groups', JSON.stringify([...n])) } catch {}
+                    return n
+                  })}
+                  title={g.label}
+                  className={cn(
+                    'inline-flex items-center gap-1 h-5 px-1.5 text-xs rounded border transition-all cursor-grab active:cursor-grabbing select-none',
+                    gBadge(g.color),
+                    open ? 'opacity-100' : 'opacity-40 hover:opacity-65',
+                    isDragging && 'opacity-30 scale-95',
+                  )}>
+                  <ChevronRight className={cn('w-2.5 h-2.5 transition-transform', open && 'rotate-90')} />
+                  <span className="font-medium">{g.label}</span>
+                  <span className="opacity-60 tabular-nums">{g.columns.length}</span>
+                </button>
+              )
+            })}
+            {(groupOrder.length > 0 || closedGroups.size > 0) && (
+              <button type="button"
+                onClick={() => {
+                  setGroupOrder([])
+                  setClosedGroups(new Set())
+                  try { localStorage.removeItem('eff-group-order'); localStorage.removeItem('eff-closed-groups') } catch {}
+                }}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1"
+                title="Reset column group order and visibility">
+                ↺
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -956,15 +1256,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         <FeedStatusBanner feedStatus={feedStatus} onPoll={pollFeedStatus} />
       )}
 
-      {/* Filter panel */}
-      {showFilter && (
-        <FFFilterPanel
-          open={showFilter}
-          onOpenChange={setShowFilter}
-          value={filterState}
-          onChange={setFilterState}
-        />
-      )}
+      {/* AI bulk actions modal */}
+      <AIBulkModal
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        selectedProductIds={[...selectedRows].flatMap((rowId) => {
+          const row = rows.find((r) => r._rowId === rowId)
+          return row?._productId ? [row._productId as string] : []
+        })}
+        marketplace={marketplace}
+      />
 
       {/* Find/Replace */}
       {showFindReplace && (
@@ -1050,7 +1351,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   >
                     <button
                       onClick={() =>
-                        setCollapsedColumnGroups((prev) => {
+                        setClosedGroups((prev) => {
                           const next = new Set(prev)
                           if (next.has(group.id)) next.delete(group.id)
                           else next.add(group.id)
@@ -1060,7 +1361,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                       className="flex items-center gap-1"
                     >
                       <ChevronDown
-                        className={cn('h-3 w-3 transition-transform', collapsedColumnGroups.has(group.id) && '-rotate-90')}
+                        className={cn('h-3 w-3 transition-transform', closedGroups.has(group.id) && '-rotate-90')}
                       />
                       {group.label}
                     </button>
