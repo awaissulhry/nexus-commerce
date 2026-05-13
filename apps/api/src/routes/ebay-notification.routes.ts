@@ -103,6 +103,90 @@ function verifyEbaySignature(
 
 export default async function ebayNotificationRoutes(app: FastifyInstance): Promise<void> {
 
+  // ── GET /api/admin/ebay-token-status ──────────────────────────────
+  // Shows the current access-token expiry for every active eBay connection.
+  app.get('/admin/ebay-token-status', async (_req, reply) => {
+    const connections = await prisma.channelConnection.findMany({
+      where: { channelType: 'EBAY', isActive: true },
+      select: {
+        id: true,
+        ebaySignInName: true,
+        tokenExpiresAt: true,
+        ebayTokenExpiresAt: true,
+        refreshToken: true,
+        ebayRefreshToken: true,
+        lastSyncStatus: true,
+        lastSyncError: true,
+      },
+    })
+
+    const now = new Date()
+    return reply.send({
+      now: now.toISOString(),
+      connections: connections.map((c) => {
+        const expiresAt = c.tokenExpiresAt ?? c.ebayTokenExpiresAt
+        const hasRefreshToken = !!(c.refreshToken ?? c.ebayRefreshToken)
+        const minsUntilExpiry = expiresAt
+          ? Math.round((expiresAt.getTime() - now.getTime()) / 60_000)
+          : null
+        return {
+          id: c.id,
+          signInName: c.ebaySignInName,
+          tokenExpiresAt: expiresAt?.toISOString() ?? null,
+          minsUntilExpiry,
+          expired: minsUntilExpiry !== null ? minsUntilExpiry <= 0 : null,
+          hasRefreshToken,
+          lastSyncStatus: c.lastSyncStatus,
+          lastSyncError: c.lastSyncError,
+        }
+      }),
+    })
+  })
+
+  // ── POST /api/admin/refresh-ebay-tokens ───────────────────────────
+  // Triggers an immediate token refresh for all active eBay connections.
+  // Same logic as the 30-min cron — safe to call any time.
+  app.post('/admin/refresh-ebay-tokens', async (_req, reply) => {
+    const { runRefreshSweep } = await import('../jobs/ebay-token-refresh.job.js')
+    try {
+      await runRefreshSweep()
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? String(err) })
+    }
+
+    // Return updated state immediately after refresh
+    const connections = await prisma.channelConnection.findMany({
+      where: { channelType: 'EBAY', isActive: true },
+      select: {
+        id: true,
+        ebaySignInName: true,
+        tokenExpiresAt: true,
+        ebayTokenExpiresAt: true,
+        lastSyncStatus: true,
+        lastSyncError: true,
+      },
+    })
+    const now = new Date()
+    return reply.send({
+      ok: true,
+      refreshedAt: now.toISOString(),
+      connections: connections.map((c) => {
+        const expiresAt = c.tokenExpiresAt ?? c.ebayTokenExpiresAt
+        const minsUntilExpiry = expiresAt
+          ? Math.round((expiresAt.getTime() - now.getTime()) / 60_000)
+          : null
+        return {
+          id: c.id,
+          signInName: c.ebaySignInName,
+          tokenExpiresAt: expiresAt?.toISOString() ?? null,
+          minsUntilExpiry,
+          lastSyncStatus: c.lastSyncStatus,
+          lastSyncError: c.lastSyncError,
+        }
+      }),
+    })
+  })
+
   // ── POST /api/admin/setup-ebay-notifications ───────────────────────
   // Calls SetNotificationPreferences via Trading API to subscribe the
   // production seller account (site 101 — Italy) to:
