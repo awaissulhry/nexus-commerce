@@ -214,7 +214,6 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
           processingDirective: {
             eventFilter: {
               eventFilterType: 'ORDER_CHANGE',
-              orderChangeTypes: ['ORDER_STATUS_CHANGE', 'ORDER_FULFILLMENT_CHANGE'],
             },
           },
         })
