@@ -6,8 +6,8 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Copy, GripVertical, Image as ImageIcon, Loader2, Plus,
-  RefreshCw, Trash2, Undo2, Redo2, Replace, SlidersHorizontal, Sparkles, X,
+  ClipboardPaste, Copy, Image as ImageIcon, Loader2, Plus,
+  RefreshCw, Search, Trash2, Undo2, Redo2, Replace, SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
@@ -753,15 +753,26 @@ export default function FlatFileGrid({
 
           {/* Search */}
           <div className="relative flex items-center">
+            <Search className="absolute left-2 w-3 h-3 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search…"
-              className="h-6 pl-6 pr-2 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-36"
+              onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
+              placeholder="Search rows…"
+              className="pl-6 pr-6 py-0.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
             />
-            <X className="absolute left-1.5 w-3 h-3 text-slate-400 pointer-events-none" />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-1.5 text-slate-400 hover:text-slate-600">
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
+          {searchQuery && (
+            <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">
+              {filteredRows.length}/{rows.length}
+            </span>
+          )}
 
           {/* Filter */}
           <FFFilterPanel
@@ -930,23 +941,42 @@ export default function FlatFileGrid({
         )}
 
         {!loading && (
-          <table className="border-collapse text-xs min-w-max">
-            {/* Sticky column headers */}
-            <thead className="sticky top-0 z-20">
-              {/* Group row */}
+          <table className="border-collapse text-sm w-max min-w-full">
+            {/* Sticky two-row header: row 1 = group bands, row 2 = column labels */}
+            <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900">
+              {/* Row 1: group colour bands */}
               <tr>
-                <th className="w-8 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky left-0 z-30" />
-                <th className="w-6 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
-                {showRowImages && (
-                  <th className="border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-                    style={{ minWidth: imageSize + 8, maxWidth: imageSize + 8 }} />
-                )}
+                {/* Checkbox / drag handle — spans both header rows */}
+                <th
+                  className="sticky left-0 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 w-9 min-w-[36px] text-center"
+                  rowSpan={2}
+                >
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 accent-blue-600"
+                    checked={rows.length > 0 && selectedRows.size === rows.length}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedRows.size > 0 && selectedRows.size < rows.length
+                    }}
+                    onChange={(e) =>
+                      setSelectedRows(e.target.checked ? new Set(rows.map((r) => r._rowId)) : new Set())
+                    }
+                  />
+                </th>
+                {/* Row # — spans both header rows */}
+                <th
+                  className="sticky left-9 z-30 bg-white dark:bg-slate-900 border-b border-r border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center font-normal w-10 min-w-[40px]"
+                  rowSpan={2}
+                >
+                  #
+                </th>
+                {/* Group colour band headers */}
                 {visibleGroups.map((group) => (
                   <th
                     key={group.id}
                     colSpan={group.columns.length}
                     className={cn(
-                      'h-7 px-2 text-left text-[10px] font-semibold uppercase tracking-wide border-r border-b border-slate-200 dark:border-slate-700',
+                      'px-2 py-1 text-xs font-bold border-b border-r border-slate-200 dark:border-slate-700 text-left whitespace-nowrap',
                       gColor(group.color).header,
                     )}
                   >
@@ -967,35 +997,20 @@ export default function FlatFileGrid({
                   </th>
                 ))}
               </tr>
-              {/* Column header row */}
+              {/* Row 2: column labels */}
               <tr>
-                <th className="w-8 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky left-0 z-30">
-                  <input
-                    type="checkbox"
-                    className="h-3 w-3"
-                    checked={selectedRows.size === rows.length && rows.length > 0}
-                    onChange={(e) =>
-                      setSelectedRows(e.target.checked ? new Set(rows.map((r) => r._rowId)) : new Set())
-                    }
-                  />
-                </th>
-                <th className="w-6 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
-                {showRowImages && (
-                  <th className="h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[10px] text-slate-400 px-1"
-                    style={{ minWidth: imageSize + 8, maxWidth: imageSize + 8 }}>
-                    Img
-                  </th>
-                )}
                 {visibleColumns.map((col) => (
                   <th
                     key={col.id}
                     className={cn(
-                      'h-7 px-1.5 text-left font-medium text-slate-600 dark:text-slate-400 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 whitespace-nowrap overflow-hidden text-ellipsis',
-                      col.required && 'after:content-["*"] after:text-red-400 after:ml-0.5',
+                      'px-2 py-0.5 text-left text-xs font-semibold border-b border-r border-slate-200 dark:border-slate-700 whitespace-nowrap select-none',
+                      gColor(visibleGroups.find(g => g.columns.some(c => c.id === col.id))?.color ?? 'slate').header,
+                      col.required && 'font-bold',
                     )}
                     style={{ minWidth: col.width, maxWidth: col.width }}
+                    title={col.description}
                   >
-                    {col.label}
+                    {col.label}{col.required && <span className="ml-0.5 text-red-500">*</span>}
                   </th>
                 ))}
               </tr>
@@ -1021,7 +1036,7 @@ export default function FlatFileGrid({
                         isExpanded={!isCollapsed}
                         showImage={showRowImages}
                         imageSize={imageSize}
-                        colSpanCount={visibleColumns.length + 2 + (showRowImages ? 1 : 0)}
+                        colSpanCount={visibleColumns.length + 2}
                         onToggle={() =>
                           setCollapsedRowGroups((prev) => {
                             const next = new Set(prev)
@@ -1040,7 +1055,7 @@ export default function FlatFileGrid({
                     filteredRows.some((fr) => fr._rowId === r._rowId),
                   )
 
-                  visibleGroupRows.forEach((row) => {
+                  visibleGroupRows.forEach((row, rowDisplayIdx) => {
                     const isRowSelected  = selectedRows.has(row._rowId)
                     const isDraggingThis = draggingRowId === row._rowId
                     const dropInd        = dropTarget?.rowId === row._rowId ? dropTarget.half : null
@@ -1054,6 +1069,16 @@ export default function FlatFileGrid({
                       : row._dirty  ? 'bg-yellow-50/40 dark:bg-yellow-950/10'
                       : groupRows.length > 1 ? bandClass
                       : ''
+
+                    // Opaque bg for sticky cells — prevents content bleed-through on horizontal scroll
+                    const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
+                      : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
+                      : row._status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
+                      : row._isNew  ? 'bg-sky-50 dark:bg-sky-950/40'
+                      : row._dirty  ? 'bg-yellow-50 dark:bg-yellow-950/40'
+                      : 'bg-white dark:bg-slate-900'
+
+                    void rowDisplayIdx
 
                     // Conditional formatting per cell
                     const cfClassMap: Record<string, string> = {}
@@ -1097,62 +1122,65 @@ export default function FlatFileGrid({
                           isDraggingThis ? 'opacity-40' : 'hover:bg-white/60 dark:hover:bg-slate-800/40',
                         )}
                       >
-                        {/* Checkbox + drag handle */}
+                        {/* Col 1: checkbox + drag handle (sticky left-0) */}
                         <td
-                          className="w-8 border-r border-slate-200 dark:border-slate-700 px-1.5 sticky left-0 bg-white dark:bg-slate-900 z-10"
+                          className={cn(
+                            'sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-1.5 w-9 text-center cursor-grab active:cursor-grabbing',
+                            frozenBg,
+                          )}
                           onMouseDown={() => { canDragRef.current = true }}
                           onMouseUp={() => { canDragRef.current = false }}
                         >
-                          <div className="relative flex items-center justify-center h-full">
-                            <GripVertical className="absolute left-0 hidden group-hover/row:block w-3 h-3 text-slate-300 cursor-grab active:cursor-grabbing" />
-                            {row._status === 'pushed'
-                              ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
-                              : row._status === 'error'
-                              ? <AlertCircle className="w-3 h-3 text-red-500 mx-auto" />
-                              : row._status === 'pending'
-                              ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
-                              : <input
-                                  type="checkbox"
-                                  className="h-3 w-3"
-                                  checked={isRowSelected}
-                                  onChange={(e) =>
-                                    setSelectedRows((prev) => {
-                                      const next = new Set(prev)
-                                      if (e.target.checked) next.add(row._rowId)
-                                      else next.delete(row._rowId)
-                                      return next
-                                    })
-                                  }
-                                />
-                            }
+                          {row._status === 'pushed'
+                            ? <CheckCircle2 className="w-3 h-3 text-emerald-500 mx-auto" />
+                            : row._status === 'error'
+                            ? <span title={String(row._feedMessage ?? '')}><AlertCircle className="w-3 h-3 text-red-500 mx-auto" /></span>
+                            : row._status === 'pending'
+                            ? <Loader2 className="w-3 h-3 text-amber-500 animate-spin mx-auto" />
+                            : <input
+                                type="checkbox"
+                                className="w-3.5 h-3.5 accent-blue-600"
+                                checked={isRowSelected}
+                                onChange={(e) =>
+                                  setSelectedRows((prev) => {
+                                    const next = new Set(prev)
+                                    if (e.target.checked) next.add(row._rowId)
+                                    else next.delete(row._rowId)
+                                    return next
+                                  })
+                                }
+                              />
+                          }
+                        </td>
+
+                        {/* Col 2: row # + push-status badge + optional image (sticky left-9) */}
+                        <td
+                          className={cn(
+                            'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 w-10 min-w-[40px] select-none',
+                            frozenBg,
+                          )}
+                        >
+                          <div className="flex flex-col items-center gap-0.5 py-0.5">
+                            {showRowImages && (() => {
+                              const imgUrl = row.image_1 ? String(row.image_1) : null
+                              return imgUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={imgUrl} alt="" style={{ width: imageSize, height: imageSize }}
+                                  className="rounded object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                              ) : (
+                                <div className="rounded border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0"
+                                  style={{ width: imageSize, height: imageSize }}>
+                                  <ImageIcon className="text-slate-300 dark:text-slate-600" style={{ width: imageSize * 0.4, height: imageSize * 0.4 }} />
+                                </div>
+                              )
+                            })()}
+                            <span className="text-xs text-slate-400 tabular-nums leading-none">
+                              {rows.indexOf(row) + 1}
+                            </span>
+                            {rowStatusIcon(row._status)}
                           </div>
                         </td>
-
-                        {/* Push status indicator */}
-                        <td className="w-6 border-r border-slate-200 dark:border-slate-700 px-1 text-center">
-                          {rowStatusIcon(row._status)}
-                        </td>
-
-                        {/* Row image (optional) */}
-                        {showRowImages && (
-                          <td
-                            className="border-r border-slate-200 dark:border-slate-700 px-0.5 py-0.5 text-center"
-                            style={{ minWidth: imageSize + 8, maxWidth: imageSize + 8 }}
-                          >
-                            {row.image_1 ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={String(row.image_1)}
-                                alt=""
-                                style={{ width: imageSize, height: imageSize }}
-                                className="rounded object-cover border border-slate-200 dark:border-slate-700 inline-block"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                              />
-                            ) : (
-                              <span className="text-slate-200">—</span>
-                            )}
-                          </td>
-                        )}
 
                         {/* Data cells — rendered by channel-specific CellComponent */}
                         {visibleColumns.map((col) => (
@@ -1180,26 +1208,25 @@ export default function FlatFileGrid({
               {/* Empty state */}
               {filteredRows.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={visibleColumns.length + 2 + (showRowImages ? 1 : 0)} className="py-8 text-center text-slate-400 text-sm">
+                  <td colSpan={visibleColumns.length + 2} className="px-6 py-6 text-center text-sm text-slate-400 italic">
                     {searchQuery ? 'No rows match your search.' : 'No rows yet.'}
                   </td>
                 </tr>
               )}
 
-              {/* Add-row footer */}
+              {/* Add-row footer — matches Amazon layout */}
               <tr>
-                <td colSpan={visibleColumns.length + 2 + (showRowImages ? 1 : 0)}
-                  className="px-3 py-1.5 border-t border-dashed border-slate-200 dark:border-slate-700">
+                <td colSpan={visibleColumns.length + 2}
+                  className="px-4 py-2 border-t border-dashed border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={addRow}
-                      className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                      <Plus className="w-3 h-3" />Add row
-                    </button>
+                    <Button size="sm" variant="ghost" onClick={addRow}>
+                      <Plus className="w-3.5 h-3.5 mr-1" />Add row
+                    </Button>
                     {selectedRows.size > 0 && (
-                      <button type="button" onClick={deleteSelected}
-                        className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                        <Trash2 className="w-3 h-3" />Delete {selectedRows.size} selected
-                      </button>
+                      <Button size="sm" variant="ghost" onClick={deleteSelected}
+                        className="text-red-500 hover:text-red-700 ml-2">
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />Delete {selectedRows.size}
+                      </Button>
                     )}
                   </div>
                 </td>
@@ -1209,12 +1236,22 @@ export default function FlatFileGrid({
         )}
       </div>
 
-      {/* ── Status bar ──────────────────────────────────────────── */}
-      <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-1 flex items-center gap-4 text-xs text-slate-500">
-        <span>{rows.length} rows</span>
-        {selectedRows.size > 0 && <span>{selectedRows.size} selected</span>}
-        {dirtyCount > 0 && <span className="text-amber-600">{dirtyCount} unsaved</span>}
-        {errorCount > 0 && <span className="text-red-600">{errorCount} errors</span>}
+      {/* ── Status bar — matches Amazon style ───────────────────── */}
+      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-1 flex items-center gap-4 text-xs text-slate-400 select-none flex-shrink-0">
+        <span>{filteredRows.length} row{filteredRows.length !== 1 ? 's' : ''}</span>
+        {selectedRows.size > 0 && <span className="text-blue-500">{selectedRows.size} selected</span>}
+        {dirtyCount > 0 && <span className="text-amber-500 ml-auto">{dirtyCount} unsaved change{dirtyCount !== 1 ? 's' : ''}</span>}
+        {(errorCount > 0 || warnCount > 0) && (
+          <button
+            type="button"
+            onClick={() => setShowValidation((o) => !o)}
+            className={cn('flex items-center gap-1 ml-auto', errorCount > 0 ? 'text-red-500' : 'text-amber-500')}
+          >
+            <AlertTriangle className="w-3 h-3" />
+            {errorCount > 0 && <span>{errorCount} error{errorCount !== 1 ? 's' : ''}</span>}
+            {warnCount  > 0 && <span>{warnCount} warning{warnCount !== 1 ? 's' : ''}</span>}
+          </button>
+        )}
         <span className="ml-auto">{channel.toUpperCase()} · {marketplace}</span>
       </div>
     </div>
