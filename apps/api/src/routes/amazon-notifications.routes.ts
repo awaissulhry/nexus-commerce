@@ -161,82 +161,67 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       })
     }
 
-    const queueUrl = process.env.AMAZON_SQS_QUEUE_URL!
-    const parts = queueUrl.replace('https://', '').split('/')
-    const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
-    const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
-    const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
+    // Respond immediately — SP-API calls can take 10-20s and Railway
+    // cuts the connection at 30s. Work runs in background; check status
+    // with GET /api/admin/amazon-notification-status after ~20 seconds.
+    reply.status(202).send({
+      status: 'setup started',
+      message: 'SP-API calls running in background. Check GET /api/admin/amazon-notification-status in ~20s.',
+    })
 
-    try {
-      // Step 1 — fetch existing destinations and subscription in parallel.
-      // If both already exist we return immediately without any further writes
-      // (avoids the 3-sequential-round-trip timeout that hit Railway's 30s limit).
-      const [destList, existingSub] = await Promise.all([
-        spApiGrantless<any>('GET', '/notifications/v1/destinations'),
-        spApiRequest<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE').catch(() => null),
-      ])
+    // Background work — detached from the HTTP response.
+    void (async () => {
+      const queueUrl = process.env.AMAZON_SQS_QUEUE_URL!
+      const parts = queueUrl.replace('https://', '').split('/')
+      const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
+      const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
+      const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
 
-      const destinations: any[] = destList.payload ?? []
-      const existingDest = destinations.find((d: any) => d.resource?.sqs?.arn === sqsArn)
+      try {
+        const [destList, existingSub] = await Promise.all([
+          spApiGrantless<any>('GET', '/notifications/v1/destinations'),
+          spApiRequest<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE').catch(() => null),
+        ])
 
-      if (existingDest && existingSub?.payload?.subscriptionId) {
-        // Already fully configured — return immediately.
-        return reply.send({
-          ok: true,
-          alreadyConfigured: true,
-          destinationId: existingDest.destinationId,
-          subscriptionId: existingSub.payload.subscriptionId,
-          sqsArn,
-          message: 'SP-API ORDER_CHANGE subscription already active.',
-        })
-      }
+        const destinations: any[] = destList.payload ?? []
+        const existingDest = destinations.find((d: any) => d.resource?.sqs?.arn === sqsArn)
 
-      // Step 2 — create destination if missing.
-      let destinationId: string
-      if (existingDest) {
-        destinationId = existingDest.destinationId
-        logger.info('[amazon-notifications] reusing existing destination', { destinationId })
-      } else {
-        const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
-          name: queueName,
-          resourceSpecification: { sqs: { arn: sqsArn } },
-        })
-        destinationId = destResp.payload?.destinationId ?? destResp.destinationId
-        logger.info('[amazon-notifications] destination created', { destinationId })
-      }
+        if (existingDest && existingSub?.payload?.subscriptionId) {
+          logger.info('[amazon-notifications] already fully configured', {
+            destinationId: existingDest.destinationId,
+            subscriptionId: existingSub.payload.subscriptionId,
+          })
+          return
+        }
 
-      // Step 3 — create subscription if missing.
-      let subscriptionId: string | undefined
-      if (!existingSub?.payload?.subscriptionId) {
-        const subResp = await spApiRequest<any>('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
-          payloadVersion: '1.0',
-          destinationId,
-          processingDirective: {
-            eventFilter: {
-              eventFilterType: 'ORDER_CHANGE',
+        let destinationId: string
+        if (existingDest) {
+          destinationId = existingDest.destinationId
+          logger.info('[amazon-notifications] reusing existing destination', { destinationId })
+        } else {
+          const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
+            name: queueName,
+            resourceSpecification: { sqs: { arn: sqsArn } },
+          })
+          destinationId = destResp.payload?.destinationId ?? destResp.destinationId
+          logger.info('[amazon-notifications] destination created', { destinationId })
+        }
+
+        if (!existingSub?.payload?.subscriptionId) {
+          const subResp = await spApiRequest<any>('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
+            payloadVersion: '1.0',
+            destinationId,
+            processingDirective: {
+              eventFilter: { eventFilterType: 'ORDER_CHANGE' },
             },
-          },
-        })
-        subscriptionId = subResp.payload?.subscriptionId ?? subResp.subscriptionId
-        logger.info('[amazon-notifications] subscription created', { subscriptionId, destinationId })
-      } else {
-        subscriptionId = existingSub.payload.subscriptionId
+          })
+          const subscriptionId = subResp.payload?.subscriptionId ?? subResp.subscriptionId
+          logger.info('[amazon-notifications] subscription created', { subscriptionId, destinationId })
+        }
+      } catch (err: any) {
+        logger.error('[amazon-notifications] background setup failed', { error: err?.message ?? String(err) })
       }
-
-      return reply.send({
-        ok: true,
-        destinationId,
-        subscriptionId,
-        sqsArn,
-        message: 'SP-API ORDER_CHANGE subscription active.',
-      })
-    } catch (err: any) {
-      logger.error('[amazon-notifications] setup failed', { error: err?.message ?? String(err) })
-      return reply.status(500).send({
-        error: err?.message ?? String(err),
-        hint: 'Ensure AMAZON_SQS_QUEUE_URL points to a queue with AmazonSQS:SendMessage permission for SP-API.',
-      })
-    }
+    })()
   })
 
   app.get('/admin/amazon-notification-status', async (_req, reply) => {
