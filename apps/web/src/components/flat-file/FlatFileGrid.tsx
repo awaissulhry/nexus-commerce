@@ -1370,6 +1370,21 @@ export default function FlatFileGrid({
         onPointerMove={(e) => {
           if (e.buttons !== 1) return
           const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
+
+          // Row # column drag — extend selection to whole rows vertically
+          if (rowDragRef.current !== null) {
+            const rowEl = el?.closest('[data-row-ri]') as HTMLElement | null
+            if (rowEl) {
+              const ri = parseInt(rowEl.dataset.rowRi ?? '', 10)
+              if (!isNaN(ri)) {
+                const maxCi = allColumnsRef.current.length - 1
+                setSelEnd((p) => (p?.ri === ri && p?.ci === maxCi ? p : { ri, ci: maxCi }))
+              }
+            }
+            return
+          }
+
+          // Regular cell selection / fill drag
           const td = el?.closest('[data-ri]') as HTMLElement | null; if (!td) return
           const ri = parseInt(td.dataset.ri ?? '', 10)
           const ci = parseInt(td.dataset.ci ?? '', 10)
@@ -1509,7 +1524,8 @@ export default function FlatFileGrid({
                         </td>
 
                         {/* Row # + optional image + row meta slot */}
-                        <td className={cn('sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rr select-none', frozenBg)}
+                        <td data-row-ri={ri}
+                          className={cn('sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rr select-none', frozenBg)}
                           style={{ width: showRowImages ? imageSize + 12 : 40, minWidth: showRowImages ? imageSize + 12 : 40, height: rowHeight, cursor: 'ns-resize' }}
                           onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.releasePointerCapture(e.pointerId); rowDragRef.current = ri; const maxCi = allColumns.length - 1; selAnchorRef.current = { ri, ci: 0 }; setSelAnchor({ ri, ci: 0 }); setSelEnd({ ri, ci: maxCi }); setIsEditing(false); const col = allColumns[0]; if (col) setActiveCell({ rowId: row._rowId, colId: col.id }) }}>
                           <div className={cn('flex flex-col gap-0.5 w-full', showRowImages ? 'items-center' : 'items-end')} style={{ minHeight: rowHeight, justifyContent: 'center', padding: '4px 2px' }}>
