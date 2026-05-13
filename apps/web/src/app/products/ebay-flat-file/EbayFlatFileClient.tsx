@@ -6,8 +6,8 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Loader2, RefreshCw, Send, Undo2, Redo2,
-  Search, ArrowDownToLine, Replace, SlidersHorizontal, Sparkles, Tag, X,
+  ClipboardPaste, Copy, Image as ImageIcon, Loader2, RefreshCw, Send, Undo2, Redo2,
+  Search, ArrowDownToLine, ArrowRightLeft, Replace, SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -21,6 +21,7 @@ import { type FindCell } from '@/app/bulk-operations/lib/find-replace'
 import { FFFilterPanel, FF_FILTER_DEFAULT, type FFFilterState } from '../amazon-flat-file/FFFilterPanel'
 import { FFSavedViews, type FFViewState } from '../amazon-flat-file/FFSavedViews'
 import { AIBulkModal } from '../amazon-flat-file/AIBulkModal'
+import { FFReplicateModal } from '../amazon-flat-file/FFReplicateModal'
 import { ChannelStrip } from './ChannelStrip'
 import {
   EBAY_COLUMN_GROUPS,
@@ -643,6 +644,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // AI modal
   const [aiModalOpen, setAiModalOpen] = useState(false)
 
+  // Replicate modal
+  const [replicateOpen, setReplicateOpen] = useState(false)
+
+  // Smart paste (clipboard header-mapping mode)
+  const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
+    try { return localStorage.getItem('eff-smart-paste') === '1' } catch { return false }
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem('eff-smart-paste', smartPasteEnabled ? '1' : '0') } catch {}
+  }, [smartPasteEnabled])
+
+  // Row images
+  const [showRowImages, setShowRowImages] = useState(false)
+  const [imageSize, setImageSize] = useState<24 | 32 | 48 | 64 | 96>(48)
+
+  // Fetch from eBay panel
+  const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
+  const [fetching, setFetching] = useState(false)
+
   // Collapsed row groups (platformProductId)
   const [collapsedRowGroups, setCollapsedRowGroups] = useState<Set<string>>(new Set())
 
@@ -926,6 +947,47 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     loadRows(mp)
   }
 
+  async function handleFetchFromEbay() {
+    const toFetch = [...selectedRows]
+      .map((id) => rows.find((r) => r._rowId === id))
+      .filter(Boolean) as EbayRow[]
+    if (!toFetch.length) return
+    setFetching(true)
+    setFetchPanelOpen(false)
+    const updates: Array<{ rowId: string; data: Partial<EbayRow> }> = []
+    await Promise.all(toFetch.map(async (row) => {
+      if (!row.sku) return
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/ebay/pull-listing?sku=${encodeURIComponent(row.sku)}&marketplace=${marketplace}`)
+        if (!res.ok) return
+        const json = await res.json() as { found: boolean; summary?: { title?: string; quantity?: number; condition?: string; imageUrls?: string[]; aspects?: Record<string, string[]> } }
+        if (!json.found || !json.summary) return
+        const s = json.summary
+        const patch: Partial<EbayRow> = {}
+        if (s.title)    patch.title    = s.title
+        if (s.quantity) patch.quantity = s.quantity
+        if (s.condition) patch.condition = s.condition
+        if (s.imageUrls?.[0]) patch.image_1 = s.imageUrls[0]
+        if (s.imageUrls?.[1]) patch.image_2 = s.imageUrls[1]
+        if (s.aspects?.Brand?.[0])  patch.brand   = s.aspects.Brand[0]
+        if (s.aspects?.Colour?.[0]) patch.colour  = s.aspects.Colour[0]
+        if (s.aspects?.Color?.[0])  patch.colour  = s.aspects.Color[0]
+        if (s.aspects?.Size?.[0])   patch.size    = s.aspects.Size[0]
+        updates.push({ rowId: row._rowId, data: patch })
+      } catch { /* skip */ }
+    }))
+    if (updates.length) {
+      const nextRows = rows.map((r) => {
+        const u = updates.find((x) => x.rowId === r._rowId)
+        return u ? { ...r, ...u.data, _dirty: true } : r
+      })
+      pushHistory(nextRows)
+      setRows(nextRows)
+      toast.success(`Fetched live data for ${updates.length} SKU${updates.length !== 1 ? 's' : ''}`)
+    }
+    setFetching(false)
+  }
+
   function handleDiscard() {
     if (!dirtyCount) return
     if (!confirm('Discard all unsaved changes?')) return
@@ -999,7 +1061,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
 
           {/* Title + status badges */}
-          <Tag className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-blue-600 dark:text-blue-400 flex-shrink-0" aria-hidden="true">
+            <path d="M.43 8.65H3.6V16H.43V8.65zm5.9 0h1.16L9.3 14.33l1.82-5.68h1.19L9.9 16H8.75L6.33 8.65zM13.36 8.65h3.17c2.13 0 3.06 1.24 3.06 3.68 0 2.44-.93 3.67-3.06 3.67h-3.17V8.65zm1.17 6.35h1.87c1.38 0 1.95-.83 1.95-2.67 0-1.84-.57-2.68-1.95-2.68h-1.87v5.35zm5.56-6.35h1.14V16h-1.14V8.65zM2 5.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm19 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
+          </svg>
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">eBay Flat File</span>
           <Badge variant="default">{marketplace}</Badge>
           {dirtyCount > 0 && <Badge variant="warning" className="flex-shrink-0"><AlertCircle className="w-3 h-3 mr-1" />{dirtyCount} unsaved</Badge>}
@@ -1051,7 +1115,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           </Button>
         </div>
 
-        {/* ── Icon toolbar ─────────────────────────────────── */}
+        {/* ── Icon toolbar — mirrors Amazon flat file exactly ── */}
         <div className="px-3 h-8 flex items-center gap-0.5 border-b border-slate-100 dark:border-slate-800/60">
 
           {/* Undo / Redo */}
@@ -1060,21 +1124,54 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* Import from Amazon */}
+          {/* Copy rows to another eBay market */}
           <TbBtn
-            icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
-            title="Import from Amazon — pre-fill empty eBay fields from matching Amazon listings"
-            onClick={importFromAmazon}
-            disabled={loading}
+            icon={<Copy className="w-3.5 h-3.5" />}
+            title="Copy rows to another market"
+            onClick={() => setReplicateOpen(true)}
+            disabled={!rows.length}
           />
 
-          {/* Refresh */}
+          {/* Replicate to multiple markets */}
           <TbBtn
-            icon={loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            title="Refresh rows from server"
-            onClick={() => loadRows(marketplace)}
-            disabled={loading}
+            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+            title="Replicate to multiple markets"
+            onClick={() => setReplicateOpen(true)}
+            disabled={!rows.length}
+            active={replicateOpen}
           />
+
+          {/* Fetch from eBay — select rows first */}
+          <div className="relative">
+            <TbBtn
+              icon={fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
+              title={selectedRows.size > 0
+                ? `Fetch from eBay (${selectedRows.size} SKU${selectedRows.size !== 1 ? 's' : ''})`
+                : 'Fetch from eBay — select rows first'}
+              onClick={() => setFetchPanelOpen((o) => !o)}
+              disabled={selectedRows.size === 0 || fetching}
+              active={fetchPanelOpen}
+              badge={selectedRows.size || undefined}
+            />
+            {fetchPanelOpen && (
+              <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 space-y-2">
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Fetch live listing data from eBay for {selectedRows.size} selected SKU{selectedRows.size !== 1 ? 's' : ''}.
+                  Overwrites title, condition, images, and aspects.
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleFetchFromEbay}
+                    className="flex-1 h-7 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Fetch now
+                  </button>
+                  <button type="button" onClick={() => setFetchPanelOpen(false)}
+                    className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
@@ -1088,6 +1185,67 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             active={showValidation}
             badge={(errorCount + warnCount) || undefined}
           />
+
+          {/* Smart paste toggle */}
+          <TbBtn
+            icon={<ClipboardPaste className="w-3.5 h-3.5" />}
+            title={smartPasteEnabled
+              ? 'Smart paste ON — first row treated as column headers when ≥2 columns match. Click to turn off.'
+              : 'Smart paste OFF — positional paste (default). Click to turn on header-mapping mode.'}
+            onClick={() => setSmartPasteEnabled((o) => !o)}
+            active={smartPasteEnabled}
+          />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* Import from Amazon (eBay equivalent of "Translate enum values") */}
+          <TbBtn
+            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+            title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
+            onClick={importFromAmazon}
+            disabled={loading}
+          />
+
+          {/* Row images toggle */}
+          <TbBtn
+            icon={<ImageIcon className="w-3.5 h-3.5" />}
+            title={showRowImages ? 'Hide product images' : 'Show product images in rows (uses image_1 field)'}
+            onClick={() => setShowRowImages((o) => !o)}
+            disabled={!rows.length}
+            active={showRowImages}
+          />
+          {showRowImages && (
+            <>
+              {([24, 32, 48, 64, 96] as const).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setImageSize(size)}
+                  className={cn(
+                    'h-6 px-1.5 rounded text-[10px] font-medium transition-colors',
+                    imageSize === size
+                      ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+                  )}
+                >
+                  {size === 24 ? 'XS' : size === 32 ? 'S' : size === 48 ? 'M' : size === 64 ? 'L' : 'XL'}
+                </button>
+              ))}
+            </>
+          )}
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+
+          {/* Sort */}
+          <TbBtn
+            icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
+            title={sortConfig.length > 0 ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active` : 'Sort rows'}
+            onClick={() => setSortPanelOpen((o) => !o)}
+            active={sortPanelOpen || sortConfig.length > 0}
+            badge={sortConfig.length || undefined}
+          />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
           {/* Find & Replace */}
           <TbBtn
@@ -1113,17 +1271,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             onClick={() => setAiModalOpen(true)}
             disabled={selectedRows.size === 0}
             badge={selectedRows.size || undefined}
-          />
-
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-
-          {/* Sort */}
-          <TbBtn
-            icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
-            title={sortConfig.length > 0 ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active` : 'Sort rows'}
-            onClick={() => setSortPanelOpen((o) => !o)}
-            active={sortPanelOpen || sortConfig.length > 0}
-            badge={sortConfig.length || undefined}
           />
         </div>
 
@@ -1255,6 +1402,36 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       {feedStatus && (
         <FeedStatusBanner feedStatus={feedStatus} onPoll={pollFeedStatus} />
       )}
+
+      {/* Replicate modal */}
+      <FFReplicateModal
+        open={replicateOpen}
+        onClose={() => setReplicateOpen(false)}
+        sourceMarket={marketplace}
+        groups={visibleGroups.map((g) => ({ id: g.id, labelEn: g.label, color: g.color }))}
+        rowCount={rows.length}
+        selectedRowCount={selectedRows.size}
+        onReplicate={async (targets, groupIds, selectedOnly) => {
+          const sourceRows = selectedOnly && selectedRows.size > 0
+            ? rows.filter((r) => selectedRows.has(r._rowId))
+            : rows
+          let copied = 0
+          for (const target of targets) {
+            const key = `eff-rows-${target.toUpperCase()}`
+            const colSet = new Set(
+              visibleGroups.filter((g) => groupIds.has(g.id)).flatMap((g) => g.columns.map((c) => c.id)),
+            )
+            const copiedRows = sourceRows.map((r) => {
+              const next: EbayRow = { _rowId: `copy-${r._rowId}-${target}`, _dirty: true, sku: r.sku }
+              for (const colId of colSet) { if (r[colId] != null) next[colId] = r[colId] }
+              return next
+            })
+            try { localStorage.setItem(key, JSON.stringify(copiedRows)) } catch {}
+            copied += copiedRows.length
+          }
+          return { copied, skipped: 0 }
+        }}
+      />
 
       {/* AI bulk actions modal */}
       <AIBulkModal
