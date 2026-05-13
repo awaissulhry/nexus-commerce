@@ -61,6 +61,14 @@ export interface FlatFileColumn {
   options?: string[]
   /** true → must pick from list (Amazon SELECTION_ONLY); false → combobox (free text allowed) */
   selectionOnly?: boolean
+  /**
+   * Which parentage levels this field is applicable to.
+   * undefined = applicable to all row types.
+   * Set from our group structure since Amazon's schema doesn't expose this directly.
+   */
+  applicableParentage?: ('VARIATION_PARENT' | 'VARIATION_CHILD' | 'STANDALONE')[]
+  /** Amazon field usage level from x-amazon-attributes.usage */
+  guidance?: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL'
   maxLength?: number
   width: number
 }
@@ -289,9 +297,17 @@ function schemaFieldToColumn(
     schemaLabels[fieldId] ?? FIXED_FIELD_LABELS[fieldId]?.[lang] ?? labelEn
 
   // Detect SELECTION_ONLY from Amazon schema attribute or hardcoded strict list
-  const schemaMode: string | undefined = inner?.['x-amazon-attributes']?.mode
+  const amazonAttrs = inner?.['x-amazon-attributes'] ?? {}
+  const schemaMode: string | undefined = amazonAttrs.mode
   const selectionOnly = kind === 'enum'
     ? STRICT_ENUM_FIELDS.has(fieldId) || schemaMode === 'SELECTION_ONLY'
+    : undefined
+
+  // Extract usage guidance level — tells grid how critical this field is
+  const rawUsage: string | undefined = amazonAttrs.usage ?? amazonAttrs.editorialUsage
+  const guidance = rawUsage === 'REQUIRED' ? 'REQUIRED'
+    : rawUsage === 'RECOMMENDED' ? 'RECOMMENDED'
+    : rawUsage === 'OPTIONAL' ? 'OPTIONAL'
     : undefined
 
   return {
@@ -303,6 +319,7 @@ function schemaFieldToColumn(
     kind,
     options,
     selectionOnly,
+    guidance,
     maxLength: typeof inner?.maxLength === 'number' ? inner.maxLength : undefined,
     width:
       kind === 'longtext' ? 260 :
@@ -382,22 +399,28 @@ function expandSchemaField(
     return [
       { id: 'purchasable_offer__condition_type',  fieldRef: 'purchasable_offer[marketplace_id]#1.condition_type',
         labelEn: 'Condition', labelLocal: ll('purchasable_offer.condition_type', { it_IT: 'Condizione', de_DE: 'Zustand', fr_FR: 'État', es_ES: 'Condición', en_GB: 'Condition' }),
-        required: isRequired, kind: 'enum', options: ['', ...condOpts], selectionOnly: true, width: 170 },
+        required: isRequired, kind: 'enum', options: ['', ...condOpts], selectionOnly: true,
+        applicableParentage: ['VARIATION_CHILD', 'STANDALONE'], width: 170 },
       { id: 'purchasable_offer__currency',        fieldRef: 'purchasable_offer[marketplace_id]#1.currency',
         labelEn: 'Currency', labelLocal: ll('purchasable_offer.currency', { it_IT: 'Valuta', de_DE: 'Währung', fr_FR: 'Devise', es_ES: 'Divisa', en_GB: 'Currency' }),
-        required: false, kind: 'enum', options: curOpts, selectionOnly: true, width: 100 },
+        required: false, kind: 'enum', options: curOpts, selectionOnly: true,
+        applicableParentage: ['VARIATION_CHILD', 'STANDALONE'], width: 100 },
       { id: 'purchasable_offer__our_price',       fieldRef: 'purchasable_offer[marketplace_id]#1.our_price.schedule.value_with_tax',
         labelEn: 'Price (incl. tax)', labelLocal: ll('purchasable_offer.our_price', { it_IT: 'Prezzo (IVA incl.)', de_DE: 'Preis (inkl. MwSt.)', fr_FR: 'Prix (TVA incl.)', es_ES: 'Precio (IVA incl.)', en_GB: 'Price (incl. tax)' }),
-        required: isRequired, kind: 'number', width: 130 },
+        required: isRequired, kind: 'number',
+        applicableParentage: ['VARIATION_CHILD', 'STANDALONE'], width: 130 },
       { id: 'purchasable_offer__sale_price',      fieldRef: 'purchasable_offer[marketplace_id]#1.sale_price.schedule.value_with_tax',
         labelEn: 'Sale Price', labelLocal: ll('purchasable_offer.sale_price', { it_IT: 'Prezzo scontato', de_DE: 'Sonderpreis', fr_FR: 'Prix promo', es_ES: 'Precio oferta', en_GB: 'Sale Price' }),
-        required: false, kind: 'number', width: 120 },
+        required: false, kind: 'number',
+        applicableParentage: ['VARIATION_CHILD', 'STANDALONE'], width: 120 },
       { id: 'purchasable_offer__sale_from_date',  fieldRef: 'purchasable_offer[marketplace_id]#1.sale_from_date.value',
         labelEn: 'Sale From Date', labelLocal: ll('purchasable_offer.sale_from_date', { it_IT: 'Inizio svendita', de_DE: 'Aktionsbeginn', fr_FR: 'Début promo', es_ES: 'Inicio oferta', en_GB: 'Sale From Date' }),
-        required: false, kind: 'text', width: 150 },
+        required: false, kind: 'text',
+        applicableParentage: ['VARIATION_CHILD', 'STANDALONE'], width: 150 },
       { id: 'purchasable_offer__sale_end_date',   fieldRef: 'purchasable_offer[marketplace_id]#1.sale_end_date.value',
         labelEn: 'Sale End Date', labelLocal: ll('purchasable_offer.sale_end_date', { it_IT: 'Fine svendita', de_DE: 'Aktionsende', fr_FR: 'Fin promo', es_ES: 'Fin oferta', en_GB: 'Sale End Date' }),
-        required: false, kind: 'text', width: 150 },
+        required: false, kind: 'text',
+        applicableParentage: ['VARIATION_CHILD', 'STANDALONE'], width: 150 },
     ]
   }
 
@@ -623,6 +646,7 @@ export class AmazonFlatFileService {
           labelEn: 'Parent SKU',
           labelLocal: schemaLabels['child_parent_sku_relationship'] ?? ll('parent_sku', 'Parent SKU'),
           required: false, kind: 'text', width: 180,
+          applicableParentage: ['VARIATION_CHILD'],
           description: 'Required when parentage_level = Child',
         },
         {
@@ -633,6 +657,8 @@ export class AmazonFlatFileService {
           required: false,
           kind: variationThemes.length > 0 ? 'enum' : 'text',
           options: variationThemes.length > 0 ? ['', ...variationThemes] : undefined,
+          selectionOnly: true,
+          applicableParentage: ['VARIATION_PARENT'],
           width: 200,
           description: 'Required on Parent rows. Values from live schema for this product type.',
         },

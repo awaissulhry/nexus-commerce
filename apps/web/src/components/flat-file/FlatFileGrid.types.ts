@@ -13,6 +13,13 @@ export interface FlatFileColumn {
   options?: string[]
   /** Display labels for option values — keys are option values, values are human-readable names */
   optionLabels?: Record<string, string>
+  /**
+   * Which Amazon parentage levels this field applies to (undefined = all).
+   * Drives the listing guidance highlight in the grid.
+   */
+  applicableParentage?: string[]
+  /** Field usage level from the channel's schema (REQUIRED/RECOMMENDED/OPTIONAL) */
+  guidance?: string
   maxLength?: number
   width: number
   frozen?: boolean
@@ -121,6 +128,14 @@ export interface FlatFileGridProps {
 
   // Override display content for specific cells (return null = default rendering)
   renderCellContent?: RenderCellContent
+
+  /**
+   * Return a guidance level to shade cells that are not applicable / low-priority
+   * for the current row type or product category. Cell remains fully editable.
+   * - 'not-applicable' → medium gray bg + tooltip (field shouldn't be filled for this row)
+   * - 'optional'       → subtle gray bg (field is low-priority for this category)
+   */
+  getCellGuidance?: (col: FlatFileColumn, row: BaseRow) => 'not-applicable' | 'optional' | null
 
   // Extra content rendered below row # in the row header cell
   renderRowMeta?: (row: BaseRow, rowIdx: number) => React.ReactNode

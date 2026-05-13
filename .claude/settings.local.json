@@ -262,7 +262,15 @@
       "Bash(mv /tmp/cfe_trimmed.tsx /Users/awais/nexus-commerce/apps/web/src/app/products/_shared/ChannelFieldEditor.tsx)",
       "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_nvC3ELQx5Odc@ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require\" node /tmp/inspect_schema.mjs)",
       "Bash(pnpm --filter api tsc --noEmit)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(xargs cat)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_nvC3ELQx5Odc@ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require\" node *)",
+      "Bash(DATABASE_URL='postgresql://neondb_owner:npg_nvC3ELQx5Odc@ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require' node -e ' *)",
+      "Bash(sed -n '57,65p' /Users/awais/nexus-commerce/apps/web/src/app/bulk-operations/lib/find-replace.ts)",
+      "Bash(sed -n '27,50p' /Users/awais/nexus-commerce/apps/web/src/app/products/amazon-flat-file/FFFilterPanel.tsx)",
+      "Bash(sed -n '72,82p' /Users/awais/nexus-commerce/apps/web/src/app/products/amazon-flat-file/FFSavedViews.tsx)",
+      "Bash(sed -n '380,400p' /Users/awais/nexus-commerce/apps/api/src/services/amazon/flat-file.service.ts)",
+      "Bash(sed -n '588,625p' /Users/awais/nexus-commerce/apps/api/src/services/amazon/flat-file.service.ts)"
     ]
   }
 }

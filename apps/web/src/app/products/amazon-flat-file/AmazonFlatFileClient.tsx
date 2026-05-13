@@ -44,6 +44,10 @@ interface Column {
   options?: string[]
   /** true → must pick from list; false/undefined → combobox (free text allowed) */
   selectionOnly?: boolean
+  /** Which parentage levels this field applies to (undefined = all) */
+  applicableParentage?: string[]
+  /** Usage level from Amazon schema: REQUIRED / RECOMMENDED / OPTIONAL */
+  guidance?: string
   maxLength?: number
   width: number
 }
@@ -3175,6 +3179,16 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
         const isMatch = matchKeys.has(`${rowIdx}:${ci}`)
         const toneCls = toneMap.get(`${rowIdx}:${col.id}`) ? TONE_CLASSES[toneMap.get(`${rowIdx}:${col.id}`)! as keyof typeof TONE_CLASSES] : undefined
 
+        // Listing guidance: detect from applicableParentage on the column
+        const guidanceLevel = (() => {
+          if (!col.applicableParentage?.length) return null
+          const parentage = String(row.parentage_level ?? '')
+          const rowType = parentage.toLowerCase() === 'parent' ? 'VARIATION_PARENT'
+            : parentage.toLowerCase() === 'child' ? 'VARIATION_CHILD'
+            : 'STANDALONE'
+          return col.applicableParentage.includes(rowType) ? null : 'not-applicable' as const
+        })()
+
         return (
           <SpreadsheetCell
             key={col.id}
@@ -3196,6 +3210,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             clipboardEdges={clipboardEdges}
             isMatch={isMatch}
             toneCls={toneCls}
+            guidanceLevel={guidanceLevel}
             ri={rowIdx}
             ci={ci}
             onCellPointerDown={(shiftKey) => onCellPointerDown(rowIdx, ci, shiftKey)}
@@ -3383,6 +3398,8 @@ interface CellProps {
   isMatch?: boolean
   /** BF.2 — conditional formatting tone class */
   toneCls?: string
+  /** Listing guidance: not-applicable = dark gray; optional = light gray */
+  guidanceLevel?: 'not-applicable' | 'optional' | null
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
   onFillHandlePointerDown: () => void
@@ -3424,6 +3441,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
+  guidanceLevel,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate }: CellProps) {
   const displayValue = value != null ? String(value) : ''
@@ -3493,6 +3511,18 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     borderLeft:   clipboardEdges.left   ? '2px dashed #22c55e' : undefined,
   } : {}
 
+  const guidanceCls = !isActive && !isSelected && !isMatch && !toneCls
+    ? guidanceLevel === 'not-applicable' ? 'bg-slate-200 dark:bg-slate-700/70'
+    : guidanceLevel === 'optional'       ? 'bg-slate-100/80 dark:bg-slate-800/60'
+    : ''
+    : ''
+
+  const guidanceTitle = guidanceLevel === 'not-applicable'
+    ? col.applicableParentage?.length
+      ? `Not needed for this row type — typically set on ${col.applicableParentage.map((p) => p.replace('VARIATION_', '').toLowerCase()).join(' or ')} rows only`
+      : 'Not applicable for this product configuration'
+    : undefined
+
   const baseCls = cn(
     'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
     isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20'
@@ -3500,10 +3530,10 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
     : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10'
     : isMatch ? 'bg-yellow-100 dark:bg-yellow-900/30'
     : toneCls ? toneCls
-    : cellBg,
+    : guidanceCls || cellBg,
     isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
     isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
-    !isActive && !isSelected && !isMatch && !toneCls && (
+    !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel && (
       validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
       : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
       : ''
@@ -3687,7 +3717,7 @@ function SpreadsheetCell({ col, value, isActive, cellBg, width, cellHeight, ri, 
 
   return (
     <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ ...cellStyle, ...selStyle }} title={validIssue?.msg ?? col.description}>
+      style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
         isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}

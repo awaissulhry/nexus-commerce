@@ -277,6 +277,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           options: isEnum ? a.values : undefined,
           required: a.required || a.usage === 'REQUIRED',
           recommended: a.usage === 'RECOMMENDED',
+          // guidance propagates eBay's usage level so the grid can shade low-priority fields
+          guidance: (a.usage === 'REQUIRED' || a.usage === 'RECOMMENDED' || a.usage === 'OPTIONAL')
+            ? a.usage : 'OPTIONAL',
           width: isEnum ? 140 : a.maxLength && a.maxLength > 50 ? 200 : 130,
         };
       });

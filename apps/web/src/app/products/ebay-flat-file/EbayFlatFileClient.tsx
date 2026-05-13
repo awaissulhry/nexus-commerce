@@ -565,6 +565,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return false
   }, [])
 
+  // ── Listing guidance ──────────────────────────────────────────────────
+  const getCellGuidance = useCallback((col: FlatFileColumn, row: BaseRow): 'not-applicable' | 'optional' | null => {
+    // Best Offer floor/ceiling only meaningful when Best Offer is enabled
+    if (col.id === 'best_offer_floor' || col.id === 'best_offer_ceiling') {
+      const enabled = row.best_offer_enabled === true || row.best_offer_enabled === 'true'
+      if (!enabled) return 'not-applicable'
+    }
+    // Item specifics: use guidance from eBay category API
+    if (col.id.startsWith('aspect_') && col.guidance === 'OPTIONAL') return 'optional'
+    return null
+  }, [])
+
   // ── Slot: channel strip ────────────────────────────────────────────────
 
   const renderChannelStrip = useCallback(() => (
@@ -761,6 +773,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       onCellChange={onCellChange}
       renderCellContent={renderCellContent}
       onBeforeEditCell={onBeforeEditCell}
+      getCellGuidance={getCellGuidance}
       onReplicate={onReplicate}
       renderChannelStrip={renderChannelStrip}
       renderPushExtras={renderPushExtras}

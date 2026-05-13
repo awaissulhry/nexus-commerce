@@ -16,6 +16,8 @@ export interface EbayColumn {
   kind: EbayColumnKind
   options?: string[]
   optionLabels?: Record<string, string>
+  /** Usage level from eBay API (REQUIRED / RECOMMENDED / OPTIONAL) */
+  guidance?: string
   maxLength?: number
   width: number
   frozen?: boolean
@@ -378,6 +380,8 @@ export interface CategoryAspect {
   options?: string[]
   required: boolean
   recommended: boolean
+  /** Usage level from eBay API: REQUIRED / RECOMMENDED / OPTIONAL */
+  guidance?: string
   width: number
 }
 
@@ -397,6 +401,7 @@ export function buildCategoryColumns(aspects: CategoryAspect[]): EbayColumnGroup
       kind: a.kind,
       options: a.options,
       required: a.required,
+      guidance: a.guidance,
       width: a.width,
     })),
   }

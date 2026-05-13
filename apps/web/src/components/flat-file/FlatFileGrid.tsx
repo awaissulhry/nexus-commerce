@@ -254,6 +254,7 @@ interface CellInternalProps {
   clipboardEdges: { top: boolean; right: boolean; bottom: boolean; left: boolean } | null
   validIssue?: ValidationIssue; stickyLeft?: number
   isMatch?: boolean; toneCls?: string
+  guidanceLevel?: 'not-applicable' | 'optional' | null
   renderCellContent?: RenderCellContent
   onCellPointerDown: (shiftKey: boolean) => void
   onCellDoubleClick: () => void
@@ -270,6 +271,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
   isSelected, selEdges, isCorner, isFillTarget, fillTargetEdges,
   isEditing, editInitialChar, isClipboard, clipboardEdges,
   validIssue, stickyLeft, isMatch, toneCls,
+  guidanceLevel,
   renderCellContent,
   onCellPointerDown, onCellDoubleClick, onFillHandlePointerDown, onFillDrop,
   onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate,
@@ -330,6 +332,19 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     borderLeft:   clipboardEdges.left   ? '2px dashed #22c55e' : undefined,
   } : {}
 
+  // Guidance overlay — applied only when cell is not actively selected/highlighted
+  const guidanceCls = !isActive && !isSelected && !isMatch && !toneCls
+    ? guidanceLevel === 'not-applicable' ? 'bg-slate-200 dark:bg-slate-700/70'
+    : guidanceLevel === 'optional'       ? 'bg-slate-100/80 dark:bg-slate-800/60'
+    : ''
+    : ''
+
+  const guidanceTitle = guidanceLevel === 'not-applicable'
+    ? col.applicableParentage?.length
+      ? `Not needed for this row type — typically set on ${col.applicableParentage.map((p) => p.replace('VARIATION_', '').toLowerCase()).join(' or ')} rows only`
+      : 'Not applicable for this row / product configuration'
+    : undefined
+
   const baseCls = cn(
     'border-b border-r border-slate-200 dark:border-slate-700 relative transition-colors',
     isSelected ? 'bg-blue-100/60 dark:bg-blue-900/20'
@@ -337,10 +352,10 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
     : isFillTarget ? 'bg-blue-50/80 dark:bg-blue-900/10'
     : isMatch ? 'bg-yellow-100 dark:bg-yellow-900/30'
     : toneCls ? toneCls
-    : cellBg,
+    : guidanceCls || cellBg,
     isActive && !isEditing && 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-[5]',
     isEditing && 'ring-2 ring-inset ring-blue-500 z-[5]',
-    !isActive && !isSelected && !isMatch && !toneCls && (
+    !isActive && !isSelected && !isMatch && !toneCls && !guidanceLevel && (
       validIssue?.level === 'error' ? 'bg-red-100/80 dark:bg-red-950/30'
       : validIssue?.level === 'warn' ? 'bg-amber-50/80 dark:bg-amber-950/20'
       : ''
@@ -500,7 +515,7 @@ function SpreadsheetCell({ col, row, value, isActive, cellBg, width, cellHeight,
   const custom = renderCellContent?.(col, row, value, displayValue)
   return (
     <td {...tdShared} className={cn(baseCls, 'cursor-pointer hover:bg-white/50 dark:hover:bg-slate-700/30')}
-      style={{ ...cellStyle, ...selStyle }} title={validIssue?.msg ?? col.description}>
+      style={{ ...cellStyle, ...selStyle }} title={guidanceTitle ?? validIssue?.msg ?? col.description}>
       {fillHandle}
       <div className={cn('px-1.5 flex items-center text-xs truncate',
         isEmpty ? (col.required ? 'text-red-400 dark:text-red-500 italic' : 'text-slate-300 dark:text-slate-600') : 'text-slate-800 dark:text-slate-200')}
@@ -546,7 +561,7 @@ export default function FlatFileGrid({
   columnGroups, initialRows, makeBlankRow, minRows = 15,
   getGroupKey, validate,
   onSave, onReload, onCellChange,
-  renderCellContent, renderRowMeta, onBeforeEditCell,
+  renderCellContent, renderRowMeta, onBeforeEditCell, getCellGuidance,
   onReplicate,
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
@@ -688,11 +703,13 @@ export default function FlatFileGrid({
   const selEndRef            = useRef<{ ri: number; ci: number } | null>(null)
   const isEditingRef         = useRef(false)
   const onBeforeEditCellRef  = useRef(onBeforeEditCell)
+  const getCellGuidanceRef   = useRef(getCellGuidance)
 
   useEffect(() => { selAnchorRef.current = selAnchor }, [selAnchor])
   useEffect(() => { selEndRef.current    = selEnd }, [selEnd])
   useEffect(() => { isEditingRef.current = isEditing }, [isEditing])
   useEffect(() => { onBeforeEditCellRef.current = onBeforeEditCell }, [onBeforeEditCell])
+  useEffect(() => { getCellGuidanceRef.current  = getCellGuidance },  [getCellGuidance])
 
   // ── Derived state ──────────────────────────────────────────────────────
 
@@ -1606,6 +1623,7 @@ export default function FlatFileGrid({
                           const isMatch     = matchKeys.has(`${ri}:${ci}`)
                           const toneCls     = toneMap.get(`${ri}:${col.id}`) ? TONE_CLASSES[toneMap.get(`${ri}:${col.id}`)! as keyof typeof TONE_CLASSES] : undefined
                           const cellBg      = stickyLeft !== undefined ? gColor(groupColor).band : gColor(groupColor).cell
+                          const guidanceLevel = getCellGuidanceRef.current?.(col, row) ?? null
 
                           return (
                             <SpreadsheetCell key={col.id}
@@ -1619,6 +1637,7 @@ export default function FlatFileGrid({
                               isClipboard={isCB} clipboardEdges={cbEdges}
                               isMatch={isMatch} toneCls={toneCls}
                               stickyLeft={stickyLeft}
+                              guidanceLevel={guidanceLevel}
                               renderCellContent={renderCellContent}
                               onCellPointerDown={(shiftKey) => handleCellPointerDown(ri, ci, shiftKey)}
                               onCellDoubleClick={() => handleCellDoubleClick(ri, ci)}
