@@ -2,20 +2,19 @@
 
 import { useCallback, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowDownToLine, ArrowRightLeft, Loader2, Search, Send, X,
+  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, Loader2, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
-import type { BaseRow, CellProps, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx } from '@/components/flat-file/FlatFileGrid.types'
+import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { ChannelStrip } from './ChannelStrip'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
   type CategoryAspect, type EbayColumnGroup,
 } from './ebay-columns'
-import { EbayCell, type EbayCellProps } from './EbayCell'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -428,20 +427,107 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     }
   }, [loadCategorySchema])
 
-  // ── Bound cell component (closures inject eBay-specific callbacks) ─────
+  // ── Market link URLs ───────────────────────────────────────────────────
+  const MARKET_URLS: Record<string, string> = {
+    IT: 'https://www.ebay.it/itm/', DE: 'https://www.ebay.de/itm/',
+    FR: 'https://www.ebay.fr/itm/', ES: 'https://www.ebay.es/itm/',
+    UK: 'https://www.ebay.co.uk/itm/',
+  }
 
-  const BoundEbayCell = useMemo(() => {
-    return function BoundEbayCellInner(props: CellProps) {
-      const rowId = props.row._rowId
+  // ── Cell content overrides ─────────────────────────────────────────────
+  const renderCellContent = useCallback<RenderCellContent>((col, _row, value, displayVal) => {
+    // Market status badge
+    if (col.id.endsWith('_status') && col.readOnly) {
+      return displayVal
+        ? <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium',
+            displayVal.toUpperCase() === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300'
+            : displayVal.toUpperCase() === 'DRAFT' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
+            : displayVal.toUpperCase() === 'ERROR' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-300'
+            : 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400')}>{displayVal}</span>
+        : <span className="text-slate-300 text-[10px]">—</span>
+    }
+    // Market item ID with external link
+    if (col.id.endsWith('_item_id') && col.readOnly) {
+      const marketCode = col.id.slice(0, 2).toUpperCase()
+      const baseUrl = MARKET_URLS[marketCode] ?? ''
+      return displayVal
+        ? <a href={`${baseUrl}${displayVal}`} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-mono text-[10px]"
+            onClick={(e) => e.stopPropagation()}>
+            {displayVal}<ExternalLink className="w-2.5 h-2.5 shrink-0" />
+          </a>
+        : <span className="text-slate-300 text-[10px]">—</span>
+    }
+    // Title with char count
+    if (col.id === 'title') {
+      const len = displayVal.length
       return (
-        <EbayCell
-          {...props as EbayCellProps}
-          onOpenDescription={() => setDescModal({ rowId })}
-          onOpenCategorySearch={() => { setCategorySearchRowId(rowId); setCategorySearchOpen(true) }}
-        />
+        <>
+          <span className="flex-1 truncate">{displayVal}</span>
+          {len > 0 && <span className={cn('text-[10px] shrink-0', len > 80 ? 'text-red-500' : 'text-slate-400')}>{len}</span>}
+        </>
       )
     }
-  }, []) // closures over setDescModal / setCategorySearchOpen / setCategorySearchRowId
+    // Description preview
+    if (col.id === 'description') {
+      return (
+        <span className="truncate text-slate-400 italic text-[10px]">
+          {displayVal ? displayVal.replace(/<[^>]+>/g, '').slice(0, 40) + '…' : 'Double-click to edit…'}
+        </span>
+      )
+    }
+    // Category ID
+    if (col.id === 'category_id') {
+      return displayVal
+        ? <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
+        : <span className="text-slate-300 text-[10px]">Double-click to search…</span>
+    }
+    // Boolean display
+    if (col.kind === 'boolean') {
+      return (value === true || value === 'true')
+        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+        : <span className="text-slate-300">—</span>
+    }
+    // listing_status badge
+    if (col.id === 'listing_status') {
+      return displayVal
+        ? <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium',
+            displayVal.toUpperCase() === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300'
+            : displayVal.toUpperCase() === 'DRAFT' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
+            : 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/40 dark:text-red-300')}>{displayVal}</span>
+        : null
+    }
+    // last_pushed_at date
+    if (col.id === 'last_pushed_at') {
+      const d = displayVal ? new Date(displayVal) : null
+      return <span className="truncate text-slate-400 text-[10px]">
+        {d ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+      </span>
+    }
+    // sync_status icon
+    if (col.id === 'sync_status') {
+      if (displayVal === 'synced')  return <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+      if (displayVal === 'pending') return <Loader2 className="h-3 w-3 text-amber-500 animate-spin" />
+      if (displayVal === 'error')   return <AlertCircle className="h-3 w-3 text-red-500" />
+      return <span className="text-slate-300 text-[10px]">—</span>
+    }
+    return null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Edit intercept for modal-based editing ─────────────────────────────
+  const onBeforeEditCell = useCallback((col: FlatFileColumn, row: BaseRow): boolean => {
+    if (col.kind === 'longtext') {
+      setDescModal({ rowId: row._rowId })
+      return true
+    }
+    if (col.id === 'category_id') {
+      setCategorySearchRowId(row._rowId)
+      setCategorySearchOpen(true)
+      return true
+    }
+    return false
+  }, [])
 
   // ── Slot: channel strip ────────────────────────────────────────────────
 
@@ -632,12 +718,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       initialRows={initialRows as BaseRow[]}
       makeBlankRow={makeBlankRow}
       minRows={15}
-      CellComponent={BoundEbayCell}
       getGroupKey={getGroupKey}
       validate={validateRows}
       onSave={onSave}
       onReload={onReload}
       onCellChange={onCellChange}
+      renderCellContent={renderCellContent}
+      onBeforeEditCell={onBeforeEditCell}
       onReplicate={onReplicate}
       renderChannelStrip={renderChannelStrip}
       renderPushExtras={renderPushExtras}
