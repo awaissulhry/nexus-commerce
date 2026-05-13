@@ -79,6 +79,25 @@ interface DeleteListingsItemOptions {
   marketplaceId: string
 }
 
+/**
+ * SP-API endpoint hostnames use regional slugs (na / eu / fe), not AWS
+ * region names. Accept either form so AMAZON_REGION=us-east-1 (typical
+ * Railway env) and AMAZON_REGION=na both work.
+ */
+export function mapAwsRegionToSpApiSlug(region: string): string {
+  const r = region.toLowerCase()
+  // Already a slug
+  if (r === 'na' || r === 'eu' || r === 'fe') return r
+  // North America: us-*, ca-*
+  if (r.startsWith('us-') || r.startsWith('ca-')) return 'na'
+  // Far East: ap-*
+  if (r.startsWith('ap-')) return 'fe'
+  // Europe: eu-*, me-*, af-*
+  if (r.startsWith('eu-') || r.startsWith('me-') || r.startsWith('af-')) return 'eu'
+  // Unknown — default to na (most common for Xavia / US seller account)
+  return 'na'
+}
+
 export class AmazonSpApiClient {
   private accessToken: string | null = null
   private tokenExpiresAt: number = 0
@@ -94,7 +113,9 @@ export class AmazonSpApiClient {
     this.clientId = process.env.AMAZON_LWA_CLIENT_ID || process.env.AMAZON_CLIENT_ID || ''
     this.clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET || process.env.AMAZON_CLIENT_SECRET || ''
     this.refreshToken = process.env.AMAZON_REFRESH_TOKEN || ''
-    this.region = process.env.AMAZON_REGION || 'us-east-1'
+    // SP-API endpoint slugs are 'na' | 'eu' | 'fe' — not AWS region names.
+    // Map AWS region names → SP-API slugs so AMAZON_REGION=us-east-1 works.
+    this.region = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'na')
 
     if (!this.clientId || !this.clientSecret || !this.refreshToken) {
       logger.warn('Amazon SP-API credentials not fully configured', {

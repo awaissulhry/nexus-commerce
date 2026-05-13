@@ -26,6 +26,100 @@ async function spApiRequest<T>(
 }
 
 export default async function amazonNotificationsRoutes(app: FastifyInstance): Promise<void> {
+
+  // ── GET /api/admin/sqs-diagnostic ─────────────────────────────────
+  app.get('/admin/sqs-diagnostic', async (_req, reply) => {
+    const { mapAwsRegionToSpApiSlug } = await import('../clients/amazon-sp-api.client.js')
+    const {
+      SQSClient,
+      GetQueueAttributesCommand,
+    } = await import('@aws-sdk/client-sqs')
+
+    const queueUrl  = process.env.AMAZON_SQS_QUEUE_URL ?? null
+    const accessKey = process.env.AWS_ACCESS_KEY_ID ?? null
+    const secretKey = process.env.AWS_SECRET_ACCESS_KEY ?? null
+    const awsRegion = process.env.AWS_REGION ?? null
+    const amzRegion = process.env.AMAZON_REGION ?? null
+    const lwaId     = process.env.AMAZON_LWA_CLIENT_ID ?? process.env.AMAZON_CLIENT_ID ?? null
+    const spSlug    = mapAwsRegionToSpApiSlug(amzRegion ?? awsRegion ?? 'na')
+    const spApiHost = `sellingpartnerapi-${spSlug}.amazon.com`
+
+    // Mask helpers
+    const last4  = (s: string | null) => s ? `...${s.slice(-4)}` : null
+    const maskUrl = (s: string | null) => s
+      ? s.replace(/\/\d{10,}/g, '/<accountId>') // hide account ID in URL
+      : null
+
+    const diag: Record<string, unknown> = {
+      env: {
+        AMAZON_SQS_QUEUE_URL:      maskUrl(queueUrl),
+        AWS_ACCESS_KEY_ID:         last4(accessKey),
+        AWS_SECRET_ACCESS_KEY:     last4(secretKey),
+        AWS_REGION:                awsRegion,
+        AMAZON_REGION:             amzRegion,
+        AMAZON_LWA_CLIENT_ID:      last4(lwaId),
+        NEXUS_ENABLE_AMAZON_SQS_POLL: process.env.NEXUS_ENABLE_AMAZON_SQS_POLL ?? null,
+      },
+      spApi: {
+        resolvedSlug: spSlug,
+        resolvedHost: spApiHost,
+        note: amzRegion
+          ? `AMAZON_REGION="${amzRegion}" → slug="${spSlug}"`
+          : 'AMAZON_REGION not set — defaulted to "na"',
+      },
+      sqs: { status: 'not tested', error: null as string | null },
+      spApiLwa: { status: 'not tested', error: null as string | null },
+    }
+
+    // Test 1 — SQS getQueueAttributes
+    if (queueUrl && accessKey && secretKey) {
+      try {
+        const sqsRegion = (awsRegion ?? queueUrl.match(/sqs\.([^.]+)\.amazonaws\.com/)?.[1] ?? 'us-east-1')
+        const client = new SQSClient({
+          region: sqsRegion,
+          credentials: {
+            accessKeyId: accessKey,
+            secretAccessKey: secretKey,
+          },
+        })
+        const resp = await client.send(new GetQueueAttributesCommand({
+          QueueUrl: queueUrl,
+          AttributeNames: ['ApproximateNumberOfMessages', 'QueueArn'],
+        }))
+        diag.sqs = {
+          status: 'ok',
+          queueArn: resp.Attributes?.QueueArn,
+          approximateMessages: resp.Attributes?.ApproximateNumberOfMessages,
+          sqsRegionUsed: sqsRegion,
+        }
+      } catch (err: any) {
+        diag.sqs = { status: 'failed', error: err?.message ?? String(err) }
+      }
+    } else {
+      diag.sqs = { status: 'skipped', error: 'AMAZON_SQS_QUEUE_URL or AWS credentials missing' }
+    }
+
+    // Test 2 — SP-API LWA token fetch (proves LWA creds + network to api.amazon.com)
+    if (lwaId) {
+      try {
+        const { amazonSpApiClient } = await import('../clients/amazon-sp-api.client.js')
+        // getAccessToken is private — call a known cheap endpoint instead
+        await amazonSpApiClient.request('GET', '/notifications/v1/destinations')
+        diag.spApiLwa = { status: 'ok', host: spApiHost }
+      } catch (err: any) {
+        diag.spApiLwa = {
+          status: 'failed',
+          host: spApiHost,
+          error: err?.message ?? String(err),
+        }
+      }
+    } else {
+      diag.spApiLwa = { status: 'skipped', error: 'AMAZON_LWA_CLIENT_ID missing' }
+    }
+
+    return reply.send(diag)
+  })
+
   app.post('/admin/setup-amazon-notifications', async (req, reply) => {
     if (!isSqsConfigured()) {
       return reply.status(400).send({
