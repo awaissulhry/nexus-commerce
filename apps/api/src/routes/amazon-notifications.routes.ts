@@ -16,6 +16,7 @@ import { isSqsConfigured } from '../services/amazon-sqs.service.js'
 import { logger } from '../utils/logger.js'
 
 const NOTIFICATIONS_SCOPE = 'sellingpartnerapi::notifications'
+const sub404 = (err: any) => err?.statusCode === 404 || String(err?.message).includes('404')
 
 // Grantless SP-API call — used for destination management (GET/POST /notifications/v1/destinations)
 async function spApiGrantless<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
@@ -148,6 +149,27 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       }
     } else {
       diag.spApiLwa = { status: 'skipped', error: 'AMAZON_LWA_CLIENT_ID missing' }
+    }
+
+    // Test 3 — check existing SP-API subscription state (seller token)
+    if (lwaId) {
+      try {
+        const sub = await spApiRequest<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE')
+        diag.spApiSubscription = {
+          status: 'ok',
+          subscriptionId: sub.payload?.subscriptionId ?? null,
+          destinationId: sub.payload?.destinationId ?? null,
+          active: !!sub.payload?.subscriptionId,
+        }
+      } catch (err: any) {
+        diag.spApiSubscription = {
+          status: sub404(err) ? 'not_found' : 'failed',
+          active: false,
+          error: sub404(err) ? 'No ORDER_CHANGE subscription exists yet' : err?.message ?? String(err),
+        }
+      }
+    } else {
+      diag.spApiSubscription = { status: 'skipped' }
     }
 
     return reply.send(diag)
