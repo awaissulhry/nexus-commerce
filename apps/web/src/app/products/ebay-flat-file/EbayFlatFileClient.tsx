@@ -6,8 +6,9 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Copy, Image as ImageIcon, Loader2, RefreshCw, Send, Undo2, Redo2,
-  Search, ArrowDownToLine, ArrowRightLeft, Replace, SlidersHorizontal, Sparkles, X,
+  ClipboardPaste, Copy, ExternalLink, Image as ImageIcon, Loader2, RefreshCw,
+  Send, Undo2, Redo2, Search, ArrowDownToLine, ArrowRightLeft, Replace,
+  SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -24,9 +25,11 @@ import { AIBulkModal } from '../amazon-flat-file/AIBulkModal'
 import { FFReplicateModal } from '../amazon-flat-file/FFReplicateModal'
 import { ChannelStrip } from './ChannelStrip'
 import {
-  EBAY_COLUMN_GROUPS,
+  EBAY_FIXED_GROUPS,
+  MARKET_COLUMN_GROUPS,
   getAllEbayColumns,
-  EBAY_MARKETPLACES,
+  buildCategoryColumns,
+  type CategoryAspect,
   type EbayColumn,
   type EbayColumnGroup,
 } from './ebay-columns'
@@ -60,12 +63,6 @@ export interface EbayRow {
   image_4?: string
   image_5?: string
   image_6?: string
-  brand?: string
-  colour?: string
-  size?: string
-  material?: string
-  model_number?: string
-  custom_label?: string
   fulfillment_policy_id?: string
   payment_policy_id?: string
   return_policy_id?: string
@@ -73,11 +70,38 @@ export interface EbayRow {
   last_pushed_at?: string
   sync_status?: string
   platformProductId?: string
+  // per-market flat fields
+  it_price?: number | null
+  it_qty?: number | null
+  it_item_id?: string | null
+  it_status?: string | null
+  it_listing_id?: string | null
+  de_price?: number | null
+  de_qty?: number | null
+  de_item_id?: string | null
+  de_status?: string | null
+  de_listing_id?: string | null
+  fr_price?: number | null
+  fr_qty?: number | null
+  fr_item_id?: string | null
+  fr_status?: string | null
+  fr_listing_id?: string | null
+  es_price?: number | null
+  es_qty?: number | null
+  es_item_id?: string | null
+  es_status?: string | null
+  es_listing_id?: string | null
+  uk_price?: number | null
+  uk_qty?: number | null
+  uk_item_id?: string | null
+  uk_status?: string | null
+  uk_listing_id?: string | null
   [key: string]: unknown
 }
 
 interface PushResult {
   sku: string
+  market: string
   status: 'PUSHED' | 'ERROR'
   message: string
   itemId?: string
@@ -89,6 +113,13 @@ interface FeedStatus {
   completionDate?: string
   summaryCount?: number
   failureCount?: number
+}
+
+interface CategoryResult {
+  id: string
+  name: string
+  path: string
+  matchScore: number
 }
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -111,13 +142,23 @@ const GROUP_COLORS: Record<string, { header: string; cell: string }> = {
   teal:    { header: 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-200', cell: 'bg-teal-50/40 dark:bg-teal-950/10' },
   amber:   { header: 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200', cell: 'bg-amber-50/40 dark:bg-amber-950/10' },
   sky:     { header: 'bg-sky-100 dark:bg-sky-900/50 text-sky-800 dark:text-sky-200', cell: 'bg-sky-50/40 dark:bg-sky-950/10' },
+  violet:  { header: 'bg-violet-100 dark:bg-violet-900/50 text-violet-800 dark:text-violet-200', cell: 'bg-violet-50/40 dark:bg-violet-950/10' },
 }
 
 function gColor(color: string) {
   return GROUP_COLORS[color] ?? GROUP_COLORS.slate
 }
 
-function statusBadgeCls(status?: string) {
+// Market code → eBay listing URL base
+const MARKET_URLS: Record<string, string> = {
+  IT: 'https://www.ebay.it/itm/',
+  DE: 'https://www.ebay.de/itm/',
+  FR: 'https://www.ebay.fr/itm/',
+  ES: 'https://www.ebay.es/itm/',
+  UK: 'https://www.ebay.co.uk/itm/',
+}
+
+function statusBadgeCls(status?: string | null) {
   switch (status?.toUpperCase()) {
     case 'ACTIVE': return 'bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300'
     case 'DRAFT':  return 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300'
@@ -175,11 +216,169 @@ function DescriptionModal({ value, onSave, onClose }: DescriptionModalProps) {
   )
 }
 
+// ── Category Search Panel ─────────────────────────────────────────────
+
+interface CategorySearchPanelProps {
+  marketplace: string
+  onSelect: (id: string, name: string) => void
+  onClose: () => void
+}
+
+function CategorySearchPanel({ marketplace, onSelect, onClose }: CategorySearchPanelProps) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<CategoryResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.trim().length < 2) { setResults([]); return }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
+        const res = await fetch(
+          `${getBackendUrl()}/api/ebay/flat-file/category-search?q=${encodeURIComponent(query)}&marketplace=${mpId}`,
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json() as { categories: CategoryResult[] }
+        setResults(json.categories)
+      } catch {
+        setResults([])
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+  }, [query, marketplace])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-32"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-[500px] max-w-full border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-2 p-3 border-b border-slate-200 dark:border-slate-700">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && onClose()}
+            placeholder="Search eBay categories…"
+            className="flex-1 text-sm bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
+          />
+          {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />}
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {results.length > 0 && (
+          <ul className="max-h-72 overflow-y-auto py-1">
+            {results.map((cat) => (
+              <li key={cat.id}>
+                <button
+                  type="button"
+                  onClick={() => { onSelect(cat.id, cat.name); onClose() }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
+                    {cat.path}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono">ID: {cat.id}</div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {query.trim().length >= 2 && !loading && results.length === 0 && (
+          <div className="px-4 py-3 text-xs text-slate-400">No categories found. Try a different term.</div>
+        )}
+        {query.trim().length < 2 && (
+          <div className="px-4 py-3 text-xs text-slate-400">Type at least 2 characters to search…</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Multi-market Publish Panel ────────────────────────────────────────
+
+interface PublishPanelProps {
+  selectedCount: number
+  publishTargets: string[]
+  onChangeTargets: (targets: string[]) => void
+  onPublish: () => void
+  pushing: boolean
+  onClose: () => void
+}
+
+const ALL_MARKETS = [
+  { code: 'IT', label: 'Italy (eBay.it)' },
+  { code: 'DE', label: 'Germany (eBay.de)' },
+  { code: 'FR', label: 'France (eBay.fr)' },
+  { code: 'ES', label: 'Spain (eBay.es)' },
+  { code: 'UK', label: 'UK (eBay.co.uk)' },
+]
+
+function PublishPanel({ selectedCount, publishTargets, onChangeTargets, onPublish, pushing, onClose }: PublishPanelProps) {
+  function toggle(code: string) {
+    onChangeTargets(
+      publishTargets.includes(code)
+        ? publishTargets.filter((m) => m !== code)
+        : [...publishTargets, code],
+    )
+  }
+
+  return (
+    <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Push to markets</span>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="space-y-1.5">
+        {ALL_MARKETS.map((m) => (
+          <label key={m.code} className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-blue-600"
+              checked={publishTargets.includes(m.code)}
+              onChange={() => toggle(m.code)}
+            />
+            <span className="text-xs text-slate-700 dark:text-slate-300">{m.label}</span>
+          </label>
+        ))}
+      </div>
+      <p className="text-[10px] text-slate-400">
+        {selectedCount > 0 ? `${selectedCount} selected rows` : 'All rows'} will be pushed to checked markets.
+      </p>
+      <Button
+        size="sm"
+        className="w-full"
+        disabled={publishTargets.length === 0 || pushing}
+        loading={pushing}
+        onClick={onPublish}
+      >
+        <Send className="w-3.5 h-3.5 mr-1.5" />
+        Push to {publishTargets.length > 0 ? publishTargets.join(', ') : 'markets'}
+      </Button>
+    </div>
+  )
+}
+
 // ── SpreadsheetCell ────────────────────────────────────────────────────
 
 interface CellProps {
   col: EbayColumn
   value: unknown
+  row: EbayRow
   isActive: boolean
   isSelected: boolean
   cfClass?: string
@@ -187,10 +386,12 @@ interface CellProps {
   onChange: (v: unknown) => void
   onActivate: () => void
   onOpenDescription: () => void
+  onOpenCategorySearch: () => void
 }
 
 function SpreadsheetCell({
-  col, value, isActive, isSelected, cfClass, rowBandClass, onChange, onActivate, onOpenDescription,
+  col, value, isActive, isSelected, cfClass, rowBandClass,
+  onChange, onActivate, onOpenDescription, onOpenCategorySearch,
 }: CellProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -202,9 +403,10 @@ function SpreadsheetCell({
   const startEdit = useCallback(() => {
     if (isReadOnly) return
     if (col.kind === 'longtext') { onOpenDescription(); return }
+    if (col.id === 'category_id') { onOpenCategorySearch(); return }
     setDraft(displayVal)
     setEditing(true)
-  }, [isReadOnly, col.kind, displayVal, onOpenDescription])
+  }, [isReadOnly, col.kind, col.id, displayVal, onOpenDescription, onOpenCategorySearch])
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -283,6 +485,47 @@ function SpreadsheetCell({
     )
   }
 
+  // ── Market-specific cell rendering ─────────────────────────────────
+
+  // Status columns for markets (it_status, de_status, etc.)
+  if (col.id.endsWith('_status') && col.readOnly) {
+    return (
+      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+        {displayVal ? (
+          <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>
+            {displayVal}
+          </span>
+        ) : (
+          <span className="text-slate-300 text-[10px]">—</span>
+        )}
+      </td>
+    )
+  }
+
+  // Item ID columns for markets (it_item_id, de_item_id, etc.) — external link
+  if (col.id.endsWith('_item_id') && col.readOnly) {
+    const marketCode = col.id.slice(0, 2).toUpperCase()
+    const baseUrl = MARKET_URLS[marketCode] ?? ''
+    return (
+      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+        {displayVal ? (
+          <a
+            href={`${baseUrl}${displayVal}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-mono text-[10px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {displayVal}
+            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+          </a>
+        ) : (
+          <span className="text-slate-300 text-[10px]">—</span>
+        )}
+      </td>
+    )
+  }
+
   // Title cell: show char count
   if (col.id === 'title') {
     const len = displayVal.length
@@ -316,6 +559,24 @@ function SpreadsheetCell({
         <span className="truncate text-slate-400 italic text-[10px]">
           {displayVal ? displayVal.replace(/<[^>]+>/g, '').slice(0, 40) + '…' : 'Double-click to edit…'}
         </span>
+      </td>
+    )
+  }
+
+  // Category ID: show with search trigger hint
+  if (col.id === 'category_id') {
+    return (
+      <td
+        className={cellBase}
+        style={{ minWidth: col.width, maxWidth: col.width }}
+        onClick={onActivate}
+        onDoubleClick={onOpenCategorySearch}
+      >
+        {displayVal ? (
+          <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
+        ) : (
+          <span className="text-slate-300 text-[10px]">Double-click to search…</span>
+        )}
       </td>
     )
   }
@@ -379,13 +640,14 @@ function SpreadsheetCell({
 
 interface GroupHeaderProps {
   row: EbayRow
-  allColumns: EbayColumn[]
   bandClass: string
   isExpanded: boolean
   onToggle: () => void
+  showImage: boolean
+  imageSize: number
 }
 
-function GroupHeader({ row, allColumns: _allColumns, bandClass, isExpanded, onToggle }: GroupHeaderProps) {
+function GroupHeader({ row, bandClass, isExpanded, onToggle, showImage, imageSize }: GroupHeaderProps) {
   return (
     <tr className={cn('border-b border-slate-200 dark:border-slate-700', bandClass)}>
       <td colSpan={99} className="px-3 py-1">
@@ -410,12 +672,13 @@ function GroupHeader({ row, allColumns: _allColumns, bandClass, isExpanded, onTo
               {row.listing_status}
             </span>
           )}
-          {row.image_1 && (
+          {showImage && row.image_1 && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={row.image_1}
               alt=""
-              className="h-6 w-6 rounded object-cover border border-slate-200 dark:border-slate-700"
+              style={{ width: imageSize, height: imageSize }}
+              className="rounded object-cover border border-slate-200 dark:border-slate-700"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
             />
           )}
@@ -463,13 +726,11 @@ function validateRows(rows: EbayRow[]): ValidationIssue[] {
     if (!row.sku) issues.push({ level: 'error', sku: '?', field: 'sku', msg: 'SKU is required' })
     if (!row.title) issues.push({ level: 'warn', sku: row.sku, field: 'title', msg: 'Title is empty' })
     if (row.title && row.title.length > 80) issues.push({ level: 'error', sku: row.sku, field: 'title', msg: `Title exceeds 80 chars (${row.title.length})` })
-    if (!row.price || Number(row.price) <= 0) issues.push({ level: 'warn', sku: row.sku, field: 'price', msg: 'Price is 0 or missing' })
-    if (row.quantity == null || Number(row.quantity) < 0) issues.push({ level: 'warn', sku: row.sku, field: 'quantity', msg: 'Quantity is missing or negative' })
   }
   return issues
 }
 
-// ── Column group pill badge colours (mirrors Amazon flat file GROUP_COLORS) ──
+// ── Column group pill badge colours ───────────────────────────────────
 
 const GROUP_BADGE: Record<string, string> = {
   slate:   'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700',
@@ -487,7 +748,6 @@ const GROUP_BADGE: Record<string, string> = {
 function gBadge(color: string) { return GROUP_BADGE[color] ?? GROUP_BADGE.slate }
 
 // ── TbBtn ─────────────────────────────────────────────────────────────
-// Icon-only toolbar button — identical contract to Amazon flat file's TbBtn.
 
 interface TbBtnProps {
   icon: React.ReactNode
@@ -524,7 +784,6 @@ function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
 }
 
 // ── MenuDropdown ─────────────────────────────────────────────────────
-// App-menu style dropdown — identical contract to Amazon flat file's MenuDropdown.
 
 interface MenuItem {
   label?: string
@@ -605,7 +864,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const router = useRouter()
   const { toast } = useToast()
 
-  const [marketplace, setMarketplace] = useState(initialMarketplace)
+  const [marketplace] = useState(initialMarketplace)
   const [rows, setRows] = useState<EbayRow[]>(initialRows)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -624,7 +883,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [showValidation, setShowValidation] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // BM.1 — column group pills (mirrors Amazon flat file)
+  // Column group pills
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('eff-closed-groups') ?? '[]')) } catch { return new Set() }
   })
@@ -636,7 +895,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Sort
   const [sortPanelOpen, setSortPanelOpen] = useState(false)
   const [sortConfig, setSortConfig] = useState<Array<{ id: string; colId: string; mode: 'asc' | 'desc' }>>([])
-  void setSortConfig // wired when sort panel ships
+  void setSortConfig
 
   // Save flash
   const [saveFlash, setSaveFlash] = useState(false)
@@ -647,7 +906,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Replicate modal
   const [replicateOpen, setReplicateOpen] = useState(false)
 
-  // Smart paste (clipboard header-mapping mode)
+  // Smart paste
   const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
     try { return localStorage.getItem('eff-smart-paste') === '1' } catch { return false }
   })
@@ -664,7 +923,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
   const [fetching, setFetching] = useState(false)
 
-  // Collapsed row groups (platformProductId)
+  // Collapsed row groups
   const [collapsedRowGroups, setCollapsedRowGroups] = useState<Set<string>>(new Set())
 
   // Description editor
@@ -673,25 +932,75 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // Push results
   const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null)
 
+  // Publish panel
+  const [publishPanelOpen, setPublishPanelOpen] = useState(false)
+  const [publishTargets, setPublishTargets] = useState<string[]>(['IT'])
+
+  // Category search panel
+  const [categorySearchOpen, setCategorySearchOpen] = useState(false)
+  const [categorySearchRowId, setCategorySearchRowId] = useState<string | null>(null)
+
+  // Dynamic category columns — keyed by categoryId
+  const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
+  const [categoryColumns, setCategoryColumns] = useState<EbayColumnGroup | null>(null)
+
   // Undo/redo
   const historyRef = useRef<EbayRow[][]>([initialRows])
   const historyIdx = useRef(0)
 
+  // ── Category schema loading ───────────────────────────────────────────
+
+  const loadCategorySchema = useCallback(async (categoryId: string) => {
+    if (!categoryId) { setCategoryColumns(null); return }
+    if (categoryColumnsCache.has(categoryId)) {
+      setCategoryColumns(categoryColumnsCache.get(categoryId)!)
+      return
+    }
+    try {
+      const mpId = marketplace.startsWith('EBAY_') ? marketplace : `EBAY_${marketplace}`
+      const res = await fetch(
+        `${getBackendUrl()}/api/ebay/flat-file/category-schema?categoryId=${encodeURIComponent(categoryId)}&marketplace=${mpId}`,
+      )
+      if (!res.ok) return
+      const json = await res.json() as { aspects: CategoryAspect[] }
+      const group = buildCategoryColumns(json.aspects)
+      setCategoryColumnsCache((prev) => new Map(prev).set(categoryId, group))
+      setCategoryColumns(group)
+    } catch {
+      // Silently fail — category schema is optional
+    }
+  }, [marketplace, categoryColumnsCache])
+
+  // Load schema when rows change and they share a consistent category_id
+  useEffect(() => {
+    const cats = [...new Set(rows.map((r) => r.category_id).filter(Boolean))]
+    if (cats.length === 1 && cats[0]) {
+      void loadCategorySchema(cats[0])
+    }
+  }, [rows, loadCategorySchema])
+
   // ── Derived ───────────────────────────────────────────────────────────
+
+  const allColumnGroups = useMemo<EbayColumnGroup[]>(() => {
+    const fixed = EBAY_FIXED_GROUPS
+    const itemSpecifics = categoryColumns ? [categoryColumns] : []
+    const markets = MARKET_COLUMN_GROUPS
+    return [...fixed, ...itemSpecifics, ...markets]
+  }, [categoryColumns])
 
   const allColumns = useMemo(() => getAllEbayColumns(), [])
 
   const orderedGroups = useMemo<EbayColumnGroup[]>(() => {
-    if (!groupOrder.length) return EBAY_COLUMN_GROUPS
-    const map = new Map(EBAY_COLUMN_GROUPS.map((g) => [g.id, g]))
+    if (!groupOrder.length) return allColumnGroups
+    const map = new Map(allColumnGroups.map((g) => [g.id, g]))
     const ordered = groupOrder.map((id) => map.get(id)).filter(Boolean) as EbayColumnGroup[]
-    const rest = EBAY_COLUMN_GROUPS.filter((g) => !groupOrder.includes(g.id))
+    const rest = allColumnGroups.filter((g) => !groupOrder.includes(g.id))
     return [...ordered, ...rest]
-  }, [groupOrder])
+  }, [groupOrder, allColumnGroups])
 
   const openGroups = useMemo(
-    () => new Set(EBAY_COLUMN_GROUPS.map((g) => g.id).filter((id) => !closedGroups.has(id))),
-    [closedGroups],
+    () => new Set(allColumnGroups.map((g) => g.id).filter((id) => !closedGroups.has(id))),
+    [closedGroups, allColumnGroups],
   )
 
   const visibleGroups = useMemo(
@@ -714,7 +1023,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return groups
   }, [rows])
 
-  // Filtered rows based on search + filter
+  // Filtered rows
   const filteredRows = useMemo(() => {
     let result = rows
     if (searchQuery) {
@@ -758,14 +1067,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     )
     pushHistory(nextRows)
     setRows(nextRows)
+
+    // If category_id changed, load new schema
+    if (colId === 'category_id' && typeof value === 'string' && value) {
+      void loadCategorySchema(value)
+    }
   }
 
   // ── API calls ─────────────────────────────────────────────────────────
 
-  async function loadRows(mp: string) {
+  async function loadRows() {
     setLoading(true)
     try {
-      const qs = new URLSearchParams({ marketplace: mp })
+      const qs = new URLSearchParams()
       if (familyId) qs.set('familyId', familyId)
       const res = await fetch(`${getBackendUrl()}/api/ebay/flat-file/rows?${qs}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -805,17 +1119,18 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   async function pushToEbay() {
     const toPush = selectedRows.size > 0
       ? rows.filter((r) => selectedRows.has(r._rowId))
-      : rows.filter((r) => r._dirty || !r.ebay_item_id)
+      : rows.filter((r) => r._dirty)
 
     if (!toPush.length) {
-      toast({ title: 'Nothing to push', description: 'Select rows or mark as dirty first.', tone: 'info' })
+      toast({ title: 'Nothing to push', description: 'Select rows or make edits first.', tone: 'info' })
       return
     }
 
+    const targets = publishTargets.length > 0 ? publishTargets : ['IT']
     const mode = toPush.length > 50 ? 'feed' : 'api'
     setPushing(true)
+    setPublishPanelOpen(false)
 
-    // Mark rows as pending
     setRows((prev) =>
       prev.map((r) =>
         toPush.find((p) => p._rowId === r._rowId) ? { ...r, _status: 'pending' } : r,
@@ -826,7 +1141,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       const res = await fetch(`${getBackendUrl()}/api/ebay/flat-file/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: toPush, marketplace, mode }),
+        body: JSON.stringify({ rows: toPush, markets: targets, mode }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as {
@@ -840,14 +1155,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       if (json.mode === 'feed' && json.taskId) {
         setFeedStatus({ taskId: json.taskId, status: 'CREATED' })
         toast({ title: 'Feed submitted', description: `Task ID: ${json.taskId}`, tone: 'success' })
-        // Mark rows as pushed optimistically
         setRows((prev) =>
           prev.map((r) =>
             toPush.find((p) => p._rowId === r._rowId) ? { ...r, _status: 'pushed', _dirty: false } : r,
           ),
         )
       } else {
-        // API mode — apply per-row results
         const resultMap = new Map((json.results ?? []).map((r) => [r.sku, r]))
         setRows((prev) =>
           prev.map((r) => {
@@ -863,7 +1176,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           }),
         )
         toast({
-          title: `Push complete`,
+          title: 'Push complete',
           description: `${json.pushed ?? 0} pushed, ${json.errors ?? 0} errors`,
           tone: (json.errors ?? 0) > 0 ? 'warning' : 'success',
         })
@@ -890,7 +1203,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as { rows: EbayRow[] }
 
-      // Merge Amazon data into existing rows by sku
       const amazonMap = new Map(json.rows.map((r) => [r.sku, r]))
       setRows((prev) =>
         prev.map((r) => {
@@ -905,11 +1217,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             image_1: az.image_1 || r.image_1,
             image_2: az.image_2 || r.image_2,
             image_3: az.image_3 || r.image_3,
-            brand: az.brand || r.brand,
-            colour: az.colour || r.colour,
-            size: az.size || r.size,
-            material: az.material || r.material,
-            model_number: az.model_number || r.model_number,
             ean: az.ean || r.ean,
             _dirty: true,
           }
@@ -927,7 +1234,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     if (!feedStatus?.taskId) return
     try {
       const res = await fetch(
-        `${getBackendUrl()}/api/ebay/flat-file/feed/${feedStatus.taskId}?marketplace=${marketplace}`,
+        `${getBackendUrl()}/api/ebay/flat-file/feed/${feedStatus.taskId}`,
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json() as FeedStatus
@@ -935,16 +1242,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     } catch (err) {
       toast.error('Feed poll failed: ' + (err instanceof Error ? err.message : String(err)))
     }
-  }
-
-  // ── Marketplace change ────────────────────────────────────────────────
-
-  function handleMarketplaceChange(mp: string) {
-    setMarketplace(mp)
-    const qs = new URLSearchParams({ marketplace: mp })
-    if (familyId) qs.set('familyId', familyId)
-    router.push(`/products/ebay-flat-file?${qs}`)
-    loadRows(mp)
   }
 
   async function handleFetchFromEbay() {
@@ -969,10 +1266,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         if (s.condition) patch.condition = s.condition
         if (s.imageUrls?.[0]) patch.image_1 = s.imageUrls[0]
         if (s.imageUrls?.[1]) patch.image_2 = s.imageUrls[1]
-        if (s.aspects?.Brand?.[0])  patch.brand   = s.aspects.Brand[0]
-        if (s.aspects?.Colour?.[0]) patch.colour  = s.aspects.Colour[0]
-        if (s.aspects?.Color?.[0])  patch.colour  = s.aspects.Color[0]
-        if (s.aspects?.Size?.[0])   patch.size    = s.aspects.Size[0]
+        if (s.aspects?.Brand?.[0])  patch['aspect_Brand']  = s.aspects.Brand[0]
+        if (s.aspects?.Colour?.[0]) patch['aspect_Colour'] = s.aspects.Colour[0]
+        if (s.aspects?.Color?.[0])  patch['aspect_Color']  = s.aspects.Color[0]
+        if (s.aspects?.Size?.[0])   patch['aspect_Size']   = s.aspects.Size[0]
         updates.push({ rowId: row._rowId, data: patch })
       } catch { /* skip */ }
     }))
@@ -991,10 +1288,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   function handleDiscard() {
     if (!dirtyCount) return
     if (!confirm('Discard all unsaved changes?')) return
-    void loadRows(marketplace)
+    void loadRows()
   }
 
-  // ── Find/Replace cells helper ─────────────────────────────────────────
+  // ── Find/Replace ──────────────────────────────────────────────────────
 
   const findCells = useMemo((): FindCell[] => {
     const cells: FindCell[] = []
@@ -1024,7 +1321,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       {/* ── Sticky header ────────────────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
 
-        {/* ── Channel strip — inside header so it stays sticky ─── */}
+        {/* ── Channel strip ─── */}
         <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
 
         {/* ── Bar 1: App chrome + menus + primary actions ───── */}
@@ -1042,8 +1339,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
           {/* File / Edit menus */}
           <MenuDropdown label="File" items={[
-            { label: `Reload from server`, icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: loading,
-              onClick: () => { if (confirm('Reload rows? Unsaved edits will be lost.')) void loadRows(marketplace) } },
+            { label: 'Reload from server', icon: <RefreshCw className="w-3.5 h-3.5" />, disabled: loading,
+              onClick: () => { if (confirm('Reload rows? Unsaved edits will be lost.')) void loadRows() } },
             { separator: true },
             { label: 'Push history…', icon: <Send className="w-3.5 h-3.5" />, disabled: !feedStatus, onClick: () => {} },
           ]} />
@@ -1060,12 +1357,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           {/* Separator */}
           <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5 flex-shrink-0" />
 
-          {/* Title + status badges */}
+          {/* Title + row count */}
           <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-blue-600 dark:text-blue-400 flex-shrink-0" aria-hidden="true">
             <path d="M.43 8.65H3.6V16H.43V8.65zm5.9 0h1.16L9.3 14.33l1.82-5.68h1.19L9.9 16H8.75L6.33 8.65zM13.36 8.65h3.17c2.13 0 3.06 1.24 3.06 3.68 0 2.44-.93 3.67-3.06 3.67h-3.17V8.65zm1.17 6.35h1.87c1.38 0 1.95-.83 1.95-2.67 0-1.84-.57-2.68-1.95-2.68h-1.87v5.35zm5.56-6.35h1.14V16h-1.14V8.65zM2 5.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm19 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
           </svg>
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">eBay Flat File</span>
-          <Badge variant="default">{marketplace}</Badge>
+          <Badge variant="default">{rows.length} rows</Badge>
           {dirtyCount > 0 && <Badge variant="warning" className="flex-shrink-0"><AlertCircle className="w-3 h-3 mr-1" />{dirtyCount} unsaved</Badge>}
 
           {/* Spacer */}
@@ -1108,14 +1405,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               : 'Save'}
           </Button>
 
-          {/* Push to eBay */}
-          <Button size="sm" onClick={pushToEbay} disabled={pushing} loading={pushing}>
-            <Send className="w-3.5 h-3.5 mr-1.5" />
-            Push to eBay{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
-          </Button>
+          {/* Push to eBay — with multi-market panel */}
+          <div className="relative">
+            <Button size="sm" onClick={() => setPublishPanelOpen((o) => !o)} disabled={pushing} loading={pushing}>
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              Push to eBay{dirtyCount > 0 ? ` (${dirtyCount})` : ''}
+            </Button>
+            {publishPanelOpen && (
+              <PublishPanel
+                selectedCount={selectedRows.size}
+                publishTargets={publishTargets}
+                onChangeTargets={setPublishTargets}
+                onPublish={pushToEbay}
+                pushing={pushing}
+                onClose={() => setPublishPanelOpen(false)}
+              />
+            )}
+          </div>
         </div>
 
-        {/* ── Icon toolbar — mirrors Amazon flat file exactly ── */}
+        {/* ── Icon toolbar ── */}
         <div className="px-3 h-8 flex items-center gap-0.5 border-b border-slate-100 dark:border-slate-800/60">
 
           {/* Undo / Redo */}
@@ -1141,7 +1450,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             active={replicateOpen}
           />
 
-          {/* Fetch from eBay — select rows first */}
+          {/* Fetch from eBay */}
           <div className="relative">
             <TbBtn
               icon={fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
@@ -1198,7 +1507,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* Import from Amazon (eBay equivalent of "Translate enum values") */}
+          {/* Import from Amazon */}
           <TbBtn
             icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
             title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
@@ -1274,25 +1583,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           />
         </div>
 
-        {/* ── Bar 3: Market · Search · Filter · Saved Views · Column pills ── */}
+        {/* ── Bar 3: All markets label · Search · Filter · Saved Views · Column pills ── */}
         <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
 
-          {/* Market selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">Market</span>
-            <div className="flex gap-0.5">
-              {EBAY_MARKETPLACES.map((mp) => (
-                <button key={mp} type="button"
-                  onClick={() => handleMarketplaceChange(mp)}
-                  className={cn('text-xs font-medium px-2 py-0.5 rounded border transition-colors',
-                    marketplace === mp
-                      ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400')}>
-                  {mp}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* All markets label */}
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
+            All markets
+          </span>
 
           {/* Search — ml-auto pushes right */}
           <div className="flex items-center gap-1 ml-auto">
@@ -1338,7 +1635,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             />
           </div>
 
-          {/* Column group pills — same UX as Amazon flat file */}
+          {/* Column group pills */}
           <div className="flex items-center gap-1 flex-wrap ml-auto">
             <span className="text-xs text-slate-400 mr-1">Columns:</span>
             {orderedGroups.map((g) => {
@@ -1452,7 +1749,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           cells={findCells}
           rangeBounds={null}
           visibleColumns={allColumns.map((c) => ({ id: c.id, label: c.label }))}
-          onActivate={() => { /* no-op: no virtualizer scroll needed */ }}
+          onActivate={() => { /* no-op */ }}
           onMatchSetChange={() => { /* no-op */ }}
           onReplaceCell={(rowId: string, columnId: string, newValue: unknown) =>
             updateCell(rowId, columnId, newValue)
@@ -1499,6 +1796,28 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         ) : null
       })()}
 
+      {/* Category search modal */}
+      {categorySearchOpen && (
+        <CategorySearchPanel
+          marketplace={marketplace}
+          onSelect={(id, _name) => {
+            if (categorySearchRowId) {
+              updateCell(categorySearchRowId, 'category_id', id)
+            } else {
+              // Apply to all selected rows or all rows
+              const targets = selectedRows.size > 0 ? [...selectedRows] : rows.map((r) => r._rowId)
+              const nextRows = rows.map((r) =>
+                targets.includes(r._rowId) ? { ...r, category_id: id, _dirty: true } : r,
+              )
+              pushHistory(nextRows)
+              setRows(nextRows)
+              void loadCategorySchema(id)
+            }
+          }}
+          onClose={() => { setCategorySearchOpen(false); setCategorySearchRowId(null) }}
+        />
+      )}
+
       {/* Main grid */}
       <div className="flex-1 overflow-auto">
         {loading && (
@@ -1517,6 +1836,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                 <th className="w-8 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky left-0 z-30" />
                 {/* Status col */}
                 <th className="w-6 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
+                {/* Row image col (when enabled) */}
+                {showRowImages && (
+                  <th className="border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    style={{ minWidth: imageSize + 8, maxWidth: imageSize + 8 }} />
+                )}
                 {visibleGroups.map((group) => (
                   <th
                     key={group.id}
@@ -1559,6 +1883,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   />
                 </th>
                 <th className="w-6 h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800" />
+                {showRowImages && (
+                  <th className="h-7 border-r border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[10px] text-slate-400 px-1"
+                    style={{ minWidth: imageSize + 8, maxWidth: imageSize + 8 }}>
+                    Img
+                  </th>
+                )}
                 {visibleColumns.map((col) => (
                   <th
                     key={col.id}
@@ -1575,7 +1905,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             </thead>
 
             <tbody>
-              {/* Render row groups */}
               {(() => {
                 const rendered: React.ReactNode[] = []
                 let bandIdx = 0
@@ -1586,15 +1915,16 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                   const isCollapsed = collapsedRowGroups.has(groupKey)
                   const headerRow = groupRows[0]
 
-                  // Only show group header band if there are multiple rows in the group
+                  // Show group header band if multiple rows in the group
                   if (groupRows.length > 1) {
                     rendered.push(
                       <GroupHeader
                         key={`header-${groupKey}`}
                         row={headerRow}
-                        allColumns={allColumns}
                         bandClass={bandClass}
                         isExpanded={!isCollapsed}
+                        showImage={showRowImages}
+                        imageSize={imageSize}
                         onToggle={() =>
                           setCollapsedRowGroups((prev) => {
                             const next = new Set(prev)
@@ -1609,7 +1939,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
                   if (isCollapsed) return
 
-                  // Filter rows by search
                   const visibleGroupRows = groupRows.filter((r) =>
                     filteredRows.some((fr) => fr._rowId === r._rowId),
                   )
@@ -1662,12 +1991,34 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                           {rowStatusIcon(row._status)}
                         </td>
 
+                        {/* Row image */}
+                        {showRowImages && (
+                          <td
+                            className="border-r border-slate-200 dark:border-slate-700 px-0.5 py-0.5 text-center"
+                            style={{ minWidth: imageSize + 8, maxWidth: imageSize + 8 }}
+                          >
+                            {row.image_1 ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={row.image_1}
+                                alt=""
+                                style={{ width: imageSize, height: imageSize }}
+                                className="rounded object-cover border border-slate-200 dark:border-slate-700 inline-block"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                              />
+                            ) : (
+                              <span className="text-slate-200">—</span>
+                            )}
+                          </td>
+                        )}
+
                         {/* Data cells */}
                         {visibleColumns.map((col) => (
                           <SpreadsheetCell
                             key={col.id}
                             col={col}
                             value={row[col.id]}
+                            row={row}
                             isActive={activeCell?.rowId === row._rowId && activeCell?.colId === col.id}
                             isSelected={isRowSelected}
                             cfClass={cfClassMap[col.id]}
@@ -1675,6 +2026,10 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                             onChange={(v) => updateCell(row._rowId, col.id, v)}
                             onActivate={() => setActiveCell({ rowId: row._rowId, colId: col.id })}
                             onOpenDescription={() => setDescModal({ rowId: row._rowId })}
+                            onOpenCategorySearch={() => {
+                              setCategorySearchRowId(row._rowId)
+                              setCategorySearchOpen(true)
+                            }}
                           />
                         ))}
                       </tr>,
@@ -1688,8 +2043,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               {/* Empty state */}
               {filteredRows.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={visibleColumns.length + 2} className="py-16 text-center text-slate-400 text-sm">
-                    No eBay listings found for this marketplace.
+                  <td colSpan={visibleColumns.length + 2 + (showRowImages ? 1 : 0)} className="py-16 text-center text-slate-400 text-sm">
+                    No eBay listings found.
                     <br />
                     <span className="text-xs mt-1 block">
                       Create listings in the <a href="/products" className="text-blue-600 underline">Products</a> catalog first.
@@ -1704,11 +2059,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
       {/* Status bar */}
       <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-1 flex items-center gap-4 text-xs text-slate-500">
-        <span>{rows.length} listings</span>
+        <span>{rows.length} products</span>
         {selectedRows.size > 0 && <span>{selectedRows.size} selected</span>}
         {dirtyCount > 0 && <span className="text-amber-600">{dirtyCount} unsaved</span>}
         {errorCount > 0 && <span className="text-red-600">{errorCount} errors</span>}
-        <span className="ml-auto">eBay · {marketplace}</span>
+        <span className="ml-auto">eBay · All markets</span>
       </div>
     </div>
   )

@@ -11,10 +11,12 @@ interface PageProps {
 const DEFAULT_MARKETPLACE = 'IT'
 
 export default async function EbayFlatFilePage({ searchParams }: PageProps) {
+  // marketplace is retained as initial context for category schema calls,
+  // but rows are now all-market (one row per product, flat per-market fields).
   const { marketplace = DEFAULT_MARKETPLACE, familyId } = await searchParams
   const backend = getBackendUrl()
 
-  const qs = new URLSearchParams({ marketplace })
+  const qs = new URLSearchParams()
   if (familyId) qs.set('familyId', familyId)
 
   const rowsRes = await fetch(

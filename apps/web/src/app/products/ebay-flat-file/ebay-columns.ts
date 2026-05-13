@@ -1,9 +1,9 @@
 /**
- * eBay Flat File — fixed column schema.
+ * eBay Flat File — fixed column schema + market column groups + dynamic category support.
  *
- * Unlike the Amazon flat file (which fetches a dynamic manifest from SP-API),
- * the eBay flat file uses a fixed column set. Category-specific item specifics
- * from the Taxonomy API are deferred to v2.
+ * Fixed groups: Identifiers, Listing, Content, Pricing, Inventory, Images, Policies, Status
+ * Dynamic group: Item Specifics — built from category aspects via buildCategoryColumns()
+ * Market groups: one per eBay marketplace (IT, DE, FR, ES, UK)
  */
 
 export type EbayColumnKind = 'text' | 'longtext' | 'number' | 'enum' | 'boolean' | 'readonly'
@@ -53,9 +53,9 @@ export const MARKETPLACE_IDS: Record<string, string> = {
 
 export const EBAY_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK']
 
-// ── Column groups ──────────────────────────────────────────────────────
+// ── Fixed column groups (no item specifics, no market groups) ──────────
 
-export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
+export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
   {
     id: 'identifiers',
     label: 'Identifiers',
@@ -70,16 +70,6 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
         maxLength: 50,
         width: 160,
         frozen: true,
-      },
-      {
-        id: 'ebay_item_id',
-        label: 'eBay Item ID',
-        description: 'eBay-assigned ItemID (12-digit number). Auto-filled after first publish.',
-        required: false,
-        kind: 'text',
-        maxLength: 20,
-        width: 140,
-        readOnly: true,
       },
       {
         id: 'ean',
@@ -127,7 +117,7 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
       {
         id: 'category_id',
         label: 'Category ID',
-        description: 'eBay category number (e.g. 11450 for Clothing)',
+        description: 'eBay category number (e.g. 11450 for Clothing). Double-click to search.',
         required: false,
         kind: 'text',
         maxLength: 20,
@@ -168,8 +158,8 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
       {
         id: 'price',
         label: 'Price (EUR)',
-        description: 'Fixed price in Euros',
-        required: true,
+        description: 'Fixed price in Euros (shared / default)',
+        required: false,
         kind: 'number',
         width: 100,
       },
@@ -207,8 +197,8 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
       {
         id: 'quantity',
         label: 'Quantity',
-        description: 'Available quantity to list',
-        required: true,
+        description: 'Available quantity to list (shared / default)',
+        required: false,
         kind: 'number',
         width: 90,
       },
@@ -233,19 +223,6 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
       { id: 'image_4', label: 'Image 4', description: 'Additional image URL', required: false, kind: 'text', maxLength: 500, width: 180 },
       { id: 'image_5', label: 'Image 5', description: 'Additional image URL', required: false, kind: 'text', maxLength: 500, width: 180 },
       { id: 'image_6', label: 'Image 6', description: 'Additional image URL', required: false, kind: 'text', maxLength: 500, width: 180 },
-    ],
-  },
-  {
-    id: 'item_specifics',
-    label: 'Item Specifics',
-    color: 'amber',
-    columns: [
-      { id: 'brand',        label: 'Brand',        description: 'Brand name', required: false, kind: 'text', maxLength: 65, width: 120 },
-      { id: 'colour',       label: 'Colour',       description: 'Colour / color name', required: false, kind: 'text', maxLength: 35, width: 120 },
-      { id: 'size',         label: 'Size',         description: 'Size value (e.g. "M", "42")', required: false, kind: 'text', maxLength: 35, width: 90 },
-      { id: 'material',     label: 'Material',     description: 'Material type', required: false, kind: 'text', maxLength: 65, width: 120 },
-      { id: 'model_number', label: 'Model Number', description: 'Manufacturer model number', required: false, kind: 'text', maxLength: 65, width: 140 },
-      { id: 'custom_label', label: 'Custom Label', description: 'Custom label / internal SKU note', required: false, kind: 'text', maxLength: 65, width: 140 },
     ],
   },
   {
@@ -295,6 +272,111 @@ export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
     ],
   },
 ]
+
+// ── Market column groups ───────────────────────────────────────────────
+
+export const MARKET_COLUMN_GROUPS: EbayColumnGroup[] = [
+  {
+    id: 'market-IT',
+    label: 'Italy (eBay.it)',
+    color: 'blue',
+    columns: [
+      { id: 'it_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
+      { id: 'it_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'it_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
+      { id: 'it_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
+      { id: 'it_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
+    ],
+  },
+  {
+    id: 'market-DE',
+    label: 'Germany (eBay.de)',
+    color: 'emerald',
+    columns: [
+      { id: 'de_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
+      { id: 'de_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'de_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
+      { id: 'de_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
+      { id: 'de_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
+    ],
+  },
+  {
+    id: 'market-FR',
+    label: 'France (eBay.fr)',
+    color: 'amber',
+    columns: [
+      { id: 'fr_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
+      { id: 'fr_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'fr_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
+      { id: 'fr_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
+      { id: 'fr_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
+    ],
+  },
+  {
+    id: 'market-ES',
+    label: 'Spain (eBay.es)',
+    color: 'orange',
+    columns: [
+      { id: 'es_price',      label: 'Price (€)',  kind: 'number',   required: false, width: 90 },
+      { id: 'es_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'es_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
+      { id: 'es_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
+      { id: 'es_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
+    ],
+  },
+  {
+    id: 'market-UK',
+    label: 'UK (eBay.co.uk)',
+    color: 'violet',
+    columns: [
+      { id: 'uk_price',      label: 'Price (£)',  kind: 'number',   required: false, width: 90 },
+      { id: 'uk_qty',        label: 'Qty',        kind: 'number',   required: false, width: 70 },
+      { id: 'uk_item_id',    label: 'Item ID',    kind: 'readonly', required: false, width: 130, readOnly: true },
+      { id: 'uk_status',     label: 'Status',     kind: 'readonly', required: false, width: 90,  readOnly: true },
+      { id: 'uk_listing_id', label: 'Listing ID', kind: 'readonly', required: false, width: 110, readOnly: true },
+    ],
+  },
+]
+
+// ── All groups (fixed + market) — no item specifics (dynamic) ─────────
+
+export const EBAY_COLUMN_GROUPS: EbayColumnGroup[] = [
+  ...EBAY_FIXED_GROUPS,
+  ...MARKET_COLUMN_GROUPS,
+]
+
+// ── Dynamic category aspect columns ───────────────────────────────────
+
+export interface CategoryAspect {
+  id: string          // e.g. 'aspect_Brand'
+  label: string       // e.g. 'Brand'
+  kind: EbayColumnKind
+  options?: string[]
+  required: boolean
+  recommended: boolean
+  width: number
+}
+
+/**
+ * Build a dynamic column group from category aspects returned by
+ * GET /api/ebay/flat-file/category-schema. Includes required (*),
+ * recommended (○), and optional aspects.
+ */
+export function buildCategoryColumns(aspects: CategoryAspect[]): EbayColumnGroup {
+  return {
+    id: 'item-specifics',
+    label: 'Item Specifics',
+    color: 'teal',
+    columns: aspects.map((a) => ({
+      id: a.id,
+      label: a.label + (a.required ? ' *' : a.recommended ? ' ○' : ''),
+      kind: a.kind,
+      options: a.options,
+      required: a.required,
+      width: a.width,
+    })),
+  }
+}
 
 // ── Flat column list (for iteration) ──────────────────────────────────
 
