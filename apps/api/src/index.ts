@@ -115,6 +115,7 @@ import ebayPhase3Routes from "./routes/ebay-phase3.routes.js";
 import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
 import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
+import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
@@ -730,8 +731,12 @@ async function start() {
 
     // IS.2 — Real-time Amazon order detection via SQS (~30-90 second latency).
     // Runs every 30s when NEXUS_ENABLE_AMAZON_SQS_POLL=1 and AMAZON_SQS_QUEUE_URL is set.
-    // Run POST /api/admin/setup-amazon-notifications once first.
     startAmazonSqsPollCron();
+
+    // IS.2 — Ensure SP-API ORDER_CHANGE subscription exists on every boot.
+    // Idempotent: skips if subscription already active. Fire-and-forget;
+    // a failure here is logged but never crashes the server.
+    ensureAmazonNotificationSubscription();
 
     // Amazon financial events — daily 02:00 UTC, pulls yesterday's
     // /finances/v0/financialEvents and writes FinancialTransaction rows.
