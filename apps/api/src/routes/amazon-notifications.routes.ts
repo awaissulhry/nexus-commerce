@@ -153,7 +153,7 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
     return reply.send(diag)
   })
 
-  app.post('/admin/setup-amazon-notifications', async (req, reply) => {
+  app.post('/admin/setup-amazon-notifications', async (_req, reply) => {
     if (!isSqsConfigured()) {
       return reply.status(400).send({
         error: 'AMAZON_SQS_QUEUE_URL not configured',
@@ -162,46 +162,53 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
     }
 
     const queueUrl = process.env.AMAZON_SQS_QUEUE_URL!
-    // Derive ARN from URL: https://sqs.<region>.amazonaws.com/<accountId>/<queueName>
     const parts = queueUrl.replace('https://', '').split('/')
     const [regionHost, accountId, queueName] = [parts[0], parts[1], parts[2]]
-    const region = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'eu-west-1'
-    const sqsArn = `arn:aws:sqs:${region}:${accountId}:${queueName}`
+    const sqsRegion = regionHost?.replace('sqs.', '').replace('.amazonaws.com', '') ?? 'us-east-1'
+    const sqsArn = `arn:aws:sqs:${sqsRegion}:${accountId}:${queueName}`
 
     try {
-      // 1. Create (or retrieve) the notification destination for this SQS queue.
-      //    SP-API deduplicates by resourceSpecification so calling this twice
-      //    returns the existing destination rather than creating a duplicate.
-      // Destination management uses grantless tokens (client_credentials +
-      // sellingpartnerapi::notifications scope) — not the seller refresh token.
-      let destinationId: string
-      try {
-        const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
-          name: queueName,
-          resourceSpecification: {
-            sqs: { arn: sqsArn },
-          },
+      // Step 1 — fetch existing destinations and subscription in parallel.
+      // If both already exist we return immediately without any further writes
+      // (avoids the 3-sequential-round-trip timeout that hit Railway's 30s limit).
+      const [destList, existingSub] = await Promise.all([
+        spApiGrantless<any>('GET', '/notifications/v1/destinations'),
+        spApiRequest<any>('GET', '/notifications/v1/subscriptions/ORDER_CHANGE').catch(() => null),
+      ])
+
+      const destinations: any[] = destList.payload ?? []
+      const existingDest = destinations.find((d: any) => d.resource?.sqs?.arn === sqsArn)
+
+      if (existingDest && existingSub?.payload?.subscriptionId) {
+        // Already fully configured — return immediately.
+        return reply.send({
+          ok: true,
+          alreadyConfigured: true,
+          destinationId: existingDest.destinationId,
+          subscriptionId: existingSub.payload.subscriptionId,
+          sqsArn,
+          message: 'SP-API ORDER_CHANGE subscription already active.',
         })
-        destinationId = destResp.payload?.destinationId ?? destResp.destinationId
-      } catch (err: any) {
-        // SP-API returns 409 if the destination already exists — fetch it instead.
-        if (err?.statusCode === 409 || String(err?.message).includes('already exists')) {
-          const list = await spApiGrantless<any>('GET', '/notifications/v1/destinations')
-          const existing = (list.payload ?? []).find(
-            (d: any) => d.resource?.sqs?.arn === sqsArn,
-          )
-          if (!existing) throw new Error(`Destination not found after 409: ${sqsArn}`)
-          destinationId = existing.destinationId
-        } else {
-          throw err
-        }
       }
 
-      logger.info('[amazon-notifications] destination ready', { destinationId, sqsArn })
+      // Step 2 — create destination if missing.
+      let destinationId: string
+      if (existingDest) {
+        destinationId = existingDest.destinationId
+        logger.info('[amazon-notifications] reusing existing destination', { destinationId })
+      } else {
+        const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
+          name: queueName,
+          resourceSpecification: { sqs: { arn: sqsArn } },
+        })
+        destinationId = destResp.payload?.destinationId ?? destResp.destinationId
+        logger.info('[amazon-notifications] destination created', { destinationId })
+      }
 
-      // 2. Subscribe to ORDER_CHANGE.
-      try {
-        await spApiRequest('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
+      // Step 3 — create subscription if missing.
+      let subscriptionId: string | undefined
+      if (!existingSub?.payload?.subscriptionId) {
+        const subResp = await spApiRequest<any>('POST', '/notifications/v1/subscriptions/ORDER_CHANGE', {
           payloadVersion: '1.0',
           destinationId,
           processingDirective: {
@@ -211,20 +218,18 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
             },
           },
         })
-        logger.info('[amazon-notifications] ORDER_CHANGE subscription created', { destinationId })
-      } catch (err: any) {
-        if (err?.statusCode === 409 || String(err?.message).includes('already exists')) {
-          logger.info('[amazon-notifications] ORDER_CHANGE subscription already exists')
-        } else {
-          throw err
-        }
+        subscriptionId = subResp.payload?.subscriptionId ?? subResp.subscriptionId
+        logger.info('[amazon-notifications] subscription created', { subscriptionId, destinationId })
+      } else {
+        subscriptionId = existingSub.payload.subscriptionId
       }
 
       return reply.send({
         ok: true,
         destinationId,
+        subscriptionId,
         sqsArn,
-        message: 'SP-API ORDER_CHANGE subscription active. Enable NEXUS_ENABLE_AMAZON_SQS_POLL=1 to start polling.',
+        message: 'SP-API ORDER_CHANGE subscription active.',
       })
     } catch (err: any) {
       logger.error('[amazon-notifications] setup failed', { error: err?.message ?? String(err) })
