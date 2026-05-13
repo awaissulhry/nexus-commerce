@@ -43,6 +43,13 @@ export const CURRENCY_MAP: Record<string, string> = {
 
 export type FlatFileColumnKind = 'text' | 'longtext' | 'number' | 'enum' | 'boolean'
 
+// Fields that must be exactly one of the predefined options — free text is invalid.
+const STRICT_ENUM_FIELDS = new Set([
+  'parentage_level', 'record_action', 'variation_theme',
+  'condition_type', 'item_condition', 'country_of_origin',
+  'merchant_shipping_group_name',
+])
+
 export interface FlatFileColumn {
   id: string
   fieldRef: string
@@ -52,6 +59,8 @@ export interface FlatFileColumn {
   required: boolean
   kind: FlatFileColumnKind
   options?: string[]
+  /** true → must pick from list (Amazon SELECTION_ONLY); false → combobox (free text allowed) */
+  selectionOnly?: boolean
   maxLength?: number
   width: number
 }
@@ -279,6 +288,12 @@ function schemaFieldToColumn(
   const labelLocal =
     schemaLabels[fieldId] ?? FIXED_FIELD_LABELS[fieldId]?.[lang] ?? labelEn
 
+  // Detect SELECTION_ONLY from Amazon schema attribute or hardcoded strict list
+  const schemaMode: string | undefined = inner?.['x-amazon-attributes']?.mode
+  const selectionOnly = kind === 'enum'
+    ? STRICT_ENUM_FIELDS.has(fieldId) || schemaMode === 'SELECTION_ONLY'
+    : undefined
+
   return {
     id: fieldId,
     fieldRef: buildFieldRef(fieldId),
@@ -287,6 +302,7 @@ function schemaFieldToColumn(
     required: isRequired,
     kind,
     options,
+    selectionOnly,
     maxLength: typeof inner?.maxLength === 'number' ? inner.maxLength : undefined,
     width:
       kind === 'longtext' ? 260 :
@@ -366,10 +382,10 @@ function expandSchemaField(
     return [
       { id: 'purchasable_offer__condition_type',  fieldRef: 'purchasable_offer[marketplace_id]#1.condition_type',
         labelEn: 'Condition', labelLocal: ll('purchasable_offer.condition_type', { it_IT: 'Condizione', de_DE: 'Zustand', fr_FR: 'État', es_ES: 'Condición', en_GB: 'Condition' }),
-        required: isRequired, kind: 'enum', options: ['', ...condOpts], width: 170 },
+        required: isRequired, kind: 'enum', options: ['', ...condOpts], selectionOnly: true, width: 170 },
       { id: 'purchasable_offer__currency',        fieldRef: 'purchasable_offer[marketplace_id]#1.currency',
         labelEn: 'Currency', labelLocal: ll('purchasable_offer.currency', { it_IT: 'Valuta', de_DE: 'Währung', fr_FR: 'Devise', es_ES: 'Divisa', en_GB: 'Currency' }),
-        required: false, kind: 'enum', options: curOpts, width: 100 },
+        required: false, kind: 'enum', options: curOpts, selectionOnly: true, width: 100 },
       { id: 'purchasable_offer__our_price',       fieldRef: 'purchasable_offer[marketplace_id]#1.our_price.schedule.value_with_tax',
         labelEn: 'Price (incl. tax)', labelLocal: ll('purchasable_offer.our_price', { it_IT: 'Prezzo (IVA incl.)', de_DE: 'Preis (inkl. MwSt.)', fr_FR: 'Prix (TVA incl.)', es_ES: 'Precio (IVA incl.)', en_GB: 'Price (incl. tax)' }),
         required: isRequired, kind: 'number', width: 130 },
@@ -574,7 +590,7 @@ export class AmazonFlatFileService {
         {
           id: 'record_action', fieldRef: '::record_action',
           labelEn: 'Operation', labelLocal: ll('record_action', 'Offer Action'),
-          required: true, kind: 'enum', width: 140,
+          required: true, kind: 'enum', width: 140, selectionOnly: true,
           options: ['full_update', 'partial_update', 'delete'],
           description: 'full_update = create/replace · partial_update = merge fields · delete = remove',
         },
@@ -597,7 +613,7 @@ export class AmazonFlatFileService {
           fieldRef: 'parentage_level[marketplace_id]#1.value',
           labelEn: 'Parent/Child',
           labelLocal: schemaLabels['parentage_level'] ?? ll('parentage_level', 'Parentage Level'),
-          required: false, kind: 'enum', width: 130,
+          required: false, kind: 'enum', width: 130, selectionOnly: true,
           options: ['', ...parentageOpts],
           description: 'Blank = standalone; Parent = non-buyable variation parent; Child = variant',
         },
