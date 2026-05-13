@@ -918,14 +918,16 @@ export default function FlatFileGrid({
   // ── Pointer handlers ───────────────────────────────────────────────────
 
   const handleCellPointerDown = useCallback((ri: number, ci: number, shiftKey: boolean) => {
-    if (shiftKey && selAnchor) {
+    if (shiftKey && selAnchorRef.current) {
       setSelEnd({ ri, ci }); setIsEditing(false); setActiveCell(null)
     } else {
+      // Update ref immediately so onPointerMove sees it before React re-renders
+      selAnchorRef.current = { ri, ci }
       setSelAnchor({ ri, ci }); setSelEnd({ ri, ci }); setIsEditing(false); setEditInitialChar(null)
       const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
       if (row && col) setActiveCell({ rowId: row._rowId, colId: col.id })
     }
-  }, [selAnchor])
+  }, [])
 
   const handleCellDoubleClick = useCallback((ri: number, ci: number) => {
     const row = displayRowsRef.current[ri]; const col = allColumnsRef.current[ci]
@@ -1374,7 +1376,7 @@ export default function FlatFileGrid({
           if (isNaN(ri) || isNaN(ci)) return
           if (isFillDragging) {
             setFillDragEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
-          } else if (selAnchor) {
+          } else if (selAnchorRef.current) {
             setSelEnd((p) => (p?.ri === ri && p?.ci === ci ? p : { ri, ci }))
             setActiveCell(null)
           }
@@ -1509,7 +1511,7 @@ export default function FlatFileGrid({
                         {/* Row # + optional image + row meta slot */}
                         <td className={cn('sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rr select-none', frozenBg)}
                           style={{ width: showRowImages ? imageSize + 12 : 40, minWidth: showRowImages ? imageSize + 12 : 40, height: rowHeight, cursor: 'ns-resize' }}
-                          onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.releasePointerCapture(e.pointerId); rowDragRef.current = ri; const maxCi = allColumns.length - 1; setSelAnchor({ ri, ci: 0 }); setSelEnd({ ri, ci: maxCi }); setIsEditing(false); const col = allColumns[0]; if (col) setActiveCell({ rowId: row._rowId, colId: col.id }) }}>
+                          onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.releasePointerCapture(e.pointerId); rowDragRef.current = ri; const maxCi = allColumns.length - 1; selAnchorRef.current = { ri, ci: 0 }; setSelAnchor({ ri, ci: 0 }); setSelEnd({ ri, ci: maxCi }); setIsEditing(false); const col = allColumns[0]; if (col) setActiveCell({ rowId: row._rowId, colId: col.id }) }}>
                           <div className={cn('flex flex-col gap-0.5 w-full', showRowImages ? 'items-center' : 'items-end')} style={{ minHeight: rowHeight, justifyContent: 'center', padding: '4px 2px' }}>
                             {showRowImages && (() => {
                               const imgUrl = row.image_1 ? String(row.image_1) : null
