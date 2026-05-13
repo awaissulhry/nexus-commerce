@@ -2,13 +2,12 @@
 
 import { useCallback, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, Loader2, RefreshCw, Send, X,
+  AlertCircle, ArrowDownToLine, ArrowRightLeft, Loader2, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Search } from 'lucide-react'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, CellProps, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx } from '@/components/flat-file/FlatFileGrid.types'
 import { ChannelStrip } from './ChannelStrip'
@@ -494,7 +493,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           'disabled:opacity-40 disabled:cursor-default',
         )}
       >
-        {fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+        {fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
       </button>
       {fetchPanelOpen && (
         <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 space-y-2">
@@ -527,7 +526,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
       className="relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
     >
-      <RefreshCw className="w-3.5 h-3.5" />
+      <ArrowRightLeft className="w-3.5 h-3.5" />
     </button>
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ), [])

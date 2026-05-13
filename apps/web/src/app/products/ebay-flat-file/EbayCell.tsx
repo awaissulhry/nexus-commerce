@@ -75,10 +75,11 @@ export function EbayCell({
     onChange(coerced)
   }
 
-  // tdCls: <td> without flex — applying flex directly to <td> breaks table layout
+  // tdCls: <td> without flex — applying flex directly to <td> breaks table layout.
+  // No explicit text-size here — inherits text-sm from the table element.
   const tdCls = cn(
     'h-7 border-r border-b border-slate-200 dark:border-slate-700',
-    'text-xs overflow-hidden cursor-pointer select-none',
+    'overflow-hidden cursor-pointer select-none',
     isReadOnly && 'bg-slate-50/60 dark:bg-slate-900/40 text-slate-400',
     !isReadOnly && (rowBandClass ?? ''),
     !isReadOnly && (cfClass ?? ''),
@@ -96,7 +97,7 @@ export function EbayCell({
         <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
-            className="w-full h-full px-1.5 text-xs bg-white dark:bg-slate-800 border-none outline-none"
+            className="w-full h-full px-1.5 bg-white dark:bg-slate-800 border-none outline-none"
             value={draft}
             onChange={(e) => { commit(e.target.value); setEditing(false) }}
             onBlur={() => commit(draft)}
@@ -111,7 +112,7 @@ export function EbayCell({
         <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
-            className="w-full h-full px-1.5 text-xs bg-white dark:bg-slate-800 border-none outline-none"
+            className="w-full h-full px-1.5 bg-white dark:bg-slate-800 border-none outline-none"
             value={draft}
             onChange={(e) => { commit(e.target.value); setEditing(false) }}
             onBlur={() => commit(draft)}
@@ -128,7 +129,7 @@ export function EbayCell({
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type={col.kind === 'number' ? 'number' : 'text'}
-          className="w-full h-full px-1.5 text-xs bg-transparent border-none outline-none"
+          className="w-full h-full px-1.5 bg-transparent border-none outline-none"
           value={draft}
           maxLength={col.maxLength}
           onChange={(e) => setDraft(e.target.value)}

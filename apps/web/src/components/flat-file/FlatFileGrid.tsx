@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Copy, Image as ImageIcon, Loader2, Plus,
+  ArrowRightLeft, ClipboardPaste, Copy, Image as ImageIcon, Loader2, Plus,
   RefreshCw, Search, Trash2, Undo2, Redo2, Replace, SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -654,10 +654,10 @@ export default function FlatFileGrid({
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          <TbBtn icon={<Copy className="w-3.5 h-3.5" />} title="Copy rows" onClick={() => setReplicateOpen(true)} disabled={!rows.length} />
+          <TbBtn icon={<Copy className="w-3.5 h-3.5" />} title="Copy rows to another market" onClick={() => setReplicateOpen(true)} disabled={!rows.length} />
 
           {onReplicate && (
-            <TbBtn icon={<Copy className="w-3.5 h-3.5" />} title="Replicate to multiple markets" onClick={() => setReplicateOpen(true)} disabled={!rows.length} active={replicateOpen} />
+            <TbBtn icon={<ArrowRightLeft className="w-3.5 h-3.5" />} title="Replicate to multiple markets" onClick={() => setReplicateOpen(true)} disabled={!rows.length} active={replicateOpen} />
           )}
 
           {/* Channel-specific fetch (slot) */}
