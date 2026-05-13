@@ -28,9 +28,22 @@ import { logger } from '../utils/logger.js'
 // ── Trading API helpers ────────────────────────────────────────────────
 
 function tradingCredentialsMissing(): string | null {
-  const required = ['EBAY_APP_ID', 'EBAY_CERT_ID', 'EBAY_DEV_ID', 'EBAY_TOKEN']
+  // Uses the same env var names as EbayAuthService (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET)
+  const required = ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET', 'EBAY_DEV_ID']
   const missing = required.filter((k) => !process.env[k])
   return missing.length ? missing.join(', ') : null
+}
+
+/** Resolve a fresh OAuth access token from the first active eBay ChannelConnection. */
+async function resolveEbayAccessToken(): Promise<string> {
+  const connection = await prisma.channelConnection.findFirst({
+    where: { channelType: 'EBAY', isActive: true },
+    select: { id: true },
+  })
+  if (!connection) throw new Error('No active eBay ChannelConnection found — complete OAuth first')
+  const { EbayAuthService } = await import('../services/ebay-auth.service.js')
+  const authService = new EbayAuthService()
+  return authService.getValidToken(connection.id)
 }
 
 async function callTradingApi(callName: string, xmlBody: string): Promise<{
@@ -40,20 +53,21 @@ async function callTradingApi(callName: string, xmlBody: string): Promise<{
   rawXml: string
 }> {
   const compatLevel = process.env.EBAY_COMPAT_LEVEL ?? '1193'
-  const endpoint = process.env.EBAY_SANDBOX === 'true'
+  const isSandbox = process.env.EBAY_ENVIRONMENT === 'sandbox' || process.env.EBAY_SANDBOX === 'true'
+  const endpoint = isSandbox
     ? 'https://api.sandbox.ebay.com/ws/api.dll'
     : 'https://api.ebay.com/ws/api.dll'
 
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
-      'X-EBAY-API-CALL-NAME': callName,
-      'X-EBAY-API-COMPATIBILITY-LEVEL': compatLevel,
-      'X-EBAY-API-DEV-NAME': process.env.EBAY_DEV_ID!,
-      'X-EBAY-API-APP-NAME': process.env.EBAY_APP_ID!,
-      'X-EBAY-API-CERT-NAME': process.env.EBAY_CERT_ID!,
-      'X-EBAY-API-SITEID': '101',   // Italy
-      'Content-Type': 'text/xml',
+      'X-EBAY-API-CALL-NAME':            callName,
+      'X-EBAY-API-COMPATIBILITY-LEVEL':  compatLevel,
+      'X-EBAY-API-DEV-NAME':             process.env.EBAY_DEV_ID!,
+      'X-EBAY-API-APP-NAME':             process.env.EBAY_CLIENT_ID!,   // App ID
+      'X-EBAY-API-CERT-NAME':            process.env.EBAY_CLIENT_SECRET!, // Cert ID
+      'X-EBAY-API-SITEID':               '101',  // Italy
+      'Content-Type':                    'text/xml',
     },
     body: xmlBody,
   })
@@ -100,11 +114,17 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     if (missing) {
       return reply.status(400).send({
         error: `Missing Trading API credentials: ${missing}`,
-        hint: 'Set EBAY_APP_ID, EBAY_CERT_ID, EBAY_DEV_ID, EBAY_TOKEN in Railway env vars',
+        hint: 'Set EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_DEV_ID in Railway env vars',
       })
     }
 
-    const token = process.env.EBAY_TOKEN!
+    let token: string
+    try {
+      token = await resolveEbayAccessToken()
+    } catch (err: any) {
+      return reply.status(400).send({ error: err?.message ?? String(err) })
+    }
+
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <SetNotificationPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials>
@@ -160,7 +180,13 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       return reply.status(400).send({ error: `Missing Trading API credentials: ${missing}` })
     }
 
-    const token = process.env.EBAY_TOKEN!
+    let token: string
+    try {
+      token = await resolveEbayAccessToken()
+    } catch (err: any) {
+      return reply.status(400).send({ error: err?.message ?? String(err) })
+    }
+
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetNotificationPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials>
