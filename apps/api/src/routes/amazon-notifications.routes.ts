@@ -177,6 +177,7 @@ export default async function amazonNotificationsRoutes(app: FastifyInstance): P
       let destinationId: string
       try {
         const destResp = await spApiGrantless<any>('POST', '/notifications/v1/destinations', {
+          name: queueName,
           resourceSpecification: {
             sqs: { arn: sqsArn },
           },
