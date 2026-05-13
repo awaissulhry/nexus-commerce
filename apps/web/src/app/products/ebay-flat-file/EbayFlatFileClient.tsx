@@ -422,8 +422,9 @@ function SpreadsheetCell({
     onChange(coerced)
   }
 
-  const cellBase = cn(
-    'h-7 px-1.5 flex items-center border-r border-b border-slate-200 dark:border-slate-700',
+  // tdCls: <td> styling without flex (flex on <td> overrides display:table-cell and breaks layout)
+  const tdCls = cn(
+    'h-7 border-r border-b border-slate-200 dark:border-slate-700',
     'text-xs overflow-hidden cursor-pointer select-none',
     isReadOnly && 'bg-slate-50/60 dark:bg-slate-900/40 text-slate-400',
     !isReadOnly && (rowBandClass ?? ''),
@@ -432,14 +433,16 @@ function SpreadsheetCell({
     isSelected && !isActive && 'bg-blue-100/60 dark:bg-blue-900/20',
     col.id === 'sku' && 'font-mono font-medium',
   )
+  // inner: flex wrapper inside each <td> so columns lay out correctly
+  const inner = 'flex items-center h-full px-1.5 gap-1 overflow-hidden'
 
   if (editing) {
     if (col.kind === 'enum') {
       return (
-        <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }}>
+        <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
-            className="w-full h-full text-xs bg-white dark:bg-slate-800 border-none outline-none"
+            className="w-full h-full px-1.5 text-xs bg-white dark:bg-slate-800 border-none outline-none"
             value={draft}
             onChange={(e) => { commit(e.target.value); setEditing(false) }}
             onBlur={() => commit(draft)}
@@ -451,10 +454,10 @@ function SpreadsheetCell({
     }
     if (col.kind === 'boolean') {
       return (
-        <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }}>
+        <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
-            className="w-full h-full text-xs bg-white dark:bg-slate-800 border-none outline-none"
+            className="w-full h-full px-1.5 text-xs bg-white dark:bg-slate-800 border-none outline-none"
             value={draft}
             onChange={(e) => { commit(e.target.value); setEditing(false) }}
             onBlur={() => commit(draft)}
@@ -467,11 +470,11 @@ function SpreadsheetCell({
       )
     }
     return (
-      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type={col.kind === 'number' ? 'number' : 'text'}
-          className="w-full h-full text-xs bg-transparent border-none outline-none"
+          className="w-full h-full px-1.5 text-xs bg-transparent border-none outline-none"
           value={draft}
           maxLength={col.maxLength}
           onChange={(e) => setDraft(e.target.value)}
@@ -490,14 +493,16 @@ function SpreadsheetCell({
   // Status columns for markets (it_status, de_status, etc.)
   if (col.id.endsWith('_status') && col.readOnly) {
     return (
-      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
-        {displayVal ? (
-          <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>
-            {displayVal}
-          </span>
-        ) : (
-          <span className="text-slate-300 text-[10px]">—</span>
-        )}
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+        <div className={inner}>
+          {displayVal ? (
+            <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>
+              {displayVal}
+            </span>
+          ) : (
+            <span className="text-slate-300 text-[10px]">—</span>
+          )}
+        </div>
       </td>
     )
   }
@@ -507,21 +512,23 @@ function SpreadsheetCell({
     const marketCode = col.id.slice(0, 2).toUpperCase()
     const baseUrl = MARKET_URLS[marketCode] ?? ''
     return (
-      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
-        {displayVal ? (
-          <a
-            href={`${baseUrl}${displayVal}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-mono text-[10px]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {displayVal}
-            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-          </a>
-        ) : (
-          <span className="text-slate-300 text-[10px]">—</span>
-        )}
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+        <div className={inner}>
+          {displayVal ? (
+            <a
+              href={`${baseUrl}${displayVal}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-mono text-[10px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {displayVal}
+              <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+            </a>
+          ) : (
+            <span className="text-slate-300 text-[10px]">—</span>
+          )}
+        </div>
       </td>
     )
   }
@@ -532,17 +539,19 @@ function SpreadsheetCell({
     const overLimit = len > 80
     return (
       <td
-        className={cellBase}
+        className={tdCls}
         style={{ minWidth: col.width, maxWidth: col.width }}
         onClick={onActivate}
         onDoubleClick={startEdit}
       >
-        <span className="flex-1 truncate">{displayVal}</span>
-        {len > 0 && (
-          <span className={cn('ml-1 text-[10px] shrink-0', overLimit ? 'text-red-500' : 'text-slate-400')}>
-            {len}
-          </span>
-        )}
+        <div className={inner}>
+          <span className="flex-1 truncate">{displayVal}</span>
+          {len > 0 && (
+            <span className={cn('text-[10px] shrink-0', overLimit ? 'text-red-500' : 'text-slate-400')}>
+              {len}
+            </span>
+          )}
+        </div>
       </td>
     )
   }
@@ -551,14 +560,16 @@ function SpreadsheetCell({
   if (col.id === 'description') {
     return (
       <td
-        className={cellBase}
+        className={tdCls}
         style={{ minWidth: col.width, maxWidth: col.width }}
         onClick={onActivate}
         onDoubleClick={onOpenDescription}
       >
-        <span className="truncate text-slate-400 italic text-[10px]">
-          {displayVal ? displayVal.replace(/<[^>]+>/g, '').slice(0, 40) + '…' : 'Double-click to edit…'}
-        </span>
+        <div className={inner}>
+          <span className="truncate text-slate-400 italic text-[10px]">
+            {displayVal ? displayVal.replace(/<[^>]+>/g, '').slice(0, 40) + '…' : 'Double-click to edit…'}
+          </span>
+        </div>
       </td>
     )
   }
@@ -567,16 +578,18 @@ function SpreadsheetCell({
   if (col.id === 'category_id') {
     return (
       <td
-        className={cellBase}
+        className={tdCls}
         style={{ minWidth: col.width, maxWidth: col.width }}
         onClick={onActivate}
         onDoubleClick={onOpenCategorySearch}
       >
-        {displayVal ? (
-          <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
-        ) : (
-          <span className="text-slate-300 text-[10px]">Double-click to search…</span>
-        )}
+        <div className={inner}>
+          {displayVal ? (
+            <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
+          ) : (
+            <span className="text-slate-300 text-[10px]">Double-click to search…</span>
+          )}
+        </div>
       </td>
     )
   }
@@ -585,16 +598,18 @@ function SpreadsheetCell({
   if (col.kind === 'boolean') {
     return (
       <td
-        className={cellBase}
+        className={tdCls}
         style={{ minWidth: col.width, maxWidth: col.width }}
         onClick={onActivate}
         onDoubleClick={startEdit}
       >
-        {value === true || value === 'true' ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-        ) : (
-          <span className="text-slate-300">—</span>
-        )}
+        <div className={inner}>
+          {value === true || value === 'true' ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </div>
       </td>
     )
   }
@@ -602,12 +617,14 @@ function SpreadsheetCell({
   // Status badge for listing_status
   if (col.id === 'listing_status') {
     return (
-      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
-        {displayVal && (
-          <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>
-            {displayVal}
-          </span>
-        )}
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+        <div className={inner}>
+          {displayVal && (
+            <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>
+              {displayVal}
+            </span>
+          )}
+        </div>
       </td>
     )
   }
@@ -616,22 +633,26 @@ function SpreadsheetCell({
   if (col.id === 'last_pushed_at') {
     const d = displayVal ? new Date(displayVal) : null
     return (
-      <td className={cellBase} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
-        <span className="truncate text-slate-400 text-[10px]">
-          {d ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
-        </span>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+        <div className={inner}>
+          <span className="truncate text-slate-400 text-[10px]">
+            {d ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+          </span>
+        </div>
       </td>
     )
   }
 
   return (
     <td
-      className={cellBase}
+      className={tdCls}
       style={{ minWidth: col.width, maxWidth: col.width }}
       onClick={onActivate}
       onDoubleClick={startEdit}
     >
-      <span className="truncate">{displayVal || <span className="text-slate-300">—</span>}</span>
+      <div className={inner}>
+        <span className="truncate">{displayVal || <span className="text-slate-300">—</span>}</span>
+      </div>
     </td>
   )
 }
@@ -883,14 +904,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [showValidation, setShowValidation] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Column group pills
+  // Column group pills — all open by default; user can close groups via pills in Bar 3
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('eff-closed-groups')
-      if (saved !== null) return new Set(JSON.parse(saved))
-    } catch {}
-    // Smart defaults: keep Identifiers + Listing + Pricing + Inventory + Status + Italy visible
-    return new Set(['content', 'images', 'policies', 'market-DE', 'market-FR', 'market-ES', 'market-UK'])
+    try { return new Set(JSON.parse(localStorage.getItem('eff-closed-groups') ?? '[]')) } catch { return new Set() }
   })
   const [groupOrder, setGroupOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('eff-group-order') ?? '[]') } catch { return [] }
@@ -1694,9 +1710,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               <button type="button"
                 onClick={() => {
                   setGroupOrder([])
-                  const defaults = new Set(['content', 'images', 'policies', 'market-DE', 'market-FR', 'market-ES', 'market-UK'])
-                  setClosedGroups(defaults)
-                  try { localStorage.removeItem('eff-group-order'); localStorage.setItem('eff-closed-groups', JSON.stringify([...defaults])) } catch {}
+                  setClosedGroups(new Set())
+                  try { localStorage.removeItem('eff-group-order'); localStorage.removeItem('eff-closed-groups') } catch {}
                 }}
                 className="text-xs text-slate-400 hover:text-slate-600 px-1"
                 title="Reset column group order and visibility">
