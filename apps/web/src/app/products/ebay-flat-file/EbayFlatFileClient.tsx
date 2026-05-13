@@ -1021,11 +1021,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
 
-      {/* ── Channel strip — Amazon | eBay tabs ──────────────────── */}
-      <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
-
       {/* ── Sticky header ────────────────────────────────────────── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+
+        {/* ── Channel strip — inside header so it stays sticky ─── */}
+        <ChannelStrip channel="ebay" marketplace={marketplace} familyId={familyId} />
 
         {/* ── Bar 1: App chrome + menus + primary actions ───── */}
         <div className="px-3 h-10 flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/60">
