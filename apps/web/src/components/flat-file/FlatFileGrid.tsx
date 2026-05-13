@@ -342,6 +342,14 @@ export default function FlatFileGrid({
   const [dropTarget,    setDropTarget]    = useState<{ rowId: string; half: 'top' | 'bottom' } | null>(null)
   const canDragRef = useRef(false)
 
+  // ── Cell selection (range) ─────────────────────────────────────────────
+  const [selAnchor, setSelAnchor] = useState<{ ri: number; ci: number } | null>(null)
+  const [selEnd,    setSelEnd]    = useState<{ ri: number; ci: number } | null>(null)
+
+  // Grid-managed editing — non-null = auto-start editing with that char
+  const [editInitialChar, setEditInitialChar] = useState<string | null>(null)
+  const [isAnyCellEditing, setIsAnyCellEditing] = useState(false)
+
   // ── Undo / redo ────────────────────────────────────────────────────────
   const historyRef = useRef<BaseRow[][]>([paddedInitRef.current])
   const historyIdx = useRef(0)
@@ -407,6 +415,45 @@ export default function FlatFileGrid({
   const dirtyCount = rows.filter((r) => r._dirty).length
   const errorCount = validationIssues.filter((i) => i.level === 'error').length
   const warnCount  = validationIssues.filter((i) => i.level === 'warn').length
+
+  // Flat ordered list of display rows (for range selection index maths)
+  const displayRows = useMemo(() => {
+    const result: BaseRow[] = []
+    rowGroups.forEach((groupRows, groupKey) => {
+      if (collapsedRowGroups.has(groupKey)) return
+      const visible = groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId))
+      result.push(...visible)
+    })
+    return result
+  }, [rowGroups, filteredRows, collapsedRowGroups])
+
+  // Normalised selection (rMin..rMax, cMin..cMax)
+  const normSel = useMemo(() => {
+    if (!selAnchor || !selEnd) return null
+    return {
+      rMin: Math.min(selAnchor.ri, selEnd.ri),
+      rMax: Math.max(selAnchor.ri, selEnd.ri),
+      cMin: Math.min(selAnchor.ci, selEnd.ci),
+      cMax: Math.max(selAnchor.ci, selEnd.ci),
+    }
+  }, [selAnchor, selEnd])
+
+  // Stable refs so keyboard / pointer callbacks never go stale
+  const displayRowsRef    = useRef(displayRows)
+  const visibleColumnsRef = useRef(visibleColumns)
+  const rowsRef           = useRef(rows)
+  const activeCellRef     = useRef(activeCell)
+  const normSelRef        = useRef(normSel)
+  const selAnchorRef      = useRef(selAnchor)
+  const isEditingRef      = useRef(isAnyCellEditing)
+
+  useEffect(() => { displayRowsRef.current    = displayRows },    [displayRows])
+  useEffect(() => { visibleColumnsRef.current = visibleColumns }, [visibleColumns])
+  useEffect(() => { rowsRef.current           = rows },           [rows])
+  useEffect(() => { activeCellRef.current     = activeCell },     [activeCell])
+  useEffect(() => { normSelRef.current        = normSel },        [normSel])
+  useEffect(() => { selAnchorRef.current      = selAnchor },      [selAnchor])
+  useEffect(() => { isEditingRef.current      = isAnyCellEditing },[isAnyCellEditing])
 
   // Find-replace cells
   const findCells = useMemo((): FindCell[] =>
@@ -528,14 +575,234 @@ export default function FlatFileGrid({
     void loadData()
   }
 
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────
+  // ── Copy / paste / clear ───────────────────────────────────────────────
+
+  function copySelection() {
+    const ac  = activeCellRef.current
+    const drs = displayRowsRef.current
+    const vcs = visibleColumnsRef.current
+    if (!ac) return
+    const ri = drs.findIndex((r) => r._rowId === ac.rowId)
+    const ci = vcs.findIndex((c) => c.id   === ac.colId)
+    const nm = normSelRef.current
+    const rMin = nm ? nm.rMin : ri
+    const rMax = nm ? nm.rMax : ri
+    const cMin = nm ? nm.cMin : ci
+    const cMax = nm ? nm.cMax : ci
+    const tsv = drs.slice(rMin, rMax + 1)
+      .map((row) => vcs.slice(cMin, cMax + 1).map((col) => String(row[col.id] ?? '')).join('\t'))
+      .join('\n')
+    navigator.clipboard.writeText(tsv).catch(() => {})
+  }
+
+  async function pasteClipboard() {
+    const ac  = activeCellRef.current
+    const drs = displayRowsRef.current
+    const vcs = visibleColumnsRef.current
+    if (!ac) return
+    const text = await navigator.clipboard.readText().catch(() => '')
+    if (!text) return
+    const ri = drs.findIndex((r) => r._rowId === ac.rowId)
+    const ci = vcs.findIndex((c) => c.id   === ac.colId)
+    if (ri < 0 || ci < 0) return
+    const lines = text.trimEnd().split('\n')
+    const next  = [...rowsRef.current]
+    lines.forEach((line, rOff) => {
+      const vals  = line.split('\t')
+      const dRow  = drs[ri + rOff]
+      if (!dRow) return
+      const full  = next.findIndex((r) => r._rowId === dRow._rowId)
+      if (full < 0) return
+      vals.forEach((val, cOff) => {
+        const col = vcs[ci + cOff]
+        if (!col || col.readOnly) return
+        next[full] = { ...next[full], [col.id]: val, _dirty: true }
+      })
+    })
+    pushHistory(next)
+    setRows(next)
+  }
+
+  function clearActiveCell() {
+    const ac  = activeCellRef.current
+    const nm  = normSelRef.current
+    const drs = displayRowsRef.current
+    const vcs = visibleColumnsRef.current
+    if (!ac) return
+    if (nm) {
+      // Clear the whole range
+      const next = [...rowsRef.current]
+      for (let r = nm.rMin; r <= nm.rMax; r++) {
+        const dRow = drs[r]
+        if (!dRow) continue
+        const full = next.findIndex((row) => row._rowId === dRow._rowId)
+        if (full < 0) continue
+        for (let c = nm.cMin; c <= nm.cMax; c++) {
+          const col = vcs[c]
+          if (!col || col.readOnly) continue
+          next[full] = { ...next[full], [col.id]: '', _dirty: true }
+        }
+      }
+      pushHistory(next)
+      setRows(next)
+    } else {
+      updateCell(ac.rowId, ac.colId, '')
+    }
+  }
+
+  // ── Cell fill-down (wired to fill-handle drag; exposed for future use) ───
+
+  function fillDown() {
+    const nm  = normSelRef.current
+    const src = selAnchorRef.current
+    if (!nm || !src) return
+    const drs = displayRowsRef.current
+    const vcs = visibleColumnsRef.current
+    const srcRow = drs[src.ri]
+    if (!srcRow) return
+    const next = [...rowsRef.current]
+    for (let r = nm.rMin; r <= nm.rMax; r++) {
+      if (r === src.ri) continue
+      const dRow = drs[r]
+      if (!dRow) continue
+      const full = next.findIndex((row) => row._rowId === dRow._rowId)
+      if (full < 0) continue
+      for (let c = nm.cMin; c <= nm.cMax; c++) {
+        const col = vcs[c]
+        if (!col || col.readOnly) continue
+        next[full] = { ...next[full], [col.id]: srcRow[col.id], _dirty: true }
+      }
+    }
+    pushHistory(next)
+    setRows(next)
+  }
+  void fillDown  // exposed for fill-handle drag (future wiring)
+
+  // ── Cell pointer handlers (selection) ─────────────────────────────────
+
+  function handleCellPointerDown(
+    e: React.PointerEvent,
+    rowId: string,
+    colId: string,
+    ri: number,
+    ci: number,
+  ) {
+    if (isEditingRef.current) return  // don't interfere while a cell is editing
+    e.preventDefault()
+    setActiveCell({ rowId, colId })
+    if (e.shiftKey && selAnchorRef.current) {
+      setSelEnd({ ri, ci })
+    } else {
+      setSelAnchor({ ri, ci })
+      setSelEnd({ ri, ci })
+    }
+  }
+
+  function handleCellPointerEnter(
+    e: React.PointerEvent,
+    ri: number,
+    ci: number,
+    rowId: string,
+    colId: string,
+  ) {
+    if (e.buttons > 0 && selAnchorRef.current && !isEditingRef.current) {
+      setSelEnd({ ri, ci })
+      setActiveCell({ rowId, colId })
+    }
+  }
+
+  // ── Keyboard shortcuts + navigation + editing ─────────────────────────
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const meta = e.metaKey || e.ctrlKey
-      if (meta && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
-      if (meta && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo() }
-      if (meta && e.key === 'f')                { e.preventDefault(); setShowFindReplace(true) }
+
+      // Always: undo / redo / find
+      if (meta && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
+      if (meta && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return }
+      if (meta && e.key === 'f')                { e.preventDefault(); setShowFindReplace(true); return }
+
+      // If any real input/textarea/select is focused (cell editing, search box, etc.) let it handle keys
+      const focused = document.activeElement
+      if (
+        focused &&
+        (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA' || focused.tagName === 'SELECT') &&
+        !(focused as HTMLElement).dataset.gridNav
+      ) return
+
+      const ac  = activeCellRef.current
+      const drs = displayRowsRef.current
+      const vcs = visibleColumnsRef.current
+      if (!ac) return
+
+      // Copy / paste
+      if (meta && e.key === 'c') { e.preventDefault(); copySelection(); return }
+      if (meta && e.key === 'v') { e.preventDefault(); void pasteClipboard(); return }
+      if (meta && e.key === 'a') {
+        // Select all cells
+        e.preventDefault()
+        if (drs.length && vcs.length) {
+          setSelAnchor({ ri: 0, ci: 0 })
+          setSelEnd({ ri: drs.length - 1, ci: vcs.length - 1 })
+          setActiveCell({ rowId: drs[0]._rowId, colId: vcs[0].id })
+        }
+        return
+      }
+
+      const ri = drs.findIndex((r) => r._rowId === ac.rowId)
+      const ci = vcs.findIndex((c) => c.id   === ac.colId)
+      if (ri < 0 || ci < 0) return
+
+      function moveTo(newRi: number, newCi: number, extendSel = false) {
+        const r = Math.max(0, Math.min(drs.length - 1, newRi))
+        const c = Math.max(0, Math.min(vcs.length - 1, newCi))
+        const row = drs[r]
+        const col = vcs[c]
+        if (!row || !col) return
+        setActiveCell({ rowId: row._rowId, colId: col.id })
+        if (extendSel) {
+          if (!selAnchorRef.current) setSelAnchor({ ri, ci })
+          setSelEnd({ ri: r, ci: c })
+        } else {
+          setSelAnchor({ ri: r, ci: c })
+          setSelEnd({ ri: r, ci: c })
+        }
+      }
+
+      if (e.key === 'ArrowRight') { e.preventDefault(); moveTo(ri, ci + 1, e.shiftKey); return }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); moveTo(ri, ci - 1, e.shiftKey); return }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); moveTo(ri + 1, ci, e.shiftKey); return }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); moveTo(ri - 1, ci, e.shiftKey); return }
+      if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); moveTo(ri, ci + 1); return }
+      if (e.key === 'Tab' &&  e.shiftKey) { e.preventDefault(); moveTo(ri, ci - 1); return }
+      if (e.key === 'Enter' && !isEditingRef.current) {
+        e.preventDefault()
+        // Enter on selected cell: start editing (empty initial char = full edit mode)
+        setEditInitialChar('')
+        return
+      }
+      if (e.key === 'Enter' && isEditingRef.current) {
+        // After editing: move down
+        e.preventDefault()
+        moveTo(ri + 1, ci)
+        return
+      }
+      if (e.key === 'Escape') {
+        setActiveCell(null)
+        setSelAnchor(null)
+        setSelEnd(null)
+        setEditInitialChar(null)
+        return
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingRef.current) {
+        e.preventDefault()
+        clearActiveCell()
+        return
+      }
+      // Typing on a non-editing cell → start editing with that char
+      if (!meta && !isEditingRef.current && e.key.length === 1) {
+        setEditInitialChar(e.key)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -1019,7 +1286,8 @@ export default function FlatFileGrid({
             <tbody>
               {(() => {
                 const rendered: React.ReactNode[] = []
-                let bandIdx = 0
+                let bandIdx    = 0
+                let displayIdx = 0   // flat display row index for range maths
 
                 rowGroups.forEach((groupRows, groupKey) => {
                   const bandClass = GROUP_BAND_COLORS[bandIdx % GROUP_BAND_COLORS.length]
@@ -1055,7 +1323,8 @@ export default function FlatFileGrid({
                     filteredRows.some((fr) => fr._rowId === r._rowId),
                   )
 
-                  visibleGroupRows.forEach((row, rowDisplayIdx) => {
+                  visibleGroupRows.forEach((row) => {
+                    const ri             = displayIdx++
                     const isRowSelected  = selectedRows.has(row._rowId)
                     const isDraggingThis = draggingRowId === row._rowId
                     const dropInd        = dropTarget?.rowId === row._rowId ? dropTarget.half : null
@@ -1070,7 +1339,6 @@ export default function FlatFileGrid({
                       : groupRows.length > 1 ? bandClass
                       : ''
 
-                    // Opaque bg for sticky cells — prevents content bleed-through on horizontal scroll
                     const frozenBg = row._status === 'pushed'  ? 'bg-emerald-50 dark:bg-emerald-950/60'
                       : row._status === 'error'   ? 'bg-red-50 dark:bg-red-950/60'
                       : row._status === 'pending' ? 'bg-amber-50 dark:bg-amber-950/60'
@@ -1078,9 +1346,6 @@ export default function FlatFileGrid({
                       : row._dirty  ? 'bg-yellow-50 dark:bg-yellow-950/40'
                       : 'bg-white dark:bg-slate-900'
 
-                    void rowDisplayIdx
-
-                    // Conditional formatting per cell
                     const cfClassMap: Record<string, string> = {}
                     if (cfRules.length > 0) {
                       visibleColumns.forEach((col) => {
@@ -1153,7 +1418,7 @@ export default function FlatFileGrid({
                           }
                         </td>
 
-                        {/* Col 2: row # + push-status badge + optional image (sticky left-9) */}
+                        {/* Col 2: row # + push status + optional image (sticky left-9) */}
                         <td
                           className={cn(
                             'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 w-10 min-w-[40px] select-none',
@@ -1182,21 +1447,42 @@ export default function FlatFileGrid({
                           </div>
                         </td>
 
-                        {/* Data cells — rendered by channel-specific CellComponent */}
-                        {visibleColumns.map((col) => (
-                          <CellComponent
-                            key={col.id}
-                            col={col}
-                            row={row}
-                            value={row[col.id]}
-                            isActive={activeCell?.rowId === row._rowId && activeCell?.colId === col.id}
-                            isSelected={isRowSelected}
-                            cfClass={cfClassMap[col.id]}
-                            rowBandClass={groupRows.length > 1 ? bandClass : undefined}
-                            onChange={(v) => updateCell(row._rowId, col.id, v)}
-                            onActivate={() => setActiveCell({ rowId: row._rowId, colId: col.id })}
-                          />
-                        ))}
+                        {/* Data cells — channel-specific CellComponent, gets all interaction props */}
+                        {visibleColumns.map((col, ci) => {
+                          const isActive   = activeCell?.rowId === row._rowId && activeCell?.colId === col.id
+                          const isInRange  = normSel
+                            ? ri >= normSel.rMin && ri <= normSel.rMax && ci >= normSel.cMin && ci <= normSel.cMax
+                            : isActive
+                          const isFillHandle = normSel
+                            ? ri === normSel.rMax && ci === normSel.cMax
+                            : isActive
+
+                          return (
+                            <CellComponent
+                              key={col.id}
+                              col={col}
+                              row={row}
+                              value={row[col.id]}
+                              isActive={isActive}
+                              isSelected={isRowSelected}
+                              isInRange={isInRange}
+                              isFillHandle={isFillHandle}
+                              cfClass={cfClassMap[col.id]}
+                              rowBandClass={groupRows.length > 1 ? bandClass : undefined}
+                              editInitialChar={isActive ? editInitialChar : null}
+                              onEditStart={() => { setIsAnyCellEditing(true); setEditInitialChar(null) }}
+                              onEditEnd={() => setIsAnyCellEditing(false)}
+                              onPointerDown={(e) => handleCellPointerDown(e, row._rowId, col.id, ri, ci)}
+                              onPointerEnter={(e) => handleCellPointerEnter(e, ri, ci, row._rowId, col.id)}
+                              onChange={(v) => updateCell(row._rowId, col.id, v)}
+                              onActivate={() => {
+                                setActiveCell({ rowId: row._rowId, colId: col.id })
+                                setSelAnchor({ ri, ci })
+                                setSelEnd({ ri, ci })
+                              }}
+                            />
+                          )
+                        })}
                       </tr>,
                     )
                   })

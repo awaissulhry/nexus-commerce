@@ -36,16 +36,35 @@ export interface BaseRow {
   [key: string]: unknown
 }
 
-// ── Cell renderer props (passed to channel CellComponent) ─────────────────
+// ── Cell renderer props ───────────────────────────────────────────────────
+// CellComponent renders the full <td> element.
+// Grid provides interaction state; cell forwards handlers to its <td>.
 
 export interface CellProps {
   col: FlatFileColumn
   row: BaseRow
   value: unknown
-  isActive: boolean
-  isSelected: boolean
+
+  // Selection state
+  isActive: boolean       // this cell has keyboard focus
+  isSelected: boolean     // row selected via checkbox
+  isInRange: boolean      // inside the drag/shift-click selection range
+  isFillHandle: boolean   // show the fill-handle corner on this cell
+
+  // Styling helpers
   cfClass?: string
   rowBandClass?: string
+
+  // Grid-managed editing — cell auto-starts editing when editInitialChar is set
+  editInitialChar: string | null
+  onEditStart: () => void   // cell → grid: "I entered edit mode"
+  onEditEnd: () => void     // cell → grid: "I left edit mode"
+
+  // Pointer events — cell must forward these to its <td>
+  onPointerDown: (e: React.PointerEvent) => void
+  onPointerEnter: (e: React.PointerEvent) => void
+
+  // Value change
   onChange: (v: unknown) => void
   onActivate: () => void
 }
@@ -100,37 +119,29 @@ export interface ReplicateCtx {
 // ── Main grid props ───────────────────────────────────────────────────────
 
 export interface FlatFileGridProps {
-  // Channel identity
   channel: 'amazon' | 'ebay' | 'shopify'
   title: string
   titleIcon?: React.ReactNode
   marketplace: string
   familyId?: string
-  storageKey: string          // localStorage key prefix (e.g. 'eff', 'aff')
+  storageKey: string
 
-  // Columns — reactive: eBay client updates to add category aspect columns
   columnGroups: FlatFileColumnGroup[]
 
-  // Rows
   initialRows: BaseRow[]
   makeBlankRow: () => BaseRow
-  minRows?: number             // pad to at least this many rows (default 15)
+  minRows?: number
 
-  // Cell rendering — channel-specific, bound component pattern
   CellComponent: React.ComponentType<CellProps>
 
-  // Row grouping — defaults to (row) => row._rowId (no grouping)
   getGroupKey?: (row: BaseRow) => string
 
-  // Validation
   validate?: (rows: BaseRow[]) => ValidationIssue[]
 
-  // API
   onSave: (dirty: BaseRow[]) => Promise<{ saved: number }>
   onReload: () => Promise<BaseRow[]>
   onCellChange?: (rowId: string, colId: string, value: unknown) => void
 
-  // Replication (channel-specific; hides button when absent)
   onReplicate?: (
     targets: string[],
     groupIds: Set<string>,
@@ -138,7 +149,6 @@ export interface FlatFileGridProps {
     ctx: ReplicateCtx,
   ) => Promise<{ copied: number; skipped: number }>
 
-  // Render slots
   renderChannelStrip?: () => React.ReactNode
   renderPushExtras?: (ctx: PushExtrasCtx) => React.ReactNode
   renderFeedBanner?: () => React.ReactNode

@@ -39,8 +39,15 @@ export function EbayCell({
   value,
   isActive,
   isSelected,
+  isInRange,
+  isFillHandle,
   cfClass,
   rowBandClass,
+  editInitialChar,
+  onEditStart,
+  onEditEnd,
+  onPointerDown,
+  onPointerEnter,
   onChange,
   onActivate,
   onOpenDescription,
@@ -50,10 +57,41 @@ export function EbayCell({
 
   const [editing, setEditing] = useState(false)
   const [draft,   setDraft]   = useState('')
-  const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
+  const inputRef  = useRef<HTMLInputElement | HTMLSelectElement | null>(null)
+  const didAutoEditRef = useRef(false)
 
   const displayVal = value == null || value === '' ? '' : String(value)
   const isReadOnly = col.readOnly || col.kind === 'readonly'
+
+  // Auto-start editing when the grid sends an editInitialChar
+  useEffect(() => {
+    if (!isActive || editInitialChar === null || editing || isReadOnly) {
+      if (!isActive || editInitialChar === null) didAutoEditRef.current = false
+      return
+    }
+    if (didAutoEditRef.current) return
+    didAutoEditRef.current = true
+
+    if (col.kind === 'longtext') { onOpenDescription(); onEditStart(); return }
+    if (col.id === 'category_id') { onOpenCategorySearch(); onEditStart(); return }
+
+    const initial = editInitialChar === '' ? displayVal : editInitialChar
+    setDraft(initial)
+    setEditing(true)
+    onEditStart()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, editInitialChar])
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus()
+      if (editInitialChar && editInitialChar.length === 1 && 'setSelectionRange' in inputRef.current) {
+        // Place cursor at end when typed char triggered edit
+        const len = (inputRef.current as HTMLInputElement).value.length
+        ;(inputRef.current as HTMLInputElement).setSelectionRange(len, len)
+      }
+    }
+  }, [editing, editInitialChar])
 
   const startEdit = useCallback(() => {
     if (isReadOnly) return
@@ -61,46 +99,62 @@ export function EbayCell({
     if (col.id === 'category_id') { onOpenCategorySearch(); return }
     setDraft(displayVal)
     setEditing(true)
-  }, [isReadOnly, col.kind, col.id, displayVal, onOpenDescription, onOpenCategorySearch])
-
-  useEffect(() => {
-    if (editing && inputRef.current) inputRef.current.focus()
-  }, [editing])
+    onEditStart()
+  }, [isReadOnly, col.kind, col.id, displayVal, onOpenDescription, onOpenCategorySearch, onEditStart])
 
   function commit(v: string) {
     setEditing(false)
+    didAutoEditRef.current = false
     let coerced: unknown = v
     if (col.kind === 'number')  coerced = v === '' ? '' : Number(v)
     if (col.kind === 'boolean') coerced = v === 'true' || v === '1'
     onChange(coerced)
+    onEditEnd()
   }
 
-  // tdCls: <td> without flex — applying flex directly to <td> breaks table layout.
-  // No explicit text-size here — inherits text-sm from the table element.
+  function abort() {
+    setEditing(false)
+    didAutoEditRef.current = false
+    onEditEnd()
+  }
+
+  // ── <td> base class — no flex (flex on <td> breaks table layout) ────────
+  // Selection: active cell gets blue ring; range gets solid blue fill; otherwise row/CF colour
   const tdCls = cn(
     'h-7 border-r border-b border-slate-200 dark:border-slate-700',
-    'overflow-hidden cursor-pointer select-none',
+    'overflow-hidden cursor-pointer select-none relative',
     isReadOnly && 'bg-slate-50/60 dark:bg-slate-900/40 text-slate-400',
-    !isReadOnly && (rowBandClass ?? ''),
-    !isReadOnly && (cfClass ?? ''),
-    isActive   && 'ring-2 ring-inset ring-blue-500',
-    isSelected && !isActive && 'bg-blue-100/60 dark:bg-blue-900/20',
+    // Range selection highlight (solid, not transparent, so it's clearly visible)
+    isInRange && !isActive && 'bg-blue-100 dark:bg-blue-900/40',
+    // Row / CF styling only when not in range
+    !isInRange && !isReadOnly && (rowBandClass ?? ''),
+    !isInRange && !isReadOnly && (cfClass ?? ''),
+    !isInRange && isSelected && !isActive && 'bg-blue-50/40 dark:bg-blue-900/20',
+    isActive && 'ring-2 ring-inset ring-blue-500 z-10',
     col.id === 'sku' && 'font-mono font-medium',
   )
   const inner = 'flex items-center h-full px-1.5 gap-1 overflow-hidden'
 
-  // ── Editing states ───────────────────────────────────────────────────
+  // Shared <td> event props — cell forwards pointer events to grid for range selection
+  const tdEvents = {
+    onPointerDown,
+    onPointerEnter,
+    onDoubleClick: startEdit,
+  }
+
+  // ── Editing states ───────────────────────────────────────────────────────
 
   if (editing) {
     if (col.kind === 'enum') {
       return (
-        <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
+        <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} {...tdEvents}>
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
             className="w-full h-full px-1.5 bg-white dark:bg-slate-800 border-none outline-none"
             value={draft}
-            onChange={(e) => { commit(e.target.value); setEditing(false) }}
+            onChange={(e) => { commit(e.target.value); }}
             onBlur={() => commit(draft)}
+            onKeyDown={(e) => { if (e.key === 'Escape') abort() }}
           >
             {(col.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
@@ -109,13 +163,14 @@ export function EbayCell({
     }
     if (col.kind === 'boolean') {
       return (
-        <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
+        <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} {...tdEvents}>
           <select
             ref={inputRef as React.RefObject<HTMLSelectElement>}
             className="w-full h-full px-1.5 bg-white dark:bg-slate-800 border-none outline-none"
             value={draft}
-            onChange={(e) => { commit(e.target.value); setEditing(false) }}
+            onChange={(e) => { commit(e.target.value); }}
             onBlur={() => commit(draft)}
+            onKeyDown={(e) => { if (e.key === 'Escape') abort() }}
           >
             <option value="">—</option>
             <option value="true">Yes</option>
@@ -125,7 +180,7 @@ export function EbayCell({
       )
     }
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} {...tdEvents}>
         <input
           ref={inputRef as React.RefObject<HTMLInputElement>}
           type={col.kind === 'number' ? 'number' : 'text'}
@@ -136,23 +191,28 @@ export function EbayCell({
           onBlur={() => commit(draft)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); commit(draft) }
-            if (e.key === 'Escape') setEditing(false)
+            if (e.key === 'Escape') abort()
           }}
         />
+        {/* Fill handle */}
+        {isFillHandle && (
+          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20 pointer-events-none" />
+        )}
       </td>
     )
   }
 
-  // ── Market-specific read-only cells ──────────────────────────────────
+  // ── Market-specific read-only cells ──────────────────────────────────────
 
   if (col.id.endsWith('_status') && col.readOnly) {
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           {displayVal
             ? <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>{displayVal}</span>
             : <span className="text-slate-300 text-[10px]">—</span>}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
@@ -161,7 +221,7 @@ export function EbayCell({
     const marketCode = col.id.slice(0, 2).toUpperCase()
     const baseUrl = MARKET_URLS[marketCode] ?? ''
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           {displayVal
             ? <a href={`${baseUrl}${displayVal}`} target="_blank" rel="noopener noreferrer"
@@ -172,65 +232,68 @@ export function EbayCell({
               </a>
             : <span className="text-slate-300 text-[10px]">—</span>}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
-  // ── Special column renderers ──────────────────────────────────────────
+  // ── Special column renderers ──────────────────────────────────────────────
 
   if (col.id === 'title') {
     const len = displayVal.length
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} onDoubleClick={startEdit}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           <span className="flex-1 truncate">{displayVal}</span>
-          {len > 0 && (
-            <span className={cn('text-[10px] shrink-0', len > 80 ? 'text-red-500' : 'text-slate-400')}>{len}</span>
-          )}
+          {len > 0 && <span className={cn('text-[10px] shrink-0', len > 80 ? 'text-red-500' : 'text-slate-400')}>{len}</span>}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
   if (col.id === 'description') {
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} onDoubleClick={onOpenDescription}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           <span className="truncate text-slate-400 italic text-[10px]">
             {displayVal ? displayVal.replace(/<[^>]+>/g, '').slice(0, 40) + '…' : 'Double-click to edit…'}
           </span>
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
   if (col.id === 'category_id') {
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} onDoubleClick={onOpenCategorySearch}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           {displayVal
             ? <span className="font-mono text-[10px] text-blue-700 dark:text-blue-300">{displayVal}</span>
             : <span className="text-slate-300 text-[10px]">Double-click to search…</span>}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
   if (col.kind === 'boolean') {
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} onDoubleClick={startEdit}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           {value === true || value === 'true'
             ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
             : <span className="text-slate-300">—</span>}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
   if (col.id === 'listing_status') {
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           {displayVal && (
             <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium', statusBadgeCls(displayVal))}>
@@ -238,6 +301,7 @@ export function EbayCell({
             </span>
           )}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
@@ -245,17 +309,17 @@ export function EbayCell({
   if (col.id === 'last_pushed_at') {
     const d = displayVal ? new Date(displayVal) : null
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           <span className="truncate text-slate-400 text-[10px]">
             {d ? d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
           </span>
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
-  // Push sync status
   if (col.id === 'sync_status') {
     const iconMap: Record<string, React.ReactNode> = {
       synced:  <CheckCircle2 className="h-3 w-3 text-emerald-500" />,
@@ -263,21 +327,23 @@ export function EbayCell({
       error:   <AlertCircle className="h-3 w-3 text-red-500" />,
     }
     return (
-      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate}>
+      <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
         <div className={inner}>
           {iconMap[displayVal] ?? <span className="text-slate-300 text-[10px]">—</span>}
         </div>
+        {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
       </td>
     )
   }
 
-  // ── Default cell ──────────────────────────────────────────────────────
+  // ── Default cell ─────────────────────────────────────────────────────────
 
   return (
-    <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} onDoubleClick={startEdit}>
+    <td className={tdCls} style={{ minWidth: col.width, maxWidth: col.width }} onClick={onActivate} {...tdEvents}>
       <div className={inner}>
         <span className="truncate">{displayVal || <span className="text-slate-300">—</span>}</span>
       </div>
+      {isFillHandle && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 cursor-crosshair z-20" />}
     </td>
   )
 }
