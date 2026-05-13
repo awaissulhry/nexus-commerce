@@ -885,7 +885,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // Column group pills
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('eff-closed-groups') ?? '[]')) } catch { return new Set() }
+    try {
+      const saved = localStorage.getItem('eff-closed-groups')
+      if (saved !== null) return new Set(JSON.parse(saved))
+    } catch {}
+    // Smart defaults: keep Identifiers + Listing + Pricing + Inventory + Status + Italy visible
+    return new Set(['content', 'images', 'policies', 'market-DE', 'market-FR', 'market-ES', 'market-UK'])
   })
   const [groupOrder, setGroupOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('eff-group-order') ?? '[]') } catch { return [] }
@@ -988,7 +993,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     return [...fixed, ...itemSpecifics, ...markets]
   }, [categoryColumns])
 
-  const allColumns = useMemo(() => getAllEbayColumns(), [])
+  // allColumns includes dynamic category columns so Find/Replace + CF see them
+  const allColumns = useMemo(
+    () => [...getAllEbayColumns(), ...(categoryColumns?.columns ?? [])],
+    [categoryColumns],
+  )
 
   const orderedGroups = useMemo<EbayColumnGroup[]>(() => {
     if (!groupOrder.length) return allColumnGroups
@@ -1661,6 +1670,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
                     setDraggingGroupId(null)
                   }}
                   onClick={() => setClosedGroups((prev) => {
+                    // Guard: at least one group must stay visible
+                    if (open && orderedGroups.filter((x) => !prev.has(x.id)).length <= 1) return prev
                     const n = new Set(prev)
                     open ? n.add(g.id) : n.delete(g.id)
                     try { localStorage.setItem('eff-closed-groups', JSON.stringify([...n])) } catch {}
@@ -1683,8 +1694,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
               <button type="button"
                 onClick={() => {
                   setGroupOrder([])
-                  setClosedGroups(new Set())
-                  try { localStorage.removeItem('eff-group-order'); localStorage.removeItem('eff-closed-groups') } catch {}
+                  const defaults = new Set(['content', 'images', 'policies', 'market-DE', 'market-FR', 'market-ES', 'market-UK'])
+                  setClosedGroups(defaults)
+                  try { localStorage.removeItem('eff-group-order'); localStorage.setItem('eff-closed-groups', JSON.stringify([...defaults])) } catch {}
                 }}
                 className="text-xs text-slate-400 hover:text-slate-600 px-1"
                 title="Reset column group order and visibility">
