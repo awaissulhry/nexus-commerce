@@ -365,6 +365,66 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
       }
     }
 
+    // IS.1 — cascade available-qty snapshot to other channels.
+    // reserveOpenOrder reduces available but doesn't call applyStockMovement,
+    // so OutboundSyncQueue never fires. We snapshot the updated available qty
+    // and enqueue QUANTITY_UPDATE for all active eBay/Amazon listings.
+    void (async () => {
+      try {
+        for (const it of createdItems) {
+          if (!it.productId) continue;
+          // Get fresh available qty after reservation
+          const sl = await prisma.stockLevel.findFirst({
+            where: { productId: it.productId },
+            select: { available: true },
+          });
+          if (!sl) continue;
+          const availableQty = sl.available;
+
+          // Find all active ChannelListings for this product on OTHER channels
+          const listings = await prisma.channelListing.findMany({
+            where: {
+              productId: it.productId,
+              channel: { not: 'SHOPIFY' },
+              isPublished: true,
+              offerActive: true,
+            },
+            select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
+          });
+
+          for (const listing of listings) {
+            const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0));
+            const targetChannel = listing.channel as 'AMAZON' | 'EBAY' | 'SHOPIFY';
+            if (!(['AMAZON', 'EBAY'] as string[]).includes(targetChannel)) continue;
+            await prisma.outboundSyncQueue.create({
+              data: {
+                productId: it.productId,
+                channelListingId: listing.id,
+                targetChannel,
+                targetRegion: listing.region ?? undefined,
+                syncType: 'QUANTITY_UPDATE',
+                syncStatus: 'PENDING',
+                payload: {
+                  quantity: bufferedQty,
+                  marketplaceId: listing.channel === 'EBAY'
+                    ? `EBAY_${(listing.region ?? 'IT').toUpperCase().replace('GB', 'GB')}`
+                    : (listing.region ?? 'IT').toUpperCase(),
+                },
+                externalListingId: listing.externalListingId ?? undefined,
+                retryCount: 0,
+                maxRetries: 3,
+                holdUntil: new Date(Date.now() + 30_000), // 30s grace (faster than applyStockMovement's 5min for orders)
+              } as any,
+            });
+          }
+        }
+      } catch (err) {
+        logger.warn('[ShopifyWebhooks] IS.1 cascade failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+
     // If Shopify already says fulfilled at create time (unusual but
     // possible on bulk imports), consume immediately.
     if (status === 'SHIPPED') {

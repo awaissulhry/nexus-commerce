@@ -201,6 +201,121 @@ function packSharedFields(row: Record<string, unknown>): {
   };
 }
 
+// ── Variation group push helper ────────────────────────────────────────
+
+async function pushVariationGroup(
+  groupKey: string,
+  rows: Array<Record<string, unknown>>,
+  mp: string,
+  token: string,
+  apiBase: string,
+  marketplaceId: string,
+): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
+  const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Content-Language': 'en-US',
+    Accept: 'application/json',
+  }
+
+  // Step 1: Create/update each individual inventory item (same as single-row flow)
+  for (const row of rows) {
+    const sku = row.sku as string
+    const aspects: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(row)) {
+      if (k.startsWith('aspect_') && v) {
+        const aspectName = k.replace('aspect_', '').replace(/_/g, ' ')
+          .replace(/\b\w/g, (c: string) => c.toUpperCase())
+        aspects[aspectName] = [String(v)]
+      }
+    }
+    if (row.ean) aspects['EAN'] = [String(row.ean)]
+    if (row.mpn) aspects['MPN'] = [String(row.mpn)]
+
+    const price = row[`${mp.toLowerCase()}_price`] ?? row.price ?? 0
+    const qty   = row[`${mp.toLowerCase()}_qty`]   ?? row.quantity ?? 0
+
+    const itemBody = {
+      product: {
+        title: row.title,
+        description: row.description ?? '',
+        imageUrls: [row.image_1, row.image_2, row.image_3].filter(Boolean),
+        aspects,
+      },
+      condition: row.condition ?? 'NEW',
+      shipToLocationAvailability: { quantity: Number(qty) },
+    }
+
+    const itemRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
+      method: 'PUT', headers, body: JSON.stringify(itemBody),
+    })
+    if (!itemRes.ok && itemRes.status !== 204) {
+      const err = await itemRes.text().catch(() => '')
+      results.push({ sku, market: mp, status: 'ERROR', message: `inventory_item PUT ${itemRes.status}: ${err.slice(0, 200)}` })
+      continue
+    }
+    results.push({ sku, market: mp, status: 'PUSHED', message: 'inventory_item updated' })
+  }
+
+  // Step 2: Build variesBy from variation_theme on the first row
+  const variationTheme = (rows[0].variation_theme as string | undefined) ?? ''
+  const varAspectNames = variationTheme.split(',').map((s: string) => s.trim()).filter(Boolean)
+
+  // Collect all values per variation aspect across all rows
+  const specMap = new Map<string, Set<string>>()
+  for (const name of varAspectNames) {
+    specMap.set(name, new Set())
+  }
+  for (const row of rows) {
+    for (const name of varAspectNames) {
+      const key = `aspect_${name.toLowerCase().replace(/\s+/g, '_')}`
+      const val = row[key] as string | undefined
+      if (val) specMap.get(name)?.add(val)
+    }
+  }
+  const specifications = [...specMap.entries()].map(([name, vals]) => ({ name, values: [...vals] }))
+
+  // Step 3: Create/update the inventory item group
+  const groupBody = {
+    inventoryItemGroupKey: groupKey,
+    title: rows[0].title ?? '',
+    description: rows[0].description ?? '',
+    imageUrls: [rows[0].image_1, rows[0].image_2, rows[0].image_3].filter(Boolean),
+    variesBy: {
+      aspectsImageVariesBy: varAspectNames.slice(0, 1), // first aspect drives image variation
+      specifications: specifications.length ? specifications : [{ name: 'Model', values: rows.map(r => r.sku as string) }],
+    },
+    inventoryItems: rows.map(r => ({ sku: r.sku as string })),
+  }
+
+  const groupRes = await fetch(`${apiBase}/sell/inventory/v1/inventory_item_group/${encodeURIComponent(groupKey)}`, {
+    method: 'PUT', headers, body: JSON.stringify(groupBody),
+  })
+  if (!groupRes.ok && groupRes.status !== 204) {
+    const err = await groupRes.text().catch(() => '')
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `inventory_item_group PUT ${groupRes.status}: ${err.slice(0, 200)}` }))
+  }
+
+  // Step 4: Publish via group
+  const publishRes = await fetch(`${apiBase}/sell/inventory/v1/offer/publish_by_inventory_item_group`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ inventoryItemGroupKey: groupKey, marketplaceId }),
+  })
+
+  let listingId: string | undefined
+  if (publishRes.ok) {
+    const pubData = await publishRes.json().catch(() => ({})) as { listingId?: string }
+    listingId = pubData.listingId
+  } else {
+    const err = await publishRes.text().catch(() => '')
+    return results.map(r => ({ ...r, status: 'ERROR' as const, message: `publish_by_group ${publishRes.status}: ${err.slice(0, 200)}` }))
+  }
+
+  // Mark all rows PUSHED with the shared listingId
+  return results.map(r => ({ ...r, status: 'PUSHED' as const, message: 'pushed as variation group', itemId: listingId }))
+}
+
 // ── Route plugin ───────────────────────────────────────────────────────
 
 export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
@@ -281,6 +396,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
           guidance: (a.usage === 'REQUIRED' || a.usage === 'RECOMMENDED' || a.usage === 'OPTIONAL')
             ? a.usage : 'OPTIONAL',
           width: isEnum ? 140 : a.maxLength && a.maxLength > 50 ? 200 : 130,
+          variantEligible: a.variantEligible,
         };
       });
 
@@ -561,7 +677,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       }
     }
 
-    // ── API mode — per row × market ─────────────────────────────────
+    // ── API mode — family-aware per row × market ────────────────────
     const perRowResults: Array<{
       sku: string;
       market: string;
@@ -570,16 +686,41 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       itemId?: string;
     }> = [];
 
+    // Group rows by family (platformProductId). Rows without one are their own family.
+    const families = new Map<string, typeof rows>();
     for (const row of rows) {
-      const sku = row.sku as string;
-      if (!sku) {
-        perRowResults.push({ sku: '', market: '*', status: 'ERROR', message: 'Missing SKU' });
-        continue;
-      }
+      const key = (row.platformProductId as string | undefined) ?? (row.sku as string);
+      if (!families.has(key)) families.set(key, []);
+      families.get(key)!.push(row);
+    }
 
-      for (const mp of targetMarkets) {
+    for (const mp of targetMarkets) {
+      const marketplaceId = toMarketplaceId(mp);
+
+      for (const [familyKey, familyRows] of families) {
+        if (familyRows.length > 1) {
+          // Multi-SKU family — push as variation group
+          const groupResults = await pushVariationGroup(
+            familyKey,
+            familyRows,
+            mp,
+            token,
+            EBAY_API_BASE,
+            marketplaceId,
+          );
+          perRowResults.push(...groupResults);
+          continue;
+        }
+
+        // Single-SKU family — existing per-row flow
+        const row = familyRows[0];
+        const sku = row.sku as string;
+        if (!sku) {
+          perRowResults.push({ sku: '', market: mp, status: 'ERROR', message: 'Missing SKU' });
+          continue;
+        }
+
         const prefix = mp.toLowerCase() as Lowercase<Market>;
-        const marketplaceId = toMarketplaceId(mp);
         const currency = mp === 'UK' ? 'GBP' : 'EUR';
         const price = Number(row[`${prefix}_price`] ?? row.price ?? 0);
         const qty = Number(row[`${prefix}_qty`] ?? row.quantity ?? 0);
@@ -1028,5 +1169,90 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         .code(500)
         .send({ error: err instanceof Error ? err.message : 'Amazon import failed' });
     }
+  });
+
+  // ── GET /api/ebay/flat-file/poll-orders ──────────────────────────────────
+  // Polls eBay Fulfillment API for new orders in the last N hours and
+  // decrements local stock via applyStockMovement. Designed to be called
+  // by a cron job every 5 minutes. Idempotent — skips already-processed
+  // orders via channelOrderId unique constraint.
+  fastify.get<{
+    Querystring: { hoursBack?: string; marketplace?: string }
+  }>('/ebay/flat-file/poll-orders', async (request, reply) => {
+    const hoursBack = parseInt(request.query.hoursBack ?? '1', 10) || 1;
+    const marketplace = toMarketplaceId(request.query.marketplace ?? 'IT');
+
+    const connection = await prisma.channelConnection.findFirst({
+      where: { channelType: 'EBAY', isActive: true },
+      select: { id: true },
+    });
+    if (!connection) {
+      return reply.code(503).send({ error: 'No active eBay connection' });
+    }
+
+    let token: string;
+    try {
+      token = await ebayAuthService.getValidToken(connection.id);
+    } catch (err) {
+      return reply.code(503).send({ error: `eBay token error: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    const since = new Date(Date.now() - hoursBack * 3600 * 1000).toISOString();
+    const ordersUrl = `${EBAY_API_BASE}/sell/fulfillment/v1/order?filter=creationdate:%5B${encodeURIComponent(since)}..%5D&limit=50`;
+
+    let ordersData: { orders?: Array<{ orderId: string; lineItems?: Array<{ sku: string; quantity: number }> }> };
+    try {
+      const res = await fetch(ordersUrl, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        return reply.code(502).send({ error: `eBay orders API ${res.status}` });
+      }
+      ordersData = await res.json() as typeof ordersData;
+    } catch (err) {
+      return reply.code(502).send({ error: `eBay orders fetch failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    const orders = ordersData.orders ?? [];
+    let processed = 0; let skipped = 0; const errors: string[] = [];
+
+    for (const order of orders) {
+      for (const line of order.lineItems ?? []) {
+        if (!line.sku || !line.quantity) continue;
+        try {
+          // Idempotent check — skip if already processed
+          const existing = await prisma.order.findFirst({
+            where: { channelOrderId: order.orderId, channel: 'EBAY' },
+            select: { id: true },
+          });
+          if (existing) { skipped++; continue; }
+
+          const product = await prisma.product.findUnique({
+            where: { sku: line.sku }, select: { id: true, sku: true },
+          });
+          if (!product) { errors.push(`SKU not found: ${line.sku}`); continue; }
+
+          // Decrement via canonical path — triggers OutboundSyncQueue cascade
+          const { applyStockMovement } = await import('../services/stock-movement.service.js');
+          await applyStockMovement({
+            productId: product.id,
+            change: -line.quantity,
+            reason: 'ORDER_PLACED',
+            referenceType: 'EbayOrder',
+            referenceId: order.orderId,
+            actor: 'ebay:poll-orders',
+            notes: `eBay order ${order.orderId} marketplace=${marketplace}`,
+          });
+          processed++;
+        } catch (err) {
+          errors.push(`${line.sku}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+
+    return reply.send({
+      marketplace, hoursBack, ordersChecked: orders.length,
+      processed, skipped, errors,
+    });
   });
 }

@@ -645,39 +645,144 @@ export class OutboundSyncService {
   }
 
   /**
-   * Sync product to Shopify.
+   * Sync product to Shopify via inventory_levels/set.
    *
-   * C.8 — replaced the Math.random demo simulator with an honest
-   * NOT_IMPLEMENTED gate. Real wiring lands in Wave 6 / C.18 once
-   * the /listings/shopify Path-A overlay is shipped. Until then
-   * every queued Shopify sync returns a clear "not yet wired"
-   * failure instead of phantom 90% success — so master/channel
-   * drift never gets papered over by a fake green tick.
+   * IS.1 — real implementation that updates the Shopify inventory level
+   * for the SKU's inventory_item_id at the configured location. Replaces
+   * the NOT_IMPLEMENTED gate from C.8.
    */
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
-    const { product, payload, id: queueId } = queueItem;
+    const { product, payload, channelListing, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
-    const shopifyPayload = this.constructShopifyPayload(payload);
+    const newQty: number = payload?.quantity ?? 0;
+
+    // Shopify credentials from env / channel connection
+    const shopName = process.env.SHOPIFY_SHOP_NAME ?? "";
+    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN ?? process.env.SHOPIFY_ADMIN_API_TOKEN ?? "";
+
+    if (!shopName || !accessToken) {
+      writeAttemptLog({
+        channel: "SHOPIFY",
+        marketplace: "GLOBAL",
+        sellerId: shopName || "(unset)",
+        sku,
+        productId: product?.id ?? null,
+        mode: "gated",
+        outcome: "gated",
+        payloadDigest: digestPayload(payload),
+        errorMessage: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN not configured.",
+      });
+      return {
+        success: false,
+        queueId,
+        channel: "SHOPIFY",
+        status: "FAILED",
+        message: "Shopify outbound sync not configured",
+        error: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN env vars missing.",
+      };
+    }
+
+    const apiBase = `https://${shopName}.myshopify.com/admin/api/2024-01`;
+    const headers = {
+      "X-Shopify-Access-Token": accessToken,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    // Resolve inventory_item_id: stored in ChannelListing.platformAttributes.inventoryItemId
+    // or fall back to looking up by SKU via the Shopify Inventory Items API
+    let inventoryItemId: string | null =
+      (channelListing?.platformAttributes as Record<string, any>)?.inventoryItemId ?? null;
+
+    if (!inventoryItemId) {
+      // Look up by variant SKU
+      const varRes = await fetch(
+        `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id`,
+        { headers },
+      ).catch(() => null);
+      if (varRes?.ok) {
+        const varData = await varRes.json().catch(() => null) as { variants?: Array<{ inventory_item_id: string }> } | null;
+        inventoryItemId = varData?.variants?.[0]?.inventory_item_id ?? null;
+      }
+    }
+
+    if (!inventoryItemId) {
+      return {
+        success: false,
+        queueId,
+        channel: "SHOPIFY",
+        status: "FAILED",
+        message: `No Shopify inventory_item_id found for SKU ${sku}`,
+        error: "inventory_item_id not in ChannelListing and SKU lookup returned nothing.",
+      };
+    }
+
+    // Resolve Shopify location ID (primary location)
+    let locationId: string | null = process.env.SHOPIFY_LOCATION_ID ?? null;
+    if (!locationId) {
+      const locRes = await fetch(`${apiBase}/locations.json?limit=1&fields=id`, { headers }).catch(() => null);
+      if (locRes?.ok) {
+        const locData = await locRes.json().catch(() => null) as { locations?: Array<{ id: string }> } | null;
+        locationId = String(locData?.locations?.[0]?.id ?? "");
+      }
+    }
+
+    if (!locationId) {
+      return {
+        success: false,
+        queueId,
+        channel: "SHOPIFY",
+        status: "FAILED",
+        message: "Could not resolve Shopify location ID",
+        error: "Set SHOPIFY_LOCATION_ID env var or connect a Shopify location.",
+      };
+    }
+
+    // Set inventory level
+    const t0 = Date.now();
+    const setRes = await fetch(`${apiBase}/inventory_levels/set.json`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        location_id: parseInt(locationId, 10),
+        inventory_item_id: parseInt(inventoryItemId, 10),
+        available: newQty,
+      }),
+    }).catch((err: Error) => ({ ok: false, text: async () => err.message } as any));
+
+    const succeeded = setRes.ok;
+    const errorBody = succeeded ? null : await setRes.text().catch(() => "");
+
     writeAttemptLog({
       channel: "SHOPIFY",
       marketplace: "GLOBAL",
-      sellerId: process.env.SHOPIFY_SHOP_NAME ?? "(unset)",
+      sellerId: shopName,
       sku,
       productId: product?.id ?? null,
-      mode: "gated",
-      outcome: "gated",
-      payload: shopifyPayload,
-      errorMessage:
-        "Shopify outbound sync not yet wired — see roadmap C.18 (Wave 6 Path A).",
+      mode: "live",
+      outcome: succeeded ? "success" : "failed",
+      payloadDigest: digestPayload(payload),
+      errorMessage: succeeded ? null : `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}`,
+      durationMs: Date.now() - t0,
     });
+
+    if (!succeeded) {
+      return {
+        success: false,
+        queueId,
+        channel: "SHOPIFY",
+        status: "FAILED",
+        message: "Failed to update Shopify inventory",
+        error: `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}`,
+      };
+    }
+
     return {
-      success: false,
+      success: true,
       queueId,
       channel: "SHOPIFY",
-      status: "FAILED",
-      message: `Failed to sync to Shopify`,
-      error:
-        "Shopify outbound sync not yet wired — see roadmap C.18 (Wave 6 Path A).",
+      status: "SUCCESS",
+      message: `Shopify inventory updated: ${sku} → ${newQty} at location ${locationId}`,
     };
   }
 

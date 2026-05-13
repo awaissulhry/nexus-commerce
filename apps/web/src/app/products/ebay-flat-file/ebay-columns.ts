@@ -22,6 +22,8 @@ export interface EbayColumn {
   width: number
   frozen?: boolean
   readOnly?: boolean
+  /** Whether this aspect can be used as a variation dimension in multi-SKU listings */
+  variantEligible?: boolean
 }
 
 export interface EbayColumnGroup {
@@ -148,6 +150,15 @@ export const EBAY_FIXED_GROUPS: EbayColumnGroup[] = [
         kind: 'text',
         maxLength: 20,
         width: 120,
+      },
+      {
+        id: 'variation_theme',
+        label: 'Variation Theme',
+        description: 'Comma-separated aspect names that define the variation dimensions (e.g. "Taglia,Colore"). Only needed for product families with multiple variants.',
+        required: false,
+        kind: 'text' as EbayColumnKind,
+        maxLength: 200,
+        width: 200,
       },
       {
         id: 'subtitle',
@@ -383,6 +394,8 @@ export interface CategoryAspect {
   /** Usage level from eBay API: REQUIRED / RECOMMENDED / OPTIONAL */
   guidance?: string
   width: number
+  /** Whether this aspect can be used as a variation dimension in multi-SKU listings */
+  variantEligible?: boolean
 }
 
 /**
@@ -397,12 +410,13 @@ export function buildCategoryColumns(aspects: CategoryAspect[]): EbayColumnGroup
     color: 'teal',
     columns: aspects.map((a) => ({
       id: a.id,
-      label: a.label + (a.required ? ' *' : a.recommended ? ' ○' : ''),
+      label: a.label + (a.required ? ' *' : a.recommended ? ' ○' : '') + (a.variantEligible ? ' ↕' : ''),
       kind: a.kind,
       options: a.options,
       required: a.required,
       guidance: a.guidance,
       width: a.width,
+      variantEligible: a.variantEligible,
     })),
   }
 }
