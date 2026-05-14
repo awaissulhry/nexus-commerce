@@ -3,6 +3,7 @@ import prisma from '../db.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
+import { syncActivatedListings } from '../services/listing-activation-sync.service.js'
 
 const amazonService = new AmazonService()
 
@@ -253,6 +254,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             })
           )
         )
+        // Sync inventory immediately for any listing just turned active
+        const activatedIds = results.filter((r) => r.offerActive).map((r) => r.id)
+        if (activatedIds.length > 0) void syncActivatedListings(activatedIds)
         return { ok: true, updated: results }
       } catch (error: any) {
         return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -310,6 +314,19 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             )
           )
           upserted += chunk.length
+        }
+        // When activating, sync inventory for every listing that just turned active
+        if (offerActive) {
+          const allIds = await prisma.channelListing.findMany({
+            where: {
+              productId: { in: productIds },
+              channel: { in: [...new Set(markets.map((m) => m.channel))] },
+              marketplace: { in: [...new Set(markets.map((m) => m.marketplace))] },
+              offerActive: true,
+            },
+            select: { id: true },
+          })
+          void syncActivatedListings(allIds.map((l) => l.id))
         }
         return { ok: true, upserted, offerActive }
       } catch (error: any) {
@@ -976,11 +993,16 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             })
           }
 
-          // Mark as published
+          // Mark as published + sync inventory
           await prisma.channelListing.updateMany({
             where: { productId: id, channel, marketplace },
             data: { isPublished: true, listingStatus: 'ACTIVE', lastSyncedAt: new Date() },
           })
+          const publishedListing = await prisma.channelListing.findFirst({
+            where: { productId: id, channel, marketplace },
+            select: { id: true },
+          })
+          if (publishedListing) void syncActivatedListings([publishedListing.id])
 
           responsePayload = {
             ok: true,
@@ -1023,6 +1045,13 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             })
           })
 
+          // Sync inventory immediately after marking published
+          const activatedL = await prisma.channelListing.findFirst({
+            where: { productId: id, channel, marketplace },
+            select: { id: true },
+          })
+          if (activatedL) void syncActivatedListings([activatedL.id])
+
           const channelLabel =
             channel === 'EBAY' ? 'eBay'
             : channel === 'SHOPIFY' ? 'Shopify'
@@ -1031,7 +1060,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           responsePayload = {
             ok: true,
             status: 'SUBMITTED',
-            message: `Marked as published. Sync will push to ${channelLabel} on next cycle.`,
+            message: `Marked as published. Inventory synced and push queued for ${channelLabel}.`,
           }
         }
 

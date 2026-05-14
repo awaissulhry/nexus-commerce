@@ -18,6 +18,7 @@ import { Prisma } from '@nexus/database';
 import prisma from '../db.js';
 import { ebayAuthService } from '../services/ebay-auth.service.js';
 import { EbayCategoryService } from '../services/ebay-category.service.js';
+import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -884,6 +885,11 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                       offerActive: true,
                     },
                   });
+                  const activated = await prisma.channelListing.findMany({
+                    where: { productId, channel: 'EBAY', region },
+                    select: { id: true },
+                  });
+                  void syncActivatedListings(activated.map((l) => l.id));
                 }
 
                 perRowResults.push({ sku, market: mp, status: 'PUSHED', message: 'Listed', itemId });
@@ -1008,6 +1014,7 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
                 offerActive: true,
               },
             });
+            void syncActivatedListings([listing.id]);
             results.push({ productId, market: mpUpper, status: 'PUBLISHED', message: `Listed: ${pubData.listingId}` });
           } else {
             const errBody = await publishRes.text().catch(() => '');
