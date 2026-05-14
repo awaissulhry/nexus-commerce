@@ -48,43 +48,11 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     window.setTimeout(() => setToast(null), 3000)
   }
 
-  // ── Loading / error states ───────────────────────────────────────────
-  if (workspace.loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-slate-400">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Loading images…
-      </div>
-    )
-  }
+  // These useMemo calls must stay above the early returns to satisfy Rules of Hooks.
+  const listing  = workspace.data?.listing  ?? []
+  const master   = workspace.data?.master   ?? []
+  const variants = workspace.data?.variants ?? []
 
-  if (workspace.loadError || !workspace.data) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-20 text-slate-500">
-        <AlertTriangle className="w-6 h-6 text-amber-500" />
-        <p className="text-sm">{workspace.loadError ?? 'Failed to load images'}</p>
-        <Button size="sm" variant="ghost" onClick={workspace.reload} className="gap-1.5">
-          <RefreshCw className="w-3.5 h-3.5" /> Retry
-        </Button>
-      </div>
-    )
-  }
-
-  const { data, dirtyCount, saving, savePending, discardPending, setAxisPreference } = workspace
-  const { product: wp, master, listing, variants, availableAxes } = data
-
-  const activeAxis = wp.imageAxisPreference ?? availableAxes[0] ?? 'Color'
-
-  // Pending channel images for the tab dot indicators
-  const pendingForChannel = (channel: 'amazon' | 'ebay' | 'shopify') => {
-    const platform = channel.toUpperCase()
-    return Array.from(workspace.pendingUpserts.values()).filter(
-      (u) => u.platform === platform,
-    ).length
-  }
-
-  // IM.10 — Per-channel completeness scores (0-100) shown as colored pills on tabs.
-  // Considers server listing images + pending upserts together.
   const channelScores = useMemo(() => {
     const pending = Array.from(workspace.pendingUpserts.values())
     const amazonEffective = [...listing.filter((i) => i.platform === 'AMAZON'), ...pending.filter((u) => u.platform === 'AMAZON') as any[]]
@@ -121,12 +89,46 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     }
   }, [listing, master, variants, workspace.pendingUpserts])
 
-  // Published count per channel (how many images have publishStatus=PUBLISHED)
   const publishedCount = useMemo(() => ({
     amazon: listing.filter((i) => i.platform === 'AMAZON' && i.publishStatus === 'PUBLISHED').length,
     ebay:   listing.filter((i) => i.platform === 'EBAY'   && i.publishStatus === 'PUBLISHED').length,
     shopify: listing.filter((i) => i.platform === 'SHOPIFY' && i.publishStatus === 'PUBLISHED').length,
   }), [listing])
+
+  // ── Loading / error states ───────────────────────────────────────────
+  if (workspace.loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+        Loading images…
+      </div>
+    )
+  }
+
+  if (workspace.loadError || !workspace.data) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-20 text-slate-500">
+        <AlertTriangle className="w-6 h-6 text-amber-500" />
+        <p className="text-sm">{workspace.loadError ?? 'Failed to load images'}</p>
+        <Button size="sm" variant="ghost" onClick={workspace.reload} className="gap-1.5">
+          <RefreshCw className="w-3.5 h-3.5" /> Retry
+        </Button>
+      </div>
+    )
+  }
+
+  const { data, dirtyCount, saving, savePending, discardPending, setAxisPreference } = workspace
+  const { product: wp, availableAxes } = data
+
+  const activeAxis = wp.imageAxisPreference ?? availableAxes[0] ?? 'Color'
+
+  // Pending channel images for the tab dot indicators
+  const pendingForChannel = (channel: 'amazon' | 'ebay' | 'shopify') => {
+    const platform = channel.toUpperCase()
+    return Array.from(workspace.pendingUpserts.values()).filter(
+      (u) => u.platform === platform,
+    ).length
+  }
 
   return (
     <div className="space-y-4">
