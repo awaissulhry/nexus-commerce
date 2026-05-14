@@ -9,7 +9,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
-  Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles, Share2,
+  Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
 } from 'lucide-react'
 import { FindReplaceBar } from '@/app/bulk-operations/components/FindReplaceBar'
 import { ConditionalFormatBar } from '@/app/bulk-operations/components/ConditionalFormatBar'
@@ -2165,34 +2165,47 @@ export default function AmazonFlatFileClient({
                 rows={rows} groups={orderedGroups} initial={sortConfig}
                 onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
                 onClose={() => setSortPanelOpen(false)}
+                footerExtra={
+                  <div className="px-4 py-3 space-y-2">
+                    {/* Sync toggle for current market */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                        Auto-sync to other markets
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleMarketSync(mp)}
+                        title={marketSync[mp]
+                          ? `ON — changes on ${mp} propagate automatically. Click to make ${mp} independent.`
+                          : `OFF — click to re-enable auto-propagation`}
+                        className={cn(
+                          'text-[10px] px-2 py-0.5 rounded font-medium transition-colors border',
+                          marketSync[mp]
+                            ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
+                            : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
+                        )}
+                      >
+                        {marketSync[mp] ? 'ON' : 'OFF'}
+                      </button>
+                    </div>
+                    {/* Apply-to section */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => { setSortPanelOpen(false); setApplyPanelOpen(true) }}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium"
+                      >
+                        Apply to specific markets…
+                      </button>
+                    </div>
+                  </div>
+                }
               />
             )}
           </div>
-
-          {/* Market sync toggle (current market) + Apply-to panel */}
-          <div className="relative flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => toggleMarketSync(mp)}
-              title={marketSync[mp]
-                ? `Auto-sync ON for ${mp} — changes propagate to other markets. Click to make ${mp} independent.`
-                : `Auto-sync OFF for ${mp} — click to re-enable propagation`}
-              className={cn(
-                'h-6 px-1.5 rounded text-[10px] font-medium transition-colors border',
-                marketSync[mp]
-                  ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
-                  : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
-              )}
-            >
-              {marketSync[mp] ? '⟳ sync' : '⟳ off'}
-            </button>
-            <TbBtn
-              icon={<Share2 className="w-3.5 h-3.5" />}
-              title="Apply row order to other markets"
-              onClick={() => setApplyPanelOpen((o) => !o)}
-              active={applyPanelOpen}
-            />
-            {applyPanelOpen && (
+          {/* Apply-to panel (opened from inside sort panel) */}
+          {applyPanelOpen && (
+            <div className="relative">
               <ApplyToPanel
                 currentMarket={mp}
                 allMarkets={ALL_MARKETS}
@@ -2201,8 +2214,8 @@ export default function AmazonFlatFileClient({
                 onApplyNow={applyOrderToMarkets}
                 onClose={() => setApplyPanelOpen(false)}
               />
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
@@ -4579,9 +4592,10 @@ interface SortPanelProps {
   initial: SortLevel[]
   onApply: (levels: SortLevel[]) => void
   onClose: () => void
+  footerExtra?: React.ReactNode
 }
 
-function SortPanel({ rows, groups, initial, onApply, onClose }: SortPanelProps) {
+function SortPanel({ rows, groups, initial, onApply, onClose, footerExtra }: SortPanelProps) {
   const [levels, setLevels] = useState<SortLevel[]>(initial)
   const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -4756,6 +4770,11 @@ function SortPanel({ rows, groups, initial, onApply, onClose }: SortPanelProps) 
           Apply sort
         </Button>
       </div>
+      {footerExtra && (
+        <div className="border-t border-slate-100 dark:border-slate-800">
+          {footerExtra}
+        </div>
+      )}
     </div>
   )
 }
