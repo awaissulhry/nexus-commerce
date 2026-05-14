@@ -20,11 +20,13 @@ import {
 } from '@dnd-kit/core'
 import {
   AlertCircle,
+  ArrowRight,
   Check,
   ChevronRight,
   Loader2,
   RefreshCw,
   Search,
+  Unlink,
   X,
 } from 'lucide-react'
 import { VirtualizedGrid } from '@/app/products/_components/GridView'
@@ -51,16 +53,21 @@ const ORGANIZE_COLUMNS: ColumnDef[] = [
 // ─── types ───────────────────────────────────────────────────────────
 type RoleFilter = 'all' | 'parents' | 'standalone'
 
+/** 'attach' — standalone/child → parent.  'detach' — child → standalone. */
+export type StagedChangeAction = 'attach' | 'detach'
+
 export interface StagedChange {
   id: string
+  action: StagedChangeAction
   product: ProductRow
-  targetParent: ProductRow
-  /** Axis → value map, e.g. { Taglia: 'M', Colore: 'Nero' } */
+  /** null for detach changes. */
+  targetParent: ProductRow | null
   attributes: Record<string, string>
 }
 
 interface PendingDrop {
-  product: ProductRow
+  /** One or more products being attached (multi-select drag). */
+  products: ProductRow[]
   targetParent: ProductRow
 }
 
@@ -138,18 +145,14 @@ export default function OrganizeGridTab({
   const toggleExpand = useCallback((parentId: string) => {
     setExpandedParents((prev) => {
       const next = new Set(prev)
-      if (next.has(parentId)) {
-        next.delete(parentId)
-      } else {
-        next.add(parentId)
-        void fetchChildrenFor(parentId)
-      }
+      if (next.has(parentId)) { next.delete(parentId) }
+      else { next.add(parentId); void fetchChildrenFor(parentId) }
       return next
     })
   }, [fetchChildrenFor])
 
   // ── selection ─────────────────────────────────────────────────────
-  const toggleSelect = useCallback((id: string, _shiftKey: boolean) => {
+  const toggleSelect = useCallback((id: string, _shift: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
@@ -164,7 +167,6 @@ export default function OrganizeGridTab({
   }, [products])
 
   const allSelected = products.length > 0 && selected.size === products.length
-
   const onChanged = useCallback(() => { void refetch() }, [refetch])
 
   // ── DnD state ─────────────────────────────────────────────────────
@@ -196,85 +198,137 @@ export default function OrganizeGridTab({
 
     const dragged = active.data.current?.product as ProductRow | undefined
     const target = over.data.current?.product as ProductRow | undefined
-    if (!dragged || !target) return
+    if (!dragged || !target || !target.isParent || dragged.id === target.id) return
 
-    // Validation
-    if (dragged.id === target.id) return
-    if (!target.isParent) return
-    // Already a child of this parent
-    if (dragged.parentId === target.id) return
-    // Already staged to this parent
-    if (stagedChanges.some((c) => c.product.id === dragged.id && c.targetParent.id === target.id)) return
+    // Collect all products to attach.
+    // If the dragged item is part of the selection, include all selected
+    // non-parent products that aren't already children of this target.
+    let toAttach: ProductRow[]
+    if (selected.has(dragged.id) && selected.size > 1) {
+      toAttach = allProducts.filter(
+        (p) =>
+          selected.has(p.id) &&
+          !p.isParent &&
+          p.parentId !== target.id &&
+          !stagedChanges.some((c) => c.action === 'attach' && c.product.id === p.id && c.targetParent?.id === target.id),
+      )
+    } else {
+      if (dragged.parentId === target.id) return
+      if (stagedChanges.some((c) => c.action === 'attach' && c.product.id === dragged.id && c.targetParent?.id === target.id)) return
+      toAttach = [dragged]
+    }
 
-    setPendingDrop({ product: dragged, targetParent: target })
-  }, [stagedChanges])
+    if (toAttach.length === 0) return
+    setPendingDrop({ products: toAttach, targetParent: target })
+  }, [selected, allProducts, stagedChanges])
 
-  const handleStageConfirm = useCallback((change: StagedChange) => {
+  const handleStageConfirm = useCallback((changes: StagedChange[]) => {
     setStagedChanges((prev) => {
-      // Replace any existing staged change for the same product
-      const without = prev.filter((c) => c.product.id !== change.product.id)
-      return [...without, change]
+      const newIds = new Set(changes.map((c) => c.product.id))
+      return [...prev.filter((c) => !newIds.has(c.product.id)), ...changes]
     })
     setPendingDrop(null)
   }, [])
+
+  // Stage detach for all selected child rows.
+  const stageDetach = useCallback(() => {
+    const toDetach = allProducts.filter(
+      (p) => selected.has(p.id) && !p.isParent && !!p.parentId,
+    )
+    if (toDetach.length === 0) return
+    setStagedChanges((prev) => {
+      const newIds = new Set(toDetach.map((p) => p.id))
+      const without = prev.filter((c) => !newIds.has(c.product.id))
+      const detachChanges: StagedChange[] = toDetach.map((p) => ({
+        id: `detach:${p.id}:${Date.now()}`,
+        action: 'detach',
+        product: p,
+        targetParent: null,
+        attributes: {},
+      }))
+      return [...without, ...detachChanges]
+    })
+    setSelected(new Set())
+  }, [allProducts, selected])
 
   const discardChange = useCallback((id: string) => {
     setStagedChanges((prev) => prev.filter((c) => c.id !== id))
   }, [])
 
-  const discardAll = useCallback(() => {
-    setStagedChanges([])
-  }, [])
+  const discardAll = useCallback(() => { setStagedChanges([]) }, [])
 
   // ── publish ───────────────────────────────────────────────────────
   const publish = useCallback(async () => {
     if (stagedChanges.length === 0) return
     setPublishing(true)
+
+    const attachChanges = stagedChanges.filter((c) => c.action === 'attach')
+    const detachChanges = stagedChanges.filter((c) => c.action === 'detach')
+    let totalPublished = 0
+    const allErrors: string[] = []
+
     try {
-      const res = await fetch(`${getBackendUrl()}/api/catalog/organize/publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          changes: stagedChanges.map((c) => ({
-            productId: c.product.id,
-            toParentId: c.targetParent.id,
-            attributes: c.attributes,
-          })),
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        onStatus({ kind: 'error', text: json?.error ?? `Publish failed (HTTP ${res.status})` })
-        return
-      }
-
-      const { published, errors, undoExpiresAt } = json as {
-        published: number
-        errors: Array<{ productId: string; sku: string; error: string }>
-        sessionId: string  // kept for Phase 5 history panel
-        undoExpiresAt: string
-      }
-
-      // Remove successfully published changes; keep any that errored.
-      const erroredIds = new Set(errors.map((e) => e.productId))
-      setStagedChanges((prev) => prev.filter((c) => erroredIds.has(c.product.id)))
-
-      emitInvalidation({ type: 'pim.changed', meta: { attached: published } })
-      void refetch()
-
-      if (errors.length === 0) {
-        setReviewOpen(false)
-        const expiryHours = Math.round(
-          (new Date(undoExpiresAt).getTime() - Date.now()) / 3_600_000
-        )
-        toast.success(
-          `Published ${published} change${published === 1 ? '' : 's'}. Undo available for ${expiryHours}h.`
-        )
-      } else {
-        onStatus({
-          kind: 'error',
-          text: `${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors[0]?.error}`,
+      // ── attach ────────────────────────────────────────────────
+      if (attachChanges.length > 0) {
+        const res = await fetch(`${getBackendUrl()}/api/catalog/organize/publish`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            changes: attachChanges.map((c) => ({
+              productId: c.product.id,
+              toParentId: c.targetParent!.id,
+              attributes: c.attributes,
+            })),
+          }),
         })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          allErrors.push(json?.error ?? `Attach publish failed (HTTP ${res.status})`)
+        } else {
+          const { published, errors, undoExpiresAt } = json as {
+            published: number
+            errors: Array<{ productId: string; error: string }>
+            sessionId: string
+            undoExpiresAt: string
+          }
+          totalPublished += published
+          const errIds = new Set(errors.map((e) => e.productId))
+          setStagedChanges((prev) => prev.filter((c) => c.action !== 'attach' || errIds.has(c.product.id)))
+          if (errors.length > 0) allErrors.push(...errors.map((e) => `${e.productId}: ${e.error}`))
+          if (published > 0 && errors.length === 0) {
+            const expiryHours = Math.round((new Date(undoExpiresAt).getTime() - Date.now()) / 3_600_000)
+            toast.success(`Attached ${published} product${published === 1 ? '' : 's'}. Undo available for ${expiryHours}h.`)
+          }
+        }
+      }
+
+      // ── detach ────────────────────────────────────────────────
+      if (detachChanges.length > 0) {
+        const res = await fetch(`${getBackendUrl()}/api/amazon/pim/unlink-child`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: detachChanges.map((c) => c.product.id) }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.success === false) {
+          allErrors.push(json?.error ?? `Detach failed (HTTP ${res.status})`)
+        } else {
+          const detached: number = json.detached ?? detachChanges.length
+          totalPublished += detached
+          setStagedChanges((prev) => prev.filter((c) => c.action !== 'detach'))
+          if (detached > 0) toast.success(`Detached ${detached} product${detached === 1 ? '' : 's'} → standalone.`)
+        }
+      }
+
+      if (totalPublished > 0) {
+        emitInvalidation({ type: 'pim.changed', meta: { published: totalPublished } })
+        void refetch()
+      }
+
+      if (allErrors.length === 0 && stagedChanges.filter(c => !['attach','detach'].includes(c.action)).length === 0) {
+        setReviewOpen(false)
+      } else if (allErrors.length > 0) {
+        onStatus({ kind: 'error', text: `${allErrors.length} error(s): ${allErrors[0]}` })
       }
     } catch (err) {
       onStatus({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
@@ -283,10 +337,16 @@ export default function OrganizeGridTab({
     }
   }, [stagedChanges, refetch, toast, onStatus])
 
-  // ── render ────────────────────────────────────────────────────────
+  // ── derived selection info ────────────────────────────────────────
+  const selectedChildren = useMemo(
+    () => allProducts.filter((p) => selected.has(p.id) && !p.isParent && !!p.parentId),
+    [allProducts, selected],
+  )
+
   const parentCount = allProducts.filter((p) => p.isParent).length
   const standaloneCount = allProducts.filter((p) => !p.isParent && !p.parentId).length
 
+  // ── render ────────────────────────────────────────────────────────
   return (
     <DndContext
       sensors={sensors}
@@ -331,6 +391,18 @@ export default function OrganizeGridTab({
             ))}
           </div>
 
+          {/* Detach selected children */}
+          {selectedChildren.length > 0 && (
+            <button
+              type="button"
+              onClick={stageDetach}
+              className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-md hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors"
+            >
+              <Unlink className="w-3 h-3" />
+              Stage detach ({selectedChildren.length})
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => void refetch()}
@@ -369,15 +441,15 @@ export default function OrganizeGridTab({
         />
       </div>
 
-      {/* DragOverlay — floating preview while dragging */}
+      {/* DragOverlay */}
       <DragOverlay dropAnimation={null}>
-        {activeProduct ? <DragPreview product={activeProduct} /> : null}
+        {activeProduct ? <DragPreview product={activeProduct} selectionCount={selected.has(activeProduct.id) ? selected.size : 1} /> : null}
       </DragOverlay>
 
       {/* Attribute drawer — shown after a valid drop */}
       {pendingDrop && (
         <AttachDrawer
-          product={pendingDrop.product}
+          products={pendingDrop.products}
           targetParent={pendingDrop.targetParent}
           onConfirm={handleStageConfirm}
           onCancel={() => setPendingDrop(null)}
@@ -408,7 +480,7 @@ export default function OrganizeGridTab({
 }
 
 // ─── DragPreview ─────────────────────────────────────────────────────
-function DragPreview({ product }: { product: ProductRow }) {
+function DragPreview({ product, selectionCount }: { product: ProductRow; selectionCount: number }) {
   return (
     <div className="bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-600 rounded-lg shadow-xl px-3 py-2 flex items-center gap-2.5 max-w-[300px] cursor-grabbing">
       {product.imageUrl ? (
@@ -419,28 +491,30 @@ function DragPreview({ product }: { product: ProductRow }) {
       )}
       <div className="min-w-0">
         <div className="text-xs font-mono text-slate-400 dark:text-slate-500 truncate">{product.sku}</div>
-        <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{product.name}</div>
+        <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+          {selectionCount > 1 ? `+ ${selectionCount - 1} more selected` : product.name}
+        </div>
       </div>
     </div>
   )
 }
 
 // ─── COMMON_THEMES ───────────────────────────────────────────────────
-// Mirrors the theme picker in /catalog/organize's PromoteModal.
 const COMMON_THEMES: Array<{ value: string; label: string; hint: string }> = [
-  { value: 'Size',           label: 'Size',           hint: 'XS / S / M / L / XL' },
-  { value: 'Color',          label: 'Color',          hint: 'Black / Brown / Red…' },
-  { value: 'Size / Color',   label: 'Size + Color',   hint: 'Apparel default' },
-  { value: 'Size / Material',label: 'Size + Material',hint: 'Boots, jackets' },
-  { value: 'BodyType / Size',label: 'Body type + Size',hint: "Men's / Women's / Kids'" },
+  { value: 'Size',            label: 'Size',            hint: 'XS / S / M / L / XL' },
+  { value: 'Color',           label: 'Color',           hint: 'Black / Brown / Red…' },
+  { value: 'Size / Color',    label: 'Size + Color',    hint: 'Apparel default' },
+  { value: 'Size / Material', label: 'Size + Material', hint: 'Boots, jackets' },
+  { value: 'BodyType / Size', label: 'Body type + Size',hint: "Men's / Women's / Kids'" },
 ]
 
 // ─── AttachDrawer ─────────────────────────────────────────────────────
-// Full slide-in drawer (placement="drawer-right") with:
+// Full slide-in drawer with:
 //   • COMMON_THEMES picker when the parent has no variation axes
-//   • Per-axis AxisCombobox with autocomplete from existing sibling values
-//   • Conflict detection (same attribute combination already taken)
-//   • Preview tile showing the full "Axis: Value" combination
+//   • Per-axis AxisCombobox with autocomplete from existing siblings
+//   • Batch support: one attribute-row per product in the drop
+//   • Conflict detection (same combo already taken by a sibling)
+//   • Preview tile showing the filled attribute combination
 //   • Amazon variationTheme badge when the parent has one
 type DrawerPhase = 'loading' | 'error' | 'pick-theme' | 'assign'
 
@@ -451,14 +525,14 @@ interface ExistingChild {
 }
 
 function AttachDrawer({
-  product,
+  products,
   targetParent,
   onConfirm,
   onCancel,
 }: {
-  product: ProductRow
+  products: ProductRow[]
   targetParent: ProductRow
-  onConfirm: (change: StagedChange) => void
+  onConfirm: (changes: StagedChange[]) => void
   onCancel: () => void
 }) {
   const [phase, setPhase] = useState<DrawerPhase>('loading')
@@ -466,12 +540,12 @@ function AttachDrawer({
   const [existingValues, setExistingValues] = useState<Map<string, string[]>>(new Map())
   const [existingChildren, setExistingChildren] = useState<ExistingChild[]>([])
   const [variationTheme, setVariationTheme] = useState<string | null>(null)
-  const [attributes, setAttributes] = useState<Record<string, string>>({})
+  // batchAttrs: productId → axis → value
+  const [batchAttrs, setBatchAttrs] = useState<Record<string, Record<string, string>>>({})
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const [customTheme, setCustomTheme] = useState('')
   const [themeChoice, setThemeChoice] = useState<string | null>(null)
+  const [customTheme, setCustomTheme] = useState('')
 
-  // Fetch parent's variation axes + sibling attribute values
   useEffect(() => {
     let cancelled = false
     setPhase('loading')
@@ -488,7 +562,6 @@ function AttachDrawer({
               ? data.variationTheme.split(/\s*\/\s*/).filter(Boolean)
               : []
 
-        // Per-axis suggestion lists from existing siblings
         const valMap = new Map<string, string[]>()
         for (const ax of rawAxes) valMap.set(ax, [])
         const variants: Array<{ id?: string; sku?: string; variationAttributes?: Record<string, unknown> }> =
@@ -506,82 +579,82 @@ function AttachDrawer({
           children.push({ id: v.id ?? '', sku: v.sku ?? '', attrs })
         }
         for (const [ax, list] of valMap) {
-          list.sort((a, b) =>
-            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-          )
+          list.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
           valMap.set(ax, list)
         }
+
         setExistingValues(valMap)
         setExistingChildren(children)
         setVariationTheme(typeof data?.variationTheme === 'string' ? data.variationTheme : null)
 
         if (rawAxes.length > 0) {
           setAxes(rawAxes)
-          setAttributes(Object.fromEntries(rawAxes.map((ax) => [ax, ''])))
+          setBatchAttrs(Object.fromEntries(products.map((p) => [p.id, Object.fromEntries(rawAxes.map((ax) => [ax, '']))])))
           setPhase('assign')
         } else {
           setPhase('pick-theme')
         }
       })
       .catch((err) => {
-        if (!cancelled) {
-          setFetchError(err instanceof Error ? err.message : String(err))
-          setPhase('error')
-        }
+        if (!cancelled) { setFetchError(err instanceof Error ? err.message : String(err)); setPhase('error') }
       })
     return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetParent.id])
 
-  // When user picks a theme, derive axes and advance
   const applyTheme = useCallback((theme: string) => {
     const parsed = theme.split(/\s*\/\s*/).map((s) => s.trim()).filter(Boolean)
     if (parsed.length === 0) return
     setAxes(parsed)
-    setAttributes(Object.fromEntries(parsed.map((ax) => [ax, ''])))
+    setBatchAttrs(Object.fromEntries(products.map((p) => [p.id, Object.fromEntries(parsed.map((ax) => [ax, '']))])))
     setPhase('assign')
+  }, [products])
+
+  const setAttr = useCallback((productId: string, axis: string, value: string) => {
+    setBatchAttrs((prev) => ({ ...prev, [productId]: { ...(prev[productId] ?? {}), [axis]: value } }))
   }, [])
 
-  // Conflict: another sibling already has the same full attribute combo
-  const conflict = useMemo<ExistingChild | null>(() => {
-    if (axes.length === 0) return null
-    const allFilled = axes.every((ax) => (attributes[ax] ?? '').trim() !== '')
-    if (!allFilled) return null
-    return (
-      existingChildren.find((child) =>
-        axes.every(
-          (ax) =>
-            child.attrs[ax]?.toLowerCase() ===
-            (attributes[ax] ?? '').trim().toLowerCase()
-        )
-      ) ?? null
-    )
-  }, [axes, attributes, existingChildren])
-
-  const previewPairs = useMemo(
-    () => axes.filter((ax) => (attributes[ax] ?? '').trim()).map((ax) => [ax, attributes[ax].trim()] as [string, string]),
-    [axes, attributes]
-  )
+  // Conflict detection: for each product, check if its combo matches an existing sibling.
+  const conflicts = useMemo<Map<string, ExistingChild>>(() => {
+    const m = new Map<string, ExistingChild>()
+    if (axes.length === 0) return m
+    for (const p of products) {
+      const pAttrs = batchAttrs[p.id] ?? {}
+      const allFilled = axes.every((ax) => (pAttrs[ax] ?? '').trim() !== '')
+      if (!allFilled) continue
+      const conflict = existingChildren.find((child) =>
+        axes.every((ax) => child.attrs[ax]?.toLowerCase() === (pAttrs[ax] ?? '').trim().toLowerCase())
+      )
+      if (conflict) m.set(p.id, conflict)
+    }
+    return m
+  }, [axes, products, batchAttrs, existingChildren])
 
   const canConfirm =
     phase === 'assign' &&
-    (axes.length === 0 || axes.every((ax) => (attributes[ax] ?? '').trim() !== ''))
+    (axes.length === 0 ||
+      products.every((p) => axes.every((ax) => (batchAttrs[p.id]?.[ax] ?? '').trim() !== '')))
 
   const handleConfirm = () => {
-    onConfirm({
-      id: `${targetParent.id}:${product.id}:${Date.now()}`,
-      product,
+    const changes: StagedChange[] = products.map((p) => ({
+      id: `${targetParent.id}:${p.id}:${Date.now()}`,
+      action: 'attach' as const,
+      product: p,
       targetParent,
       attributes: Object.fromEntries(
-        Object.entries(attributes).map(([k, v]) => [k, v.trim()])
+        Object.entries(batchAttrs[p.id] ?? {}).map(([k, v]) => [k, v.trim()])
       ),
-    })
+    }))
+    onConfirm(changes)
   }
+
+  const isBatch = products.length > 1
 
   return (
     <Modal
       open
       onClose={onCancel}
-      title="Attach to parent"
+      title={isBatch ? `Attach ${products.length} products to parent` : 'Attach to parent'}
       size="xl"
       placement="drawer-right"
       dismissOnEscape
@@ -589,43 +662,42 @@ function AttachDrawer({
     >
       <div className="flex flex-col gap-5 min-h-[200px]">
 
-        {/* ── Product → Parent header ─────────────────────────────── */}
+        {/* Header */}
         <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
-              Moving
-            </div>
-            <div className="font-mono text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
-              {product.sku}
-            </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{product.name}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Moving</div>
+            {isBatch ? (
+              <div className="text-xs font-medium text-slate-800 dark:text-slate-100">
+                {products.map((p) => p.sku).join(', ')}
+              </div>
+            ) : (
+              <>
+                <div className="font-mono text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{products[0]!.sku}</div>
+                <div className="text-xs text-slate-400 truncate">{products[0]!.name}</div>
+              </>
+            )}
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <ArrowRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 mb-0.5">
-              Into parent
-            </div>
-            <div className="font-mono text-sm font-medium text-blue-700 dark:text-blue-300 truncate">
-              {targetParent.sku}
-            </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{targetParent.name}</div>
+            <div className="text-xs text-blue-600 dark:text-blue-400 mb-0.5">Into parent</div>
+            <div className="font-mono text-sm font-medium text-blue-700 dark:text-blue-300 truncate">{targetParent.sku}</div>
+            <div className="text-xs text-slate-400 truncate">{targetParent.name}</div>
           </div>
         </div>
 
-        {/* ── Loading ──────────────────────────────────────────────── */}
+        {/* Loading */}
         {phase === 'loading' && (
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-4 justify-center">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading variation axes…
+          <div className="flex items-center justify-center gap-2 text-sm text-slate-500 py-4">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading variation axes…
           </div>
         )}
 
-        {/* ── Error ────────────────────────────────────────────────── */}
+        {/* Error */}
         {phase === 'error' && (
           <div className="space-y-3">
-            <div className="flex items-start gap-2 text-sm text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg px-3 py-2.5">
+            <div className="flex items-start gap-2 text-sm text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg px-3 py-2.5">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>Couldn't load axes: {fetchError}. You can still stage the change without attributes.</span>
+              <span>Couldn't load axes: {fetchError}. You can still stage without attributes.</span>
             </div>
             <Button variant="secondary" size="sm" onClick={() => setPhase('assign')}>
               Continue without attributes
@@ -633,140 +705,153 @@ function AttachDrawer({
           </div>
         )}
 
-        {/* ── Pick variation theme (parent has no axes) ─────────────── */}
+        {/* Pick theme */}
         {phase === 'pick-theme' && (
           <div className="space-y-3">
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              <strong className="text-slate-800 dark:text-slate-200">{targetParent.sku}</strong> has no variation axes yet.
-              Pick a theme to define which attributes differentiate children, or skip and set them later.
+              <strong className="text-slate-800 dark:text-slate-200">{targetParent.sku}</strong> has no variation axes.
+              Pick a theme, or skip and attach without attributes.
             </p>
             <div className="grid grid-cols-2 gap-2">
               {COMMON_THEMES.map((t) => {
                 const active = themeChoice === t.value
                 return (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => setThemeChoice(t.value)}
-                    className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
-                      active
-                        ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600'
-                    }`}
-                  >
+                  <button key={t.value} type="button" onClick={() => setThemeChoice(t.value)}
+                    className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${active ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'}`}>
                     <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{t.label}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t.hint}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{t.hint}</div>
                   </button>
                 )
               })}
-              {/* Custom theme */}
-              <div
-                className={`rounded-lg border px-3 py-2.5 transition-colors ${
-                  themeChoice === 'CUSTOM'
-                    ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setThemeChoice('CUSTOM')}
-                  className="text-left w-full"
-                >
+              <div className={`rounded-lg border px-3 py-2.5 transition-colors ${themeChoice === 'CUSTOM' ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'}`}>
+                <button type="button" onClick={() => setThemeChoice('CUSTOM')} className="text-left w-full">
                   <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Custom…</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">e.g. "Color / Material"</div>
+                  <div className="text-xs text-slate-500 mt-0.5">e.g. "Color / Material"</div>
                 </button>
                 {themeChoice === 'CUSTOM' && (
-                  <input
-                    type="text"
-                    value={customTheme}
-                    onChange={(e) => setCustomTheme(e.target.value)}
-                    placeholder="Axis1 / Axis2"
-                    autoFocus
-                    className="mt-2 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
+                  <input type="text" value={customTheme} onChange={(e) => setCustomTheme(e.target.value)}
+                    placeholder="Axis1 / Axis2" autoFocus
+                    className="mt-2 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
                 )}
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <Button
-                variant="primary"
-                size="sm"
+              <Button variant="primary" size="sm"
                 disabled={!themeChoice || (themeChoice === 'CUSTOM' && !customTheme.trim())}
-                onClick={() => {
-                  const theme = themeChoice === 'CUSTOM' ? customTheme.trim() : (themeChoice ?? '')
-                  applyTheme(theme)
-                }}
-              >
-                <Check className="w-3.5 h-3.5" />
-                Use this theme
+                onClick={() => applyTheme(themeChoice === 'CUSTOM' ? customTheme.trim() : (themeChoice ?? ''))}>
+                <Check className="w-3.5 h-3.5" /> Use this theme
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => { setAxes([]); setAttributes({}); setPhase('assign') }}>
+              <Button variant="secondary" size="sm"
+                onClick={() => { setAxes([]); setBatchAttrs({}); setPhase('assign') }}>
                 Skip — no attributes
               </Button>
             </div>
           </div>
         )}
 
-        {/* ── Attribute assignment ──────────────────────────────────── */}
+        {/* Assign */}
         {phase === 'assign' && (
           <div className="space-y-4">
             {axes.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400 italic">
-                No variation attributes — the product will be attached without them. You can set attributes from the parent's Variations tab later.
+              <p className="text-sm text-slate-500 italic">
+                No variation attributes — products will be attached without them.
               </p>
+            ) : isBatch ? (
+              /* ── Batch table ── */
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Set attributes for each product:
+                </p>
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left text-xs font-semibold text-slate-500">Product</th>
+                        {axes.map((ax) => (
+                          <th key={ax} className="px-2 py-1.5 text-left text-xs font-semibold text-slate-500">{ax}</th>
+                        ))}
+                        <th className="px-2 py-1.5 w-6" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {products.map((p) => {
+                        const conflict = conflicts.get(p.id)
+                        return (
+                          <tr key={p.id} className={conflict ? 'bg-amber-50/40 dark:bg-amber-950/20' : ''}>
+                            <td className="px-2 py-1.5 font-mono text-xs text-slate-700 dark:text-slate-300 max-w-[100px] truncate">
+                              {p.sku}
+                            </td>
+                            {axes.map((ax) => (
+                              <td key={ax} className="px-2 py-1.5 min-w-[100px]">
+                                <AxisCombobox
+                                  axis={ax}
+                                  value={batchAttrs[p.id]?.[ax] ?? ''}
+                                  suggestions={existingValues.get(ax) ?? []}
+                                  onChange={(v) => setAttr(p.id, ax, v)}
+                                />
+                              </td>
+                            ))}
+                            <td className="px-2 py-1.5">
+                              {conflict && (
+                                <span title={`Taken by ${conflict.sku}`}>
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {conflicts.size > 0 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1.5">
+                    ⚠ {conflicts.size} attribute combo{conflicts.size > 1 ? 's are' : ' is'} already taken — you can still stage but publishing may fail.
+                  </p>
+                )}
+              </div>
             ) : (
-              <>
+              /* ── Single-product form ── */
+              <div className="space-y-3">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Set attributes for <span className="font-mono text-slate-900 dark:text-slate-100">{product.sku}</span>
+                  Set attributes for <span className="font-mono text-slate-900 dark:text-slate-100">{products[0]!.sku}</span>
                 </p>
                 {axes.map((ax) => (
                   <AxisCombobox
                     key={ax}
                     axis={ax}
-                    value={attributes[ax] ?? ''}
+                    value={batchAttrs[products[0]!.id]?.[ax] ?? ''}
                     suggestions={existingValues.get(ax) ?? []}
-                    onChange={(v) => setAttributes((prev) => ({ ...prev, [ax]: v }))}
+                    onChange={(v) => setAttr(products[0]!.id, ax, v)}
                   />
                 ))}
-              </>
-            )}
-
-            {/* Conflict banner */}
-            {conflict && (
-              <div className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2.5">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>
-                  This combination is already taken by{' '}
-                  <span className="font-mono font-semibold">{conflict.sku}</span>.
-                  You can still stage the change but publishing may fail.
-                </span>
+                {conflicts.has(products[0]!.id) && (
+                  <div className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2.5">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>Combo taken by <span className="font-mono font-semibold">{conflicts.get(products[0]!.id)!.sku}</span>. Can still stage, but publishing may fail.</span>
+                  </div>
+                )}
+                {/* Preview tile */}
+                {axes.some((ax) => (batchAttrs[products[0]!.id]?.[ax] ?? '').trim()) && (
+                  <div className="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/30 px-3 py-2.5">
+                    <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mb-1.5">Will appear as</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {axes.filter((ax) => (batchAttrs[products[0]!.id]?.[ax] ?? '').trim()).map((ax) => (
+                        <span key={ax} className="inline-flex items-center gap-1 text-xs bg-white dark:bg-teal-900/40 border border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-200 px-2 py-0.5 rounded-full font-medium">
+                          <span className="opacity-60">{ax}:</span> {batchAttrs[products[0]!.id]?.[ax]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Preview tile */}
-            {previewPairs.length > 0 && (
-              <div className="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/30 px-3 py-2.5">
-                <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mb-1.5">Will appear as</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {previewPairs.map(([ax, val]) => (
-                    <span
-                      key={ax}
-                      className="inline-flex items-center gap-1 text-xs bg-white dark:bg-teal-900/40 border border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-200 px-2 py-0.5 rounded-full font-medium"
-                    >
-                      <span className="opacity-60">{ax}:</span> {val}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Amazon variation_theme badge */}
+            {/* Amazon theme badge */}
             {variationTheme && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span className="font-medium">Amazon variation_theme:</span>
-                <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                  {variationTheme}
-                </code>
+                <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">{variationTheme}</code>
               </div>
             )}
           </div>
@@ -774,18 +859,11 @@ function AttachDrawer({
       </div>
 
       <ModalFooter>
-        <Button variant="secondary" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
+        <Button variant="secondary" size="sm" onClick={onCancel}>Cancel</Button>
         {phase === 'assign' && (
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleConfirm}
-            disabled={!canConfirm}
-          >
+          <Button variant="primary" size="sm" onClick={handleConfirm} disabled={!canConfirm}>
             <Check className="w-3.5 h-3.5" />
-            Stage change
+            {isBatch ? `Stage ${products.length} changes` : 'Stage change'}
           </Button>
         )}
       </ModalFooter>
@@ -794,9 +872,6 @@ function AttachDrawer({
 }
 
 // ─── AxisCombobox ─────────────────────────────────────────────────────
-// Type-to-filter combobox for a single variation axis.
-// Shows a dropdown with filtered suggestions from existing siblings.
-// Keyboard nav: ArrowDown opens / navigates, Enter selects, Escape closes.
 function AxisCombobox({
   axis,
   value,
@@ -814,58 +889,33 @@ function AxisCombobox({
   const listRef = useRef<HTMLUListElement>(null)
 
   const filtered = useMemo(
-    () =>
-      suggestions.filter((s) =>
-        s.toLowerCase().includes(value.toLowerCase())
-      ),
-    [suggestions, value]
+    () => suggestions.filter((s) => s.toLowerCase().includes(value.toLowerCase())),
+    [suggestions, value],
   )
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => {
       if (!inputRef.current?.closest('[data-combobox]')?.contains(e.target as Node)) {
-        setOpen(false)
-        setFocused(-1)
+        setOpen(false); setFocused(-1)
       }
     }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [open])
 
-  const pick = useCallback(
-    (val: string) => {
-      onChange(val)
-      setOpen(false)
-      setFocused(-1)
-      inputRef.current?.focus()
-    },
-    [onChange]
-  )
+  const pick = useCallback((val: string) => {
+    onChange(val); setOpen(false); setFocused(-1); inputRef.current?.focus()
+  }, [onChange])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setOpen(true)
-      setFocused((f) => Math.min(f + 1, filtered.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setFocused((f) => Math.max(f - 1, 0))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (focused >= 0 && filtered[focused]) {
-        pick(filtered[focused])
-      }
-    } else if (e.key === 'Escape') {
-      setOpen(false)
-      setFocused(-1)
-    } else {
-      setOpen(true)
-    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setFocused((f) => Math.min(f + 1, filtered.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setFocused((f) => Math.max(f - 1, 0)) }
+    else if (e.key === 'Enter') { e.preventDefault(); if (focused >= 0 && filtered[focused]) pick(filtered[focused]) }
+    else if (e.key === 'Escape') { setOpen(false); setFocused(-1) }
+    else setOpen(true)
   }
 
-  // Scroll focused item into view
   useEffect(() => {
     if (focused < 0) return
     const el = listRef.current?.children[focused] as HTMLElement | undefined
@@ -873,24 +923,13 @@ function AxisCombobox({
   }, [focused])
 
   const isEmpty = value.trim() === ''
-  const isNewValue = value.trim() !== '' && !suggestions.includes(value.trim())
+  const isNew = value.trim() !== '' && !suggestions.includes(value.trim())
 
   return (
     <div data-combobox className="relative">
-      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-        {axis}
-      </label>
-      <div className={`flex items-center border rounded-md transition-colors ${
-        isEmpty
-          ? 'border-slate-200 dark:border-slate-700'
-          : isNewValue
-            ? 'border-teal-400 dark:border-teal-600'
-            : 'border-blue-400 dark:border-blue-600'
-      }`}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
+      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{axis}</label>
+      <div className={`flex items-center border rounded-md transition-colors ${isEmpty ? 'border-slate-200 dark:border-slate-700' : isNew ? 'border-teal-400 dark:border-teal-600' : 'border-blue-400 dark:border-blue-600'}`}>
+        <input ref={inputRef} type="text" value={value}
           onChange={(e) => { onChange(e.target.value); setOpen(true); setFocused(-1) }}
           onFocus={() => { if (filtered.length > 0) setOpen(true) }}
           onKeyDown={onKeyDown}
@@ -898,31 +937,16 @@ function AxisCombobox({
           autoComplete="off"
           className="flex-1 h-8 px-2.5 text-sm bg-transparent focus:outline-none rounded-md text-slate-800 dark:text-slate-100 placeholder-slate-400"
         />
-        {isNewValue && (
-          <span className="text-xs text-teal-600 dark:text-teal-400 pr-2.5 font-medium whitespace-nowrap">
-            New
-          </span>
-        )}
-        {!isEmpty && !isNewValue && (
-          <Check className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 mr-2.5 flex-shrink-0" />
-        )}
+        {isNew && <span className="text-xs text-teal-600 dark:text-teal-400 pr-2.5 font-medium whitespace-nowrap">New</span>}
+        {!isEmpty && !isNew && <Check className="w-3.5 h-3.5 text-blue-500 mr-2.5 flex-shrink-0" />}
       </div>
       {open && filtered.length > 0 && (
-        <ul
-          ref={listRef}
-          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-36 overflow-y-auto py-1"
-        >
+        <ul ref={listRef} className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-36 overflow-y-auto py-1">
           {filtered.map((s, i) => (
-            <li
-              key={s}
+            <li key={s}
               onMouseDown={(e) => { e.preventDefault(); pick(s) }}
               onMouseEnter={() => setFocused(i)}
-              className={`px-2.5 py-1.5 text-sm cursor-pointer transition-colors ${
-                i === focused
-                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
+              className={`px-2.5 py-1.5 text-sm cursor-pointer transition-colors ${i === focused ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
               {s}
             </li>
           ))}
@@ -934,9 +958,9 @@ function AxisCombobox({
 
 // ─── channel-tone helper ─────────────────────────────────────────────
 const CHANNEL_TONE: Record<string, string> = {
-  AMAZON:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800',
-  EBAY:     'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800',
-  SHOPIFY:  'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800',
+  AMAZON:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800',
+  EBAY:    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800',
+  SHOPIFY: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800',
 }
 
 // ─── ReviewModal ──────────────────────────────────────────────────────
@@ -953,6 +977,9 @@ function ReviewModal({
   onPublish: () => void
   onClose: () => void
 }) {
+  const attachCount = changes.filter((c) => c.action === 'attach').length
+  const detachCount = changes.filter((c) => c.action === 'detach').length
+
   return (
     <Modal
       open
@@ -964,46 +991,65 @@ function ReviewModal({
       dismissOnBackdrop={!publishing}
     >
       <div className="space-y-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Publishes hierarchy changes to the catalog and enqueues channel sync via OutboundSyncQueue.
-          After publishing you can undo within <strong className="text-slate-700 dark:text-slate-300">48 hours</strong>.
-        </p>
+        <div className="flex items-center gap-3 flex-wrap text-sm text-slate-500 dark:text-slate-400">
+          {attachCount > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+              {attachCount} attach {attachCount === 1 ? 'change' : 'changes'}
+            </span>
+          )}
+          {detachCount > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
+              {detachCount} detach {detachCount === 1 ? 'change' : 'changes'}
+            </span>
+          )}
+          <span className="text-xs">Publishes to catalog + enqueues channel sync. Attach changes undoable for 48h.</span>
+        </div>
+
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Product</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">→ Parent</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Attributes</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Channels</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Product</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Action</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Attributes</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Channels</th>
                 <th className="px-3 py-2 w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {changes.map((c) => {
-                // Derive channel impact from syncChannels + coverage already in ProductRow.
                 const channels = c.product.syncChannels ?? []
                 const coverage = c.product.coverage ?? {}
+                const isDetach = c.action === 'detach'
                 return (
-                  <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                  <tr key={c.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 ${isDetach ? 'bg-rose-50/20 dark:bg-rose-950/10' : ''}`}>
                     <td className="px-3 py-2.5 align-top">
                       <div className="font-mono text-xs text-slate-700 dark:text-slate-300">{c.product.sku}</div>
                       <div className="text-xs text-slate-400 truncate max-w-[140px]">{c.product.name}</div>
-                      {c.product.amazonAsin && (
-                        <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">
-                          {c.product.amazonAsin}
-                        </div>
-                      )}
                     </td>
                     <td className="px-3 py-2.5 align-top">
-                      <div className="font-mono text-xs text-blue-700 dark:text-blue-400">{c.targetParent.sku}</div>
-                      <div className="text-xs text-slate-400 truncate max-w-[140px]">{c.targetParent.name}</div>
+                      {isDetach ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-rose-700 dark:text-rose-400 font-medium">
+                          <Unlink className="w-3 h-3" /> → Standalone
+                        </span>
+                      ) : (
+                        <div>
+                          <div className="flex items-center gap-1 text-xs">
+                            <ChevronRight className="w-3 h-3 text-slate-400" />
+                            <span className="font-mono text-blue-700 dark:text-blue-400 truncate max-w-[100px]">
+                              {c.targetParent?.sku}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 align-top">
                       {Object.keys(c.attributes).length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {Object.entries(c.attributes).map(([k, v]) => v ? (
-                            <span key={k} className="inline-flex items-center gap-0.5 text-xs bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded-full">
+                            <span key={k} className="text-xs bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded-full">
                               <span className="opacity-60">{k}:</span> {v}
                             </span>
                           ) : null)}
@@ -1019,15 +1065,11 @@ function ReviewModal({
                         <div className="flex flex-col gap-1">
                           {channels.map((ch) => {
                             const cov = coverage[ch]
-                            const tone = CHANNEL_TONE[ch] ?? 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            const tone = CHANNEL_TONE[ch] ?? 'bg-slate-50 text-slate-600 border-slate-200'
                             return (
-                              <span key={ch} className={`inline-flex items-center gap-1 text-[10px] font-medium border px-1.5 py-0.5 rounded-full whitespace-nowrap ${tone}`}>
+                              <span key={ch} className={`inline-flex items-center gap-1 text-[10px] font-medium border px-1.5 py-0.5 rounded-full ${tone}`}>
                                 {ch}
-                                {cov && (
-                                  <span className="opacity-70">
-                                    {cov.live > 0 ? `${cov.live}L` : cov.draft > 0 ? `${cov.draft}D` : '—'}
-                                  </span>
-                                )}
+                                {cov && <span className="opacity-70">{cov.live > 0 ? `${cov.live}L` : cov.draft > 0 ? `${cov.draft}D` : '—'}</span>}
                               </span>
                             )
                           })}
@@ -1035,13 +1077,9 @@ function ReviewModal({
                       )}
                     </td>
                     <td className="px-3 py-2.5 align-top">
-                      <button
-                        type="button"
-                        onClick={() => onDiscard(c.id)}
-                        disabled={publishing}
-                        aria-label={`Remove ${c.product.sku} from staged changes`}
-                        className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-30"
-                      >
+                      <button type="button" onClick={() => onDiscard(c.id)} disabled={publishing}
+                        aria-label={`Remove ${c.product.sku}`}
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-30">
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -1054,15 +1092,8 @@ function ReviewModal({
       </div>
 
       <ModalFooter>
-        <Button variant="secondary" size="sm" onClick={onClose} disabled={publishing}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={onPublish}
-          disabled={publishing || changes.length === 0}
-        >
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={publishing}>Cancel</Button>
+        <Button variant="primary" size="sm" onClick={onPublish} disabled={publishing || changes.length === 0}>
           {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           {publishing ? 'Publishing…' : `Publish ${changes.length} change${changes.length === 1 ? '' : 's'}`}
         </Button>
@@ -1091,18 +1122,11 @@ function StagingBar({
           staged change{count === 1 ? '' : 's'}
         </span>
         <div className="w-px h-4 bg-slate-600" />
-        <button
-          type="button"
-          onClick={onDiscardAll}
-          className="text-xs text-slate-400 hover:text-white transition-colors"
-        >
+        <button type="button" onClick={onDiscardAll} className="text-xs text-slate-400 hover:text-white transition-colors">
           Discard all
         </button>
-        <button
-          type="button"
-          onClick={onReview}
-          className="inline-flex items-center gap-1 text-xs font-semibold bg-teal-400 hover:bg-teal-300 text-slate-900 px-3 py-1 rounded-full transition-colors"
-        >
+        <button type="button" onClick={onReview}
+          className="inline-flex items-center gap-1 text-xs font-semibold bg-teal-400 hover:bg-teal-300 text-slate-900 px-3 py-1 rounded-full transition-colors">
           Review & Publish
           <ChevronRight className="w-3 h-3" />
         </button>

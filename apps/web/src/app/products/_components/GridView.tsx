@@ -63,7 +63,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -681,21 +681,31 @@ function DraggableHandle({
 }
 
 // DroppableRowOverlay — absolute overlay covering a parent row's full
-// area. Renders a highlight ring when a draggable item hovers over it.
+// area. Renders a colour-coded ring on hover:
+//   green  — dragged product type matches the parent (or either is null)
+//   amber  — different product types (allowed, but operator should check)
 // pointer-events: none so it doesn't block clicks on row cells.
+// useDndContext is safe here because this component is only mounted
+// when isDraggable=true, which always means a DndContext is an ancestor.
 function DroppableRowOverlay({ product }: { product: ProductRowType }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `drop:${product.id}`,
     data: { product },
   })
+  const { active } = useDndContext()
+  const draggingType = (active?.data.current?.product as ProductRowType | undefined)?.productType ?? null
+  const compatible =
+    !draggingType || !product.productType || draggingType === product.productType
+
   return (
     <div
       ref={setNodeRef}
       aria-hidden="true"
       className={`absolute inset-0 pointer-events-none rounded transition-all duration-100 ${
-        isOver
-          ? 'ring-2 ring-inset ring-blue-400 bg-blue-50/25 dark:bg-blue-950/20'
-          : ''
+        !isOver ? '' :
+        compatible
+          ? 'ring-2 ring-inset ring-green-400 bg-green-50/20 dark:bg-green-950/15'
+          : 'ring-2 ring-inset ring-amber-400 bg-amber-50/20 dark:bg-amber-950/15'
       }`}
     />
   )
