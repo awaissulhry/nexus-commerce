@@ -419,9 +419,31 @@ function DragPreview({ product }: { product: ProductRow }) {
   )
 }
 
+// ─── COMMON_THEMES ───────────────────────────────────────────────────
+// Mirrors the theme picker in /catalog/organize's PromoteModal.
+const COMMON_THEMES: Array<{ value: string; label: string; hint: string }> = [
+  { value: 'Size',           label: 'Size',           hint: 'XS / S / M / L / XL' },
+  { value: 'Color',          label: 'Color',          hint: 'Black / Brown / Red…' },
+  { value: 'Size / Color',   label: 'Size + Color',   hint: 'Apparel default' },
+  { value: 'Size / Material',label: 'Size + Material',hint: 'Boots, jackets' },
+  { value: 'BodyType / Size',label: 'Body type + Size',hint: "Men's / Women's / Kids'" },
+]
+
 // ─── AttachDrawer ─────────────────────────────────────────────────────
-// Simple attribute-assignment modal shown after drag-and-drop.
-// Phase 3 will upgrade this to a full slide-in drawer with autocomplete.
+// Full slide-in drawer (placement="drawer-right") with:
+//   • COMMON_THEMES picker when the parent has no variation axes
+//   • Per-axis AxisCombobox with autocomplete from existing sibling values
+//   • Conflict detection (same attribute combination already taken)
+//   • Preview tile showing the full "Axis: Value" combination
+//   • Amazon variationTheme badge when the parent has one
+type DrawerPhase = 'loading' | 'error' | 'pick-theme' | 'assign'
+
+interface ExistingChild {
+  id: string
+  sku: string
+  attrs: Record<string, string>
+}
+
 function AttachDrawer({
   product,
   targetParent,
@@ -433,60 +455,110 @@ function AttachDrawer({
   onConfirm: (change: StagedChange) => void
   onCancel: () => void
 }) {
+  const [phase, setPhase] = useState<DrawerPhase>('loading')
   const [axes, setAxes] = useState<string[]>([])
   const [existingValues, setExistingValues] = useState<Map<string, string[]>>(new Map())
+  const [existingChildren, setExistingChildren] = useState<ExistingChild[]>([])
+  const [variationTheme, setVariationTheme] = useState<string | null>(null)
   const [attributes, setAttributes] = useState<Record<string, string>>({})
-  const [fetching, setFetching] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [customTheme, setCustomTheme] = useState('')
+  const [themeChoice, setThemeChoice] = useState<string | null>(null)
 
-  // Fetch parent's variation axes + existing variant attribute values
+  // Fetch parent's variation axes + sibling attribute values
   useEffect(() => {
     let cancelled = false
-    setFetching(true)
+    setPhase('loading')
     setFetchError(null)
     fetch(`${getBackendUrl()}/api/catalog/products/${encodeURIComponent(targetParent.id)}`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return
         const data = json?.data ?? json
-        const rawAxes: string[] = Array.isArray(data?.variationAxes) && data.variationAxes.length > 0
-          ? data.variationAxes
-          : typeof data?.variationTheme === 'string' && data.variationTheme.trim()
-            ? data.variationTheme.split(/\s*\/\s*/).filter(Boolean)
-            : []
-        // Build per-axis suggestion lists from existing variants
+        const rawAxes: string[] =
+          Array.isArray(data?.variationAxes) && data.variationAxes.length > 0
+            ? data.variationAxes
+            : typeof data?.variationTheme === 'string' && data.variationTheme.trim()
+              ? data.variationTheme.split(/\s*\/\s*/).filter(Boolean)
+              : []
+
+        // Per-axis suggestion lists from existing siblings
         const valMap = new Map<string, string[]>()
         for (const ax of rawAxes) valMap.set(ax, [])
-        const variants: Array<{ variationAttributes?: Record<string, unknown> }> = data?.variations ?? []
+        const variants: Array<{ id?: string; sku?: string; variationAttributes?: Record<string, unknown> }> =
+          data?.variations ?? []
+        const children: ExistingChild[] = []
         for (const v of variants) {
+          const attrs: Record<string, string> = {}
           for (const ax of rawAxes) {
             const val = String((v.variationAttributes ?? {})[ax] ?? '').trim()
             if (!val) continue
+            attrs[ax] = val
             const list = valMap.get(ax)!
             if (!list.includes(val)) list.push(val)
           }
+          children.push({ id: v.id ?? '', sku: v.sku ?? '', attrs })
         }
         for (const [ax, list] of valMap) {
-          list.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+          list.sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+          )
           valMap.set(ax, list)
         }
-        if (!cancelled) {
+        setExistingValues(valMap)
+        setExistingChildren(children)
+        setVariationTheme(typeof data?.variationTheme === 'string' ? data.variationTheme : null)
+
+        if (rawAxes.length > 0) {
           setAxes(rawAxes)
-          setExistingValues(valMap)
           setAttributes(Object.fromEntries(rawAxes.map((ax) => [ax, ''])))
-          setFetching(false)
+          setPhase('assign')
+        } else {
+          setPhase('pick-theme')
         }
       })
       .catch((err) => {
         if (!cancelled) {
           setFetchError(err instanceof Error ? err.message : String(err))
-          setFetching(false)
+          setPhase('error')
         }
       })
     return () => { cancelled = true }
   }, [targetParent.id])
 
-  const canConfirm = axes.length === 0 || axes.every((ax) => (attributes[ax] ?? '').trim() !== '')
+  // When user picks a theme, derive axes and advance
+  const applyTheme = useCallback((theme: string) => {
+    const parsed = theme.split(/\s*\/\s*/).map((s) => s.trim()).filter(Boolean)
+    if (parsed.length === 0) return
+    setAxes(parsed)
+    setAttributes(Object.fromEntries(parsed.map((ax) => [ax, ''])))
+    setPhase('assign')
+  }, [])
+
+  // Conflict: another sibling already has the same full attribute combo
+  const conflict = useMemo<ExistingChild | null>(() => {
+    if (axes.length === 0) return null
+    const allFilled = axes.every((ax) => (attributes[ax] ?? '').trim() !== '')
+    if (!allFilled) return null
+    return (
+      existingChildren.find((child) =>
+        axes.every(
+          (ax) =>
+            child.attrs[ax]?.toLowerCase() ===
+            (attributes[ax] ?? '').trim().toLowerCase()
+        )
+      ) ?? null
+    )
+  }, [axes, attributes, existingChildren])
+
+  const previewPairs = useMemo(
+    () => axes.filter((ax) => (attributes[ax] ?? '').trim()).map((ax) => [ax, attributes[ax].trim()] as [string, string]),
+    [axes, attributes]
+  )
+
+  const canConfirm =
+    phase === 'assign' &&
+    (axes.length === 0 || axes.every((ax) => (attributes[ax] ?? '').trim() !== ''))
 
   const handleConfirm = () => {
     onConfirm({
@@ -504,102 +576,353 @@ function AttachDrawer({
       open
       onClose={onCancel}
       title="Attach to parent"
-      size="lg"
-      placement="top"
+      size="xl"
+      placement="drawer-right"
       dismissOnEscape
-      dismissOnBackdrop
+      dismissOnBackdrop={false}
     >
-      <div className="space-y-4">
-        {/* Product → parent line */}
-        <div className="flex items-center gap-2 flex-wrap text-sm">
-          <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
-            {product.sku}
-          </span>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-          <span className="font-mono bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
-            {targetParent.sku}
-          </span>
-          <span className="text-slate-500 dark:text-slate-400 truncate">{targetParent.name}</span>
+      <div className="flex flex-col gap-5 min-h-[200px]">
+
+        {/* ── Product → Parent header ─────────────────────────────── */}
+        <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-0.5">
+              Moving
+            </div>
+            <div className="font-mono text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+              {product.sku}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{product.name}</div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 mb-0.5">
+              Into parent
+            </div>
+            <div className="font-mono text-sm font-medium text-blue-700 dark:text-blue-300 truncate">
+              {targetParent.sku}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{targetParent.name}</div>
+          </div>
         </div>
 
-        {fetching && (
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-2">
+        {/* ── Loading ──────────────────────────────────────────────── */}
+        {phase === 'loading' && (
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 py-4 justify-center">
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading variation axes…
           </div>
         )}
 
-        {fetchError && (
-          <div className="flex items-start gap-2 text-sm text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-md px-3 py-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>Couldn't load axes: {fetchError}. You can still stage without attributes.</span>
+        {/* ── Error ────────────────────────────────────────────────── */}
+        {phase === 'error' && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 text-sm text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-lg px-3 py-2.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>Couldn't load axes: {fetchError}. You can still stage the change without attributes.</span>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => setPhase('assign')}>
+              Continue without attributes
+            </Button>
           </div>
         )}
 
-        {!fetching && axes.length === 0 && !fetchError && (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            This parent has no variation axes defined. The product will be attached without attributes — you can set them later from the Variations tab.
-          </p>
+        {/* ── Pick variation theme (parent has no axes) ─────────────── */}
+        {phase === 'pick-theme' && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              <strong className="text-slate-800 dark:text-slate-200">{targetParent.sku}</strong> has no variation axes yet.
+              Pick a theme to define which attributes differentiate children, or skip and set them later.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {COMMON_THEMES.map((t) => {
+                const active = themeChoice === t.value
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setThemeChoice(t.value)}
+                    className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                      active
+                        ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{t.label}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t.hint}</div>
+                  </button>
+                )
+              })}
+              {/* Custom theme */}
+              <div
+                className={`rounded-lg border px-3 py-2.5 transition-colors ${
+                  themeChoice === 'CUSTOM'
+                    ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setThemeChoice('CUSTOM')}
+                  className="text-left w-full"
+                >
+                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100">Custom…</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">e.g. "Color / Material"</div>
+                </button>
+                {themeChoice === 'CUSTOM' && (
+                  <input
+                    type="text"
+                    value={customTheme}
+                    onChange={(e) => setCustomTheme(e.target.value)}
+                    placeholder="Axis1 / Axis2"
+                    autoFocus
+                    className="mt-2 w-full h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!themeChoice || (themeChoice === 'CUSTOM' && !customTheme.trim())}
+                onClick={() => {
+                  const theme = themeChoice === 'CUSTOM' ? customTheme.trim() : (themeChoice ?? '')
+                  applyTheme(theme)
+                }}
+              >
+                <Check className="w-3.5 h-3.5" />
+                Use this theme
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setAxes([]); setAttributes({}); setPhase('assign') }}>
+                Skip — no attributes
+              </Button>
+            </div>
+          </div>
         )}
 
-        {!fetching && axes.length > 0 && (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Set variation attributes for <span className="font-mono">{product.sku}</span>:
-            </p>
-            {axes.map((ax) => {
-              const known = existingValues.get(ax) ?? []
-              const val = attributes[ax] ?? ''
-              const isCustom = val !== '' && !known.includes(val)
-              return (
-                <div key={ax}>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{ax}</label>
-                  <select
-                    value={isCustom ? '__custom__' : val}
-                    onChange={(e) => {
-                      const v = e.target.value === '__custom__' ? '' : e.target.value
-                      setAttributes((prev) => ({ ...prev, [ax]: v }))
-                    }}
-                    className="w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">— Select —</option>
-                    {known.map((k) => (
-                      <option key={k} value={k}>{k}</option>
-                    ))}
-                    <option value="__custom__">+ New value…</option>
-                  </select>
-                  {(isCustom || (val === '' && known.length === 0)) && (
-                    <input
-                      type="text"
-                      value={val}
-                      onChange={(e) => setAttributes((prev) => ({ ...prev, [ax]: e.target.value }))}
-                      placeholder={`Enter ${ax} value`}
-                      className="mt-1 w-full h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                      autoFocus
-                    />
-                  )}
+        {/* ── Attribute assignment ──────────────────────────────────── */}
+        {phase === 'assign' && (
+          <div className="space-y-4">
+            {axes.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                No variation attributes — the product will be attached without them. You can set attributes from the parent's Variations tab later.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Set attributes for <span className="font-mono text-slate-900 dark:text-slate-100">{product.sku}</span>
+                </p>
+                {axes.map((ax) => (
+                  <AxisCombobox
+                    key={ax}
+                    axis={ax}
+                    value={attributes[ax] ?? ''}
+                    suggestions={existingValues.get(ax) ?? []}
+                    onChange={(v) => setAttributes((prev) => ({ ...prev, [ax]: v }))}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Conflict banner */}
+            {conflict && (
+              <div className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  This combination is already taken by{' '}
+                  <span className="font-mono font-semibold">{conflict.sku}</span>.
+                  You can still stage the change but publishing may fail.
+                </span>
+              </div>
+            )}
+
+            {/* Preview tile */}
+            {previewPairs.length > 0 && (
+              <div className="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/30 px-3 py-2.5">
+                <p className="text-xs font-medium text-teal-700 dark:text-teal-400 mb-1.5">Will appear as</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {previewPairs.map(([ax, val]) => (
+                    <span
+                      key={ax}
+                      className="inline-flex items-center gap-1 text-xs bg-white dark:bg-teal-900/40 border border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-200 px-2 py-0.5 rounded-full font-medium"
+                    >
+                      <span className="opacity-60">{ax}:</span> {val}
+                    </span>
+                  ))}
                 </div>
-              )
-            })}
+              </div>
+            )}
+
+            {/* Amazon variation_theme badge */}
+            {variationTheme && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-medium">Amazon variation_theme:</span>
+                <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                  {variationTheme}
+                </code>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <ModalFooter>
-        <Button variant="secondary" size="sm" onClick={onCancel} disabled={fetching}>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleConfirm}
-          disabled={fetching || !canConfirm}
-        >
-          <Check className="w-3.5 h-3.5" />
-          Stage change
-        </Button>
+        {phase === 'assign' && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+          >
+            <Check className="w-3.5 h-3.5" />
+            Stage change
+          </Button>
+        )}
       </ModalFooter>
     </Modal>
+  )
+}
+
+// ─── AxisCombobox ─────────────────────────────────────────────────────
+// Type-to-filter combobox for a single variation axis.
+// Shows a dropdown with filtered suggestions from existing siblings.
+// Keyboard nav: ArrowDown opens / navigates, Enter selects, Escape closes.
+function AxisCombobox({
+  axis,
+  value,
+  suggestions,
+  onChange,
+}: {
+  axis: string
+  value: string
+  suggestions: string[]
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [focused, setFocused] = useState(-1)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  const filtered = useMemo(
+    () =>
+      suggestions.filter((s) =>
+        s.toLowerCase().includes(value.toLowerCase())
+      ),
+    [suggestions, value]
+  )
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => {
+      if (!inputRef.current?.closest('[data-combobox]')?.contains(e.target as Node)) {
+        setOpen(false)
+        setFocused(-1)
+      }
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const pick = useCallback(
+    (val: string) => {
+      onChange(val)
+      setOpen(false)
+      setFocused(-1)
+      inputRef.current?.focus()
+    },
+    [onChange]
+  )
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpen(true)
+      setFocused((f) => Math.min(f + 1, filtered.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setFocused((f) => Math.max(f - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (focused >= 0 && filtered[focused]) {
+        pick(filtered[focused])
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+      setFocused(-1)
+    } else {
+      setOpen(true)
+    }
+  }
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (focused < 0) return
+    const el = listRef.current?.children[focused] as HTMLElement | undefined
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [focused])
+
+  const isEmpty = value.trim() === ''
+  const isNewValue = value.trim() !== '' && !suggestions.includes(value.trim())
+
+  return (
+    <div data-combobox className="relative">
+      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+        {axis}
+      </label>
+      <div className={`flex items-center border rounded-md transition-colors ${
+        isEmpty
+          ? 'border-slate-200 dark:border-slate-700'
+          : isNewValue
+            ? 'border-teal-400 dark:border-teal-600'
+            : 'border-blue-400 dark:border-blue-600'
+      }`}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); setFocused(-1) }}
+          onFocus={() => { if (filtered.length > 0) setOpen(true) }}
+          onKeyDown={onKeyDown}
+          placeholder={`Enter ${axis} value`}
+          autoComplete="off"
+          className="flex-1 h-8 px-2.5 text-sm bg-transparent focus:outline-none rounded-md text-slate-800 dark:text-slate-100 placeholder-slate-400"
+        />
+        {isNewValue && (
+          <span className="text-xs text-teal-600 dark:text-teal-400 pr-2.5 font-medium whitespace-nowrap">
+            New
+          </span>
+        )}
+        {!isEmpty && !isNewValue && (
+          <Check className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 mr-2.5 flex-shrink-0" />
+        )}
+      </div>
+      {open && filtered.length > 0 && (
+        <ul
+          ref={listRef}
+          className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-50 max-h-36 overflow-y-auto py-1"
+        >
+          {filtered.map((s, i) => (
+            <li
+              key={s}
+              onMouseDown={(e) => { e.preventDefault(); pick(s) }}
+              onMouseEnter={() => setFocused(i)}
+              className={`px-2.5 py-1.5 text-sm cursor-pointer transition-colors ${
+                i === focused
+                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              {s}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
