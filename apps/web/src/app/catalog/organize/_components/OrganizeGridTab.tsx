@@ -508,6 +508,74 @@ const COMMON_THEMES: Array<{ value: string; label: string; hint: string }> = [
   { value: 'BodyType / Size', label: 'Body type + Size',hint: "Men's / Women's / Kids'" },
 ]
 
+// ─── Axis auto-detection ─────────────────────────────────────────────
+// Tokenises product names / SKUs and pattern-matches against known
+// axis-value sets to suggest a variation theme when the parent has none.
+
+const SIZE_TOKENS = new Set([
+  // EU letter sizes (apparel, helmets)
+  'XXS','XS','S','M','L','XL','XXL','XXXL','2XL','3XL','4XL',
+  // EU numeric clothing sizes
+  '34','36','38','40','42','44','46','48','50','52','54',
+  // EU footwear sizes
+  '37','38','39','40','41','42','43','44','45','46',
+  // Helmet range labels
+  '53-54','55-56','57-58','59-60','61-62',
+  // Italian keyword that precedes a size
+  'TAGLIA',
+])
+
+const COLOR_TOKENS = new Set([
+  // Italian
+  'NERO','BIANCO','ROSSO','BLU','AZZURRO','VERDE','GIALLO',
+  'ARANCIONE','ARANCIO','GRIGIO','ARGENTO','MARRONE','BORDEAUX',
+  'ANTRACITE','BEIGE','FUCSIA','LILLA','VIOLA','ORO','BRONZO','FLUO',
+  // English
+  'BLACK','WHITE','RED','BLUE','NAVY','GREEN','YELLOW','ORANGE',
+  'GREY','GRAY','SILVER','BROWN','ANTHRACITE','GOLD','PURPLE',
+  'PINK','FUCHSIA','DARK','LIGHT',
+])
+
+const MATERIAL_TOKENS = new Set([
+  'PELLE','CUOIO','TESSUTO','MESH','CORDURA','NABUK','MICROFIBRA',
+  'LEATHER','TEXTILE','DENIM','NYLON','CANVAS','PERFORATED',
+])
+
+const BODYTYPE_TOKENS = new Set([
+  'DONNA','UOMO','UNISEX','BAMBINO','BAMBINA','JUNIOR','RAGAZZO','RAGAZZA',
+  'WOMEN','WOMAN','MENS','MEN','KIDS','YOUTH','ADULT','LADIES',
+])
+
+/** Returns detected logical axis types in the order they should appear. */
+function detectAxesFromNames(names: string[]): string[] {
+  const tokens = new Set(
+    names.flatMap((n) =>
+      n.toUpperCase()
+        .split(/[\s\-_/,.()\[\]|+]+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+    )
+  )
+  const has = (set: Set<string>) => [...tokens].some((t) => set.has(t))
+  const detected: string[] = []
+  if (has(BODYTYPE_TOKENS)) detected.push('BodyType')
+  if (has(SIZE_TOKENS))     detected.push('Size')
+  if (has(COLOR_TOKENS))    detected.push('Color')
+  if (has(MATERIAL_TOKENS)) detected.push('Material')
+  return detected
+}
+
+/** Maps detected axis list to the best matching COMMON_THEME value. */
+function axesToThemeValue(axes: string[]): string | null {
+  const h = (ax: string) => axes.includes(ax)
+  if (h('BodyType') && h('Size'))   return 'BodyType / Size'
+  if (h('Size') && h('Color'))      return 'Size / Color'
+  if (h('Size') && h('Material'))   return 'Size / Material'
+  if (h('Size'))                    return 'Size'
+  if (h('Color'))                   return 'Color'
+  return null
+}
+
 // ─── AttachDrawer ─────────────────────────────────────────────────────
 // Full slide-in drawer with:
 //   • COMMON_THEMES picker when the parent has no variation axes
@@ -545,6 +613,10 @@ function AttachDrawer({
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [themeChoice, setThemeChoice] = useState<string | null>(null)
   const [customTheme, setCustomTheme] = useState('')
+  /** Auto-detected COMMON_THEME value from product names. Null = nothing clear. */
+  const [suggestedTheme, setSuggestedTheme] = useState<string | null>(null)
+  /** True once the user dismisses the ASIN standalone warning. */
+  const [asinWarningDismissed, setAsinWarningDismissed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -592,6 +664,17 @@ function AttachDrawer({
           setBatchAttrs(Object.fromEntries(products.map((p) => [p.id, Object.fromEntries(rawAxes.map((ax) => [ax, '']))])))
           setPhase('assign')
         } else {
+          // Auto-detect axes from the products being attached + existing sibling SKUs.
+          const namesToAnalyse = [
+            ...products.map((p) => p.name),
+            ...products.map((p) => p.sku),
+            ...children.map((c) => c.sku),
+          ]
+          const detectedAxes = detectAxesFromNames(namesToAnalyse)
+          const suggestion = axesToThemeValue(detectedAxes)
+          setSuggestedTheme(suggestion)
+          // Pre-select the suggestion so the user can confirm with one click.
+          if (suggestion) setThemeChoice(suggestion)
           setPhase('pick-theme')
         }
       })
@@ -650,6 +733,10 @@ function AttachDrawer({
 
   const isBatch = products.length > 1
 
+  // Products that already have a standalone Amazon listing — attaching them
+  // as children may be rejected by Amazon until the old listing is removed.
+  const asinConflicts = products.filter((p) => !!p.amazonAsin && !p.parentId)
+
   return (
     <Modal
       open
@@ -685,6 +772,36 @@ function AttachDrawer({
           </div>
         </div>
 
+        {/* ASIN standalone warning — products with an active Amazon top-level
+            listing may be rejected by Amazon when moved into a variation family.
+            Shown as soon as the drawer opens (we have the data from ProductRow). */}
+        {asinConflicts.length > 0 && !asinWarningDismissed && (
+          <div className="flex items-start gap-2.5 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2.5">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+            <div className="flex-1 min-w-0 space-y-1">
+              <p className="font-medium">
+                {asinConflicts.length === 1
+                  ? 'This product has an active standalone Amazon listing.'
+                  : `${asinConflicts.length} products have active standalone Amazon listings.`}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                ASIN{asinConflicts.length > 1 ? 's' : ''}:{' '}
+                <span className="font-mono">{asinConflicts.map((p) => p.amazonAsin).join(', ')}</span>.{' '}
+                Amazon may reject the parent–child relationship until the standalone listing is removed.
+                You can still stage and publish — handle any feed errors afterwards.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAsinWarningDismissed(true)}
+              aria-label="Dismiss ASIN warning"
+              className="flex-shrink-0 text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-100 transition-colors mt-0.5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Loading */}
         {phase === 'loading' && (
           <div className="flex items-center justify-center gap-2 text-sm text-slate-500 py-4">
@@ -710,15 +827,26 @@ function AttachDrawer({
           <div className="space-y-3">
             <p className="text-sm text-slate-600 dark:text-slate-400">
               <strong className="text-slate-800 dark:text-slate-200">{targetParent.sku}</strong> has no variation axes.
-              Pick a theme, or skip and attach without attributes.
+              {suggestedTheme
+                ? <> <span className="text-blue-700 dark:text-blue-400 font-medium">{suggestedTheme}</span> was detected from product names — confirm or choose a different theme.</>
+                : <> Pick a theme, or skip and attach without attributes.</>
+              }
             </p>
             <div className="grid grid-cols-2 gap-2">
               {COMMON_THEMES.map((t) => {
                 const active = themeChoice === t.value
+                const isDetected = suggestedTheme === t.value
                 return (
                   <button key={t.value} type="button" onClick={() => setThemeChoice(t.value)}
                     className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${active ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-950/40 ring-1 ring-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300'}`}>
-                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{t.label}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{t.label}</span>
+                      {isDetected && (
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                          ✓ Detected
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-500 mt-0.5">{t.hint}</div>
                   </button>
                 )
