@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
+  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
   Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
 } from 'lucide-react'
@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
+import { CascadeModal } from '../_shared/CascadeModal'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -527,6 +528,9 @@ export default function AmazonFlatFileClient({
     try { return localStorage.getItem('ff-show-overrides') !== '0' } catch { return true }
   })
   useEffect(() => { try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {} }, [showOverrideBadges])
+
+  // IN.2 — Row being cascaded (opens CascadeModal)
+  const [cascadeRow, setCascadeRow] = useState<Row | null>(null)
 
   // Persist image preferences
   useEffect(() => { try { localStorage.setItem('ff-show-images', showRowImages ? '1' : '0') } catch {} }, [showRowImages])
@@ -1890,8 +1894,29 @@ export default function AmazonFlatFileClient({
 
   // ── Render ─────────────────────────────────────────────────────────
 
+  // IN.2 — Build CascadeModal fields from the row when cascade is triggered
+  const cascadeFields = cascadeRow ? [
+    { key: 'price', label: 'Price', value: cascadeRow.purchasable_offer__our_price },
+    { key: 'title', label: 'Title', value: cascadeRow.item_name },
+    { key: 'description', label: 'Description', value: cascadeRow.product_description },
+    { key: 'quantity', label: 'Quantity', value: cascadeRow.fulfillment_availability__quantity },
+  ] : []
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+
+      {/* IN.2 — Cascade modal */}
+      {cascadeRow && cascadeRow._productId && (
+        <CascadeModal
+          sourceProductId={String(cascadeRow._productId)}
+          sourceSku={String(cascadeRow.item_sku ?? cascadeRow._rowId)}
+          channel="AMAZON"
+          marketplace={marketplace}
+          availableFields={cascadeFields}
+          onClose={() => setCascadeRow(null)}
+          onSuccess={(n) => { if (n > 0) void loadData(marketplace, productType, false, true) }}
+        />
+      )}
 
       {/* Full-screen overlay while resizing — locks cursor, prevents text selection */}
       {resizingType && (
@@ -2131,6 +2156,37 @@ export default function AmazonFlatFileClient({
             title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
             onClick={() => setShowOverrideBadges((o) => !o)}
             active={showOverrideBadges}
+          />
+
+          {/* IN.2 — Cascade: reset all visible rows back to master */}
+          <TbBtn
+            icon={<GitFork className="w-3.5 h-3.5" />}
+            title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
+            onClick={async () => {
+              const overrideRows = rows.filter(
+                (r) => {
+                  const fs = r._fieldStates as any
+                  return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
+                },
+              )
+              if (!overrideRows.length) return
+              const ids = overrideRows.map((r) => r._listingId as string).filter(Boolean)
+              await Promise.all(
+                ids.map((id) =>
+                  fetch(`${getBackendUrl()}/api/listings/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      followMasterPrice: true, followMasterTitle: true,
+                      followMasterDescription: true, followMasterQuantity: true,
+                      followMasterBulletPoints: true,
+                    }),
+                  }),
+                ),
+              )
+              void loadData(marketplace, productType, false, true)
+            }}
+            disabled={!rows.length}
           />
 
           {/* Row images toggle */}
@@ -2742,6 +2798,7 @@ export default function AmazonFlatFileClient({
                     return next
                   })}
                   showOverrideBadges={showOverrideBadges}
+                  onCascadeRow={(r) => setCascadeRow(r)}
                 />
               ))}
 
@@ -3098,6 +3155,7 @@ interface RowProps {
   onFillHandlePointerDown: (ri: number, ci: number) => void
   onFillDrop: () => void
   showOverrideBadges: boolean
+  onCascadeRow: (row: Row) => void
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
@@ -3109,7 +3167,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop,
-  showOverrideBadges }: RowProps) {
+  showOverrideBadges, onCascadeRow }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -3285,6 +3343,18 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
               fieldStates={row._fieldStates as any}
               masterValues={row._masterValues as any}
             />
+          )}
+
+          {/* IN.2 — Cascade button: only for child (variant) rows */}
+          {isChild && (!showRowImages || imageSize >= 48) && row._productId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCascadeRow(row) }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Apply this row's values to all sibling variants"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+            >
+              <GitFork className="h-2.5 w-2.5" />↓
+            </button>
           )}
         </div>
         {/* Row height resize handle at the bottom edge */}

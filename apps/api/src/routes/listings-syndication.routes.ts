@@ -3090,4 +3090,193 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       updatedAt: job.updatedAt.getTime(),
     }
   })
+
+  // IN.2 — POST /api/listings/cascade
+  // Pushes field values from one product's ChannelListing to all sibling
+  // variants (same parentId) on the same channel + marketplace.
+  //
+  // dryRun=true returns the affected count + preview without writing.
+  // On a real run:
+  //   • Upserts ChannelListing for each sibling
+  //   • Sets followMaster*=false for pushed fields (explicit override)
+  //   • Enqueues OutboundSyncQueue entries for price/qty changes
+  //   • Emits a single CASCADE_APPLIED ProductEvent on the parent
+  fastify.post<{
+    Body: {
+      sourceProductId: string
+      channel: string
+      marketplace: string
+      fields: string[]
+      dryRun?: boolean
+    }
+  }>('/listings/cascade', async (request, reply) => {
+    try {
+      const { sourceProductId, channel, marketplace, fields, dryRun = false } = request.body
+
+      if (!sourceProductId || !channel || !marketplace || !fields?.length) {
+        return reply.code(400).send({ error: 'sourceProductId, channel, marketplace, and fields are required' })
+      }
+
+      const SUPPORTED_FIELDS = new Set(['price', 'title', 'description', 'quantity', 'bulletPoints'])
+      const validFields = fields.filter((f) => SUPPORTED_FIELDS.has(f))
+      if (validFields.length === 0) {
+        return reply.code(400).send({ error: 'No supported fields: price, title, description, quantity, bulletPoints' })
+      }
+
+      // Source product — must have a parent to have siblings
+      const source = await prisma.product.findUnique({
+        where: { id: sourceProductId },
+        select: { id: true, parentId: true, sku: true },
+      })
+      if (!source) return reply.code(404).send({ error: 'Source product not found' })
+      if (!source.parentId) {
+        return reply.send({ affected: 0, preview: [], note: 'Product has no parent — no siblings to cascade to' })
+      }
+
+      // Source listing — get the values to push
+      const sourceListing = await prisma.channelListing.findFirst({
+        where: { productId: source.id, channel: channel.toUpperCase(), marketplace: marketplace.toUpperCase() },
+        select: {
+          price: true, title: true, description: true,
+          quantity: true, bulletPointsOverride: true,
+        },
+      })
+      if (!sourceListing) {
+        return reply.send({ affected: 0, preview: [], note: 'Source listing not found for this channel/marketplace' })
+      }
+
+      // Build value map for the requested fields
+      const valueMap: Record<string, unknown> = {}
+      if (validFields.includes('price') && sourceListing.price != null) {
+        valueMap.price = Number(sourceListing.price)
+      }
+      if (validFields.includes('title') && sourceListing.title != null) {
+        valueMap.title = sourceListing.title
+      }
+      if (validFields.includes('description') && sourceListing.description != null) {
+        valueMap.description = sourceListing.description
+      }
+      if (validFields.includes('quantity') && sourceListing.quantity != null) {
+        valueMap.quantity = sourceListing.quantity
+      }
+      if (validFields.includes('bulletPoints') && sourceListing.bulletPointsOverride?.length) {
+        valueMap.bulletPoints = sourceListing.bulletPointsOverride
+      }
+
+      if (Object.keys(valueMap).length === 0) {
+        return reply.send({ affected: 0, preview: [], note: 'Source listing has no values for the requested fields' })
+      }
+
+      // Find sibling products
+      const siblings = await prisma.product.findMany({
+        where: { parentId: source.parentId, id: { not: source.id }, deletedAt: null },
+        select: { id: true, sku: true },
+      })
+
+      if (dryRun || siblings.length === 0) {
+        return reply.send({
+          affected: siblings.length,
+          preview: siblings.map((s) => ({ productId: s.id, sku: s.sku, changes: valueMap })),
+        })
+      }
+
+      // Apply to each sibling
+      const mp = marketplace.toUpperCase()
+      const ch = channel.toUpperCase()
+      const region = mp === 'UK' ? 'GB' : mp
+      const results: Array<{ productId: string; sku: string }> = []
+
+      for (const sibling of siblings) {
+        const existing = await prisma.channelListing.findFirst({
+          where: { productId: sibling.id, channel: ch, marketplace: mp },
+          select: { id: true, price: true, quantity: true },
+        })
+
+        // Build update — field values + mark followMaster=false for each pushed field
+        const updateData: Record<string, unknown> = {}
+        if ('price' in valueMap) { updateData.price = valueMap.price; updateData.followMasterPrice = false }
+        if ('title' in valueMap) { updateData.title = valueMap.title; updateData.followMasterTitle = false }
+        if ('description' in valueMap) { updateData.description = valueMap.description; updateData.followMasterDescription = false }
+        if ('quantity' in valueMap) { updateData.quantity = valueMap.quantity; updateData.followMasterQuantity = false }
+        if ('bulletPoints' in valueMap) { updateData.bulletPointsOverride = valueMap.bulletPoints; updateData.followMasterBulletPoints = false }
+
+        let listingId: string
+        const prevPrice = existing?.price != null ? Number(existing.price) : null
+        const prevQty = existing?.quantity ?? null
+
+        if (existing) {
+          await prisma.channelListing.update({ where: { id: existing.id }, data: updateData as any })
+          listingId = existing.id
+        } else {
+          const created = await prisma.channelListing.create({
+            data: {
+              productId: sibling.id,
+              channel: ch,
+              marketplace: mp,
+              region,
+              channelMarket: `${ch}_${mp}`,
+              listingStatus: 'DRAFT',
+              ...updateData,
+            } as any,
+          })
+          listingId = created.id
+        }
+
+        // Enqueue outbound sync for price/qty changes
+        const currency = mp === 'UK' ? 'GBP' : 'EUR'
+        if ('price' in valueMap && valueMap.price != null && prevPrice !== valueMap.price) {
+          await prisma.outboundSyncQueue.create({
+            data: {
+              channelListingId: listingId,
+              targetChannel: ch as any,
+              targetRegion: region,
+              syncStatus: 'PENDING' as any,
+              syncType: 'PRICE_UPDATE',
+              holdUntil: null,
+              payload: { price: valueMap.price, currency, source: 'CASCADE' },
+            } as any,
+          })
+        }
+        if ('quantity' in valueMap && valueMap.quantity != null && prevQty !== valueMap.quantity) {
+          await prisma.outboundSyncQueue.create({
+            data: {
+              channelListingId: listingId,
+              targetChannel: ch as any,
+              targetRegion: region,
+              syncStatus: 'PENDING' as any,
+              syncType: 'QUANTITY_UPDATE',
+              holdUntil: null,
+              payload: { quantity: valueMap.quantity, source: 'CASCADE' },
+            } as any,
+          })
+        }
+
+        results.push({ productId: sibling.id, sku: sibling.sku })
+      }
+
+      // Single CASCADE event on the parent product
+      void productEventService.emit({
+        aggregateId: source.parentId,
+        aggregateType: 'Product',
+        eventType: 'PRODUCT_UPDATED',
+        data: {
+          cascaded: true,
+          fields: validFields,
+          sourceProductId: source.id,
+          sourceSku: source.sku,
+          values: valueMap,
+          affectedCount: results.length,
+        },
+        metadata: {
+          source: 'OPERATOR',
+          ip: request.ip ?? undefined,
+        },
+      })
+
+      return reply.send({ affected: results.length, preview: results })
+    } catch (err: any) {
+      fastify.log.error({ err }, '[listings/cascade] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
 }

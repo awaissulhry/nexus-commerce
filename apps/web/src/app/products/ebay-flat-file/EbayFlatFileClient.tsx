@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, GitBranch, Loader2, Search, Send, X,
+  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, GitBranch, GitFork, Loader2, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -12,6 +12,7 @@ import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { ChannelStrip } from './ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
+import { CascadeModal } from '../_shared/CascadeModal'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
   type CategoryAspect, type EbayColumnGroup,
@@ -270,6 +271,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [categorySearchRowId, setCategorySearchRowId] = useState<string | null>(null)
   const [fetching, setFetching]               = useState(false)
   const [fetchPanelOpen, setFetchPanelOpen]   = useState(false)
+
+  // IN.2 — Row being cascaded
+  const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
   const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
@@ -779,7 +783,27 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Render ─────────────────────────────────────────────────────────────
 
+  // IN.2 — Cascade modal fields for eBay (use IT market as primary)
+  const ebayCascadeFields = cascadeRow ? [
+    { key: 'price', label: 'Price', value: (cascadeRow as any).it_price ?? (cascadeRow as any).price },
+    { key: 'title', label: 'Title', value: (cascadeRow as any).title },
+    { key: 'description', label: 'Description', value: (cascadeRow as any).description },
+    { key: 'quantity', label: 'Quantity', value: (cascadeRow as any).it_qty ?? (cascadeRow as any).quantity },
+  ] : []
+
   return (
+    <>
+      {cascadeRow && cascadeRow._productId && (
+        <CascadeModal
+          sourceProductId={String(cascadeRow._productId)}
+          sourceSku={String((cascadeRow as any).sku ?? cascadeRow._rowId)}
+          channel="EBAY"
+          marketplace="IT"
+          availableFields={ebayCascadeFields}
+          onClose={() => setCascadeRow(null)}
+          onSuccess={(n) => { if (n > 0) void onReload() }}
+        />
+      )}
     <FlatFileGrid
       channel="ebay"
       title="eBay Flat File"
@@ -807,15 +831,31 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       renderToolbarFetch={renderToolbarFetch}
       renderToolbarImport={renderToolbarImport}
       renderBar3Left={renderBar3Left}
-      renderRowMeta={showOverrideBadges ? (row) => (
-        <OverrideBadge
-          listingId={row._listingId as string | null | undefined}
-          fieldStates={row._fieldStates as any}
-          masterValues={row._masterValues as any}
-          marketListingIds={row._marketListingIds as any}
-          marketFieldStates={row._marketFieldStates as any}
-        />
-      ) : undefined}
+      renderRowMeta={(row) => (
+        <div className="flex items-center gap-0.5">
+          {showOverrideBadges && (
+            <OverrideBadge
+              listingId={row._listingId as string | null | undefined}
+              fieldStates={row._fieldStates as any}
+              masterValues={row._masterValues as any}
+              marketListingIds={row._marketListingIds as any}
+              marketFieldStates={row._marketFieldStates as any}
+            />
+          )}
+          {/* IN.2 — Cascade button */}
+          {row._productId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setCascadeRow(row) }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Apply this row's values to all sibling variants on eBay"
+              className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+            >
+              <GitFork className="h-2.5 w-2.5" />↓
+            </button>
+          )}
+        </div>
+      )}
     />
+    </>
   )
 }
