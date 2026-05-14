@@ -3345,8 +3345,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             />
           )}
 
-          {/* IN.2 — Cascade button: only for child (variant) rows */}
-          {isChild && (!showRowImages || imageSize >= 48) && row._productId && (
+          {/* IN.2 — Cascade button: shown on all rows; server handles "no siblings" gracefully */}
+          {(!showRowImages || imageSize >= 48) && row._productId && (
             <button
               onClick={(e) => { e.stopPropagation(); onCascadeRow(row) }}
               onPointerDown={(e) => e.stopPropagation()}
