@@ -250,7 +250,20 @@ export default function AmazonFlatFileClient({
   // has dirty rows from a previous session we surface a restore banner instead
   // of silently loading stale data — this ensures the flat file always opens
   // showing what is actually in the DB.
-  const [rows, setRows] = useState<Row[]>(() => mergeAsinCache(initialRows, initialMarketplace))
+  const [rows, setRows] = useState<Row[]>(() => {
+    const merged = mergeAsinCache(initialRows, initialMarketplace)
+    try {
+      const saved: string[] | null = JSON.parse(localStorage.getItem('ff-amazon-row-order') ?? 'null')
+      if (Array.isArray(saved) && saved.length > 0) {
+        const orderMap = new Map(saved.map((id, i) => [id, i]))
+        const inOrder = merged.filter((r) => orderMap.has(r._rowId as string))
+        inOrder.sort((a, b) => orderMap.get(a._rowId as string)! - orderMap.get(b._rowId as string)!)
+        const notInOrder = merged.filter((r) => !orderMap.has(r._rowId as string))
+        return [...inOrder, ...notInOrder]
+      }
+    } catch {}
+    return merged
+  })
   // Non-null when localStorage has a draft with unsaved edits that differ from
   // the DB rows loaded on this page open.
   const [draftBanner, setDraftBanner] = useState<Row[] | null>(null)
@@ -279,8 +292,11 @@ export default function AmazonFlatFileClient({
   })
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
 
-  const [sortConfig, setSortConfig] = useState<SortLevel[]>([])
+  const [sortConfig, setSortConfig] = useState<SortLevel[]>(() => {
+    try { return JSON.parse(localStorage.getItem('ff-amazon-sort') ?? '[]') } catch { return [] }
+  })
   const [sortPanelOpen, setSortPanelOpen] = useState(false)
+  useEffect(() => { try { localStorage.setItem('ff-amazon-sort', JSON.stringify(sortConfig)) } catch {} }, [sortConfig])
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -1067,7 +1083,9 @@ export default function AmazonFlatFileClient({
       const adj = fi < ti ? ti - 1 : ti
       next.splice(half === 'top' ? adj : adj + 1, 0, fromId)
       const notDisplayed = prev.filter((r) => !displayed.includes(r._rowId as string))
-      return [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
+      const reordered = [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
+      try { localStorage.setItem('ff-amazon-row-order', JSON.stringify(reordered.map((r) => r._rowId))) } catch {}
+      return reordered
     })
     setDraggingRowId(null)
     setDropTarget(null)

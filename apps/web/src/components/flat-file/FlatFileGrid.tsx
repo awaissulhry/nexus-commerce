@@ -26,6 +26,7 @@ import type {
   FlatFileGridProps, BaseRow, FlatFileColumn, FlatFileColumnGroup,
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
 } from './FlatFileGrid.types'
+import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
 
 // ── Internal types ─────────────────────────────────────────────────────────
 
@@ -571,7 +572,25 @@ export default function FlatFileGrid({
 
   // ── Row state ──────────────────────────────────────────────────────────
   const paddedInitRef = useRef<BaseRow[] | null>(null)
-  if (!paddedInitRef.current) paddedInitRef.current = padToMin(initialRows, makeBlankRow, minRows)
+  if (!paddedInitRef.current) {
+    const padded = padToMin(initialRows, makeBlankRow, minRows)
+    // Restore saved drag-drop order: reconcile saved _rowId order with current rows.
+    // New rows (not in saved order) append at end; deleted ids are dropped.
+    try {
+      const saved: string[] | null = JSON.parse(localStorage.getItem(`${storageKey}-row-order`) ?? 'null')
+      if (Array.isArray(saved) && saved.length > 0) {
+        const orderMap = new Map(saved.map((id, i) => [id, i]))
+        const inOrder = padded.filter((r) => orderMap.has(r._rowId))
+        inOrder.sort((a, b) => orderMap.get(a._rowId)! - orderMap.get(b._rowId)!)
+        const notInOrder = padded.filter((r) => !orderMap.has(r._rowId))
+        paddedInitRef.current = [...inOrder, ...notInOrder]
+      } else {
+        paddedInitRef.current = padded
+      }
+    } catch {
+      paddedInitRef.current = padded
+    }
+  }
 
   const [rows, setRows]       = useState<BaseRow[]>(paddedInitRef.current)
   const [loading, setLoading] = useState(false)
@@ -635,6 +654,13 @@ export default function FlatFileGrid({
   useEffect(() => { try { localStorage.setItem(`${storageKey}-col-widths`, JSON.stringify(colWidths)) } catch {} }, [colWidths, storageKey])
   useEffect(() => { try { localStorage.setItem(`${storageKey}-row-height`, String(rowHeight)) } catch {} }, [rowHeight, storageKey])
   useEffect(() => { try { localStorage.setItem(`${storageKey}-frozen-cols`, String(frozenColCount)) } catch {} }, [frozenColCount, storageKey])
+
+  // ── Sort state (persisted) ─────────────────────────────────────────────
+  const [sortConfig, setSortConfig] = useState<SortLevel[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`${storageKey}-sort`) ?? '[]') } catch { return [] }
+  })
+  const [sortPanelOpen, setSortPanelOpen] = useState(false)
+  useEffect(() => { try { localStorage.setItem(`${storageKey}-sort`, JSON.stringify(sortConfig)) } catch {} }, [sortConfig, storageKey])
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -772,9 +798,10 @@ export default function FlatFileGrid({
       if (collapsedRowGroups.has(groupKey)) return
       result.push(...groupRows.filter((r) => filteredRows.some((fr) => fr._rowId === r._rowId)))
     })
-    displayRowsRef.current = result
-    return result
-  }, [rowGroups, filteredRows, collapsedRowGroups])
+    const sorted = applySortLevels(result as Array<Record<string, unknown>>, sortConfig) as BaseRow[]
+    displayRowsRef.current = sorted
+    return sorted
+  }, [rowGroups, filteredRows, collapsedRowGroups, sortConfig])
 
   const normSel = useMemo<NormSel | null>(() => {
     if (!selAnchor || !selEnd) return null
@@ -1111,6 +1138,7 @@ export default function FlatFileGrid({
   function reorderRow(fromId: string, toId: string, half: 'top' | 'bottom') {
     if (fromId === toId) return
     pushSnapshot()
+    setSortConfig([])  // drag-drop overrides sort (same as Amazon)
     setRows((prev) => {
       const displayed = displayRowsRef.current.map((r) => r._rowId)
       const rowMap = new Map(prev.map((r) => [r._rowId, r]))
@@ -1121,7 +1149,10 @@ export default function FlatFileGrid({
       const adj = fi < ti ? ti - 1 : ti
       next.splice(half === 'top' ? adj : adj + 1, 0, fromId)
       const notDisplayed = prev.filter((r) => !displayed.includes(r._rowId))
-      return [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
+      const reordered = [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
+      // Persist row order so drag-drop survives page reload
+      try { localStorage.setItem(`${storageKey}-row-order`, JSON.stringify(reordered.map((r) => r._rowId))) } catch {}
+      return reordered
     })
     setDraggingRowId(null); setDropTarget(null)
   }
@@ -1293,7 +1324,28 @@ export default function FlatFileGrid({
             </>
           )}
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-          <TbBtn icon={<SlidersHorizontal className="w-3.5 h-3.5" />} title="Sort rows" onClick={() => {}} />
+          <div className="relative">
+            <TbBtn
+              icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
+              title={sortConfig.length > 0 ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active` : 'Sort rows'}
+              onClick={() => setSortPanelOpen((o) => !o)}
+              active={sortPanelOpen || sortConfig.length > 0}
+              badge={sortConfig.length || undefined}
+            />
+            {sortPanelOpen && (
+              <SortPanel
+                rows={rows as Array<Record<string, unknown>>}
+                groups={orderedGroups.map((g): SortGroup => ({
+                  id: g.id,
+                  label: g.label,
+                  columns: g.columns.map((c) => ({ id: c.id, label: c.label ?? c.id })),
+                }))}
+                initial={sortConfig}
+                onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
+                onClose={() => setSortPanelOpen(false)}
+              />
+            )}
+          </div>
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
           <TbBtn icon={<Replace className="w-3.5 h-3.5" />} title="Find & Replace (⌘F)" onClick={() => setShowFindReplace((o) => !o)} active={showFindReplace} />
           <TbBtn icon={<Sparkles className="w-3.5 h-3.5" />}
