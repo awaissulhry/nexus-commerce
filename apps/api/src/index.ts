@@ -40,6 +40,7 @@ import { sendcloudWebhookRoutes } from "./routes/sendcloud-webhooks.routes.js";
 import { ordersRoutes } from "./routes/orders.routes.js";
 import { customersRoutes } from "./routes/customers.routes.js";
 import { catalogSafeRoutes } from "./routes/catalog-safe.routes.js";
+import catalogOrganizeRoutes from "./routes/catalog-organize.routes.js";
 import healthRoutes from "./routes/health.js";
 import amazonRoutes from "./routes/amazon.routes.js";
 import amazonFlatFileRoutes from "./routes/amazon-flat-file.routes.js";
@@ -419,6 +420,7 @@ app.register(ebayAuthRoutes);
 app.register(ebayRoutes);
 app.register(ebayOrdersRoutes);
 app.register(catalogRoutes, { prefix: '/api/catalog' });
+app.register(catalogOrganizeRoutes, { prefix: '/api/catalog' });
 // S.0 / C-2 — listing-health.routes declares full /api/catalog/... paths
 // internally, so register without a prefix. See DEVELOPMENT.md "Health
 // endpoint conventions" for why /api/listings/health and

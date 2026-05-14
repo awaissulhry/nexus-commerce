@@ -8850,3 +8850,54 @@ model ListingReconciliation {
   @@index([runId])
   @@index([matchedProductId])
 }
+
+// ── Catalog Organize (CO series) ─────────────────────────────────────
+// Session-based publish + undo for /catalog/organize drag-and-drop.
+// CatalogOrganizeSession groups N changes into one undoable batch.
+// CatalogOrganizeChange records the before/after snapshot per product
+// so Phase 5 undo can restore the prior state.
+
+model CatalogOrganizeSession {
+  id            String                  @id @default(cuid())
+  // PUBLISHED → UNDONE once the operator reverts all changes.
+  status        String                  @default("PUBLISHED")
+  publishedAt   DateTime                @default(now())
+  // Undo allowed up to 48 h after publish.
+  undoExpiresAt DateTime
+  undoneAt      DateTime?
+  changes       CatalogOrganizeChange[]
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model CatalogOrganizeChange {
+  id        String                 @id @default(cuid())
+  sessionId String
+  session   CatalogOrganizeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // productId is a plain String FK (no Prisma relation) so we avoid
+  // touching the already-large Product model.
+  productId  String
+  toParentId String
+
+  // Before-state snapshot for undo
+  fromParentId          String?
+  fromVariantAttributes Json?
+
+  // Variation attributes applied on publish (axis → value)
+  attributes Json?
+
+  // APPLIED → UNDONE when the operator reverts this specific change.
+  status   String   @default("APPLIED")
+  // OutboundSyncQueue row IDs created for this change (used in undo).
+  queueIds String[]
+  undoneAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([productId])
+}

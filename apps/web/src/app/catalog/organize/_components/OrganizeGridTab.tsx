@@ -230,50 +230,56 @@ export default function OrganizeGridTab({
   const publish = useCallback(async () => {
     if (stagedChanges.length === 0) return
     setPublishing(true)
-    let successCount = 0
-    const errors: string[] = []
-
-    for (const change of stagedChanges) {
-      try {
-        const res = await fetch(`${getBackendUrl()}/api/pim/attach-to-parent`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': `organize:${change.targetParent.id}:${change.product.id}`,
-          },
-          body: JSON.stringify({
-            parentId: change.targetParent.id,
-            productIds: [change.product.id],
-            axisValues: { [change.product.id]: change.attributes },
-          }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok || json?.success === false) {
-          errors.push(`${change.product.sku}: ${json?.error ?? `HTTP ${res.status}`}`)
-        } else {
-          successCount++
-        }
-      } catch (err) {
-        errors.push(`${change.product.sku}: ${err instanceof Error ? err.message : String(err)}`)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/catalog/organize/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          changes: stagedChanges.map((c) => ({
+            productId: c.product.id,
+            toParentId: c.targetParent.id,
+            attributes: c.attributes,
+          })),
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        onStatus({ kind: 'error', text: json?.error ?? `Publish failed (HTTP ${res.status})` })
+        return
       }
-    }
 
-    setPublishing(false)
+      const { published, errors, undoExpiresAt } = json as {
+        published: number
+        errors: Array<{ productId: string; sku: string; error: string }>
+        sessionId: string  // kept for Phase 5 history panel
+        undoExpiresAt: string
+      }
 
-    if (errors.length === 0) {
-      setStagedChanges([])
-      setReviewOpen(false)
-      emitInvalidation({ type: 'pim.changed', meta: { attached: successCount } })
+      // Remove successfully published changes; keep any that errored.
+      const erroredIds = new Set(errors.map((e) => e.productId))
+      setStagedChanges((prev) => prev.filter((c) => erroredIds.has(c.product.id)))
+
+      emitInvalidation({ type: 'pim.changed', meta: { attached: published } })
       void refetch()
-      toast.success(`Published ${successCount} change${successCount === 1 ? '' : 's'}.`)
-    } else {
-      if (successCount > 0) {
-        setStagedChanges((prev) =>
-          prev.filter((c) => errors.some((e) => e.startsWith(c.product.sku + ':')))
+
+      if (errors.length === 0) {
+        setReviewOpen(false)
+        const expiryHours = Math.round(
+          (new Date(undoExpiresAt).getTime() - Date.now()) / 3_600_000
         )
-        void refetch()
+        toast.success(
+          `Published ${published} change${published === 1 ? '' : 's'}. Undo available for ${expiryHours}h.`
+        )
+      } else {
+        onStatus({
+          kind: 'error',
+          text: `${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors[0]?.error}`,
+        })
       }
-      onStatus({ kind: 'error', text: `${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors[0]}` })
+    } catch (err) {
+      onStatus({ kind: 'error', text: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setPublishing(false)
     }
   }, [stagedChanges, refetch, toast, onStatus])
 
@@ -926,6 +932,13 @@ function AxisCombobox({
   )
 }
 
+// ─── channel-tone helper ─────────────────────────────────────────────
+const CHANNEL_TONE: Record<string, string> = {
+  AMAZON:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800',
+  EBAY:     'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800',
+  SHOPIFY:  'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-800',
+}
+
 // ─── ReviewModal ──────────────────────────────────────────────────────
 function ReviewModal({
   changes,
@@ -945,14 +958,15 @@ function ReviewModal({
       open
       onClose={onClose}
       title={`Review ${changes.length} staged change${changes.length === 1 ? '' : 's'}`}
-      size="2xl"
+      size="3xl"
       placement="top"
       dismissOnEscape={!publishing}
       dismissOnBackdrop={!publishing}
     >
-      <div className="space-y-2">
+      <div className="space-y-3">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Each change calls <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">/pim/attach-to-parent</code> and updates catalog hierarchy. Channel listings are updated via the outbound sync queue.
+          Publishes hierarchy changes to the catalog and enqueues channel sync via OutboundSyncQueue.
+          After publishing you can undo within <strong className="text-slate-700 dark:text-slate-300">48 hours</strong>.
         </p>
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -961,46 +975,79 @@ function ReviewModal({
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Product</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">→ Parent</th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Attributes</th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Channels</th>
                 <th className="px-3 py-2 w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {changes.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                  <td className="px-3 py-2.5">
-                    <div className="font-mono text-xs text-slate-600 dark:text-slate-400">{c.product.sku}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-500 truncate max-w-[160px]">{c.product.name}</div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="font-mono text-xs text-blue-700 dark:text-blue-400">{c.targetParent.sku}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-500 truncate max-w-[160px]">{c.targetParent.name}</div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {Object.keys(c.attributes).length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(c.attributes).map(([k, v]) => v ? (
-                          <span key={k} className="inline-flex items-center gap-0.5 text-xs bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded-full">
-                            <span className="opacity-70">{k}:</span> {v}
-                          </span>
-                        ) : null)}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400 dark:text-slate-500 italic">none</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => onDiscard(c.id)}
-                      disabled={publishing}
-                      aria-label={`Remove ${c.product.sku} from staged changes`}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-30"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {changes.map((c) => {
+                // Derive channel impact from syncChannels + coverage already in ProductRow.
+                const channels = c.product.syncChannels ?? []
+                const coverage = c.product.coverage ?? {}
+                return (
+                  <tr key={c.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="font-mono text-xs text-slate-700 dark:text-slate-300">{c.product.sku}</div>
+                      <div className="text-xs text-slate-400 truncate max-w-[140px]">{c.product.name}</div>
+                      {c.product.amazonAsin && (
+                        <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-0.5">
+                          {c.product.amazonAsin}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="font-mono text-xs text-blue-700 dark:text-blue-400">{c.targetParent.sku}</div>
+                      <div className="text-xs text-slate-400 truncate max-w-[140px]">{c.targetParent.name}</div>
+                    </td>
+                    <td className="px-3 py-2.5 align-top">
+                      {Object.keys(c.attributes).length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(c.attributes).map(([k, v]) => v ? (
+                            <span key={k} className="inline-flex items-center gap-0.5 text-xs bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded-full">
+                              <span className="opacity-60">{k}:</span> {v}
+                            </span>
+                          ) : null)}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">none</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 align-top">
+                      {channels.length === 0 ? (
+                        <span className="text-xs text-slate-400 italic">unlisted</span>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {channels.map((ch) => {
+                            const cov = coverage[ch]
+                            const tone = CHANNEL_TONE[ch] ?? 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                            return (
+                              <span key={ch} className={`inline-flex items-center gap-1 text-[10px] font-medium border px-1.5 py-0.5 rounded-full whitespace-nowrap ${tone}`}>
+                                {ch}
+                                {cov && (
+                                  <span className="opacity-70">
+                                    {cov.live > 0 ? `${cov.live}L` : cov.draft > 0 ? `${cov.draft}D` : '—'}
+                                  </span>
+                                )}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 align-top">
+                      <button
+                        type="button"
+                        onClick={() => onDiscard(c.id)}
+                        disabled={publishing}
+                        aria-label={`Remove ${c.product.sku} from staged changes`}
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-30"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
