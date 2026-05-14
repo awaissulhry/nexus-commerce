@@ -58,10 +58,11 @@ const RECEIVE_AUTO_LAYER_REASONS = new Set([
 //   silent drift). BullMQ enqueue happens after commit; Redis failures
 //   leave the DB row PENDING for the next drain pass.
 
-// Phase 13 — 5-minute grace window before the worker pushes to the
-// marketplace. Same value MasterPriceService uses; consistent with the
-// PHASE 12a pattern in outbound-sync-phase9.service.ts.
-const DEFAULT_HOLD_MS = 5 * 60 * 1000
+// IS.2b — reduced from 5 min to 30s. The original 5-min window was an
+// "undo grace" for manual edits, but stock changes from orders need to
+// reach channels within ~1 minute to prevent oversells. Manual edits
+// from the edit page have their own debounce at the route layer.
+const DEFAULT_HOLD_MS = 30 * 1000
 
 type MovementReason =
   | 'ORDER_PLACED'

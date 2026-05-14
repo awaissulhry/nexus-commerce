@@ -63,8 +63,10 @@ import prisma from '../db.js'
 import { outboundSyncQueue } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
-// 5 minutes, matches PHASE 12a grace window across other outbound writers.
-const DEFAULT_HOLD_MS = 5 * 60 * 1000
+// IS.2b — reduced from 5 min to 30s. Price changes from the edit page
+// should reach channels within ~1 minute. The route layer debounces
+// rapid consecutive edits before calling this service.
+const DEFAULT_HOLD_MS = 30 * 1000
 
 export interface MasterPriceUpdateContext {
   /** Who initiated the change. Surfaces in AuditLog.userId; null for system writes. */

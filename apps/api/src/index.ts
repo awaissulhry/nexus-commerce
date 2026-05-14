@@ -116,6 +116,7 @@ import amazonNotificationsRoutes from "./routes/amazon-notifications.routes.js";
 import ebayNotificationRoutes from "./routes/ebay-notification.routes.js";
 import { startAmazonSqsPollCron } from "./jobs/amazon-sqs-poll.job.js";
 import { ensureAmazonNotificationSubscription } from "./services/amazon-notifications-boot.service.js";
+import { initializeSyncWorker } from "./workers/sync.worker.js";
 import { startWizardCleanupCron } from "./jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "./jobs/bulk-job-orphan-cleanup.job.js";
 import { startScheduledBulkActionCron } from "./jobs/scheduled-bulk-action.job.js";
@@ -282,6 +283,11 @@ async function seedEnvManagedConnections(): Promise<void> {
 }
 
 async function tryStartQueueWorkers(): Promise<void> {
+  // The DB-polling autopilot runs unconditionally — no Redis needed.
+  // It drains OutboundSyncQueue rows every 60s so pushes work even
+  // when BullMQ/Redis is not configured.
+  initializeSyncWorker();
+
   if (process.env.ENABLE_QUEUE_WORKERS !== '1') {
     return;
   }

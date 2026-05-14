@@ -264,6 +264,45 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   )
 
+  // IS.2b — PATCH /api/products/:id/auto-publish-content
+  // Toggle the per-listing auto-publish flag for content changes (title,
+  // description, images). Stored as platformAttributes._autoPublishContent.
+  // Default=false — operator opts in per listing. Once enabled, any save
+  // of content fields on that listing enqueues an OFFER_SYNC automatically.
+  fastify.patch<{
+    Params: { id: string }
+    Body: { markets: Array<{ channel: string; marketplace: string; enabled: boolean }> }
+  }>(
+    '/products/:id/auto-publish-content',
+    async (request, reply) => {
+      const { id } = request.params
+      const { markets } = request.body ?? {}
+      if (!Array.isArray(markets) || markets.length === 0) {
+        return reply.code(400).send({ error: 'markets array required' })
+      }
+      try {
+        const results = await Promise.all(
+          markets.map(async ({ channel, marketplace, enabled }) => {
+            const listing = await prisma.channelListing.findFirst({
+              where: { productId: id, channel, marketplace },
+              select: { id: true, platformAttributes: true },
+            })
+            if (!listing) return { channel, marketplace, updated: false }
+            const attrs = (listing.platformAttributes as Record<string, unknown> | null) ?? {}
+            await prisma.channelListing.update({
+              where: { id: listing.id },
+              data: { platformAttributes: { ...attrs, _autoPublishContent: enabled } },
+            })
+            return { channel, marketplace, updated: true, autoPublishContent: enabled }
+          })
+        )
+        return reply.send({ ok: true, results })
+      } catch (err: any) {
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    }
+  )
+
   // MA.1 — POST /api/products/bulk-offer-availability
   // Toggle offerActive across many products × many markets in one shot.
   // Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }

@@ -491,12 +491,79 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Max 2000 rows per sync' })
     }
     try {
-      const result = await flatFileService.syncRowsToPlatform(
-        rows,
-        (marketplace ?? 'IT').toUpperCase(),
-        expandedFields,
-        { isPublished },
-      )
+      const mp = (marketplace ?? 'IT').toUpperCase()
+      const result = await flatFileService.syncRowsToPlatform(rows, mp, expandedFields, { isPublished })
+
+      // IS.2b — auto-enqueue qty + price pushes for active listings.
+      // Unlike eBay (which enqueues inline), the Amazon service only writes
+      // to DB. We enqueue here so the autopilot worker picks them up within
+      // ~30s instead of waiting for a manual feed submit.
+      void (async () => {
+        try {
+          const skus = rows.map((r: any) => String(r.item_sku ?? '').trim()).filter(Boolean)
+          if (!skus.length) return
+
+          const listings = await prisma.channelListing.findMany({
+            where: {
+              channel: 'AMAZON',
+              marketplace: mp,
+              isPublished: true,
+              offerActive: true,
+              product: { sku: { in: skus } },
+            },
+            select: {
+              id: true,
+              productId: true,
+              price: true,
+              quantity: true,
+              externalListingId: true,
+              region: true,
+            },
+          })
+
+          for (const listing of listings) {
+            const row = rows.find((r: any) => {
+              // match by SKU via listing.productId — simpler: match any changed field
+              return true
+            })
+            if (!listing.productId) continue
+            await prisma.outboundSyncQueue.createMany({
+              data: [
+                {
+                  productId: listing.productId,
+                  channelListingId: listing.id,
+                  targetChannel: 'AMAZON',
+                  targetRegion: listing.region ?? mp,
+                  syncType: 'QUANTITY_UPDATE',
+                  syncStatus: 'PENDING',
+                  payload: { quantity: listing.quantity ?? 0, source: 'AMAZON_FLAT_FILE_SAVE' },
+                  externalListingId: listing.externalListingId ?? undefined,
+                  retryCount: 0,
+                  maxRetries: 3,
+                  holdUntil: new Date(Date.now() + 30_000),
+                },
+                ...(listing.price != null ? [{
+                  productId: listing.productId,
+                  channelListingId: listing.id,
+                  targetChannel: 'AMAZON' as const,
+                  targetRegion: listing.region ?? mp,
+                  syncType: 'PRICE_UPDATE' as const,
+                  syncStatus: 'PENDING' as const,
+                  payload: { price: Number(listing.price), currency: 'EUR', source: 'AMAZON_FLAT_FILE_SAVE' },
+                  externalListingId: listing.externalListingId ?? undefined,
+                  retryCount: 0,
+                  maxRetries: 3,
+                  holdUntil: new Date(Date.now() + 30_000),
+                }] : []),
+              ] as any,
+              skipDuplicates: true,
+            })
+          }
+        } catch (err2) {
+          request.log.warn({ err: err2 }, 'amazon flat-file: auto-enqueue failed (non-fatal)')
+        }
+      })()
+
       return reply.send(result)
     } catch (err: any) {
       request.log.error(err, 'flat-file/sync-rows failed')
