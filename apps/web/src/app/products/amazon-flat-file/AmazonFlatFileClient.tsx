@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
+import { OverrideBadge } from '../_shared/OverrideBadge'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -3156,6 +3157,11 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
           'sticky left-9 z-10 border-b border-r border-slate-200 dark:border-slate-700 px-0.5 relative group/rowresize select-none',
           frozenBg,
           isChild && 'border-l-2 border-l-blue-200 dark:border-l-blue-800',
+          // IN.1 — amber left-border when price is overriding master AND has drifted
+          (row._fieldStates as any)?.price === 'OVERRIDE' &&
+            (row._masterValues as any)?.price != null &&
+            row.purchasable_offer__our_price !== String((row._masterValues as any).price) &&
+            'border-l-2 border-l-amber-400 dark:border-l-amber-500',
         )}
         onPointerDown={(e) => {
           if (e.button !== 0) return
@@ -3254,6 +3260,15 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
               : 'text-red-500 dark:text-red-400'
             return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
           })()}
+
+          {/* IN.1 — Override badge: shows when any field has followMaster*=false */}
+          {(!showRowImages || imageSize >= 48) && (
+            <OverrideBadge
+              listingId={row._listingId as string | null | undefined}
+              fieldStates={row._fieldStates as any}
+              masterValues={row._masterValues as any}
+            />
+          )}
         </div>
         {/* Row height resize handle at the bottom edge */}
         <div

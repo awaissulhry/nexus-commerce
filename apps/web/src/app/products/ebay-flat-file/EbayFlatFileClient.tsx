@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, PushExtrasCtx, RenderCellContent } from '@/components/flat-file/FlatFileGrid.types'
 import { ChannelStrip } from './ChannelStrip'
+import { OverrideBadge } from '../_shared/OverrideBadge'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
   type CategoryAspect, type EbayColumnGroup,
@@ -782,6 +783,15 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       renderToolbarFetch={renderToolbarFetch}
       renderToolbarImport={renderToolbarImport}
       renderBar3Left={renderBar3Left}
+      renderRowMeta={(row) => (
+        <OverrideBadge
+          listingId={row._listingId as string | null | undefined}
+          fieldStates={row._fieldStates as any}
+          masterValues={row._masterValues as any}
+          marketListingIds={row._marketListingIds as any}
+          marketFieldStates={row._marketFieldStates as any}
+        />
+      )}
     />
   )
 }

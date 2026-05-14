@@ -87,6 +87,16 @@ function buildFlatRow(
       offerActive: boolean;
       syncStatus: string;
       updatedAt: Date;
+      // IN.1 — Inheritance state fields (present at runtime, optional in type)
+      followMasterTitle?: boolean | null;
+      followMasterDescription?: boolean | null;
+      followMasterPrice?: boolean | null;
+      followMasterQuantity?: boolean | null;
+      followMasterBulletPoints?: boolean | null;
+      masterTitle?: string | null;
+      masterDescription?: string | null;
+      masterPrice?: { toNumber(): number } | null;
+      masterQuantity?: number | null;
     }>;
   },
 ): Record<string, unknown> {
@@ -150,6 +160,45 @@ function buildFlatRow(
     row[`${prefix}_item_id`] = listing?.externalListingId ?? null;
     row[`${prefix}_status`] = listing?.listingStatus ?? null;
     row[`${prefix}_listing_id`] = (attrs.offerId as string | undefined) ?? null;
+  }
+
+  // IN.1 — Inheritance state from the first (primary) listing.
+  // _marketFieldStates provides per-market breakdown for the eBay popover.
+  if (first) {
+    row._listingId = first.id
+    row._fieldStates = {
+      price:        (first.followMasterPrice        ?? true) ? 'INHERITED' : 'OVERRIDE',
+      title:        (first.followMasterTitle        ?? true) ? 'INHERITED' : 'OVERRIDE',
+      description:  (first.followMasterDescription  ?? true) ? 'INHERITED' : 'OVERRIDE',
+      quantity:     (first.followMasterQuantity     ?? true) ? 'INHERITED' : 'OVERRIDE',
+      bulletPoints: (first.followMasterBulletPoints ?? true) ? 'INHERITED' : 'OVERRIDE',
+    }
+    row._masterValues = {
+      price:       first.masterPrice != null ? first.masterPrice.toNumber() : null,
+      title:       first.masterTitle       ?? null,
+      description: first.masterDescription ?? null,
+      quantity:    first.masterQuantity    ?? null,
+    }
+    // Per-market override state (price + qty are the key ones for eBay)
+    const marketFieldStates: Record<string, Record<string, 'INHERITED' | 'OVERRIDE'>> = {}
+    for (const mp of MARKETS) {
+      const l = listings.find((x) => x.region === mp || x.region === (mp === 'UK' ? 'GB' : mp))
+      if (l) {
+        marketFieldStates[mp] = {
+          price:    (l.followMasterPrice    ?? true) ? 'INHERITED' : 'OVERRIDE',
+          quantity: (l.followMasterQuantity ?? true) ? 'INHERITED' : 'OVERRIDE',
+          title:    (l.followMasterTitle    ?? true) ? 'INHERITED' : 'OVERRIDE',
+        }
+      }
+    }
+    row._marketFieldStates = marketFieldStates
+    // Build list of per-market listing IDs for the reset-per-market action
+    const marketListingIds: Record<string, string> = {}
+    for (const mp of MARKETS) {
+      const l = listings.find((x) => x.region === mp || x.region === (mp === 'UK' ? 'GB' : mp))
+      if (l) marketListingIds[mp] = l.id
+    }
+    row._marketListingIds = marketListingIds
   }
 
   return row;
