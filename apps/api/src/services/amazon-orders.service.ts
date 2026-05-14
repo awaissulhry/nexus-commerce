@@ -552,14 +552,13 @@ export class AmazonOrdersService {
           const listings = await prisma.channelListing.findMany({
             where: {
               productId: it.productId,
-              channel: { not: 'AMAZON' },
               isPublished: true,
               offerActive: true,
             },
             select: { id: true, channel: true, region: true, stockBuffer: true, externalListingId: true },
           })
           for (const listing of listings) {
-            if (!(['EBAY', 'SHOPIFY'] as string[]).includes(listing.channel)) continue
+            if (!(['AMAZON', 'EBAY', 'SHOPIFY'] as string[]).includes(listing.channel)) continue
             const bufferedQty = Math.max(0, availableQty - (listing.stockBuffer ?? 0))
             await prisma.outboundSyncQueue.create({
               data: {
