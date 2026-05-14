@@ -198,7 +198,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
                 className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400 w-28"
               />
               <datalist id="images-axis-list">
-                {[...new Set([...availableAxes, 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
+                {[...new Set([...availableAxes, 'ASIN', 'SKU', 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
                   <option key={a} value={a} />
                 ))}
               </datalist>

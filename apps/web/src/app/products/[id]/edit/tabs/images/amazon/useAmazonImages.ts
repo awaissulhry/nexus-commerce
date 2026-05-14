@@ -105,18 +105,27 @@ export function useAmazonImages({
   const [feedJobs, setFeedJobs] = useState<FeedJobStatus[]>([])
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Group variants by activeAxis
+  // Group variants by activeAxis.
+  // 'ASIN' and 'SKU' are virtual axes — they pull from dedicated fields
+  // rather than variantAttributes, giving one row per ASIN or per SKU.
   const variantGroups = useMemo<VariantGroup[]>(() => {
     const map = new Map<string, VariantSummary[]>()
     for (const v of variants) {
-      const val = (v.variantAttributes as Record<string, string> | null)?.[activeAxis] ?? '—'
+      let val: string
+      if (activeAxis === 'ASIN') {
+        val = v.amazonAsin ?? '—'
+      } else if (activeAxis === 'SKU') {
+        val = v.sku
+      } else {
+        val = (v.variantAttributes as Record<string, string> | null)?.[activeAxis] ?? '—'
+      }
       if (!map.has(val)) map.set(val, [])
       map.get(val)!.push(v)
     }
     return Array.from(map.entries()).map(([groupValue, vs]) => ({
       groupValue,
       variants: vs,
-      displayAsin: vs.find((v) => v.amazonAsin)?.amazonAsin ?? null,
+      displayAsin: activeAxis === 'ASIN' ? groupValue : (vs.find((v) => v.amazonAsin)?.amazonAsin ?? null),
       displaySku: vs[0]?.sku ?? groupValue,
     }))
   }, [variants, activeAxis])
