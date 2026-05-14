@@ -122,14 +122,14 @@ interface ParentSearchHit {
 
 const TABS: Array<{ id: Tab; label: string; description: string }> = [
   {
-    id: 'groups',
-    label: 'Suggested Groups',
-    description: 'Auto-detected variation clusters',
-  },
-  {
     id: 'organize',
     label: 'Organize',
     description: 'Parents and standalones — drag to restructure',
+  },
+  {
+    id: 'groups',
+    label: 'Suggested Groups',
+    description: 'Auto-detected variation clusters',
   },
 ]
 
@@ -146,12 +146,12 @@ export default function OrganizeClient() {
     if (t === 'organize' || t === 'groups') return t
     // Legacy ?tab=standalone and ?tab=parents both redirect to organize tab.
     if (t === 'standalone' || t === 'parents') return 'organize'
-    return 'groups'
+    return 'organize'
   })()
   const [tab, setTab] = useState<Tab>(initialTab)
   useEffect(() => {
     const next = new URLSearchParams(Array.from(params.entries()))
-    if (tab === 'groups') next.delete('tab')
+    if (tab === 'organize') next.delete('tab')
     else next.set('tab', tab)
     // Clean up legacy tab params that no longer exist.
     if (next.get('tab') === 'standalone' || next.get('tab') === 'parents') next.delete('tab')
