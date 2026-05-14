@@ -199,10 +199,12 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── GET /api/catalog/organize/sessions ──────────────────────────
-  // Returns recent sessions for the Phase 5 history panel.
+  // Returns recent sessions enriched with product sku + name.
+  // productId is a plain-string FK (no Prisma relation) so we
+  // batch-fetch Product rows after the session query.
   fastify.get('/organize/sessions', async (_request, _reply) => {
     const sessions = await prisma.catalogOrganizeSession.findMany({
-      where: { status: { in: ['PUBLISHED', 'UNDONE'] } },
+      where: { status: { in: ['PUBLISHED', 'UNDONE', 'FAILED'] } },
       orderBy: { publishedAt: 'desc' },
       take: 20,
       include: {
@@ -214,15 +216,97 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
             fromParentId: true,
             attributes: true,
             status: true,
+            undoneAt: true,
           },
+          orderBy: { createdAt: 'asc' },
         },
       },
     })
-    return { sessions }
+
+    // Collect all unique product IDs (children + parents) for enrichment.
+    const idSet = new Set<string>()
+    for (const s of sessions) {
+      for (const c of s.changes) {
+        idSet.add(c.productId)
+        idSet.add(c.toParentId)
+        if (c.fromParentId) idSet.add(c.fromParentId)
+      }
+    }
+
+    const products = idSet.size > 0
+      ? await prisma.product.findMany({
+          where: { id: { in: Array.from(idSet) } },
+          select: { id: true, sku: true, name: true },
+        })
+      : []
+    const pmap = new Map(products.map((p) => [p.id, p]))
+
+    const enriched = sessions.map((s) => ({
+      ...s,
+      changes: s.changes.map((c) => ({
+        ...c,
+        productSku:  pmap.get(c.productId)?.sku  ?? c.productId,
+        productName: pmap.get(c.productId)?.name ?? '',
+        toParentSku: pmap.get(c.toParentId)?.sku ?? c.toParentId,
+      })),
+    }))
+
+    return { sessions: enriched }
   })
 
+  // ── Shared revert helper ─────────────────────────────────────────
+  // Used by both session-level and change-level undo endpoints.
+  async function revertChange(
+    change: {
+      id: string
+      productId: string
+      toParentId: string
+      fromParentId: string | null
+      fromVariantAttributes: unknown
+    },
+    sessionId: string,
+    now: Date,
+  ): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: change.productId },
+        data: {
+          parentId: change.fromParentId ?? null,
+          variantAttributes: (change.fromVariantAttributes as any) ?? null,
+        },
+      })
+      const listings = await tx.channelListing.findMany({
+        where: { productId: change.productId },
+        select: { id: true, channel: true, marketplace: true },
+      })
+      if (listings.length > 0) {
+        await tx.outboundSyncQueue.createMany({
+          data: listings.map((cl) => ({
+            productId: change.productId,
+            channelListingId: cl.id,
+            targetChannel: cl.channel as any,
+            targetRegion: cl.marketplace ?? null,
+            syncType: 'LISTING_SYNC',
+            syncStatus: 'PENDING' as const,
+            payload: {
+              kind: 'PARENT_DETACH',
+              fromParentId: change.toParentId,
+              toParentId: change.fromParentId ?? null,
+              source: 'catalog-organize-undo',
+              sessionId,
+            },
+          })),
+        })
+      }
+      await tx.catalogOrganizeChange.update({
+        where: { id: change.id },
+        data: { status: 'UNDONE', undoneAt: now },
+      })
+    })
+  }
+
   // ── POST /api/catalog/organize/undo/:sessionId ───────────────────
-  // Restore pre-publish state for all changes in a session.
+  // Undo all changes in a session (batch revert).
   fastify.post<{ Params: { sessionId: string } }>(
     '/organize/undo/:sessionId',
     async (request, reply) => {
@@ -248,44 +332,7 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
       for (const change of session.changes) {
         if (change.status === 'UNDONE') { undone++; continue }
         try {
-          await prisma.$transaction(async (tx) => {
-            // Restore product's parentId and variantAttributes.
-            await tx.product.update({
-              where: { id: change.productId },
-              data: {
-                parentId: change.fromParentId ?? null,
-                variantAttributes: (change.fromVariantAttributes as any) ?? null,
-              },
-            })
-            // Enqueue reversal sync row for each channel listing.
-            const listings = await tx.channelListing.findMany({
-              where: { productId: change.productId },
-              select: { id: true, channel: true, marketplace: true },
-            })
-            if (listings.length > 0) {
-              await tx.outboundSyncQueue.createMany({
-                data: listings.map((cl) => ({
-                  productId: change.productId,
-                  channelListingId: cl.id,
-                  targetChannel: cl.channel as any,
-                  targetRegion: cl.marketplace ?? null,
-                  syncType: 'LISTING_SYNC',
-                  syncStatus: 'PENDING' as const,
-                  payload: {
-                    kind: 'PARENT_DETACH',
-                    fromParentId: change.toParentId,
-                    toParentId: change.fromParentId ?? null,
-                    source: 'catalog-organize-undo',
-                    sessionId,
-                  },
-                })),
-              })
-            }
-            await tx.catalogOrganizeChange.update({
-              where: { id: change.id },
-              data: { status: 'UNDONE', undoneAt: now },
-            })
-          })
+          await revertChange(change, sessionId, now)
           undone++
         } catch (err) {
           errors.push({
@@ -303,6 +350,57 @@ const catalogOrganizeRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return { undone, errors }
+    },
+  )
+
+  // ── POST /api/catalog/organize/undo/:sessionId/change/:changeId ──
+  // Undo a single change within a session (granular revert).
+  fastify.post<{ Params: { sessionId: string; changeId: string } }>(
+    '/organize/undo/:sessionId/change/:changeId',
+    async (request, reply) => {
+      const { sessionId, changeId } = request.params
+      const session = await prisma.catalogOrganizeSession.findUnique({
+        where: { id: sessionId },
+        select: { id: true, status: true, undoExpiresAt: true },
+      })
+      if (!session) return reply.code(404).send({ error: 'Session not found' })
+      const now = new Date()
+      if (now > session.undoExpiresAt) {
+        return reply.code(409).send({
+          error: `Undo window expired at ${session.undoExpiresAt.toISOString()}`,
+        })
+      }
+
+      const change = await prisma.catalogOrganizeChange.findUnique({
+        where: { id: changeId },
+      })
+      if (!change || change.sessionId !== sessionId) {
+        return reply.code(404).send({ error: 'Change not found in this session' })
+      }
+      if (change.status === 'UNDONE') {
+        return reply.code(409).send({ error: 'Change already undone' })
+      }
+
+      try {
+        await revertChange(change, sessionId, now)
+      } catch (err) {
+        return reply.code(500).send({
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+
+      // If all changes in session are now UNDONE, flip the session too.
+      const remaining = await prisma.catalogOrganizeChange.count({
+        where: { sessionId, status: 'APPLIED' },
+      })
+      if (remaining === 0) {
+        await prisma.catalogOrganizeSession.update({
+          where: { id: sessionId },
+          data: { status: 'UNDONE', undoneAt: now },
+        })
+      }
+
+      return { undone: 1, errors: [] }
     },
   )
 }

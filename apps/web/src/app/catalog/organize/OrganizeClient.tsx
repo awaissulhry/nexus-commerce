@@ -42,6 +42,7 @@ import {
   X,
 } from 'lucide-react'
 import OrganizeGridTab from './_components/OrganizeGridTab'
+import OrganizeHistoryPanel from './_components/OrganizeHistoryPanel'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -2371,6 +2372,12 @@ function RightRail({ tab }: { tab: Tab }) {
           )}
         </div>
       </Card>
+
+      {tab === 'organize' && (
+        <Card title="Publish History">
+          <OrganizeHistoryPanel />
+        </Card>
+      )}
 
       <Card title="Quick actions">
         <ul className="text-base text-slate-700 dark:text-slate-300 space-y-1">
