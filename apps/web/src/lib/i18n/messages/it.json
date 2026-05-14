@@ -3226,6 +3226,7 @@
   "organize.title": "Organizzazione catalogo",
   "organize.description": "Promuovi prodotti indipendenti a genitori, collega orfani a genitori esistenti e approva gruppi di varianti rilevati automaticamente. Multi-canale ovunque.",
   "organize.tab.groups": "Gruppi suggeriti",
+  "organize.tab.organize": "Organizza",
   "organize.tab.standalone": "Prodotti indipendenti",
   "organize.tab.parents": "Genitori",
   "organize.searchPlaceholder": "Cerca SKU o nome prodotto",

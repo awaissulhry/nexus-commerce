@@ -142,6 +142,7 @@
   "organize.title": "Catalog Organization",
   "organize.description": "Promote standalones to parents, attach orphans to existing parents, and approve auto-detected variation groups. Multi-channel awareness throughout.",
   "organize.tab.groups": "Suggested Groups",
+  "organize.tab.organize": "Organize",
   "organize.tab.standalone": "Standalone Products",
   "organize.tab.parents": "Parents",
   "organize.searchPlaceholder": "Search SKU or product name",

@@ -63,6 +63,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -136,10 +137,16 @@ interface VirtualizedGridProps {
   /** R7.2 — set of flagged SKUs (>2σ above productType return-rate mean). */
   riskFlaggedSkus: Set<string>
   /** When true, a GripVertical drag-handle column is prepended to each
-   *  row and header. Non-functional in Phase 1 — wired up by the
-   *  DnD context in Phase 2. Safe to omit on /products. */
+   *  row and header. Wired to @dnd-kit DraggableHandle / DroppableRowOverlay.
+   *  Safe to omit on /products (no DndContext needed when false). */
   draggable?: boolean
+  /** IDs of products that have a pending staged change (teal row tint). */
+  stagedProductIds?: Set<string>
+  /** ID of the product currently being dragged (opacity-40 row tint). */
+  activeProductId?: string | null
 }
+
+const EMPTY_SET = new Set<never>()
 
 export function VirtualizedGrid({
   products,
@@ -162,7 +169,10 @@ export function VirtualizedGrid({
   searchTerm,
   riskFlaggedSkus,
   draggable = false,
+  stagedProductIds,
+  activeProductId = null,
 }: VirtualizedGridProps) {
+  const _stagedProductIds = stagedProductIds ?? (EMPTY_SET as Set<string>)
   const { t } = useTranslations()
   // Build the flat row list. Order: each parent followed by its
   // expanded children (or a loading/empty placeholder). Memo deps
@@ -539,7 +549,7 @@ export function VirtualizedGrid({
                       data-index={vRow.index}
                       ref={rowVirtualizer.measureElement}
                       role="row"
-                      className="border-b border-slate-100 flex"
+                      className={`border-b border-slate-100 flex${draggable ? ' relative' : ''}`}
                       onContextMenu={
                         productForMenu
                           ? (e) => onRowContextMenu(e, productForMenu)
@@ -554,20 +564,25 @@ export function VirtualizedGrid({
                       }}
                     >
                       {row.kind === 'parent' && (
-                        <ProductRow
-                          product={row.product}
-                          isChild={false}
-                          isSelected={isSelected}
-                          isExpanded={isExpanded}
-                          isFocused={isFocused}
-                          visible={visible}
-                          cellPad={cellPad}
-                          onToggleSelect={toggleSelect}
-                          onToggleExpand={onToggleExpand}
-                          onTagEdit={onTagEdit}
-                          onChanged={onChanged}
-                          isDraggable={draggable}
-                        />
+                        <>
+                          <ProductRow
+                            product={row.product}
+                            isChild={false}
+                            isSelected={isSelected}
+                            isExpanded={isExpanded}
+                            isFocused={isFocused}
+                            visible={visible}
+                            cellPad={cellPad}
+                            onToggleSelect={toggleSelect}
+                            onToggleExpand={onToggleExpand}
+                            onTagEdit={onTagEdit}
+                            onChanged={onChanged}
+                            isDraggable={draggable}
+                            isStaged={_stagedProductIds.has(row.product.id)}
+                            isActivelyDragged={activeProductId === row.product.id}
+                          />
+                          {draggable && <DroppableRowOverlay product={row.product} />}
+                        </>
                       )}
                       {row.kind === 'child' && (
                         <ProductRow
@@ -583,6 +598,8 @@ export function VirtualizedGrid({
                           onTagEdit={onTagEdit}
                           onChanged={onChanged}
                           isDraggable={draggable}
+                          isStaged={_stagedProductIds.has(row.product.id)}
+                          isActivelyDragged={activeProductId === row.product.id}
                         />
                       )}
                       {row.kind === 'loading' && (
@@ -626,6 +643,61 @@ export function VirtualizedGrid({
         </Card>
       </RiskFlaggedContext.Provider>
     </SearchContext.Provider>
+  )
+}
+
+// DraggableHandle — rendered in ProductRow when isDraggable=true.
+// Must be a separate component so useDraggable is called consistently
+// (never inside a conditional). Only mounted when isDraggable=true,
+// which always means an OrganizeGridTab DndContext is an ancestor.
+function DraggableHandle({
+  product,
+  rowBg,
+}: {
+  product: ProductRowType
+  rowBg: string
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `drag:${product.id}`,
+    data: { product },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`px-1 py-2 flex items-center justify-center touch-none select-none transition-colors ${rowBg} ${
+        isDragging
+          ? 'cursor-grabbing text-blue-500'
+          : 'cursor-grab text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400'
+      }`}
+      style={{ width: 28, minWidth: 28 }}
+      role="cell"
+      aria-label="Drag row"
+    >
+      <GripVertical size={14} />
+    </div>
+  )
+}
+
+// DroppableRowOverlay — absolute overlay covering a parent row's full
+// area. Renders a highlight ring when a draggable item hovers over it.
+// pointer-events: none so it doesn't block clicks on row cells.
+function DroppableRowOverlay({ product }: { product: ProductRowType }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `drop:${product.id}`,
+    data: { product },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      aria-hidden="true"
+      className={`absolute inset-0 pointer-events-none rounded transition-all duration-100 ${
+        isOver
+          ? 'ring-2 ring-inset ring-blue-400 bg-blue-50/25 dark:bg-blue-950/20'
+          : ''
+      }`}
+    />
   )
 }
 
@@ -880,6 +952,8 @@ const ProductRow = memo(function ProductRow({
   onTagEdit,
   onChanged,
   isDraggable = false,
+  isStaged = false,
+  isActivelyDragged = false,
 }: {
   product: ProductRowType
   isChild: boolean
@@ -893,6 +967,8 @@ const ProductRow = memo(function ProductRow({
   onTagEdit: (id: string) => void
   onChanged: () => void
   isDraggable?: boolean
+  isStaged?: boolean
+  isActivelyDragged?: boolean
 }) {
   const { t } = useTranslations()
   const childCount = product.childCount ?? 0
@@ -928,26 +1004,23 @@ const ProductRow = memo(function ProductRow({
     return ''
   })()
 
-  const rowBg = isChild
-    ? isSelected
-      ? `bg-blue-50/40 ${focusRing}`
-      : `${stateTint || 'bg-slate-50/40'} hover:bg-slate-100/60 ${focusRing}`
-    : isSelected
-      ? `bg-blue-50/30 ${focusRing}`
-      : `${stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
+  const stagedTint = isStaged && !isSelected
+    ? 'bg-teal-50/60 dark:bg-teal-950/25'
+    : ''
+
+  const rowBg = isActivelyDragged
+    ? 'opacity-40'
+    : isChild
+      ? isSelected
+        ? `bg-blue-50/40 ${focusRing}`
+        : `${stagedTint || stateTint || 'bg-slate-50/40'} hover:bg-slate-100/60 ${focusRing}`
+      : isSelected
+        ? `bg-blue-50/30 ${focusRing}`
+        : `${stagedTint || stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
+
   return (
     <>
-      {isDraggable && (
-        <div
-          className={`px-1 py-2 flex items-center justify-center ${rowBg} cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400`}
-          style={{ width: 28, minWidth: 28 }}
-          role="cell"
-          aria-label="Drag to reorder"
-          data-drag-handle
-        >
-          <GripVertical size={14} />
-        </div>
-      )}
+      {isDraggable && <DraggableHandle product={product} rowBg={rowBg} />}
       <div
         className={`px-3 py-2 flex items-center ${rowBg}`}
         style={{ width: 32, minWidth: 32 }}
