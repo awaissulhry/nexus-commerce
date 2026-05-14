@@ -27,6 +27,7 @@ interface Props {
   variants: VariantSummary[]
   activeAxis: string
   availableAxes: string[]
+  onAxisChange: (axis: string) => void
   pendingUpserts: Map<string, PendingUpsert>
   addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
   removePendingUpsert: (tempId: string) => void
@@ -52,6 +53,7 @@ export default function AmazonPanel({
   variants,
   activeAxis,
   availableAxes,
+  onAxisChange,
   pendingUpserts,
   addPendingUpsert,
   onToast,
@@ -136,30 +138,48 @@ export default function AmazonPanel({
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-      {/* Marketplace tabs */}
-      <div className="flex items-center border-b border-slate-200 dark:border-slate-700 px-4 overflow-x-auto">
-        {(['ALL', ...AMAZON_MARKETPLACES] as AmazonMarketplace[]).map((mkt) => {
-          const isActive = amazon.activeMarketplace === mkt
-          const hasImages = mkt !== 'ALL' && amazon.populatedMarketplaces.has(mkt)
-          return (
-            <button
-              key={mkt}
-              type="button"
-              onClick={() => amazon.setActiveMarketplace(mkt)}
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                isActive
-                  ? 'border-orange-500 text-orange-600 dark:text-orange-400'
-                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
-              )}
+      {/* Marketplace tabs + axis selector */}
+      <div className="flex items-center border-b border-slate-200 dark:border-slate-700 px-4 overflow-x-auto gap-2">
+        <div className="flex items-center flex-1 overflow-x-auto">
+          {(['ALL', ...AMAZON_MARKETPLACES] as AmazonMarketplace[]).map((mkt) => {
+            const isActive = amazon.activeMarketplace === mkt
+            const hasImages = mkt !== 'ALL' && amazon.populatedMarketplaces.has(mkt)
+            return (
+              <button
+                key={mkt}
+                type="button"
+                onClick={() => amazon.setActiveMarketplace(mkt)}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                  isActive
+                    ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+                )}
+              >
+                {MKT_LABELS[mkt] ?? mkt}
+                {hasImages && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" title="Has marketplace-specific images" />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Axis selector — group rows by Color, Size, etc. */}
+        {availableAxes.length > 0 && (
+          <div className="flex items-center gap-1.5 py-2 pl-3 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
+            <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">Group by</span>
+            <select
+              value={activeAxis}
+              onChange={(e) => onAxisChange(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-400"
             >
-              {MKT_LABELS[mkt] ?? mkt}
-              {hasImages && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" title="Has marketplace-specific images" />
-              )}
-            </button>
-          )
-        })}
+              {availableAxes.map((axis) => (
+                <option key={axis} value={axis}>{axis}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Missing axis-data warning */}
@@ -184,6 +204,7 @@ export default function AmazonPanel({
           <AmazonMatrix
             variantGroups={amazon.variantGroups}
             activeMarketplace={amazon.activeMarketplace}
+            activeAxis={activeAxis}
             resolveCell={amazon.resolveCell}
             onCellClick={(groupValue, slot) => amazon.setImagePicker({ groupValue, slot })}
             onCellDrop={(groupValue, slot, url, sourceId) => amazon.assignCell(groupValue, slot, url, sourceId)}

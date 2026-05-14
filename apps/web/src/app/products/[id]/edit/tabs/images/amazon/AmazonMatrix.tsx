@@ -15,6 +15,7 @@ import { ALL_SLOTS, SLOT_LABELS } from './useAmazonImages'
 interface MatrixProps {
   variantGroups: VariantGroup[]
   activeMarketplace: AmazonMarketplace
+  activeAxis: string
   resolveCell: (groupValue: string | null, slot: AmazonSlot) => CellDisplay | null
   onCellClick: (groupValue: string | null, slot: AmazonSlot) => void
   onCellDrop: (groupValue: string | null, slot: AmazonSlot, url: string, sourceId?: string) => void
@@ -238,6 +239,7 @@ function RowMenu({
 export default function AmazonMatrix({
   variantGroups,
   activeMarketplace,
+  activeAxis,
   resolveCell,
   onCellClick,
   onCellDrop,
@@ -265,7 +267,7 @@ export default function AmazonMatrix({
     ...variantGroups.map((g) => ({
       groupValue: g.groupValue,
       label: g.groupValue,
-      sublabel: g.displayAsin ?? g.displaySku,
+      sublabel: `${g.variants.length} variant${g.variants.length !== 1 ? 's' : ''}`,
       asin: g.displayAsin,
       sku: g.displaySku,
     })),
@@ -296,7 +298,7 @@ export default function AmazonMatrix({
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
             {/* Row label column */}
             <div className="w-44 flex-shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              {activeMarketplace === 'ALL' ? 'Colour / ASIN' : `Colour / ${activeMarketplace}`}
+              {activeAxis}{activeMarketplace !== 'ALL' ? ` / ${activeMarketplace}` : ''}
             </div>
             {/* Slot columns — each is a drag target */}
             {ALL_SLOTS.map((slot) => (
