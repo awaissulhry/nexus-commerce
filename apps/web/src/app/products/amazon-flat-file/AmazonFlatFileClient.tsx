@@ -9,7 +9,7 @@ import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
-  Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
+  Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles, Share2,
 } from 'lucide-react'
 import { FindReplaceBar } from '@/app/bulk-operations/components/FindReplaceBar'
 import { ConditionalFormatBar } from '@/app/bulk-operations/components/ConditionalFormatBar'
@@ -250,10 +250,70 @@ export default function AmazonFlatFileClient({
   // has dirty rows from a previous session we surface a restore banner instead
   // of silently loading stale data — this ensures the flat file always opens
   // showing what is actually in the DB.
+  // ── Per-market storage keys ────────────────────────────────────────────
+  const mp = initialMarketplace.toUpperCase()
+  const rowOrderKey = `ff-amazon-${mp}-row-order`
+  const sortKey     = `ff-amazon-${mp}-sort`
+
+  // ── Market sync state ──────────────────────────────────────────────────
+  // Each market has a boolean: when true it receives auto-propagation from
+  // other markets. Default=true. Once set false it stays false until the
+  // user manually re-enables it — we never auto-reset to true.
+  const SYNC_STATE_KEY = 'ff-amazon-market-sync'
+  const ALL_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK'] as const
+  const [marketSync, setMarketSync] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SYNC_STATE_KEY) ?? '{}') as Record<string, boolean>
+      const result: Record<string, boolean> = {}
+      for (const m of ALL_MARKETS) result[m] = m in saved ? saved[m] : true
+      return result
+    } catch {
+      return Object.fromEntries(ALL_MARKETS.map((m) => [m, true])) as Record<string, boolean>
+    }
+  })
+  const marketSyncRef = useRef(marketSync)
+  useEffect(() => { marketSyncRef.current = marketSync }, [marketSync])
+  useEffect(() => {
+    try { localStorage.setItem(SYNC_STATE_KEY, JSON.stringify(marketSync)) } catch {}
+  }, [marketSync])
+
+  const [applyPanelOpen, setApplyPanelOpen] = useState(false)
+
+  function applyOrderToMarkets(targets: string[]) {
+    const ids = rows.map((r) => r._rowId as string)
+    for (const m of targets) {
+      try { localStorage.setItem(`ff-amazon-${m}-row-order`, JSON.stringify(ids)) } catch {}
+      try { localStorage.setItem(`ff-amazon-${m}-sort`, JSON.stringify(sortConfig)) } catch {}
+    }
+  }
+
+  function toggleMarketSync(market: string) {
+    setMarketSync((prev) => ({ ...prev, [market]: !prev[market] }))
+  }
+
+  // Propagate a row order (_rowId[]) to every market that has sync=true.
+  // Never writes to the current market (caller handles that separately).
+  function propagateRowOrder(ids: string[]) {
+    if (!marketSyncRef.current[mp]) return
+    for (const m of ALL_MARKETS) {
+      if (m === mp || !marketSyncRef.current[m]) continue
+      try { localStorage.setItem(`ff-amazon-${m}-row-order`, JSON.stringify(ids)) } catch {}
+    }
+  }
+  function propagateSort(levels: SortLevel[]) {
+    if (!marketSyncRef.current[mp]) return
+    for (const m of ALL_MARKETS) {
+      if (m === mp || !marketSyncRef.current[m]) continue
+      try { localStorage.setItem(`ff-amazon-${m}-sort`, JSON.stringify(levels)) } catch {}
+    }
+  }
+
   const [rows, setRows] = useState<Row[]>(() => {
     const merged = mergeAsinCache(initialRows, initialMarketplace)
     try {
-      const saved: string[] | null = JSON.parse(localStorage.getItem('ff-amazon-row-order') ?? 'null')
+      // Try per-market key first, fall back to legacy shared key for migration
+      const raw = localStorage.getItem(rowOrderKey) ?? localStorage.getItem('ff-amazon-row-order')
+      const saved: string[] | null = JSON.parse(raw ?? 'null')
       if (Array.isArray(saved) && saved.length > 0) {
         const orderMap = new Map(saved.map((id, i) => [id, i]))
         const inOrder = merged.filter((r) => orderMap.has(r._rowId as string))
@@ -293,10 +353,17 @@ export default function AmazonFlatFileClient({
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
 
   const [sortConfig, setSortConfig] = useState<SortLevel[]>(() => {
-    try { return JSON.parse(localStorage.getItem('ff-amazon-sort') ?? '[]') } catch { return [] }
+    try {
+      const raw = localStorage.getItem(sortKey) ?? localStorage.getItem('ff-amazon-sort')
+      return JSON.parse(raw ?? '[]')
+    } catch { return [] }
   })
   const [sortPanelOpen, setSortPanelOpen] = useState(false)
-  useEffect(() => { try { localStorage.setItem('ff-amazon-sort', JSON.stringify(sortConfig)) } catch {} }, [sortConfig])
+  useEffect(() => {
+    try { localStorage.setItem(sortKey, JSON.stringify(sortConfig)) } catch {}
+    propagateSort(sortConfig)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortConfig])
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -1084,7 +1151,9 @@ export default function AmazonFlatFileClient({
       next.splice(half === 'top' ? adj : adj + 1, 0, fromId)
       const notDisplayed = prev.filter((r) => !displayed.includes(r._rowId as string))
       const reordered = [...next.map((id) => rowMap.get(id)!).filter(Boolean), ...notDisplayed]
-      try { localStorage.setItem('ff-amazon-row-order', JSON.stringify(reordered.map((r) => r._rowId))) } catch {}
+      const ids = reordered.map((r) => r._rowId as string)
+      try { localStorage.setItem(rowOrderKey, JSON.stringify(ids)) } catch {}
+      propagateRowOrder(ids)
       return reordered
     })
     setDraggingRowId(null)
@@ -2096,6 +2165,41 @@ export default function AmazonFlatFileClient({
                 rows={rows} groups={orderedGroups} initial={sortConfig}
                 onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
                 onClose={() => setSortPanelOpen(false)}
+              />
+            )}
+          </div>
+
+          {/* Market sync toggle (current market) + Apply-to panel */}
+          <div className="relative flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => toggleMarketSync(mp)}
+              title={marketSync[mp]
+                ? `Auto-sync ON for ${mp} — changes propagate to other markets. Click to make ${mp} independent.`
+                : `Auto-sync OFF for ${mp} — click to re-enable propagation`}
+              className={cn(
+                'h-6 px-1.5 rounded text-[10px] font-medium transition-colors border',
+                marketSync[mp]
+                  ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
+                  : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
+              )}
+            >
+              {marketSync[mp] ? '⟳ sync' : '⟳ off'}
+            </button>
+            <TbBtn
+              icon={<Share2 className="w-3.5 h-3.5" />}
+              title="Apply row order to other markets"
+              onClick={() => setApplyPanelOpen((o) => !o)}
+              active={applyPanelOpen}
+            />
+            {applyPanelOpen && (
+              <ApplyToPanel
+                currentMarket={mp}
+                allMarkets={ALL_MARKETS}
+                marketSync={marketSync}
+                onToggleSync={toggleMarketSync}
+                onApplyNow={applyOrderToMarkets}
+                onClose={() => setApplyPanelOpen(false)}
               />
             )}
           </div>
@@ -4361,6 +4465,106 @@ function MenuDropdown({ label, items }: MenuDropdownProps) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── ApplyToPanel ───────────────────────────────────────────────────────
+// Copy current row order + sort to other Amazon markets and/or eBay.
+// Each target has a toggle: on=auto-sync (always propagated), off=manual only.
+// "off" state is sticky — never auto-reset to true.
+
+interface ApplyToPanelProps {
+  currentMarket: string
+  allMarkets: readonly string[]
+  marketSync: Record<string, boolean>
+  onToggleSync: (market: string) => void
+  onApplyNow: (targets: string[]) => void
+  onClose: () => void
+}
+
+function ApplyToPanel({
+  currentMarket, allMarkets, marketSync, onToggleSync, onApplyNow, onClose,
+}: ApplyToPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(allMarkets.filter((m) => m !== currentMarket))
+  )
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  const targets = allMarkets.filter((m) => m !== currentMarket)
+  const allSelected = targets.every((m) => selected.has(m))
+
+  function toggle(m: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(m) ? next.delete(m) : next.add(m)
+      return next
+    })
+  }
+
+  return (
+    <div ref={panelRef}
+      className="absolute left-0 top-full mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
+
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Apply row order to…</div>
+          <div className="text-xs text-slate-400">From {currentMarket} → other Amazon markets</div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+      </div>
+
+      <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Amazon markets</span>
+          <button type="button" onClick={() => setSelected(allSelected ? new Set() : new Set(targets))}
+            className="text-[10px] text-blue-500 hover:text-blue-600 font-medium">
+            {allSelected ? 'Deselect all' : 'Select all'}
+          </button>
+        </div>
+        {targets.map((m) => (
+          <div key={m} className="flex items-center gap-2 py-1.5 border-b border-slate-50 dark:border-slate-800/60 last:border-0">
+            {/* Apply-now checkbox */}
+            <input type="checkbox" id={`apply-${m}`} checked={selected.has(m)} onChange={() => toggle(m)}
+              className="rounded border-slate-300 text-blue-500 focus:ring-blue-400 cursor-pointer" />
+            <label htmlFor={`apply-${m}`} className="flex-1 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+              Amazon {m}
+            </label>
+            {/* Auto-sync toggle */}
+            <button
+              type="button"
+              onClick={() => onToggleSync(m)}
+              title={marketSync[m] ? 'Auto-sync ON — turn off to make this market independent' : 'Auto-sync OFF — click to enable'}
+              className={cn(
+                'text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors border',
+                marketSync[m]
+                  ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
+                  : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
+              )}
+            >
+              {marketSync[m] ? 'auto' : 'manual'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="px-4 py-3 flex items-center gap-2">
+        <div className="flex-1 text-[10px] text-slate-400">
+          <span className="font-medium text-blue-500">auto</span> = propagates on every change ·{' '}
+          <span className="font-medium text-slate-500">manual</span> = only when you click Apply
+        </div>
+        <Button size="sm" onClick={() => { onApplyNow([...selected]); onClose() }} disabled={selected.size === 0}>
+          Apply now
+        </Button>
+      </div>
     </div>
   )
 }
