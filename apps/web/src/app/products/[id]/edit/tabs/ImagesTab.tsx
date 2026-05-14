@@ -225,6 +225,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               listingImages={listing}
               variants={variants}
               activeAxis={activeAxis}
+              availableAxes={availableAxes}
               pendingUpserts={workspace.pendingUpserts}
               addPendingUpsert={workspace.addPendingUpsert}
               removePendingUpsert={workspace.removePendingUpsert}

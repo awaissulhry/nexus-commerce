@@ -4,6 +4,7 @@
 // Marketplace tabs + Color × Slot matrix + publish bar.
 
 import { cn } from '@/lib/utils'
+import { AlertTriangle } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
@@ -25,6 +26,7 @@ interface Props {
   listingImages: ListingImage[]
   variants: VariantSummary[]
   activeAxis: string
+  availableAxes: string[]
   pendingUpserts: Map<string, PendingUpsert>
   addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
   removePendingUpsert: (tempId: string) => void
@@ -49,6 +51,7 @@ export default function AmazonPanel({
   listingImages,
   variants,
   activeAxis,
+  availableAxes,
   pendingUpserts,
   addPendingUpsert,
   onToast,
@@ -62,6 +65,7 @@ export default function AmazonPanel({
   onSavePending,
   onReload,
 }: Props) {
+  const noAxisData = variants.length > 0 && availableAxes.length === 0
   const amazon = useAmazonImages({
     productId,
     variants,
@@ -157,6 +161,18 @@ export default function AmazonPanel({
           )
         })}
       </div>
+
+      {/* Missing axis-data warning */}
+      {noAxisData && (
+        <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>
+            {variants.length} variant{variants.length !== 1 ? 's' : ''} found but no Color/Size attributes are set.
+            Go to <strong>Catalog → Organize</strong> and set the axis values (e.g. Colore, Taglia) for each child product,
+            then reload this page. Images will group by color once attributes are in place.
+          </span>
+        </div>
+      )}
 
       {/* Matrix */}
       <div className="p-4">

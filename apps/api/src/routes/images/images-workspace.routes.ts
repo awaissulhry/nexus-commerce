@@ -95,7 +95,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
-      const [master, listing, rawVariants, recentJobs] = await Promise.all([
+      const [master, listing, childProducts, pvRecords, recentJobs] = await Promise.all([
         prisma.productImage.findMany({
           where: { productId },
           orderBy: { sortOrder: 'asc' },
@@ -111,51 +111,34 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
           ],
         }),
 
-        // Variants: children when isParent, else check variations table
-        product.isParent
-          ? prisma.product.findMany({
-              where: { parentId: productId },
-              orderBy: { sku: 'asc' },
-              select: {
-                id: true,
-                sku: true,
-                name: true,
-                variantAttributes: true,
-                amazonAsin: true,
-              },
-            }).then((children) =>
-              children.map((c) => ({
-                id: c.id,
-                sku: c.sku,
-                name: c.name ?? c.sku,
-                variantAttributes: c.variantAttributes as Record<string, string> | null,
-                amazonAsin: c.amazonAsin,
-                ebayVariationId: null as string | null,
-                shopifyVariantId: null as string | null,
-              })),
-            )
-          : prisma.productVariation.findMany({
-              where: { productId },
-              orderBy: { sku: 'asc' },
-              select: {
-                id: true,
-                sku: true,
-                variationAttributes: true,
-                amazonAsin: true,
-                ebayVariationId: true,
-                shopifyVariantId: true,
-              },
-            }).then((vars) =>
-              vars.map((v) => ({
-                id: v.id,
-                sku: v.sku,
-                name: v.sku,
-                variantAttributes: v.variationAttributes as Record<string, string> | null,
-                amazonAsin: v.amazonAsin,
-                ebayVariationId: v.ebayVariationId,
-                shopifyVariantId: v.shopifyVariantId,
-              })),
-            ),
+        // Always query child Products (parentId) — covers both isParent=true
+        // and cases where the flag was not set correctly.
+        prisma.product.findMany({
+          where: { parentId: productId },
+          orderBy: { sku: 'asc' },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            variantAttributes: true,
+            categoryAttributes: true,
+            amazonAsin: true,
+          },
+        }),
+
+        // Also query ProductVariation records (legacy path / WooCommerce import).
+        prisma.productVariation.findMany({
+          where: { productId },
+          orderBy: { sku: 'asc' },
+          select: {
+            id: true,
+            sku: true,
+            variationAttributes: true,
+            amazonAsin: true,
+            ebayVariationId: true,
+            shopifyVariantId: true,
+          },
+        }),
 
         prisma.amazonImageFeedJob.findMany({
           where: { productId },
@@ -175,7 +158,37 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ])
 
-      // Derive available axes from union of variationAttributes keys
+      // Prefer child Products if they exist; fall back to ProductVariation records.
+      const rawVariants = childProducts.length > 0
+        ? childProducts.map((c) => {
+            // variantAttributes is canonical; fall back to categoryAttributes.variations
+            // for products created via the old bulk-create route that left variantAttributes null.
+            const catVars = (c.categoryAttributes as Record<string, unknown> | null)?.variations
+            const attrs = (c.variantAttributes as Record<string, string> | null)
+              ?? (catVars && typeof catVars === 'object' && !Array.isArray(catVars)
+                ? catVars as Record<string, string>
+                : null)
+            return {
+              id: c.id,
+              sku: c.sku,
+              name: c.name ?? c.sku,
+              variantAttributes: attrs,
+              amazonAsin: c.amazonAsin,
+              ebayVariationId: null as string | null,
+              shopifyVariantId: null as string | null,
+            }
+          })
+        : pvRecords.map((v) => ({
+            id: v.id,
+            sku: v.sku,
+            name: v.sku,
+            variantAttributes: v.variationAttributes as Record<string, string> | null,
+            amazonAsin: v.amazonAsin,
+            ebayVariationId: v.ebayVariationId,
+            shopifyVariantId: v.shopifyVariantId,
+          }))
+
+      // Derive available axes from union of variant attribute keys.
       const axisSet = new Set<string>()
       for (const v of rawVariants) {
         if (v.variantAttributes && typeof v.variantAttributes === 'object') {
