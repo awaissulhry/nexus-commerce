@@ -262,6 +262,60 @@ export class eBayAPIProvider implements MarketplaceProvider {
   }
 
   /**
+   * IM.9 — Revise only the images on an eBay listing.
+   * Sends PictureDetails (gallery) and optionally VariationSpecificPictureSet
+   * (colour sets). All other listing fields are left untouched.
+   */
+  async reviseItemImages(input: {
+    itemId: string
+    galleryUrls: string[]
+    colorSets?: Array<{ axisName: string; value: string; urls: string[] }>
+  }): Promise<{ success: boolean; error?: string }> {
+    const pictures = input.galleryUrls
+      .map((url) => `    <PictureURL>${this.escapeXml(url)}</PictureURL>`)
+      .join('\n')
+
+    const variationPictureSets = (input.colorSets ?? [])
+      .filter((cs) => cs.urls.length > 0)
+      .map((cs) => {
+        const pics = cs.urls
+          .map((u) => `      <PictureURL>${this.escapeXml(u)}</PictureURL>`)
+          .join('\n')
+        return `    <VariationSpecificPictureSet>
+      <VariationSpecificName>${this.escapeXml(cs.axisName)}</VariationSpecificName>
+      <VariationSpecificValue>${this.escapeXml(cs.value)}</VariationSpecificValue>
+${pics}
+    </VariationSpecificPictureSet>`
+      })
+      .join('\n')
+
+    const variationsBlock = variationPictureSets
+      ? `  <Variations>\n${variationPictureSets}\n  </Variations>`
+      : ''
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${this.credentials.token}</eBayAuthToken>
+  </RequesterCredentials>
+  <Item>
+    <ItemID>${this.escapeXml(input.itemId)}</ItemID>
+    <PictureDetails>
+${pictures}
+    </PictureDetails>
+${variationsBlock}
+  </Item>
+</ReviseItemRequest>`
+
+    try {
+      await this.callTradingApi('ReviseItem', xml)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  /**
    * Build ReviseItem XML request
    * Used for complete listing updates
    */

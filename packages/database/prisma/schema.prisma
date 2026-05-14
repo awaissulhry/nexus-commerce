@@ -253,6 +253,11 @@ model Product {
   // Example: {"Color": "Black", "Size": "M", "BodyType": "Men"}
   variantAttributes Json?
 
+  // IM.1 — Image axis preference for the images tab matrix view.
+  // Persisted per product so the operator doesn't re-select each visit.
+  // Defaults to "Color" when present; first available axis otherwise.
+  imageAxisPreference String?
+
   // ── PHASE 20: SSOT Indicators ────────────────────────────────────
   // Track which channels this product is synced to
   syncChannels String[] @default([]) // ["AMAZON", "EBAY", "SHOPIFY"]
@@ -300,6 +305,7 @@ model Product {
   substitutionsAsSubstitute ProductSubstitution[]         @relation("SubstitutionSubstitute") // R.17
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
   channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
+  amazonImageFeedJobs       AmazonImageFeedJob[]    // IM.1: Amazon image feed submissions
   listingRecoveryEvents     ListingRecoveryEvent[] // W5.49: delete+relist audit
   buyBoxHistory             BuyBoxHistory[] // Pricing F.1: Buy Box observation log
   scheduledChanges          ScheduledProductChange[] // F.3: deferred mutations
@@ -4932,12 +4938,32 @@ model ListingImage {
   uploadedAt DateTime @default(now())
   uploadedBy String?
 
+  // IM.1 — Amazon slot code. Only meaningful when platform = AMAZON.
+  // Drives ZIP filename generation and JSON_LISTINGS_FEED attribute mapping.
+  // MAIN | PT01 | PT02 | PT03 | PT04 | PT05 | PT06 | PT07 | PT08 | SWCH
+  amazonSlot String?
+
+  // IM.1 — Variant axis grouping. Lets one ListingImage row represent
+  // "all variants where <key> = <value>" without N×M row explosion.
+  // Example: variantGroupKey="Color", variantGroupValue="Rosso"
+  // covers Red-S, Red-M, Red-L in one row.
+  variantGroupKey   String?
+  variantGroupValue String?
+
+  // IM.1 — Channel publish tracking.
+  // DRAFT | PUBLISHED | OUTDATED | ERROR
+  publishStatus String    @default("DRAFT")
+  publishedAt   DateTime?
+  publishError  String?
+
   product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   variation ProductVariation? @relation(fields: [variationId], references: [id], onDelete: Cascade)
 
   @@index([productId, scope, platform, marketplace])
   @@index([productId, variationId, scope])
   @@index([productId, position])
+  @@index([productId, platform, amazonSlot])
+  @@index([productId, variantGroupKey, variantGroupValue])
 }
 
 enum ImageScope {
@@ -4953,6 +4979,33 @@ enum ImageRole {
   LIFESTYLE
   SIZE_CHART
   SWATCH
+}
+
+// IM.1 — Tracks every JSON_LISTINGS_FEED image submission to Amazon.
+// One row per feed call (covering 1..N SKUs). Polling worker updates
+// status as Amazon processes the feed asynchronously. resultSummary
+// holds the parsed per-SKU outcomes from Amazon's processing report.
+model AmazonImageFeedJob {
+  id             String    @id @default(cuid())
+  productId      String
+  marketplace    String    // IT | DE | FR | ES | UK | ALL
+  feedId         String?   // Amazon feedId (from createFeed response)
+  feedDocumentId String?   // Amazon feedDocumentId (from createFeedDocument)
+
+  // PENDING | SUBMITTING | IN_QUEUE | IN_PROGRESS | DONE | FATAL | CANCELLED
+  status       String   @default("PENDING")
+  skus         Json     // string[] — SKUs included in this feed submission
+  errorMessage String?  // top-level feed error (FATAL status)
+  resultSummary Json?   // parsed Amazon processingReport: { processed, successful, errors[] }
+
+  submittedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, marketplace])
+  @@index([feedId])
+  @@index([status, submittedAt])
 }
 
 // Append-only log of every detected schema change (added/removed

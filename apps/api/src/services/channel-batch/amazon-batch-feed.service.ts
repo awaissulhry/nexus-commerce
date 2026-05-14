@@ -22,10 +22,55 @@
 
 import { logger } from '../../utils/logger.js'
 
+export type AmazonSlot =
+  | 'MAIN'
+  | 'PT01' | 'PT02' | 'PT03' | 'PT04'
+  | 'PT05' | 'PT06' | 'PT07' | 'PT08'
+  | 'SWCH'
+
+export const SLOT_TO_ATTRIBUTE: Record<AmazonSlot, string> = {
+  MAIN: 'main_product_image_locator',
+  PT01: 'other_product_image_locator_1',
+  PT02: 'other_product_image_locator_2',
+  PT03: 'other_product_image_locator_3',
+  PT04: 'other_product_image_locator_4',
+  PT05: 'other_product_image_locator_5',
+  PT06: 'other_product_image_locator_6',
+  PT07: 'other_product_image_locator_7',
+  PT08: 'other_product_image_locator_8',
+  SWCH: 'swatch_product_image_locator',
+}
+
+export const AMAZON_SLOTS: AmazonSlot[] = [
+  'MAIN', 'PT01', 'PT02', 'PT03', 'PT04', 'PT05', 'PT06', 'PT07', 'PT08', 'SWCH',
+]
+
+export const MARKETPLACE_IDS: Record<string, string> = {
+  IT: 'APJ6JRA9NG5V4',
+  DE: 'A1PA6795UKMFR9',
+  FR: 'A13V1IB3VIYZZH',
+  ES: 'A1RKKUPIHCS9HS',
+  UK: 'A1F83G8C2ARO7P',
+}
+
+export const MARKETPLACE_LOCALE: Record<string, string> = {
+  IT: 'it_IT',
+  DE: 'de_DE',
+  FR: 'fr_FR',
+  ES: 'es_ES',
+  UK: 'en_GB',
+}
+
 export type AmazonBatchOperation =
   | { type: 'price'; sku: string; currency: string; value: number }
   | { type: 'stock'; sku: string; quantity: number }
   | { type: 'status'; sku: string; status: 'ACTIVE' | 'INACTIVE' }
+  | {
+      type: 'image'
+      sku: string
+      productType: string  // e.g. 'JACKET' — from product's catalogAttributes or productType field
+      slots: { slot: AmazonSlot; url: string }[]
+    }
 
 export interface AmazonBatchSubmission {
   marketplaceIds: string[]
@@ -76,6 +121,19 @@ export function buildJsonListingsFeedBody(
             { fulfillmentChannelCode: 'DEFAULT', quantity: op.quantity },
           ],
         },
+      }
+    }
+    if (op.type === 'image') {
+      return {
+        messageId,
+        sku: op.sku,
+        operationType: 'PATCH',
+        productType: op.productType,
+        patches: op.slots.map(({ slot, url }) => ({
+          op: 'replace',
+          path: `/attributes/${SLOT_TO_ATTRIBUTE[slot]}`,
+          value: [{ media_location: url }],
+        })),
       }
     }
     // status

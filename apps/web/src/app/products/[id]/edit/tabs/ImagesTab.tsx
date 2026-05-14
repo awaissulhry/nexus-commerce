@@ -1,454 +1,328 @@
 'use client'
 
-/**
- * W8.1 — Inline images tab on /products/[id]/edit.
- *
- * Master image manager: upload, reorder, type-tag, alt-text, delete.
- * No extra deps — uses HTML5 DnD for drag reorder, native <input type=file>
- * for uploads, and fetch() directly.
- *
- * Images are fetched via GET /api/products/:id/images (sorted by
- * sortOrder). Reorder commits via POST /api/products/:id/images/reorder
- * on drop. Upload goes to POST /api/products/:id/images (multipart).
- * Delete goes to DELETE /api/products/:id/images/:imageId.
- *
- * Channel-scope overrides (ListingImage) remain on the separate
- * /products/:id/images page — this tab is master-only.
- *
- * Quality signal: badge when < 3 images (most channels require 3+),
- * warning when no MAIN type image.
- */
+// IM.3 — Images workspace tab.
+//
+// Shell layout: channel tabs (Master | Amazon | eBay | Shopify),
+// axis selector, master panel (full), channel panels (stubs until IM.4-6),
+// quality checklist sidebar, action bar (Save/Discard pending changes).
+//
+// Master image operations persist immediately (same as before).
+// Channel listing-image assignments are staged locally and committed
+// via the Save button in the action bar.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  AlertTriangle,
-  GripVertical,
-  Image as ImageIcon,
-  Loader2,
-  Plus,
-  Star,
-  Trash2,
-  Upload,
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { IconButton } from '@/components/ui/IconButton'
-import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { useImagesWorkspace } from './images/useImagesWorkspace'
+import MasterPanel from './images/MasterPanel'
+import QualityChecklist from './images/QualityChecklist'
+import ImageActionBar from './images/ImageActionBar'
+import AmazonPanel from './images/amazon/AmazonPanel'
+import EbayPanel from './images/ebay/EbayPanel'
+import ShopifyPanel from './images/shopify/ShopifyPanel'
+import type { ChannelTab } from './images/types'
 
-// ── Types ──────────────────────────────────────────────────────────────
-
-interface ProductImage {
-  id: string
-  productId: string
-  url: string
-  alt: string | null
-  type: string
-  sortOrder: number
-  publicId: string | null
-  createdAt: string
-}
-
-interface ImagesTabProps {
+interface Props {
   product: { id: string; sku: string }
   discardSignal: number
   onDirtyChange: (count: number) => void
 }
 
-const IMAGE_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
-type ImageType = typeof IMAGE_TYPES[number]
+const CHANNEL_TABS: { key: ChannelTab; label: string }[] = [
+  { key: 'master',  label: 'Master' },
+  { key: 'amazon',  label: 'Amazon' },
+  { key: 'ebay',    label: 'eBay' },
+  { key: 'shopify', label: 'Shopify' },
+]
 
-const TYPE_LABELS: Record<ImageType, string> = {
-  MAIN: 'Main',
-  ALT: 'Alt',
-  LIFESTYLE: 'Lifestyle',
-  SWATCH: 'Swatch',
-  DIAGRAM: 'Diagram',
-}
+export default function ImagesTab({ product, discardSignal, onDirtyChange }: Props) {
+  const [activeChannel, setActiveChannel] = useState<ChannelTab>('master')
+  const [toast, setToast] = useState<string | null>(null)
 
-const TYPE_COLORS: Record<ImageType, string> = {
-  MAIN: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  ALT: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-  LIFESTYLE: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-  SWATCH: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
-  DIAGRAM: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-}
+  const workspace = useImagesWorkspace(product.id, discardSignal, onDirtyChange)
 
-// ── Component ──────────────────────────────────────────────────────────
+  function showToast(msg: string) {
+    setToast(msg)
+    window.setTimeout(() => setToast(null), 3000)
+  }
 
-export default function ImagesTab({ product, discardSignal, onDirtyChange }: ImagesTabProps) {
-  const { t } = useTranslations()
+  // ── Loading / error states ───────────────────────────────────────────
+  if (workspace.loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+        Loading images…
+      </div>
+    )
+  }
 
-  const [images, setImages] = useState<ProductImage[]>([])
-  const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editAlt, setEditAlt] = useState('')
-  const [editType, setEditType] = useState<ImageType>('ALT')
-  const [savingEdit, setSavingEdit] = useState(false)
+  if (workspace.loadError || !workspace.data) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-20 text-slate-500">
+        <AlertTriangle className="w-6 h-6 text-amber-500" />
+        <p className="text-sm">{workspace.loadError ?? 'Failed to load images'}</p>
+        <Button size="sm" variant="ghost" onClick={workspace.reload} className="gap-1.5">
+          <RefreshCw className="w-3.5 h-3.5" /> Retry
+        </Button>
+      </div>
+    )
+  }
 
-  // Drag state
-  const dragIndexRef = useRef<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
-  const [reordering, setReordering] = useState(false)
+  const { data, dirtyCount, saving, savePending, discardPending, setAxisPreference } = workspace
+  const { product: wp, master, listing, variants, availableAxes } = data
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const newImageTypeRef = useRef<ImageType>('ALT')
+  const activeAxis = wp.imageAxisPreference ?? availableAxes[0] ?? 'Color'
 
-  // ImagesTab doesn't have dirty state of its own (all actions persist
-  // immediately), so always report 0.
-  useEffect(() => { onDirtyChange(0) }, [onDirtyChange])
+  // Pending channel images for the tab dot indicators
+  const pendingForChannel = (channel: 'amazon' | 'ebay' | 'shopify') => {
+    const platform = channel.toUpperCase()
+    return Array.from(workspace.pendingUpserts.values()).filter(
+      (u) => u.platform === platform,
+    ).length
+  }
 
-  const loadImages = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/products/${product.id}/images`)
-      if (!res.ok) throw new Error()
-      setImages(await res.json())
-    } finally {
-      setLoading(false)
+  // IM.10 — Per-channel completeness scores (0-100) shown as colored pills on tabs.
+  // Considers server listing images + pending upserts together.
+  const channelScores = useMemo(() => {
+    const pending = Array.from(workspace.pendingUpserts.values())
+    const amazonEffective = [...listing.filter((i) => i.platform === 'AMAZON'), ...pending.filter((u) => u.platform === 'AMAZON') as any[]]
+    const ebayEffective   = [...listing.filter((i) => i.platform === 'EBAY'),   ...pending.filter((u) => u.platform === 'EBAY') as any[]]
+    const shopifyEffective = [...listing.filter((i) => i.platform === 'SHOPIFY'), ...pending.filter((u) => u.platform === 'SHOPIFY') as any[]]
+
+    function pct(checks: boolean[]) { return Math.round(checks.filter(Boolean).length / checks.length * 100) }
+
+    const amazonChecks = [
+      amazonEffective.some((i) => i.amazonSlot === 'MAIN') || master.length > 0,
+      amazonEffective.some((i) => i.amazonSlot === 'MAIN' && i.hasWhiteBackground === true) || !amazonEffective.some((i) => i.amazonSlot === 'MAIN'),
+      amazonEffective.some((i) => i.amazonSlot === 'SWCH') || variants.length === 0,
+      variants.length === 0 || variants.every((v) => v.amazonAsin),
+    ]
+
+    const ebayGallery = ebayEffective.filter((i) => !i.variantGroupKey)
+    const ebayChecks = [
+      ebayGallery.length > 0 || master.length > 0,
+      ebayGallery.length >= 3 || master.length >= 3,
+      ebayEffective.some((i) => i.variantGroupKey) || variants.length === 0,
+    ]
+
+    const shopifyPool = shopifyEffective.filter((i) => !i.variantGroupKey)
+    const shopifyChecks = [
+      shopifyPool.length > 0 || master.length > 0,
+      shopifyEffective.some((i) => i.variantGroupKey) || variants.length === 0,
+      master.some((i) => i.type === 'MAIN'),
+    ]
+
+    return {
+      amazon: pct(amazonChecks),
+      ebay: pct(ebayChecks),
+      shopify: pct(shopifyChecks),
     }
-  }, [product.id])
+  }, [listing, master, variants, workspace.pendingUpserts])
 
-  useEffect(() => { loadImages() }, [loadImages, discardSignal])
-
-  // ── Upload ──────────────────────────────────────────────────────────
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    if (files.length === 0) return
-    setUploading(true)
-    setUploadError(null)
-    try {
-      for (const file of files) {
-        const fd = new FormData()
-        fd.append('file', file)
-        const res = await fetch(
-          `/api/products/${product.id}/images?type=${newImageTypeRef.current}`,
-          { method: 'POST', body: fd },
-        )
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error(body?.error ?? `Upload failed: ${res.status}`)
-        }
-        const created: ProductImage = await res.json()
-        setImages((prev) => [...prev, created])
-      }
-    } catch (err: unknown) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
-  // ── Delete ──────────────────────────────────────────────────────────
-  async function handleDelete(imageId: string) {
-    setDeletingId(imageId)
-    try {
-      const res = await fetch(`/api/products/${product.id}/images/${imageId}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) throw new Error()
-      setImages((prev) => prev.filter((img) => img.id !== imageId))
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  // ── Edit alt / type ─────────────────────────────────────────────────
-  function startEdit(img: ProductImage) {
-    setEditingId(img.id)
-    setEditAlt(img.alt ?? '')
-    setEditType((img.type as ImageType) ?? 'ALT')
-  }
-
-  async function commitEdit() {
-    if (!editingId) return
-    setSavingEdit(true)
-    try {
-      const res = await fetch(`/api/products/${product.id}/images/${editingId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alt: editAlt || null, type: editType }),
-      })
-      if (!res.ok) throw new Error()
-      const updated: ProductImage = await res.json()
-      setImages((prev) => prev.map((img) => (img.id === updated.id ? updated : img)))
-      setEditingId(null)
-    } finally {
-      setSavingEdit(false)
-    }
-  }
-
-  // ── Drag-to-reorder ─────────────────────────────────────────────────
-  function handleDragStart(e: React.DragEvent, index: number) {
-    dragIndexRef.current = index
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  function handleDragOver(e: React.DragEvent, index: number) {
-    e.preventDefault()
-    setDragOverIndex(index)
-  }
-
-  function handleDragLeave() {
-    setDragOverIndex(null)
-  }
-
-  async function handleDrop(e: React.DragEvent, targetIndex: number) {
-    e.preventDefault()
-    setDragOverIndex(null)
-    const fromIndex = dragIndexRef.current
-    dragIndexRef.current = null
-    if (fromIndex === null || fromIndex === targetIndex) return
-
-    const reordered = [...images]
-    const [moved] = reordered.splice(fromIndex, 1)
-    reordered.splice(targetIndex, 0, moved)
-    const withOrder = reordered.map((img, i) => ({ ...img, sortOrder: i }))
-    setImages(withOrder)
-
-    setReordering(true)
-    try {
-      await fetch(`/api/products/${product.id}/images/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order: withOrder.map((img) => ({ id: img.id, sortOrder: img.sortOrder })),
-        }),
-      })
-    } finally {
-      setReordering(false)
-    }
-  }
-
-  // ── Quality signals ─────────────────────────────────────────────────
-  const hasMain = images.some((img) => img.type === 'MAIN')
-  const tooFew = images.length > 0 && images.length < 3
+  // Published count per channel (how many images have publishStatus=PUBLISHED)
+  const publishedCount = useMemo(() => ({
+    amazon: listing.filter((i) => i.platform === 'AMAZON' && i.publishStatus === 'PUBLISHED').length,
+    ebay:   listing.filter((i) => i.platform === 'EBAY'   && i.publishStatus === 'PUBLISHED').length,
+    shopify: listing.filter((i) => i.platform === 'SHOPIFY' && i.publishStatus === 'PUBLISHED').length,
+  }), [listing])
 
   return (
-    <div className="space-y-6">
-      {/* ── Quality banner ─────────────────────────────────────────── */}
-      {((!hasMain && images.length > 0) || tooFew) && (
-        <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
-          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
-          <div>
-            {!hasMain && images.length > 0 && (
-              <div>{t('products.edit.images.noMain')}</div>
-            )}
-            {tooFew && (
-              <div>{t('products.edit.images.tooFew', { count: images.length })}</div>
-            )}
-          </div>
+    <div className="space-y-4">
+      {/* ── Toast notification ──────────────────────────────────────── */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 dark:bg-slate-100 text-slate-100 dark:text-slate-900 text-sm px-4 py-2 rounded-lg shadow-lg pointer-events-none">
+          {toast}
         </div>
       )}
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* ── Channel tab strip + axis selector ───────────────────────── */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-          <ImageIcon className="w-4 h-4 text-slate-500" />
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {t('products.edit.images.title')}
-          </h2>
-          <span className="text-xs text-slate-400 dark:text-slate-500">
-            {images.length} {t('products.edit.images.imageCount')}
-          </span>
-          {reordering && (
-            <span className="flex items-center gap-1 text-xs text-slate-400 ml-2">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              {t('products.edit.images.saving')}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            <select
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
-              onChange={(e) => { newImageTypeRef.current = e.target.value as ImageType }}
-              defaultValue="ALT"
-            >
-              {IMAGE_TYPES.map((t) => (
-                <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-              ))}
-            </select>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-1"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              {uploading
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Upload className="w-3.5 h-3.5" />}
-              {t('products.edit.images.upload')}
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="sr-only"
-              onChange={handleFileChange}
-            />
-          </div>
-        </div>
-
-        {/* ── Grid ─────────────────────────────────────────────────── */}
-        <div className="px-5 py-4">
-          {uploadError && (
-            <p className="text-xs text-red-600 dark:text-red-400 mb-3">{uploadError}</p>
-          )}
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              {t('products.edit.images.loading')}
-            </div>
-          ) : images.length === 0 ? (
-            <div
-              className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-16 flex flex-col items-center gap-3 text-slate-400 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <ImageIcon className="w-10 h-10" />
-              <div className="text-center">
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                  {t('products.edit.images.empty')}
-                </p>
-                <p className="text-xs mt-1">{t('products.edit.images.emptyHint')}</p>
-              </div>
-              <Button size="sm" className="gap-1" onClick={() => fileInputRef.current?.click()}>
-                <Plus className="w-3.5 h-3.5" /> {t('products.edit.images.addFirst')}
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {images.map((img, index) => (
-                <div
-                  key={img.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, index)}
+        <div className="flex items-center border-b border-slate-200 dark:border-slate-700 px-4 gap-1 flex-wrap">
+          {/* Channel tabs */}
+          <div className="flex items-center gap-1 flex-1 -mb-px overflow-x-auto">
+            {CHANNEL_TABS.map(({ key, label }) => {
+              const isActive = activeChannel === key
+              const dotCount = key === 'master' ? 0 : pendingForChannel(key as any)
+              const score = key === 'master' ? null : channelScores[key as keyof typeof channelScores]
+              const pubCount = key === 'master' ? null : publishedCount[key as keyof typeof publishedCount]
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveChannel(key)}
                   className={cn(
-                    'group relative rounded-lg border bg-slate-50 dark:bg-slate-800 overflow-hidden transition-all',
-                    dragOverIndex === index
-                      ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
-                      : 'border-slate-200 dark:border-slate-700',
+                    'relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                    isActive
+                      ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                      : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                 >
-                  {/* Image */}
-                  <div className="aspect-square relative bg-slate-100 dark:bg-slate-700">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={img.url}
-                      alt={img.alt ?? img.type}
-                      className="w-full h-full object-contain"
-                    />
-                    {/* Drag handle overlay */}
-                    <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-                      <div className="bg-white/80 dark:bg-slate-900/80 rounded p-1">
-                        <GripVertical className="w-3.5 h-3.5 text-slate-500" />
-                      </div>
-                    </div>
-                    {/* Star on MAIN */}
-                    {img.type === 'MAIN' && (
-                      <div className="absolute top-1 right-1">
-                        <div className="bg-blue-500 rounded p-0.5">
-                          <Star className="w-3 h-3 text-white fill-white" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {label}
+                  {/* IM.10 — Completeness score pill */}
+                  {score !== null && (
+                    <span
+                      className={cn(
+                        'text-[10px] font-mono px-1.5 py-px rounded tabular-nums',
+                        score >= 80
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                          : score >= 50
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                            : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
+                      )}
+                      title={`${score}% complete${pubCount ? ` · ${pubCount} published` : ''}`}
+                    >
+                      {score}%
+                    </span>
+                  )}
+                  {dotCount > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400" title={`${dotCount} unsaved`} />
+                  )}
+                </button>
+              )
+            })}
+          </div>
 
-                  {/* Footer */}
-                  <div className="px-2 py-2 space-y-1.5">
-                    {editingId === img.id ? (
-                      <div className="space-y-1.5">
-                        <select
-                          value={editType}
-                          onChange={(e) => setEditType(e.target.value as ImageType)}
-                          className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
-                        >
-                          {IMAGE_TYPES.map((t) => (
-                            <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-                          ))}
-                        </select>
-                        <input
-                          value={editAlt}
-                          onChange={(e) => setEditAlt(e.target.value)}
-                          placeholder="Alt text"
-                          className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 focus:outline-none"
-                        />
-                        <div className="flex gap-1">
-                          <Button size="sm" className="flex-1 text-xs h-6" onClick={commitEdit} disabled={savingEdit}>
-                            {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
-                          </Button>
-                          <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => setEditingId(null)}>
-                            ✕
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => startEdit(img)}
-                          className={cn(
-                            'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80',
-                            TYPE_COLORS[(img.type as ImageType) ?? 'ALT'],
-                          )}
-                        >
-                          {TYPE_LABELS[(img.type as ImageType)] ?? img.type}
-                        </button>
-                        {img.alt && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate" title={img.alt}>
-                            {img.alt}
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <button
-                            className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                            onClick={() => startEdit(img)}
-                          >
-                            {t('products.edit.images.edit')}
-                          </button>
-                          <IconButton
-                            size="sm"
-                            aria-label={t('products.edit.images.delete')}
-                            onClick={() => handleDelete(img.id)}
-                            disabled={deletingId === img.id}
-                            className="text-slate-400 hover:text-red-500"
-                          >
-                            {deletingId === img.id
-                              ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : <Trash2 className="w-3 h-3" />}
-                          </IconButton>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* Add-more card */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1.5 text-slate-400 cursor-pointer hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+          {/* Axis selector — only meaningful when variants exist */}
+          {availableAxes.length > 0 && (
+            <div className="flex items-center gap-2 py-2 pl-4 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
+              <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Group by</span>
+              <select
+                value={activeAxis}
+                onChange={(e) => setAxisPreference(e.target.value)}
+                className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
               >
-                <Plus className="w-6 h-6" />
-                <span className="text-xs">{t('products.edit.images.add')}</span>
-              </div>
+                {availableAxes.map((axis) => (
+                  <option key={axis} value={axis}>{axis}</option>
+                ))}
+              </select>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Tips ───────────────────────────────────────────────────── */}
-      <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 px-1">
-        <p>• {t('products.edit.images.tip1')}</p>
-        <p>• {t('products.edit.images.tip2')}</p>
-        <p>• {t('products.edit.images.tip3')}</p>
+      {/* ── Panel + sidebar layout ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_220px] gap-4 items-start">
+        {/* Active panel */}
+        <div>
+          {activeChannel === 'master' && (
+            <MasterPanel
+              product={wp}
+              images={master}
+              onImagesChange={() => { void workspace.reload() }}
+              onAddToChannel={workspace.addToChannel}
+              onToast={showToast}
+            />
+          )}
+          {activeChannel === 'amazon' && (
+            <AmazonPanel
+              productId={product.id}
+              product={wp}
+              masterImages={master}
+              listingImages={listing}
+              variants={variants}
+              activeAxis={activeAxis}
+              pendingUpserts={workspace.pendingUpserts}
+              addPendingUpsert={workspace.addPendingUpsert}
+              removePendingUpsert={workspace.removePendingUpsert}
+              amazonJobs={data.amazonJobs}
+              dirtyCount={dirtyCount}
+              onSavePending={savePending}
+              onReload={workspace.reload}
+              onToast={showToast}
+              onCopyToEbayGallery={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
+              onCopyToEbayColorSets={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'colorSets', activeAxis })}
+              onCopyToShopifyPool={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
+              onCopyToShopifyAssignments={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'colorSets', activeAxis })}
+            />
+          )}
+          {activeChannel === 'ebay' && (
+            <EbayPanel
+              productId={product.id}
+              product={wp}
+              masterImages={master}
+              listingImages={listing}
+              variants={variants}
+              activeAxis={activeAxis}
+              pendingUpserts={workspace.pendingUpserts}
+              pendingDeletes={workspace.pendingDeletes}
+              addPendingUpsert={workspace.addPendingUpsert}
+              addPendingDelete={workspace.addPendingDelete}
+              onToast={showToast}
+              onCopyFromMaster={() => workspace.copyChannelImages({ fromPlatform: 'MASTER', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
+              onCopyFromAmazonGallery={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
+              onCopyFromAmazonColorSets={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'colorSets', activeAxis })}
+              publishedCount={publishedCount.ebay}
+              onPublish={async () => {
+                const ok = await savePending()
+                if (!ok) { showToast('Save failed — fix errors before publishing'); return }
+                const res = await fetch(`/api/products/${product.id}/ebay-images/publish`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ activeAxis }),
+                })
+                const data = await res.json()
+                showToast(data.message ?? (data.success ? 'Published to eBay' : 'eBay publish failed'))
+              }}
+            />
+          )}
+          {activeChannel === 'shopify' && (
+            <ShopifyPanel
+              productId={product.id}
+              product={wp}
+              masterImages={master}
+              listingImages={listing}
+              variants={variants}
+              activeAxis={activeAxis}
+              pendingUpserts={workspace.pendingUpserts}
+              pendingDeletes={workspace.pendingDeletes}
+              addPendingUpsert={workspace.addPendingUpsert}
+              addPendingDelete={workspace.addPendingDelete}
+              onToast={showToast}
+              onCopyFromMaster={() => workspace.copyChannelImages({ fromPlatform: 'MASTER', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
+              onCopyFromAmazonPool={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
+              onCopyFromAmazonAssignments={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'colorSets', activeAxis })}
+              publishedCount={publishedCount.shopify}
+              onPublish={async () => {
+                const ok = await savePending()
+                if (!ok) { showToast('Save failed — fix errors before publishing'); return }
+                const res = await fetch(`/api/products/${product.id}/shopify-images/publish`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ activeAxis }),
+                })
+                const data = await res.json()
+                showToast(data.message ?? (data.success ? 'Published to Shopify' : 'Shopify publish failed'))
+              }}
+            />
+          )}
+        </div>
+
+        {/* Quality checklist sidebar */}
+        <div className="xl:sticky xl:top-24">
+          <QualityChecklist
+            product={wp}
+            masterImages={master}
+            listingImages={listing}
+            variants={variants}
+          />
+        </div>
       </div>
+
+      {/* ── Action bar ───────────────────────────────────────────────── */}
+      <ImageActionBar
+        activeChannel={activeChannel}
+        dirtyCount={dirtyCount}
+        saving={saving}
+        onSave={async () => {
+          const ok = await savePending()
+          if (ok) showToast('Changes saved')
+        }}
+        onDiscard={() => {
+          discardPending()
+          showToast('Changes discarded')
+        }}
+      />
     </div>
   )
 }
