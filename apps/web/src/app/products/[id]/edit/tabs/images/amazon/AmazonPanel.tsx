@@ -165,19 +165,22 @@ export default function AmazonPanel({
           })}
         </div>
 
-        {/* Axis selector — group rows by Color, Size, etc. */}
-        {availableAxes.length > 0 && (
+        {/* Axis selector — group rows by Color, Size, etc. Free-type + datalist suggestions */}
+        {variants.length > 0 && (
           <div className="flex items-center gap-1.5 py-2 pl-3 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
             <span className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">Group by</span>
-            <select
+            <input
+              list="amazon-axis-list"
               value={activeAxis}
-              onChange={(e) => onAxisChange(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-400"
-            >
-              {availableAxes.map((axis) => (
-                <option key={axis} value={axis}>{axis}</option>
+              onChange={(e) => { if (e.target.value.trim()) onAxisChange(e.target.value.trim()) }}
+              placeholder="e.g. Colore"
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-orange-400 w-24"
+            />
+            <datalist id="amazon-axis-list">
+              {[...new Set([...availableAxes, 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
+                <option key={a} value={a} />
               ))}
-            </select>
+            </datalist>
           </div>
         )}
       </div>

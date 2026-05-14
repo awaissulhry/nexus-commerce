@@ -186,19 +186,22 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
             })}
           </div>
 
-          {/* Axis selector — only meaningful when variants exist */}
-          {availableAxes.length > 0 && (
+          {/* Axis selector — show whenever variants exist */}
+          {variants.length > 0 && (
             <div className="flex items-center gap-2 py-2 pl-4 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
               <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Group by</span>
-              <select
+              <input
+                list="images-axis-list"
                 value={activeAxis}
-                onChange={(e) => setAxisPreference(e.target.value)}
-                className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none"
-              >
-                {availableAxes.map((axis) => (
-                  <option key={axis} value={axis}>{axis}</option>
+                onChange={(e) => { if (e.target.value.trim()) setAxisPreference(e.target.value.trim()) }}
+                placeholder="e.g. Colore"
+                className="text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-400 w-28"
+              />
+              <datalist id="images-axis-list">
+                {[...new Set([...availableAxes, 'Colore', 'Taglia', 'Color', 'Size', 'Colour', 'Material', 'Style', 'Gender'])].map((a) => (
+                  <option key={a} value={a} />
                 ))}
-              </select>
+              </datalist>
             </div>
           )}
         </div>
