@@ -38,8 +38,10 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Table2,
   X,
 } from 'lucide-react'
+import OrganizeGridTab from './_components/OrganizeGridTab'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -57,7 +59,7 @@ import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 
-type Tab = 'groups' | 'standalone' | 'parents'
+type Tab = 'groups' | 'organize'
 
 interface DetectedGroup {
   id: string
@@ -124,14 +126,9 @@ const TABS: Array<{ id: Tab; label: string; description: string }> = [
     description: 'Auto-detected variation clusters',
   },
   {
-    id: 'standalone',
-    label: 'Standalone Products',
-    description: 'Orphans waiting to be promoted or linked',
-  },
-  {
-    id: 'parents',
-    label: 'Parents',
-    description: 'Catalog overview',
+    id: 'organize',
+    label: 'Organize',
+    description: 'Parents and standalones — drag to restructure',
   },
 ]
 
@@ -145,7 +142,9 @@ export default function OrganizeClient() {
   // the same URL params via useSearchParams individually.
   const initialTab = ((): Tab => {
     const t = params.get('tab')
-    if (t === 'standalone' || t === 'parents' || t === 'groups') return t
+    if (t === 'organize' || t === 'groups') return t
+    // Legacy ?tab=standalone and ?tab=parents both redirect to organize tab.
+    if (t === 'standalone' || t === 'parents') return 'organize'
     return 'groups'
   })()
   const [tab, setTab] = useState<Tab>(initialTab)
@@ -153,6 +152,8 @@ export default function OrganizeClient() {
     const next = new URLSearchParams(Array.from(params.entries()))
     if (tab === 'groups') next.delete('tab')
     else next.set('tab', tab)
+    // Clean up legacy tab params that no longer exist.
+    if (next.get('tab') === 'standalone' || next.get('tab') === 'parents') next.delete('tab')
     const qs = next.toString()
     router.replace(qs ? `?${qs}` : '?', { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,14 +211,11 @@ export default function OrganizeClient() {
                 : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 dark:text-slate-400 dark:hover:text-slate-200',
             )}
           >
-            {tabDef.id === 'groups' && <Layers className="w-3.5 h-3.5" />}
-            {tabDef.id === 'standalone' && <Boxes className="w-3.5 h-3.5" />}
-            {tabDef.id === 'parents' && <Package className="w-3.5 h-3.5" />}
+            {tabDef.id === 'groups'   && <Layers  className="w-3.5 h-3.5" />}
+            {tabDef.id === 'organize' && <Table2  className="w-3.5 h-3.5" />}
             {tabDef.id === 'groups'
               ? t('organize.tab.groups')
-              : tabDef.id === 'standalone'
-                ? t('organize.tab.standalone')
-                : t('organize.tab.parents')}
+              : t('organize.tab.organize')}
           </button>
         ))}
       </nav>
@@ -229,13 +227,8 @@ export default function OrganizeClient() {
               onStatus={onStatus}
             />
           )}
-          {tab === 'standalone' && (
-            <StandaloneTab
-              onStatus={onStatus}
-            />
-          )}
-          {tab === 'parents' && (
-            <ParentsTab onStatus={onStatus} />
+          {tab === 'organize' && (
+            <OrganizeGridTab onStatus={onStatus} />
           )}
         </div>
         <RightRail tab={tab} />
@@ -651,7 +644,7 @@ function GroupRow({
 // Tab 2 — Standalone Products
 // ───────────────────────────────────────────────────────────────────
 
-function StandaloneTab({
+export function StandaloneTab({
   onStatus,
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
@@ -1776,7 +1769,7 @@ const ChildItem = memo(function ChildItem({
   )
 })
 
-function ParentsTab({
+export function ParentsTab({
   onStatus,
 }: {
   onStatus: (s: { kind: 'success' | 'error'; text: string }) => void
@@ -2368,19 +2361,12 @@ function RightRail({ tab }: { tab: Tab }) {
               The slider controls the minimum confidence threshold.
             </p>
           )}
-          {tab === 'standalone' && (
+          {tab === 'organize' && (
             <p>
-              Products with no parent and no auto-detected group. Either
-              <strong> promote</strong> to make it a parent (add variants
-              later) or <strong>attach</strong> to an existing parent —
-              you can multi-select rows for bulk attach.
-            </p>
-          )}
-          {tab === 'parents' && (
-            <p>
-              Catalog overview of every parent with its child count,
-              listing health, and channel coverage. Click a row to open
-              its edit page (Variations tab supports add/edit/delete).
+              Unified view of all parents (expandable to show children)
+              and standalone products. Use the drag handles to rearrange
+              — drag a standalone onto a parent to make it a child variant.
+              Changes are staged until you publish.
             </p>
           )}
         </div>
@@ -2430,4 +2416,8 @@ function RightRail({ tab }: { tab: Tab }) {
   )
 }
 
+// StandaloneTab + ParentsTab are preserved for Phase 2 (AttachModal /
+// PromoteModal / AxisValueEditor will be extracted into the DnD flow).
 void Plus
+void StandaloneTab
+void ParentsTab

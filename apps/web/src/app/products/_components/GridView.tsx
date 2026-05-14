@@ -54,6 +54,7 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  GripVertical,
   Image as ImageIcon,
   Layers,
   Pencil,
@@ -565,6 +566,7 @@ export function VirtualizedGrid({
                           onToggleExpand={onToggleExpand}
                           onTagEdit={onTagEdit}
                           onChanged={onChanged}
+                          isDraggable={draggable}
                         />
                       )}
                       {row.kind === 'child' && (
@@ -580,6 +582,7 @@ export function VirtualizedGrid({
                           onToggleExpand={onToggleExpand}
                           onTagEdit={onTagEdit}
                           onChanged={onChanged}
+                          isDraggable={draggable}
                         />
                       )}
                       {row.kind === 'loading' && (
@@ -876,6 +879,7 @@ const ProductRow = memo(function ProductRow({
   onToggleExpand,
   onTagEdit,
   onChanged,
+  isDraggable = false,
 }: {
   product: ProductRowType
   isChild: boolean
@@ -888,6 +892,7 @@ const ProductRow = memo(function ProductRow({
   onToggleExpand: (parentId: string) => void
   onTagEdit: (id: string) => void
   onChanged: () => void
+  isDraggable?: boolean
 }) {
   const { t } = useTranslations()
   const childCount = product.childCount ?? 0
@@ -932,6 +937,17 @@ const ProductRow = memo(function ProductRow({
       : `${stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
   return (
     <>
+      {isDraggable && (
+        <div
+          className={`px-1 py-2 flex items-center justify-center ${rowBg} cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 dark:text-slate-600 dark:hover:text-slate-400`}
+          style={{ width: 28, minWidth: 28 }}
+          role="cell"
+          aria-label="Drag to reorder"
+          data-drag-handle
+        >
+          <GripVertical size={14} />
+        </div>
+      )}
       <div
         className={`px-3 py-2 flex items-center ${rowBg}`}
         style={{ width: 32, minWidth: 32 }}
