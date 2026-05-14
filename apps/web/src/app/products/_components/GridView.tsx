@@ -134,6 +134,10 @@ interface VirtualizedGridProps {
   searchTerm: string
   /** R7.2 — set of flagged SKUs (>2σ above productType return-rate mean). */
   riskFlaggedSkus: Set<string>
+  /** When true, a GripVertical drag-handle column is prepended to each
+   *  row and header. Non-functional in Phase 1 — wired up by the
+   *  DnD context in Phase 2. Safe to omit on /products. */
+  draggable?: boolean
 }
 
 export function VirtualizedGrid({
@@ -156,6 +160,7 @@ export function VirtualizedGrid({
   focusedRowId,
   searchTerm,
   riskFlaggedSkus,
+  draggable = false,
 }: VirtualizedGridProps) {
   const { t } = useTranslations()
   // Build the flat row list. Order: each parent followed by its
@@ -243,15 +248,16 @@ export function VirtualizedGrid({
     }
     return style as React.CSSProperties
   }, [visible, colWidth])
-  // Total table width = checkbox(32) + chevron(24) + sum(effective
+  // Total table width = [drag(28)] + checkbox(32) + chevron(24) + sum(effective
   // widths). Used for both header + body min-width so horizontal
   // overflow works correctly inside the scroll container.
   const totalWidth = useMemo(
     () =>
+      (draggable ? 28 : 0) +
       32 +
       24 +
       visible.reduce((acc, c) => acc + colWidth(c.key, c.width), 0),
-    [visible, colWidth],
+    [visible, colWidth, draggable],
   )
 
   // E.9 — right-click context menu state. Tracks the click position
@@ -353,6 +359,14 @@ export function VirtualizedGrid({
                 className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-10"
                 role="row"
               >
+                {draggable && (
+                  <div
+                    className="px-1 py-2"
+                    style={{ width: 28, minWidth: 28 }}
+                    role="columnheader"
+                    aria-label="Drag"
+                  />
+                )}
                 <div
                   className="px-3 py-2 flex items-center"
                   style={{ width: 32, minWidth: 32 }}
