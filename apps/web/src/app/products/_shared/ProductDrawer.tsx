@@ -145,6 +145,7 @@ interface ProductDetail {
     followMasterQuantity?: boolean
     title: string | null
     externalListingId: string | null
+    platformAttributes?: Record<string, unknown> | null
   }>
   images?: Array<{ url: string; type: string | null }>
 }
@@ -1678,6 +1679,38 @@ function ListingsTab({
                             BullMQ worker picks it up next tick. The
                             row's status pill flips to PENDING after
                             the parent's onChanged() refetch. */}
+                        {/* IS.2b — Auto-publish content toggle */}
+                        {(() => {
+                          const autoOn = !!(l.platformAttributes as any)?._autoPublishContent
+                          return (
+                            <button
+                              type="button"
+                              title={autoOn
+                                ? 'Auto-publish content ON — title/description changes push automatically. Click to disable.'
+                                : 'Auto-publish content OFF — content changes require manual publish. Click to enable.'}
+                              onClick={async () => {
+                                await fetch(
+                                  `${getBackendUrl()}/api/products/${productId}/auto-publish-content`,
+                                  {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      markets: [{ channel: l.channel, marketplace: l.marketplace, enabled: !autoOn }],
+                                    }),
+                                  },
+                                )
+                                onChanged?.()
+                              }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors ${
+                                autoOn
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'
+                                  : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700'
+                              }`}
+                            >
+                              {autoOn ? '↑ auto' : '↑ off'}
+                            </button>
+                          )
+                        })()}
                         <button
                           type="button"
                           onClick={() => resync(l.id)}

@@ -21,6 +21,7 @@ import {
   MARKETPLACE_ID_MAP,
 } from '../services/amazon/flat-file.service.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
+import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -559,6 +560,9 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               skipDuplicates: true,
             })
           }
+          // Content auto-publish: enqueue FULL_SYNC for listings
+          // that have _autoPublishContent=true in platformAttributes.
+          await enqueueContentSyncIfEnabled(listings.map((l) => l.id))
         } catch (err2) {
           request.log.warn({ err: err2 }, 'amazon flat-file: auto-enqueue failed (non-fatal)')
         }

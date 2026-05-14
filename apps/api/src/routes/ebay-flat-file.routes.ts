@@ -19,6 +19,7 @@ import prisma from '../db.js';
 import { ebayAuthService } from '../services/ebay-auth.service.js';
 import { EbayCategoryService } from '../services/ebay-category.service.js';
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
+import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -575,6 +576,9 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               } as any,
             });
           }
+
+          // Content auto-publish: title/description changes
+          void enqueueContentSyncIfEnabled([listingId])
         }
 
         saved++;

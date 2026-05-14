@@ -3,6 +3,7 @@ import prisma from '../db.js'
 import { masterPriceService } from '../services/master-price.service.js'
 import { masterStatusService } from '../services/master-status.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
+import { enqueueContentSyncForProduct } from '../services/content-auto-publish.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -365,7 +366,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
               // values different = drift).
               price: true, masterPrice: true, followMasterPrice: true,
               quantity: true, masterQuantity: true, followMasterQuantity: true,
-              externalListingId: true, title: true,
+              externalListingId: true, title: true, description: true,
+              platformAttributes: true,
             },
           },
         },
@@ -1230,6 +1232,13 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         // Edge case: product deleted between our prefetch and now.
         return reply.code(404).send({ error: 'Product not found' })
       }
+
+      // Content auto-publish: if name or description changed, enqueue
+      // FULL_SYNC for listings that follow master title and have auto-publish on.
+      if (body.name !== undefined || body.description !== undefined) {
+        void enqueueContentSyncForProduct(id)
+      }
+
       return {
         ...updated,
         basePrice: Number(updated.basePrice),
