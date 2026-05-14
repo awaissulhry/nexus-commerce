@@ -23,6 +23,7 @@ interface MatrixProps {
   onPublishRow: (groupValue: string) => void
   onCopyRow: (groupValue: string, toMarketplace: string) => void
   onClearRow: (groupValue: string) => void
+  onCellFileDrop: (groupValue: string | null, slot: AmazonSlot, file: File) => void
 }
 
 // ── Slot cell ──────────────────────────────────────────────────────────
@@ -32,11 +33,13 @@ function SlotCell({
   slot,
   onDrop,
   onClick,
+  onFileDrop,
 }: {
   cell: CellDisplay | null
   slot: AmazonSlot
   onDrop: (url: string, sourceId?: string) => void
   onClick: () => void
+  onFileDrop?: (file: File) => void
 }) {
   const [isOver, setIsOver] = useState(false)
   const isMain = slot === 'MAIN'
@@ -57,7 +60,8 @@ function SlotCell({
     const url = e.dataTransfer.getData('application/nexus-image-url')
     const sourceId = e.dataTransfer.getData('application/nexus-image-id') || undefined
     if (url) { onDrop(url, sourceId); return }
-    // File drop handled by parent panel (would need upload logic here)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length && onFileDrop) { onFileDrop(files[0]); return }
   }
 
   return (
@@ -247,6 +251,7 @@ export default function AmazonMatrix({
   onPublishRow,
   onCopyRow,
   onClearRow,
+  onCellFileDrop,
 }: MatrixProps) {
   // Track column fill confirmation popover
   const [pendingColumnFill, setPendingColumnFill] = useState<{
@@ -352,6 +357,7 @@ export default function AmazonMatrix({
                     slot={slot}
                     onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
                     onClick={() => onCellClick(groupValue, slot)}
+                    onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
                   />
                 ))}
 

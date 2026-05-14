@@ -14,7 +14,7 @@
 
 import { useRef, useState, useMemo } from 'react'
 import {
-  AlertTriangle, GripVertical, Loader2, Plus,
+  AlertTriangle, CheckCircle2, GripVertical, Loader2, Plus,
   Star, Store, Trash2, Upload,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -27,6 +27,13 @@ import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, Workspa
 interface CopyResult { copied: number; skipped: number }
 
 const SHOPIFY_MAX = 250
+
+function elapsedTime(from: string): string {
+  const m = Math.floor((Date.now() - new Date(from).getTime()) / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  return `${Math.floor(m / 60)}h ago`
+}
 
 interface Props {
   productId: string
@@ -44,7 +51,7 @@ interface Props {
   onCopyFromAmazonPool: () => CopyResult
   onCopyFromAmazonAssignments: () => CopyResult
   publishedCount: number
-  onPublish: () => Promise<void>
+  onPublish: () => Promise<{ success: boolean; message: string }>
 }
 
 interface PoolItem {
@@ -74,6 +81,7 @@ export default function ShopifyPanel({
   onPublish,
 }: Props) {
   const [publishing, setPublishing] = useState(false)
+  const [lastPublish, setLastPublish] = useState<{ success: boolean; message: string; ts: string } | null>(null)
   const [pickerTarget, setPickerTarget] = useState<'pool' | { colorValue: string } | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const dragIndexRef = useRef<number | null>(null)
@@ -443,26 +451,41 @@ export default function ShopifyPanel({
       />
 
       {/* Publish */}
-      <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <span className="text-xs text-slate-400">
-          PUT /products/{'{id}'} · variant image_id assignment via REST
-          {publishedCount > 0 && (
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">· {publishedCount} published</span>
-          )}
-        </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="gap-1.5 border border-slate-200 dark:border-slate-700"
-          disabled={publishing}
-          onClick={async () => {
-            setPublishing(true)
-            try { await onPublish() } finally { setPublishing(false) }
-          }}
-        >
-          {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-          Publish to Shopify
-        </Button>
+      <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400">
+            PUT /products/{'{id}'} · variant image_id assignment via REST
+            {publishedCount > 0 && (
+              <span className="ml-2 text-emerald-600 dark:text-emerald-400">· {publishedCount} published</span>
+            )}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 border border-slate-200 dark:border-slate-700"
+            disabled={publishing}
+            onClick={async () => {
+              setPublishing(true)
+              try {
+                const result = await onPublish()
+                setLastPublish({ ...result, ts: new Date().toISOString() })
+              } finally {
+                setPublishing(false)
+              }
+            }}
+          >
+            {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            Publish to Shopify
+          </Button>
+        </div>
+        {lastPublish && (
+          <div className={cn('flex items-center gap-1.5 text-xs', lastPublish.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+            {lastPublish.success
+              ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
+            {lastPublish.message} · {elapsedTime(lastPublish.ts)}
+          </div>
+        )}
       </div>
 
       {/* Image picker modal */}

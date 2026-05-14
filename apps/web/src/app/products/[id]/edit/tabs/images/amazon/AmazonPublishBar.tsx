@@ -22,11 +22,14 @@ interface FeedJobStatus {
 interface Props {
   activeMarketplace: AmazonMarketplace
   publishing: boolean
+  publishingAll: boolean
   publishError: string | null
   feedJobs: FeedJobStatus[]
   dirtyCount: number
   onPublish: (marketplace: AmazonMarketplace) => void
+  onPublishAll: () => void
   onExportZip: (marketplace: AmazonMarketplace) => void
+  isExporting: boolean
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -50,11 +53,14 @@ function elapsed(from: string): string {
 export default function AmazonPublishBar({
   activeMarketplace,
   publishing,
+  publishingAll,
   publishError,
   feedJobs,
   dirtyCount,
   onPublish,
+  onPublishAll,
   onExportZip,
+  isExporting,
 }: Props) {
   const [zipMenuOpen, setZipMenuOpen] = useState(false)
 
@@ -71,7 +77,7 @@ export default function AmazonPublishBar({
             size="sm"
             variant={activeMarketplace === mkt ? 'primary' : 'ghost'}
             onClick={() => onPublish(mkt)}
-            disabled={publishing}
+            disabled={publishing || publishingAll}
             className={cn(
               'text-xs gap-1',
               activeMarketplace !== mkt && 'border border-slate-200 dark:border-slate-700',
@@ -86,14 +92,11 @@ export default function AmazonPublishBar({
 
         <Button
           size="sm"
-          onClick={() => {
-            const mkt = activeMarketplace === 'ALL' ? 'IT' : activeMarketplace
-            onPublish(mkt)
-          }}
-          disabled={publishing}
+          onClick={onPublishAll}
+          disabled={publishing || publishingAll}
           className="text-xs gap-1 ml-1"
         >
-          {publishing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+          {publishingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
           Publish all markets
         </Button>
 
@@ -101,11 +104,13 @@ export default function AmazonPublishBar({
         <div className="relative ml-auto">
           <button
             type="button"
-            onClick={() => setZipMenuOpen((p) => !p)}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+            onClick={() => { if (!isExporting) setZipMenuOpen((p) => !p) }}
+            disabled={isExporting}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ··· Export ZIP
-            <ChevronDown className="w-3 h-3" />
+            {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : '···'}
+            {isExporting ? 'Exporting…' : 'Export ZIP'}
+            {!isExporting && <ChevronDown className="w-3 h-3" />}
           </button>
           {zipMenuOpen && (
             <>

@@ -100,6 +100,7 @@ export function useAmazonImages({
   const [imagePicker, setImagePicker] = useState<ImagePickerState | null>(null)
   const [columnFill, setColumnFill] = useState<ColumnFillState | null>(null)
   const [publishing, setPublishing] = useState(false)
+  const [publishingAll, setPublishingAll] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [feedJobs, setFeedJobs] = useState<FeedJobStatus[]>([])
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -316,6 +317,17 @@ export function useAmazonImages({
     })))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const publishAll = useCallback(async () => {
+    setPublishingAll(true)
+    try {
+      for (const mkt of AMAZON_MARKETPLACES) {
+        await publish(mkt)
+      }
+    } finally {
+      setPublishingAll(false)
+    }
+  }, [publish])
+
   // Cleanup on unmount
   useEffect(() => () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current) }, [])
 
@@ -325,9 +337,9 @@ export function useAmazonImages({
     resolveCell, assignCell, assignColumn,
     imagePicker, setImagePicker,
     columnFill, setColumnFill,
-    publishing, publishError,
+    publishing, publishingAll, publishError,
     feedJobs,
-    publish,
+    publish, publishAll,
     masterImages,
   }
 }

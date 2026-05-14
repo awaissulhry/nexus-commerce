@@ -3,8 +3,9 @@
 // IM.4 — Amazon images panel (replaces AmazonPanelStub).
 // Marketplace tabs + Color × Slot matrix + publish bar.
 
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
@@ -14,6 +15,7 @@ import {
   useAmazonImages,
   AMAZON_MARKETPLACES,
   type AmazonMarketplace,
+  type AmazonSlot,
 } from './useAmazonImages'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct, AmazonJobSummary } from '../types'
 
@@ -68,6 +70,8 @@ export default function AmazonPanel({
   onReload,
 }: Props) {
   const noAxisData = variants.length > 0 && availableAxes.length === 0
+  const [slotUploading, setSlotUploading] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   const amazon = useAmazonImages({
     productId,
     variants,
@@ -83,6 +87,7 @@ export default function AmazonPanel({
 
   async function handleExportZip(marketplace: AmazonMarketplace) {
     if (marketplace === 'ALL') return
+    setIsExporting(true)
     try {
       const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
         method: 'POST',
@@ -100,6 +105,22 @@ export default function AmazonPanel({
       URL.revokeObjectURL(a.href)
     } catch {
       // Non-fatal — user can retry
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  async function handleCellFileDrop(groupValue: string | null, slot: AmazonSlot, file: File) {
+    setSlotUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await beFetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
+      if (!res.ok) return
+      const created = await res.json()
+      amazon.assignCell(groupValue, slot, created.url, created.id)
+    } finally {
+      setSlotUploading(false)
     }
   }
 
@@ -165,6 +186,13 @@ export default function AmazonPanel({
           })}
         </div>
 
+        {/* Slot-uploading indicator */}
+        {slotUploading && (
+          <span className="flex items-center gap-1 text-xs text-slate-400 ml-2 py-3 flex-shrink-0">
+            <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+          </span>
+        )}
+
         {/* Axis selector — group rows by Color, Size, etc. Free-type + datalist suggestions */}
         {variants.length > 0 && (
           <div className="flex items-center gap-1.5 py-2 pl-3 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
@@ -217,6 +245,7 @@ export default function AmazonPanel({
             )}
             onCopyRow={handleCopyRow}
             onClearRow={handleClearRow}
+            onCellFileDrop={handleCellFileDrop}
           />
         )}
       </div>
@@ -225,11 +254,14 @@ export default function AmazonPanel({
       <AmazonPublishBar
         activeMarketplace={amazon.activeMarketplace}
         publishing={amazon.publishing}
+        publishingAll={amazon.publishingAll}
         publishError={amazon.publishError}
         feedJobs={amazon.feedJobs}
         dirtyCount={dirtyCount}
         onPublish={amazon.publish}
+        onPublishAll={amazon.publishAll}
         onExportZip={handleExportZip}
+        isExporting={isExporting}
       />
 
       {/* IM.7 — Cross-channel sync */}

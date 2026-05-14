@@ -263,14 +263,19 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               publishedCount={publishedCount.ebay}
               onPublish={async () => {
                 const ok = await savePending()
-                if (!ok) { showToast('Save failed — fix errors before publishing'); return }
+                if (!ok) {
+                  showToast('Save failed — fix errors before publishing')
+                  return { success: false, message: 'Save failed — fix errors first' }
+                }
                 const res = await beFetch(`/api/products/${product.id}/ebay-images/publish`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ activeAxis }),
                 })
-                const data = await res.json()
-                showToast(data.message ?? (data.success ? 'Published to eBay' : 'eBay publish failed'))
+                const body = await res.json()
+                const message = body.message ?? (res.ok ? 'Published to eBay' : 'eBay publish failed')
+                showToast(message)
+                return { success: res.ok && body.success !== false, message }
               }}
             />
           )}
@@ -293,14 +298,19 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               publishedCount={publishedCount.shopify}
               onPublish={async () => {
                 const ok = await savePending()
-                if (!ok) { showToast('Save failed — fix errors before publishing'); return }
+                if (!ok) {
+                  showToast('Save failed — fix errors before publishing')
+                  return { success: false, message: 'Save failed — fix errors first' }
+                }
                 const res = await beFetch(`/api/products/${product.id}/shopify-images/publish`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ activeAxis }),
                 })
-                const data = await res.json()
-                showToast(data.message ?? (data.success ? 'Published to Shopify' : 'Shopify publish failed'))
+                const body = await res.json()
+                const message = body.message ?? (res.ok ? 'Published to Shopify' : 'Shopify publish failed')
+                showToast(message)
+                return { success: res.ok && body.success !== false, message }
               }}
             />
           )}
