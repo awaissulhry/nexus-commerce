@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, Loader2, Search, Send, X,
+  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, GitBranch, Loader2, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -270,6 +270,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [categorySearchRowId, setCategorySearchRowId] = useState<string | null>(null)
   const [fetching, setFetching]               = useState(false)
   const [fetchPanelOpen, setFetchPanelOpen]   = useState(false)
+
+  // IN.1 — Override badges toggle (default on, persisted to localStorage)
+  const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-show-overrides') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {}
+  }, [showOverrideBadges])
 
   // ── Category schema state (drives columnGroups) ────────────────────────
   const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
@@ -669,10 +677,26 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: Bar3 left ────────────────────────────────────────────────────
 
   const renderBar3Left = useCallback(() => (
-    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap flex-shrink-0">
-      All markets
-    </span>
-  ), [])
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap flex-shrink-0">
+        All markets
+      </span>
+      {/* IN.1 — Override badges toggle */}
+      <button
+        type="button"
+        onClick={() => setShowOverrideBadges((o) => !o)}
+        title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators'}
+        className={cn(
+          'h-6 w-6 flex items-center justify-center rounded transition-colors flex-shrink-0',
+          showOverrideBadges
+            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300',
+        )}
+      >
+        <GitBranch className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  ), [showOverrideBadges, setShowOverrideBadges])
 
   // ── Slot: modals ───────────────────────────────────────────────────────
 
@@ -783,7 +807,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       renderToolbarFetch={renderToolbarFetch}
       renderToolbarImport={renderToolbarImport}
       renderBar3Left={renderBar3Left}
-      renderRowMeta={(row) => (
+      renderRowMeta={showOverrideBadges ? (row) => (
         <OverrideBadge
           listingId={row._listingId as string | null | undefined}
           fieldStates={row._fieldStates as any}
@@ -791,7 +815,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           marketListingIds={row._marketListingIds as any}
           marketFieldStates={row._marketFieldStates as any}
         />
-      )}
+      ) : undefined}
     />
   )
 }

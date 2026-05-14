@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
+  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
   Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
 } from 'lucide-react'
@@ -521,6 +521,12 @@ export default function AmazonFlatFileClient({
   useEffect(() => { try { localStorage.setItem('ff-col-widths', JSON.stringify(colWidths)) } catch {} }, [colWidths])
   useEffect(() => { try { localStorage.setItem('ff-row-height', String(rowHeight)) } catch {} }, [rowHeight])
   useEffect(() => { try { localStorage.setItem('ff-frozen-cols', String(frozenColCount)) } catch {} }, [frozenColCount])
+
+  // IN.1 — Override badges toggle (default on)
+  const [showOverrideBadges, setShowOverrideBadges] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-show-overrides') !== '0' } catch { return true }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {} }, [showOverrideBadges])
 
   // Persist image preferences
   useEffect(() => { try { localStorage.setItem('ff-show-images', showRowImages ? '1' : '0') } catch {} }, [showRowImages])
@@ -2119,6 +2125,14 @@ export default function AmazonFlatFileClient({
             active={pushPanel?.tab === 'translate'}
           />
 
+          {/* IN.1 — Override badges toggle */}
+          <TbBtn
+            icon={<GitBranch className="w-3.5 h-3.5" />}
+            title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
+            onClick={() => setShowOverrideBadges((o) => !o)}
+            active={showOverrideBadges}
+          />
+
           {/* Row images toggle */}
           <TbBtn
             icon={<ImageIcon className="w-3.5 h-3.5" />}
@@ -2727,6 +2741,7 @@ export default function AmazonFlatFileClient({
                     else next.add(rowId)
                     return next
                   })}
+                  showOverrideBadges={showOverrideBadges}
                 />
               ))}
 
@@ -3082,6 +3097,7 @@ interface RowProps {
   onRowSelect: (ri: number) => void
   onFillHandlePointerDown: (ri: number, ci: number) => void
   onFillDrop: () => void
+  showOverrideBadges: boolean
 }
 
 function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell,
@@ -3092,7 +3108,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   matchKeys, toneMap,
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
-  onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop }: RowProps) {
+  onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop,
+  showOverrideBadges }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -3261,8 +3278,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             return <span className={cn('text-[9px] font-semibold leading-none', cls)}>{s.slice(0, 4)}</span>
           })()}
 
-          {/* IN.1 — Override badge: shows when any field has followMaster*=false */}
-          {(!showRowImages || imageSize >= 48) && (
+          {/* IN.1 — Override badge: shows when toggle is on and any field has followMaster*=false */}
+          {showOverrideBadges && (!showRowImages || imageSize >= 48) && (
             <OverrideBadge
               listingId={row._listingId as string | null | undefined}
               fieldStates={row._fieldStates as any}

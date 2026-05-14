@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CheckCircle2, GitBranch, Loader2, RotateCcw, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -133,18 +134,40 @@ function OverrideBadgeInner({
   const [marketFieldStates, setMarketFieldStates] = useState<MarketFieldStates | null>(
     initialMarketFieldStates ?? null,
   )
-  const [resetting, setResetting] = useState<string | null>(null) // field key or 'all'
+  const [resetting, setResetting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
+  // Position for the portal-rendered popover (fixed coords from button rect)
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
 
-  // Close on outside click
+  // Recompute position whenever the popover opens
+  useEffect(() => {
+    if (!open || !btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    const POPOVER_WIDTH = 240
+    const left = Math.min(rect.left, window.innerWidth - POPOVER_WIDTH - 8)
+    setPopoverPos({ top: rect.bottom + 4, left: Math.max(4, left) })
+  }, [open])
+
+  // Close on outside click or Escape — listens on document so it works
+  // regardless of what stacking context the badge is rendered inside.
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        btnRef.current?.contains(e.target as Node) ||
+        popoverRef.current?.contains(e.target as Node)
+      ) return
+      setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKey)
+    }
   }, [open])
 
   const currentOverrides = marketFieldStates
@@ -230,28 +253,15 @@ function OverrideBadgeInner({
 
   const isEbay = !!marketFieldStates
 
-  return (
-    <div ref={ref} className="relative" onPointerDown={(e) => e.stopPropagation()}>
-      {/* Chip */}
-      <button
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
-        className={cn(
-          'flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors',
-          'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60',
-        )}
-        title={`${currentOverrides} field${currentOverrides !== 1 ? 's' : ''} overriding master`}
-      >
-        <GitBranch className="h-2.5 w-2.5" />
-        {currentOverrides}
-      </button>
-
-      {/* Popover */}
-      {open && (
+  // The popover content — rendered via portal so it escapes any sticky/transform
+  // stacking context from the flat file table columns.
+  const popoverContent = open && popoverPos && typeof document !== 'undefined'
+    ? createPortal(
         <div
-          className={cn(
-            'absolute left-0 top-full mt-1 z-50 min-w-[220px] rounded-lg border border-slate-200 dark:border-slate-700',
-            'bg-white dark:bg-slate-900 shadow-lg overflow-hidden',
-          )}
+          ref={popoverRef}
+          style={{ position: 'fixed', top: popoverPos.top, left: popoverPos.left, zIndex: 9999 }}
+          className="w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -312,9 +322,7 @@ function OverrideBadgeInner({
                 if (marketOverrides === 0) return null
                 return (
                   <div key={market} className="px-3 py-1.5">
-                    <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      {market}
-                    </div>
+                    <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">{market}</div>
                     {(Object.entries(states) as Array<['price' | 'quantity' | 'title', InheritanceState]>).map(
                       ([field, state]) =>
                         state === 'OVERRIDE' ? (
@@ -362,8 +370,30 @@ function OverrideBadgeInner({
               </button>
             </div>
           )}
-        </div>
-      )}
-    </div>
+        </div>,
+        document.body,
+      )
+    : null
+
+  return (
+    <>
+      {/* Chip — sits inside the frozen column cell */}
+      <button
+        ref={btnRef}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={cn(
+          'flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold leading-none transition-colors',
+          'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60',
+        )}
+        title={`${currentOverrides} field${currentOverrides !== 1 ? 's' : ''} overriding master`}
+      >
+        <GitBranch className="h-2.5 w-2.5" />
+        {currentOverrides}
+      </button>
+
+      {/* Popover — portal-rendered at document.body to escape table stacking context */}
+      {popoverContent}
+    </>
   )
 }
