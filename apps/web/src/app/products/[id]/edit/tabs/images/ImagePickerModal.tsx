@@ -4,6 +4,7 @@
 // Shows master images + upload-new. Used by Amazon, eBay, Shopify panels.
 
 import { useRef, useState } from 'react'
+import { beFetch } from './api'
 import { Loader2, Upload, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -28,7 +29,7 @@ export default function ImagePickerModal({ productId, masterImages, onSelect, on
     try {
       const fd = new FormData()
       fd.append('file', files[0])
-      const res = await fetch(`/api/products/${productId}/images?type=ALT`, {
+      const res = await beFetch(`/api/products/${productId}/images?type=ALT`, {
         method: 'POST',
         body: fd,
       })

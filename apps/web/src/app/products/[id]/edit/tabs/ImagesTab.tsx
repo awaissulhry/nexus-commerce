@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { beFetch } from './images/api'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useImagesWorkspace } from './images/useImagesWorkspace'
@@ -256,7 +257,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onPublish={async () => {
                 const ok = await savePending()
                 if (!ok) { showToast('Save failed — fix errors before publishing'); return }
-                const res = await fetch(`/api/products/${product.id}/ebay-images/publish`, {
+                const res = await beFetch(`/api/products/${product.id}/ebay-images/publish`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ activeAxis }),
@@ -286,7 +287,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onPublish={async () => {
                 const ok = await savePending()
                 if (!ok) { showToast('Save failed — fix errors before publishing'); return }
-                const res = await fetch(`/api/products/${product.id}/shopify-images/publish`, {
+                const res = await beFetch(`/api/products/${product.id}/shopify-images/publish`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ activeAxis }),

@@ -8,6 +8,7 @@
 // "Add to channel" creates a pending listing-image via addToChannel().
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { beFetch } from './api'
 import {
   AlertTriangle,
   CheckSquare,
@@ -131,7 +132,7 @@ export default function MasterPanel({
         }
         const fd = new FormData()
         fd.append('file', file)
-        const res = await fetch(
+        const res = await beFetch(
           `/api/products/${product.id}/images?type=${newTypeRef.current}`,
           { method: 'POST', body: fd },
         )
@@ -174,7 +175,7 @@ export default function MasterPanel({
   async function handleDelete(imageId: string) {
     setDeletingId(imageId)
     try {
-      const res = await fetch(`/api/products/${product.id}/images/${imageId}`, { method: 'DELETE' })
+      const res = await beFetch(`/api/products/${product.id}/images/${imageId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       onImagesChange(images.filter((i) => i.id !== imageId))
     } finally {
@@ -194,7 +195,7 @@ export default function MasterPanel({
     if (!editingId) return
     setSavingEdit(true)
     try {
-      const res = await fetch(`/api/products/${product.id}/images/${editingId}`, {
+      const res = await beFetch(`/api/products/${product.id}/images/${editingId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ alt: editAlt || null, type: editType }),
@@ -242,7 +243,7 @@ export default function MasterPanel({
 
     setReordering(true)
     try {
-      await fetch(`/api/products/${product.id}/images/reorder`, {
+      await beFetch(`/api/products/${product.id}/images/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order: withOrder.map((img) => ({ id: img.id, sortOrder: img.sortOrder })) }),

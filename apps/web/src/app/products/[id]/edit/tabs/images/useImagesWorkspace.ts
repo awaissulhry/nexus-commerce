@@ -16,6 +16,7 @@
 // data via the reload() callback.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { beFetch } from './api'
 import type { WorkspaceData, PendingUpsert } from './types'
 
 let _tempIdCounter = 0
@@ -53,7 +54,7 @@ export function useImagesWorkspace(
     setLoading(true)
     setLoadError(null)
     try {
-      const res = await fetch(`/api/products/${productId}/images-workspace`)
+      const res = await beFetch(`/api/products/${productId}/images-workspace`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
@@ -148,7 +149,7 @@ export function useImagesWorkspace(
     if (pendingUpserts.size === 0 && pendingDeletes.size === 0) return true
     setSaving(true)
     try {
-      const res = await fetch(`/api/products/${productId}/images-workspace/bulk-save`, {
+      const res = await beFetch(`/api/products/${productId}/images-workspace/bulk-save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -275,7 +276,7 @@ export function useImagesWorkspace(
       prev ? { ...prev, product: { ...prev.product, imageAxisPreference: axis } } : prev,
     )
     try {
-      await fetch(`/api/products/${productId}/images-workspace/axis`, {
+      await beFetch(`/api/products/${productId}/images-workspace/axis`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ axis }),

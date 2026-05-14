@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
@@ -198,7 +199,7 @@ export default function ShopifyPanel({
       for (const file of files) {
         const fd = new FormData()
         fd.append('file', file)
-        const res = await fetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
+        const res = await beFetch(`/api/products/${productId}/images?type=ALT`, { method: 'POST', body: fd })
         if (!res.ok) continue
         const created = await res.json()
         handleAddToPool(created.url, created.id)

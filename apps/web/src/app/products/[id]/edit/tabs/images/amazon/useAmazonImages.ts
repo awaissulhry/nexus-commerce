@@ -12,6 +12,7 @@
 //   - publish: calls POST /api/products/:id/amazon-images/publish + polls
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { beFetch } from '../api'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, AmazonJobSummary } from '../types'
 
 export type AmazonSlot = 'MAIN' | 'PT01' | 'PT02' | 'PT03' | 'PT04' | 'PT05' | 'PT06' | 'PT07' | 'PT08' | 'SWCH'
@@ -265,7 +266,7 @@ export function useAmazonImages({
       const saved = await onSavePending()
       if (!saved) { setPublishError('Save failed — fix errors before publishing'); return }
 
-      const res = await fetch(`/api/products/${productId}/amazon-images/publish`, {
+      const res = await beFetch(`/api/products/${productId}/amazon-images/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ marketplace, activeAxis }),
@@ -291,7 +292,7 @@ export function useAmazonImages({
   function startPolling(jobId: string) {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     pollTimerRef.current = setInterval(async () => {
-      const res = await fetch(`/api/products/${productId}/amazon-images/feed-status/${jobId}`)
+      const res = await beFetch(`/api/products/${productId}/amazon-images/feed-status/${jobId}`)
       if (!res.ok) return
       const { status } = await res.json()
       setFeedJobs((prev) => prev.map((j) => j.jobId === jobId ? { ...j, status } : j))

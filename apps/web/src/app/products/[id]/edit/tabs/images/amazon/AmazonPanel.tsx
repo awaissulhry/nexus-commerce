@@ -4,6 +4,7 @@
 // Marketplace tabs + Color × Slot matrix + publish bar.
 
 import { cn } from '@/lib/utils'
+import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
 import ImagePickerModal from '../ImagePickerModal'
@@ -77,7 +78,7 @@ export default function AmazonPanel({
   async function handleExportZip(marketplace: AmazonMarketplace) {
     if (marketplace === 'ALL') return
     try {
-      const res = await fetch(`/api/products/${productId}/amazon-images/export-zip`, {
+      const res = await beFetch(`/api/products/${productId}/amazon-images/export-zip`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ marketplace }),
