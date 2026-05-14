@@ -95,6 +95,44 @@ export default function ChannelListingTab({
   } | null>(null)
   const isNew = !listing
 
+  // IS.2b — Auto-publish content toggle. Local state seeded from listing's
+  // platformAttributes._autoPublishContent. Optimistically updated on click
+  // so there's no page refresh needed.
+  const [autoPublish, setAutoPublish] = useState<boolean>(
+    !!(listing?.platformAttributes as any)?._autoPublishContent,
+  )
+  const [autoPublishing, setAutoPublishing] = useState(false)
+  const [autoPublishErr, setAutoPublishErr] = useState<string | null>(null)
+
+  async function handleToggleAutoPublish() {
+    if (!listing || autoPublishing) return
+    setAutoPublishing(true)
+    setAutoPublishErr(null)
+    const next = !autoPublish
+    setAutoPublish(next) // optimistic
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/${product.id}/auto-publish-content`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            markets: [{ channel, marketplace, enabled: next }],
+          }),
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+    } catch (e) {
+      setAutoPublish(!next) // revert on failure
+      setAutoPublishErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAutoPublishing(false)
+    }
+  }
+
   async function fetchWithRateLimitRetry(
     url: string,
     onWaiting: (seconds: number) => void,
@@ -299,6 +337,35 @@ export default function ChannelListingTab({
             >
               {savedFlash ? 'Saved' : 'Save'}
             </Button>
+            {/* IS.2b — auto-publish content toggle */}
+            {listing && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={autoPublishing}
+                  onClick={handleToggleAutoPublish}
+                  title={autoPublish
+                    ? 'Auto-publish ON — content changes (title, description) push to this channel automatically. Click to turn off.'
+                    : 'Auto-publish OFF — content changes require manual Publish. Click to enable.'}
+                  className={cn(
+                    'inline-flex items-center gap-1 h-7 px-2.5 text-xs font-medium rounded border transition-colors disabled:opacity-50',
+                    autoPublish
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'
+                      : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400',
+                  )}
+                >
+                  {autoPublishing ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <span className="text-[10px]">↑</span>
+                  )}
+                  {autoPublish ? 'Auto-publish ON' : 'Auto-publish OFF'}
+                </button>
+                {autoPublishErr && (
+                  <span className="text-xs text-rose-600" title={autoPublishErr}>⚠</span>
+                )}
+              </div>
+            )}
             <Button
               size="sm"
               icon={<Send className="w-3.5 h-3.5" />}

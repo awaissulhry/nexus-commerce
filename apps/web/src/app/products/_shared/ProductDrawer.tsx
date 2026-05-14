@@ -145,7 +145,6 @@ interface ProductDetail {
     followMasterQuantity?: boolean
     title: string | null
     externalListingId: string | null
-    platformAttributes?: Record<string, unknown> | null
   }>
   images?: Array<{ url: string; type: string | null }>
 }
@@ -1450,11 +1449,6 @@ function ListingsTab({
     listingId: string
     message: string
   } | null>(null)
-  const [autoPublishing, setAutoPublishing] = useState<string | null>(null)
-  const [autoPublishError, setAutoPublishError] = useState<{
-    listingId: string
-    message: string
-  } | null>(null)
 
   const snapToMaster = async (listingId: string) => {
     setSnapping(listingId)
@@ -1684,61 +1678,6 @@ function ListingsTab({
                             BullMQ worker picks it up next tick. The
                             row's status pill flips to PENDING after
                             the parent's onChanged() refetch. */}
-                        {/* IS.2b — Auto-publish content toggle */}
-                        {(() => {
-                          const autoOn = !!(l.platformAttributes as any)?._autoPublishContent
-                          const isToggling = autoPublishing === l.id
-                          const toggleErr = autoPublishError?.listingId === l.id ? autoPublishError : null
-                          return (
-                            <>
-                              <button
-                                type="button"
-                                disabled={isToggling}
-                                title={autoOn
-                                  ? 'Auto-publish content ON — title/description changes push automatically. Click to disable.'
-                                  : 'Auto-publish content OFF — content changes require manual publish. Click to enable.'}
-                                onClick={async () => {
-                                  setAutoPublishing(l.id)
-                                  setAutoPublishError(null)
-                                  try {
-                                    const res = await fetch(
-                                      `${getBackendUrl()}/api/products/${productId}/auto-publish-content`,
-                                      {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          markets: [{ channel: l.channel, marketplace: l.marketplace, enabled: !autoOn }],
-                                        }),
-                                      },
-                                    )
-                                    if (!res.ok) {
-                                      const body = await res.json().catch(() => ({}))
-                                      throw new Error(body?.error ?? `HTTP ${res.status}`)
-                                    }
-                                    onChanged?.()
-                                  } catch (e) {
-                                    setAutoPublishError({
-                                      listingId: l.id,
-                                      message: e instanceof Error ? e.message : String(e),
-                                    })
-                                  } finally {
-                                    setAutoPublishing(null)
-                                  }
-                                }}
-                                className={`text-[10px] px-1.5 py-0.5 rounded border font-medium transition-colors disabled:opacity-50 ${
-                                  autoOn
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'
-                                    : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700'
-                                }`}
-                              >
-                                {isToggling ? '…' : autoOn ? '↑ auto' : '↑ off'}
-                              </button>
-                              {toggleErr && (
-                                <span className="text-[10px] text-rose-600" title={toggleErr.message}>⚠ failed</span>
-                              )}
-                            </>
-                          )
-                        })()}
                         <button
                           type="button"
                           onClick={() => resync(l.id)}
