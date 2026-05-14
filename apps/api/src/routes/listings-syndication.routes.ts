@@ -3,6 +3,7 @@ import prisma from '../db.js'
 import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
 import { publishListingEvent, subscribeListingEvents } from '../services/listing-events.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
+import { productEventService } from '../services/product-event.service.js'
 import { getProvider } from '../services/ai/providers/index.js'
 import {
   KNOWN_BULK_ACTION_TYPES,
@@ -1126,6 +1127,16 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const updated = await prisma.channelListing.update({ where: { id }, data })
       // S.4 — broadcast so other tabs / cells refresh within 200ms.
       publishListingEvent({ type: 'listing.updated', listingId: id, reason: 'patch', ts: Date.now() })
+      // ES.2 — persist the change to the immutable event log.
+      void productEventService.emit({
+        aggregateId: id,
+        aggregateType: 'ChannelListing',
+        eventType: 'CHANNEL_LISTING_UPDATED',
+        data: Object.fromEntries(
+          Object.entries(body).filter(([k]) => k !== 'expectedVersion'),
+        ),
+        metadata: { source: 'OPERATOR', ip: request.ip ?? undefined },
+      })
       return { ok: true, listing: { id: updated.id, version: updated.version } }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[listings/:id PATCH] failed')

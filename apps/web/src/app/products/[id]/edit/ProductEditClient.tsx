@@ -21,7 +21,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
-import ActivityTab from './tabs/ActivityTab'
+import { TimelineTab } from './tabs/TimelineTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
 import LocalesTab from './tabs/LocalesTab'
@@ -678,7 +678,7 @@ export default function ProductEditClient({
                 active={topTab === 'activity'}
                 onClick={() => goToTab('activity')}
               >
-                {t('products.edit.tab.activity')}
+                Timeline
               </TopTabButton>
             </>)}
             <TopTabButton
@@ -839,7 +839,7 @@ export default function ProductEditClient({
 
         {topTab === 'activity' && (
           <div role="tabpanel" id="panel-activity" aria-labelledby="tab-activity">
-            <ActivityTab
+            <TimelineTab
               product={product}
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('activity', count)}

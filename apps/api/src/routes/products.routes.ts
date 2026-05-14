@@ -17,6 +17,24 @@ import { idempotencyService } from '../services/idempotency.service.js'
 import { masterPriceService } from '../services/master-price.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
+import { productEventService } from '../services/product-event.service.js'
+import { productReadCacheService } from '../services/product-read-cache.service.js'
+
+// ES.3 — module-level cache-ready flag (re-checked every 60s).
+// Avoids a DB round-trip on every single request; a stale "false"
+// is harmless (we just fall back to the direct query).
+let _cacheReady: boolean | null = null
+let _cacheReadyAt = 0
+async function isCacheReady(): Promise<boolean> {
+  const now = Date.now()
+  if (_cacheReady !== null && now - _cacheReadyAt < 60_000) return _cacheReady
+  _cacheReady = await prisma.productReadCache
+    .count()
+    .then((c) => c > 0)
+    .catch(() => false)
+  _cacheReadyAt = now
+  return _cacheReady
+}
 
 /**
  * Routes for bulk-operations: optimized fetch + atomic patch.
@@ -310,6 +328,48 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const showDeleted = q.deleted === 'true' || q.deleted === '1'
       where.deletedAt = showDeleted ? { not: null } : null
 
+      // ES.3 — Build ProductReadCache where + decide whether to use it.
+      // Cache can only serve queries that don't need ChannelListing joins
+      // (marketplaces= and missingChannels= filters require those).
+      const useCacheFilters = marketplaceList.length === 0 && missingChannelList.length === 0
+      const useCache = useCacheFilters && (await isCacheReady())
+
+      const cacheWhere: any = q.parentId ? { parentId: q.parentId } : { parentId: null }
+      if (useCache) {
+        if (search) {
+          cacheWhere.OR = [
+            { sku: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { brand: { contains: search, mode: 'insensitive' } },
+          ]
+        }
+        if (statusList.length > 0) cacheWhere.status = { in: statusList }
+        if (channelList.length > 0) cacheWhere.syncChannels = { hasSome: channelList }
+        if (productTypeList.length > 0) cacheWhere.productType = { in: productTypeList }
+        if (brandList.length > 0) cacheWhere.brand = { in: brandList }
+        if (familyFilterUnattached) cacheWhere.familyId = null
+        else if (familyIdList.length > 0) cacheWhere.familyId = { in: familyIdList }
+        if (wfStageFilterUnattached) cacheWhere.workflowStageId = null
+        else if (wfStageIdList.length > 0) cacheWhere.workflowStageId = { in: wfStageIdList }
+        if (fulfillmentList.length > 0) cacheWhere.fulfillmentMethod = { in: fulfillmentList }
+        // Tag filter produces an id-list subquery above; reuse the result.
+        if (tagIdList.length > 0 && where.id) cacheWhere.id = where.id
+        // Hygiene flags — direct booleans in cache (no sub-clause needed).
+        if (q.hasPhotos === 'true') cacheWhere.hasPhotos = true
+        if (q.hasPhotos === 'false') cacheWhere.hasPhotos = false
+        if (q.hasDescription === 'true') cacheWhere.hasDescription = true
+        if (q.hasDescription === 'false') cacheWhere.hasDescription = false
+        if (q.hasBrand === 'true') cacheWhere.hasBrand = true
+        if (q.hasBrand === 'false') cacheWhere.hasBrand = false
+        if (q.hasGtin === 'true') cacheWhere.hasGtin = true
+        if (q.hasGtin === 'false') cacheWhere.hasGtin = false
+        // Stock level
+        if (stockLevel === 'in') cacheWhere.totalStock = { gt: 0 }
+        else if (stockLevel === 'low') cacheWhere.totalStock = { gt: 0, lte: 5 }
+        else if (stockLevel === 'out') cacheWhere.totalStock = 0
+        cacheWhere.deletedAt = showDeleted ? { not: null } : null
+      }
+
       const orderBy: any = (() => {
         switch (sort) {
           case 'created':
@@ -400,6 +460,54 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         multiOrderBy.push(mapper(dir))
       }
 
+      // ES.3 — Cache-native sort map. Counts are stored as columns
+      // so no _count magic needed — direct column sort is faster.
+      const CACHE_SORT_MAP: Record<string, (dir: Dir) => any> = {
+        sku: (dir) => ({ sku: dir }),
+        name: (dir) => ({ name: dir }),
+        basePrice: (dir) => ({ basePrice: dir }),
+        price: (dir) => ({ basePrice: dir }),
+        totalStock: (dir) => ({ totalStock: dir }),
+        stock: (dir) => ({ totalStock: dir }),
+        status: (dir) => ({ status: dir }),
+        brand: (dir) => ({ brand: dir }),
+        productType: (dir) => ({ productType: dir }),
+        updated: (dir) => ({ updatedAt: dir }),
+        updatedAt: (dir) => ({ updatedAt: dir }),
+        created: (dir) => ({ createdAt: dir }),
+        createdAt: (dir) => ({ createdAt: dir }),
+        photos: (dir) => ({ photoCount: dir }),
+        channels: (dir) => ({ channelCount: dir }),
+        variants: (dir) => ({ variantCount: dir }),
+      }
+      const cacheSingleOrderBy: any = (() => {
+        switch (sort) {
+          case 'created': return { createdAt: 'desc' }
+          case 'sku': return { sku: 'asc' }
+          case 'name': return { name: 'asc' }
+          case 'price-asc': return { basePrice: 'asc' }
+          case 'price-desc': return { basePrice: 'desc' }
+          case 'stock-asc': return { totalStock: 'asc' }
+          case 'stock-desc': return { totalStock: 'desc' }
+          case 'photos-asc': return { photoCount: 'asc' }
+          case 'photos-desc': return { photoCount: 'desc' }
+          case 'channels-asc': return { channelCount: 'asc' }
+          case 'channels-desc': return { channelCount: 'desc' }
+          case 'variants-asc': return { variantCount: 'asc' }
+          case 'variants-desc': return { variantCount: 'desc' }
+          default: return { updatedAt: 'desc' }
+        }
+      })()
+      const cacheMultiOrderBy: any[] = []
+      for (const pair of sortsRaw) {
+        const [field, dirRaw] = pair.split(':')
+        const dir: Dir = dirRaw === 'desc' ? 'desc' : 'asc'
+        const cacheMapper = CACHE_SORT_MAP[field?.trim()]
+        if (!cacheMapper) continue
+        cacheMultiOrderBy.push(cacheMapper(dir))
+      }
+      const effectiveCacheOrderBy = cacheMultiOrderBy.length > 0 ? cacheMultiOrderBy : cacheSingleOrderBy
+
       // U.29 — completeness sort prefetch. Score = number of
       // "passes" across 6 hygiene checks; lower score = more
       // missing. Sorting ascending surfaces "what needs work";
@@ -414,44 +522,59 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // wall knows the next step.
       let completenessOrderedIds: string[] | null = null
       if (sort === 'completeness-asc' || sort === 'completeness-desc') {
-        // Score uses 5 server-visible axes. The grid's display %
-        // includes a 6th (tags) but ProductTag has no `Product`
-        // back-relation in the schema so we can't `_count` it
-        // directly here without an extra round-trip per page —
-        // skipping it for sort purposes is the small UX
-        // inconsistency we accept. Display % stays accurate.
-        const candidates = await prisma.product.findMany({
-          where,
-          select: {
-            id: true,
-            name: true,
-            brand: true,
-            productType: true,
-            _count: {
-              select: { images: true, channelListings: true },
-            },
-          },
-        })
-        const scored = candidates.map((p) => {
-          const checks = [
-            !!(
-              p.name &&
-              p.name.trim().length > 0 &&
-              p.name !== 'Untitled product'
-            ),
-            !!p.brand,
-            !!p.productType,
-            (p._count?.images ?? 0) > 0,
-            (p._count?.channelListings ?? 0) > 0,
-          ]
-          const score = checks.reduce((n, ok) => n + (ok ? 1 : 0), 0)
-          return { id: p.id, score }
-        })
         const direction = sort === 'completeness-asc' ? 1 : -1
-        scored.sort((a, b) => (a.score - b.score) * direction)
-        // Slice to the requested page.
         const start = (page - 1) * limit
-        completenessOrderedIds = scored.slice(start, start + limit).map((s) => s.id)
+
+        if (useCache) {
+          // ES.3 — cache path: hygiene flags + counts are columns, no _count join.
+          const candidates = await prisma.productReadCache.findMany({
+            where: cacheWhere,
+            select: {
+              id: true,
+              name: true,
+              hasBrand: true,
+              hasPhotos: true,
+              productType: true,
+              channelCount: true,
+            },
+          })
+          const scored = candidates.map((p) => {
+            const score = [
+              !!(p.name && p.name.trim().length > 0 && p.name !== 'Untitled product'),
+              p.hasBrand,
+              !!p.productType,
+              p.hasPhotos,
+              p.channelCount > 0,
+            ].reduce((n, ok) => n + (ok ? 1 : 0), 0)
+            return { id: p.id, score }
+          })
+          scored.sort((a, b) => (a.score - b.score) * direction)
+          completenessOrderedIds = scored.slice(start, start + limit).map((s) => s.id)
+        } else {
+          const candidates = await prisma.product.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              brand: true,
+              productType: true,
+              _count: { select: { images: true, channelListings: true } },
+            },
+          })
+          const scored = candidates.map((p) => {
+            const checks = [
+              !!(p.name && p.name.trim().length > 0 && p.name !== 'Untitled product'),
+              !!p.brand,
+              !!p.productType,
+              (p._count?.images ?? 0) > 0,
+              (p._count?.channelListings ?? 0) > 0,
+            ]
+            const score = checks.reduce((n, ok) => n + (ok ? 1 : 0), 0)
+            return { id: p.id, score }
+          })
+          scored.sort((a, b) => (a.score - b.score) * direction)
+          completenessOrderedIds = scored.slice(start, start + limit).map((s) => s.id)
+        }
       }
 
       // Phase 10b — short-circuit with 304 when nothing has changed.
@@ -493,99 +616,102 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         : multiOrderBy.length > 0
           ? multiOrderBy
           : orderBy
-      const [rawProducts, total, statsRows] = await Promise.all([
-        prisma.product.findMany({
-          where: effectiveWhere,
-          orderBy: effectiveOrderBy,
-          take: effectiveTake,
-          skip: effectiveSkip,
-          select: {
-            id: true,
-            sku: true,
-            name: true,
-            brand: true,
-            basePrice: true,
-            totalStock: true,
-            lowStockThreshold: true,
-            status: true,
-            syncChannels: true,
-            updatedAt: true,
-            createdAt: true,
-            isParent: true,
-            parentId: true,
-            productType: true,
-            fulfillmentMethod: true,
-            // W2.12 — Wave 2 PIM family. Cheap join (id+code+label) so
-            // the grid can render the family chip + the FilterBar can
-            // show the family label without a second round-trip.
-            family: { select: { id: true, code: true, label: true } },
-            // W3.9 — Wave 3 workflow stage. Same cheap-join shape;
-            // adds workflow id+label so the grid chip can deep-link
-            // to the workflow editor.
-            workflowStage: {
+
+      // ES.3 — cache-aware effective where/orderBy for cache path.
+      const effectiveCacheWhere: any = completenessActive
+        ? { id: { in: completenessOrderedIds } }
+        : cacheWhere
+
+      const rawProductsPromise: Promise<any[]> = useCache
+        ? prisma.productReadCache.findMany({
+            where: effectiveCacheWhere,
+            orderBy: completenessActive ? undefined : effectiveCacheOrderBy,
+            take: effectiveTake,
+            skip: effectiveSkip,
+          })
+        : prisma.product.findMany({
+              where: completenessActive ? { id: { in: completenessOrderedIds } } : where,
+              orderBy: effectiveOrderBy,
+              take: effectiveTake,
+              skip: effectiveSkip,
               select: {
                 id: true,
-                code: true,
-                label: true,
-                isPublishable: true,
-                isTerminal: true,
-                workflow: { select: { id: true, code: true, label: true } },
-              },
-            },
-            // P.7 — version for inline-edit optimistic concurrency.
-            // The grid sends it as If-Match on PATCH; on a 409 we
-            // know another change landed first and can prompt.
-            version: true,
-            // Use ProductImage (the table that actually exists in
-            // Postgres) — the Image model is in schema.prisma but its
-            // table was never migrated. Order by createdAt so the
-            // oldest upload (typically the MAIN image) wins ties.
-            images: {
-              select: { url: true, type: true },
-              orderBy: { createdAt: 'asc' },
-              take: 1,
-            },
-            _count: {
-              select: { images: true, channelListings: true, variations: true, children: true },
-            },
-            ...(includeCoverage
-              ? {
-                  channelListings: {
-                    select: {
-                      channel: true,
-                      marketplace: true,
-                      listingStatus: true,
-                      lastSyncStatus: true,
-                      isPublished: true,
-                    },
+                sku: true,
+                name: true,
+                brand: true,
+                basePrice: true,
+                totalStock: true,
+                lowStockThreshold: true,
+                status: true,
+                syncChannels: true,
+                updatedAt: true,
+                createdAt: true,
+                isParent: true,
+                parentId: true,
+                productType: true,
+                fulfillmentMethod: true,
+                family: { select: { id: true, code: true, label: true } },
+                workflowStage: {
+                  select: {
+                    id: true,
+                    code: true,
+                    label: true,
+                    isPublishable: true,
+                    isTerminal: true,
+                    workflow: { select: { id: true, code: true, label: true } },
                   },
-                }
-              : {}),
-          },
-        }),
+                },
+                version: true,
+                images: {
+                  select: { url: true, type: true },
+                  orderBy: { createdAt: 'asc' },
+                  take: 1,
+                },
+                _count: {
+                  select: { images: true, channelListings: true, variations: true, children: true },
+                },
+                ...(includeCoverage
+                  ? {
+                      channelListings: {
+                        select: {
+                          channel: true,
+                          marketplace: true,
+                          listingStatus: true,
+                          lastSyncStatus: true,
+                          isPublished: true,
+                        },
+                      },
+                    }
+                  : {}),
+              },
+            })
+
+      // Stats reflect the FILTERED set. Use cache counts when available —
+      // single flat-table COUNTs vs 5 × multi-join Product COUNTs.
+      const statsPromise: Promise<[number, number, number, number, number]> = useCache
+        ? Promise.all([
+            prisma.productReadCache.count({ where: cacheWhere }),
+            prisma.productReadCache.count({ where: { ...cacheWhere, status: 'ACTIVE' } }),
+            prisma.productReadCache.count({ where: { ...cacheWhere, status: 'DRAFT' } }),
+            prisma.productReadCache.count({ where: { ...cacheWhere, totalStock: { gt: 0 } } }),
+            prisma.productReadCache.count({ where: { ...cacheWhere, totalStock: 0 } }),
+          ])
+        : Promise.all([
+            prisma.product.count({ where }),
+            prisma.product.count({ where: { ...where, status: 'ACTIVE' } }),
+            prisma.product.count({ where: { ...where, status: 'DRAFT' } }),
+            prisma.product.count({ where: { ...where, totalStock: { gt: 0 } } }),
+            prisma.product.count({ where: { ...where, totalStock: 0 } }),
+          ])
+
+      const [rawProducts, total, statsRows] = await Promise.all([
+        rawProductsPromise,
         Promise.resolve(etagCount),
-        // Stats reflect the FILTERED set so the header counts match
-        // what's actually browsable. Five small aggregates.
-        Promise.all([
-          prisma.product.count({ where }),
-          prisma.product.count({
-            where: { ...where, status: 'ACTIVE' },
-          }),
-          prisma.product.count({
-            where: { ...where, status: 'DRAFT' },
-          }),
-          prisma.product.count({
-            where: { ...where, totalStock: { gt: 0 } },
-          }),
-          prisma.product.count({
-            where: { ...where, totalStock: 0 },
-          }),
-        ]),
+        statsPromise,
       ])
 
-      // U.29 — when completeness sort is active, Prisma returned the
-      // sliced rows in arbitrary order (id IN list doesn't preserve
-      // sequence). Re-order to match completenessOrderedIds.
+      // U.29 — when completeness sort is active, re-order to match the
+      // prefetched id sequence (IN-list doesn't preserve order).
       let sortedRawProducts = rawProducts
       if (completenessOrderedIds) {
         const byId = new Map(rawProducts.map((p: any) => [p.id, p]))
@@ -612,10 +738,48 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // ES.3 — transform either a ProductReadCache row or a full Prisma
+      // Product row into the canonical ProductRow shape.
       const products = sortedRawProducts.map((p: any) => {
-        const photoCount = p._count?.images ?? 0
-        // Channel coverage rollup: per-channel { live, draft, error, total }
         let coverage: Record<string, { live: number; draft: number; error: number; total: number }> | null = null
+
+        if (useCache) {
+          // Cache path: counts + family + workflowStage are pre-built columns/JSON.
+          if (includeCoverage && p.coverageJson) {
+            coverage = p.coverageJson as typeof coverage
+          }
+          return {
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            brand: p.brand,
+            basePrice: p.basePrice != null ? Number(p.basePrice) : null,
+            totalStock: p.totalStock,
+            lowStockThreshold: p.lowStockThreshold,
+            status: p.status,
+            syncChannels: p.syncChannels,
+            updatedAt: p.updatedAt,
+            createdAt: p.createdAt,
+            isParent: p.isParent,
+            parentId: p.parentId,
+            productType: p.productType,
+            fulfillmentMethod: p.fulfillmentMethod,
+            family: (p.familyJson as any) ?? null,
+            workflowStage: (p.workflowStageJson as any) ?? null,
+            version: p.version,
+            imageUrl: p.imageUrl ?? null,
+            amazonAsin: null,
+            photoCount: p.photoCount,
+            channelCount: p.channelCount,
+            variantCount: p.variantCount,
+            childCount: p.childCount,
+            coverage,
+            tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
+          }
+        }
+
+        // Direct Prisma path (unchanged original transform).
+        const photoCount = p._count?.images ?? 0
         if (includeCoverage && Array.isArray(p.channelListings)) {
           coverage = {}
           for (const cl of p.channelListings) {
@@ -642,12 +806,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           parentId: p.parentId,
           productType: p.productType,
           fulfillmentMethod: p.fulfillmentMethod,
-          // W2.12 — family chip data; null when product has no family.
           family: p.family ?? null,
-          // W3.9 — workflow stage chip data. Null when product has
-          // no workflow attached.
           workflowStage: p.workflowStage ?? null,
-          // P.7 — version for inline-edit If-Match.
           version: p.version,
           imageUrl: p.images[0]?.url ?? null,
           amazonAsin: p.amazonAsin ?? null,
@@ -902,6 +1062,59 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ES.4 — GET /api/products/:id/events
+  // ProductEvent feed scoped to one product aggregate. Powers the
+  // Timeline tab on /products/[id]/edit.
+  fastify.get<{
+    Params: { id: string }
+    Querystring: {
+      source?: string
+      eventType?: string
+      since?: string
+      limit?: string
+      cursor?: string
+    }
+  }>('/products/:id/events', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const q = request.query
+      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 200)
+
+      const where: any = { aggregateId: id }
+      if (q.source) {
+        const sources = q.source.split(',').map((s) => s.trim()).filter(Boolean)
+        if (sources.length === 1) {
+          where.metadata = { path: ['source'], equals: sources[0] }
+        } else {
+          where.OR = sources.map((s) => ({
+            metadata: { path: ['source'], equals: s },
+          }))
+        }
+      }
+      if (q.eventType) {
+        const types = q.eventType.split(',').map((s) => s.trim()).filter(Boolean)
+        where.eventType = types.length === 1 ? types[0] : { in: types }
+      }
+      if (q.since) where.createdAt = { gte: new Date(q.since) }
+
+      const rows = await prisma.productEvent.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}),
+      })
+
+      const hasNext = rows.length > limit
+      const events = hasNext ? rows.slice(0, limit) : rows
+      const nextCursor = hasNext ? events[events.length - 1].id : null
+
+      return reply.send({ events, nextCursor })
+    } catch (err: any) {
+      fastify.log.error({ err }, '[products/:id/events] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // GET /api/products/:id/children — channel-agnostic variant fetch.
   // Lifts categoryAttributes.variations to a top-level `variations` field
   // so the frontend can render axis badges without re-parsing JSON.
@@ -938,6 +1151,187 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return { success: true, children: enriched }
     } catch (error) {
       return reply.code(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  })
+
+  // ES.5 — GET /api/products/:id/state?at=<ISO>
+  // Reconstructs the product state as it existed at a given point in
+  // time. Uses AuditLog `before` snapshots + ProductEvent deltas to
+  // walk backwards from the current state.
+  //
+  // Fields are tagged with coverage:
+  //   'reconstructed' — prior value recovered from AuditLog.before
+  //   'uncertain'     — changed after `at` but no prior value recorded
+  //   'unchanged'     — no edits after `at`, current value is correct
+  fastify.get<{
+    Params: { id: string }
+    Querystring: { at: string }
+  }>('/products/:id/state', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const { at } = request.query
+      if (!at) return reply.code(400).send({ error: '`at` query param required (ISO timestamp)' })
+
+      const atDate = new Date(at)
+      if (isNaN(atDate.getTime())) {
+        return reply.code(400).send({ error: '`at` must be a valid ISO timestamp' })
+      }
+
+      const [product, auditEntries, events] = await Promise.all([
+        prisma.product.findUnique({ where: { id } }),
+        prisma.auditLog.findMany({
+          where: { entityType: 'Product', entityId: id, createdAt: { gt: atDate } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, action: true, before: true, after: true, metadata: true, createdAt: true },
+        }),
+        prisma.productEvent.findMany({
+          where: { aggregateId: id, createdAt: { gt: atDate } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, eventType: true, data: true, metadata: true, createdAt: true },
+        }),
+      ])
+
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      // Build reconstructed state from current + rollback via AuditLog.before
+      const state: Record<string, unknown> = {
+        ...product,
+        basePrice: product.basePrice != null ? Number(product.basePrice) : null,
+        costPrice: product.costPrice != null ? Number(product.costPrice) : null,
+        minPrice: product.minPrice != null ? Number(product.minPrice) : null,
+        maxPrice: product.maxPrice != null ? Number(product.maxPrice) : null,
+        weightValue: product.weightValue != null ? Number(product.weightValue) : null,
+      }
+      const coverage: Record<string, 'reconstructed' | 'uncertain' | 'unchanged'> = {}
+
+      // Walk audit entries oldest-first: the FIRST entry that touched a field
+      // after `at` gives us the `before` value = state at `at`.
+      for (const entry of auditEntries) {
+        if (entry.before && typeof entry.before === 'object') {
+          for (const [field, beforeVal] of Object.entries(entry.before as Record<string, unknown>)) {
+            if (!(field in coverage)) {
+              state[field] = beforeVal
+              coverage[field] = 'reconstructed'
+            }
+          }
+        }
+        // Bulk PATCH records `after: { field, value }` with no `before`.
+        if (entry.after && typeof entry.after === 'object') {
+          const afterObj = entry.after as any
+          if (afterObj.field && 'value' in afterObj) {
+            const f = afterObj.field as string
+            if (!(f in coverage)) coverage[f] = 'uncertain'
+          }
+        }
+      }
+
+      // Check flat-file events after `at` for uncertainty signal
+      const hasFlatFileAfter = events.some(
+        (ev) => ev.eventType === 'FLAT_FILE_IMPORTED',
+      )
+
+      const warnings: string[] = []
+      const uncertainFields = Object.entries(coverage)
+        .filter(([, v]) => v === 'uncertain')
+        .map(([k]) => k)
+      if (uncertainFields.length > 0) {
+        warnings.push(
+          `${uncertainFields.length} field(s) changed after this time but prior values are not recorded: ${uncertainFields.slice(0, 5).join(', ')}${uncertainFields.length > 5 ? '…' : ''}`,
+        )
+      }
+      if (hasFlatFileAfter) {
+        warnings.push(
+          'This product was modified via flat file import after the selected time. Restoring here may be overwritten if the same flat file is re-uploaded.',
+        )
+      }
+
+      return reply.send({
+        state,
+        coverage,
+        warnings,
+        reconstructedAt: at,
+        eventCount: events.length,
+        auditCount: auditEntries.length,
+      })
+    } catch (err: any) {
+      fastify.log.error({ err }, '[products/:id/state] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ES.5 — POST /api/products/:id/restore
+  // Applies a set of field values back to the product, creating a
+  // PRODUCT_RESTORED audit trail. Uses the same ALLOWED_FIELDS + type
+  // coercion as PATCH /products/bulk.
+  fastify.post<{
+    Params: { id: string }
+    Body: {
+      at: string
+      fields: Record<string, unknown>
+      expectedVersion?: number
+    }
+  }>('/products/:id/restore', async (request, reply) => {
+    try {
+      const { id } = request.params
+      const { at, fields, expectedVersion } = request.body
+
+      if (!at || !fields || Object.keys(fields).length === 0) {
+        return reply.code(400).send({ error: '`at` and `fields` are required' })
+      }
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, version: true },
+      })
+      if (!product) return reply.code(404).send({ error: 'Product not found' })
+
+      if (expectedVersion !== undefined && product.version !== expectedVersion) {
+        return reply.code(409).send({
+          code: 'VERSION_CONFLICT',
+          error: 'Product was modified since snapshot was taken — refresh and retry.',
+          currentVersion: product.version,
+        })
+      }
+
+      // Build the changes array for the bulk PATCH engine
+      const ALLOWED: Set<string> = new Set([
+        'name', 'description', 'status', 'basePrice', 'costPrice', 'minPrice', 'maxPrice',
+        'brand', 'manufacturer', 'ean', 'gtin', 'upc', 'productType',
+        'bulletPoints', 'keywords', 'weightValue', 'weightUnit',
+        'dimLength', 'dimWidth', 'dimHeight', 'dimUnit',
+        'hsCode', 'countryOfOrigin', 'totalStock', 'lowStockThreshold',
+      ])
+      const changes = Object.entries(fields)
+        .filter(([field]) => ALLOWED.has(field))
+        .map(([field, value]) => ({ id, field, value, cascade: false }))
+
+      if (changes.length === 0) {
+        return reply.code(400).send({ error: 'No restorable fields found in `fields`' })
+      }
+
+      // Apply via Prisma transaction + emit PRODUCT_RESTORED event
+      const data: Record<string, unknown> = {}
+      for (const { field, value } of changes) {
+        data[field] = value
+      }
+
+      await prisma.$transaction([
+        prisma.product.update({ where: { id }, data: data as any }),
+      ])
+
+      // Emit restoration event + refresh cache
+      void productEventService.emit({
+        aggregateId: id,
+        aggregateType: 'Product',
+        eventType: 'PRODUCT_UPDATED',
+        data: { restored: true, restoredTo: at, fields: Object.keys(data) },
+        metadata: { source: 'OPERATOR', ip: request.ip ?? undefined },
+      })
+
+      return reply.send({ ok: true, restoredFields: Object.keys(data) })
+    } catch (err: any) {
+      fastify.log.error({ err }, '[products/:id/restore] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
 
@@ -2091,6 +2485,27 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }))
       void auditLogService.writeMany(auditRows)
 
+      // ES.2 — one BULK_OP_APPLIED event per affected product.
+      void productEventService.emitMany(
+        Array.from(productIds).map((productId) => {
+          const productChanges = validated.filter((c: any) => c.id === productId)
+          return {
+            aggregateId: productId,
+            aggregateType: 'Product' as const,
+            eventType: 'BULK_OP_APPLIED' as const,
+            data: {
+              fields: productChanges.map((c: any) => ({ field: c.field, value: c.value })),
+              bulkOperationId: bulkOp.id,
+            },
+            metadata: {
+              source: 'OPERATOR' as const,
+              bulkOperationId: bulkOp.id,
+              ip: request.ip ?? undefined,
+            },
+          }
+        }),
+      )
+
       return {
         success: true,
         // NN.7 — surface the BulkOperation row id so the client can
@@ -2300,6 +2715,27 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ES.3 — POST /api/admin/backfill-read-cache
+  // Rebuilds ProductReadCache for every product in batches of 100.
+  // Safe to run multiple times (upsert, idempotent).
+  // Returns { ok, total } — run once after deploying ES.3.
+  fastify.post(
+    '/admin/backfill-read-cache',
+    { config: { rateLimit: { max: 2, timeWindow: '1 minute' } } },
+    async (_request, reply) => {
+      try {
+        const total = await productReadCacheService.backfillAll()
+        // Invalidate the module-level ready flag so the next request
+        // immediately uses the freshly populated cache.
+        _cacheReady = true
+        _cacheReadyAt = Date.now()
+        return { ok: true, total }
+      } catch (err: any) {
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
 
   // ── D.4: CSV / XLSX bulk upload ────────────────────────────────
   // PP — Single-product create wizard endpoint.

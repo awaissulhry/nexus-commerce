@@ -20,6 +20,7 @@ import { ebayAuthService } from '../services/ebay-auth.service.js';
 import { EbayCategoryService } from '../services/ebay-category.service.js';
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
+import { productEventService } from '../services/product-event.service.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -579,6 +580,25 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           // Content auto-publish: title/description changes
           void enqueueContentSyncIfEnabled([listingId])
+
+          // ES.2 — emit FLAT_FILE_IMPORTED event for this product × market.
+          void productEventService.emit({
+            aggregateId: productId,
+            aggregateType: 'Product',
+            eventType: 'FLAT_FILE_IMPORTED',
+            data: {
+              channel: 'EBAY',
+              marketplace: mp,
+              region,
+              channelListingId: listingId,
+              ...(priceChanged ? { price: newPrice } : {}),
+              ...(qtyChanged ? { quantity: newQty } : {}),
+            },
+            metadata: {
+              source: 'FLAT_FILE_IMPORT',
+              flatFileType: 'EBAY_FLAT_FILE',
+            },
+          })
         }
 
         saved++;

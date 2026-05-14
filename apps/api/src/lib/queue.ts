@@ -91,6 +91,20 @@ export const channelSyncQueue: Queue = new Queue('channel-sync', {
   defaultJobOptions,
 })
 
+// ES.3 — ProductReadCache refresh queue. One job per productId.
+// jobId deduplication (jobId = "cache:refresh:<productId>") means
+// rapid successive events for the same product collapse to one job.
+// 2s delay gives a debounce window for bulk flat-file imports.
+export const readCacheQueue: Queue = new Queue('read-cache', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 5000 },
+    removeOnComplete: { age: 3600 },
+    removeOnFail: { age: 86400 },
+  },
+})
+
 // W13.1 — out-of-process bulk-job processor. Large jobs (W13.2
 // promotion threshold) get enqueued here so the API process
 // stays responsive while a 10k-row batch chews on its work.

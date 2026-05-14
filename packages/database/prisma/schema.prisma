@@ -8954,3 +8954,159 @@ model CatalogOrganizeChange {
   @@index([sessionId])
   @@index([productId])
 }
+
+// ── ES.3 — Product Read Cache ─────────────────────────────────────────
+//
+// Denormalized, BullMQ-refreshed read model for the /products grid.
+// One row per Product. Rebuilt by the read-cache worker whenever a
+// ProductEvent fires for that aggregate. Eliminates the 6-table join
+// (ProductFamily, WorkflowStage, Workflow, ProductImage, ChannelListing
+// _count, ProductVariation _count) that runs on every grid page load.
+//
+// Route logic:
+//   • Cache populated (count > 0) → query ProductReadCache directly.
+//   • Cache empty (first boot) → fall back to full Prisma join query.
+//   • ?marketplaces= / ?missingChannels= filters still hit Prisma
+//     (require ChannelListing join not stored here).
+//
+// cacheRefreshedAt is updated on every upsert so an admin can see
+// how fresh the cache is per row.
+
+model ProductReadCache {
+  id String @id // mirrors Product.id — no FK so parent deletes don't cascade here
+
+  // ── Core Product fields ──────────────────────────────────────────
+  sku               String
+  name              String
+  brand             String?
+  basePrice         Decimal? @db.Decimal(10, 2)
+  totalStock        Int      @default(0)
+  lowStockThreshold Int?
+  status            String
+  syncChannels      String[]
+  productType       String?
+  fulfillmentMethod String?
+  isParent          Boolean  @default(false)
+  parentId          String?
+  version           Int      @default(0)
+
+  // ── Denormalized relations (avoids joins on read) ─────────────────
+  familyId          String?
+  // Shape: { id, code, label }
+  familyJson        Json?
+  workflowStageId   String?
+  // Shape: { id, code, label, isPublishable, isTerminal, workflow: { id, code, label } }
+  workflowStageJson Json?
+
+  // ── Media ─────────────────────────────────────────────────────────
+  imageUrl String?
+
+  // ── Computed counts (replaces _count joins) ───────────────────────
+  photoCount   Int @default(0)
+  channelCount Int @default(0)
+  variantCount Int @default(0)
+  childCount   Int @default(0)
+
+  // ── Hygiene flags (for filter chips) ──────────────────────────────
+  hasDescription Boolean @default(false)
+  hasBrand       Boolean @default(false)
+  hasGtin        Boolean @default(false)
+  hasPhotos      Boolean @default(false)
+
+  // ── Channel keys (for marketplace filter) ─────────────────────────
+  // e.g. ["AMAZON_IT", "EBAY_DE", "SHOPIFY_MAIN"]
+  channelKeys String[]
+
+  // ── Coverage summary (for includeCoverage) ────────────────────────
+  // Shape: { "AMAZON": { live, draft, error, total }, "EBAY": { ... } }
+  coverageJson Json?
+
+  // ── Product timestamps (mirrors Product) ──────────────────────────
+  createdAt DateTime
+  updatedAt DateTime
+  deletedAt DateTime?
+
+  // ── Cache bookkeeping ──────────────────────────────────────────────
+  cacheRefreshedAt DateTime @default(now())
+
+  @@index([status])
+  @@index([brand])
+  @@index([productType])
+  @@index([familyId])
+  @@index([workflowStageId])
+  @@index([isParent])
+  @@index([parentId])
+  @@index([totalStock])
+  @@index([updatedAt(sort: Desc)])
+  @@index([deletedAt])
+  @@index([photoCount])
+  @@index([channelCount])
+  @@index([variantCount])
+}
+
+// ── ES.1 — Immutable Product Event Log ───────────────────────────────
+//
+// Append-only ledger for every tracked mutation across Product,
+// ChannelListing, StockLevel, and Order aggregates.
+//
+// Design rules:
+//   • Never UPDATE or DELETE a row — only INSERT.
+//   • data holds the delta (changed fields only), NOT full snapshots.
+//     Keep it slim to control table growth under bulk traffic.
+//   • metadata.source identifies origin so the Timeline UI can group
+//     and filter flat-file imports vs operator edits vs webhooks.
+//
+// eventType taxonomy (strings — extensible without schema migrations):
+//   PRODUCT_CREATED | PRODUCT_UPDATED | PRODUCT_DELETED
+//   PRICE_CHANGED | STOCK_ADJUSTED
+//   TITLE_UPDATED | BULLETS_UPDATED | DESCRIPTION_UPDATED | IMAGES_UPDATED
+//   CHANNEL_LISTING_CREATED | CHANNEL_LISTING_UPDATED
+//   CHANNEL_LISTING_PUBLISHED | CHANNEL_LISTING_SUPPRESSED
+//   SYNC_QUEUED | SYNC_SUCCEEDED | SYNC_FAILED
+//   BULK_OP_APPLIED | AUTOMATION_RULE_FIRED
+//   AI_CONTENT_GENERATED | AI_CONTENT_APPROVED
+//   WORKFLOW_STAGE_CHANGED | FLAT_FILE_IMPORTED
+//
+// metadata shape:
+//   {
+//     userId?:          string,
+//     ip?:              string,
+//     source:           "OPERATOR" | "API" | "WEBHOOK" | "AUTOMATION"
+//                     | "AI" | "FLAT_FILE_IMPORT" | "SYSTEM",
+//     // flat-file context (when source = FLAT_FILE_IMPORT):
+//     fileName?:        string,
+//     flatFileType?:    string,   // "AMAZON_INVENTORY_LOADER" | "EBAY_FLAT_FILE" | ...
+//     rowIndex?:        number,
+//     importJobId?:     string,
+//     // batch context:
+//     bulkOperationId?: string,
+//     automationRuleId?: string,
+//   }
+
+model ProductEvent {
+  id String @id @default(cuid())
+
+  // Aggregate identity — plain string FKs (no Prisma relation) so we
+  // never block deletes on the parent and keep this table lean.
+  aggregateId   String // Product.id | ChannelListing.id | StockLevel.id | Order.id
+  aggregateType String // "Product" | "ChannelListing" | "StockLevel" | "Order"
+
+  // Event classification — see taxonomy above.
+  eventType String
+
+  // Delta payload: only the fields that changed, never a full snapshot.
+  data Json?
+
+  // Actor + origin — see metadata shape above.
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  // Timeline query: all events for one aggregate, newest first.
+  @@index([aggregateId, createdAt(sort: Desc)])
+  // Cross-aggregate feed filtered by type + time.
+  @@index([aggregateType, aggregateId])
+  @@index([eventType, createdAt(sort: Desc)])
+  // Admin event explorer sorted by time.
+  @@index([createdAt(sort: Desc)])
+}

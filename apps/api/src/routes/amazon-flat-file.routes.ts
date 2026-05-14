@@ -22,6 +22,7 @@ import {
 } from '../services/amazon/flat-file.service.js'
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
+import { productEventService } from '../services/product-event.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -563,6 +564,29 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           // Content auto-publish: enqueue FULL_SYNC for listings
           // that have _autoPublishContent=true in platformAttributes.
           await enqueueContentSyncIfEnabled(listings.map((l) => l.id))
+
+          // ES.2 — emit one FLAT_FILE_IMPORTED event per affected product.
+          void productEventService.emitMany(
+            listings
+              .filter((l) => l.productId)
+              .map((l) => ({
+                aggregateId: l.productId!,
+                aggregateType: 'Product' as const,
+                eventType: 'FLAT_FILE_IMPORTED' as const,
+                data: {
+                  channel: 'AMAZON',
+                  marketplace: mp,
+                  channelListingId: l.id,
+                  price: l.price,
+                  quantity: l.quantity,
+                },
+                metadata: {
+                  source: 'FLAT_FILE_IMPORT' as const,
+                  flatFileType: 'AMAZON_INVENTORY_LOADER',
+                  rowCount: rows.length,
+                },
+              })),
+          )
         } catch (err2) {
           request.log.warn({ err: err2 }, 'amazon flat-file: auto-enqueue failed (non-fatal)')
         }

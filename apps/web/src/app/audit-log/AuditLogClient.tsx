@@ -5,12 +5,19 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   ArrowRight,
+  Bot,
   ChevronDown,
   ChevronRight,
+  FileSpreadsheet,
   History as HistoryIcon,
+  Loader2,
   RefreshCw,
   Search,
+  Settings2,
+  User,
+  Webhook,
   X,
+  Zap,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -202,6 +209,146 @@ function EntryRow({ entry }: { entry: AuditEntry }) {
   )
 }
 
+// ── ES.4: Event Log mode ──────────────────────────────────────────────
+
+type EventSource = 'OPERATOR' | 'API' | 'WEBHOOK' | 'AUTOMATION' | 'AI' | 'FLAT_FILE_IMPORT' | 'SYSTEM'
+
+interface ProductEvent {
+  id: string
+  aggregateId: string
+  aggregateType: string
+  eventType: string
+  data: Record<string, unknown> | null
+  metadata: { source?: EventSource; userId?: string; fileName?: string; flatFileType?: string; rowCount?: number; bulkOperationId?: string } | null
+  createdAt: string
+}
+
+const EVENT_SOURCE_FILTERS = [
+  { value: 'all', label: 'All Sources' },
+  { value: 'OPERATOR', label: 'Operator' },
+  { value: 'FLAT_FILE_IMPORT', label: 'Flat File' },
+  { value: 'AUTOMATION', label: 'Automation' },
+  { value: 'AI', label: 'AI' },
+  { value: 'WEBHOOK', label: 'Webhook' },
+  { value: 'SYSTEM', label: 'System' },
+]
+
+function EventSourceIcon({ source }: { source?: EventSource }) {
+  const cls = 'h-3.5 w-3.5'
+  switch (source) {
+    case 'FLAT_FILE_IMPORT': return <FileSpreadsheet className={cls} />
+    case 'AUTOMATION': return <Zap className={cls} />
+    case 'AI': return <Bot className={cls} />
+    case 'WEBHOOK': return <Webhook className={cls} />
+    case 'SYSTEM': return <Settings2 className={cls} />
+    default: return <User className={cls} />
+  }
+}
+
+function EventFeed() {
+  const [events, setEvents] = useState<ProductEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const fetchEvents = useCallback(async (cursor?: string) => {
+    if (!cursor) setLoading(true); else setLoadingMore(true)
+    try {
+      const params = new URLSearchParams({ limit: '50' })
+      if (sourceFilter !== 'all') params.set('source', sourceFilter)
+      if (cursor) params.set('cursor', cursor)
+      const res = await fetch(`${getBackendUrl()}/api/events?${params}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json: { events: ProductEvent[]; nextCursor: string | null } = await res.json()
+      if (!cursor) setEvents(json.events); else setEvents(prev => [...prev, ...json.events])
+      setNextCursor(json.nextCursor)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false); setLoadingMore(false)
+    }
+  }, [sourceFilter])
+
+  useEffect(() => { void fetchEvents() }, [fetchEvents])
+
+  const toggleExpand = (id: string) =>
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  return (
+    <div className="space-y-3">
+      {/* Source filter chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {EVENT_SOURCE_FILTERS.map(f => (
+          <button key={f.value} onClick={() => setSourceFilter(f.value)}
+            className={cn('px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+              sourceFilter === f.value
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+            )}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {loading && <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}
+      {!loading && error && (
+        <div className="flex items-center gap-2 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />{error}
+        </div>
+      )}
+      {!loading && !error && events.length === 0 && (
+        <div className="text-center py-12 text-sm text-slate-400">No events found. Run the backfill first.</div>
+      )}
+      {!loading && events.length > 0 && (
+        <div className="space-y-1">
+          {events.map(ev => {
+            const source = ev.metadata?.source
+            const isOpen = expanded.has(ev.id)
+            const dataEntries = ev.data ? Object.entries(ev.data) : []
+            return (
+              <div key={ev.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                <button onClick={() => toggleExpand(ev.id)}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <EventSourceIcon source={source} />
+                  <Badge variant="default" size="sm">{ev.aggregateType}</Badge>
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200 flex-1 truncate">
+                    {ev.eventType.replace(/_/g, ' ')}
+                    {ev.metadata?.fileName && <span className="ml-2 font-normal text-slate-500">· {ev.metadata.fileName}</span>}
+                  </span>
+                  <span className="text-xs text-slate-400 shrink-0">{relativeTime(ev.createdAt)}</span>
+                  {isOpen ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
+                </button>
+                {isOpen && dataEntries.length > 0 && (
+                  <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                    {dataEntries.map(([k, v]) => (
+                      <div key={k} className="flex gap-2 px-3 py-1.5 text-xs font-mono">
+                        <span className="text-slate-500 w-40 shrink-0 truncate">{k}</span>
+                        <span className="text-slate-800 dark:text-slate-200 truncate">{typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {nextCursor && (
+            <div className="pt-2">
+              <button onClick={() => fetchEvents(nextCursor)} disabled={loadingMore}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5">
+                {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Load older events
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AuditLogClient() {
   const router = useRouter()
   const pathname = usePathname()
@@ -219,6 +366,7 @@ export default function AuditLogClient() {
   const urlSearch = searchParams.get('search') ?? ''
   const urlSince = searchParams.get('since') ?? ''
 
+  const [mode, setMode] = useState<'audit' | 'events'>('audit')
   const [searchInput, setSearchInput] = useState(urlSearch)
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch)
   const [data, setData] = useState<SearchResponse | null>(null)
@@ -301,6 +449,25 @@ export default function AuditLogClient() {
 
   return (
     <div className="space-y-3">
+      {/* ES.4 — Mode toggle: Audit Log vs Event Log */}
+      <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 w-fit">
+        {(['audit', 'events'] as const).map((m) => (
+          <button key={m} onClick={() => setMode(m)}
+            className={cn('px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              mode === m
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            )}>
+            {m === 'audit' ? 'Audit Log' : 'Event Log'}
+          </button>
+        ))}
+      </div>
+
+      {/* ES.4 — Event Log feed */}
+      {mode === 'events' && <EventFeed />}
+
+      {/* Original Audit Log (hidden when mode = events) */}
+      {mode === 'audit' && <>
       {/* Filter bar */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -481,6 +648,7 @@ export default function AuditLogClient() {
           )}
         </div>
       )}
+      </> /* end mode === 'audit' */}
     </div>
   )
 }
