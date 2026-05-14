@@ -529,7 +529,11 @@ export default function AmazonFlatFileClient({
   })
   useEffect(() => { try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {} }, [showOverrideBadges])
 
-  // IN.2 — Row being cascaded (opens CascadeModal)
+  // IN.2 — Cascade button toggle (default on) + row being cascaded
+  const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<Row | null>(null)
 
   // Persist image preferences
@@ -2158,6 +2162,14 @@ export default function AmazonFlatFileClient({
             active={showOverrideBadges}
           />
 
+          {/* IN.2 — Cascade buttons toggle */}
+          <TbBtn
+            icon={<GitFork className="w-3.5 h-3.5" />}
+            title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
+            onClick={() => setShowCascadeButtons((o) => !o)}
+            active={showCascadeButtons}
+          />
+
           {/* IN.2 — Cascade: reset all visible rows back to master */}
           <TbBtn
             icon={<GitFork className="w-3.5 h-3.5" />}
@@ -2798,6 +2810,7 @@ export default function AmazonFlatFileClient({
                     return next
                   })}
                   showOverrideBadges={showOverrideBadges}
+                  showCascadeButtons={showCascadeButtons}
                   onCascadeRow={(r) => setCascadeRow(r)}
                 />
               ))}
@@ -3155,6 +3168,7 @@ interface RowProps {
   onFillHandlePointerDown: (ri: number, ci: number) => void
   onFillDrop: () => void
   showOverrideBadges: boolean
+  showCascadeButtons: boolean
   onCascadeRow: (row: Row) => void
 }
 
@@ -3167,7 +3181,7 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
   onSelect, onDeactivate, onChange, onLiveChange, onPushSnapshot, onNavigate, onRowResizeStart,
   onRowDragStart, onRowDragEnd, onRowDragOver, onRowDrop,
   onCellPointerDown, onCellDoubleClick, onRowSelect, onFillHandlePointerDown, onFillDrop,
-  showOverrideBadges, onCascadeRow }: RowProps) {
+  showOverrideBadges, showCascadeButtons, onCascadeRow }: RowProps) {
   const rowId = row._rowId as string
   const status = row._status
   const canDragRef = useRef(false)
@@ -3345,8 +3359,8 @@ function SpreadsheetRow({ row, rowIdx, columns, colToGroup, selected, activeCell
             />
           )}
 
-          {/* IN.2 — Cascade button: shown on all rows; server handles "no siblings" gracefully */}
-          {(!showRowImages || imageSize >= 48) && row._productId && (
+          {/* IN.2 — Cascade button */}
+          {showCascadeButtons && (!showRowImages || imageSize >= 48) && row._productId && (
             <button
               onClick={(e) => { e.stopPropagation(); onCascadeRow(row) }}
               onPointerDown={(e) => e.stopPropagation()}

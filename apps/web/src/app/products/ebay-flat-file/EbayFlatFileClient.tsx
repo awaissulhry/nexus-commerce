@@ -272,7 +272,11 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [fetching, setFetching]               = useState(false)
   const [fetchPanelOpen, setFetchPanelOpen]   = useState(false)
 
-  // IN.2 — Row being cascaded
+  // IN.2 — Cascade button toggle (default on, shared localStorage key with Amazon)
+  const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
+    try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
+  })
+  useEffect(() => { try { localStorage.setItem('ff-show-cascade', showCascadeButtons ? '1' : '0') } catch {} }, [showCascadeButtons])
   const [cascadeRow, setCascadeRow] = useState<BaseRow | null>(null)
 
   // IN.1 — Override badges toggle (default on, persisted to localStorage)
@@ -699,8 +703,23 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       >
         <GitBranch className="w-3.5 h-3.5" />
       </button>
+
+      {/* IN.2 — Cascade buttons toggle */}
+      <button
+        type="button"
+        onClick={() => setShowCascadeButtons((o) => !o)}
+        title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons'}
+        className={cn(
+          'h-6 w-6 flex items-center justify-center rounded transition-colors flex-shrink-0',
+          showCascadeButtons
+            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300',
+        )}
+      >
+        <GitFork className="w-3.5 h-3.5" />
+      </button>
     </div>
-  ), [showOverrideBadges, setShowOverrideBadges])
+  ), [showOverrideBadges, setShowOverrideBadges, showCascadeButtons, setShowCascadeButtons])
 
   // ── Slot: modals ───────────────────────────────────────────────────────
 
@@ -843,7 +862,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             />
           )}
           {/* IN.2 — Cascade button */}
-          {row._productId && (
+          {showCascadeButtons && row._productId && (
             <button
               onClick={(e) => { e.stopPropagation(); setCascadeRow(row) }}
               onPointerDown={(e) => e.stopPropagation()}
