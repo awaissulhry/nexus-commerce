@@ -79,6 +79,12 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
   const innerMm    = rightColMm - padMm * 2
   const barWidthMm = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
   const barcodeWarn = barWidthMm < 20
+  // Module width = barcode width / total CODE128 modules (n×11 + 35 for a
+  // typical 10-char FNSKU). We use 10 chars as a representative estimate.
+  // Real module width depends on the actual FNSKU length at print time.
+  const estimatedModules = 10 * 11 + 35  // 145 for a 10-char FNSKU
+  const moduleWidthMm = barWidthMm / estimatedModules
+  const moduleWarn = moduleWidthMm < 0.25
 
   return (
     <div className="w-80 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-y-auto">
@@ -342,11 +348,16 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
           <SliderRow label="FNSKU text" value={template.fnskuTextScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
             onChange={v => patch({ fnskuTextScale: v })} />
           <p className="text-[10px] text-slate-400 mt-1">
-            Effective width: ~{barWidthMm.toFixed(1)}mm.
+            Width: ~{barWidthMm.toFixed(1)}mm · module: ~{(moduleWidthMm * 1000).toFixed(0)}µm
           </p>
           {barcodeWarn && (
             <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
               Width {barWidthMm.toFixed(1)}mm is below the 20mm minimum for reliable scanning.
+            </p>
+          )}
+          {moduleWarn && !barcodeWarn && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+              Module width ~{(moduleWidthMm * 1000).toFixed(0)}µm — below 250µm recommended minimum. Increase barcode width.
             </p>
           )}
         </Section>

@@ -463,12 +463,13 @@ async function drawLabel(
     // White background for barcode area
     doc.rect(bcX, ry, effBarcodeW, barcodeHPt).fill('#ffffff')
 
-    // Barcode bars
+    // Barcode bars — use exact scaled widths; no Math.max floor so bar:space
+    // ratios are never distorted (Math.max rounds up thin bars, eating adjacent space)
     const { bars, totalUnits } = encodeBarcode(item.fnsku)
     if (totalUnits > 0) {
       const scale = effBarcodeW / totalUnits
       for (const b of bars) {
-        doc.rect(bcX + b.x * scale, ry, Math.max(0.1, b.w * scale), barcodeHPt).fill('#000000')
+        doc.rect(bcX + b.x * scale, ry, b.w * scale, barcodeHPt).fill('#000000')
       }
     }
     ry += barcodeHPt + mm(1)

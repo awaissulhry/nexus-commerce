@@ -105,12 +105,13 @@ export function Barcode128({
         width={totalWidth}
         height={height}
         preserveAspectRatio="none"
+        shapeRendering="crispEdges"
         role="img"
         aria-hidden="true"
       >
         <rect x={0} y={0} width={totalWidth} height={height} fill="white" />
         {bars.map((b, i) => (
-          <rect key={i} x={b.x} y={0} width={b.width} height={height} fill="black" />
+          <rect key={i} x={b.x} y={0} width={b.width} height={height} fill="black" shapeRendering="crispEdges" />
         ))}
       </svg>
       {showText && (
