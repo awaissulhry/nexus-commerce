@@ -164,7 +164,10 @@ export function StatusMatrixLens({ products, loading }: Props) {
   }, [products, expandedParents, childrenByParent])
 
   return (
-    <div className="flex flex-col h-full border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+    <div
+      className="flex flex-col border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900"
+      style={{ height: 'calc(100vh - 320px)', minHeight: '500px' }}
+    >
       <MatrixToolbar
         contentLocale={contentLocale}
         onLocaleChange={handleLocaleChange}
