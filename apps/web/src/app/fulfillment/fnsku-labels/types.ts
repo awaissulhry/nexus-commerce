@@ -26,6 +26,7 @@ export interface LabelItem {
   variationAttributes: Record<string, string>
   imageUrl: string | null
   fnskuLoading?: boolean
+  fnskuError?: string
 }
 
 export interface SavedTemplate {

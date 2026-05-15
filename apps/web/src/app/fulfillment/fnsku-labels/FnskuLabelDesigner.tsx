@@ -72,6 +72,7 @@ export default function FnskuLabelDesigner() {
           ...it,
           fnskuLoading: false,
           fnsku: hit.fnsku ?? it.fnsku,
+          fnskuError: hit.error,
           productName: it.productName ?? hit.productName,
           listingTitle: it.listingTitle ?? hit.listingTitle,
           variationAttributes: Object.keys(it.variationAttributes).length > 0

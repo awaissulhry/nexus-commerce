@@ -3810,6 +3810,57 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     idempotencyService.store('replicate', idempotencyKey, responseBody)
     return responseBody
   })
+
+  // ── FNSKU label designer: search variant SKUs directly ────────────────────
+  // Unlike GET /products which filters parentId=null (parent products only),
+  // this endpoint searches ProductVariation by child SKU or parent name so
+  // the label designer can find specific variants.
+  fastify.get('/products/variant-search', async (request, reply) => {
+    try {
+      const { search = '', limit = '12' } = request.query as any
+      const q = String(search).trim()
+      const take = Math.min(50, parseInt(String(limit)) || 12)
+
+      const where: any = {}
+      if (q.length >= 1) {
+        where.OR = [
+          { sku: { contains: q, mode: 'insensitive' } },
+          { product: { name: { contains: q, mode: 'insensitive' } } },
+          { product: { sku: { contains: q, mode: 'insensitive' } } },
+        ]
+      }
+
+      const variants = await prisma.productVariation.findMany({
+        where,
+        select: {
+          sku: true,
+          fnsku: true,
+          variationAttributes: true,
+          product: {
+            select: {
+              name: true,
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+            },
+          },
+        },
+        take,
+        orderBy: { sku: 'asc' },
+      })
+
+      return {
+        variants: variants.map(v => ({
+          sku: v.sku,
+          fnsku: v.fnsku ?? null,
+          productName: v.product.name ?? null,
+          variationAttributes: (v.variationAttributes ?? {}) as Record<string, string>,
+          imageUrl: v.product.images[0]?.url ?? null,
+        })),
+      }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[products/variant-search] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
 }
 
 // EE.5 — canonical-name mapping for cross-channel replicate. Keys

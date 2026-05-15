@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { Barcode128 } from '@/components/ui/Barcode128'
 import type { LabelItem, TemplateConfig, TemplateRow } from './types'
 
@@ -235,7 +236,7 @@ export function LabelPreview({ item, template }: Props) {
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
-                  }}>
+                  } as React.CSSProperties}>
                     {item.listingTitle}
                   </div>
                 )}
