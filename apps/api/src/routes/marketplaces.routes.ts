@@ -46,6 +46,8 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         pendingOrders,
         syncIssues,
         connectedChannels,
+        inboxCritical,
+        inboxWarn,
       ] = await Promise.all([
         prisma.product.count({ where: { parentId: null } }),
         prisma.product.count({ where: { reviewStatus: 'PENDING_REVIEW' } }),
@@ -61,6 +63,17 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           .catch(() => 0),
         prisma.channelListing.count({ where: { lastSyncStatus: 'FAILED' } }),
         prisma.marketplace.count({ where: { isActive: true } }),
+        // P5.4 — inbox critical count (dead syncs + critical alert events)
+        Promise.all([
+          (prisma.outboundSyncQueue as any).count({ where: { isDead: true } }).catch(() => 0),
+          prisma.alertEvent.count({ where: { status: 'TRIGGERED', rule: { metric: { in: ['errorRate', 'latencyP95'] } } } }).catch(() => 0),
+        ]).then(([s, a]: [number, number]) => s + a),
+        // warn count
+        Promise.all([
+          (prisma.outboundSyncQueue as any).count({ where: { syncStatus: 'FAILED', retryCount: { gt: 0 }, isDead: false } }).catch(() => 0),
+          prisma.alertEvent.count({ where: { status: 'TRIGGERED', rule: { metric: { notIn: ['errorRate', 'latencyP95'] } } } }).catch(() => 0),
+          prisma.webhookEvent.count({ where: { isProcessed: false, error: { not: null } } }).catch(() => 0),
+        ]).then(([s, a, w]: [number, number, number]) => s + a + w),
       ])
 
       // Group listings by channel + per-marketplace breakdown
@@ -83,6 +96,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         operations: { pendingOrders },
         monitoring: { syncIssues },
         system: { connectedChannels },
+        inbox: { critical: inboxCritical, warn: inboxWarn, total: inboxCritical + inboxWarn },
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[sidebar/counts] failed')

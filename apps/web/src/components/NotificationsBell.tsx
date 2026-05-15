@@ -315,7 +315,9 @@ export default function NotificationsBell() {
           </div>
 
           <div className="px-3 py-2 border-t border-slate-100 flex-shrink-0 text-sm text-slate-500 flex items-center justify-between">
-            <span>Polls every 30s</span>
+            <a href="/inbox" className="text-blue-600 hover:text-blue-700 font-medium">
+              View all in inbox →
+            </a>
             <button
               type="button"
               onClick={() => void refresh()}

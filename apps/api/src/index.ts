@@ -112,6 +112,7 @@ import savedViewAlertsRoutes from "./routes/saved-view-alerts.routes.js";
 // pending-tab consume (it carries the alertSummary join those UIs
 // rely on); the O.27 file is removed.
 import notificationsRoutes from "./routes/notifications.routes.js";
+import inboxRoutes from "./routes/inbox.routes.js";
 import ordersReviewsRoutes from "./routes/orders-reviews.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 import { jobMonitorRoutes } from "./routes/job-monitor.routes.js";
@@ -509,6 +510,7 @@ app.register(savedViewAlertsRoutes, { prefix: '/api' });
 // savedViewsRoutes register removed — see import comment above.
 // /api/saved-views{,/...} is owned by products-catalog.routes.ts.
 app.register(notificationsRoutes, { prefix: '/api' });
+app.register(inboxRoutes, { prefix: '/api' });
 app.register(ordersReviewsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });

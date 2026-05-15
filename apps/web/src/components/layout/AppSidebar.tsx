@@ -47,6 +47,7 @@ import {
   Monitor,
   GitCompare,
   PackagePlus,
+  Inbox,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -64,6 +65,7 @@ interface SidebarCounts {
   operations?: { pendingOrders?: number }
   monitoring?: { syncIssues?: number }
   system?: { connectedChannels?: number }
+  inbox?: { critical?: number; warn?: number; total?: number }
 }
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -659,12 +661,23 @@ export default function AppSidebar() {
         </NavGroup>
 
         <NavGroup label="Monitoring">
-          {/* L.2.1 — /sync-logs is the unified observability hub.
-              The two siblings below open dedicated detail surfaces
-              the hub deep-links to. /dashboard/health is sync-health
-              detail (cron status + stock drift); /audit-log is the
-              full mutation browser; /outbound is the cascade-queue
-              dashboard. */}
+          {/* P5.4 — Triage Inbox: priority feed of sync failures,
+              unacknowledged alerts, unread notifications, webhook errors. */}
+          <NavItem
+            href="/inbox"
+            icon={Inbox}
+            label="Inbox"
+            count={(counts.inbox?.total ?? 0) > 0 ? counts.inbox?.total : undefined}
+            indicator={
+              (counts.inbox?.critical ?? 0) > 0
+                ? 'action'
+                : (counts.inbox?.warn ?? 0) > 0
+                  ? 'warning'
+                  : undefined
+            }
+            active={pathname === '/inbox'}
+          />
+          {/* L.2.1 — /sync-logs is the unified observability hub. */}
           <NavItem
             href="/sync-logs"
             icon={Activity}

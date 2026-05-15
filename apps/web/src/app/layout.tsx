@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AppSidebar from "@/components/layout/AppSidebar";
 import CommandPalette from "@/components/CommandPalette";
+import CommandMatrixPanel from "@/components/CommandMatrixPanel";
 import NotificationsBell from "@/components/NotificationsBell";
 import MobileTopBar from "@/components/MobileTopBar";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -54,6 +55,7 @@ export default async function RootLayout({
               </div>
             </div>
             <CommandPalette />
+            <CommandMatrixPanel />
             <NotificationsBell />
           </ConfirmProvider>
         </ToastProvider>

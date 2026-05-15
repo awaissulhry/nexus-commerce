@@ -7,6 +7,7 @@ import {
   Search,
   Package,
   FileText,
+  Inbox,
   Settings as SettingsIcon,
   Tag,
   Layers,
@@ -44,7 +45,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 type AppRouter = ReturnType<typeof useRouterType>
 
-interface Command {
+export interface Command {
   id: string
   label: string
   icon: LucideIcon
@@ -63,7 +64,7 @@ interface Command {
   contextPath?: string | RegExp
 }
 
-const COMMANDS: Command[] = [
+export const COMMANDS: Command[] = [
   // Navigation
   { id: 'goto-products', label: 'Go to Products', icon: Package, href: '/products', group: 'Navigation', chord: 'g p' },
   { id: 'goto-listings', label: 'Go to All Listings', icon: Boxes, href: '/listings', group: 'Navigation', chord: 'g l' },
@@ -107,6 +108,7 @@ const COMMANDS: Command[] = [
   { id: 'goto-replen-cannibalization', label: 'Replenishment — Cannibalization (new launch impact)', icon: ArrowRightLeft, href: '/fulfillment/replenishment#cannibalization', group: 'Replenishment', keywords: 'cannibalization cannibalizzazione substitute substitute substitution sostituzione new launch lancio impact velocity drop' },
   { id: 'goto-returns', label: 'Go to Returns (RMA + refund workflow)', icon: RefreshCw, href: '/fulfillment/returns', group: 'Navigation', chord: 'g t' },
   { id: 'goto-returns-analytics', label: 'Go to Returns Analytics (rates, top SKUs, processing time)', icon: Activity, href: '/fulfillment/returns/analytics', group: 'Navigation', keywords: 'returns rate sku processing analytics' },
+  { id: 'goto-inbox', label: 'Go to Triage Inbox (alerts, failures, notifications)', icon: Inbox, href: '/inbox', group: 'Navigation', chord: 'g i', keywords: 'inbox triage alert sync failure notification webhook dead letter' },
   { id: 'goto-activity', label: 'Go to Sync Logs (observability hub)', icon: Activity, href: '/sync-logs', group: 'Navigation', keywords: 'monitoring observability hub kpi cron channel' },
   { id: 'goto-api-calls', label: 'Go to API Calls (latency, errors, live tail)', icon: Activity, href: '/sync-logs/api-calls', group: 'Navigation', keywords: 'amazon ebay sp-api requests latency p95 p99 csv export live tail' },
   { id: 'goto-error-groups', label: 'Go to Error Groups (Sentry-tier rolled-up errors)', icon: Activity, href: '/sync-logs/errors', group: 'Navigation', keywords: 'errors fingerprint resolve mute ignore sentry' },
@@ -331,7 +333,7 @@ const COMMANDS: Command[] = [
  * Adding a new page's commands is one entry below — the page just
  * needs to listen for the matching event name.
  */
-const PAGE_COMMANDS: Command[] = [
+export const PAGE_COMMANDS: Command[] = [
   {
     id: 'page-products-new',
     label: 'New product',
