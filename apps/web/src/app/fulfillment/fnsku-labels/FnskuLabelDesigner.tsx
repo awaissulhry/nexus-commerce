@@ -11,16 +11,32 @@ import type { LabelItem, TemplateConfig, SavedTemplate } from './types'
 
 const DEFAULT_TEMPLATE: TemplateConfig = {
   labelSize: { widthMm: 101.6, heightMm: 76.2, preset: '4x3in' },
+  // Layout
+  columnSplitPct: 38,
+  paddingMm: 2,
+  showColumnDivider: true,
+  // Logo
   logoUrl: '',
   showLogo: true,
+  // Size box
   showSizeBox: true,
+  sizeBoxLabel: 'SIZE',
+  // Barcode
+  barcodeHeightPct: 32,
+  // Listing
   showListingTitle: true,
+  listingTitleLines: 2,
   showCondition: true,
   condition: 'New',
+  // Typography
+  fontFamily: 'Arial',
+  badgeFontScale: 1.0,
+  valueFontScale: 1.0,
+  // Rows
   rows: [
-    { id: '1', badgeText: 'MODEL', valueSource: 'productName', customValue: '', show: true },
-    { id: '2', badgeText: 'COLOR', valueSource: 'color', customValue: '', show: true },
-    { id: '3', badgeText: 'GEN.', valueSource: 'gender', customValue: '', show: true },
+    { id: '1', badgeText: 'MODEL', valueSource: 'productName', customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },
+    { id: '2', badgeText: 'COLOR', valueSource: 'color',       customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },
+    { id: '3', badgeText: 'GEN.',  valueSource: 'gender',      customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },
   ],
 }
 

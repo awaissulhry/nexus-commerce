@@ -14,8 +14,8 @@ export function getRowValue(row: TemplateRow, item: LabelItem): string {
   const attrs = item.variationAttributes ?? {}
   switch (row.valueSource) {
     case 'productName': return item.productName ?? ''
-    case 'color': return attrs['Color'] ?? attrs['color'] ?? ''
-    case 'size':   return attrs['Size']  ?? attrs['size']  ?? ''
+    case 'color':  return attrs['Color']  ?? attrs['color']  ?? ''
+    case 'size':   return attrs['Size']   ?? attrs['size']   ?? ''
     case 'gender': return attrs['Gender'] ?? attrs['gender'] ?? ''
     case 'sku':    return item.sku
     case 'custom': return row.customValue
@@ -23,12 +23,7 @@ export function getRowValue(row: TemplateRow, item: LabelItem): string {
   }
 }
 
-function getSizeValue(item: LabelItem): string {
-  const attrs = item.variationAttributes ?? {}
-  return attrs['Size'] ?? attrs['size'] ?? ''
-}
-
-// 1mm → px at 96dpi
+// 1mm → px at 96 dpi
 const MM_TO_PX = 3.7795
 
 export function LabelPreview({ item, template }: Props) {
@@ -36,74 +31,61 @@ export function LabelPreview({ item, template }: Props) {
   const wPx = widthMm * MM_TO_PX
   const hPx = heightMm * MM_TO_PX
 
-  // Right column is 38% of total width
-  const rightColPx = Math.round(wPx * 0.38)
-  const leftColPx = wPx - rightColPx
+  const rightPct  = Math.max(15, Math.min(55, template.columnSplitPct ?? 38)) / 100
+  const rightColPx = Math.round(wPx * rightPct)
+  const leftColPx  = wPx - rightColPx
 
-  const pad = Math.round(hPx * 0.04) // ~3px padding
-  const sizeVal = getSizeValue(item)
+  const padPx = (template.paddingMm ?? 2) * MM_TO_PX
+  const barcodeH = Math.round(hPx * ((template.barcodeHeightPct ?? 32) / 100))
+  const barcodeW = Math.max(20, rightColPx - padPx * 2)
+
+  const sizeVal  = (item.variationAttributes ?? {})['Size'] ?? (item.variationAttributes ?? {})['size'] ?? ''
   const activeRows = template.rows.filter(r => r.show)
 
-  // Scale so preview fits nicely in the center pane (max 560px wide)
-  const scale = Math.min(1, 560 / wPx)
+  const badgeFs  = hPx * 0.07  * (template.badgeFontScale  ?? 1)
+  const valueFs  = hPx * 0.1   * (template.valueFontScale  ?? 1)
+  const valueFs1 = hPx * 0.13  * (template.valueFontScale  ?? 1) // first row
+  const fontFam  = template.fontFamily ?? 'Arial, Helvetica, sans-serif'
+
+  // Scale preview to fit max 580px wide
+  const scale = Math.min(1, 580 / wPx)
 
   return (
-    <div style={{ transform: `scale(${scale})`, transformOrigin: 'top center', marginBottom: `${(hPx * scale - hPx)}px` }}>
-      {/* Label body */}
-      <div
-        style={{
-          width: wPx,
-          height: hPx,
-          background: '#fff',
-          border: '1px solid #999',
-          display: 'flex',
-          flexDirection: 'row',
-          overflow: 'hidden',
-          fontFamily: 'Arial, Helvetica, sans-serif',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-        }}
-      >
-        {/* ── LEFT COLUMN ──────────────────────────────── */}
-        <div
-          style={{
-            width: leftColPx,
-            height: hPx,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: `${pad}px ${pad}px ${pad}px ${pad + 2}px`,
-            borderRight: '1px solid #ddd',
-          }}
-        >
+    <div style={{ transform: `scale(${scale})`, transformOrigin: 'top center', marginBottom: `${hPx * scale - hPx}px` }}>
+      <div style={{
+        width: wPx, height: hPx,
+        background: '#fff',
+        border: '1px solid #999',
+        display: 'flex',
+        flexDirection: 'row',
+        overflow: 'hidden',
+        fontFamily: fontFam,
+        boxShadow: '0 2px 16px rgba(0,0,0,0.18)',
+      }}>
+
+        {/* ── LEFT COLUMN ─────────────────────────────────── */}
+        <div style={{
+          width: leftColPx, height: hPx,
+          display: 'flex', flexDirection: 'column',
+          padding: `${padPx}px ${padPx}px ${padPx}px ${padPx + 2}px`,
+          borderRight: (template.showColumnDivider ?? true) ? '1px solid #ddd' : 'none',
+          flexShrink: 0,
+        }}>
           {/* Logo */}
           {template.showLogo && (
-            <div style={{ marginBottom: pad, flexShrink: 0 }}>
+            <div style={{ marginBottom: padPx, flexShrink: 0 }}>
               {template.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={template.logoUrl}
-                  alt="Logo"
-                  style={{ maxHeight: hPx * 0.22, maxWidth: leftColPx - pad * 2, objectFit: 'contain' }}
-                />
+                <img src={template.logoUrl} alt="Logo"
+                  style={{ maxHeight: hPx * 0.22, maxWidth: leftColPx - padPx * 2, objectFit: 'contain' }} />
               ) : (
-                <div style={{
-                  height: hPx * 0.22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start',
-                }}>
+                <div style={{ height: hPx * 0.22, display: 'flex', alignItems: 'center' }}>
                   <span style={{
-                    fontSize: hPx * 0.1,
-                    fontWeight: 900,
-                    letterSpacing: '-0.04em',
-                    background: '#000',
-                    color: '#fff',
+                    fontSize: hPx * 0.1, fontWeight: 900, letterSpacing: '-0.04em',
+                    background: '#000', color: '#fff',
                     padding: `${hPx * 0.01}px ${hPx * 0.025}px`,
-                    borderRadius: 4,
-                    textTransform: 'uppercase',
-                    lineHeight: 1,
-                  }}>
-                    LOGO
-                  </span>
+                    borderRadius: 4, textTransform: 'uppercase', lineHeight: 1,
+                  }}>LOGO</span>
                 </div>
               )}
             </div>
@@ -114,38 +96,33 @@ export function LabelPreview({ item, template }: Props) {
             {activeRows.map((row, i) => {
               const value = getRowValue(row, item)
               const isFirst = i === 0
+              const fs = (isFirst ? valueFs1 : valueFs) * (row.fontScale ?? 1)
+              const tx = row.textTransform ?? 'uppercase'
               return (
                 <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: Math.round(wPx * 0.015) }}>
-                  {/* Badge */}
                   <div style={{
-                    background: '#111',
-                    color: '#fff',
+                    background: '#111', color: '#fff',
                     fontWeight: 700,
-                    fontSize: isFirst ? hPx * 0.07 : hPx * 0.07,
+                    fontSize: badgeFs,
                     padding: `${hPx * 0.02}px ${hPx * 0.03}px`,
-                    borderRadius: 3,
-                    whiteSpace: 'nowrap',
-                    letterSpacing: '0.03em',
-                    textTransform: 'uppercase',
-                    flexShrink: 0,
-                    minWidth: hPx * 0.45,
-                    textAlign: 'center',
+                    borderRadius: 3, whiteSpace: 'nowrap',
+                    letterSpacing: '0.03em', textTransform: 'uppercase',
+                    flexShrink: 0, minWidth: hPx * 0.45 * (template.badgeFontScale ?? 1), textAlign: 'center',
                   }}>
                     {row.badgeText || '—'}
                   </div>
-                  {/* Value */}
                   <div style={{
-                    fontWeight: isFirst ? 900 : 700,
-                    fontSize: isFirst ? hPx * 0.13 : hPx * 0.1,
+                    fontWeight: row.boldValue !== false ? (isFirst ? 900 : 700) : 400,
+                    fontSize: fs,
                     color: '#000',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     letterSpacing: isFirst ? '-0.02em' : '0.02em',
-                    textTransform: 'uppercase',
+                    textTransform: tx as React.CSSProperties['textTransform'],
                     lineHeight: 1.1,
                   }}>
-                    {value || <span style={{ color: '#aaa', fontStyle: 'italic', fontWeight: 400, fontSize: hPx * 0.07 }}>—</span>}
+                    {value || <span style={{ color: '#aaa', fontStyle: 'italic', fontWeight: 400, fontSize: badgeFs }}>—</span>}
                   </div>
                 </div>
               )
@@ -153,49 +130,29 @@ export function LabelPreview({ item, template }: Props) {
           </div>
         </div>
 
-        {/* ── RIGHT COLUMN ─────────────────────────────── */}
-        <div
-          style={{
-            width: rightColPx,
-            height: hPx,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: `${pad}px ${pad}px ${pad}px ${pad}px`,
-          }}
-        >
+        {/* ── RIGHT COLUMN ─────────────────────────────────── */}
+        <div style={{
+          width: rightColPx, height: hPx,
+          display: 'flex', flexDirection: 'column',
+          padding: `${padPx}px ${padPx}px ${padPx}px ${padPx}px`,
+        }}>
           {/* Size box */}
           {template.showSizeBox && (
             <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              border: '2px solid #111',
-              borderRadius: 4,
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              border: '2px solid #111', borderRadius: 4,
               padding: `${hPx * 0.01}px ${hPx * 0.015}px`,
-              marginBottom: pad,
-              flexShrink: 0,
+              marginBottom: padPx, flexShrink: 0,
             }}>
               <div style={{
-                fontSize: hPx * 0.06,
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                background: '#111',
-                color: '#fff',
-                width: '100%',
-                textAlign: 'center',
-                borderRadius: 2,
+                fontSize: hPx * 0.06, fontWeight: 700, letterSpacing: '0.1em',
+                textTransform: 'uppercase', background: '#111', color: '#fff',
+                width: '100%', textAlign: 'center', borderRadius: 2,
                 padding: `${hPx * 0.005}px 0`,
               }}>
-                SIZE
+                {template.sizeBoxLabel || 'SIZE'}
               </div>
-              <div style={{
-                fontSize: hPx * 0.19,
-                fontWeight: 900,
-                color: '#000',
-                lineHeight: 1,
-                marginTop: hPx * 0.01,
-              }}>
+              <div style={{ fontSize: hPx * 0.19, fontWeight: 900, color: '#000', lineHeight: 1, marginTop: hPx * 0.01 }}>
                 {sizeVal || '—'}
               </div>
             </div>
@@ -205,63 +162,53 @@ export function LabelPreview({ item, template }: Props) {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
             {item.fnsku ? (
               <>
-                <div style={{ width: '100%', overflow: 'hidden' }}>
-                  <Barcode128
-                    value={item.fnsku}
-                    height={Math.round(hPx * 0.32)}
-                    moduleWidthPx={Math.max(1, (rightColPx - pad * 2) / (item.fnsku.length * 11 + 35))}
-                    showText={false}
-                    className="w-full"
-                  />
-                </div>
+                {/* maxWidthPx guarantees the barcode never overflows — see Barcode128.tsx */}
+                <Barcode128
+                  value={item.fnsku}
+                  height={barcodeH}
+                  maxWidthPx={barcodeW}
+                  showText={false}
+                />
+                {/* FNSKU text — nowrap, never truncates */}
                 <div style={{
-                  fontSize: hPx * 0.063,
+                  fontSize: Math.min(hPx * 0.063, barcodeW / (item.fnsku.length * 0.6 + 2)),
                   fontFamily: 'monospace',
                   letterSpacing: '0.05em',
                   color: '#111',
                   marginTop: 2,
                   textAlign: 'center',
+                  whiteSpace: 'nowrap',
                 }}>
                   {item.fnsku}
                 </div>
                 {template.showListingTitle && item.listingTitle && (
                   <div style={{
-                    fontSize: hPx * 0.055,
+                    fontSize: hPx * 0.052,
                     color: '#333',
                     marginTop: 3,
                     textAlign: 'center',
                     lineHeight: 1.2,
-                    maxWidth: rightColPx - pad * 2,
+                    maxWidth: barcodeW,
                     overflow: 'hidden',
                     display: '-webkit-box',
-                    WebkitLineClamp: 2,
+                    WebkitLineClamp: template.listingTitleLines ?? 2,
                     WebkitBoxOrient: 'vertical',
                   } as React.CSSProperties}>
                     {item.listingTitle}
                   </div>
                 )}
                 {template.showCondition && (
-                  <div style={{
-                    fontSize: hPx * 0.055,
-                    color: '#333',
-                    marginTop: 1,
-                    textAlign: 'center',
-                  }}>
+                  <div style={{ fontSize: hPx * 0.052, color: '#333', marginTop: 2, textAlign: 'center' }}>
                     {template.condition || 'New'}
                   </div>
                 )}
               </>
             ) : (
               <div style={{
-                width: '100%',
-                height: hPx * 0.35,
-                border: '1px dashed #ccc',
-                borderRadius: 4,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#bbb',
-                fontSize: hPx * 0.06,
+                width: barcodeW, height: barcodeH,
+                border: '1px dashed #ccc', borderRadius: 4,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#bbb', fontSize: hPx * 0.06,
               }}>
                 No FNSKU
               </div>

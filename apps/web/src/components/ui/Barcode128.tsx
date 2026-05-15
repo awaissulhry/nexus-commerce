@@ -45,6 +45,9 @@ interface Barcode128Props {
   /** Pixel width per CODE128 module. Default 1.5 — fits a 90mm-wide
    *  printed label at typical 203 dpi without losing scannability. */
   moduleWidthPx?: number
+  /** When set, overrides moduleWidthPx so the barcode fits exactly this
+   *  pixel width. Computed as maxWidthPx / totalModuleCount. */
+  maxWidthPx?: number
   /** Pixel height of the bars (text adds ~14px below). */
   height?: number
   /** Show the human-readable text label under the bars. Default true. */
@@ -55,6 +58,7 @@ interface Barcode128Props {
 export function Barcode128({
   value,
   moduleWidthPx = 1.5,
+  maxWidthPx,
   height = 56,
   showText = true,
   className,
@@ -72,6 +76,12 @@ export function Barcode128({
     (START_B + codes.reduce((acc, c, i) => acc + c * (i + 1), 0)) % 103
   const sequence = [START_B, ...codes, checksum, STOP]
 
+  // If maxWidthPx provided, compute exact moduleWidthPx to fill that width.
+  // Total module count: START(11) + n×11 chars + CHECKSUM(11) + STOP(13).
+  const effectiveModuleW = maxWidthPx != null
+    ? maxWidthPx / (safe.length * 11 + 35)
+    : moduleWidthPx
+
   type Bar = { x: number; width: number }
   const bars: Bar[] = []
   let cursor = 0
@@ -80,13 +90,13 @@ export function Barcode128({
     if (!pattern) continue
     let isBar = true
     for (const ch of pattern) {
-      const w = parseInt(ch, 10) * moduleWidthPx
+      const w = parseInt(ch, 10) * effectiveModuleW
       if (isBar) bars.push({ x: cursor, width: w })
       cursor += w
       isBar = !isBar
     }
   }
-  const totalWidth = cursor
+  const totalWidth = maxWidthPx ?? cursor
 
   return (
     <div className={className} aria-label={`Barcode for ${safe}`}>

@@ -44,7 +44,7 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
         },
       },
       channelListings: {
-        where: { channel: 'AMAZON' },
+        where: { channel: 'AMAZON', marketplace: 'IT' },
         select: { title: true },
         take: 1,
       },
