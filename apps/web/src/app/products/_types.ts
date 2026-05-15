@@ -78,6 +78,21 @@ export type ProductRow = {
     string,
     { live: number; draft: number; error: number; total: number }
   > | null
+  /**
+   * Per-marketplace traffic-light coverage, keyed by "CHANNEL:MARKETPLACE"
+   * (e.g. "AMAZON:IT", "EBAY:DE", "SHOPIFY:GLOBAL"). Only present when
+   * the Status Matrix lens requests includeMarketplaceCoverage=true.
+   */
+  marketplaceCoverage?: Record<
+    string,
+    { status: 'live' | 'override' | 'error' | 'none'; errorChildCount: number; overrideChildCount: number; totalChildren: number }
+  >
+  /**
+   * Per-locale product copy, keyed by ISO 639-1 language code.
+   * Only present when includeTranslations=true is passed to the API.
+   * Top supported locales: it, en, de, fr, es.
+   */
+  translations?: Record<string, { name: string | null; description: string | null }>
   tags?: Array<{ id: string; name: string; color: string | null }>
   updatedAt: string
   createdAt: string

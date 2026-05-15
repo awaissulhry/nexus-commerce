@@ -18,6 +18,7 @@ import {
   Trash2,
   GitBranch,
   Globe,
+  BarChart2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -46,6 +47,7 @@ import { PricingLens } from './_lenses/PricingLens'
 import { WorkflowLens } from './_lenses/WorkflowLens'
 import { ReadinessLens } from './_lenses/ReadinessLens'
 import { TranslationsLens } from './_lenses/TranslationsLens'
+import { StatusMatrixLens } from './_lenses/StatusMatrixLens'
 import { BulkActionBar } from './_components/BulkActionBar'
 import { FilterBar } from './_components/FilterBar'
 import { SavedViewsButton } from './_components/SavedViewsButton'
@@ -80,7 +82,7 @@ const BulkImageUploadModal = dynamic(
 import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness' | 'translations'
+type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness' | 'translations' | 'status-matrix'
 
 // ProductRow + Tag types moved to ./_types.ts (P.1f) so GridView and
 // the workspace share a canonical shape.
@@ -365,7 +367,7 @@ export default function ProductsWorkspace() {
     // workspace; they need the data fetched whichever lens lands
     // first. (Hierarchy / Health / Drafts have their own fetches
     // and don't read `products`.)
-    if (lens !== 'grid' && lens !== 'coverage' && lens !== 'pricing') {
+    if (lens !== 'grid' && lens !== 'coverage' && lens !== 'pricing' && lens !== 'status-matrix') {
       return null
     }
     const qs = new URLSearchParams()
@@ -393,6 +395,10 @@ export default function ProductsWorkspace() {
     if (sortStack.length > 0) qs.set('sorts', sortStack.join(','))
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
+    if (lens === 'status-matrix') {
+      qs.set('includeMarketplaceCoverage', 'true')
+      qs.set('includeTranslations', 'true')
+    }
     return `/api/products?${qs.toString()}`
   }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly, showDeleted, sortBy, sortStack.join(',')])
 
@@ -1388,6 +1394,7 @@ export default function ProductsWorkspace() {
       {lens === 'workflow' && <WorkflowLens />}
       {lens === 'readiness' && <ReadinessLens products={products} loading={loading} />}
       {lens === 'translations' && <TranslationsLens products={products} loading={loading} />}
+      {lens === 'status-matrix' && <StatusMatrixLens products={products} loading={loading} />}
 
       {tagEditorProductId && (
         <TagEditor
@@ -1461,6 +1468,7 @@ function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) =>
     // W5.6 — Akeneo per-locale completeness. Products × supported
     // locales matrix; cell = N/4 fields filled in that language.
     { key: 'translations', label: 'Translations', icon: Globe },
+    { key: 'status-matrix', label: 'Status Matrix', icon: BarChart2 },
   ]
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
