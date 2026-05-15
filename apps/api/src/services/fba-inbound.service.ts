@@ -545,3 +545,67 @@ export function mapAmazonShipmentStatusToLocal(
       return 'WORKING'
   }
 }
+
+// In-memory cache: full sellerSku→fnSku map, refreshed every 30 minutes.
+let fnskuInventoryCache: { map: Record<string, string>; fetchedAt: number } | null = null
+const FNSKU_CACHE_TTL_MS = 30 * 60_000
+
+/**
+ * Return the full FBA inventory sellerSku→fnSku map, fetching from Amazon
+ * if the cache is stale. We fetch the entire inventory (no SKU filter) and
+ * cache it — this is one API call that covers all enrolled SKUs.
+ *
+ * SKUs not enrolled in FBA simply won't appear in the map (caller treats
+ * absent as null — user enters FNSKU manually).
+ */
+export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<string, string>> {
+  if (!isFbaInboundConfigured()) {
+    throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
+  }
+  if (sellerSkus.length === 0) return {}
+
+  // Refresh cache if stale
+  if (!fnskuInventoryCache || Date.now() - fnskuInventoryCache.fetchedAt > FNSKU_CACHE_TTL_MS) {
+    const token = await getLwaAccessToken()
+    const base = REGION_ENDPOINTS[SP_REGION] ?? REGION_ENDPOINTS.eu
+    const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
+    const allMap: Record<string, string> = {}
+
+    let nextToken: string | undefined
+    do {
+      const url = new URL(`${base}/fba/inventory/v1/summaries`)
+      url.searchParams.set('details', 'true')
+      url.searchParams.set('granularityType', 'Marketplace')
+      url.searchParams.set('granularityId', marketplaceId)
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      if (nextToken) url.searchParams.set('nextToken', nextToken)
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${token}`, 'x-amz-access-token': token },
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`FBA Inventory API ${res.status}: ${text.slice(0, 300)}`)
+      }
+      const json = (await res.json()) as {
+        payload?: {
+          inventorySummaries: Array<{ sellerSku?: string; fnSku?: string }>
+          nextToken?: string
+        }
+      }
+      for (const item of json.payload?.inventorySummaries ?? []) {
+        if (item.sellerSku && item.fnSku) allMap[item.sellerSku] = item.fnSku
+      }
+      nextToken = json.payload?.nextToken
+    } while (nextToken)
+
+    fnskuInventoryCache = { map: allMap, fetchedAt: Date.now() }
+  }
+
+  // Return only the entries matching the requested SKUs
+  const result: Record<string, string> = {}
+  for (const sku of sellerSkus) {
+    if (fnskuInventoryCache.map[sku]) result[sku] = fnskuInventoryCache.map[sku]
+  }
+  return result
+}

@@ -1,5 +1,5 @@
 import prisma from '../db.js'
-import { createInboundShipmentPlan, isFbaInboundConfigured } from './fba-inbound.service.js'
+import { getInventoryFnskus, isFbaInboundConfigured } from './fba-inbound.service.js'
 
 export interface FnskuLookupResult {
   sku: string
@@ -67,19 +67,9 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
       spApiError = 'Amazon SP-API not configured — enter FNSKUs manually'
     } else {
       try {
-        const planResult = await createInboundShipmentPlan({
-          items: uncached.map(sku => ({ sellerSku: sku, quantity: 1 })),
-          labelPrepPreference: 'SELLER_LABEL',
-        })
-
-        const fetchedFnskus: Record<string, string> = {}
-        for (const plan of planResult.shipmentPlans) {
-          for (const item of plan.Items ?? []) {
-            if (item.FulfillmentNetworkSKU) {
-              fetchedFnskus[item.SellerSKU] = item.FulfillmentNetworkSKU
-            }
-          }
-        }
+        // Use FBA Inventory API — no ship-from address required, reads what
+        // Amazon already has enrolled in FBA for these SKUs.
+        const fetchedFnskus = await getInventoryFnskus(uncached)
 
         const updates = Object.entries(fetchedFnskus)
         if (updates.length > 0) {
@@ -117,7 +107,9 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
     return {
       sku,
       fnsku: p.fnsku ?? null,
-      ...(needsFetch && spApiError ? { error: spApiError } : {}),
+      // Only surface SP-API errors (config/network) — missing FBA inventory
+      // is not an error, just means the SKU isn't currently enrolled in FBA.
+      ...(needsFetch && spApiError && !spApiError.includes('not enrolled') ? { error: spApiError } : {}),
       // Use parent name (shorter, no size/color suffix) for the MODEL label field
       productName: p.parent?.name ?? p.name ?? null,
       listingTitle: p.channelListings[0]?.title ?? p.name ?? null,
