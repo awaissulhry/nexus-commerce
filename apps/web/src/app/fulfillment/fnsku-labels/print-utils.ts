@@ -1,6 +1,10 @@
 import type { LabelItem, TemplateConfig } from './types'
 import { getRowValue } from './LabelPreview'
 
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 function cssFontStack(family?: string): string {
   const f = (family ?? 'Helvetica').toLowerCase()
   if (f.includes('courier') || f.includes('mono')) return "'Courier New', Courier, monospace"
@@ -116,10 +120,10 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const barcodeHtml = item.fnsku
     ? `<div style="width:${barW}mm;">${barcodeSvg(item.fnsku, barW, barH)}</div>
        <div style="width:${barW}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;margin-top:0.5mm;">
-         <span style="font-size:${fnskuFs}mm;font-family:${fontFam};letter-spacing:0.03em;">${item.fnsku}</span>
+         <span style="font-size:${fnskuFs}mm;font-family:${fontFam};letter-spacing:0.03em;">${esc(item.fnsku)}</span>
        </div>
-       ${template.showListingTitle && displayTitle ? (truncMode === 'smart' ? `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayTitle}</div>` : `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${displayTitle}</div>`) : ''}
-       ${template.showCondition ? `<div style="font-size:${heightMm * 0.052 * conditionScale}mm;font-family:${fontFam};color:#333;text-align:center;margin-top:0.5mm;white-space:nowrap;overflow:hidden;width:${barW}mm;">${template.condition || 'New'}</div>` : ''}`
+       ${template.showListingTitle && displayTitle ? (truncMode === 'smart' ? `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(displayTitle)}</div>` : `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${esc(displayTitle)}</div>`) : ''}
+       ${template.showCondition ? `<div style="font-size:${heightMm * 0.052 * conditionScale}mm;font-family:${fontFam};color:#333;text-align:center;margin-top:0.5mm;white-space:nowrap;overflow:hidden;width:${barW}mm;">${esc(template.condition || 'New')}</div>` : ''}`
     : `<div style="width:${barW}mm;height:${barH}mm;border:0.3mm dashed #ccc;border-radius:1mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:${heightMm * 0.07}mm;">No FNSKU</div>`
 
   const rowsHtml = activeRows.map((row, i) => {
@@ -131,15 +135,15 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
     const tx = row.textTransform ?? 'uppercase'
     const fw = row.boldValue !== false ? (isFirst ? 900 : 700) : 400
     return `<div style="display:flex;align-items:center;gap:${widthMm * 0.015}mm;margin-bottom:${heightMm * 0.025}mm;">
-      <div style="background:#111;color:#fff;font-weight:700;font-size:${badgeFs}mm;padding:${heightMm * 0.02}mm ${heightMm * 0.03}mm;border-radius:0.8mm;white-space:nowrap;letter-spacing:0.03em;text-transform:uppercase;flex-shrink:0;min-width:${heightMm * 0.45 * badgeScale}mm;text-align:center;">${row.badgeText || '—'}</div>
-      <div style="font-weight:${fw};font-size:${fs}mm;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:${isFirst ? '-0.02em' : '0.02em'};text-transform:${tx};line-height:1.1;">${value || '—'}</div>
+      <div style="background:#111;color:#fff;font-weight:700;font-size:${badgeFs}mm;padding:${heightMm * 0.02}mm ${heightMm * 0.03}mm;border-radius:0.8mm;white-space:nowrap;letter-spacing:0.03em;text-transform:uppercase;flex-shrink:0;min-width:${heightMm * 0.45 * badgeScale}mm;text-align:center;">${esc(row.badgeText || '—')}</div>
+      <div style="font-weight:${fw};font-size:${fs}mm;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:${isFirst ? '-0.02em' : '0.02em'};text-transform:${tx};line-height:1.1;">${esc(value || '—')}</div>
     </div>`
   }).join('')
 
   const sizeBoxHtml = template.showSizeBox ? `
     <div style="display:flex;flex-direction:column;align-items:center;border:0.5mm solid #111;border-radius:1mm;padding:${heightMm * 0.01}mm ${heightMm * 0.015}mm;margin-bottom:${padMm}mm;flex-shrink:0;">
-      <div style="background:#111;color:#fff;font-weight:700;font-size:${heightMm * 0.06 * sizeHeaderScale}mm;letter-spacing:0.1em;text-transform:uppercase;width:100%;text-align:center;border-radius:0.5mm;padding:${heightMm * 0.005}mm 0;">${sizeLabel}</div>
-      <div style="font-size:${Math.min(heightMm * 0.19 * sizeValueScale, innerMm * 0.85)}mm;font-weight:900;color:#000;line-height:1;margin-top:${heightMm * 0.01}mm;">${sizeVal || '—'}</div>
+      <div style="background:#111;color:#fff;font-weight:700;font-size:${heightMm * 0.06 * sizeHeaderScale}mm;letter-spacing:0.1em;text-transform:uppercase;width:100%;text-align:center;border-radius:0.5mm;padding:${heightMm * 0.005}mm 0;">${esc(sizeLabel)}</div>
+      <div style="font-size:${Math.min(heightMm * 0.19 * sizeValueScale, innerMm * 0.85)}mm;font-weight:900;color:#000;line-height:1;margin-top:${heightMm * 0.01}mm;">${esc(sizeVal || '—')}</div>
     </div>` : ''
 
   const logoHtml = template.showLogo ? (

@@ -201,17 +201,19 @@ function fitTextSize(
   return fs
 }
 
-const imageCache = new Map<string, Buffer | null>()
+// Cache successful fetches for 5 min; never cache failures so retries work
+const imageCache = new Map<string, { buf: Buffer; expiresAt: number }>()
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
-  if (imageCache.has(url)) return imageCache.get(url)!
+  const cached = imageCache.get(url)
+  if (cached && cached.expiresAt > Date.now()) return cached.buf
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) })
-    if (!res.ok) { imageCache.set(url, null); return null }
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
+    if (!res.ok) return null
     const buf = Buffer.from(await res.arrayBuffer())
-    imageCache.set(url, buf)
+    imageCache.set(url, { buf, expiresAt: Date.now() + 5 * 60 * 1000 })
     return buf
   } catch {
-    imageCache.set(url, null); return null
+    return null  // don't cache failures — next render will retry
   }
 }
 

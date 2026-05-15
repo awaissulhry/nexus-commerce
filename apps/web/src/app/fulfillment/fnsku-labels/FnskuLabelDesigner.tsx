@@ -58,8 +58,14 @@ export default function FnskuLabelDesigner() {
   const [items, setItems] = useState<LabelItem[]>(() => {
     try {
       const saved = localStorage.getItem('fnsku-label-items')
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
+      if (!saved) return []
+      const parsed: LabelItem[] = JSON.parse(saved)
+      // Normalise in case of corruption: ensure quantity is always >= 1
+      return parsed.map(it => ({ ...it, quantity: Math.max(1, it.quantity || 1) }))
+    } catch (e) {
+      console.warn('[fnsku-labels] Failed to restore items from localStorage:', e)
+      return []
+    }
   })
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [template, setTemplate] = useState<TemplateConfig>(DEFAULT_TEMPLATE)
@@ -92,13 +98,22 @@ export default function FnskuLabelDesigner() {
       .catch(() => {})
   }, [])
 
+  // Abort controller for the in-flight lookup — prevents stale responses
+  // from overwriting manual edits when multiple lookups race.
+  const lookupAbortRef = useRef<AbortController | null>(null)
+
   const fetchFnskus = useCallback(async (targetItems: LabelItem[], force = false) => {
     const needsFnsku = force
       ? targetItems.filter(it => it.sku)
       : targetItems.filter(it => (!it.fnsku || !it.listingTitle) && it.sku)
     if (needsFnsku.length === 0) return
+
+    // Cancel any in-flight request before starting a new one
+    lookupAbortRef.current?.abort()
+    const controller = new AbortController()
+    lookupAbortRef.current = controller
+
     setFetchingFnskus(true)
-    // Mark them as loading
     setItems(prev => prev.map(it =>
       needsFnsku.some(n => n.sku === it.sku) ? { ...it, fnskuLoading: true } : it,
     ))
@@ -107,6 +122,7 @@ export default function FnskuLabelDesigner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skus: needsFnsku.map(it => it.sku) }),
+        signal: controller.signal,
       })
       const data = await res.json()
       const results: any[] = data?.results ?? []
@@ -127,17 +143,23 @@ export default function FnskuLabelDesigner() {
           imageUrl: it.imageUrl ?? hit.imageUrl,
         }
       }))
-    } catch {
-      setItems(prev => prev.map(it => ({ ...it, fnskuLoading: false })))
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        setItems(prev => prev.map(it => ({ ...it, fnskuLoading: false })))
+      }
     } finally {
-      setFetchingFnskus(false)
+      if (!controller.signal.aborted) setFetchingFnskus(false)
     }
   }, [])
 
   const handleItemsChange = useCallback((next: LabelItem[]) => {
     setItems(next)
     setSelectedIdx(i => Math.min(i, Math.max(0, next.length - 1)))
-    try { localStorage.setItem('fnsku-label-items', JSON.stringify(next)) } catch {}
+    try {
+      localStorage.setItem('fnsku-label-items', JSON.stringify(next))
+    } catch (e) {
+      console.warn('[fnsku-labels] localStorage quota exceeded — label queue not persisted:', e)
+    }
     // Auto-fetch for items missing FNSKU or listing title
     const newOnes = next.filter(it => (!it.fnsku || !it.listingTitle) && !it.fnskuLoading && it.sku)
     if (newOnes.length > 0) fetchFnskus(newOnes)
@@ -158,6 +180,20 @@ export default function FnskuLabelDesigner() {
   }
 
   const handleDownloadPdf = async (mode: 'label' | 'a4') => {
+    // Pre-flight compliance check
+    if (template.showListingTitle) {
+      const missingTitle = items.filter(it => !it.listingTitle)
+      if (missingTitle.length > 0) {
+        const skus = missingTitle.map(it => it.sku).join(', ')
+        const proceed = window.confirm(
+          `${missingTitle.length} item${missingTitle.length > 1 ? 's' : ''} missing listing title (${skus}).\n\n` +
+          `Amazon FBA requires the listing title on every label.\n\n` +
+          `Click OK to generate anyway, or Cancel to fix first.`,
+        )
+        if (!proceed) return
+      }
+    }
+
     const allLabels: LabelItem[] = []
     for (const it of items) {
       for (let i = 0; i < Math.max(1, it.quantity); i++) allLabels.push(it)
