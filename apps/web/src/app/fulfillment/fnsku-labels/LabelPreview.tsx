@@ -27,6 +27,14 @@ export function getRowValue(row: TemplateRow, item: LabelItem): string {
 // 1mm → px at 96 dpi
 const MM_TO_PX = 3.7795
 
+// Map template fontFamily to a CSS stack that uses the same family the PDF will render
+function cssFontStack(family?: string): string {
+  const f = (family ?? 'Helvetica').toLowerCase()
+  if (f.includes('courier') || f.includes('mono')) return "'Courier New', Courier, monospace"
+  if (f.includes('times') || f.includes('roman')) return "Georgia, 'Times New Roman', serif"
+  return 'Helvetica, Arial, sans-serif'
+}
+
 export function LabelPreview({ item, template }: Props) {
   const { widthMm, heightMm } = template.labelSize
   const wPx = widthMm * MM_TO_PX
@@ -47,7 +55,7 @@ export function LabelPreview({ item, template }: Props) {
   const badgeFs  = hPx * 0.07  * (template.badgeFontScale  ?? 1)
   const valueFs  = hPx * 0.1   * (template.valueFontScale  ?? 1)
   const valueFs1 = hPx * 0.13  * (template.valueFontScale  ?? 1) // first row
-  const fontFam  = template.fontFamily ?? 'Arial, Helvetica, sans-serif'
+  const fontFam  = cssFontStack(template.fontFamily)
 
   // Scale preview to fit max 580px wide
   const scale = Math.min(1, 580 / wPx)
@@ -69,7 +77,7 @@ export function LabelPreview({ item, template }: Props) {
         <div style={{
           width: leftColPx, height: hPx,
           display: 'flex', flexDirection: 'column',
-          padding: `${padPx}px ${padPx}px ${padPx}px ${padPx + 2}px`,
+          padding: `${padPx}px`,
           borderRight: (template.showColumnDivider ?? true) ? '1px solid #ddd' : 'none',
           flexShrink: 0,
         }}>

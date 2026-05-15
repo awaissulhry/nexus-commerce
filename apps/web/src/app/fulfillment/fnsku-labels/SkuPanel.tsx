@@ -8,7 +8,7 @@ import type { LabelItem } from './types'
 interface Props {
   items: LabelItem[]
   onChange: (items: LabelItem[]) => void
-  onFetchFnskus: () => void
+  onFetchFnskus: (force?: boolean) => void
   fetchingFnskus: boolean
 }
 
@@ -276,16 +276,22 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
         </div>
       )}
 
-      {/* Fetch FNSKUs button */}
+      {/* Fetch FNSKUs + Clear all */}
       {items.length > 0 && (
-        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800">
+        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-1.5">
           <button
-            onClick={onFetchFnskus}
+            onClick={() => onFetchFnskus(true)}
             disabled={fetchingFnskus}
             className="w-full inline-flex items-center justify-center gap-1.5 h-7 text-xs rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/30 disabled:opacity-50"
           >
             {fetchingFnskus ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            {fetchingFnskus ? 'Fetching from Amazon…' : 'Re-fetch FNSKUs from Amazon'}
+            {fetchingFnskus ? 'Fetching from Amazon…' : 'Re-fetch all FNSKUs from Amazon'}
+          </button>
+          <button
+            onClick={() => { onChange([]); try { localStorage.removeItem('fnsku-label-items') } catch {} }}
+            className="w-full inline-flex items-center justify-center gap-1.5 h-6 text-xs rounded border border-red-200 dark:border-red-900 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            Clear all SKUs
           </button>
         </div>
       )}

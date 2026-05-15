@@ -23,10 +23,9 @@ const PRESETS = [
 ]
 
 const FONT_FAMILIES = [
-  { value: 'Arial',            label: 'Arial' },
-  { value: 'Helvetica Neue',   label: 'Helvetica Neue' },
-  { value: 'monospace',        label: 'Monospace' },
-  { value: 'Georgia',          label: 'Georgia' },
+  { value: 'Helvetica',   label: 'Helvetica (Sans)' },
+  { value: 'Courier',     label: 'Courier (Mono)' },
+  { value: 'Times-Roman', label: 'Times Roman (Serif)' },
 ]
 
 interface Props {
@@ -74,6 +73,12 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
   const colSplit = template.columnSplitPct ?? 38
   const barcodeH = template.barcodeHeightPct ?? 32
   const padMm    = template.paddingMm ?? 2
+
+  // Computed barcode width (mm) — mirrored from renderLabelHtml / LabelPreview
+  const rightColMm = template.labelSize.widthMm * (colSplit / 100)
+  const innerMm    = rightColMm - padMm * 2
+  const barWidthMm = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
+  const barcodeWarn = barWidthMm < 20
 
   return (
     <div className="w-80 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-y-auto">
@@ -283,7 +288,14 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         <Section title="Barcode">
           <SliderRow label="Height" value={barcodeH} min={10} max={55} unit="%" onChange={v => patch({ barcodeHeightPct: v })} />
           <SliderRow label="Width"  value={template.barcodeWidthPct ?? 100} min={20} max={100} unit="%" onChange={v => patch({ barcodeWidthPct: v })} />
-          <p className="text-[10px] text-slate-400 mt-1">≥25mm width recommended for reliable scanning.</p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Effective width: ~{barWidthMm.toFixed(1)}mm.
+          </p>
+          {barcodeWarn && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+              Width {barWidthMm.toFixed(1)}mm is below the 20mm minimum for reliable scanning.
+            </p>
+          )}
         </Section>
 
         {/* ── Sheet layout (A4 mode) ─────────────── */}

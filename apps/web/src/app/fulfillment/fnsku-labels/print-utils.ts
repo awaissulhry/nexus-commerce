@@ -1,6 +1,13 @@
 import type { LabelItem, TemplateConfig } from './types'
 import { getRowValue } from './LabelPreview'
 
+function cssFontStack(family?: string): string {
+  const f = (family ?? 'Helvetica').toLowerCase()
+  if (f.includes('courier') || f.includes('mono')) return "'Courier New', Courier, monospace"
+  if (f.includes('times') || f.includes('roman')) return "Georgia, 'Times New Roman', serif"
+  return 'Helvetica, Arial, sans-serif'
+}
+
 // CODE128B encoder — outputs a scaled SVG string.
 // The barcode is rendered at exactly widthMm wide by applying a uniform
 // scale factor to all bar x-positions and widths, preserving relative
@@ -68,7 +75,7 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const innerMm    = rightColMm - padMm * 2
   const barW       = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
   const barH       = heightMm * ((template.barcodeHeightPct ?? 32) / 100)
-  const fontFam    = template.fontFamily ?? 'Arial, Helvetica, sans-serif'
+  const fontFam    = cssFontStack(template.fontFamily)
   const badgeScale = template.badgeFontScale ?? 1
   const valueScale = template.valueFontScale ?? 1
   const divider    = (template.showColumnDivider ?? true) ? '0.3mm solid #ddd' : 'none'

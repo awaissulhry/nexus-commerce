@@ -30,7 +30,7 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
   showCondition: true,
   condition: 'New',
   // Typography
-  fontFamily: 'Arial',
+  fontFamily: 'Helvetica',
   badgeFontScale: 1.0,
   valueFontScale: 1.0,
   // Rows
@@ -42,7 +42,12 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
 }
 
 export default function FnskuLabelDesigner() {
-  const [items, setItems] = useState<LabelItem[]>([])
+  const [items, setItems] = useState<LabelItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('fnsku-label-items')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [template, setTemplate] = useState<TemplateConfig>(DEFAULT_TEMPLATE)
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([])
@@ -67,8 +72,10 @@ export default function FnskuLabelDesigner() {
       .catch(() => {})
   }, [])
 
-  const fetchFnskus = useCallback(async (targetItems: LabelItem[]) => {
-    const needsFnsku = targetItems.filter(it => !it.fnsku && it.sku)
+  const fetchFnskus = useCallback(async (targetItems: LabelItem[], force = false) => {
+    const needsFnsku = force
+      ? targetItems.filter(it => it.sku)
+      : targetItems.filter(it => !it.fnsku && it.sku)
     if (needsFnsku.length === 0) return
     setFetchingFnskus(true)
     // Mark them as loading
@@ -110,6 +117,7 @@ export default function FnskuLabelDesigner() {
   const handleItemsChange = useCallback((next: LabelItem[]) => {
     setItems(next)
     setSelectedIdx(i => Math.min(i, Math.max(0, next.length - 1)))
+    try { localStorage.setItem('fnsku-label-items', JSON.stringify(next)) } catch {}
     // Auto-fetch FNSKUs for newly added items
     const newOnes = next.filter(it => !it.fnsku && !it.fnskuLoading && it.sku)
     if (newOnes.length > 0) fetchFnskus(newOnes)
@@ -265,7 +273,7 @@ export default function FnskuLabelDesigner() {
         <SkuPanel
           items={items}
           onChange={handleItemsChange}
-          onFetchFnskus={() => fetchFnskus(items)}
+          onFetchFnskus={(force) => fetchFnskus(items, force)}
           fetchingFnskus={fetchingFnskus}
         />
 
