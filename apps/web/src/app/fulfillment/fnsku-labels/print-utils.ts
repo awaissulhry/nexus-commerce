@@ -81,7 +81,7 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
 
   const barcodeHtml = item.fnsku
     ? `<div style="width:${barW}mm;">${barcodeSvg(item.fnsku, barW, barH)}</div>
-       <div style="font-size:${Math.min(heightMm * 0.063, barW / (item.fnsku.length * 0.55 + 2))}mm;font-family:monospace;letter-spacing:0.05em;text-align:center;margin-top:0.5mm;white-space:nowrap;">${item.fnsku}</div>
+       <div style="font-size:${Math.min(heightMm * 0.063, barW / (item.fnsku.length * 0.55 + 2))}mm;font-family:${fontFam};letter-spacing:0.05em;text-align:center;margin-top:0.5mm;white-space:nowrap;">${item.fnsku}</div>
        ${template.showListingTitle && item.listingTitle ? `<div style="font-size:${heightMm * 0.052}mm;color:#333;text-align:center;line-height:1.2;margin-top:0.5mm;max-width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${item.listingTitle}</div>` : ''}
        ${template.showCondition ? `<div style="font-size:${heightMm * 0.052}mm;color:#333;text-align:center;margin-top:0.5mm;">${template.condition || 'New'}</div>` : ''}`
     : `<div style="width:${barW}mm;height:${barH}mm;border:0.3mm dashed #ccc;border-radius:1mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:${heightMm * 0.07}mm;">No FNSKU</div>`

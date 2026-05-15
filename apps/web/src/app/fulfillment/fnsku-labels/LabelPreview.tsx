@@ -174,7 +174,7 @@ export function LabelPreview({ item, template }: Props) {
                 {/* FNSKU text — nowrap, never truncates */}
                 <div style={{
                   fontSize: Math.min(hPx * 0.063, barcodeW / (item.fnsku.length * 0.6 + 2)),
-                  fontFamily: 'monospace',
+                  fontFamily: fontFam,
                   letterSpacing: '0.05em',
                   color: '#111',
                   marginTop: 2,

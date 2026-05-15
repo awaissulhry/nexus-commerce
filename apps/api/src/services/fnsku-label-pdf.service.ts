@@ -336,7 +336,7 @@ async function drawLabel(
 
     // FNSKU text
     if (fnskuFs > 0) {
-      doc.font('Courier').fontSize(fnskuFs).fillColor('#111111')
+      doc.font(fontBase).fontSize(fnskuFs).fillColor('#111111')
          .text(item.fnsku, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
       ry += fnskuH
     }
