@@ -3821,22 +3821,28 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const q = String(search).trim()
       const take = Math.min(50, parseInt(String(limit)) || 12)
 
-      const where: any = {}
+      // Variants are child Product rows (parentId IS NOT NULL).
+      // ProductVariation is a deprecated empty table — do not query it.
+      const where: any = { parentId: { not: null } }
       if (q.length >= 1) {
         where.OR = [
           { sku: { contains: q, mode: 'insensitive' } },
-          { product: { name: { contains: q, mode: 'insensitive' } } },
-          { product: { sku: { contains: q, mode: 'insensitive' } } },
+          { name: { contains: q, mode: 'insensitive' } },
+          { parent: { name: { contains: q, mode: 'insensitive' } } },
+          { parent: { sku: { contains: q, mode: 'insensitive' } } },
         ]
       }
 
-      const variants = await prisma.productVariation.findMany({
+      const variants = await prisma.product.findMany({
         where,
         select: {
           sku: true,
           fnsku: true,
-          variationAttributes: true,
-          product: {
+          name: true,
+          variantAttributes: true,
+          categoryAttributes: true,
+          images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+          parent: {
             select: {
               name: true,
               images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
@@ -3848,13 +3854,24 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return {
-        variants: variants.map(v => ({
-          sku: v.sku,
-          fnsku: v.fnsku ?? null,
-          productName: v.product.name ?? null,
-          variationAttributes: (v.variationAttributes ?? {}) as Record<string, string>,
-          imageUrl: v.product.images[0]?.url ?? null,
-        })),
+        variants: variants.map(v => {
+          // Resolve attributes: variantAttributes → categoryAttributes.variations
+          let attrs: Record<string, string> = {}
+          if (v.variantAttributes && typeof v.variantAttributes === 'object' && !Array.isArray(v.variantAttributes)) {
+            attrs = v.variantAttributes as Record<string, string>
+          } else {
+            const cat = v.categoryAttributes as any
+            if (cat?.variations && typeof cat.variations === 'object') attrs = cat.variations
+          }
+          return {
+            sku: v.sku,
+            fnsku: v.fnsku ?? null,
+            // Use parent name (concise, no size/color suffix) for the MODEL label field
+            productName: v.parent?.name ?? v.name ?? null,
+            variationAttributes: attrs,
+            imageUrl: v.images[0]?.url ?? v.parent?.images[0]?.url ?? null,
+          }
+        }),
       }
     } catch (err: any) {
       fastify.log.error({ err }, '[products/variant-search] failed')

@@ -235,6 +235,7 @@ model Product {
   // GTIN at master OR variant level). Per-variant GTIN lives on
   // ProductVariation.gtin.
   gtin           String?
+  fnsku          String? // Amazon Fulfillment Network SKU — cached from SP-API for child variants
 
   // ── PHASE 31: PIM Master Catalog Fields ──────────────────────────
   // True master entity flag (vs. isMasterProduct which is legacy)

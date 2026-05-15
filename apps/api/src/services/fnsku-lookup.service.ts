@@ -11,36 +11,53 @@ export interface FnskuLookupResult {
   imageUrl: string | null
 }
 
+// Extract color/size/gender from child Product — try variantAttributes first,
+// fall back to categoryAttributes.variations (both shapes are used in prod data).
+function extractAttrs(p: { variantAttributes: unknown; categoryAttributes: unknown }): Record<string, string> {
+  if (p.variantAttributes && typeof p.variantAttributes === 'object' && !Array.isArray(p.variantAttributes)) {
+    return p.variantAttributes as Record<string, string>
+  }
+  const cat = p.categoryAttributes as any
+  if (cat?.variations && typeof cat.variations === 'object') {
+    return cat.variations as Record<string, string>
+  }
+  return {}
+}
+
 export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]> {
   if (skus.length === 0) return []
 
-  const variants = await prisma.productVariation.findMany({
+  // Variants are stored as child Product rows (parentId IS NOT NULL)
+  const products = await prisma.product.findMany({
     where: { sku: { in: skus } },
     select: {
       sku: true,
       fnsku: true,
-      variationAttributes: true,
-      product: {
+      name: true,
+      variantAttributes: true,
+      categoryAttributes: true,
+      images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+      parent: {
         select: {
           name: true,
           images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
-          channelListings: {
-            where: { channel: 'AMAZON' },
-            select: { title: true },
-            take: 1,
-          },
         },
+      },
+      channelListings: {
+        where: { channel: 'AMAZON' },
+        select: { title: true },
+        take: 1,
       },
     },
   })
 
-  type Variant = typeof variants[number]
-  const variantMap = new Map<string, Variant>(variants.map(v => [v.sku, v]))
+  type Row = typeof products[number]
+  const productMap = new Map<string, Row>(products.map(p => [p.sku, p]))
 
   // Collect SKUs that are in our DB but missing a cached FNSKU
   const uncached = skus.filter(sku => {
-    const v = variantMap.get(sku)
-    return v && !v.fnsku
+    const p = productMap.get(sku)
+    return p && !p.fnsku
   })
 
   let spApiError: string | undefined
@@ -68,12 +85,12 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
         if (updates.length > 0) {
           await Promise.all(
             updates.map(([sku, fnsku]) =>
-              prisma.productVariation.updateMany({ where: { sku }, data: { fnsku } }),
+              prisma.product.updateMany({ where: { sku }, data: { fnsku } }),
             ),
           )
           for (const [sku, fnsku] of updates) {
-            const v = variantMap.get(sku)
-            if (v) (v as any).fnsku = fnsku
+            const p = productMap.get(sku)
+            if (p) (p as any).fnsku = fnsku
           }
         }
       } catch (err: any) {
@@ -83,9 +100,8 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
   }
 
   return skus.map(sku => {
-    const v = variantMap.get(sku)
-    // SKU not in our DB at all — return as a stub so user can enter FNSKU manually
-    if (!v) {
+    const p = productMap.get(sku)
+    if (!p) {
       return {
         sku,
         fnsku: null,
@@ -96,17 +112,17 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
         imageUrl: null,
       }
     }
-    const attrs = (v.variationAttributes ?? {}) as Record<string, string>
-    const needsFetch = !v.fnsku
+    const needsFetch = !p.fnsku
+    const imageUrl = p.images[0]?.url ?? p.parent?.images[0]?.url ?? null
     return {
       sku,
-      fnsku: v.fnsku ?? null,
-      // Only attach spApiError for SKUs that actually needed a fetch attempt
+      fnsku: p.fnsku ?? null,
       ...(needsFetch && spApiError ? { error: spApiError } : {}),
-      productName: v.product.name ?? null,
-      listingTitle: v.product.channelListings[0]?.title ?? null,
-      variationAttributes: attrs,
-      imageUrl: v.product.images[0]?.url ?? null,
+      // Use parent name (shorter, no size/color suffix) for the MODEL label field
+      productName: p.parent?.name ?? p.name ?? null,
+      listingTitle: p.channelListings[0]?.title ?? p.name ?? null,
+      variationAttributes: extractAttrs(p),
+      imageUrl,
     }
   })
 }
