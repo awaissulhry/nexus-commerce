@@ -356,7 +356,16 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
                 <button onClick={() => updateQty(idx, -1)} className="h-5 w-5 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
                   <Minus size={10} />
                 </button>
-                <span className="text-xs w-5 text-center font-mono tabular-nums">{it.quantity}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={it.quantity}
+                  onChange={e => {
+                    const v = Math.max(1, parseInt(e.target.value) || 1)
+                    onChange(items.map((item, i) => i === idx ? { ...item, quantity: v } : item))
+                  }}
+                  className="w-12 h-5 px-1 text-xs text-center font-mono tabular-nums rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                />
                 <button onClick={() => updateQty(idx, 1)} className="h-5 w-5 flex items-center justify-center rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
                   <Plus size={10} />
                 </button>
