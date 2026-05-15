@@ -79,12 +79,29 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
   const innerMm    = rightColMm - padMm * 2
   const barWidthMm = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
   const barcodeWarn = barWidthMm < 20
-  // Module width = barcode width / total CODE128 modules (n×11 + 35 for a
-  // typical 10-char FNSKU). We use 10 chars as a representative estimate.
-  // Real module width depends on the actual FNSKU length at print time.
-  const estimatedModules = 10 * 11 + 35  // 145 for a 10-char FNSKU
+  // Module width estimate (10-char FNSKU = 145 modules; real value depends on actual FNSKU length)
+  const estimatedModules = 10 * 11 + 35
   const moduleWidthMm = barWidthMm / estimatedModules
   const moduleWarn = moduleWidthMm < 0.25
+
+  // Max safe A4 columns: highest col count where the effective label width still
+  // keeps module width >= 0.25mm (recommended scannable minimum).
+  const sheetMarginMm = template.sheetMarginMm ?? 5
+  const sheetGapMm    = template.sheetGapMm ?? 2
+  const barcodeWidthPct = template.barcodeWidthPct ?? 100
+  function moduleWidthForCols(cols: number): number {
+    const effectiveW = (210 - 2 * sheetMarginMm - (cols - 1) * sheetGapMm) / cols
+    const rCol = effectiveW * (colSplit / 100)
+    const inner = rCol - padMm * 2
+    const bw = Math.min(Math.max(5, inner * (barcodeWidthPct / 100)), effectiveW - 2 * padMm)
+    return bw / estimatedModules
+  }
+  let maxSafeCols = 1
+  for (let c = 1; c <= 20; c++) {
+    if (moduleWidthForCols(c) >= 0.25) maxSafeCols = c
+    else break
+  }
+  const sheetColsWarn = (template.sheetCols ?? 0) > maxSafeCols
 
   return (
     <div className="w-80 shrink-0 flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-y-auto">
@@ -364,20 +381,26 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
 
         {/* ── Sheet layout (A4 mode) ─────────────── */}
         <Section title="A4 sheet layout">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1">
             <span className="text-xs text-slate-500 shrink-0 w-28">Columns</span>
             <input
-              type="number" min={0} max={10} step={1}
+              type="number" min={0} max={maxSafeCols} step={1}
               value={template.sheetCols ?? ''}
               placeholder="auto"
               onChange={e => {
-                const v = e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1)
+                if (e.target.value === '') { patch({ sheetCols: undefined }); return }
+                const v = Math.max(1, Math.min(maxSafeCols, parseInt(e.target.value) || 1))
                 patch({ sheetCols: v })
               }}
-              className="w-16 h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none"
+              className={`w-16 h-6 px-2 text-xs rounded border bg-white dark:bg-slate-800 focus:outline-none ${sheetColsWarn ? 'border-amber-400 dark:border-amber-600' : 'border-slate-300 dark:border-slate-700'}`}
             />
-            <span className="text-xs text-slate-400">(blank = auto)</span>
+            <span className="text-xs text-slate-400">max {maxSafeCols}</span>
           </div>
+          {sheetColsWarn && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 mb-1">
+              Exceeds max {maxSafeCols} cols — barcode module width drops below 250µm (unscanneable). Value clamped on next change.
+            </p>
+          )}
           <SliderRow label="Sheet margin" value={template.sheetMarginMm ?? 5} min={0} max={20} step={0.5} unit="mm"
             onChange={v => patch({ sheetMarginMm: v })} />
           <SliderRow label="Label gap" value={template.sheetGapMm ?? 2} min={0} max={10} step={0.5} unit="mm"
