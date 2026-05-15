@@ -5,6 +5,8 @@ import { masterStatusService } from '../services/master-status.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { enqueueContentSyncForProduct } from '../services/content-auto-publish.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
+import { computeLocaleCompleteness } from '../services/translation-completeness.service.js'
+import { deriveSyncStatus, ACTIVE_CHANNELS } from '../services/sync-status.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // PRODUCTS REBUILD C.2 — catalog browse extensions
@@ -1805,6 +1807,185 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
       return { ok: true, ...result }
     } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // COMMAND MATRIX — hierarchical catalog grid
+  //
+  // GET /api/products/command-matrix
+  //
+  // Returns master products (parentId=null) with their variant children
+  // as `subRows`. Each node includes:
+  //   - Core PIM fields (for inline editing parity with /bulk-operations)
+  //   - locales: per-locale translation completion % (master only;
+  //     variants get null so the grid renders "--")
+  //   - channels: derived SyncStatus per active channel (AMAZON DE,
+  //     EBAY UK, SHOPIFY); both master and variant rows get per-channel
+  //     status; parents roll up on the client side
+  // ═══════════════════════════════════════════════════════════════════
+  fastify.get('/products/command-matrix', async (request, reply) => {
+    try {
+      const masters = await prisma.product.findMany({
+        where: { parentId: null, deletedAt: null },
+        orderBy: [{ updatedAt: 'desc' }],
+        select: {
+          id: true, sku: true, name: true,
+          basePrice: true, totalStock: true, lowStockThreshold: true,
+          status: true, isParent: true, parentId: true,
+          brand: true, manufacturer: true,
+          upc: true, ean: true, gtin: true,
+          weightValue: true, weightUnit: true,
+          dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
+          fulfillmentMethod: true, productType: true,
+          categoryAttributes: true,
+          amazonAsin: true, ebayItemId: true,
+          updatedAt: true,
+          costPrice: true,
+          minMargin: true,
+          minPrice: true,
+          maxPrice: true,
+          images: {
+            where: { type: 'MAIN' },
+            select: { url: true },
+            take: 1,
+          },
+          translations: {
+            select: { language: true, name: true, description: true, bulletPoints: true },
+          },
+          channelListings: {
+            select: {
+              channel: true, region: true, marketplace: true,
+              listingStatus: true, lastSyncStatus: true,
+              isPublished: true,
+              followMasterTitle: true, followMasterDescription: true,
+              followMasterPrice: true, followMasterQuantity: true,
+              followMasterImages: true, followMasterBulletPoints: true,
+            },
+          },
+          children: {
+            where: { deletedAt: null },
+            orderBy: { sku: 'asc' },
+            select: {
+              id: true, sku: true, name: true,
+              basePrice: true, totalStock: true, lowStockThreshold: true,
+              status: true, isParent: true, parentId: true,
+              brand: true, manufacturer: true,
+              upc: true, ean: true, gtin: true,
+              weightValue: true, weightUnit: true,
+              dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
+              fulfillmentMethod: true, productType: true,
+              categoryAttributes: true,
+              amazonAsin: true, ebayItemId: true,
+              updatedAt: true,
+              costPrice: true,
+              minMargin: true,
+              minPrice: true,
+              maxPrice: true,
+              images: {
+                where: { type: 'MAIN' },
+                select: { url: true },
+                take: 1,
+              },
+              // Variants don't have their own translations (masters own the content).
+              channelListings: {
+                select: {
+                  channel: true, region: true, marketplace: true,
+                  listingStatus: true, lastSyncStatus: true,
+                  isPublished: true,
+                  followMasterTitle: true, followMasterDescription: true,
+                  followMasterPrice: true, followMasterQuantity: true,
+                  followMasterImages: true, followMasterBulletPoints: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      function buildChannels(
+        channelListings: Array<{
+          channel: string; region: string; marketplace: string;
+          listingStatus: string; lastSyncStatus: string | null;
+          isPublished: boolean;
+          followMasterTitle: boolean; followMasterDescription: boolean;
+          followMasterPrice: boolean; followMasterQuantity: boolean;
+          followMasterImages: boolean; followMasterBulletPoints: boolean;
+        }>,
+      ) {
+        const result: Record<string, string> = {}
+        for (const { key, channel, region } of ACTIVE_CHANNELS) {
+          const listing = channelListings.find((cl) => {
+            if (cl.channel !== channel) return false
+            if (region === null) return true // Shopify: any region
+            return cl.region === region || cl.marketplace === region
+          })
+          result[key] = listing ? deriveSyncStatus(listing) : 'UNLISTED'
+        }
+        return result
+      }
+
+      function shapeNode(
+        p: any,
+        isMaster: boolean,
+        subRows?: any[],
+      ) {
+        return {
+          id: p.id,
+          isMaster,
+          name: p.name,
+          sku: p.sku,
+          thumbnailUrl: p.images?.[0]?.url ?? null,
+          // Core PIM fields (editor surface)
+          basePrice: p.basePrice !== undefined ? Number(p.basePrice) : null,
+          costPrice: p.costPrice !== undefined ? Number(p.costPrice) : null,
+          minMargin: p.minMargin !== undefined ? Number(p.minMargin) : null,
+          minPrice: p.minPrice !== undefined ? Number(p.minPrice) : null,
+          maxPrice: p.maxPrice !== undefined ? Number(p.maxPrice) : null,
+          totalStock: p.totalStock,
+          lowStockThreshold: p.lowStockThreshold,
+          status: p.status,
+          isParent: p.isParent,
+          parentId: p.parentId,
+          brand: p.brand,
+          manufacturer: p.manufacturer,
+          upc: p.upc,
+          ean: p.ean,
+          gtin: p.gtin,
+          weightValue: p.weightValue !== undefined && p.weightValue !== null ? Number(p.weightValue) : null,
+          weightUnit: p.weightUnit,
+          dimLength: p.dimLength !== undefined && p.dimLength !== null ? Number(p.dimLength) : null,
+          dimWidth: p.dimWidth !== undefined && p.dimWidth !== null ? Number(p.dimWidth) : null,
+          dimHeight: p.dimHeight !== undefined && p.dimHeight !== null ? Number(p.dimHeight) : null,
+          dimUnit: p.dimUnit,
+          fulfillmentChannel: p.fulfillmentMethod,
+          productType: p.productType,
+          categoryAttributes: p.categoryAttributes,
+          amazonAsin: p.amazonAsin,
+          ebayItemId: p.ebayItemId,
+          updatedAt: p.updatedAt?.toISOString?.() ?? p.updatedAt,
+          syncChannels: [],
+          variantAttributes: null,
+          // Matrix columns
+          locales: isMaster
+            ? computeLocaleCompleteness(p.translations ?? [])
+            : null, // variants show '--' in locale columns
+          channels: buildChannels(p.channelListings ?? []),
+          subRows: subRows,
+        }
+      }
+
+      const tree = masters.map((master) => {
+        const variants = (master.children ?? []).map((child: any) =>
+          shapeNode(child, false, undefined),
+        )
+        return shapeNode(master, true, variants.length > 0 ? variants : undefined)
+      })
+
+      return reply.send(tree)
+    } catch (err: any) {
+      fastify.log.error({ err }, '[GET /products/command-matrix] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
