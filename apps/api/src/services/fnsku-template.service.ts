@@ -29,12 +29,16 @@ export interface TemplateConfig {
   fontFamily: string
   badgeFontScale: number
   valueFontScale: number
+  labelRadiusMm?: number
   sizeValueScale?: number
   sizeHeaderScale?: number
   fnskuTextScale?: number
   listingTitleScale?: number
   conditionScale?: number
   logoHeightPct?: number
+  titleTruncationMode?: 'lines' | 'smart'
+  titleFirstWords?: number
+  titleLastWords?: number
   sheetCols?: number
   sheetMarginMm?: number
   sheetGapMm?: number
@@ -59,12 +63,16 @@ const DEFAULT_CONFIG: TemplateConfig = {
   fontFamily: 'Helvetica',
   badgeFontScale: 1.0,
   valueFontScale: 1.0,
+  labelRadiusMm: 5,
   sizeValueScale: 1.0,
   sizeHeaderScale: 1.0,
   fnskuTextScale: 1.0,
   listingTitleScale: 1.0,
   conditionScale: 1.0,
   logoHeightPct: 22,
+  titleTruncationMode: 'lines' as const,
+  titleFirstWords: 5,
+  titleLastWords: 4,
   rows: [
     { id: '1', badgeText: 'MODEL', valueSource: 'productName', customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },
     { id: '2', badgeText: 'COLOR', valueSource: 'color',       customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },

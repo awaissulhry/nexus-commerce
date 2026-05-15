@@ -33,6 +33,8 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
   fontFamily: 'Helvetica',
   badgeFontScale: 1.0,
   valueFontScale: 1.0,
+  // Label border
+  labelRadiusMm: 5,
   // Fine-grained scales
   sizeValueScale: 1.0,
   sizeHeaderScale: 1.0,
@@ -40,6 +42,10 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
   listingTitleScale: 1.0,
   conditionScale: 1.0,
   logoHeightPct: 22,
+  // Title truncation
+  titleTruncationMode: 'lines' as const,
+  titleFirstWords: 5,
+  titleLastWords: 4,
   // Rows
   rows: [
     { id: '1', badgeText: 'MODEL', valueSource: 'productName', customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },
@@ -62,6 +68,13 @@ export default function FnskuLabelDesigner() {
   const [fetchingFnskus, setFetchingFnskus] = useState(false)
   const [pdfLoading, setPdfLoading] = useState<'label' | 'a4' | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
+
+  // On mount: fetch metadata for localStorage-restored items missing FNSKU or listing title
+  useEffect(() => {
+    const needsMeta = items.filter(it => it.sku && (!it.fnsku || !it.listingTitle))
+    if (needsMeta.length > 0) fetchFnskus(needsMeta)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Load saved templates on mount
   useEffect(() => {
@@ -125,8 +138,8 @@ export default function FnskuLabelDesigner() {
     setItems(next)
     setSelectedIdx(i => Math.min(i, Math.max(0, next.length - 1)))
     try { localStorage.setItem('fnsku-label-items', JSON.stringify(next)) } catch {}
-    // Auto-fetch FNSKUs for newly added items
-    const newOnes = next.filter(it => !it.fnsku && !it.fnskuLoading && it.sku)
+    // Auto-fetch for items missing FNSKU or listing title
+    const newOnes = next.filter(it => (!it.fnsku || !it.listingTitle) && !it.fnskuLoading && it.sku)
     if (newOnes.length > 0) fetchFnskus(newOnes)
   }, [fetchFnskus])
 

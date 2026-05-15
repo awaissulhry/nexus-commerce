@@ -35,6 +35,12 @@ function cssFontStack(family?: string): string {
   return 'Helvetica, Arial, sans-serif'
 }
 
+function smartTruncateTitle(title: string, firstN: number, lastN: number): string {
+  const words = title.trim().split(/\s+/)
+  if (words.length <= firstN + lastN) return title
+  return words.slice(0, firstN).join(' ') + ' ...' + words.slice(-lastN).join(' ')
+}
+
 export function LabelPreview({ item, template }: Props) {
   const { widthMm, heightMm } = template.labelSize
   const wPx = widthMm * MM_TO_PX
@@ -65,6 +71,17 @@ export function LabelPreview({ item, template }: Props) {
   const valueFs  = hPx * 0.1   * (template.valueFontScale  ?? 1)
   const valueFs1 = hPx * 0.13  * (template.valueFontScale  ?? 1) // first row
   const fontFam  = cssFontStack(template.fontFamily)
+  const labelRadiusPx = ((template.labelRadiusMm ?? 5) * MM_TO_PX)
+
+  // Title display value (apply smart truncation if enabled)
+  const rawTitle = item.listingTitle ?? null
+  const displayTitle = (() => {
+    if (!rawTitle) return null
+    if ((template.titleTruncationMode ?? 'lines') === 'smart') {
+      return smartTruncateTitle(rawTitle, template.titleFirstWords ?? 5, template.titleLastWords ?? 4)
+    }
+    return rawTitle
+  })()
 
   // Scale preview to fit max 580px wide
   const scale = Math.min(1, 580 / wPx)
@@ -75,6 +92,7 @@ export function LabelPreview({ item, template }: Props) {
         width: wPx, height: hPx,
         background: '#fff',
         border: '1px solid #999',
+        borderRadius: labelRadiusPx,
         display: 'flex',
         flexDirection: 'row',
         overflow: 'hidden',
@@ -212,21 +230,37 @@ export function LabelPreview({ item, template }: Props) {
                     {item.fnsku}
                   </span>
                 </div>
-                {template.showListingTitle && item.listingTitle && (
-                  <div style={{
-                    fontSize: hPx * 0.052 * listingTitleScale,
-                    color: '#333',
-                    marginTop: 3,
-                    textAlign: 'center',
-                    lineHeight: 1.25,
-                    maxWidth: barcodeW,
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: template.listingTitleLines ?? 2,
-                    WebkitBoxOrient: 'vertical',
-                  } as React.CSSProperties}>
-                    {item.listingTitle}
-                  </div>
+                {template.showListingTitle && displayTitle && (
+                  (template.titleTruncationMode ?? 'lines') === 'smart' ? (
+                    <div style={{
+                      fontSize: hPx * 0.052 * listingTitleScale,
+                      color: '#333',
+                      marginTop: 3,
+                      textAlign: 'center',
+                      lineHeight: 1.25,
+                      maxWidth: barcodeW,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {displayTitle}
+                    </div>
+                  ) : (
+                    <div style={{
+                      fontSize: hPx * 0.052 * listingTitleScale,
+                      color: '#333',
+                      marginTop: 3,
+                      textAlign: 'center',
+                      lineHeight: 1.25,
+                      maxWidth: barcodeW,
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: template.listingTitleLines ?? 2,
+                      WebkitBoxOrient: 'vertical',
+                    } as React.CSSProperties}>
+                      {displayTitle}
+                    </div>
+                  )
                 )}
                 {template.showCondition && (
                   <div style={{ fontSize: hPx * 0.052 * conditionScale, color: '#333', marginTop: 2, textAlign: 'center' }}>

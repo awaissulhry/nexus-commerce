@@ -163,6 +163,8 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
 
         {/* ── Layout ──────────────────────────────── */}
         <Section title="Layout">
+          <SliderRow label="Corner radius" value={template.labelRadiusMm ?? 5} min={0} max={12} step={0.5} unit="mm"
+            onChange={v => patch({ labelRadiusMm: v })} />
           <SliderRow label="Right column width" value={colSplit} min={15} max={55} unit="%"
             onChange={v => patch({ columnSplitPct: v })} />
           <div className="flex items-center gap-3 mt-2">
@@ -287,9 +289,31 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
               <p className="text-[10px] text-amber-600 dark:text-amber-400 ml-5">Required by Amazon FBA</p>
             )}
             {template.showListingTitle && (
-              <div className="ml-1">
+              <div className="ml-1 space-y-1">
                 <SliderRow label="Title size" value={template.listingTitleScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
                   onChange={v => patch({ listingTitleScale: v })} />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 shrink-0 w-28">Truncation</span>
+                  <select value={template.titleTruncationMode ?? 'lines'}
+                    onChange={e => patch({ titleTruncationMode: e.target.value as 'lines' | 'smart' })}
+                    className="flex-1 h-6 px-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <option value="lines">Line clamp</option>
+                    <option value="smart">First + last words</option>
+                  </select>
+                </div>
+                {(template.titleTruncationMode ?? 'lines') === 'smart' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 shrink-0 w-28">First / last</span>
+                    <input type="number" min={1} max={10} value={template.titleFirstWords ?? 5}
+                      onChange={e => patch({ titleFirstWords: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className="w-10 h-6 px-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
+                    <span className="text-[10px] text-slate-400">…</span>
+                    <input type="number" min={1} max={10} value={template.titleLastWords ?? 4}
+                      onChange={e => patch({ titleLastWords: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className="w-10 h-6 px-1.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none" />
+                    <span className="text-[10px] text-slate-400">words</span>
+                  </div>
+                )}
               </div>
             )}
             <Checkbox label="Show condition" checked={template.showCondition} onChange={v => patch({ showCondition: v })} />

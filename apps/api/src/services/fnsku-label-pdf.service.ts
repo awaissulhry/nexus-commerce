@@ -43,12 +43,16 @@ interface TemplateConfig {
   fontFamily?: string
   badgeFontScale?: number
   valueFontScale?: number
+  labelRadiusMm?: number
   sizeValueScale?: number
   sizeHeaderScale?: number
   fnskuTextScale?: number
   listingTitleScale?: number
   conditionScale?: number
   logoHeightPct?: number
+  titleTruncationMode?: 'lines' | 'smart'
+  titleFirstWords?: number
+  titleLastWords?: number
   sheetCols?: number
   sheetMarginMm?: number
   sheetGapMm?: number
@@ -152,6 +156,12 @@ function applyTextTransform(s: string, tx?: string): string {
   return s
 }
 
+function smartTruncateTitle(title: string, firstN: number, lastN: number): string {
+  const words = title.trim().split(/\s+/)
+  if (words.length <= firstN + lastN) return title
+  return words.slice(0, firstN).join(' ') + ' ...' + words.slice(-lastN).join(' ')
+}
+
 function getRowValue(row: TemplateRow, item: LabelItem): string {
   const attrs = item.variationAttributes ?? {}
   switch (row.valueSource) {
@@ -229,12 +239,15 @@ async function drawLabel(
   const attrs      = item.variationAttributes ?? {}
   const sizeVal    = attrs['Size'] ?? attrs['size'] ?? ''
 
-  // ── Clip everything to label boundary ────────────────────────────────────
-  doc.save()
-  doc.rect(xPt, yPt, wPt, hPt).clip()
+  // Rounded corner radius (matches preview borderRadius)
+  const labelR = mm(template.labelRadiusMm ?? 5)
 
-  // Label border (matches preview '1px solid #999')
-  doc.lineWidth(0.5).rect(xPt, yPt, wPt, hPt).stroke('#999999')
+  // ── Clip everything to label boundary (rounded) ───────────────────────────
+  doc.save()
+  doc.roundedRect(xPt, yPt, wPt, hPt, labelR).clip()
+
+  // Label border (matches preview borderRadius + '1px solid #999')
+  doc.lineWidth(0.5).roundedRect(xPt, yPt, wPt, hPt, labelR).stroke('#999999')
 
   // ═══════════════════════════════════════════════════════════════════
   // LEFT COLUMN
@@ -269,7 +282,7 @@ async function drawLabel(
       const placeX = lx
       const placeY = yPt + padPt + (logoAreaH - placeH) / 2
       const logoFs = fitTextSize(doc, 'LOGO', fontBold, logoAreaH * 0.455, placeW - mm(2))
-      doc.rect(placeX, placeY, placeW, placeH).fill('#000000')
+      doc.roundedRect(placeX, placeY, placeW, placeH, mm(0.8)).fill('#000000')
       doc.font(fontBold).fontSize(logoFs).fillColor('#ffffff')
          .text('LOGO', placeX, placeY + (placeH - logoFs) / 2, { width: placeW, align: 'center', lineBreak: false })
     }
@@ -313,8 +326,8 @@ async function drawLabel(
     const badgeW        = Math.max(badgeMinW, measuredBadge + badgePadH * 2)
     const badgeY        = rowMidY - badgeH / 2
 
-    // Draw badge (black fill, white text)
-    doc.rect(lx, badgeY, badgeW, badgeH).fill('#111111')
+    // Draw badge (black fill, white text) — rounded corners match preview borderRadius:3
+    doc.roundedRect(lx, badgeY, badgeW, badgeH, mm(0.8)).fill('#111111')
     doc.font(fontBold).fontSize(badgeFs).fillColor('#ffffff')
        .text(badgeLabel, lx, badgeY + badgePadV, { width: badgeW, align: 'center', lineBreak: false })
 
@@ -373,12 +386,19 @@ async function drawLabel(
   const isMono = /mono|courier/i.test(template.fontFamily ?? '')
   const charWR = isMono ? 0.62 : 0.58
 
+  // Smart title truncation (matches LabelPreview.tsx logic)
+  const truncMode   = template.titleTruncationMode ?? 'lines'
+  const rawTitle    = item.listingTitle ?? null
+  const displayTitle = rawTitle && truncMode === 'smart'
+    ? smartTruncateTitle(rawTitle, template.titleFirstWords ?? 5, template.titleLastWords ?? 4)
+    : rawTitle
+
   // Font sizes for info stack (same ratios as preview, with scale factors applied)
   const fnskuFsRaw   = item.fnsku
     ? Math.min(hPt * L.BARCODE_FS, effBarcodeW / (item.fnsku.length * charWR + 2)) * fnskuTextScale
     : 0
   const maxTitleLines = template.listingTitleLines ?? 2
-  const titleFsRaw   = (template.showListingTitle && item.listingTitle) ? hPt * L.TITLE_FS * listingTitleScale : 0
+  const titleFsRaw   = (template.showListingTitle && displayTitle) ? hPt * L.TITLE_FS * listingTitleScale : 0
   const condFsRaw    = template.showCondition ? hPt * L.COND_FS * conditionScale : 0
 
   // Stack height: barcode + gap + FNSKU text + title + condition
@@ -402,12 +422,14 @@ async function drawLabel(
     const sizeLabel = (template.sizeBoxLabel || 'SIZE').toUpperCase()
     const border   = 1.5  // pt, matches CSS 2px
 
-    doc.lineWidth(border).rect(rx, ry, boxW, sizeBoxTotalH).stroke('#111111')
+    // Size box outer border — rounded corners match preview borderRadius:4
+    doc.lineWidth(border).roundedRect(rx, ry, boxW, sizeBoxTotalH, mm(1)).stroke('#111111')
 
-    // Header strip
+    // Header strip — slightly inset from border, with rounded corners matching preview borderRadius:2
     const hdrY  = ry + hPt * L.SIZE_BOX_PAD
     const hdrFs = fitTextSize(doc, sizeLabel, fontBold, hPt * L.SIZE_HDR_FS * sizeHeaderScale, boxW - mm(2))
-    doc.rect(rx, hdrY, boxW, sizeHdrH).fill('#111111')
+    const bi    = border / 2
+    doc.roundedRect(rx + bi, hdrY, boxW - 2 * bi, sizeHdrH, mm(0.5)).fill('#111111')
     doc.font(fontBold).fontSize(hdrFs).fillColor('#ffffff')
        .text(sizeLabel, rx, hdrY + hPt * L.SIZE_HDR_PAD, { width: boxW, align: 'center', lineBreak: false })
 
@@ -446,15 +468,23 @@ async function drawLabel(
     }
 
     // Listing title
-    if (titleFsRaw > 0 && item.listingTitle) {
+    if (titleFsRaw > 0 && displayTitle) {
       ry += hPt * L.TITLE_MT
-      doc.font(fontBase).fontSize(titleFsRaw).fillColor('#333333')
-         .text(item.listingTitle, rx, ry, {
-           width: innerRightW, align: 'center',
-           lineBreak: true,
-           height: titleFsRaw * L.TITLE_LH * maxTitleLines,
-         })
-      ry += titleFsRaw * L.TITLE_LH * maxTitleLines
+      if (truncMode === 'smart') {
+        // Smart mode: single line, already truncated
+        const tFs = fitTextSize(doc, displayTitle, fontBase, titleFsRaw, innerRightW - mm(1))
+        doc.font(fontBase).fontSize(tFs).fillColor('#333333')
+           .text(displayTitle, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
+        ry += tFs * L.TITLE_LH
+      } else {
+        doc.font(fontBase).fontSize(titleFsRaw).fillColor('#333333')
+           .text(displayTitle, rx, ry, {
+             width: innerRightW, align: 'center',
+             lineBreak: true,
+             height: titleFsRaw * L.TITLE_LH * maxTitleLines,
+           })
+        ry += titleFsRaw * L.TITLE_LH * maxTitleLines
+      }
     }
 
     // Condition
@@ -467,9 +497,9 @@ async function drawLabel(
     }
 
   } else {
-    // No FNSKU placeholder (matches preview dashed border)
+    // No FNSKU placeholder — rounded corners match preview borderRadius:4
     const placeH = barcodeHPt
-    doc.lineWidth(0.5).rect(rx, ry, innerRightW, placeH)
+    doc.lineWidth(0.5).roundedRect(rx, ry, innerRightW, placeH, mm(1))
        .dash(3, { space: 3 }).stroke('#cccccc').undash()
     const noFs = fitTextSize(doc, 'No FNSKU', fontBase, mm(4), innerRightW - mm(2))
     doc.font(fontBase).fontSize(noFs).fillColor('#bbbbbb')

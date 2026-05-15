@@ -41,12 +41,20 @@ export interface TemplateConfig {
   badgeFontScale: number       // 0.5–2.0, default 1.0
   valueFontScale: number       // 0.5–2.0, default 1.0
 
+  // Label border
+  labelRadiusMm?: number       // outer label corner radius in mm (0–12, default 5)
+
   // Fine-grained right-column scale factors (0.5–2.0, default 1.0)
   sizeValueScale?: number      // SIZE number font scale
   sizeHeaderScale?: number     // SIZE header strip font scale
   fnskuTextScale?: number      // FNSKU alphanumeric text scale
   listingTitleScale?: number   // Listing title font scale
   conditionScale?: number      // Condition text scale
+
+  // Title truncation
+  titleTruncationMode?: 'lines' | 'smart'  // default 'lines'
+  titleFirstWords?: number     // smart mode: first N words (default 5)
+  titleLastWords?: number      // smart mode: last N words (default 4)
 
   // Left-column fine-grained
   logoHeightPct?: number       // Logo area height as % of label height (10–40, default 22)

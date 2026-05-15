@@ -8,6 +8,12 @@ function cssFontStack(family?: string): string {
   return 'Helvetica, Arial, sans-serif'
 }
 
+function smartTruncateTitle(title: string, firstN: number, lastN: number): string {
+  const words = title.trim().split(/\s+/)
+  if (words.length <= firstN + lastN) return title
+  return words.slice(0, firstN).join(' ') + ' ...' + words.slice(-lastN).join(' ')
+}
+
 // CODE128B encoder — outputs a scaled SVG string.
 // The barcode is rendered at exactly widthMm wide by applying a uniform
 // scale factor to all bar x-positions and widths, preserving relative
@@ -88,6 +94,12 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const fnskuTextScale     = template.fnskuTextScale    ?? 1
   const listingTitleScale  = template.listingTitleScale ?? 1
   const conditionScale     = template.conditionScale    ?? 1
+  const labelRadiusMm      = template.labelRadiusMm    ?? 5
+  const truncMode          = template.titleTruncationMode ?? 'lines'
+  const rawTitle           = item.listingTitle ?? null
+  const displayTitle       = rawTitle && truncMode === 'smart'
+    ? smartTruncateTitle(rawTitle, template.titleFirstWords ?? 5, template.titleLastWords ?? 4)
+    : rawTitle
 
   const activeRows = template.rows.filter(r => r.show)
   const attrs = item.variationAttributes ?? {}
@@ -105,7 +117,7 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
        <div style="width:${barW}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;margin-top:0.5mm;">
          <span style="font-size:${fnskuFs}mm;font-family:${fontFam};letter-spacing:0.03em;">${item.fnsku}</span>
        </div>
-       ${template.showListingTitle && item.listingTitle ? `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${item.listingTitle}</div>` : ''}
+       ${template.showListingTitle && displayTitle ? (truncMode === 'smart' ? `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayTitle}</div>` : `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${displayTitle}</div>`) : ''}
        ${template.showCondition ? `<div style="font-size:${heightMm * 0.052 * conditionScale}mm;font-family:${fontFam};color:#333;text-align:center;margin-top:0.5mm;white-space:nowrap;overflow:hidden;width:${barW}mm;">${template.condition || 'New'}</div>` : ''}`
     : `<div style="width:${barW}mm;height:${barH}mm;border:0.3mm dashed #ccc;border-radius:1mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:${heightMm * 0.07}mm;">No FNSKU</div>`
 
@@ -136,7 +148,7 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   ) : ''
 
   return `
-    <div class="label" style="width:${widthMm}mm;height:${heightMm}mm;display:flex;flex-direction:row;overflow:hidden;font-family:${fontFam};background:#fff;box-sizing:border-box;">
+    <div class="label" style="width:${widthMm}mm;height:${heightMm}mm;display:flex;flex-direction:row;overflow:hidden;font-family:${fontFam};background:#fff;box-sizing:border-box;border-radius:${labelRadiusMm}mm;border:0.3mm solid #999;">
       <div style="width:${leftColMm}mm;height:${heightMm}mm;display:flex;flex-direction:column;padding:${padMm}mm;border-right:${divider};box-sizing:border-box;">
         ${logoHtml}
         <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">${rowsHtml}</div>
