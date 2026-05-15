@@ -14,7 +14,7 @@ import {
   Boxes, AlertTriangle, CalendarClock,
   FileText, ChevronUp, ChevronDown,
   Upload, Link2, Trash2, Camera, Unlock, History, Check,
-  Smartphone,
+  Smartphone, Tag,
 } from 'lucide-react'
 import Link from 'next/link'
 import PageHeader from '@/components/layout/PageHeader'
@@ -289,6 +289,9 @@ export default function InboundWorkspace() {
             </button>
             <button onClick={() => setFbaWizardOpen(true)} className="h-8 px-3 text-base bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900 rounded hover:bg-orange-100 dark:hover:bg-orange-900/60 inline-flex items-center gap-1.5">
               <Truck size={12} /> {t('inbound.sendToFba')}
+            </button>
+            <button onClick={() => window.open('/fulfillment/fnsku-labels', '_blank', 'noopener,noreferrer')} className="h-8 px-3 text-base bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-900 rounded hover:bg-violet-100 dark:hover:bg-violet-900/60 inline-flex items-center gap-1.5">
+              <Tag size={12} /> Get FNSKU Labels
             </button>
             <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('inbound.newInbound')}

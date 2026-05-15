@@ -186,6 +186,13 @@ import {
   runFbaStatusPoll,
   getFbaStatusPollStatus,
 } from '../jobs/fba-status-poll.job.js'
+import { lookupFnskus } from '../services/fnsku-lookup.service.js'
+import {
+  listTemplates as listFnskuTemplates,
+  createTemplate as createFnskuTemplate,
+  updateTemplate as updateFnskuTemplate,
+  deleteTemplate as deleteFnskuTemplate,
+} from '../services/fnsku-template.service.js'
 import {
   publishInboundEvent,
   subscribeInboundEvents,
@@ -11210,6 +11217,65 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/warehouses', async (_request, reply) => {
     const items = await prisma.warehouse.findMany({ orderBy: [{ isDefault: 'desc' }, { code: 'asc' }] })
     return { items }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // FNSKU LABEL DESIGNER
+  // ═══════════════════════════════════════════════════════════════════
+
+  fastify.post('/fulfillment/fnsku/lookup', async (request, reply) => {
+    try {
+      const { skus } = request.body as { skus: string[] }
+      if (!Array.isArray(skus) || skus.length === 0) {
+        return reply.code(400).send({ error: 'skus[] required' })
+      }
+      const results = await lookupFnskus(skus)
+      return { results }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fnsku/lookup] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.get('/fulfillment/fnsku/templates', async (_request, reply) => {
+    try {
+      const items = await listFnskuTemplates()
+      return { items }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/fnsku/templates', async (request, reply) => {
+    try {
+      const { name, config } = request.body as { name: string; config?: any }
+      if (!name) return reply.code(400).send({ error: 'name required' })
+      const item = await createFnskuTemplate(name, config)
+      return reply.code(201).send(item)
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.put('/fulfillment/fnsku/templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const body = request.body as { name?: string; config?: any; isDefault?: boolean }
+      const item = await updateFnskuTemplate(id, body)
+      return item
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.delete('/fulfillment/fnsku/templates/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      await deleteFnskuTemplate(id)
+      return reply.code(204).send()
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
   })
 }
 

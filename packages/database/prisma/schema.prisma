@@ -1151,6 +1151,7 @@ model ProductVariation {
   upc  String?
   ean  String?
   gtin String?
+  fnsku String? // Amazon Fulfillment Network SKU — cached after first SP-API lookup
 
   // ── Per-variant physical attributes (override parent defaults) ────
   weightValue Decimal? @db.Decimal(10, 3)
@@ -9094,6 +9095,19 @@ model ProductReadCache {
 //     bulkOperationId?: string,
 //     automationRuleId?: string,
 //   }
+
+// ── FNSKU Label Templates ─────────────────────────────────────────────────
+// Saved label designs for printing supplier FNSKU labels.
+// config JSON shape: { labelSize, logoUrl, showLogo, showSizeBox,
+//   showListingTitle, showCondition, condition, rows[] }
+model FnskuLabelTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  isDefault Boolean  @default(false)
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 model ProductEvent {
   id String @id @default(cuid())
