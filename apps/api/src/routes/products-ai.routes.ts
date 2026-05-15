@@ -62,6 +62,9 @@ interface BulkGenerateBody {
   /** H.7 — provider override. 'gemini' | 'anthropic'. Falls back to
    *  AI_PROVIDER env or first configured provider. */
   provider?: string
+  /** A4.3 — model override. e.g. 'claude-sonnet-4-6'. Only used when
+   *  provider supports model selection; ignored by Gemini path. */
+  model?: string
 }
 
 interface BulkGenerateResult {
@@ -96,6 +99,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
       const requestedFieldsRaw = Array.isArray(body.fields) ? body.fields : []
       const dryRun = body.dryRun === true
       const providerName = body.provider
+      const modelOverride = body.model ?? undefined
 
       if (productIds.length === 0) {
         return reply.code(400).send({ error: 'productIds[] required' })
@@ -212,6 +216,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
             fields: requestedFields,
             terminology,
             provider: providerName,
+            modelOverride,
           })
 
           // H.7 — flush per-field cost telemetry. Failures don't bubble

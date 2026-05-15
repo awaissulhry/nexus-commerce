@@ -126,7 +126,7 @@ export default function PresetsModal({
                     {preset.requiresAi && (
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
                         <Sparkles className="w-2.5 h-2.5" />
-                        AI · deferred
+                        AI
                       </span>
                     )}
                     {preset.needsEdit && (

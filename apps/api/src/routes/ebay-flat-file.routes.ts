@@ -21,6 +21,7 @@ import { EbayCategoryService } from '../services/ebay-category.service.js';
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js';
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js';
 import { productEventService } from '../services/product-event.service.js';
+import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js';
 import {
   buildInventoryNdjson,
   createInventoryTask,
@@ -1335,4 +1336,48 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       processed, skipped, errors,
     });
   });
+
+  // ── A4.1 — Flat File AI Assistant ──────────────────────────────────────────
+  // POST /api/ebay/flat-file/ai-assist
+  fastify.post<{
+    Body: {
+      instruction: string
+      rows: Array<Record<string, unknown>>
+      columnMeta: Array<{ id: string; label: string; description?: string }>
+      marketplace?: string
+      model?: string
+    }
+  }>('/ebay/flat-file/ai-assist', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const { instruction, rows, columnMeta, marketplace = 'IT', model } = request.body ?? {}
+
+    if (!instruction || typeof instruction !== 'string' || instruction.trim().length === 0) {
+      return reply.code(400).send({ error: 'instruction is required' })
+    }
+    if (instruction.length > 2000) {
+      return reply.code(400).send({ error: 'instruction must be ≤ 2000 characters' })
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return reply.code(400).send({ error: 'rows must be a non-empty array' })
+    }
+    if (rows.length > 300) {
+      return reply.code(400).send({ error: 'Max 300 rows per request' })
+    }
+
+    try {
+      const result = await runFlatFileAiInstruction({
+        instruction: instruction.trim(),
+        rows,
+        columnMeta: Array.isArray(columnMeta) ? columnMeta : [],
+        marketplace: (marketplace ?? 'IT').toUpperCase(),
+        channel: 'EBAY',
+        model: model || undefined,
+      })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error(err, '[ebay/flat-file/ai-assist] failed')
+      return reply.code(500).send({ error: err?.message ?? 'AI assistant failed' })
+    }
+  })
 }

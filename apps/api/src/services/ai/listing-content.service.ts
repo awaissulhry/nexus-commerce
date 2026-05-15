@@ -110,6 +110,10 @@ export interface GenerationParams {
   /** H.7 — caller-chosen provider. Falls back to AI_PROVIDER env or
    *  the first configured provider. */
   provider?: string | null
+  /** A4.3 — optional model override, e.g. 'claude-sonnet-4-6'.
+   *  Only effective when provider supports model selection. Falls
+   *  back to provider.defaultModel when unset. */
+  modelOverride?: string
   /** AI-1.3 — budget scope. When set, AiBudgetService is consulted
    *  before each underlying vendor call; the call is refused (with a
    *  BudgetExceededError) when one of the four spend horizons would
@@ -566,7 +570,7 @@ export class ListingContentService {
     for (const f of params.fields) {
       if (f === 'title') {
         tasks.push(
-          this.runOne(provider, resolvedPrompts.title ?? '', params.variant).then(
+          this.runOne(provider, resolvedPrompts.title ?? '', params.variant, 0, params.modelOverride).then(
             (r) => ({
               field: 'title',
               result: this.parseTitle(r.text),
@@ -582,6 +586,7 @@ export class ListingContentService {
             resolvedPrompts.bullets ?? '',
             params.variant,
             0.05,
+            params.modelOverride,
           ).then((r) => ({
             field: 'bullets',
             result: this.parseBullets(r.text),
@@ -595,6 +600,8 @@ export class ListingContentService {
             provider,
             resolvedPrompts.description ?? '',
             params.variant,
+            0,
+            params.modelOverride,
           ).then((r) => ({
             field: 'description',
             result: this.parseDescription(r.text),
@@ -608,6 +615,8 @@ export class ListingContentService {
             provider,
             resolvedPrompts.keywords ?? '',
             params.variant,
+            0,
+            params.modelOverride,
           ).then((r) => ({
             field: 'keywords',
             result: this.parseKeywords(r.text),
@@ -1612,27 +1621,22 @@ Return JSON only:
     prompt: string,
     variant: number = 0,
     extraTemperatureBump: number = 0,
+    modelOverride?: string,
   ): Promise<{
     text: string
     usage: ProviderUsage
     redactions: RedactionCount[]
   }> {
-    // Base 0.6 + variant bump; bullets get a slightly higher base so
-    // repeats feel meaningfully different.
     const temperature = Math.min(
       1.0,
       0.6 + variant * 0.07 + extraTemperatureBump,
     )
-    // AI-3.1 — sanitize before the vendor call. Anything matching a
-    // fiscal / personal-data shape becomes a [REDACTED:KIND]
-    // placeholder; the redactions count gets bubbled up to the
-    // caller for telemetry. The vendor sees the sanitized prompt
-    // only.
     const { sanitized, redactions } = sanitizeOutboundPrompt(prompt)
     const result = await provider.generate({
       prompt: sanitized,
       temperature,
       jsonMode: true,
+      ...(modelOverride ? { model: modelOverride } : {}),
     })
     return { ...result, redactions }
   }

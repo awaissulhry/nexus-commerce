@@ -1,19 +1,25 @@
 /**
- * MC.11.1 — Marketing-content automation rule CRUD.
+ * MC.11.1 / A4.2 — Marketing-content automation rule CRUD + executor.
  *
  * Reuses the shared AutomationRule model with domain='marketing_content'.
- * Replenishment-led automation rules live under domain='replenishment'
- * + their own routes; we filter by domain in every query so the two
- * surfaces stay isolated.
- *
- * The rule executor (MC.11-followup) reads these rows + dispatches
- * triggers against the marketing-content event hooks; AI actions
- * are deferred per the engagement directive (executor emits
- * status='deferred' instead of 'completed' until MC.4 lands).
+ * AI actions (generate_content, fill_missing_content, ai_translate) are now
+ * live: the /run endpoint dispatches directly to ListingContentService.
+ * Non-AI actions (resize, watermark, tag_with) still emit DEFERRED until
+ * their respective services are wired.
  */
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import {
+  ListingContentService,
+  type ContentField,
+} from '../services/ai/listing-content.service.js'
+import {
+  languageForMarketplace,
+} from '../services/products/translation-resolver.service.js'
+import { logger } from '../utils/logger.js'
+
+const listingContentSvc = new ListingContentService()
 
 const DOMAIN = 'marketing_content'
 
@@ -163,75 +169,219 @@ const marketingAutomationRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── MC.11.3 — Manual run + execution history ──────────────
+  // ── A4.2 — Rule executor ──────────────────────────────────
 
-  // Manual fire. Creates an AutomationRuleExecution row recording
-  // what the executor *would* do; the AI-action gating means rules
-  // with deferred actions log status='deferred' instead of
-  // 'completed'. Deterministic actions today still log 'deferred'
-  // because the executor itself is MC.11-followup work — this
-  // endpoint produces audit rows so the history view is meaningful
-  // before the executor lands.
   fastify.post(
     '/marketing-automation/rules/:id/run',
     async (request, reply) => {
       const { id } = request.params as { id: string }
-      const rule = await prisma.automationRule.findUnique({
-        where: { id },
-      })
+      const rule = await prisma.automationRule.findUnique({ where: { id } })
       if (!rule || rule.domain !== DOMAIN)
         return reply.code(404).send({ error: 'rule not found' })
 
       const startedAt = new Date()
-      const actions = (rule.actions as Array<{ type?: string }>) ?? []
-      const aiAction = actions[0]?.type
-      const aiSet = new Set([
-        'auto_alt_text',
-        'auto_tag',
-        'translate_caption',
-        'background_removal',
-        'generate_lifestyle',
-      ])
-      const status = aiAction && aiSet.has(aiAction) ? 'DEFERRED' : 'DEFERRED'
-      const reason =
-        aiAction && aiSet.has(aiAction)
-          ? 'AI integration paused per engagement directive (docs/MC-AI-DEFERRED.md)'
-          : 'Executor wiring pending (MC.11-followup)'
+      const actions = (rule.actions as Array<{ type?: string; config?: Record<string, unknown> }>) ?? []
+      const action = actions[0]
+      const actionType = action?.type ?? ''
+      const config = (action?.config ?? {}) as Record<string, unknown>
+      const dryRun = rule.dryRun === true
 
+      // ── AI product-content actions ─────────────────────────────────────
+      const AI_PRODUCT_ACTIONS = new Set(['generate_content', 'fill_missing_content', 'ai_translate'])
+
+      if (AI_PRODUCT_ACTIONS.has(actionType)) {
+        if (!listingContentSvc.isConfigured()) {
+          return reply.code(503).send({ error: 'AI provider not configured — check GEMINI_API_KEY / ANTHROPIC_API_KEY' })
+        }
+        return reply.code(201).send(
+          await runAiProductAction({ rule, actionType, config, dryRun, startedAt, id }),
+        )
+      }
+
+      // ── Legacy / non-AI actions — still deferred ───────────────────────
+      const reason = 'Action executor not yet wired for this action type'
       const exec = await prisma.automationRuleExecution.create({
         data: {
           ruleId: id,
           startedAt,
           finishedAt: new Date(),
-          status,
-          dryRun: rule.dryRun,
+          status: 'DEFERRED',
+          dryRun,
           triggerData: { source: 'manual', firedAt: startedAt.toISOString() },
-          actionResults: [
-            {
-              type: aiAction ?? 'noop',
-              ok: false,
-              deferred: true,
-              reason,
-            },
-          ] as never,
+          actionResults: [{ type: actionType, ok: false, deferred: true, reason }] as never,
           errorMessage: null,
-          durationMs:
-            new Date().getTime() - startedAt.getTime(),
+          durationMs: new Date().getTime() - startedAt.getTime(),
         },
       })
-
-      // Touch counters so the rule list shows it ran.
       await prisma.automationRule.update({
         where: { id },
-        data: {
-          executionCount: { increment: 1 },
-          lastExecutedAt: new Date(),
-        },
+        data: { executionCount: { increment: 1 }, lastExecutedAt: new Date() },
       })
-
-      return reply.code(201).send({ execution: exec, status, reason })
+      return reply.code(201).send({ execution: exec, status: 'DEFERRED', reason })
     },
   )
+
+  // ── AI product-content action executor ────────────────────────────────
+  async function runAiProductAction({
+    rule, actionType, config, dryRun, startedAt, id,
+  }: {
+    rule: { id: string; dryRun: boolean | null; triggerConfig?: unknown }
+    actionType: string
+    config: Record<string, unknown>
+    dryRun: boolean
+    startedAt: Date
+    id: string
+  }) {
+    const marketplace = ((config.marketplace as string) ?? 'IT').toUpperCase()
+    const maxProducts = Math.min(Number(config.maxProducts ?? 50), 50)
+    const rawFields = Array.isArray(config.fields) ? (config.fields as string[]) : ['title', 'bullets', 'description']
+    const ALLOWED: ContentField[] = ['title', 'bullets', 'description', 'keywords']
+    const fields = rawFields.filter((f): f is ContentField => ALLOWED.includes(f as ContentField))
+
+    // ── Build target product list ────────────────────────────────────────
+    const isTranslate = actionType === 'ai_translate'
+    const onlyMissing = actionType === 'fill_missing_content'
+
+    const targetLocale = isTranslate
+      ? ((config.targetLocale as string) ?? 'DE').toUpperCase()
+      : marketplace
+
+    let productWhere: Record<string, unknown> = {}
+    if (onlyMissing) {
+      // Only products where at least one of the requested fields is empty
+      const orClauses: Record<string, unknown>[] = []
+      if (fields.includes('description')) orClauses.push({ description: null }, { description: '' })
+      if (fields.includes('bullets')) orClauses.push({ bulletPoints: { isEmpty: true } })
+      if (fields.includes('title')) orClauses.push({ name: null }, { name: '' })
+      if (orClauses.length > 0) productWhere.OR = orClauses
+    }
+
+    // Respect trigger-level product filter if present (productType / brand)
+    const triggerCfg = (rule.triggerConfig ?? {}) as Record<string, unknown>
+    if (triggerCfg.productType) productWhere.productType = triggerCfg.productType
+    if (triggerCfg.brand) productWhere.brand = triggerCfg.brand
+
+    const products = await prisma.product.findMany({
+      where: productWhere,
+      take: maxProducts,
+      select: {
+        id: true, sku: true, name: true, brand: true, description: true,
+        bulletPoints: true, keywords: true, weightValue: true, weightUnit: true,
+        dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
+        productType: true, variantAttributes: true, categoryAttributes: true,
+      },
+      orderBy: { updatedAt: 'asc' },
+    })
+
+    logger.info('[automation-ai] dispatching', {
+      actionType, marketplace: isTranslate ? targetLocale : marketplace,
+      dryRun, productCount: products.length, fields,
+    })
+
+    // ── Execute per-product ──────────────────────────────────────────────
+    const results: Array<{ productId: string; sku: string; ok: boolean; written?: string[]; error?: string }> = []
+    let okCount = 0
+
+    for (const product of products) {
+      try {
+        const generated = await listingContentSvc.generate({
+          product: {
+            id: product.id,
+            sku: product.sku ?? '',
+            name: product.name ?? '',
+            brand: product.brand ?? '',
+            description: product.description ?? undefined,
+            bulletPoints: product.bulletPoints ?? [],
+            keywords: product.keywords ?? [],
+            weightValue: product.weightValue != null ? Number(product.weightValue) : undefined,
+            weightUnit: product.weightUnit ?? undefined,
+            dimLength: product.dimLength != null ? Number(product.dimLength) : undefined,
+            dimWidth: product.dimWidth != null ? Number(product.dimWidth) : undefined,
+            dimHeight: product.dimHeight != null ? Number(product.dimHeight) : undefined,
+            dimUnit: product.dimUnit ?? undefined,
+            productType: product.productType ?? undefined,
+            variantAttributes: (product.variantAttributes ?? undefined) as Record<string, string> | undefined,
+            categoryAttributes: (product.categoryAttributes ?? undefined) as Record<string, string> | undefined,
+          },
+          marketplace: isTranslate ? targetLocale : marketplace,
+          fields,
+          terminology: [],
+          provider: 'anthropic',
+        })
+
+        if (!dryRun) {
+          const writeData: Record<string, unknown> = {}
+          const targetLang = languageForMarketplace(isTranslate ? targetLocale : marketplace)
+          const isPrimary = !isTranslate || targetLang === languageForMarketplace('IT')
+
+          if (generated.title && fields.includes('title') && isPrimary) writeData.name = generated.title.content
+          if (generated.description && fields.includes('description') && isPrimary) writeData.description = generated.description.content
+          if (generated.bullets && fields.includes('bullets') && isPrimary) writeData.bulletPoints = generated.bullets.content
+          if (generated.keywords && fields.includes('keywords') && isPrimary) writeData.keywords = generated.keywords.content.split(/\s+/).filter(Boolean)
+
+          if (Object.keys(writeData).length > 0) {
+            await prisma.product.update({ where: { id: product.id }, data: writeData as never })
+          }
+
+          // Translation path — write to ProductTranslation
+          if (isTranslate && !isPrimary) {
+            const translationFields: Record<string, unknown> = {}
+            if (generated.title && fields.includes('title')) translationFields.title = generated.title.content
+            if (generated.description && fields.includes('description')) translationFields.description = generated.description.content
+            if (generated.bullets && fields.includes('bullets')) translationFields.bulletPoints = generated.bullets.content
+            if (Object.keys(translationFields).length > 0) {
+              await (prisma.productTranslation as any).upsert({
+                where: { productId_language: { productId: product.id, language: targetLang } },
+                update: translationFields,
+                create: { productId: product.id, language: targetLang, ...translationFields },
+              })
+            }
+          }
+        }
+
+        const written = fields.filter((f) => {
+          if (f === 'title') return generated.title != null
+          if (f === 'bullets') return generated.bullets != null
+          if (f === 'description') return generated.description != null
+          if (f === 'keywords') return generated.keywords != null
+          return false
+        })
+        results.push({ productId: product.id, sku: product.sku ?? '', ok: true, written })
+        okCount++
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'unknown error'
+        logger.warn('[automation-ai] product failed', { productId: product.id, err: msg })
+        results.push({ productId: product.id, sku: product.sku ?? '', ok: false, error: msg })
+      }
+    }
+
+    // ── Record execution ────────────────────────────────────────────────
+    const finishedAt = new Date()
+    const status = results.length === 0 ? 'COMPLETED' : okCount === results.length ? 'COMPLETED' : okCount > 0 ? 'COMPLETED' : 'FAILED'
+    const summary = dryRun
+      ? `Dry run: would update ${products.length} products`
+      : `Updated ${okCount}/${products.length} products`
+
+    const exec = await prisma.automationRuleExecution.create({
+      data: {
+        ruleId: id,
+        startedAt,
+        finishedAt,
+        status,
+        dryRun,
+        triggerData: { source: 'manual', firedAt: startedAt.toISOString() },
+        actionResults: results as never,
+        errorMessage: null,
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+      },
+    })
+    await prisma.automationRule.update({
+      where: { id },
+      data: { executionCount: { increment: 1 }, lastExecutedAt: new Date() },
+    })
+
+    return { execution: exec, status, summary, productsMatched: products.length, productsOk: okCount, dryRun }
+  }
 
   fastify.get(
     '/marketing-automation/executions',

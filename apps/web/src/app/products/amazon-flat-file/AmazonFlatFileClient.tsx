@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  AlertCircle, AlertTriangle, BrainCircuit, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
   Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
   Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
@@ -28,6 +28,8 @@ import { IconButton } from '@/components/ui/IconButton'
 import { ChannelStrip } from '../ebay-flat-file/ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
+import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
+import type { FlatFileAiChange } from '@/components/flat-file/FlatFileGrid.types'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -431,6 +433,8 @@ export default function AmazonFlatFileClient({
 
   // BF.4 — AI bulk actions
   const [aiModalOpen, setAiModalOpen] = useState(false)
+  // A4.1 — AI assistant panel
+  const [aiPanelOpen, setAiPanelOpen] = useState(false)
 
   // BM.2 — Replicate modal
   const [replicateOpen, setReplicateOpen] = useState(false)
@@ -495,6 +499,23 @@ export default function AmazonFlatFileClient({
     setHistory((prev) => [...prev.slice(-49), rowsRef.current])
     setFuture([])
   }, [])
+
+  const applyAiChanges = useCallback((changes: FlatFileAiChange[]) => {
+    if (changes.length === 0) return
+    pushSnapshot()
+    setRows((prev) => {
+      const byRowId = new Map(prev.map((r) => [r._rowId as string, r]))
+      const bySku = new Map(prev.map((r) => [(r.sku as string) ?? '', r]))
+      const updated = new Map<string, Row>()
+      for (const ch of changes) {
+        const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
+        if (!row) continue
+        const existing = updated.get(row._rowId as string) ?? { ...row }
+        updated.set(row._rowId as string, { ...existing, [ch.field]: ch.newValue, _dirty: true })
+      }
+      return prev.map((r) => updated.get(r._rowId as string) ?? r)
+    })
+  }, [pushSnapshot])
 
   const undo = useCallback(() => {
     setHistory((prev) => {
@@ -2329,6 +2350,19 @@ export default function AmazonFlatFileClient({
             disabled={selectedRows.size === 0 || !manifest}
             badge={selectedRows.size || undefined}
           />
+
+          {/* A4.1 — AI assistant panel */}
+          {manifest && (
+            <>
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+              <TbBtn
+                icon={<BrainCircuit className="w-3.5 h-3.5 text-violet-500" />}
+                title={aiPanelOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+                onClick={() => setAiPanelOpen((o) => !o)}
+                active={aiPanelOpen}
+              />
+            </>
+          )}
         </div>
 
         {/* ── Bar 3: Marketplace · Product type · Search ────── */}
@@ -2542,8 +2576,9 @@ export default function AmazonFlatFileClient({
         </div>
       )}
 
-      {/* ── Spreadsheet ───────────────────────────────────────── */}
+      {/* ── Spreadsheet + AI panel ────────────────────────────── */}
       {manifest && !loading && (
+        <div className="flex-1 flex overflow-hidden">
         <div
           className="flex-1 overflow-auto"
           onContextMenu={(e) => {
@@ -2851,6 +2886,20 @@ export default function AmazonFlatFileClient({
               </tr>
             </tbody>
           </table>
+        </div>
+
+        {/* A4.1 — AI assistant panel */}
+        {aiPanelOpen && (
+          <div className="w-[40%] min-w-[360px] max-w-[560px] border-l border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900">
+            <FlatFileAiPanel
+              rows={rows as any}
+              columns={manifestColumns as any}
+              marketplace={marketplace}
+              onApplyChanges={applyAiChanges}
+              channel="amazon"
+            />
+          </div>
+        )}
         </div>
       )}
 

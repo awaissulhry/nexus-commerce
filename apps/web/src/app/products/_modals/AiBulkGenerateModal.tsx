@@ -93,6 +93,7 @@ export default function AiBulkGenerateModal({
   // default + fallback). Populated from GET /api/ai/providers on
   // mount; only "configured" providers appear as selectable.
   const [provider, setProvider] = useState<string>('')
+  const [model, setModel] = useState<string>('')
   const [providers, setProviders] = useState<
     Array<{ name: string; configured: boolean; defaultModel: string }>
   >([])
@@ -177,10 +178,8 @@ export default function AiBulkGenerateModal({
           marketplace: marketplace.toUpperCase(),
           fields: Array.from(fields),
           dryRun,
-          // F.4 — only send provider when explicitly chosen; empty
-          // string lets the server fallback (env default → first
-          // configured) per its existing rule.
           ...(provider ? { provider } : {}),
+          ...(model ? { model } : {}),
         }),
       },
     )
@@ -334,9 +333,7 @@ export default function AiBulkGenerateModal({
               </p>
             </div>
 
-            {/* F.4 — provider selector. Hidden when only one provider is
-                configured (auto-pick is unambiguous). When 2+ are wired
-                up, the operator can override the env default. */}
+            {/* Provider selector — shown when 2+ providers configured */}
             {providers.filter((p) => p.configured).length > 1 && (
               <div>
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
@@ -344,7 +341,10 @@ export default function AiBulkGenerateModal({
                 </label>
                 <select
                   value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
+                  onChange={(e) => {
+                    setProvider(e.target.value)
+                    setModel('') // reset model when switching providers
+                  }}
                   className="w-44 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
                 >
                   <option value="">Auto (server default)</option>
@@ -352,18 +352,34 @@ export default function AiBulkGenerateModal({
                     .filter((p) => p.configured)
                     .map((p) => (
                       <option key={p.name} value={p.name}>
-                        {p.name === 'gemini'
-                          ? 'Gemini'
-                          : p.name === 'anthropic'
-                            ? 'Claude'
-                            : p.name}{' '}
+                        {p.name === 'gemini' ? 'Gemini' : p.name === 'anthropic' ? 'Claude' : p.name}{' '}
                         ({p.defaultModel})
                       </option>
                     ))}
                 </select>
+              </div>
+            )}
+
+            {/* A4.3 — Model selector. Shown when Anthropic is configured (either
+                as the only provider or explicitly selected). Lets operators pick
+                Haiku (fast, cheap) vs Sonnet (higher quality) per-run. */}
+            {providers.some((p) => p.name === 'anthropic' && p.configured) &&
+              (provider === 'anthropic' || provider === '' && providers.filter((p) => p.configured).length <= 1) && (
+              <div>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider block mb-1">
+                  Claude model
+                </label>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-64 h-8 px-2 text-base border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 focus:outline-none focus:border-blue-300"
+                >
+                  <option value="">Haiku 4.5 — fast, cheap (default)</option>
+                  <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast, cheap</option>
+                  <option value="claude-sonnet-4-6">Sonnet 4.6 — higher quality, slower</option>
+                </select>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  Override the server default. Cost + tokens still log
-                  per-call to AiUsageLog.
+                  Sonnet produces better copy but costs ~5× more per token.
                 </p>
               </div>
             )}

@@ -13,6 +13,8 @@ import type { BaseRow, FlatFileColumn, ModalsCtx, ToolbarFetchCtx, ToolbarImport
 import { ChannelStrip } from './ChannelStrip'
 import { OverrideBadge } from '../_shared/OverrideBadge'
 import { CascadeModal } from '../_shared/CascadeModal'
+import { FlatFileAiPanel } from '../_shared/FlatFileAiPanel'
+import type { AiPanelCtx } from '@/components/flat-file/FlatFileGrid.types'
 import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
   type CategoryAspect, type EbayColumnGroup,
@@ -892,6 +894,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       renderToolbarFetch={renderToolbarFetch}
       renderToolbarImport={renderToolbarImport}
       renderBar3Left={renderBar3Left}
+      renderAiPanel={(ctx: AiPanelCtx) => (
+        <FlatFileAiPanel {...ctx} channel="ebay" />
+      )}
       renderRowMeta={(row) => (
         <div className="flex items-center gap-0.5">
           {showOverrideBadges && (

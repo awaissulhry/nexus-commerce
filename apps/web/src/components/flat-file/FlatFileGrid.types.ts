@@ -159,4 +159,24 @@ export interface FlatFileGridProps {
   renderToolbarFetch?: (ctx: ToolbarFetchCtx) => React.ReactNode
   renderToolbarImport?: (ctx: ToolbarImportCtx) => React.ReactNode
   renderBar3Left?: () => React.ReactNode
+  /** A4.1 — AI assistant panel slot */
+  renderAiPanel?: (ctx: AiPanelCtx) => React.ReactNode
+}
+
+// ── A4.1 — AI panel context ───────────────────────────────────────────────
+
+export interface FlatFileAiChange {
+  rowId: string
+  sku: string
+  field: string
+  oldValue: unknown
+  newValue: unknown
+}
+
+export interface AiPanelCtx {
+  rows: BaseRow[]
+  columns: FlatFileColumn[]
+  marketplace: string
+  /** Apply changes to flat file rows (updates in-memory state + marks rows dirty) */
+  onApplyChanges: (changes: FlatFileAiChange[]) => void
 }

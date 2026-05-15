@@ -4844,7 +4844,7 @@
   "automation.field.dryRunHint": "Dry-run registra cosa accadrebbe senza eseguire — disattiva quando sei pronto per l'esecuzione reale.",
   "automation.section.trigger": "Quando",
   "automation.section.action": "Allora fai",
-  "automation.aiActionWarning": "L'integrazione AI è in pausa — la regola si salva ma l'executor registra status='deferred' invece di eseguire. Riprenderà automaticamente quando arriva MC.4.",
+  "automation.aiActionWarning": "Questa azione usa Claude AI. Assicurati che ANTHROPIC_API_KEY sia configurata e che il toggle dryRun sia impostato correttamente prima di eseguire.",
   "automation.nameRequired": "Il nome della regola è obbligatorio",
   "automation.saved": "Regola salvata",
   "automation.saveError": "Impossibile salvare la regola — riprova",

@@ -7,7 +7,7 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ArrowRightLeft, ClipboardPaste, Copy, Image as ImageIcon, Loader2, Pin, Plus,
+  ArrowRightLeft, BrainCircuit, ClipboardPaste, Copy, Image as ImageIcon, Loader2, Pin, Plus,
   Search, Trash2, Undo2, Redo2, Replace, SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -566,6 +566,7 @@ export default function FlatFileGrid({
   onReplicate,
   renderChannelStrip, renderPushExtras, renderFeedBanner, renderModals,
   renderToolbarFetch, renderToolbarImport, renderBar3Left,
+  renderAiPanel,
 }: FlatFileGridProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -693,6 +694,7 @@ export default function FlatFileGrid({
   const [searchQuery,     setSearchQuery]     = useState('')
   const [saveFlash,       setSaveFlash]       = useState(false)
   const [aiModalOpen,     setAiModalOpen]     = useState(false)
+  const [aiPanelOpen,     setAiPanelOpen]     = useState(false)
   const [replicateOpen,   setReplicateOpen]   = useState(false)
   const [matchKeys,       setMatchKeys]       = useState<Set<string>>(new Set())
   const [smartPasteEnabled, setSmartPasteEnabled] = useState(() => {
@@ -1175,6 +1177,24 @@ export default function FlatFileGrid({
     onCellChange?.(rowId, colId, value)
   }, [pushSnapshot, onCellChange])
 
+  // A4.1 — apply AI-proposed changes as a single undoable snapshot
+  const applyAiChanges = useCallback((changes: import('./FlatFileGrid.types.js').FlatFileAiChange[]) => {
+    if (changes.length === 0) return
+    pushSnapshot()
+    setRows((prev) => {
+      const byRowId = new Map(prev.map((r) => [r._rowId, r]))
+      const bySku = new Map(prev.map((r) => [(r as any).sku, r]))
+      const updated = new Map<string, BaseRow>()
+      for (const ch of changes) {
+        const row = byRowId.get(ch.rowId) ?? bySku.get(ch.sku)
+        if (!row) continue
+        const existing = updated.get(row._rowId) ?? { ...row }
+        updated.set(row._rowId, { ...existing, [ch.field]: ch.newValue, _dirty: true })
+      }
+      return prev.map((r) => updated.get(r._rowId) ?? r)
+    })
+  }, [pushSnapshot])
+
   const liveUpdateCell = useCallback((rowId: string, colId: string, value: string) => {
     setRows((prev) => prev.map((r) => r._rowId === rowId ? { ...r, [colId]: value, _dirty: true } : r))
   }, [])
@@ -1355,6 +1375,17 @@ export default function FlatFileGrid({
           <TbBtn icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
             title={selectedRows.size > 0 ? `AI bulk actions (${selectedRows.size} selected)` : 'AI bulk actions — select rows first'}
             onClick={() => setAiModalOpen(true)} disabled={selectedRows.size === 0} badge={selectedRows.size || undefined} />
+          {renderAiPanel && (
+            <>
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+              <TbBtn
+                icon={<BrainCircuit className="w-3.5 h-3.5 text-violet-500" />}
+                title={aiPanelOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+                onClick={() => setAiPanelOpen((o) => !o)}
+                active={aiPanelOpen}
+              />
+            </>
+          )}
         </div>
 
         {/* Bar 3: search + filter + saved views + column pills */}
@@ -1473,7 +1504,9 @@ export default function FlatFileGrid({
 
       {renderModals?.(modalsCtx)}
 
-      {/* ── Main grid ──────────────────────────────────── */}
+      {/* ── Main grid + optional AI panel ─────────────── */}
+      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-auto"
         onPointerMove={(e) => {
           if (e.buttons !== 1) return
@@ -1747,6 +1780,15 @@ export default function FlatFileGrid({
         )}
         <span className="ml-auto">{channel.toUpperCase()} · {marketplace}</span>
       </div>
+      </div>{/* end inner flex-col */}
+
+      {/* AI panel — right side, 40% width */}
+      {aiPanelOpen && renderAiPanel && (
+        <div className="w-[40%] min-w-[360px] max-w-[560px] border-l border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900">
+          {renderAiPanel({ rows, columns: allColumns, marketplace, onApplyChanges: applyAiChanges })}
+        </div>
+      )}
+      </div>{/* end outer flex row */}
     </div>
   )
 }

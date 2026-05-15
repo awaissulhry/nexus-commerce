@@ -1,17 +1,9 @@
-// MC.11.1 — Marketing-content automation rule spec.
+// MC.11.1 / A4.2 — Marketing-content automation rule spec.
 //
-// Reuses the shared AutomationRule model (domain='marketing_content')
-// from the replenishment-led automation engagement. Triggers + actions
-// here describe the marketing-content surface specifically; the
-// replenishment engagement keeps its own spec under its
-// /fulfillment/automation route.
-//
-// Per the engagement directive, AI actions (auto_alt_text, auto_tag,
-// translate_caption, generate_lifestyle) are wired but their actual
-// firing is deferred to MC.4. The executor (MC.11-followup) emits a
-// 'deferred' status row instead of 'completed' when it sees one of
-// those actions, so the operator gets visible feedback that the rule
-// ran but the AI part is paused.
+// Reuses the shared AutomationRule model (domain='marketing_content').
+// AI actions (generate_content, fill_missing_content, ai_translate)
+// are now live — executor dispatches to the internal bulk-generate
+// service using ListingContentService directly.
 
 export type FieldKind =
   | 'text'
@@ -146,6 +138,31 @@ export const TRIGGERS: TriggerSpec[] = [
       'Operator-fired only. Useful for "apply to selected assets" bulk operations.',
     fields: [],
   },
+  {
+    id: 'product_missing_content',
+    label: 'Product has missing content',
+    category: 'scheduled',
+    description:
+      'Fires on a schedule for every product where title, description, or bullet points are empty.',
+    fields: [
+      {
+        key: 'cron',
+        label: 'Cron expression',
+        kind: 'text',
+        required: true,
+        hint: 'e.g. "0 3 * * *" for 03:00 daily.',
+        defaultValue: '0 3 * * *',
+      },
+      {
+        key: 'marketplace',
+        label: 'Marketplace',
+        kind: 'text',
+        required: true,
+        hint: 'e.g. IT, DE, FR',
+        defaultValue: 'IT',
+      },
+    ],
+  },
 ]
 
 export const ACTIONS: ActionSpec[] = [
@@ -271,6 +288,141 @@ export const ACTIONS: ActionSpec[] = [
           { value: 'brand_color', label: 'Brand primary color' },
         ],
         defaultValue: 'transparent',
+      },
+    ],
+  },
+
+  // ── A4.2 — Product content AI actions ────────────────────────────────
+
+  {
+    id: 'generate_content',
+    label: 'Generate content with Claude',
+    description:
+      'Run Claude over matched products and write title, bullet points, description, or keywords. Overwrites existing content.',
+    requiresAi: true,
+    fields: [
+      {
+        key: 'fields',
+        label: 'Fields to generate',
+        kind: 'multi_select',
+        required: true,
+        options: [
+          { value: 'title', label: 'Title' },
+          { value: 'bullets', label: 'Bullet points' },
+          { value: 'description', label: 'Description' },
+          { value: 'keywords', label: 'Keywords' },
+        ],
+        defaultValue: ['title', 'bullets', 'description'],
+      },
+      {
+        key: 'marketplace',
+        label: 'Marketplace',
+        kind: 'text',
+        required: true,
+        hint: 'e.g. IT, DE, FR',
+        defaultValue: 'IT',
+      },
+      {
+        key: 'model',
+        label: 'Model',
+        kind: 'select',
+        options: [
+          { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (fast, cheap)' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (higher quality)' },
+        ],
+        defaultValue: 'claude-haiku-4-5-20251001',
+      },
+      {
+        key: 'maxProducts',
+        label: 'Max products per run',
+        kind: 'number',
+        defaultValue: 50,
+        hint: 'Limit to avoid runaway costs. Max 50 per batch.',
+      },
+    ],
+  },
+  {
+    id: 'fill_missing_content',
+    label: 'Fill missing fields with Claude',
+    description:
+      'Like "Generate content" but skips products that already have the requested fields filled.',
+    requiresAi: true,
+    fields: [
+      {
+        key: 'fields',
+        label: 'Fields to fill',
+        kind: 'multi_select',
+        required: true,
+        options: [
+          { value: 'title', label: 'Title' },
+          { value: 'bullets', label: 'Bullet points' },
+          { value: 'description', label: 'Description' },
+          { value: 'keywords', label: 'Keywords' },
+        ],
+        defaultValue: ['bullets', 'description'],
+      },
+      {
+        key: 'marketplace',
+        label: 'Marketplace',
+        kind: 'text',
+        required: true,
+        hint: 'e.g. IT, DE, FR',
+        defaultValue: 'IT',
+      },
+      {
+        key: 'model',
+        label: 'Model',
+        kind: 'select',
+        options: [
+          { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (fast, cheap)' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (higher quality)' },
+        ],
+        defaultValue: 'claude-haiku-4-5-20251001',
+      },
+      {
+        key: 'maxProducts',
+        label: 'Max products per run',
+        kind: 'number',
+        defaultValue: 50,
+        hint: 'Max 50 per batch.',
+      },
+    ],
+  },
+  {
+    id: 'ai_translate',
+    label: 'Translate content with Claude',
+    description:
+      'Translate title, bullets, and description to a target locale using Claude. Writes to ProductTranslation rows.',
+    requiresAi: true,
+    fields: [
+      {
+        key: 'targetLocale',
+        label: 'Target locale',
+        kind: 'text',
+        required: true,
+        hint: 'Marketplace code — e.g. DE, FR, ES',
+        defaultValue: 'DE',
+      },
+      {
+        key: 'fields',
+        label: 'Fields to translate',
+        kind: 'multi_select',
+        options: [
+          { value: 'title', label: 'Title' },
+          { value: 'bullets', label: 'Bullet points' },
+          { value: 'description', label: 'Description' },
+        ],
+        defaultValue: ['title', 'bullets', 'description'],
+      },
+      {
+        key: 'model',
+        label: 'Model',
+        kind: 'select',
+        options: [
+          { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (fast, cheap)' },
+          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (higher quality)' },
+        ],
+        defaultValue: 'claude-haiku-4-5-20251001',
       },
     ],
   },

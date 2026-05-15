@@ -23,6 +23,7 @@ import {
 import { translateEnumValues } from '../services/amazon/value-translate.service.js'
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
 import { productEventService } from '../services/product-event.service.js'
+import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -641,6 +642,54 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error(err, 'flat-file/translate-values failed')
       return reply.code(500).send({ error: err?.message ?? 'Translation failed' })
+    }
+  })
+
+  // ── A4.1 — Flat File AI Assistant ──────────────────────────────────────────
+  // POST /api/amazon/flat-file/ai-assist
+  //
+  // Accepts the current flat file rows + a free-form operator instruction.
+  // Claude reads the rows and returns structured proposed cell changes.
+  // The frontend shows a diff; operator applies selected changes.
+  fastify.post<{
+    Body: {
+      instruction: string
+      rows: Array<Record<string, unknown>>
+      columnMeta: Array<{ id: string; label: string; description?: string }>
+      marketplace?: string
+      model?: string
+    }
+  }>('/amazon/flat-file/ai-assist', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const { instruction, rows, columnMeta, marketplace = 'IT', model } = request.body ?? {}
+
+    if (!instruction || typeof instruction !== 'string' || instruction.trim().length === 0) {
+      return reply.code(400).send({ error: 'instruction is required' })
+    }
+    if (instruction.length > 2000) {
+      return reply.code(400).send({ error: 'instruction must be ≤ 2000 characters' })
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return reply.code(400).send({ error: 'rows must be a non-empty array' })
+    }
+    if (rows.length > 300) {
+      return reply.code(400).send({ error: 'Max 300 rows per request' })
+    }
+
+    try {
+      const result = await runFlatFileAiInstruction({
+        instruction: instruction.trim(),
+        rows,
+        columnMeta: Array.isArray(columnMeta) ? columnMeta : [],
+        marketplace: (marketplace ?? 'IT').toUpperCase(),
+        channel: 'AMAZON',
+        model: model || undefined,
+      })
+      return reply.send(result)
+    } catch (err: any) {
+      request.log.error(err, '[amazon/flat-file/ai-assist] failed')
+      return reply.code(500).send({ error: err?.message ?? 'AI assistant failed' })
     }
   })
 }
