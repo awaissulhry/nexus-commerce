@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Printer } from 'lucide-react'
+import { ArrowLeft, Printer, FileDown, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { SkuPanel } from './SkuPanel'
 import { LabelPreview } from './LabelPreview'
@@ -23,6 +23,7 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
   sizeBoxLabel: 'SIZE',
   // Barcode
   barcodeHeightPct: 32,
+  barcodeWidthPct: 100,
   // Listing
   showListingTitle: true,
   listingTitleLines: 2,
@@ -47,6 +48,7 @@ export default function FnskuLabelDesigner() {
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([])
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null)
   const [fetchingFnskus, setFetchingFnskus] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState<'label' | 'a4' | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
   // Load saved templates on mount
@@ -118,12 +120,39 @@ export default function FnskuLabelDesigner() {
       for (let i = 0; i < Math.max(1, it.quantity); i++) allLabels.push(it)
     }
     const html = buildPrintHtml(allLabels, template)
-    const w = window.open('', '_blank', 'noopener,noreferrer')
-    if (!w) return
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => w.print(), 300)
+    // Use a Blob URL so the page loads fully before print() fires,
+    // avoiding document.write() quirks and popup-blocker issues.
+    const blob = new Blob([html], { type: 'text/html; charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const w    = window.open(url, '_blank', 'noopener')
+    if (w) w.addEventListener('load', () => { w.print(); URL.revokeObjectURL(url) }, { once: true })
+  }
+
+  const handleDownloadPdf = async (mode: 'label' | 'a4') => {
+    const allLabels: LabelItem[] = []
+    for (const it of items) {
+      for (let i = 0; i < Math.max(1, it.quantity); i++) allLabels.push(it)
+    }
+    setPdfLoading(mode)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/fnsku/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: allLabels, template, mode }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = mode === 'a4' ? 'fnsku-labels-a4.pdf' : 'fnsku-labels.pdf'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert(`PDF generation failed: ${err?.message ?? String(err)}`)
+    } finally {
+      setPdfLoading(null)
+    }
   }
 
   const saveTemplate = async (name: string) => {
@@ -175,13 +204,33 @@ export default function FnskuLabelDesigner() {
         <span className="font-semibold text-slate-900 dark:text-slate-100">FNSKU Label Designer</span>
         <div className="flex-1" />
         <span className="text-xs text-slate-400">{totalLabelCount} label{totalLabelCount !== 1 ? 's' : ''} total</span>
-        <button
-          onClick={handlePrint}
-          disabled={items.length === 0}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Printer size={14} /> Print All
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handlePrint}
+            disabled={items.length === 0}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Printer size={13} /> Print
+          </button>
+          <button
+            onClick={() => handleDownloadPdf('label')}
+            disabled={items.length === 0 || pdfLoading !== null}
+            title="One label per page at exact label dimensions — ideal for thermal label printers"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 text-sm hover:bg-violet-50 dark:hover:bg-violet-950/30 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {pdfLoading === 'label' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+            PDF (label)
+          </button>
+          <button
+            onClick={() => handleDownloadPdf('a4')}
+            disabled={items.length === 0 || pdfLoading !== null}
+            title="Labels tiled on A4 sheets — print on a regular printer and cut"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {pdfLoading === 'a4' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+            PDF (A4)
+          </button>
+        </div>
       </div>
 
       {/* 3-panel body */}

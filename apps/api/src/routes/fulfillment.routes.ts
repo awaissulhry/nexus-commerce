@@ -193,6 +193,7 @@ import {
   updateTemplate as updateFnskuTemplate,
   deleteTemplate as deleteFnskuTemplate,
 } from '../services/fnsku-template.service.js'
+import { renderFnskuLabelPdf } from '../services/fnsku-label-pdf.service.js'
 import {
   publishInboundEvent,
   subscribeInboundEvents,
@@ -11274,6 +11275,27 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       await deleteFnskuTemplate(id)
       return reply.code(204).send()
     } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/fnsku/pdf', async (request, reply) => {
+    try {
+      const { items, template, mode = 'label' } = request.body as {
+        items: any[]
+        template: any
+        mode?: 'label' | 'a4'
+      }
+      if (!items?.length) return reply.code(400).send({ error: 'items[] required' })
+      const buffer   = await renderFnskuLabelPdf(items, template, mode)
+      const filename = mode === 'a4' ? 'fnsku-labels-a4.pdf' : 'fnsku-labels.pdf'
+      reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="${filename}"`)
+        .header('Cache-Control', 'no-store')
+      return reply.send(buffer)
+    } catch (err: any) {
+      fastify.log.error({ err }, '[fnsku/pdf] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

@@ -65,7 +65,8 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const rightColMm = widthMm * rightPct
   const leftColMm  = widthMm - rightColMm
   const padMm      = template.paddingMm ?? 2
-  const barW       = Math.max(5, rightColMm - padMm * 2)
+  const innerMm    = rightColMm - padMm * 2
+  const barW       = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
   const barH       = heightMm * ((template.barcodeHeightPct ?? 32) / 100)
   const fontFam    = template.fontFamily ?? 'Arial, Helvetica, sans-serif'
   const badgeScale = template.badgeFontScale ?? 1

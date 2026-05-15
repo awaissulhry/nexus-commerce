@@ -37,7 +37,8 @@ export function LabelPreview({ item, template }: Props) {
 
   const padPx = (template.paddingMm ?? 2) * MM_TO_PX
   const barcodeH = Math.round(hPx * ((template.barcodeHeightPct ?? 32) / 100))
-  const barcodeW = Math.max(20, rightColPx - padPx * 2)
+  const innerW   = rightColPx - padPx * 2
+  const barcodeW = Math.max(20, innerW * ((template.barcodeWidthPct ?? 100) / 100))
 
   const sizeVal  = (item.variationAttributes ?? {})['Size'] ?? (item.variationAttributes ?? {})['size'] ?? ''
   const activeRows = template.rows.filter(r => r.show)

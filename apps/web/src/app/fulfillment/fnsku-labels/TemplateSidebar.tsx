@@ -281,6 +281,7 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         {/* ── Barcode ─────────────────────────────── */}
         <Section title="Barcode">
           <SliderRow label="Height" value={barcodeH} min={10} max={55} unit="%" onChange={v => patch({ barcodeHeightPct: v })} />
+          <SliderRow label="Width"  value={template.barcodeWidthPct ?? 100} min={20} max={100} unit="%" onChange={v => patch({ barcodeWidthPct: v })} />
           <p className="text-[10px] text-slate-400 mt-1">≥25mm width recommended for reliable scanning.</p>
         </Section>
 

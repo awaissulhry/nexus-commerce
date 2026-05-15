@@ -28,6 +28,7 @@ export interface TemplateConfig {
 
   // Barcode
   barcodeHeightPct: number     // barcode height % of label height (10–55, default 32)
+  barcodeWidthPct: number      // barcode width % of right-col inner width (20–100, default 100)
 
   // Listing info (below barcode)
   showListingTitle: boolean
