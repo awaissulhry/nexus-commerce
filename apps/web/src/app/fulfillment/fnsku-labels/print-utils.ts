@@ -74,13 +74,20 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const padMm      = template.paddingMm ?? 2
   const innerMm    = rightColMm - padMm * 2
   const barW       = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
-  const barH       = heightMm * ((template.barcodeHeightPct ?? 32) / 100)
+  // Cap at 55% — matches PDF service and LabelPreview
+  const barH       = heightMm * (Math.min(template.barcodeHeightPct ?? 32, 55) / 100)
   const fontFam    = cssFontStack(template.fontFamily)
   const badgeScale = template.badgeFontScale ?? 1
   const valueScale = template.valueFontScale ?? 1
   const divider    = (template.showColumnDivider ?? true) ? '0.3mm solid #ddd' : 'none'
   const sizeLabel  = template.sizeBoxLabel || 'SIZE'
   const titleLines = template.listingTitleLines ?? 2
+  const logoHeightMm       = heightMm * ((template.logoHeightPct ?? 22) / 100)
+  const sizeValueScale     = template.sizeValueScale    ?? 1
+  const sizeHeaderScale    = template.sizeHeaderScale   ?? 1
+  const fnskuTextScale     = template.fnskuTextScale    ?? 1
+  const listingTitleScale  = template.listingTitleScale ?? 1
+  const conditionScale     = template.conditionScale    ?? 1
 
   const activeRows = template.rows.filter(r => r.show)
   const attrs = item.variationAttributes ?? {}
@@ -90,7 +97,7 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const isMono = /mono|courier/i.test(fontFam)
   const charWidthRatio = isMono ? 0.62 : 0.58
   const fnskuFs = item.fnsku
-    ? Math.min(heightMm * 0.063, barW / (item.fnsku.length * charWidthRatio + 2))
+    ? Math.min(heightMm * 0.063, barW / (item.fnsku.length * charWidthRatio + 2)) * fnskuTextScale
     : 0
 
   const barcodeHtml = item.fnsku
@@ -98,8 +105,8 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
        <div style="width:${barW}mm;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;margin-top:0.5mm;">
          <span style="font-size:${fnskuFs}mm;font-family:${fontFam};letter-spacing:0.03em;">${item.fnsku}</span>
        </div>
-       ${template.showListingTitle && item.listingTitle ? `<div style="font-size:${heightMm * 0.052}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.2;margin-top:0.5mm;width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${item.listingTitle}</div>` : ''}
-       ${template.showCondition ? `<div style="font-size:${heightMm * 0.052}mm;font-family:${fontFam};color:#333;text-align:center;margin-top:0.5mm;white-space:nowrap;overflow:hidden;width:${barW}mm;">${template.condition || 'New'}</div>` : ''}`
+       ${template.showListingTitle && item.listingTitle ? `<div style="font-size:${heightMm * 0.052 * listingTitleScale}mm;font-family:${fontFam};color:#333;text-align:center;line-height:1.25;margin-top:0.5mm;width:${barW}mm;overflow:hidden;display:-webkit-box;-webkit-line-clamp:${titleLines};-webkit-box-orient:vertical;">${item.listingTitle}</div>` : ''}
+       ${template.showCondition ? `<div style="font-size:${heightMm * 0.052 * conditionScale}mm;font-family:${fontFam};color:#333;text-align:center;margin-top:0.5mm;white-space:nowrap;overflow:hidden;width:${barW}mm;">${template.condition || 'New'}</div>` : ''}`
     : `<div style="width:${barW}mm;height:${barH}mm;border:0.3mm dashed #ccc;border-radius:1mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:${heightMm * 0.07}mm;">No FNSKU</div>`
 
   const rowsHtml = activeRows.map((row, i) => {
@@ -118,19 +125,19 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
 
   const sizeBoxHtml = template.showSizeBox ? `
     <div style="display:flex;flex-direction:column;align-items:center;border:0.5mm solid #111;border-radius:1mm;padding:${heightMm * 0.01}mm ${heightMm * 0.015}mm;margin-bottom:${padMm}mm;flex-shrink:0;">
-      <div style="background:#111;color:#fff;font-weight:700;font-size:${heightMm * 0.06}mm;letter-spacing:0.1em;text-transform:uppercase;width:100%;text-align:center;border-radius:0.5mm;padding:${heightMm * 0.005}mm 0;">${sizeLabel}</div>
-      <div style="font-size:${heightMm * 0.19}mm;font-weight:900;color:#000;line-height:1;margin-top:${heightMm * 0.01}mm;">${sizeVal || '—'}</div>
+      <div style="background:#111;color:#fff;font-weight:700;font-size:${heightMm * 0.06 * sizeHeaderScale}mm;letter-spacing:0.1em;text-transform:uppercase;width:100%;text-align:center;border-radius:0.5mm;padding:${heightMm * 0.005}mm 0;">${sizeLabel}</div>
+      <div style="font-size:${Math.min(heightMm * 0.19 * sizeValueScale, innerMm * 0.85)}mm;font-weight:900;color:#000;line-height:1;margin-top:${heightMm * 0.01}mm;">${sizeVal || '—'}</div>
     </div>` : ''
 
   const logoHtml = template.showLogo ? (
     template.logoUrl
-      ? `<div style="margin-bottom:${padMm}mm;flex-shrink:0;"><img src="${template.logoUrl}" style="max-height:${heightMm * 0.22}mm;max-width:${leftColMm - padMm * 2}mm;object-fit:contain;" /></div>`
-      : `<div style="height:${heightMm * 0.22}mm;margin-bottom:${padMm}mm;flex-shrink:0;display:flex;align-items:center;"><span style="font-size:${heightMm * 0.1}mm;font-weight:900;letter-spacing:-0.04em;background:#000;color:#fff;padding:${heightMm * 0.01}mm ${heightMm * 0.025}mm;border-radius:1mm;text-transform:uppercase;line-height:1;">LOGO</span></div>`
+      ? `<div style="margin-bottom:${padMm}mm;flex-shrink:0;"><img src="${template.logoUrl}" style="max-height:${logoHeightMm}mm;max-width:${leftColMm - padMm * 2}mm;object-fit:contain;" /></div>`
+      : `<div style="height:${logoHeightMm}mm;margin-bottom:${padMm}mm;flex-shrink:0;display:flex;align-items:center;"><span style="font-size:${logoHeightMm * 0.455}mm;font-weight:900;letter-spacing:-0.04em;background:#000;color:#fff;padding:${heightMm * 0.01}mm ${heightMm * 0.025}mm;border-radius:1mm;text-transform:uppercase;line-height:1;">LOGO</span></div>`
   ) : ''
 
   return `
     <div class="label" style="width:${widthMm}mm;height:${heightMm}mm;display:flex;flex-direction:row;overflow:hidden;font-family:${fontFam};background:#fff;box-sizing:border-box;">
-      <div style="width:${leftColMm}mm;height:${heightMm}mm;display:flex;flex-direction:column;padding:${padMm}mm ${padMm}mm ${padMm}mm ${padMm + 0.5}mm;border-right:${divider};box-sizing:border-box;">
+      <div style="width:${leftColMm}mm;height:${heightMm}mm;display:flex;flex-direction:column;padding:${padMm}mm;border-right:${divider};box-sizing:border-box;">
         ${logoHtml}
         <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">${rowsHtml}</div>
       </div>

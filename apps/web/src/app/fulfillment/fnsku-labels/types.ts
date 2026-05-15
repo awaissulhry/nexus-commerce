@@ -37,9 +37,19 @@ export interface TemplateConfig {
   condition: string
 
   // Typography
-  fontFamily: string           // 'Arial' | 'Helvetica Neue' | 'monospace' | 'Georgia'
+  fontFamily: string           // 'Helvetica' | 'Courier' | 'Times-Roman'
   badgeFontScale: number       // 0.5–2.0, default 1.0
   valueFontScale: number       // 0.5–2.0, default 1.0
+
+  // Fine-grained right-column scale factors (0.5–2.0, default 1.0)
+  sizeValueScale?: number      // SIZE number font scale
+  sizeHeaderScale?: number     // SIZE header strip font scale
+  fnskuTextScale?: number      // FNSKU alphanumeric text scale
+  listingTitleScale?: number   // Listing title font scale
+  conditionScale?: number      // Condition text scale
+
+  // Left-column fine-grained
+  logoHeightPct?: number       // Logo area height as % of label height (10–40, default 22)
 
   // Sheet layout (A4 mode)
   sheetCols?: number        // override auto-calculated columns (blank = auto)

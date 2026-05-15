@@ -33,6 +33,13 @@ const DEFAULT_TEMPLATE: TemplateConfig = {
   fontFamily: 'Helvetica',
   badgeFontScale: 1.0,
   valueFontScale: 1.0,
+  // Fine-grained scales
+  sizeValueScale: 1.0,
+  sizeHeaderScale: 1.0,
+  fnskuTextScale: 1.0,
+  listingTitleScale: 1.0,
+  conditionScale: 1.0,
+  logoHeightPct: 22,
   // Rows
   rows: [
     { id: '1', badgeText: 'MODEL', valueSource: 'productName', customValue: '', show: true, fontScale: 1.0, textTransform: 'uppercase', boldValue: true },

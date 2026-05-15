@@ -265,6 +265,14 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                   className="flex-1 h-5 px-1.5 text-xs uppercase font-bold rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500" />
               )}
             </div>
+            {template.showSizeBox && (
+              <div className="ml-1 space-y-0.5">
+                <SliderRow label="Size value scale" value={template.sizeValueScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
+                  onChange={v => patch({ sizeValueScale: v })} />
+                <SliderRow label="Size label scale" value={template.sizeHeaderScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
+                  onChange={v => patch({ sizeHeaderScale: v })} />
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Checkbox label="Show listing title" checked={template.showListingTitle} onChange={v => patch({ showListingTitle: v })} />
               {template.showListingTitle && (
@@ -275,7 +283,25 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
                 </select>
               )}
             </div>
+            {!template.showListingTitle && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 ml-5">Required by Amazon FBA</p>
+            )}
+            {template.showListingTitle && (
+              <div className="ml-1">
+                <SliderRow label="Title size" value={template.listingTitleScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
+                  onChange={v => patch({ listingTitleScale: v })} />
+              </div>
+            )}
             <Checkbox label="Show condition" checked={template.showCondition} onChange={v => patch({ showCondition: v })} />
+            {!template.showCondition && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 ml-5">Required by Amazon FBA</p>
+            )}
+            {template.showCondition && (
+              <div className="ml-1">
+                <SliderRow label="Condition size" value={template.conditionScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
+                  onChange={v => patch({ conditionScale: v })} />
+              </div>
+            )}
           </div>
           {template.showCondition && (
             <input value={template.condition} onChange={e => patch({ condition: e.target.value })}
@@ -288,6 +314,8 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         <Section title="Barcode">
           <SliderRow label="Height" value={barcodeH} min={10} max={55} unit="%" onChange={v => patch({ barcodeHeightPct: v })} />
           <SliderRow label="Width"  value={template.barcodeWidthPct ?? 100} min={20} max={100} unit="%" onChange={v => patch({ barcodeWidthPct: v })} />
+          <SliderRow label="FNSKU text" value={template.fnskuTextScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
+            onChange={v => patch({ fnskuTextScale: v })} />
           <p className="text-[10px] text-slate-400 mt-1">
             Effective width: ~{barWidthMm.toFixed(1)}mm.
           </p>
@@ -322,11 +350,13 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
 
         {/* ── Logo URL ────────────────────────────── */}
         {template.showLogo && (
-          <Section title="Logo URL">
+          <Section title="Logo">
             <input value={template.logoUrl} onChange={e => patch({ logoUrl: e.target.value })}
               placeholder="https://…/logo.png"
               className="w-full h-7 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-violet-500" />
-            <p className="text-xs text-slate-400 mt-1">Direct image URL. Leave blank for placeholder.</p>
+            <p className="text-xs text-slate-400 mt-1 mb-2">Direct image URL. Leave blank for placeholder.</p>
+            <SliderRow label="Logo height" value={template.logoHeightPct ?? 22} min={10} max={40} step={1} unit="% h"
+              onChange={v => patch({ logoHeightPct: v })} />
           </Section>
         )}
       </div>

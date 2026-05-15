@@ -43,6 +43,12 @@ interface TemplateConfig {
   fontFamily?: string
   badgeFontScale?: number
   valueFontScale?: number
+  sizeValueScale?: number
+  sizeHeaderScale?: number
+  fnskuTextScale?: number
+  listingTitleScale?: number
+  conditionScale?: number
+  logoHeightPct?: number
   sheetCols?: number
   sheetMarginMm?: number
   sheetGapMm?: number
@@ -236,11 +242,18 @@ async function drawLabel(
   const lx = xPt + padPt
   const leftInnerW = leftW - padPt * 2
 
+  // Fine-grained scale factors (new optional controls, all default 1.0)
+  const sizeValueScale    = template.sizeValueScale    ?? 1
+  const sizeHeaderScale   = template.sizeHeaderScale   ?? 1
+  const fnskuTextScale    = template.fnskuTextScale    ?? 1
+  const listingTitleScale = template.listingTitleScale ?? 1
+  const conditionScale    = template.conditionScale    ?? 1
+
   // ── Logo ─────────────────────────────────────────────────────────
   // Matches preview: showLogo shows logo area (with or without URL)
   let logoAreaH = 0
   if (template.showLogo) {
-    logoAreaH = hPt * L.LOGO_H
+    logoAreaH = hPt * ((template.logoHeightPct ?? 22) / 100)
 
     if (template.logoUrl) {
       const buf = await fetchImageBuffer(template.logoUrl)
@@ -250,11 +263,12 @@ async function drawLabel(
       }
     } else {
       // Placeholder box — matches preview's black "LOGO" badge
+      // fontSize = logoAreaH * 0.455 so that at default logoH=22% it equals hPt * 0.1
       const placeH = logoAreaH * 0.5
       const placeW = Math.min(mm(25), leftInnerW * 0.55)
       const placeX = lx
       const placeY = yPt + padPt + (logoAreaH - placeH) / 2
-      const logoFs = fitTextSize(doc, 'LOGO', fontBold, placeH * 0.5, placeW - mm(2))
+      const logoFs = fitTextSize(doc, 'LOGO', fontBold, logoAreaH * 0.455, placeW - mm(2))
       doc.rect(placeX, placeY, placeW, placeH).fill('#000000')
       doc.font(fontBold).fontSize(logoFs).fillColor('#ffffff')
          .text('LOGO', placeX, placeY + (placeH - logoFs) / 2, { width: placeW, align: 'center', lineBreak: false })
@@ -344,8 +358,8 @@ async function drawLabel(
   let sizeValFsBase = 0
 
   if (template.showSizeBox) {
-    sizeHdrH      = hPt * L.SIZE_HDR_FS + 2 * hPt * L.SIZE_HDR_PAD
-    sizeValFsBase = hPt * L.SIZE_VAL_FS
+    sizeHdrH      = hPt * L.SIZE_HDR_FS * sizeHeaderScale + 2 * hPt * L.SIZE_HDR_PAD
+    sizeValFsBase = hPt * L.SIZE_VAL_FS * sizeValueScale
     sizeBoxTotalH = 2 * hPt * L.SIZE_BOX_PAD + sizeHdrH + hPt * L.SIZE_VAL_MT + sizeValFsBase
   }
   const sizeBoxMB = template.showSizeBox ? hPt * L.SIZE_MB : 0
@@ -353,19 +367,19 @@ async function drawLabel(
   // ── Barcode + info stack dimensions ──────────────────────────────
   const barcodeHPct  = Math.min(template.barcodeHeightPct ?? 32, 55)
   const barcodeHPt   = hPt * barcodeHPct / 100
-  const quietZonePt  = mm(2)
-  const rawBarcodeW  = Math.max(mm(5), innerRightW * ((template.barcodeWidthPct ?? 100) / 100))
-  const effBarcodeW  = Math.max(mm(10), rawBarcodeW - 2 * quietZonePt)
+  const effBarcodeW  = Math.max(mm(5), innerRightW * ((template.barcodeWidthPct ?? 100) / 100))
   const bcX          = rx + (innerRightW - effBarcodeW) / 2
 
   const isMono = /mono|courier/i.test(template.fontFamily ?? '')
   const charWR = isMono ? 0.62 : 0.58
 
-  // Font sizes for info stack (same ratios as preview)
-  const fnskuFsRaw   = item.fnsku ? Math.min(hPt * L.BARCODE_FS, effBarcodeW / (item.fnsku.length * charWR + 2)) : 0
+  // Font sizes for info stack (same ratios as preview, with scale factors applied)
+  const fnskuFsRaw   = item.fnsku
+    ? Math.min(hPt * L.BARCODE_FS, effBarcodeW / (item.fnsku.length * charWR + 2)) * fnskuTextScale
+    : 0
   const maxTitleLines = template.listingTitleLines ?? 2
-  const titleFsRaw   = (template.showListingTitle && item.listingTitle) ? hPt * L.TITLE_FS : 0
-  const condFsRaw    = template.showCondition ? hPt * L.COND_FS : 0
+  const titleFsRaw   = (template.showListingTitle && item.listingTitle) ? hPt * L.TITLE_FS * listingTitleScale : 0
+  const condFsRaw    = template.showCondition ? hPt * L.COND_FS * conditionScale : 0
 
   // Stack height: barcode + gap + FNSKU text + title + condition
   // Matches preview flex column with margins
@@ -392,7 +406,7 @@ async function drawLabel(
 
     // Header strip
     const hdrY  = ry + hPt * L.SIZE_BOX_PAD
-    const hdrFs = fitTextSize(doc, sizeLabel, fontBold, hPt * L.SIZE_HDR_FS, boxW - mm(2))
+    const hdrFs = fitTextSize(doc, sizeLabel, fontBold, hPt * L.SIZE_HDR_FS * sizeHeaderScale, boxW - mm(2))
     doc.rect(rx, hdrY, boxW, sizeHdrH).fill('#111111')
     doc.font(fontBold).fontSize(hdrFs).fillColor('#ffffff')
        .text(sizeLabel, rx, hdrY + hPt * L.SIZE_HDR_PAD, { width: boxW, align: 'center', lineBreak: false })
@@ -410,8 +424,8 @@ async function drawLabel(
   ry += stackOffsetY
 
   if (item.fnsku) {
-    // White quiet-zone background
-    doc.rect(bcX - quietZonePt, ry, effBarcodeW + 2 * quietZonePt, barcodeHPt).fill('#ffffff')
+    // White background for barcode area
+    doc.rect(bcX, ry, effBarcodeW, barcodeHPt).fill('#ffffff')
 
     // Barcode bars
     const { bars, totalUnits } = encodeBarcode(item.fnsku)

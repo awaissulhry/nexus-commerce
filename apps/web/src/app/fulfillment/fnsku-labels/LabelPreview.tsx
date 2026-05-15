@@ -45,9 +45,18 @@ export function LabelPreview({ item, template }: Props) {
   const leftColPx  = wPx - rightColPx
 
   const padPx = (template.paddingMm ?? 2) * MM_TO_PX
-  const barcodeH = Math.round(hPx * ((template.barcodeHeightPct ?? 32) / 100))
+  // Cap barcode height at 55% — matches PDF service cap
+  const barcodeH = Math.round(hPx * (Math.min(template.barcodeHeightPct ?? 32, 55) / 100))
   const innerW   = rightColPx - padPx * 2
   const barcodeW = Math.max(20, innerW * ((template.barcodeWidthPct ?? 100) / 100))
+
+  // Fine-grained scale factors (new optional controls)
+  const sizeValueScale    = template.sizeValueScale    ?? 1
+  const sizeHeaderScale   = template.sizeHeaderScale   ?? 1
+  const fnskuTextScale    = template.fnskuTextScale    ?? 1
+  const listingTitleScale = template.listingTitleScale ?? 1
+  const conditionScale    = template.conditionScale    ?? 1
+  const logoH             = hPx * ((template.logoHeightPct ?? 22) / 100)
 
   const sizeVal  = (item.variationAttributes ?? {})['Size'] ?? (item.variationAttributes ?? {})['size'] ?? ''
   const activeRows = template.rows.filter(r => r.show)
@@ -87,9 +96,9 @@ export function LabelPreview({ item, template }: Props) {
               {template.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={template.logoUrl} alt="Logo"
-                  style={{ maxHeight: hPx * 0.22, maxWidth: leftColPx - padPx * 2, objectFit: 'contain' }} />
+                  style={{ maxHeight: logoH, maxWidth: leftColPx - padPx * 2, objectFit: 'contain' }} />
               ) : (
-                <div style={{ height: hPx * 0.22, display: 'flex', alignItems: 'center' }}>
+                <div style={{ height: logoH, display: 'flex', alignItems: 'center' }}>
                   <span style={{
                     fontSize: hPx * 0.1, fontWeight: 900, letterSpacing: '-0.04em',
                     background: '#000', color: '#fff',
@@ -155,14 +164,17 @@ export function LabelPreview({ item, template }: Props) {
               marginBottom: padPx, flexShrink: 0,
             }}>
               <div style={{
-                fontSize: hPx * 0.06, fontWeight: 700, letterSpacing: '0.1em',
+                fontSize: hPx * 0.06 * sizeHeaderScale, fontWeight: 700, letterSpacing: '0.1em',
                 textTransform: 'uppercase', background: '#111', color: '#fff',
                 width: '100%', textAlign: 'center', borderRadius: 2,
                 padding: `${hPx * 0.005}px 0`,
               }}>
                 {template.sizeBoxLabel || 'SIZE'}
               </div>
-              <div style={{ fontSize: hPx * 0.19, fontWeight: 900, color: '#000', lineHeight: 1, marginTop: hPx * 0.01 }}>
+              <div style={{
+                fontSize: Math.min(hPx * 0.19 * sizeValueScale, (innerW) * 0.85),
+                fontWeight: 900, color: '#000', lineHeight: 1, marginTop: hPx * 0.01,
+              }}>
                 {sizeVal || '—'}
               </div>
             </div>
@@ -189,11 +201,10 @@ export function LabelPreview({ item, template }: Props) {
                   marginTop: 2,
                 }}>
                   <span style={{
-                    // proportional fonts avg ~0.55× char width; monospace exactly 0.6×
                     fontSize: Math.min(
                       hPx * 0.063,
                       barcodeW / (item.fnsku.length * (/mono|courier/i.test(fontFam) ? 0.62 : 0.58) + 2),
-                    ),
+                    ) * fnskuTextScale,
                     fontFamily: fontFam,
                     letterSpacing: '0.03em',
                     color: '#111',
@@ -203,11 +214,11 @@ export function LabelPreview({ item, template }: Props) {
                 </div>
                 {template.showListingTitle && item.listingTitle && (
                   <div style={{
-                    fontSize: hPx * 0.052,
+                    fontSize: hPx * 0.052 * listingTitleScale,
                     color: '#333',
                     marginTop: 3,
                     textAlign: 'center',
-                    lineHeight: 1.2,
+                    lineHeight: 1.25,
                     maxWidth: barcodeW,
                     overflow: 'hidden',
                     display: '-webkit-box',
@@ -218,7 +229,7 @@ export function LabelPreview({ item, template }: Props) {
                   </div>
                 )}
                 {template.showCondition && (
-                  <div style={{ fontSize: hPx * 0.052, color: '#333', marginTop: 2, textAlign: 'center' }}>
+                  <div style={{ fontSize: hPx * 0.052 * conditionScale, color: '#333', marginTop: 2, textAlign: 'center' }}>
                     {template.condition || 'New'}
                   </div>
                 )}
