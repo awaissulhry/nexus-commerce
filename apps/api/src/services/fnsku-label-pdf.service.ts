@@ -1,20 +1,19 @@
 /**
- * FNSKU label PDF generator using pdfkit.
+ * FNSKU label PDF generator — pdfkit-based, strict layout budgeting.
+ *
+ * Every element has a pre-calculated height allocation. The entire label is
+ * wrapped in a clip path so nothing can visually escape the boundary even if
+ * calculations are off. Font sizes are capped to never exceed their allocated
+ * space. No element position relies on doc.y — all coordinates are absolute.
  *
  * Two modes:
- *   'label' — one label per page, page size = label dimensions. Ideal for
- *             thermal label printers (Zebra, Dymo, Brother, etc.).
- *   'a4'    — labels tiled on A4 pages with 5mm margins and 2mm gaps.
- *             Print on a regular printer, then cut.
- *
- * All coordinates are in points (pt). 1mm = 2.8346pt.
- * Barcode is rendered as filled black rectangles (CODE128B, uniform scale).
- * Fonts use pdfkit built-ins: Helvetica, Courier, Times-Roman.
+ *   'label' — one label per page, page = label dimensions (thermal printers)
+ *   'a4'    — labels tiled on A4 pages (5mm margin, 2mm gap, auto cols×rows)
  */
 
 import PDFDocument from 'pdfkit'
 
-// ── Types (mirrors frontend types.ts — kept local to avoid cross-workspace dep) ──
+// ── Types (mirrors frontend types.ts) ────────────────────────────────────────
 
 interface TemplateRow {
   id: string
@@ -50,14 +49,15 @@ interface TemplateConfig {
 
 interface LabelItem {
   sku: string
-  fnsku: string
+  fnsku?: string | null
+  asin?: string | null
   productName?: string | null
   listingTitle?: string | null
   variationAttributes?: Record<string, string>
   imageUrl?: string | null
 }
 
-// ── CODE128B encoder ─────────────────────────────────────────────────────────
+// ── CODE128B encoder ──────────────────────────────────────────────────────────
 
 const PATTERNS: readonly string[] = [
   '212222','222122','222221','121223','121322','131222','122213','122312',
@@ -87,7 +87,6 @@ function encodeBarcode(value: string): { bars: { x: number; w: number }[]; total
   }
   const checksum = (START_B + codes.reduce((acc, c, i) => acc + c * (i + 1), 0)) % 103
   const sequence = [START_B, ...codes, checksum, STOP]
-
   const bars: { x: number; w: number }[] = []
   let cursor = 0
   for (const sym of sequence) {
@@ -104,16 +103,15 @@ function encodeBarcode(value: string): { bars: { x: number; w: number }[]; total
   return { bars, totalUnits: cursor }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const MM = 2.8346 // 1mm in points
-
-function mm(n: number) { return n * MM }
+const MM_TO_PT = 2.8346
+function mm(n: number) { return n * MM_TO_PT }
 
 function applyTextTransform(s: string, tx?: string): string {
   if (!s) return s
-  if (tx === 'uppercase') return s.toUpperCase()
-  if (tx === 'capitalize') return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+  if (tx === 'uppercase')  return s.toUpperCase()
+  if (tx === 'capitalize') return s.charAt(0).toUpperCase() + s.slice(1)
   return s
 }
 
@@ -125,38 +123,35 @@ function getRowValue(row: TemplateRow, item: LabelItem): string {
     case 'size':   return attrs['Size']   ?? attrs['size']   ?? ''
     case 'gender': return attrs['Gender'] ?? attrs['gender'] ?? ''
     case 'sku':    return item.sku
+    case 'asin':   return item.asin ?? ''
     case 'custom': return row.customValue
     default: return ''
   }
 }
 
-// Map template fontFamily to pdfkit built-in font names
 function resolveFont(family?: string, bold = false): string {
   const f = (family ?? 'Arial').toLowerCase()
   if (f.includes('mono') || f.includes('courier')) return bold ? 'Courier-Bold' : 'Courier'
-  if (f.includes('georgia') || f.includes('times')) return bold ? 'Times-Bold' : 'Times-Roman'
+  if (f.includes('georgia') || f.includes('times')) return bold ? 'Times-Bold'   : 'Times-Roman'
   return bold ? 'Helvetica-Bold' : 'Helvetica'
 }
 
-// Fetch an image URL as a Buffer. Returns null on any error.
+// Image fetch with 4-second timeout and per-process cache
 const imageCache = new Map<string, Buffer | null>()
-
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   if (imageCache.has(url)) return imageCache.get(url)!
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(4000) })
     if (!res.ok) { imageCache.set(url, null); return null }
-    const ab  = await res.arrayBuffer()
-    const buf = Buffer.from(ab)
+    const buf = Buffer.from(await res.arrayBuffer())
     imageCache.set(url, buf)
     return buf
   } catch {
-    imageCache.set(url, null)
-    return null
+    imageCache.set(url, null); return null
   }
 }
 
-// ── Label renderer ────────────────────────────────────────────────────────────
+// ── Label renderer — strict layout budgeting + clipping ──────────────────────
 
 async function drawLabel(
   doc: InstanceType<typeof PDFDocument>,
@@ -167,186 +162,221 @@ async function drawLabel(
   item: LabelItem,
   template: TemplateConfig,
 ) {
-  const rightPct    = Math.max(15, Math.min(55, template.columnSplitPct ?? 38)) / 100
-  const rightW      = wPt * rightPct
-  const leftW       = wPt - rightW
-  const padPt       = mm(template.paddingMm ?? 2)
-  const barcodeHPt  = hPt * ((template.barcodeHeightPct ?? 32) / 100)
-  const innerW      = rightW - padPt * 2
-  const barcodeWPt  = Math.max(mm(5), innerW * ((template.barcodeWidthPct ?? 100) / 100))
+  const rightPct  = Math.max(15, Math.min(55, template.columnSplitPct ?? 38)) / 100
+  const rightW    = wPt * rightPct
+  const leftW     = wPt - rightW
+  const padPt     = mm(template.paddingMm ?? 2)
+  const innerH    = hPt - 2 * padPt          // usable height in both columns
 
-  const badgeScale  = template.badgeFontScale  ?? 1
-  const valueScale  = template.valueFontScale  ?? 1
-  const fontBase    = resolveFont(template.fontFamily)
-  const fontBold    = resolveFont(template.fontFamily, true)
-  const activeRows  = (template.rows ?? []).filter(r => r.show)
+  const badgeScale = template.badgeFontScale ?? 1
+  const valueScale = template.valueFontScale ?? 1
+  const fontBase   = resolveFont(template.fontFamily)
+  const fontBold   = resolveFont(template.fontFamily, true)
+  const activeRows = (template.rows ?? []).filter(r => r.show)
 
-  const attrs = item.variationAttributes ?? {}
+  const attrs  = item.variationAttributes ?? {}
   const sizeVal = attrs['Size'] ?? attrs['size'] ?? ''
 
-  // ── Thin label border ────────────────────────────────────────────────────
-  doc.save().rect(xPt, yPt, wPt, hPt).stroke('#cccccc').restore()
+  // ── CLIP everything to label boundary ────────────────────────────────────
+  doc.save()
+  doc.rect(xPt, yPt, wPt, hPt).clip()
 
-  // ── Left column ──────────────────────────────────────────────────────────
+  // Thin border (drawn inside clip so it's always visible)
+  doc.rect(xPt, yPt, wPt, hPt).stroke('#bbbbbb')
+
+  // ── LEFT COLUMN ───────────────────────────────────────────────────────────
   const lx = xPt + padPt
-  let   ly = yPt + padPt
 
-  // Divider
-  if (template.showColumnDivider !== false) {
-    doc.save()
-      .moveTo(xPt + leftW, yPt + padPt)
-      .lineTo(xPt + leftW, yPt + hPt - padPt)
-      .stroke('#dddddd')
-      .restore()
-  }
-
-  // Logo
-  if (template.showLogo) {
-    const logoH = hPt * 0.22
-    if (template.logoUrl) {
-      const buf = await fetchImageBuffer(template.logoUrl)
-      if (buf) {
-        try {
-          doc.image(buf, lx, ly, { fit: [leftW - padPt * 2, logoH] })
-        } catch { /* image format not supported — skip */ }
-      }
-    } else {
-      // Placeholder black box "LOGO"
-      doc.save()
-        .rect(lx, ly, mm(20), logoH * 0.6).fill('#111111')
-        .fillColor('white').font(fontBold).fontSize(logoH * 0.28)
-        .text('LOGO', lx + mm(1), ly + logoH * 0.16, { width: mm(18), align: 'center' })
-        .restore()
+  // ---- Logo ----------------------------------------------------------------
+  let logoH = 0
+  if (template.showLogo && template.logoUrl) {
+    logoH = Math.min(hPt * 0.20, innerH * 0.25)
+    const buf = await fetchImageBuffer(template.logoUrl)
+    if (buf) {
+      try {
+        doc.image(buf, lx, yPt + padPt, { fit: [leftW - padPt * 2, logoH] })
+      } catch { /* unsupported format — skip silently */ }
     }
-    ly += logoH + padPt
   }
 
-  // Field rows — vertically centred in remaining left-col height
-  const rowsAvailH = yPt + hPt - padPt - ly
+  // ---- Field rows ----------------------------------------------------------
+  const rowsStartY = yPt + padPt + (logoH > 0 ? logoH + padPt * 0.5 : 0)
+  const rowsH      = (yPt + hPt - padPt) - rowsStartY
   const rowCount   = activeRows.length
-  const rowH       = rowCount > 0 ? rowsAvailH / rowCount : 0
+  const rowH       = rowCount > 0 ? rowsH / rowCount : 0
 
   activeRows.forEach((row, i) => {
-    const isFirst   = i === 0
-    const baseFs    = isFirst ? hPt * 0.13 : hPt * 0.10
-    const fs        = baseFs * valueScale * (row.fontScale ?? 1)
-    const badgeFs   = hPt * 0.07 * badgeScale
-    const badgeMinW = hPt * 0.45 * badgeScale
-    const rowY      = ly + i * rowH + (rowH - Math.max(badgeFs, fs)) / 2
-
-    const value = applyTextTransform(getRowValue(row, item), row.textTransform ?? 'uppercase')
-    const badge = (row.badgeText || '—').toUpperCase()
-
-    // Badge (black pill)
-    const badgePadH = badgeFs * 0.3
-    const badgePadW = badgeFs * 0.5
-    const badgeW    = Math.max(badgeMinW, doc.font(fontBold).fontSize(badgeFs).widthOfString(badge) + badgePadW * 2)
+    const isFirst  = i === 0
+    const badgeFs  = Math.min(hPt * 0.07  * badgeScale, rowH * 0.42)
+    const valueFs  = Math.min(
+      hPt * (isFirst ? 0.12 : 0.09) * valueScale * (row.fontScale ?? 1),
+      rowH * (isFirst ? 0.62 : 0.52),
+    )
+    const badgePadH = badgeFs * 0.28
+    const badgePadW = badgeFs * 0.45
     const badgeH    = badgeFs + badgePadH * 2
 
-    doc.save()
-      .rect(lx, rowY, badgeW, badgeH).fill('#111111')
-      .fillColor('white').font(fontBold).fontSize(badgeFs)
-      .text(badge, lx, rowY + badgePadH, { width: badgeW, align: 'center', lineBreak: false })
-      .restore()
+    // Vertical centre within this row
+    const rowTopY  = rowsStartY + i * rowH
+    const rowMidY  = rowTopY + rowH / 2
+
+    // Badge width — measure text then ensure minimum
+    doc.font(fontBold).fontSize(badgeFs)
+    const badgeLabel = (row.badgeText || '—').toUpperCase()
+    const measuredW  = doc.widthOfString(badgeLabel)
+    const badgeMinW  = hPt * 0.42 * badgeScale
+    const badgeW     = Math.max(badgeMinW, measuredW + badgePadW * 2)
+
+    const badgeX = lx
+    const badgeY = rowMidY - badgeH / 2
+
+    // Draw badge (black fill, white text)
+    doc.rect(badgeX, badgeY, badgeW, badgeH).fill('#111111')
+    doc.font(fontBold).fontSize(badgeFs).fillColor('#ffffff')
+       .text(badgeLabel, badgeX, badgeY + badgePadH,
+             { width: badgeW, align: 'center', lineBreak: false })
 
     // Value text
-    const vFont = row.boldValue !== false ? fontBold : fontBase
-    const vfw   = row.boldValue !== false ? (isFirst ? 900 : 700) : 400 // unused by pdfkit but harmless
-    void vfw
-    const valueX = lx + badgeW + mm(2)
-    const valueW = leftW - padPt - badgeW - mm(2)
-    const valueStr = value || '—'
+    const tx     = row.textTransform ?? 'uppercase'
+    const value  = applyTextTransform(getRowValue(row, item), tx) || '—'
+    const vFont  = row.boldValue !== false ? fontBold : fontBase
+    const valueX = lx + badgeW + mm(1.5)
+    const valueW = leftW - padPt - badgeW - mm(1.5)
+    const valueY = rowMidY - valueFs / 2
 
-    doc.save()
-      .fillColor('#000000').font(vFont).fontSize(fs)
-      .text(valueStr, valueX, rowY + (badgeH - fs) / 2, { width: valueW, lineBreak: false, ellipsis: true })
-      .restore()
+    doc.font(vFont).fontSize(valueFs).fillColor('#000000')
+       .text(value, valueX, valueY, { width: Math.max(1, valueW), lineBreak: false, ellipsis: true })
   })
 
-  // ── Right column ─────────────────────────────────────────────────────────
+  // Divider line
+  if (template.showColumnDivider !== false) {
+    doc.moveTo(xPt + leftW, yPt + padPt)
+       .lineTo(xPt + leftW, yPt + hPt - padPt)
+       .stroke('#dddddd')
+  }
+
+  // ── RIGHT COLUMN — budget height before drawing anything ──────────────────
   const rx = xPt + leftW + padPt
-  let   ry = yPt + padPt
+  const innerRightW = rightW - padPt * 2
+
+  // --- Size box budget ------------------------------------------------------
+  let sizeBoxH   = 0
+  let sizeHeaderH = 0
+  let sizeValFs  = 0
+
+  if (template.showSizeBox) {
+    sizeHeaderH = Math.min(hPt * 0.06, innerH * 0.10)
+    sizeValFs   = Math.min(hPt * 0.17, Math.max(sizeHeaderH * 1.2, (innerH * 0.28) - sizeHeaderH))
+    sizeBoxH    = sizeHeaderH + sizeValFs * 1.2 + mm(1.5)
+  }
+
+  // --- Barcode budget -------------------------------------------------------
+  const barcodeHPct = Math.min(template.barcodeHeightPct ?? 32, 55)
+  let barcodeHPt = Math.min(innerH * barcodeHPct / 100, innerH * 0.55)
+  if (template.showSizeBox) barcodeHPt = Math.min(barcodeHPt, innerH - sizeBoxH - padPt * 0.5 - mm(8))
+
+  // Width with quiet zone enforcement
+  const barcodeWPct = template.barcodeWidthPct ?? 100
+  const quietZonePt = mm(2)
+  const rawBarcodeW = Math.max(mm(5), innerRightW * (barcodeWPct / 100))
+  const effectiveBarcodeW = Math.max(mm(10), rawBarcodeW - 2 * quietZonePt)
+  const bcX = rx + (innerRightW - effectiveBarcodeW) / 2
+
+  // --- Info block budget (FNSKU text + listing title + condition) -----------
+  const usedH   = sizeBoxH + (sizeBoxH > 0 ? padPt * 0.5 : 0) + barcodeHPt + mm(1.5)
+  const infoH   = Math.max(0, innerH - usedH)
+
+  const fnskuFs = item.fnsku ? Math.min(innerH * 0.06, Math.max(mm(2), infoH * 0.28)) : 0
+  const fnskuH  = fnskuFs > 0 ? fnskuFs * 1.4 : 0
+
+  const maxTitleLines = template.listingTitleLines ?? 2
+  const titleFs = (template.showListingTitle && item.listingTitle)
+    ? Math.min(innerH * 0.05, Math.max(mm(1.5), (infoH - fnskuH) * 0.5 / maxTitleLines))
+    : 0
+  const titleH  = titleFs > 0 ? titleFs * 1.35 * maxTitleLines + mm(0.5) : 0
+
+  const condFs  = template.showCondition
+    ? Math.min(titleFs > 0 ? titleFs : innerH * 0.05, Math.max(mm(1.5), infoH - fnskuH - titleH))
+    : 0
+
+  // --- Draw right column top-to-bottom (all positions are absolute) ---------
+  let ry = yPt + padPt
 
   // Size box
-  if (template.showSizeBox) {
+  if (template.showSizeBox && sizeBoxH > 0) {
+    const boxW    = innerRightW
     const sizeLabel = (template.sizeBoxLabel || 'SIZE').toUpperCase()
-    const boxW      = rightW - padPt * 2
-    const labelFs   = hPt * 0.06
-    const labelH    = labelFs * 1.5
-    const valFs     = hPt * 0.19
-    const valH      = valFs * 1.1
-    const boxH      = labelH + valH + mm(1)
 
     // Border
-    doc.save().rect(rx, ry, boxW, boxH).stroke('#111111').restore()
+    doc.rect(rx, ry, boxW, sizeBoxH).stroke('#111111')
     // Header strip
-    doc.save().rect(rx, ry, boxW, labelH).fill('#111111')
-      .fillColor('white').font(fontBold).fontSize(labelFs)
-      .text(sizeLabel, rx, ry + (labelH - labelFs) / 2, { width: boxW, align: 'center', lineBreak: false })
-      .restore()
+    doc.rect(rx, ry, boxW, sizeHeaderH).fill('#111111')
+    doc.font(fontBold).fontSize(sizeHeaderH * 0.65).fillColor('#ffffff')
+       .text(sizeLabel, rx, ry + sizeHeaderH * 0.17, { width: boxW, align: 'center', lineBreak: false })
     // Size value
-    doc.save()
-      .fillColor('#000000').font(fontBold).fontSize(valFs)
-      .text(sizeVal || '—', rx, ry + labelH + mm(0.5), { width: boxW, align: 'center', lineBreak: false })
-      .restore()
+    const sizeValY = ry + sizeHeaderH + mm(0.5)
+    doc.font(fontBold).fontSize(sizeValFs).fillColor('#000000')
+       .text(sizeVal || '—', rx, sizeValY, { width: boxW, align: 'center', lineBreak: false })
 
-    ry += boxH + padPt
+    ry += sizeBoxH + padPt * 0.5
   }
 
   // Barcode
-  if (item.fnsku) {
+  if (item.fnsku && barcodeHPt > 0) {
     const { bars, totalUnits } = encodeBarcode(item.fnsku)
-    const scale = barcodeWPt / totalUnits
-    // Centre barcode horizontally in the right inner column
-    const bcX = rx + (innerW - barcodeWPt) / 2
-
-    doc.save()
-    for (const b of bars) {
-      doc.rect(bcX + b.x * scale, ry, b.w * scale, barcodeHPt).fill('#000000')
+    if (totalUnits > 0) {
+      const scale = effectiveBarcodeW / totalUnits
+      // White background behind barcode for clean scan
+      doc.rect(bcX - quietZonePt, ry, effectiveBarcodeW + 2 * quietZonePt, barcodeHPt).fill('#ffffff')
+      for (const b of bars) {
+        doc.rect(bcX + b.x * scale, ry, Math.max(0.1, b.w * scale), barcodeHPt).fill('#000000')
+      }
     }
-    doc.restore()
-
     ry += barcodeHPt + mm(1)
 
     // FNSKU text
-    const fnskuFs = Math.min(hPt * 0.063, barcodeWPt / (item.fnsku.length * 0.6 + 2))
-    doc.save()
-      .fillColor('#111111').font('Courier').fontSize(fnskuFs)
-      .text(item.fnsku, rx, ry, { width: innerW, align: 'center', lineBreak: false })
-      .restore()
-    ry += fnskuFs + mm(0.8)
+    if (fnskuFs > 0) {
+      doc.font('Courier').fontSize(fnskuFs).fillColor('#111111')
+         .text(item.fnsku, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
+      ry += fnskuH
+    }
 
     // Listing title
-    if (template.showListingTitle && item.listingTitle) {
-      const maxLines = template.listingTitleLines ?? 2
-      const titleFs  = hPt * 0.052
-      doc.save()
-        .fillColor('#333333').font(fontBase).fontSize(titleFs)
-        .text(item.listingTitle, rx, ry, {
-          width: innerW, align: 'center',
-          height: titleFs * 1.3 * maxLines,
-          lineBreak: true,
-        })
-        .restore()
-      ry += titleFs * 1.3 * maxLines + mm(0.5)
+    if (titleFs > 0 && item.listingTitle) {
+      doc.font(fontBase).fontSize(titleFs).fillColor('#333333')
+         .text(item.listingTitle, rx, ry, {
+           width: innerRightW, align: 'center',
+           lineBreak: true,
+           height: titleFs * 1.35 * maxTitleLines,
+         })
+      ry += titleH
     }
 
     // Condition
-    if (template.showCondition) {
-      const condFs = hPt * 0.052
-      doc.save()
-        .fillColor('#333333').font(fontBase).fontSize(condFs)
-        .text(template.condition || 'New', rx, ry, { width: innerW, align: 'center', lineBreak: false })
-        .restore()
+    if (condFs > 0) {
+      doc.font(fontBase).fontSize(condFs).fillColor('#333333')
+         .text(template.condition || 'New', rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
     }
-  } else {
+  } else if (!item.fnsku) {
     // No FNSKU placeholder
-    doc.save()
-      .rect(rx, ry, innerW, barcodeHPt).stroke('#cccccc')
-      .fillColor('#bbbbbb').font(fontBase).fontSize(hPt * 0.06)
-      .text('No FNSKU', rx, ry + barcodeHPt / 2 - hPt * 0.03, { width: innerW, align: 'center', lineBreak: false })
-      .restore()
+    const placeH = Math.min(barcodeHPt, innerH * 0.4)
+    doc.rect(rx, ry, innerRightW, placeH).stroke('#cccccc')
+    doc.font(fontBase).fontSize(Math.min(mm(4), placeH * 0.3)).fillColor('#aaaaaa')
+       .text('No FNSKU', rx, ry + placeH / 2 - mm(2), { width: innerRightW, align: 'center', lineBreak: false })
   }
+
+  // ── Restore (also removes clip) ───────────────────────────────────────────
+  doc.restore()
+}
+
+// ── Sheet capacity helper (mirrors FnskuLabelDesigner.tsx calculation) ────────
+
+export function labelsPerA4Sheet(widthMm: number, heightMm: number): { cols: number; rows: number; total: number } {
+  const marginMm = 5
+  const gapMm    = 2
+  const cols = Math.max(1, Math.floor((210 - 2 * marginMm + gapMm) / (widthMm + gapMm)))
+  const rows = Math.max(1, Math.floor((297 - 2 * marginMm + gapMm) / (heightMm + gapMm)))
+  return { cols, rows, total: cols * rows }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -360,61 +390,49 @@ export async function renderFnskuLabelPdf(
   const wPt = mm(widthMm)
   const hPt = mm(heightMm)
 
+  const chunks: Buffer[] = []
+
   if (mode === 'label') {
-    // One label per page, page = label dimensions
     const doc = new PDFDocument({ size: [wPt, hPt], margin: 0, autoFirstPage: false })
-    const chunks: Buffer[] = []
     doc.on('data', (c: Buffer) => chunks.push(c))
     const finished = new Promise<Buffer>((resolve, reject) => {
-      doc.on('end', () => resolve(Buffer.concat(chunks)))
+      doc.on('end',   () => resolve(Buffer.concat(chunks)))
       doc.on('error', reject)
     })
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
+    for (const item of items) {
       doc.addPage({ size: [wPt, hPt], margin: 0 })
       await drawLabel(doc, 0, 0, wPt, hPt, item, template)
     }
-
     doc.end()
     return finished
 
   } else {
-    // A4 tiled layout
-    const A4W = mm(210)
-    const A4H = mm(297)
+    const A4W      = mm(210)
+    const A4H      = mm(297)
     const marginPt = mm(5)
     const gapPt    = mm(2)
 
-    const cols = Math.max(1, Math.floor((A4W - 2 * marginPt + gapPt) / (wPt + gapPt)))
-    const rows = Math.max(1, Math.floor((A4H - 2 * marginPt + gapPt) / (hPt + gapPt)))
+    const { cols, rows } = labelsPerA4Sheet(widthMm, heightMm)
 
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false })
-    const chunks: Buffer[] = []
     doc.on('data', (c: Buffer) => chunks.push(c))
     const finished = new Promise<Buffer>((resolve, reject) => {
-      doc.on('end', () => resolve(Buffer.concat(chunks)))
+      doc.on('end',   () => resolve(Buffer.concat(chunks)))
       doc.on('error', reject)
     })
 
-    let col = 0, row = 0
-    let pageStarted = false
-
-    const ensurePage = () => {
-      if (!pageStarted) { doc.addPage({ size: 'A4', margin: 0 }); pageStarted = true }
-    }
-    const nextCell = () => {
-      col++
-      if (col >= cols) { col = 0; row++ }
-      if (row >= rows) { col = 0; row = 0; pageStarted = false }
-    }
+    let col = 0, row = 0, pageOpen = false
 
     for (const item of items) {
-      ensurePage()
+      if (!pageOpen) { doc.addPage({ size: 'A4', margin: 0 }); pageOpen = true }
+
       const xPt = marginPt + col * (wPt + gapPt)
       const yPt = marginPt + row * (hPt + gapPt)
       await drawLabel(doc, xPt, yPt, wPt, hPt, item, template)
-      nextCell()
+
+      col++
+      if (col >= cols) { col = 0; row++ }
+      if (row >= rows) { col = 0; row = 0; pageOpen = false }
     }
 
     doc.end()

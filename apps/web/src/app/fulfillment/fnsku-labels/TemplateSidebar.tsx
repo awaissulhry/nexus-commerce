@@ -10,6 +10,7 @@ const VALUE_SOURCES: { value: TemplateRow['valueSource']; label: string }[] = [
   { value: 'size',        label: 'Size attribute' },
   { value: 'gender',      label: 'Gender attribute' },
   { value: 'sku',         label: 'SKU' },
+  { value: 'asin',        label: 'ASIN (Amazon)' },
   { value: 'custom',      label: 'Custom text' },
 ]
 

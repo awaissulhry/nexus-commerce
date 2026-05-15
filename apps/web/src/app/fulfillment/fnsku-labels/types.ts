@@ -1,7 +1,7 @@
 export interface TemplateRow {
   id: string
   badgeText: string
-  valueSource: 'productName' | 'color' | 'size' | 'gender' | 'sku' | 'custom'
+  valueSource: 'productName' | 'color' | 'size' | 'gender' | 'sku' | 'asin' | 'custom'
   customValue: string
   show: boolean
   fontScale: number                                        // 0.5–2.0, default 1.0
@@ -48,6 +48,7 @@ export interface TemplateConfig {
 export interface LabelItem {
   sku: string
   fnsku: string
+  asin?: string | null
   quantity: number
   productName: string | null
   listingTitle: string | null

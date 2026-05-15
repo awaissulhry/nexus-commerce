@@ -3838,6 +3838,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         select: {
           sku: true,
           fnsku: true,
+          amazonAsin: true,
           name: true,
           variantAttributes: true,
           categoryAttributes: true,
@@ -3855,7 +3856,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         variants: variants.map(v => {
-          // Resolve attributes: variantAttributes → categoryAttributes.variations
           let attrs: Record<string, string> = {}
           if (v.variantAttributes && typeof v.variantAttributes === 'object' && !Array.isArray(v.variantAttributes)) {
             attrs = v.variantAttributes as Record<string, string>
@@ -3866,7 +3866,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           return {
             sku: v.sku,
             fnsku: v.fnsku ?? null,
-            // Use parent name (concise, no size/color suffix) for the MODEL label field
+            asin: v.amazonAsin ?? null,
             productName: v.parent?.name ?? v.name ?? null,
             variationAttributes: attrs,
             imageUrl: v.images[0]?.url ?? v.parent?.images[0]?.url ?? null,

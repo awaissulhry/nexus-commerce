@@ -15,6 +15,7 @@ interface Props {
 interface VariantResult {
   sku: string
   fnsku: string | null
+  asin?: string | null
   productName: string | null
   variationAttributes: Record<string, string>
   imageUrl: string | null
@@ -73,6 +74,7 @@ export function SkuPanel({ items, onChange, onFetchFnskus, fetchingFnskus }: Pro
       onChange([...items, {
         sku: p.sku,
         fnsku: p.fnsku ?? '',
+        asin: p.asin ?? null,
         quantity: 1,
         productName: p.productName,
         listingTitle: null,

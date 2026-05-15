@@ -18,6 +18,7 @@ export function getRowValue(row: TemplateRow, item: LabelItem): string {
     case 'size':   return attrs['Size']   ?? attrs['size']   ?? ''
     case 'gender': return attrs['Gender'] ?? attrs['gender'] ?? ''
     case 'sku':    return item.sku
+    case 'asin':   return item.asin ?? ''
     case 'custom': return row.customValue
     default: return ''
   }

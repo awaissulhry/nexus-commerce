@@ -4,6 +4,7 @@ import { getInventoryFnskus, isFbaInboundConfigured } from './fba-inbound.servic
 export interface FnskuLookupResult {
   sku: string
   fnsku: string | null
+  asin: string | null
   error?: string
   productName: string | null
   listingTitle: string | null
@@ -33,6 +34,7 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
     select: {
       sku: true,
       fnsku: true,
+      amazonAsin: true,
       name: true,
       variantAttributes: true,
       categoryAttributes: true,
@@ -95,6 +97,7 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
       return {
         sku,
         fnsku: null,
+        asin: null,
         error: 'SKU not found in database',
         productName: null,
         listingTitle: null,
@@ -107,10 +110,8 @@ export async function lookupFnskus(skus: string[]): Promise<FnskuLookupResult[]>
     return {
       sku,
       fnsku: p.fnsku ?? null,
-      // Only surface SP-API errors (config/network) — missing FBA inventory
-      // is not an error, just means the SKU isn't currently enrolled in FBA.
+      asin: p.amazonAsin ?? null,
       ...(needsFetch && spApiError && !spApiError.includes('not enrolled') ? { error: spApiError } : {}),
-      // Use parent name (shorter, no size/color suffix) for the MODEL label field
       productName: p.parent?.name ?? p.name ?? null,
       listingTitle: p.channelListings[0]?.title ?? p.name ?? null,
       variationAttributes: extractAttrs(p),

@@ -90,6 +90,7 @@ export default function FnskuLabelDesigner() {
           ...it,
           fnskuLoading: false,
           fnsku: hit.fnsku ?? it.fnsku,
+          asin: it.asin ?? hit.asin ?? null,
           fnskuError: hit.error,
           productName: it.productName ?? hit.productName,
           listingTitle: it.listingTitle ?? hit.listingTitle,
@@ -190,6 +191,17 @@ export default function FnskuLabelDesigner() {
 
   const totalLabelCount = items.reduce((s, it) => s + Math.max(1, it.quantity), 0)
 
+  // Per-sheet capacity (matches PDF service calculation)
+  const { widthMm, heightMm } = template.labelSize
+  const a4Cols = Math.max(1, Math.floor((210 - 10 + 2) / (widthMm + 2)))
+  const a4Rows = Math.max(1, Math.floor((297 - 10 + 2) / (heightMm + 2)))
+  const labelsPerSheet = a4Cols * a4Rows
+
+  const fillSheet = () => {
+    if (items.length === 0) return
+    setItems(prev => prev.map((it, i) => i === selectedIdx ? { ...it, quantity: labelsPerSheet } : it))
+  }
+
   return (
     <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-950">
       {/* Top bar */}
@@ -204,6 +216,17 @@ export default function FnskuLabelDesigner() {
         <span className="font-semibold text-slate-900 dark:text-slate-100">FNSKU Label Designer</span>
         <div className="flex-1" />
         <span className="text-xs text-slate-400">{totalLabelCount} label{totalLabelCount !== 1 ? 's' : ''} total</span>
+        <span className="text-xs text-slate-400 hidden sm:inline">·</span>
+        <span className="text-xs text-slate-400 hidden sm:inline">{a4Cols}×{a4Rows} = {labelsPerSheet}/sheet</span>
+        {items.length > 0 && (
+          <button
+            onClick={fillSheet}
+            title={`Set selected SKU qty to ${labelsPerSheet} to fill one A4 sheet`}
+            className="text-xs h-7 px-2 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            Fill sheet
+          </button>
+        )}
         <div className="flex items-center gap-1.5">
           <button
             onClick={handlePrint}
