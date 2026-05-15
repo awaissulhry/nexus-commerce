@@ -93,6 +93,27 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: 'familyCompleteness', label: 'Family ✓', labelKey: 'products.col.familyCompleteness', width: 110 },
   { key: 'updated',      label: 'Updated',  labelKey: 'products.col.updated',      width: 110 },
 
+  // ── Status Matrix columns ───────────────────────────────────────────
+  // Channel-rollup cells (worst-status across all marketplaces).
+  // Used by the Grid lens's Matrix view-mode + pickable in the standard
+  // column picker. The cell renderer reads ProductRow.marketplaceCoverage
+  // (populated by /api/products?includeMarketplaceCoverage=true).
+  { key: 'ch_AMAZON',  label: 'Amazon',  labelKey: 'products.col.chAmazon',  width: 96 },
+  { key: 'ch_EBAY',    label: 'eBay',    labelKey: 'products.col.chEbay',    width: 96 },
+  { key: 'ch_SHOPIFY', label: 'Shopify', labelKey: 'products.col.chShopify', width: 96 },
+
+  // Per-marketplace traffic-light cells.
+  { key: 'mkt_AMAZON_IT',     label: 'Amazon IT',  labelKey: 'products.col.mktAmazonIt',     width: 80 },
+  { key: 'mkt_AMAZON_DE',     label: 'Amazon DE',  labelKey: 'products.col.mktAmazonDe',     width: 80 },
+  { key: 'mkt_AMAZON_FR',     label: 'Amazon FR',  labelKey: 'products.col.mktAmazonFr',     width: 80 },
+  { key: 'mkt_AMAZON_UK',     label: 'Amazon UK',  labelKey: 'products.col.mktAmazonUk',     width: 80 },
+  { key: 'mkt_AMAZON_ES',     label: 'Amazon ES',  labelKey: 'products.col.mktAmazonEs',     width: 80 },
+  { key: 'mkt_EBAY_IT',       label: 'eBay IT',    labelKey: 'products.col.mktEbayIt',       width: 80 },
+  { key: 'mkt_EBAY_DE',       label: 'eBay DE',    labelKey: 'products.col.mktEbayDe',       width: 80 },
+  { key: 'mkt_EBAY_FR',       label: 'eBay FR',    labelKey: 'products.col.mktEbayFr',       width: 80 },
+  { key: 'mkt_EBAY_UK',       label: 'eBay UK',    labelKey: 'products.col.mktEbayUk',       width: 80 },
+  { key: 'mkt_SHOPIFY_GLOBAL', label: 'Shopify',   labelKey: 'products.col.mktShopifyGlobal', width: 80 },
+
   // ── Always-trailing locked column ───────────────────────────────────
   { key: 'actions', label: '', width: 140, locked: true },
 ]
