@@ -286,6 +286,28 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
           <p className="text-[10px] text-slate-400 mt-1">≥25mm width recommended for reliable scanning.</p>
         </Section>
 
+        {/* ── Sheet layout (A4 mode) ─────────────── */}
+        <Section title="A4 sheet layout">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-slate-500 shrink-0 w-28">Columns</span>
+            <input
+              type="number" min={0} max={10} step={1}
+              value={template.sheetCols ?? ''}
+              placeholder="auto"
+              onChange={e => {
+                const v = e.target.value === '' ? undefined : Math.max(1, parseInt(e.target.value) || 1)
+                patch({ sheetCols: v })
+              }}
+              className="w-16 h-6 px-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:outline-none"
+            />
+            <span className="text-xs text-slate-400">(blank = auto)</span>
+          </div>
+          <SliderRow label="Sheet margin" value={template.sheetMarginMm ?? 5} min={0} max={20} step={0.5} unit="mm"
+            onChange={v => patch({ sheetMarginMm: v })} />
+          <SliderRow label="Label gap" value={template.sheetGapMm ?? 2} min={0} max={10} step={0.5} unit="mm"
+            onChange={v => patch({ sheetGapMm: v })} />
+        </Section>
+
         {/* ── Logo URL ────────────────────────────── */}
         {template.showLogo && (
           <Section title="Logo URL">

@@ -191,10 +191,13 @@ export default function FnskuLabelDesigner() {
 
   const totalLabelCount = items.reduce((s, it) => s + Math.max(1, it.quantity), 0)
 
-  // Per-sheet capacity (matches PDF service calculation)
+  // Per-sheet capacity — mirrors computeSheetLayout() in the PDF service exactly
   const { widthMm, heightMm } = template.labelSize
-  const a4Cols = Math.max(1, Math.floor((210 - 10 + 2) / (widthMm + 2)))
-  const a4Rows = Math.max(1, Math.floor((297 - 10 + 2) / (heightMm + 2)))
+  const sheetMarginMm = template.sheetMarginMm ?? 5
+  const sheetGapMm    = template.sheetGapMm    ?? 2
+  const autoCols      = Math.max(1, Math.floor((210 - 2 * sheetMarginMm + sheetGapMm) / (widthMm + sheetGapMm)))
+  const a4Cols        = template.sheetCols && template.sheetCols > 0 ? template.sheetCols : autoCols
+  const a4Rows        = Math.max(1, Math.floor((297 - 2 * sheetMarginMm + sheetGapMm) / (heightMm + sheetGapMm)))
   const labelsPerSheet = a4Cols * a4Rows
 
   const fillSheet = () => {

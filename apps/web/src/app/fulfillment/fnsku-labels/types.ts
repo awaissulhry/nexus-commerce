@@ -41,6 +41,11 @@ export interface TemplateConfig {
   badgeFontScale: number       // 0.5–2.0, default 1.0
   valueFontScale: number       // 0.5–2.0, default 1.0
 
+  // Sheet layout (A4 mode)
+  sheetCols?: number        // override auto-calculated columns (blank = auto)
+  sheetMarginMm?: number    // sheet edge margin mm (default 5)
+  sheetGapMm?: number       // gap between labels mm (default 2)
+
   // Field rows
   rows: TemplateRow[]
 }

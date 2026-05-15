@@ -1,14 +1,13 @@
 /**
- * FNSKU label PDF generator — pdfkit-based, strict layout budgeting.
+ * FNSKU Label PDF — pdfkit renderer.
  *
- * Every element has a pre-calculated height allocation. The entire label is
- * wrapped in a clip path so nothing can visually escape the boundary even if
- * calculations are off. Font sizes are capped to never exceed their allocated
- * space. No element position relies on doc.y — all coordinates are absolute.
+ * All layout constants are IDENTICAL to LabelPreview.tsx so the PDF matches
+ * the screen preview pixel-for-pixel. Vertical centering of rows and the
+ * barcode stack mirrors CSS flexbox justifyContent:'center'.
  *
  * Two modes:
  *   'label' — one label per page, page = label dimensions (thermal printers)
- *   'a4'    — labels tiled on A4 pages (5mm margin, 2mm gap, auto cols×rows)
+ *   'a4'    — labels tiled on A4 with configurable margin/gap/columns
  */
 
 import PDFDocument from 'pdfkit'
@@ -44,6 +43,9 @@ interface TemplateConfig {
   fontFamily?: string
   badgeFontScale?: number
   valueFontScale?: number
+  sheetCols?: number
+  sheetMarginMm?: number
+  sheetGapMm?: number
   rows: TemplateRow[]
 }
 
@@ -55,6 +57,35 @@ interface LabelItem {
   listingTitle?: string | null
   variationAttributes?: Record<string, string>
   imageUrl?: string | null
+}
+
+// ── Layout constants — MUST match LabelPreview.tsx exactly ───────────────────
+// These are ratios of label height H (or width W where noted).
+
+const L = {
+  LOGO_H:         0.22,   // logo area height / H
+  LOGO_GAP:       0.025,  // gap after logo / H  (= padPx in preview marginBottom)
+  BADGE_FS:       0.07,   // badge font size / H
+  BADGE_PAD_V:    0.02,   // badge vertical padding / H
+  BADGE_PAD_H:    0.03,   // badge horizontal padding / H
+  BADGE_MIN_W:    0.45,   // badge min width / H
+  VAL_FS_1:       0.13,   // first-row value font / H
+  VAL_FS_N:       0.10,   // other-row value font / H
+  ROW_GAP:        0.025,  // gap between rows / H
+  COL_GAP_W:      0.015,  // badge-to-value gap / W (label WIDTH)
+  SIZE_BOX_PAD:   0.01,   // size-box inner v-padding / H
+  SIZE_HDR_FS:    0.06,   // size header font / H
+  SIZE_HDR_PAD:   0.005,  // size header inner v-padding / H
+  SIZE_VAL_FS:    0.19,   // size value font / H
+  SIZE_VAL_MT:    0.01,   // size value margin-top / H
+  SIZE_MB:        0.025,  // size box margin-bottom (= padPx) / H
+  BARCODE_FS:     0.063,  // FNSKU text max font / H
+  BARCODE_MT:     0.004,  // FNSKU text margin-top / H (≈ 2px at 288px)
+  TITLE_FS:       0.052,  // listing title font / H
+  TITLE_MT:       0.010,  // listing title margin-top / H (≈ 3px at 288px)
+  TITLE_LH:       1.25,   // listing title line height
+  COND_FS:        0.052,  // condition font / H
+  COND_MT:        0.007,  // condition margin-top / H (≈ 2px at 288px)
 }
 
 // ── CODE128B encoder ──────────────────────────────────────────────────────────
@@ -131,16 +162,12 @@ function getRowValue(row: TemplateRow, item: LabelItem): string {
 
 function resolveFont(family?: string, bold = false): string {
   const f = (family ?? 'Arial').toLowerCase()
-  if (f.includes('mono') || f.includes('courier')) return bold ? 'Courier-Bold' : 'Courier'
+  if (f.includes('mono') || f.includes('courier')) return bold ? 'Courier-Bold'  : 'Courier'
   if (f.includes('georgia') || f.includes('times')) return bold ? 'Times-Bold'   : 'Times-Roman'
   return bold ? 'Helvetica-Bold' : 'Helvetica'
 }
 
-/**
- * Auto-shrink font size until text fits within maxWidth.
- * Uses pdfkit's widthOfString() which is font-metric accurate.
- * Returns the fitted font size; also leaves doc in that font/size state.
- */
+/** Auto-shrink font size so text fits within maxWidth (using actual font metrics). */
 function fitTextSize(
   doc: InstanceType<typeof PDFDocument>,
   text: string,
@@ -158,7 +185,6 @@ function fitTextSize(
   return fs
 }
 
-// Image fetch with 4-second timeout and per-process cache
 const imageCache = new Map<string, Buffer | null>()
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   if (imageCache.has(url)) return imageCache.get(url)!
@@ -173,7 +199,7 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   }
 }
 
-// ── Label renderer — strict layout budgeting + clipping ──────────────────────
+// ── Label renderer ────────────────────────────────────────────────────────────
 
 async function drawLabel(
   doc: InstanceType<typeof PDFDocument>,
@@ -184,227 +210,290 @@ async function drawLabel(
   item: LabelItem,
   template: TemplateConfig,
 ) {
-  const rightPct  = Math.max(15, Math.min(55, template.columnSplitPct ?? 38)) / 100
-  const rightW    = wPt * rightPct
-  const leftW     = wPt - rightW
-  const padPt     = mm(template.paddingMm ?? 2)
-  const innerH    = hPt - 2 * padPt          // usable height in both columns
-
+  // Derived dimensions
+  const rightPct   = Math.max(15, Math.min(55, template.columnSplitPct ?? 38)) / 100
+  const rightW     = wPt * rightPct
+  const leftW      = wPt - rightW
+  const padPt      = mm(template.paddingMm ?? 2)
   const badgeScale = template.badgeFontScale ?? 1
   const valueScale = template.valueFontScale ?? 1
   const fontBase   = resolveFont(template.fontFamily)
   const fontBold   = resolveFont(template.fontFamily, true)
   const activeRows = (template.rows ?? []).filter(r => r.show)
+  const attrs      = item.variationAttributes ?? {}
+  const sizeVal    = attrs['Size'] ?? attrs['size'] ?? ''
 
-  const attrs  = item.variationAttributes ?? {}
-  const sizeVal = attrs['Size'] ?? attrs['size'] ?? ''
-
-  // ── CLIP everything to label boundary ────────────────────────────────────
+  // ── Clip everything to label boundary ────────────────────────────────────
   doc.save()
   doc.rect(xPt, yPt, wPt, hPt).clip()
 
-  // Thin border (drawn inside clip so it's always visible)
-  doc.rect(xPt, yPt, wPt, hPt).stroke('#bbbbbb')
+  // Label border (matches preview '1px solid #999')
+  doc.lineWidth(0.5).rect(xPt, yPt, wPt, hPt).stroke('#999999')
 
-  // ── LEFT COLUMN ───────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════
+  // LEFT COLUMN
+  // ═══════════════════════════════════════════════════════════════════
   const lx = xPt + padPt
+  const leftInnerW = leftW - padPt * 2
 
-  // ---- Logo ----------------------------------------------------------------
-  let logoH = 0
-  if (template.showLogo && template.logoUrl) {
-    logoH = Math.min(hPt * 0.20, innerH * 0.25)
-    const buf = await fetchImageBuffer(template.logoUrl)
-    if (buf) {
-      try {
-        doc.image(buf, lx, yPt + padPt, { fit: [leftW - padPt * 2, logoH] })
-      } catch { /* unsupported format — skip silently */ }
+  // ── Logo ─────────────────────────────────────────────────────────
+  // Matches preview: showLogo shows logo area (with or without URL)
+  let logoAreaH = 0
+  if (template.showLogo) {
+    logoAreaH = hPt * L.LOGO_H
+
+    if (template.logoUrl) {
+      const buf = await fetchImageBuffer(template.logoUrl)
+      if (buf) {
+        try { doc.image(buf, lx, yPt + padPt, { fit: [leftInnerW, logoAreaH] }) }
+        catch { /* unsupported format */ }
+      }
+    } else {
+      // Placeholder box — matches preview's black "LOGO" badge
+      const placeH = logoAreaH * 0.5
+      const placeW = Math.min(mm(25), leftInnerW * 0.55)
+      const placeX = lx
+      const placeY = yPt + padPt + (logoAreaH - placeH) / 2
+      const logoFs = fitTextSize(doc, 'LOGO', fontBold, placeH * 0.5, placeW - mm(2))
+      doc.rect(placeX, placeY, placeW, placeH).fill('#000000')
+      doc.font(fontBold).fontSize(logoFs).fillColor('#ffffff')
+         .text('LOGO', placeX, placeY + (placeH - logoFs) / 2, { width: placeW, align: 'center', lineBreak: false })
     }
   }
 
-  // ---- Field rows ----------------------------------------------------------
-  const rowsStartY = yPt + padPt + (logoH > 0 ? logoH + padPt * 0.5 : 0)
-  const rowsH      = (yPt + hPt - padPt) - rowsStartY
-  const rowCount   = activeRows.length
-  const rowH       = rowCount > 0 ? rowsH / rowCount : 0
+  // ── Field rows — centred vertically in remaining left-col space ───
+  // Mirrors CSS: flex column, justifyContent:'center', gap: hPt*L.ROW_GAP
+  const logoGapPt   = logoAreaH > 0 ? padPt : 0   // matches preview marginBottom: padPx
+  const rowsTopY    = yPt + padPt + logoAreaH + logoGapPt
+  const rowsAvailH  = yPt + hPt - padPt - rowsTopY
 
+  // Pre-compute each row's natural height to enable vertical centering
+  const rowHeights = activeRows.map((row, i) => {
+    const badgeFs  = hPt * L.BADGE_FS * badgeScale
+    const badgeH   = badgeFs + 2 * hPt * L.BADGE_PAD_V
+    const valueFs  = hPt * (i === 0 ? L.VAL_FS_1 : L.VAL_FS_N) * valueScale * (row.fontScale ?? 1)
+    return Math.max(badgeH, valueFs)
+  })
+
+  const rowGap      = hPt * L.ROW_GAP
+  const N           = rowHeights.length
+  const totalGroupH = rowHeights.reduce((s, h) => s + h, 0) + (N > 1 ? (N - 1) * rowGap : 0)
+  // Center the group: matches justifyContent:'center'
+  const groupStartY = rowsTopY + Math.max(0, (rowsAvailH - totalGroupH) / 2)
+
+  let curRowY = groupStartY
   activeRows.forEach((row, i) => {
-    const isFirst  = i === 0
-    const badgeFs  = Math.min(hPt * 0.07  * badgeScale, rowH * 0.42)
-    const valueFs  = Math.min(
-      hPt * (isFirst ? 0.12 : 0.09) * valueScale * (row.fontScale ?? 1),
-      rowH * (isFirst ? 0.62 : 0.52),
-    )
-    const badgePadH = badgeFs * 0.28
-    const badgePadW = badgeFs * 0.45
-    const badgeH    = badgeFs + badgePadH * 2
+    const rowH    = rowHeights[i]
+    const rowMidY = curRowY + rowH / 2
 
-    // Vertical centre within this row
-    const rowTopY  = rowsStartY + i * rowH
-    const rowMidY  = rowTopY + rowH / 2
-
-    // Badge width — measure text then ensure minimum
-    doc.font(fontBold).fontSize(badgeFs)
+    const badgeFs  = hPt * L.BADGE_FS * badgeScale
+    const badgePadV = hPt * L.BADGE_PAD_V
+    const badgePadH = hPt * L.BADGE_PAD_H
+    const badgeH   = badgeFs + 2 * badgePadV
     const badgeLabel = (row.badgeText || '—').toUpperCase()
-    const measuredW  = doc.widthOfString(badgeLabel)
-    const badgeMinW  = hPt * 0.42 * badgeScale
-    const badgeW     = Math.max(badgeMinW, measuredW + badgePadW * 2)
 
-    const badgeX = lx
-    const badgeY = rowMidY - badgeH / 2
+    // Measure badge width (identical to preview's minWidth: hPx * 0.45 * scale)
+    doc.font(fontBold).fontSize(badgeFs)
+    const measuredBadge = doc.widthOfString(badgeLabel)
+    const badgeMinW     = hPt * L.BADGE_MIN_W * badgeScale
+    const badgeW        = Math.max(badgeMinW, measuredBadge + badgePadH * 2)
+    const badgeY        = rowMidY - badgeH / 2
 
     // Draw badge (black fill, white text)
-    doc.rect(badgeX, badgeY, badgeW, badgeH).fill('#111111')
+    doc.rect(lx, badgeY, badgeW, badgeH).fill('#111111')
     doc.font(fontBold).fontSize(badgeFs).fillColor('#ffffff')
-       .text(badgeLabel, badgeX, badgeY + badgePadH,
-             { width: badgeW, align: 'center', lineBreak: false })
+       .text(badgeLabel, lx, badgeY + badgePadV, { width: badgeW, align: 'center', lineBreak: false })
 
-    // Value text — auto-shrink to fit available width
-    const tx     = row.textTransform ?? 'uppercase'
-    const value  = applyTextTransform(getRowValue(row, item), tx) || '—'
-    const vFont  = row.boldValue !== false ? fontBold : fontBase
-    const valueX = lx + badgeW + mm(1.5)
-    const valueW = Math.max(mm(5), leftW - padPt - badgeW - mm(1.5))
-    const fittedValueFs = fitTextSize(doc, value, vFont, valueFs, valueW)
-    const valueY = rowMidY - fittedValueFs / 2
+    // Value text — gap from badge matches preview wPx * 0.015
+    const tx       = row.textTransform ?? 'uppercase'
+    const rawValue = getRowValue(row, item)
+    const value    = applyTextTransform(rawValue, tx) || '—'
+    const vFont    = row.boldValue !== false ? fontBold : fontBase
+    const valueFs  = hPt * (i === 0 ? L.VAL_FS_1 : L.VAL_FS_N) * valueScale * (row.fontScale ?? 1)
+    const colGap   = wPt * L.COL_GAP_W
+    const valueX   = lx + badgeW + colGap
+    const valueW   = Math.max(mm(4), leftInnerW - badgeW - colGap)
+    const fitted   = fitTextSize(doc, value, vFont, valueFs, valueW)
+    const valueY   = rowMidY - fitted / 2
 
-    doc.font(vFont).fontSize(fittedValueFs).fillColor('#000000')
+    doc.font(vFont).fontSize(fitted).fillColor('#000000')
        .text(value, valueX, valueY, { width: valueW, lineBreak: false })
+
+    curRowY += rowH + (i < N - 1 ? rowGap : 0)
   })
 
   // Divider line
   if (template.showColumnDivider !== false) {
-    doc.moveTo(xPt + leftW, yPt + padPt)
+    doc.lineWidth(0.5)
+       .moveTo(xPt + leftW, yPt + padPt)
        .lineTo(xPt + leftW, yPt + hPt - padPt)
        .stroke('#dddddd')
   }
 
-  // ── RIGHT COLUMN — budget height before drawing anything ──────────────────
-  const rx = xPt + leftW + padPt
+  // ═══════════════════════════════════════════════════════════════════
+  // RIGHT COLUMN
+  // Pre-calculate all heights before drawing, then centre barcode stack
+  // ═══════════════════════════════════════════════════════════════════
+  const rx          = xPt + leftW + padPt
   const innerRightW = rightW - padPt * 2
 
-  // --- Size box budget ------------------------------------------------------
-  let sizeBoxH   = 0
-  let sizeHeaderH = 0
-  let sizeValFs  = 0
+  // ── Size box ─────────────────────────────────────────────────────
+  // Dimensions mirror CSS: border + inner padding + header + marginTop + value
+  let sizeBoxTotalH = 0
+  let sizeHdrH      = 0
+  let sizeValFsBase = 0
 
   if (template.showSizeBox) {
-    sizeHeaderH = Math.min(hPt * 0.06, innerH * 0.10)
-    sizeValFs   = Math.min(hPt * 0.17, Math.max(sizeHeaderH * 1.2, (innerH * 0.28) - sizeHeaderH))
-    sizeBoxH    = sizeHeaderH + sizeValFs * 1.2 + mm(1.5)
+    sizeHdrH      = hPt * L.SIZE_HDR_FS + 2 * hPt * L.SIZE_HDR_PAD
+    sizeValFsBase = hPt * L.SIZE_VAL_FS
+    sizeBoxTotalH = 2 * hPt * L.SIZE_BOX_PAD + sizeHdrH + hPt * L.SIZE_VAL_MT + sizeValFsBase
   }
+  const sizeBoxMB = template.showSizeBox ? hPt * L.SIZE_MB : 0
 
-  // --- Barcode budget -------------------------------------------------------
-  const barcodeHPct = Math.min(template.barcodeHeightPct ?? 32, 55)
-  let barcodeHPt = Math.min(innerH * barcodeHPct / 100, innerH * 0.55)
-  if (template.showSizeBox) barcodeHPt = Math.min(barcodeHPt, innerH - sizeBoxH - padPt * 0.5 - mm(8))
+  // ── Barcode + info stack dimensions ──────────────────────────────
+  const barcodeHPct  = Math.min(template.barcodeHeightPct ?? 32, 55)
+  const barcodeHPt   = hPt * barcodeHPct / 100
+  const quietZonePt  = mm(2)
+  const rawBarcodeW  = Math.max(mm(5), innerRightW * ((template.barcodeWidthPct ?? 100) / 100))
+  const effBarcodeW  = Math.max(mm(10), rawBarcodeW - 2 * quietZonePt)
+  const bcX          = rx + (innerRightW - effBarcodeW) / 2
 
-  // Width with quiet zone enforcement
-  const barcodeWPct = template.barcodeWidthPct ?? 100
-  const quietZonePt = mm(2)
-  const rawBarcodeW = Math.max(mm(5), innerRightW * (barcodeWPct / 100))
-  const effectiveBarcodeW = Math.max(mm(10), rawBarcodeW - 2 * quietZonePt)
-  const bcX = rx + (innerRightW - effectiveBarcodeW) / 2
+  const isMono = /mono|courier/i.test(template.fontFamily ?? '')
+  const charWR = isMono ? 0.62 : 0.58
 
-  // --- Info block budget (FNSKU text + listing title + condition) -----------
-  const usedH   = sizeBoxH + (sizeBoxH > 0 ? padPt * 0.5 : 0) + barcodeHPt + mm(1.5)
-  const infoH   = Math.max(0, innerH - usedH)
-
-  const fnskuFs = item.fnsku ? Math.min(innerH * 0.06, Math.max(mm(2), infoH * 0.28)) : 0
-  const fnskuH  = fnskuFs > 0 ? fnskuFs * 1.4 : 0
-
+  // Font sizes for info stack (same ratios as preview)
+  const fnskuFsRaw   = item.fnsku ? Math.min(hPt * L.BARCODE_FS, effBarcodeW / (item.fnsku.length * charWR + 2)) : 0
   const maxTitleLines = template.listingTitleLines ?? 2
-  const titleFs = (template.showListingTitle && item.listingTitle)
-    ? Math.min(innerH * 0.05, Math.max(mm(1.5), (infoH - fnskuH) * 0.5 / maxTitleLines))
-    : 0
-  const titleH  = titleFs > 0 ? titleFs * 1.35 * maxTitleLines + mm(0.5) : 0
+  const titleFsRaw   = (template.showListingTitle && item.listingTitle) ? hPt * L.TITLE_FS : 0
+  const condFsRaw    = template.showCondition ? hPt * L.COND_FS : 0
 
-  const condFs  = template.showCondition
-    ? Math.min(titleFs > 0 ? titleFs : innerH * 0.05, Math.max(mm(1.5), infoH - fnskuH - titleH))
-    : 0
+  // Stack height: barcode + gap + FNSKU text + title + condition
+  // Matches preview flex column with margins
+  const fnskuH  = fnskuFsRaw > 0 ? fnskuFsRaw + hPt * L.BARCODE_MT : 0
+  const titleH  = titleFsRaw > 0 ? titleFsRaw * L.TITLE_LH * maxTitleLines + hPt * L.TITLE_MT : 0
+  const condH   = condFsRaw  > 0 ? condFsRaw + hPt * L.COND_MT : 0
+  const stackH  = barcodeHPt + mm(1) + fnskuH + titleH + condH
 
-  // --- Draw right column top-to-bottom (all positions are absolute) ---------
+  // Remaining right-col height after size box — centre stack in it (CSS justifyContent:'center')
+  const rightUsedBySize = sizeBoxTotalH + sizeBoxMB
+  const rightRemaining  = hPt - 2 * padPt - rightUsedBySize
+  const stackOffsetY    = Math.max(0, (rightRemaining - stackH) / 2)
+
+  // ── Draw right column ─────────────────────────────────────────────
   let ry = yPt + padPt
 
   // Size box
-  if (template.showSizeBox && sizeBoxH > 0) {
-    const boxW    = innerRightW
+  if (template.showSizeBox && sizeBoxTotalH > 0) {
+    const boxW     = innerRightW
     const sizeLabel = (template.sizeBoxLabel || 'SIZE').toUpperCase()
+    const border   = 1.5  // pt, matches CSS 2px
 
-    // Border
-    doc.rect(rx, ry, boxW, sizeBoxH).stroke('#111111')
+    doc.lineWidth(border).rect(rx, ry, boxW, sizeBoxTotalH).stroke('#111111')
+
     // Header strip
-    doc.rect(rx, ry, boxW, sizeHeaderH).fill('#111111')
-    const sizeHdrFs = fitTextSize(doc, sizeLabel, fontBold, sizeHeaderH * 0.65, boxW - mm(1))
-    doc.font(fontBold).fontSize(sizeHdrFs).fillColor('#ffffff')
-       .text(sizeLabel, rx, ry + (sizeHeaderH - sizeHdrFs) / 2, { width: boxW, align: 'center', lineBreak: false })
-    // Size value — auto-shrink to always fit inside box width
-    const sizeValY    = ry + sizeHeaderH + mm(0.5)
-    const fittedValFs = fitTextSize(doc, sizeVal || '—', fontBold, sizeValFs, boxW - mm(1))
-    doc.font(fontBold).fontSize(fittedValFs).fillColor('#000000')
-       .text(sizeVal || '—', rx, sizeValY, { width: boxW, align: 'center', lineBreak: false })
+    const hdrY  = ry + hPt * L.SIZE_BOX_PAD
+    const hdrFs = fitTextSize(doc, sizeLabel, fontBold, hPt * L.SIZE_HDR_FS, boxW - mm(2))
+    doc.rect(rx, hdrY, boxW, sizeHdrH).fill('#111111')
+    doc.font(fontBold).fontSize(hdrFs).fillColor('#ffffff')
+       .text(sizeLabel, rx, hdrY + hPt * L.SIZE_HDR_PAD, { width: boxW, align: 'center', lineBreak: false })
 
-    ry += sizeBoxH + padPt * 0.5
+    // Size value
+    const valY  = hdrY + sizeHdrH + hPt * L.SIZE_VAL_MT
+    const valFs = fitTextSize(doc, sizeVal || '—', fontBold, sizeValFsBase, boxW - mm(2))
+    doc.font(fontBold).fontSize(valFs).fillColor('#000000')
+       .text(sizeVal || '—', rx, valY, { width: boxW, align: 'center', lineBreak: false })
+
+    ry += sizeBoxTotalH + sizeBoxMB
   }
 
-  // Barcode
-  if (item.fnsku && barcodeHPt > 0) {
+  // Barcode stack — centred in remaining space
+  ry += stackOffsetY
+
+  if (item.fnsku) {
+    // White quiet-zone background
+    doc.rect(bcX - quietZonePt, ry, effBarcodeW + 2 * quietZonePt, barcodeHPt).fill('#ffffff')
+
+    // Barcode bars
     const { bars, totalUnits } = encodeBarcode(item.fnsku)
     if (totalUnits > 0) {
-      const scale = effectiveBarcodeW / totalUnits
-      // White background behind barcode for clean scan
-      doc.rect(bcX - quietZonePt, ry, effectiveBarcodeW + 2 * quietZonePt, barcodeHPt).fill('#ffffff')
+      const scale = effBarcodeW / totalUnits
       for (const b of bars) {
         doc.rect(bcX + b.x * scale, ry, Math.max(0.1, b.w * scale), barcodeHPt).fill('#000000')
       }
     }
     ry += barcodeHPt + mm(1)
 
-    // FNSKU text — fit to barcode width so it always aligns with the bars above
-    if (fnskuFs > 0 && item.fnsku) {
-      const fittedFnskuFs = fitTextSize(doc, item.fnsku, fontBase, fnskuFs, effectiveBarcodeW)
-      doc.font(fontBase).fontSize(fittedFnskuFs).fillColor('#111111')
+    // FNSKU text (centred under barcode)
+    if (fnskuFsRaw > 0) {
+      const fnskuFs = fitTextSize(doc, item.fnsku, fontBase, fnskuFsRaw, effBarcodeW)
+      doc.font(fontBase).fontSize(fnskuFs).fillColor('#111111')
          .text(item.fnsku, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
-      ry += fittedFnskuFs * 1.4
+      ry += fnskuH
     }
 
-    // Listing title — line-wrapped, height capped
-    if (titleFs > 0 && item.listingTitle) {
-      doc.font(fontBase).fontSize(titleFs).fillColor('#333333')
+    // Listing title
+    if (titleFsRaw > 0 && item.listingTitle) {
+      ry += hPt * L.TITLE_MT
+      doc.font(fontBase).fontSize(titleFsRaw).fillColor('#333333')
          .text(item.listingTitle, rx, ry, {
            width: innerRightW, align: 'center',
            lineBreak: true,
-           height: titleFs * 1.35 * maxTitleLines,
+           height: titleFsRaw * L.TITLE_LH * maxTitleLines,
          })
-      ry += titleH
+      ry += titleFsRaw * L.TITLE_LH * maxTitleLines
     }
 
-    // Condition — fit to available width
-    if (condFs > 0) {
+    // Condition
+    if (condFsRaw > 0) {
+      ry += hPt * L.COND_MT
       const condText = template.condition || 'New'
-      const fittedCondFs = fitTextSize(doc, condText, fontBase, condFs, innerRightW - mm(1))
-      doc.font(fontBase).fontSize(fittedCondFs).fillColor('#333333')
+      const condFs   = fitTextSize(doc, condText, fontBase, condFsRaw, innerRightW - mm(1))
+      doc.font(fontBase).fontSize(condFs).fillColor('#333333')
          .text(condText, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
     }
-  } else if (!item.fnsku) {
-    // No FNSKU placeholder
-    const placeH = Math.min(barcodeHPt, innerH * 0.4)
-    doc.rect(rx, ry, innerRightW, placeH).stroke('#cccccc')
-    doc.font(fontBase).fontSize(Math.min(mm(4), placeH * 0.3)).fillColor('#aaaaaa')
-       .text('No FNSKU', rx, ry + placeH / 2 - mm(2), { width: innerRightW, align: 'center', lineBreak: false })
+
+  } else {
+    // No FNSKU placeholder (matches preview dashed border)
+    const placeH = barcodeHPt
+    doc.lineWidth(0.5).rect(rx, ry, innerRightW, placeH)
+       .dash(3, { space: 3 }).stroke('#cccccc').undash()
+    const noFs = fitTextSize(doc, 'No FNSKU', fontBase, mm(4), innerRightW - mm(2))
+    doc.font(fontBase).fontSize(noFs).fillColor('#bbbbbb')
+       .text('No FNSKU', rx, ry + placeH / 2 - noFs / 2, { width: innerRightW, align: 'center', lineBreak: false })
   }
 
-  // ── Restore (also removes clip) ───────────────────────────────────────────
+  // Remove clip
   doc.restore()
 }
 
-// ── Sheet capacity helper (mirrors FnskuLabelDesigner.tsx calculation) ────────
+// ── Sheet layout helpers ──────────────────────────────────────────────────────
 
-export function labelsPerA4Sheet(widthMm: number, heightMm: number): { cols: number; rows: number; total: number } {
-  const marginMm = 5
-  const gapMm    = 2
-  const cols = Math.max(1, Math.floor((210 - 2 * marginMm + gapMm) / (widthMm + gapMm)))
+export interface SheetLayout {
+  cols: number
+  rows: number
+  total: number
+  marginMm: number
+  gapMm: number
+  effectiveLabelW: number  // mm (may differ from configured if cols override applied)
+}
+
+export function computeSheetLayout(widthMm: number, heightMm: number, template: TemplateConfig): SheetLayout {
+  const marginMm = template.sheetMarginMm ?? 5
+  const gapMm    = template.sheetGapMm    ?? 2
+  const userCols = template.sheetCols
+
+  // Auto-calculate or use override
+  const autoCols = Math.max(1, Math.floor((210 - 2 * marginMm + gapMm) / (widthMm + gapMm)))
+  const cols     = userCols && userCols > 0 ? userCols : autoCols
+
+  // When user specifies cols, compute the effective label width to fill that many columns
+  const effectiveLabelW = userCols && userCols > 0
+    ? (210 - 2 * marginMm - (cols - 1) * gapMm) / cols
+    : widthMm
+
   const rows = Math.max(1, Math.floor((297 - 2 * marginMm + gapMm) / (heightMm + gapMm)))
-  return { cols, rows, total: cols * rows }
+
+  return { cols, rows, total: cols * rows, marginMm, gapMm, effectiveLabelW }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -417,53 +506,48 @@ export async function renderFnskuLabelPdf(
   const { widthMm, heightMm } = template.labelSize
   const wPt = mm(widthMm)
   const hPt = mm(heightMm)
-
   const chunks: Buffer[] = []
 
   if (mode === 'label') {
     const doc = new PDFDocument({ size: [wPt, hPt], margin: 0, autoFirstPage: false })
     doc.on('data', (c: Buffer) => chunks.push(c))
-    const finished = new Promise<Buffer>((resolve, reject) => {
-      doc.on('end',   () => resolve(Buffer.concat(chunks)))
-      doc.on('error', reject)
+    const done = new Promise<Buffer>((res, rej) => {
+      doc.on('end', () => res(Buffer.concat(chunks)))
+      doc.on('error', rej)
     })
     for (const item of items) {
       doc.addPage({ size: [wPt, hPt], margin: 0 })
       await drawLabel(doc, 0, 0, wPt, hPt, item, template)
     }
     doc.end()
-    return finished
+    return done
 
   } else {
-    const A4W      = mm(210)
-    const A4H      = mm(297)
-    const marginPt = mm(5)
-    const gapPt    = mm(2)
-
-    const { cols, rows } = labelsPerA4Sheet(widthMm, heightMm)
+    const { cols, rows, marginMm, gapMm, effectiveLabelW } = computeSheetLayout(widthMm, heightMm, template)
+    const marginPt = mm(marginMm)
+    const gapPt    = mm(gapMm)
+    const effWPt   = mm(effectiveLabelW)
 
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false })
     doc.on('data', (c: Buffer) => chunks.push(c))
-    const finished = new Promise<Buffer>((resolve, reject) => {
-      doc.on('end',   () => resolve(Buffer.concat(chunks)))
-      doc.on('error', reject)
+    const done = new Promise<Buffer>((res, rej) => {
+      doc.on('end', () => res(Buffer.concat(chunks)))
+      doc.on('error', rej)
     })
 
     let col = 0, row = 0, pageOpen = false
 
     for (const item of items) {
       if (!pageOpen) { doc.addPage({ size: 'A4', margin: 0 }); pageOpen = true }
-
-      const xPt = marginPt + col * (wPt + gapPt)
-      const yPt = marginPt + row * (hPt + gapPt)
-      await drawLabel(doc, xPt, yPt, wPt, hPt, item, template)
-
+      const xPt = marginPt + col * (effWPt + gapPt)
+      const yPt = marginPt + row * (hPt    + gapPt)
+      await drawLabel(doc, xPt, yPt, effWPt, hPt, item, template)
       col++
       if (col >= cols) { col = 0; row++ }
       if (row >= rows) { col = 0; row = 0; pageOpen = false }
     }
 
     doc.end()
-    return finished
+    return done
   }
 }
