@@ -95,7 +95,7 @@ export default function FnskuLabelDesigner() {
   const fetchFnskus = useCallback(async (targetItems: LabelItem[], force = false) => {
     const needsFnsku = force
       ? targetItems.filter(it => it.sku)
-      : targetItems.filter(it => !it.fnsku && it.sku)
+      : targetItems.filter(it => (!it.fnsku || !it.listingTitle) && it.sku)
     if (needsFnsku.length === 0) return
     setFetchingFnskus(true)
     // Mark them as loading
