@@ -171,17 +171,27 @@ export function LabelPreview({ item, template }: Props) {
                   maxWidthPx={barcodeW}
                   showText={false}
                 />
-                {/* FNSKU text — nowrap, never truncates */}
+                {/* FNSKU text — width-fitted using font-aware char estimate */}
                 <div style={{
-                  fontSize: Math.min(hPx * 0.063, barcodeW / (item.fnsku.length * 0.6 + 2)),
-                  fontFamily: fontFam,
-                  letterSpacing: '0.05em',
-                  color: '#111',
-                  marginTop: 2,
-                  textAlign: 'center',
+                  width: barcodeW,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  textAlign: 'center',
+                  marginTop: 2,
                 }}>
-                  {item.fnsku}
+                  <span style={{
+                    // proportional fonts avg ~0.55× char width; monospace exactly 0.6×
+                    fontSize: Math.min(
+                      hPx * 0.063,
+                      barcodeW / (item.fnsku.length * (/mono|courier/i.test(fontFam) ? 0.62 : 0.58) + 2),
+                    ),
+                    fontFamily: fontFam,
+                    letterSpacing: '0.03em',
+                    color: '#111',
+                  }}>
+                    {item.fnsku}
+                  </span>
                 </div>
                 {template.showListingTitle && item.listingTitle && (
                   <div style={{

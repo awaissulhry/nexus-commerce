@@ -136,6 +136,28 @@ function resolveFont(family?: string, bold = false): string {
   return bold ? 'Helvetica-Bold' : 'Helvetica'
 }
 
+/**
+ * Auto-shrink font size until text fits within maxWidth.
+ * Uses pdfkit's widthOfString() which is font-metric accurate.
+ * Returns the fitted font size; also leaves doc in that font/size state.
+ */
+function fitTextSize(
+  doc: InstanceType<typeof PDFDocument>,
+  text: string,
+  font: string,
+  startSize: number,
+  maxWidth: number,
+  minSize = mm(2),
+): number {
+  let fs = Math.max(minSize, startSize)
+  doc.font(font).fontSize(fs)
+  while (fs > minSize && doc.widthOfString(text) > maxWidth) {
+    fs = Math.max(minSize, fs - 0.4)
+    doc.font(font).fontSize(fs)
+  }
+  return fs
+}
+
 // Image fetch with 4-second timeout and per-process cache
 const imageCache = new Map<string, Buffer | null>()
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
@@ -236,16 +258,17 @@ async function drawLabel(
        .text(badgeLabel, badgeX, badgeY + badgePadH,
              { width: badgeW, align: 'center', lineBreak: false })
 
-    // Value text
+    // Value text — auto-shrink to fit available width
     const tx     = row.textTransform ?? 'uppercase'
     const value  = applyTextTransform(getRowValue(row, item), tx) || '—'
     const vFont  = row.boldValue !== false ? fontBold : fontBase
     const valueX = lx + badgeW + mm(1.5)
-    const valueW = leftW - padPt - badgeW - mm(1.5)
-    const valueY = rowMidY - valueFs / 2
+    const valueW = Math.max(mm(5), leftW - padPt - badgeW - mm(1.5))
+    const fittedValueFs = fitTextSize(doc, value, vFont, valueFs, valueW)
+    const valueY = rowMidY - fittedValueFs / 2
 
-    doc.font(vFont).fontSize(valueFs).fillColor('#000000')
-       .text(value, valueX, valueY, { width: Math.max(1, valueW), lineBreak: false, ellipsis: true })
+    doc.font(vFont).fontSize(fittedValueFs).fillColor('#000000')
+       .text(value, valueX, valueY, { width: valueW, lineBreak: false })
   })
 
   // Divider line
@@ -311,11 +334,13 @@ async function drawLabel(
     doc.rect(rx, ry, boxW, sizeBoxH).stroke('#111111')
     // Header strip
     doc.rect(rx, ry, boxW, sizeHeaderH).fill('#111111')
-    doc.font(fontBold).fontSize(sizeHeaderH * 0.65).fillColor('#ffffff')
-       .text(sizeLabel, rx, ry + sizeHeaderH * 0.17, { width: boxW, align: 'center', lineBreak: false })
-    // Size value
-    const sizeValY = ry + sizeHeaderH + mm(0.5)
-    doc.font(fontBold).fontSize(sizeValFs).fillColor('#000000')
+    const sizeHdrFs = fitTextSize(doc, sizeLabel, fontBold, sizeHeaderH * 0.65, boxW - mm(1))
+    doc.font(fontBold).fontSize(sizeHdrFs).fillColor('#ffffff')
+       .text(sizeLabel, rx, ry + (sizeHeaderH - sizeHdrFs) / 2, { width: boxW, align: 'center', lineBreak: false })
+    // Size value — auto-shrink to always fit inside box width
+    const sizeValY    = ry + sizeHeaderH + mm(0.5)
+    const fittedValFs = fitTextSize(doc, sizeVal || '—', fontBold, sizeValFs, boxW - mm(1))
+    doc.font(fontBold).fontSize(fittedValFs).fillColor('#000000')
        .text(sizeVal || '—', rx, sizeValY, { width: boxW, align: 'center', lineBreak: false })
 
     ry += sizeBoxH + padPt * 0.5
@@ -334,14 +359,15 @@ async function drawLabel(
     }
     ry += barcodeHPt + mm(1)
 
-    // FNSKU text
-    if (fnskuFs > 0) {
-      doc.font(fontBase).fontSize(fnskuFs).fillColor('#111111')
+    // FNSKU text — fit to barcode width so it always aligns with the bars above
+    if (fnskuFs > 0 && item.fnsku) {
+      const fittedFnskuFs = fitTextSize(doc, item.fnsku, fontBase, fnskuFs, effectiveBarcodeW)
+      doc.font(fontBase).fontSize(fittedFnskuFs).fillColor('#111111')
          .text(item.fnsku, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
-      ry += fnskuH
+      ry += fittedFnskuFs * 1.4
     }
 
-    // Listing title
+    // Listing title — line-wrapped, height capped
     if (titleFs > 0 && item.listingTitle) {
       doc.font(fontBase).fontSize(titleFs).fillColor('#333333')
          .text(item.listingTitle, rx, ry, {
@@ -352,10 +378,12 @@ async function drawLabel(
       ry += titleH
     }
 
-    // Condition
+    // Condition — fit to available width
     if (condFs > 0) {
-      doc.font(fontBase).fontSize(condFs).fillColor('#333333')
-         .text(template.condition || 'New', rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
+      const condText = template.condition || 'New'
+      const fittedCondFs = fitTextSize(doc, condText, fontBase, condFs, innerRightW - mm(1))
+      doc.font(fontBase).fontSize(fittedCondFs).fillColor('#333333')
+         .text(condText, rx, ry, { width: innerRightW, align: 'center', lineBreak: false })
     }
   } else if (!item.fnsku) {
     // No FNSKU placeholder
