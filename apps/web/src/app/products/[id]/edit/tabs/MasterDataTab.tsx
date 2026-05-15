@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronsDown,
+  GitFork,
   Globe,
   Loader2,
   RefreshCw,
@@ -42,6 +44,9 @@ const MASTER_FIELDS = [
 ] as const
 
 type MasterField = (typeof MASTER_FIELDS)[number]
+
+// Fields that make sense to cascade to child variants
+const CASCADE_FIELDS = new Set<MasterField>(['name', 'brand', 'manufacturer'])
 
 function seedFromProduct(product: any): Record<MasterField, string> {
   const seed = {} as Record<MasterField, string>
@@ -83,6 +88,13 @@ export default function MasterDataTab({
   useEffect(() => { dataRef.current = data }, [data])
   const saveTimer = useRef<number | null>(null)
   const reportDirty = () => onDirtyChange(dirtyRef.current.size)
+
+  // IN.3 — per-field cascade state
+  const childCount: number = product.childCount ?? (product.isParent ? 1 : 0)
+  const canCascade = product.isParent && childCount > 0
+  const [cascadeField, setCascadeField] = useState<MasterField | null>(null)
+  const [cascading, setCascading] = useState(false)
+  const [cascadeAllOpen, setCascadeAllOpen] = useState(false)
 
   const update = (field: MasterField, value: string) => {
     setData((prev) => ({ ...prev, [field]: value }))
@@ -173,6 +185,37 @@ export default function MasterDataTab({
     }
   }
 
+  // IN.3 — push a single field (or array of fields) to all children
+  const doCascade = useCallback(async (fields: (MasterField | string)[]) => {
+    setCascading(true)
+    try {
+      const changes = fields.map((field) => ({
+        id: product.id,
+        field,
+        value: (dataRef.current as Record<string, string>)[field] === '' ? null : (dataRef.current as Record<string, string>)[field],
+        cascade: true,
+      }))
+      const res = await fetch(`${getBackendUrl()}/api/products/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changes }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      const body = await res.json().catch(() => null)
+      const affected: number = body?.affectedChildren?.length ?? childCount
+      toast({ tone: 'success', title: `Cascaded to ${affected} variant${affected !== 1 ? 's' : ''}` })
+    } catch (e: any) {
+      toast({ tone: 'error', title: 'Cascade failed', description: e?.message ?? String(e) })
+    } finally {
+      setCascading(false)
+      setCascadeField(null)
+      setCascadeAllOpen(false)
+    }
+  }, [product.id, childCount, toast])
+
   // Flush on unmount so an in-flight debounce doesn't drop the last edit.
   useEffect(() => {
     return () => {
@@ -198,6 +241,8 @@ export default function MasterDataTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [discardSignal, product])
 
+  const cascadableDirtyFields = Array.from(dirtyRef.current).filter((f) => CASCADE_FIELDS.has(f)) as MasterField[]
+
   return (
     <div className="space-y-4">
       {conflict && (
@@ -209,7 +254,40 @@ export default function MasterDataTab({
           t={t}
         />
       )}
-      <SaveStatusBar status={status} error={error} t={t} />
+
+      {/* Save status + cascade-all button */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <SaveStatusBar status={status} error={error} t={t} />
+        {canCascade && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setCascadeAllOpen((o) => !o)}
+              title={`Push fields to ${childCount} child variant${childCount !== 1 ? 's' : ''}`}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
+                cascadeAllOpen
+                  ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300'
+                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+              )}
+            >
+              <ChevronsDown className="w-3.5 h-3.5" />
+              Cascade to variants
+            </button>
+            {cascadeAllOpen && (
+              <CascadeAllPopover
+                fields={CASCADE_FIELDS}
+                data={data}
+                childCount={childCount}
+                cascading={cascading}
+                highlightFields={new Set(cascadableDirtyFields)}
+                onApply={(fields) => void doCascade(fields)}
+                onClose={() => setCascadeAllOpen(false)}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       <Card
         title={t('products.edit.master.identityTitle')}
@@ -234,17 +312,55 @@ export default function MasterDataTab({
               tooltip={t('products.edit.master.aiSuggestTitle')}
             />
             <NameCounter value={data.name} t={t} />
+            {canCascade && (
+              <CascadeFieldButton
+                field="name"
+                active={cascadeField === 'name'}
+                cascading={cascading && cascadeField === 'name'}
+                childCount={childCount}
+                onRequest={() => setCascadeField(cascadeField === 'name' ? null : 'name')}
+                onConfirm={() => void doCascade(['name'])}
+                onCancel={() => setCascadeField(null)}
+                offsetRight="2.5rem"
+              />
+            )}
           </div>
-          <Input
-            label={t('products.edit.master.brandLabel')}
-            value={data.brand}
-            onChange={(e) => update('brand', e.target.value)}
-          />
-          <Input
-            label={t('products.edit.master.manufacturerLabel')}
-            value={data.manufacturer}
-            onChange={(e) => update('manufacturer', e.target.value)}
-          />
+          <div className="relative">
+            <Input
+              label={t('products.edit.master.brandLabel')}
+              value={data.brand}
+              onChange={(e) => update('brand', e.target.value)}
+            />
+            {canCascade && (
+              <CascadeFieldButton
+                field="brand"
+                active={cascadeField === 'brand'}
+                cascading={cascading && cascadeField === 'brand'}
+                childCount={childCount}
+                onRequest={() => setCascadeField(cascadeField === 'brand' ? null : 'brand')}
+                onConfirm={() => void doCascade(['brand'])}
+                onCancel={() => setCascadeField(null)}
+              />
+            )}
+          </div>
+          <div className="relative">
+            <Input
+              label={t('products.edit.master.manufacturerLabel')}
+              value={data.manufacturer}
+              onChange={(e) => update('manufacturer', e.target.value)}
+            />
+            {canCascade && (
+              <CascadeFieldButton
+                field="manufacturer"
+                active={cascadeField === 'manufacturer'}
+                cascading={cascading && cascadeField === 'manufacturer'}
+                childCount={childCount}
+                onRequest={() => setCascadeField(cascadeField === 'manufacturer' ? null : 'manufacturer')}
+                onConfirm={() => void doCascade(['manufacturer'])}
+                onCancel={() => setCascadeField(null)}
+              />
+            )}
+          </div>
           <Input
             label={t('products.edit.master.upcLabel')}
             value={data.upc}
@@ -283,6 +399,170 @@ export default function MasterDataTab({
   )
 }
 
+// ── IN.3 — Per-field cascade button ──────────────────────────────────────────
+
+interface CascadeFieldButtonProps {
+  field: string
+  active: boolean
+  cascading: boolean
+  childCount: number
+  onRequest: () => void
+  onConfirm: () => void
+  onCancel: () => void
+  /** Extra right offset to avoid overlapping other absolute buttons (e.g. AI suggest). */
+  offsetRight?: string
+}
+
+function CascadeFieldButton({
+  field, active, cascading, childCount,
+  onRequest, onConfirm, onCancel,
+  offsetRight = '0.375rem',
+}: CascadeFieldButtonProps) {
+  if (active) {
+    return (
+      <div
+        className="absolute bottom-1.5 flex items-center gap-1"
+        style={{ right: offsetRight }}
+      >
+        <span className="text-[10px] text-amber-700 dark:text-amber-400 whitespace-nowrap">
+          Push to {childCount} variant{childCount !== 1 ? 's' : ''}?
+        </span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={cascading}
+          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+        >
+          {cascading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <GitFork className="w-2.5 h-2.5" />}
+          Push
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex items-center justify-center w-4 h-4 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onRequest}
+      title={`Cascade ${field} to all child variants`}
+      className="absolute bottom-1.5 inline-flex items-center justify-center w-6 h-6 rounded text-slate-300 dark:text-slate-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+      style={{ right: offsetRight }}
+    >
+      <GitFork className="w-3.5 h-3.5" />
+    </button>
+  )
+}
+
+// ── IN.3 — Cascade-all popover ────────────────────────────────────────────────
+
+const CASCADE_FIELD_LABELS: Record<string, string> = {
+  name: 'Name',
+  brand: 'Brand',
+  manufacturer: 'Manufacturer',
+}
+
+interface CascadeAllPopoverProps {
+  fields: Set<string>
+  data: Record<string, string>
+  childCount: number
+  cascading: boolean
+  highlightFields: Set<string>
+  onApply: (fields: MasterField[]) => void
+  onClose: () => void
+}
+
+function CascadeAllPopover({
+  fields, data, childCount, cascading, highlightFields, onApply, onClose,
+}: CascadeAllPopoverProps) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(fields))
+
+  function toggle(f: string) {
+    setSelected((prev) => {
+      const n = new Set(prev)
+      n.has(f) ? n.delete(f) : n.add(f)
+      return n
+    })
+  }
+
+  return (
+    <div className="absolute left-0 top-full mt-1.5 z-50 w-64 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <ChevronsDown className="w-3.5 h-3.5 text-amber-500" />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            Cascade to {childCount} variant{childCount !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="px-3 py-2 space-y-1">
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-2">
+          Select fields to push to all child variants:
+        </p>
+        {Array.from(fields).map((f) => {
+          const val = data[f] ?? ''
+          const isDirty = highlightFields.has(f)
+          return (
+            <label
+              key={f}
+              className={cn(
+                'flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors',
+                selected.has(f)
+                  ? 'bg-amber-50 dark:bg-amber-900/20'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(f)}
+                onChange={() => toggle(f)}
+                className="w-3.5 h-3.5 accent-amber-500 shrink-0"
+              />
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 w-24 shrink-0">
+                {CASCADE_FIELD_LABELS[f] ?? f}
+                {isDirty && (
+                  <span className="ml-1 text-[9px] text-amber-500 font-semibold">unsaved</span>
+                )}
+              </span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-mono">
+                {val || '—'}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+        >
+          Cancel
+        </button>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={selected.size === 0 || cascading}
+          onClick={() => onApply(Array.from(selected) as MasterField[])}
+        >
+          {cascading
+            ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
+            : <ChevronsDown className="w-3 h-3 mr-1" />}
+          Push {selected.size} field{selected.size !== 1 ? 's' : ''}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function AiSuggestOverlay({ busy, onClick, tooltip }: { busy: boolean; onClick: () => void; tooltip: string }) {
   return (
     <button
@@ -292,7 +572,7 @@ function AiSuggestOverlay({ busy, onClick, tooltip }: { busy: boolean; onClick: 
       aria-label={tooltip}
       disabled={busy}
       className={cn(
-        'absolute right-1.5 bottom-1.5 inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 transition-colors',
+        'absolute right-7 bottom-1.5 inline-flex items-center justify-center w-6 h-6 rounded text-slate-400 dark:text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 dark:hover:text-blue-400 transition-colors',
         busy && 'opacity-50 cursor-wait',
       )}
     >

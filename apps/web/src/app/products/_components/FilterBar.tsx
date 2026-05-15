@@ -27,6 +27,7 @@ import { Filter, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { cn } from '@/lib/utils'
 
 interface Tag {
   id: string
@@ -97,6 +98,7 @@ interface FilterBarProps {
   hasDescription: string | null | undefined
   hasBrand: string | null | undefined
   hasGtin: string | null | undefined
+  driftOnly: string | null | undefined
   filterCount: number
   facets: Facets | null
   tags: Tag[]
@@ -138,6 +140,7 @@ export function FilterBar(props: FilterBarProps) {
     hasDescription,
     hasBrand,
     hasGtin,
+    driftOnly,
     filterCount,
     facets,
     tags,
@@ -340,6 +343,14 @@ export function FilterBar(props: FilterBarProps) {
       clear: () => updateUrl({ hasGtin: undefined, page: undefined }),
     })
   }
+  if (driftOnly === 'true') {
+    activePills.push({
+      key: 'drift',
+      label: 'Channel drift',
+      value: 'Has overrides',
+      clear: () => updateUrl({ driftOnly: undefined, page: undefined }),
+    })
+  }
 
   return (
     <div className="space-y-2">
@@ -392,6 +403,7 @@ export function FilterBar(props: FilterBarProps) {
                 hasDescription: undefined,
                 hasBrand: undefined,
                 hasGtin: undefined,
+                driftOnly: undefined,
                 page: undefined,
               })
             }
@@ -640,6 +652,26 @@ export function FilterBar(props: FilterBarProps) {
                   })
                 }
               />
+              {/* IN.4 — drift filter */}
+              <div className="min-w-0">
+                <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                  Channel drift
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateUrl({ driftOnly: driftOnly === 'true' ? undefined : 'true', page: undefined })
+                  }
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
+                    driftOnly === 'true'
+                      ? 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  )}
+                >
+                  Has overrides
+                </button>
+              </div>
             </div>
           </div>
         </div>

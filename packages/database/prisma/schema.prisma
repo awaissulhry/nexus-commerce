@@ -45,6 +45,7 @@ enum OutboundSyncStatus {
   SUCCESS
   FAILED
   SKIPPED
+  CANCELLED
 }
 
 enum PricingRuleType {
@@ -3475,11 +3476,18 @@ model OutboundSyncQueue {
   syncType          String // "PRICE_UPDATE", "QUANTITY_UPDATE", "LISTING_SYNC", "OFFER_SYNC", "FULL_SYNC"
   externalListingId String? // Amazon ASIN or eBay ItemID
 
+  // ── P3.2 — Dead-letter queue ────────────────────────────────────
+  // Set to true when retryCount >= maxRetries and the job is FAILED.
+  // These jobs are surfaced in the Dead Letters tab and require manual re-enqueue.
+  isDead Boolean   @default(false)
+  diedAt DateTime?
+
   @@index([productId])
   @@index([channelListingId])
   @@index([syncStatus])
   @@index([targetChannel])
   @@index([nextRetryAt])
+  @@index([isDead, targetChannel])
 }
 
 // ── Phase 5: Bulk Operations Audit Log ───────────────────────────────
@@ -9039,9 +9047,13 @@ model ProductReadCache {
   @@index([totalStock])
   @@index([updatedAt(sort: Desc)])
   @@index([deletedAt])
+  // IN.4 — count of ChannelListings where any followMaster*=false
+  driftCount Int @default(0)
+
   @@index([photoCount])
   @@index([channelCount])
   @@index([variantCount])
+  @@index([driftCount])
 }
 
 // ── ES.1 — Immutable Product Event Log ───────────────────────────────

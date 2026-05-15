@@ -33,6 +33,12 @@ export interface OrderChangeNotification {
 export interface SqsOrderMessage {
   notification: OrderChangeNotification
   receiptHandle: string
+  /** SQS Message.MessageId — used as WebhookEvent.externalId for dedup. */
+  messageId: string
+  /** Raw parsed SNS/notification payload for WebhookEvent.payload storage. */
+  rawPayload: unknown
+  /** The raw NotificationType string from the envelope. */
+  notificationType: string
 }
 
 function buildClient(): SQSClient | null {
@@ -103,6 +109,9 @@ export async function pollSqsMessages(maxMessages = 10): Promise<SqsOrderMessage
           purchaseDate: payload.PurchaseDate,
         },
         receiptHandle: msg.ReceiptHandle,
+        messageId: msg.MessageId ?? '',
+        rawPayload: inner,
+        notificationType: notifType,
       })
     } catch (err) {
       logger.warn('[SQS] message parse error — deleting', {

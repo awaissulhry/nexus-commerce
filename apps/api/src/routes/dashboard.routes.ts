@@ -22,6 +22,9 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { getAllAmazonCircuitStates, resetAllAmazonCircuits } from '../services/amazon-publish-gate.service.js'
+import { getAllEbayCircuitStates, resetAllEbayCircuits } from '../services/ebay-publish-gate.service.js'
+import { getAllShopifyCircuitStates, resetAllShopifyCircuits } from '../services/shopify-publish-gate.service.js'
 
 type Window = 'today' | '7d' | '30d' | '90d' | 'ytd' | 'custom'
 
@@ -2832,6 +2835,62 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: message })
     }
   })
+  // ── P3.3 — Circuit breaker state ──────────────────────────────────────────
+  //
+  // Reads in-process state from publish gates (Amazon, eBay, Shopify).
+  // Safe to call frequently — no DB or Redis access.
+
+  fastify.get('/dashboard/circuit-breakers', async (_request, reply) => {
+    // Aggregate per-channel: worst state wins (open > half-open > closed)
+    function aggregate(states: Record<string, { state: string; failureCount: number; openedAt: string | null; lastError?: string }>): {
+      state: 'closed' | 'open' | 'half-open'
+      failureCount: number
+      openedAt: string | null
+      lastError: string | null
+      keyCount: number
+    } {
+      const entries = Object.values(states)
+      if (entries.length === 0) return { state: 'closed', failureCount: 0, openedAt: null, lastError: null, keyCount: 0 }
+      const worst = entries.reduce((a, b) => {
+        const rank = (s: string) => s === 'open' ? 2 : s === 'half-open' ? 1 : 0
+        return rank(b.state) > rank(a.state) ? b : a
+      })
+      return {
+        state: worst.state as 'closed' | 'open' | 'half-open',
+        failureCount: worst.failureCount,
+        openedAt: worst.openedAt,
+        lastError: (worst as any).lastError ?? null,
+        keyCount: entries.length,
+      }
+    }
+
+    return reply.send({
+      AMAZON: aggregate(getAllAmazonCircuitStates()),
+      EBAY: aggregate(getAllEbayCircuitStates()),
+      SHOPIFY: aggregate(getAllShopifyCircuitStates()),
+    })
+  })
+
+  fastify.post<{ Params: { channel: string } }>(
+    '/dashboard/circuit-breakers/:channel/reset',
+    async (request, reply) => {
+      const { channel } = request.params
+      switch (channel.toUpperCase()) {
+        case 'AMAZON':
+          resetAllAmazonCircuits()
+          break
+        case 'EBAY':
+          resetAllEbayCircuits()
+          break
+        case 'SHOPIFY':
+          resetAllShopifyCircuits()
+          break
+        default:
+          return reply.code(400).send({ error: `Unknown channel: ${channel}` })
+      }
+      return reply.send({ ok: true, channel: channel.toUpperCase(), state: 'closed' })
+    },
+  )
 }
 
 export default dashboardRoutes

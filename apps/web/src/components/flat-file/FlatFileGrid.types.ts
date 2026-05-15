@@ -90,8 +90,10 @@ export interface ToolbarFetchCtx {
 
 export interface ToolbarImportCtx {
   loading: boolean
+  rows: BaseRow[]
   setRows: React.Dispatch<React.SetStateAction<BaseRow[]>>
   pushHistory: (rows: BaseRow[]) => void
+  onReload: () => void
 }
 
 export interface ReplicateCtx {

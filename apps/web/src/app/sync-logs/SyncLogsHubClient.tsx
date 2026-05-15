@@ -40,8 +40,12 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
   Timer,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -198,6 +202,20 @@ export interface AlertsRollup {
   }>
 }
 
+interface CircuitState {
+  state: 'closed' | 'open' | 'half-open'
+  failureCount: number
+  openedAt: string | null
+  lastError: string | null
+  keyCount: number
+}
+
+interface CircuitBreakersPayload {
+  AMAZON: CircuitState
+  EBAY: CircuitState
+  SHOPIFY: CircuitState
+}
+
 interface InitialPayload {
   health: HealthRollup | null
   crons: CronRunsRollup | null
@@ -252,6 +270,8 @@ export default function SyncLogsHubClient({
   const [health, setHealth] = useState<HealthRollup | null>(initial.health)
   const [crons, setCrons] = useState<CronRunsRollup | null>(initial.crons)
   const [audit, setAudit] = useState<AuditRollup | null>(initial.audit)
+  const [circuits, setCircuits] = useState<CircuitBreakersPayload | null>(null)
+  const [resettingCircuit, setResettingCircuit] = useState<string | null>(null)
   const [apiCalls, setApiCalls] = useState<ApiCallsRollup | null>(
     initial.apiCalls,
   )
@@ -272,7 +292,7 @@ export default function SyncLogsHubClient({
     try {
       const backend = getBackendUrl()
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const [hRes, cRes, aRes, apiRes, egRes, alRes] = await Promise.all([
+      const [hRes, cRes, aRes, apiRes, egRes, alRes, cbRes] = await Promise.all([
         fetch(`${backend}/api/dashboard/health`, { cache: 'no-store' }),
         fetch(`${backend}/api/dashboard/cron-runs`, { cache: 'no-store' }),
         fetch(
@@ -291,6 +311,7 @@ export default function SyncLogsHubClient({
           `${backend}/api/sync-logs/alerts/events?status=TRIGGERED&limit=10`,
           { cache: 'no-store' },
         ),
+        fetch(`${backend}/api/dashboard/circuit-breakers`, { cache: 'no-store' }),
       ])
       if (hRes.ok) setHealth(await hRes.json())
       if (cRes.ok) setCrons(await cRes.json())
@@ -298,6 +319,7 @@ export default function SyncLogsHubClient({
       if (apiRes.ok) setApiCalls(await apiRes.json())
       if (egRes.ok) setErrorGroups(await egRes.json())
       if (alRes.ok) setAlerts(await alRes.json())
+      if (cbRes.ok) setCircuits(await cbRes.json())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -375,7 +397,7 @@ export default function SyncLogsHubClient({
               {t('syncLogs.hub.deepLink.auditLog')}
             </Button>
           </Link>
-          <Link href="/outbound">
+          <Link href="/sync-logs/outbound-queue">
             <Button variant="secondary" size="sm">
               <Boxes className="w-3.5 h-3.5" />
               {t('syncLogs.hub.deepLink.outboundQueue')}
@@ -524,6 +546,32 @@ export default function SyncLogsHubClient({
               }
             />
           </section>
+
+          {/* P3.3 — Circuit breaker state row */}
+          {circuits && (
+            <CircuitBreakerRow
+              circuits={circuits}
+              resetting={resettingCircuit}
+              onReset={async (channel) => {
+                setResettingCircuit(channel)
+                try {
+                  const res = await fetch(
+                    `${getBackendUrl()}/api/dashboard/circuit-breakers/${channel}/reset`,
+                    { method: 'POST' },
+                  )
+                  if (res.ok) {
+                    // Optimistic update
+                    setCircuits((prev) => prev ? {
+                      ...prev,
+                      [channel]: { ...prev[channel as keyof CircuitBreakersPayload], state: 'closed', failureCount: 0, openedAt: null, lastError: null },
+                    } : prev)
+                  }
+                } finally {
+                  setResettingCircuit(null)
+                }
+              }}
+            />
+          )}
 
           {/* L.16.2 — firing alerts banner. Pulses while there's an
               unresolved triggered event. Distinct from the error-group
@@ -1081,5 +1129,115 @@ function Kpi({
       </div>
       {hint && <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{hint}</div>}
     </div>
+  )
+}
+
+// ── P3.3 — Circuit breaker row ────────────────────────────────────────
+
+function fmtRelativeShort(iso: string | null): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  return `${Math.floor(diff / 3_600_000)}h ago`
+}
+
+function CircuitBreakerRow({
+  circuits,
+  resetting,
+  onReset,
+}: {
+  circuits: CircuitBreakersPayload
+  resetting: string | null
+  onReset: (channel: string) => Promise<void>
+}) {
+  const channels = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
+  const anyOpen = channels.some((ch) => circuits[ch].state !== 'closed')
+
+  return (
+    <section className={cn(
+      'rounded-md border px-4 py-3',
+      anyOpen
+        ? 'border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20'
+        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+    )}>
+      <div className="flex items-center gap-2 mb-2.5">
+        {anyOpen
+          ? <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          : <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />}
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Circuit Breakers
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {channels.map((ch) => {
+          const s = circuits[ch]
+          const isOpen = s.state === 'open'
+          const isHalf = s.state === 'half-open'
+          const isClosed = s.state === 'closed'
+
+          return (
+            <div
+              key={ch}
+              className={cn(
+                'rounded-lg border px-3 py-2 flex items-start justify-between gap-2',
+                isOpen && 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30',
+                isHalf && 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20',
+                isClosed && 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900',
+              )}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className={cn(
+                    'w-2 h-2 rounded-full flex-shrink-0',
+                    isOpen && 'bg-amber-500',
+                    isHalf && 'bg-amber-400',
+                    isClosed && 'bg-emerald-500',
+                  )} />
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{ch}</span>
+                  <span className={cn(
+                    'text-[10px] font-medium',
+                    isOpen && 'text-amber-700 dark:text-amber-400',
+                    isHalf && 'text-amber-600 dark:text-amber-400',
+                    isClosed && 'text-emerald-600 dark:text-emerald-400',
+                  )}>
+                    {s.state.toUpperCase()}
+                  </span>
+                </div>
+                {isClosed ? (
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500">
+                    {s.failureCount === 0 ? 'No failures' : `${s.failureCount} failure${s.failureCount !== 1 ? 's' : ''} (window)`}
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[10px] text-amber-700 dark:text-amber-400">
+                      {s.failureCount} failure{s.failureCount !== 1 ? 's' : ''} · {fmtRelativeShort(s.openedAt)}
+                    </div>
+                    {s.lastError && (
+                      <div className="text-[10px] text-slate-500 dark:text-slate-500 truncate mt-0.5 font-mono" title={s.lastError}>
+                        {s.lastError.slice(0, 40)}{s.lastError.length > 40 ? '…' : ''}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              {!isClosed && (
+                <button
+                  type="button"
+                  title={`Force reset ${ch} circuit`}
+                  onClick={() => void onReset(ch)}
+                  disabled={resetting === ch}
+                  className="flex-shrink-0 p-1 rounded text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-40 transition-colors"
+                >
+                  {resetting === ch
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <RotateCcw className="w-3.5 h-3.5" />}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }

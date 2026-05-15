@@ -114,6 +114,10 @@ export class OutboundSyncServicePhase9 {
 
       // ── PHASE 13: Push to BullMQ Queue ──────────────────────────────────
       // Schedule job with 5-minute delay (grace period)
+      // Deterministic jobId collapses rapid changes to the same listing+type
+      // into a single delayed BullMQ job, preventing duplicate API calls.
+      // The DB row is still created for audit; the worker processes the latest
+      // PENDING row for (channelListingId, syncType) when the job fires.
       await outboundSyncQueue.add(
         'sync-job',
         {
@@ -124,8 +128,8 @@ export class OutboundSyncServicePhase9 {
           syncType,
         },
         {
-          delay: 5 * 60 * 1000, // 5 minute grace period
-          jobId: queueRecord.id, // Use queue ID as job ID for tracking
+          delay: 5 * 60 * 1000,
+          jobId: `${listing.id}:${syncType}`,
         }
       )
 
@@ -204,7 +208,7 @@ export class OutboundSyncServicePhase9 {
 
     // ── PHASE 13: Push to BullMQ Queue ──────────────────────────────────
     // Schedule job with 5-minute delay (grace period)
-    await outboundSyncQueue.add(
+      await outboundSyncQueue.add(
       'sync-job',
       {
         queueId: queueRecord.id,
@@ -214,8 +218,8 @@ export class OutboundSyncServicePhase9 {
         syncType,
       },
       {
-        delay: 5 * 60 * 1000, // 5 minute grace period
-        jobId: queueRecord.id,
+        delay: 5 * 60 * 1000,
+        jobId: `${channelListingId}:${syncType}`,
       }
     )
 
@@ -290,8 +294,8 @@ export class OutboundSyncServicePhase9 {
         syncType,
       },
       {
-        delay: 5 * 60 * 1000, // 5 minute grace period
-        jobId: queueRecord.id,
+        delay: 5 * 60 * 1000,
+        jobId: `${offer.channelListingId}:${syncType}`,
       }
     )
 

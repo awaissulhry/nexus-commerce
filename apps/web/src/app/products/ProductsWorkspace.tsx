@@ -217,6 +217,7 @@ export default function ProductsWorkspace() {
   const hasDescription = searchParams.get('hasDescription')
   const hasBrand = searchParams.get('hasBrand')
   const hasGtin = searchParams.get('hasGtin')
+  const driftOnly = searchParams.get('driftOnly')
   // F.1 — recycle-bin lens. ?deleted=true flips the workspace into
   // soft-deleted-rows-only mode: the grid filters to deletedAt NOT
   // NULL, the bulk-action bar swaps Activate/Draft/Inactive/Tag/
@@ -386,13 +387,14 @@ export default function ProductsWorkspace() {
     if (hasDescription) qs.set('hasDescription', hasDescription)
     if (hasBrand) qs.set('hasBrand', hasBrand)
     if (hasGtin) qs.set('hasGtin', hasGtin)
+    if (driftOnly) qs.set('driftOnly', driftOnly)
     if (showDeleted) qs.set('deleted', 'true')
     qs.set('sort', sortBy)
     if (sortStack.length > 0) qs.set('sorts', sortStack.join(','))
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
     return `/api/products?${qs.toString()}`
-  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, showDeleted, sortBy, sortStack.join(',')])
+  }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly, showDeleted, sortBy, sortStack.join(',')])
 
   const {
     data: productsData,
@@ -642,6 +644,7 @@ export default function ProductsWorkspace() {
       hasDescription: undefined,
       hasBrand: undefined,
       hasGtin: undefined,
+      driftOnly: undefined,
       page: undefined,
     })
   }, [updateUrl])
@@ -846,7 +849,7 @@ export default function ProductsWorkspace() {
   )
 
   // Reset selection when filters change
-  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), familyFilters.join(','), workflowStageFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin])
+  useEffect(() => { setSelected(new Set()) }, [page, search, statusFilters.join(','), channelFilters.join(','), marketplaceFilters.join(','), productTypeFilters.join(','), brandFilters.join(','), familyFilters.join(','), workflowStageFilters.join(','), tagFilters.join(','), fulfillmentFilters.join(','), missingChannelFilters.join(','), stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly])
 
   // P.15 — page-level keyboard shortcuts. Layered on top of the
   // global CommandPalette which owns Cmd+K / `?` / `/` / 'g <l>'
@@ -920,7 +923,7 @@ export default function ProductsWorkspace() {
     productTypeFilters.length + brandFilters.length + familyFilters.length + workflowStageFilters.length + tagFilters.length +
     fulfillmentFilters.length + missingChannelFilters.length +
     (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0) +
-    (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0)
+    (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0)
 
   return (
     // P.1f — SearchContext + RiskFlaggedContext moved into VirtualizedGrid
@@ -1315,6 +1318,7 @@ export default function ProductsWorkspace() {
         hasDescription={hasDescription}
         hasBrand={hasBrand}
         hasGtin={hasGtin}
+        driftOnly={driftOnly}
         filterCount={filterCount}
         facets={facets}
         tags={tags}

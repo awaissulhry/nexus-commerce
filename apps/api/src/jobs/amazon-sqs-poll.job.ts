@@ -17,6 +17,7 @@ import { isSqsConfigured, pollSqsMessages, deleteSqsMessage } from '../services/
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import prisma from '../db.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let running = false
@@ -38,9 +39,39 @@ async function runSqsPoll(): Promise<void> {
       for (const msg of messages) {
         const { amazonOrderId, orderStatus, fulfillmentType } = msg.notification
 
+        // P3.4 — Persist to WebhookEvent so the message appears in
+        // /sync-logs/webhooks and can be replayed. Upsert on (channel, externalId)
+        // so polling the same message twice (before ack) is idempotent.
+        let webhookEventId: string | null = null
+        if (msg.messageId) {
+          try {
+            const we = await prisma.webhookEvent.upsert({
+              where: { channel_externalId: { channel: 'AMAZON', externalId: msg.messageId } },
+              create: {
+                channel: 'AMAZON',
+                eventType: msg.notificationType,
+                externalId: msg.messageId,
+                payload: msg.rawPayload as any,
+                isProcessed: false,
+              },
+              update: {},  // don't overwrite if already persisted
+              select: { id: true },
+            })
+            webhookEventId = we.id
+          } catch {
+            // Non-fatal — proceed with processing regardless
+          }
+        }
+
         // FBA orders are managed by Amazon's warehouse — no stock action needed here.
         if (fulfillmentType === 'AFN') {
           await deleteSqsMessage(msg.receiptHandle)
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { isProcessed: true, processedAt: new Date() },
+            }).catch(() => {})
+          }
           skipped++
           continue
         }
@@ -53,11 +84,23 @@ async function runSqsPoll(): Promise<void> {
           await amazonOrdersService.syncNewOrders(since, { limit: 50 })
           processed++
           logger.info('[SQS poll] processed ORDER_CHANGE', { amazonOrderId, orderStatus })
+
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { isProcessed: true, processedAt: new Date() },
+            }).catch(() => {})
+          }
         } catch (err) {
-          logger.warn('[SQS poll] order sync failed', {
-            amazonOrderId,
-            error: err instanceof Error ? err.message : String(err),
-          })
+          const errMsg = err instanceof Error ? err.message : String(err)
+          logger.warn('[SQS poll] order sync failed', { amazonOrderId, error: errMsg })
+
+          if (webhookEventId) {
+            await prisma.webhookEvent.update({
+              where: { id: webhookEventId },
+              data: { error: errMsg.slice(0, 2000) },
+            }).catch(() => {})
+          }
           // Don't delete — let SQS retry (visibility timeout will expire)
           continue
         }

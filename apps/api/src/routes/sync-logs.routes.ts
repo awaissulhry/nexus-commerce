@@ -40,6 +40,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import { dispatchShopifyWebhook } from './shopify-webhooks.js'
 import { dispatchWooWebhook } from './woocommerce-webhooks.js'
 import { dispatchEtsyWebhook } from './etsy-webhooks.js'
+import { amazonOrdersService } from '../services/amazon-orders.service.js'
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -1006,6 +1007,26 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
         })
         if (!event) {
           return reply.code(404).send({ error: 'Webhook event not found' })
+        }
+
+        // P3.4 — Amazon ORDER_CHANGE replay: re-run syncNewOrders for a 5-min window.
+        if (event.channel === 'AMAZON') {
+          try {
+            const since = new Date(Date.now() - 5 * 60 * 1000)
+            await amazonOrdersService.syncNewOrders(since, { limit: 50 })
+            await prisma.webhookEvent.update({
+              where: { id: event.id },
+              data: { isProcessed: true, processedAt: new Date(), error: null },
+            })
+            return reply.send({ success: true })
+          } catch (handlerErr) {
+            const msg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr)
+            await prisma.webhookEvent.update({
+              where: { id: event.id },
+              data: { isProcessed: false, error: msg.slice(0, 2000) },
+            })
+            return reply.code(500).send({ success: false, error: msg })
+          }
         }
 
         const dispatcher =

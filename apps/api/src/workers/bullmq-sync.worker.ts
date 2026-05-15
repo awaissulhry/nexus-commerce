@@ -15,6 +15,7 @@ import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
 import OutboundSyncService from '../services/outbound-sync.service.js'
 import { calculateTargetPrice } from '../services/repricer.service.js'
+import { productEventService } from '../services/product-event.service.js'
 
 // Worker statistics
 let processedCount = 0
@@ -299,18 +300,22 @@ async function processOutboundSyncJob(job: Job) {
     } else {
       // Determine if this is a retryable error
       const isRetryable = syncResult.retryable !== false
-      const nextRetryAt = isRetryable
-        ? new Date(Date.now() + Math.pow(2, job.attemptsMade) * 5000) // Exponential backoff
+      const newRetryCount = (queueRecord.retryCount || 0) + 1
+      const exhausted = newRetryCount >= (queueRecord.maxRetries ?? 3)
+      const nextRetryAt = isRetryable && !exhausted
+        ? new Date(Date.now() + Math.pow(2, job.attemptsMade) * 5000)
         : null
 
       await prisma.outboundSyncQueue.update({
         where: { id: queueId },
         data: {
-          syncStatus: isRetryable ? 'PENDING' : 'FAILED',
+          syncStatus: (isRetryable && !exhausted) ? 'PENDING' : 'FAILED',
           errorMessage: syncResult.error || 'Unknown error',
           errorCode: syncResult.errorCode,
-          retryCount: (queueRecord.retryCount || 0) + 1,
+          retryCount: newRetryCount,
           nextRetryAt,
+          // P3.2 — mark dead when retries exhausted
+          ...(exhausted ? { isDead: true, diedAt: new Date() } : {}),
           payload: {
             ...(queueRecord.payload as any),
             processedBy: 'BullMQ',
@@ -319,6 +324,22 @@ async function processOutboundSyncJob(job: Job) {
           },
         },
       })
+
+      if (exhausted) {
+        productEventService.emit({
+          aggregateId: queueRecord.productId ?? queueId,
+          aggregateType: 'ChannelListing',
+          eventType: 'SYNC_DEAD',
+          data: {
+            queueId,
+            channel: targetChannel,
+            syncType,
+            error: syncResult.error,
+            retryCount: newRetryCount,
+          },
+          metadata: { source: 'SYSTEM' },
+        }).catch(() => {})
+      }
 
       if (isRetryable) {
         logger.warn('⚠️ Sync failed, will retry', {

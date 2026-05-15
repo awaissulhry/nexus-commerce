@@ -45,6 +45,7 @@ export type ProductEventType =
   | 'SYNC_QUEUED'
   | 'SYNC_SUCCEEDED'
   | 'SYNC_FAILED'
+  | 'SYNC_DEAD'
   | 'BULK_OP_APPLIED'
   | 'AUTOMATION_RULE_FIRED'
   | 'AI_CONTENT_GENERATED'

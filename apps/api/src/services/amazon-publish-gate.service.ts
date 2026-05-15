@@ -266,6 +266,33 @@ export function recordAmazonOutcome(
   }
 }
 
+/** Returns current circuit state for all tracked Amazon seller+marketplace keys. */
+export function getAllAmazonCircuitStates(): Record<string, {
+  state: CircuitState
+  failureCount: number
+  openedAt: string | null
+  lastError?: string
+}> {
+  const result: ReturnType<typeof getAllAmazonCircuitStates> = {}
+  for (const [key, c] of circuits.entries()) {
+    result[key] = {
+      state: c.state,
+      failureCount: c.failureTimestamps.length,
+      openedAt: c.openedAt ? new Date(c.openedAt).toISOString() : null,
+    }
+  }
+  return result
+}
+
+/** Force-close all Amazon circuits (operator manual reset). */
+export function resetAllAmazonCircuits(): void {
+  for (const c of circuits.values()) {
+    c.state = 'closed'
+    c.failureTimestamps = []
+    c.openedAt = undefined
+  }
+}
+
 /** Test-only — wipe all in-memory state. Not exported in prod paths. */
 export function __resetAmazonPublishGateForTests(): void {
   rateBuckets.clear()

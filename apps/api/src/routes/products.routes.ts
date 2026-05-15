@@ -171,6 +171,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       hasDescription?: string
       hasBrand?: string
       hasGtin?: string
+      driftOnly?: string
       includeCoverage?: string
       includeTags?: string
       // Lazy-load children of this parent. Pass the parent's ID
@@ -363,6 +364,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         if (q.hasBrand === 'false') cacheWhere.hasBrand = false
         if (q.hasGtin === 'true') cacheWhere.hasGtin = true
         if (q.hasGtin === 'false') cacheWhere.hasGtin = false
+        // IN.4 — drift filter (any channel override active)
+        if (q.driftOnly === 'true') cacheWhere.driftCount = { gt: 0 }
         // Stock level
         if (stockLevel === 'in') cacheWhere.totalStock = { gt: 0 }
         else if (stockLevel === 'low') cacheWhere.totalStock = { gt: 0, lte: 5 }
@@ -773,6 +776,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             channelCount: p.channelCount,
             variantCount: p.variantCount,
             childCount: p.childCount,
+            driftCount: (p as any).driftCount ?? 0,
             coverage,
             tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
           }

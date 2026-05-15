@@ -1240,9 +1240,9 @@ export default function FlatFileGrid({
     [rows, selectedRows, loading],
   )
   const toolbarImportCtx = useMemo<ToolbarImportCtx>(
-    () => ({ loading, setRows, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) } }),
+    () => ({ loading, rows, setRows, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) }, onReload: () => { void onReload() } }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [loading],
+    [loading, rows],
   )
   const replicateCtx = useMemo<ReplicateCtx>(
     () => ({ rows, selectedRows, visibleGroups, pushHistory: (r: BaseRow[]) => { pushSnapshot(); setRows(r) }, setRows }),

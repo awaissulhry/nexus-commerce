@@ -14,6 +14,11 @@ import {
   recordEbayOutcome,
 } from "./ebay-publish-gate.service.js";
 import {
+  acquireShopifyPublishToken,
+  checkShopifyCircuit,
+  recordShopifyOutcome,
+} from "./shopify-publish-gate.service.js";
+import {
   digestPayload,
   writeAttemptLog,
 } from "./channel-publish-audit.service.js";
@@ -652,34 +657,36 @@ export class OutboundSyncService {
    * the NOT_IMPLEMENTED gate from C.8.
    */
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
-    const { product, payload, channelListing, id: queueId } = queueItem;
+    const { product, payload, channelListing, id: queueId, syncType } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
-    const newQty: number = payload?.quantity ?? 0;
 
-    // Shopify credentials from env / channel connection
     const shopName = process.env.SHOPIFY_SHOP_NAME ?? "";
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN ?? process.env.SHOPIFY_ADMIN_API_TOKEN ?? "";
 
     if (!shopName || !accessToken) {
       writeAttemptLog({
-        channel: "SHOPIFY",
-        marketplace: "GLOBAL",
-        sellerId: shopName || "(unset)",
-        sku,
-        productId: product?.id ?? null,
-        mode: "gated",
-        outcome: "gated",
+        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName || "(unset)",
+        sku, productId: product?.id ?? null, mode: "gated", outcome: "gated",
         payloadDigest: digestPayload(payload),
         errorMessage: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN not configured.",
       });
-      return {
-        success: false,
-        queueId,
-        channel: "SHOPIFY",
-        status: "FAILED",
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
         message: "Shopify outbound sync not configured",
-        error: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN env vars missing.",
-      };
+        error: "SHOPIFY_SHOP_NAME or SHOPIFY_ACCESS_TOKEN env vars missing." };
+    }
+
+    // P3.0 — circuit breaker check
+    const circuitCheck = checkShopifyCircuit(shopName);
+    if (!circuitCheck.ok) {
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+        message: "Shopify circuit open", error: circuitCheck.error };
+    }
+
+    // P3.0 — rate limiter
+    const tokenResult = await acquireShopifyPublishToken(shopName);
+    if (!tokenResult.ok) {
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+        message: "Shopify rate limited", error: tokenResult.error };
     }
 
     const apiBase = `https://${shopName}.myshopify.com/admin/api/2024-01`;
@@ -689,35 +696,79 @@ export class OutboundSyncService {
       Accept: "application/json",
     };
 
-    // Resolve inventory_item_id: stored in ChannelListing.platformAttributes.inventoryItemId
-    // or fall back to looking up by SKU via the Shopify Inventory Items API
+    // Resolve variant (needed for both price + inventory_item_id for qty)
+    let variantId: string | null =
+      (channelListing?.platformAttributes as Record<string, any>)?.variantId ?? null;
     let inventoryItemId: string | null =
       (channelListing?.platformAttributes as Record<string, any>)?.inventoryItemId ?? null;
 
-    if (!inventoryItemId) {
-      // Look up by variant SKU
+    if (!variantId || !inventoryItemId) {
       const varRes = await fetch(
         `${apiBase}/variants.json?sku=${encodeURIComponent(sku)}&fields=id,inventory_item_id`,
         { headers },
       ).catch(() => null);
       if (varRes?.ok) {
-        const varData = await varRes.json().catch(() => null) as { variants?: Array<{ inventory_item_id: string }> } | null;
-        inventoryItemId = varData?.variants?.[0]?.inventory_item_id ?? null;
+        const varData = await varRes.json().catch(() => null) as {
+          variants?: Array<{ id: string; inventory_item_id: string }>
+        } | null;
+        const v = varData?.variants?.[0];
+        if (v) {
+          variantId = String(v.id);
+          inventoryItemId = String(v.inventory_item_id);
+        }
       }
     }
 
-    if (!inventoryItemId) {
-      return {
-        success: false,
-        queueId,
-        channel: "SHOPIFY",
-        status: "FAILED",
-        message: `No Shopify inventory_item_id found for SKU ${sku}`,
-        error: "inventory_item_id not in ChannelListing and SKU lookup returned nothing.",
-      };
+    // ── P3.0 — Price update ──────────────────────────────────────────────
+    if (syncType === "PRICE_UPDATE" || payload?.price != null) {
+      const newPrice: number | null = payload?.price ?? null;
+      if (newPrice == null || !variantId) {
+        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+          message: `Cannot update Shopify price for SKU ${sku}: missing price or variantId`,
+          error: "price or variantId not resolved." };
+      }
+
+      const t0 = Date.now();
+      const priceStr = Number(newPrice).toFixed(2);
+      const priceRes = await fetch(`${apiBase}/variants/${variantId}.json`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ variant: { id: parseInt(variantId, 10), price: priceStr } }),
+      }).catch((err: Error) => ({ ok: false, text: async () => err.message } as any));
+
+      const succeeded = priceRes.ok;
+      const errBody = succeeded ? null : await priceRes.text().catch(() => "");
+
+      writeAttemptLog({
+        channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
+        sku, productId: product?.id ?? null, mode: "live",
+        outcome: succeeded ? "success" : "failed",
+        payloadDigest: digestPayload(payload),
+        errorMessage: succeeded ? null : `variants PUT ${priceRes.status}: ${(errBody ?? "").slice(0, 300)}`,
+        durationMs: Date.now() - t0,
+      });
+
+      recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `variants PUT ${priceRes.status}`);
+
+      if (!succeeded) {
+        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+          message: "Failed to update Shopify variant price",
+          error: `variants PUT ${priceRes.status}: ${(errBody ?? "").slice(0, 300)}` };
+      }
+
+      return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
+        message: `Shopify price updated: ${sku} → €${priceStr}` };
     }
 
-    // Resolve Shopify location ID (primary location)
+    // ── Quantity update (existing path) ─────────────────────────────────
+    const newQty: number = payload?.quantity ?? 0;
+
+    if (!inventoryItemId) {
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
+        message: `No Shopify inventory_item_id found for SKU ${sku}`,
+        error: "inventory_item_id not in ChannelListing and SKU lookup returned nothing." };
+    }
+
     let locationId: string | null = process.env.SHOPIFY_LOCATION_ID ?? null;
     if (!locationId) {
       const locRes = await fetch(`${apiBase}/locations.json?limit=1&fields=id`, { headers }).catch(() => null);
@@ -728,21 +779,14 @@ export class OutboundSyncService {
     }
 
     if (!locationId) {
-      return {
-        success: false,
-        queueId,
-        channel: "SHOPIFY",
-        status: "FAILED",
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
         message: "Could not resolve Shopify location ID",
-        error: "Set SHOPIFY_LOCATION_ID env var or connect a Shopify location.",
-      };
+        error: "Set SHOPIFY_LOCATION_ID env var or connect a Shopify location." };
     }
 
-    // Set inventory level
     const t0 = Date.now();
     const setRes = await fetch(`${apiBase}/inventory_levels/set.json`, {
-      method: "POST",
-      headers,
+      method: "POST", headers,
       body: JSON.stringify({
         location_id: parseInt(locationId, 10),
         inventory_item_id: parseInt(inventoryItemId, 10),
@@ -754,36 +798,24 @@ export class OutboundSyncService {
     const errorBody = succeeded ? null : await setRes.text().catch(() => "");
 
     writeAttemptLog({
-      channel: "SHOPIFY",
-      marketplace: "GLOBAL",
-      sellerId: shopName,
-      sku,
-      productId: product?.id ?? null,
-      mode: "live",
+      channel: "SHOPIFY", marketplace: "GLOBAL", sellerId: shopName,
+      sku, productId: product?.id ?? null, mode: "live",
       outcome: succeeded ? "success" : "failed",
       payloadDigest: digestPayload(payload),
       errorMessage: succeeded ? null : `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}`,
       durationMs: Date.now() - t0,
     });
 
+    recordShopifyOutcome(shopName, succeeded, succeeded ? undefined : `inventory_levels/set ${setRes.status}`);
+
     if (!succeeded) {
-      return {
-        success: false,
-        queueId,
-        channel: "SHOPIFY",
-        status: "FAILED",
+      return { success: false, queueId, channel: "SHOPIFY", status: "FAILED",
         message: "Failed to update Shopify inventory",
-        error: `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}`,
-      };
+        error: `inventory_levels/set ${setRes.status}: ${(errorBody ?? "").slice(0, 300)}` };
     }
 
-    return {
-      success: true,
-      queueId,
-      channel: "SHOPIFY",
-      status: "SUCCESS",
-      message: `Shopify inventory updated: ${sku} → ${newQty} at location ${locationId}`,
-    };
+    return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS",
+      message: `Shopify inventory updated: ${sku} → ${newQty} at location ${locationId}` };
   }
 
   /**

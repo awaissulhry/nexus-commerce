@@ -255,6 +255,32 @@ export function recordEbayOutcome(
   }
 }
 
+/** Returns current circuit state for all tracked eBay connection+marketplace keys. */
+export function getAllEbayCircuitStates(): Record<string, {
+  state: CircuitState
+  failureCount: number
+  openedAt: string | null
+}> {
+  const result: ReturnType<typeof getAllEbayCircuitStates> = {}
+  for (const [key, c] of circuits.entries()) {
+    result[key] = {
+      state: c.state,
+      failureCount: c.failureTimestamps.length,
+      openedAt: c.openedAt ? new Date(c.openedAt).toISOString() : null,
+    }
+  }
+  return result
+}
+
+/** Force-close all eBay circuits (operator manual reset). */
+export function resetAllEbayCircuits(): void {
+  for (const c of circuits.values()) {
+    c.state = 'closed'
+    c.failureTimestamps = []
+    c.openedAt = undefined
+  }
+}
+
 /** Test-only — wipe all in-memory state. */
 export function __resetEbayPublishGateForTests(): void {
   rateBuckets.clear()

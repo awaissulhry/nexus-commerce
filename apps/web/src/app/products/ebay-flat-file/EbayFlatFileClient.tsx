@@ -287,6 +287,14 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     try { localStorage.setItem('ff-show-overrides', showOverrideBadges ? '1' : '0') } catch {}
   }, [showOverrideBadges])
 
+  // Ensure row height is tall enough for badge + row number to both be visible
+  useState(() => {
+    try {
+      const current = parseInt(localStorage.getItem('eff-row-height') ?? '28', 10) || 28
+      if (current < 36) localStorage.setItem('eff-row-height', '36')
+    } catch {}
+  })
+
   // ── Category schema state (drives columnGroups) ────────────────────────
   const [categoryColumnsCache, setCategoryColumnsCache] = useState<Map<string, EbayColumnGroup>>(new Map())
   const [categoryColumns, setCategoryColumns] = useState<EbayColumnGroup | null>(null)
@@ -671,31 +679,24 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: import button ────────────────────────────────────────────────
 
   const renderToolbarImport = useCallback((ctx: ToolbarImportCtx) => (
-    <button type="button"
-      onClick={() => void importFromAmazon(ctx)}
-      disabled={ctx.loading}
-      title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
-      className="relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
-    >
-      <ArrowRightLeft className="w-3.5 h-3.5" />
-    </button>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [])
+    <>
+      {/* Import from Amazon */}
+      <button type="button"
+        onClick={() => void importFromAmazon(ctx)}
+        disabled={ctx.loading}
+        title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
+        className="relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+      >
+        <ArrowRightLeft className="w-3.5 h-3.5" />
+      </button>
 
-  // ── Slot: Bar3 left ────────────────────────────────────────────────────
-
-  const renderBar3Left = useCallback(() => (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap flex-shrink-0">
-        All markets
-      </span>
       {/* IN.1 — Override badges toggle */}
       <button
         type="button"
         onClick={() => setShowOverrideBadges((o) => !o)}
-        title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators'}
+        title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
         className={cn(
-          'h-6 w-6 flex items-center justify-center rounded transition-colors flex-shrink-0',
+          'h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
           showOverrideBadges
             ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
             : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300',
@@ -708,9 +709,9 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       <button
         type="button"
         onClick={() => setShowCascadeButtons((o) => !o)}
-        title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons'}
+        title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
         className={cn(
-          'h-6 w-6 flex items-center justify-center rounded transition-colors flex-shrink-0',
+          'h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
           showCascadeButtons
             ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
             : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300',
@@ -718,8 +719,49 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       >
         <GitFork className="w-3.5 h-3.5" />
       </button>
-    </div>
-  ), [showOverrideBadges, setShowOverrideBadges, showCascadeButtons, setShowCascadeButtons])
+
+      {/* IN.2 — Reset all visible overrides back to master */}
+      <button
+        type="button"
+        title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
+        onClick={async () => {
+          const overrideRows = ctx.rows.filter((r) => {
+            const fs = (r as any)._fieldStates
+            return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
+          })
+          if (!overrideRows.length) return
+          const ids = overrideRows.map((r) => (r as any)._listingId as string).filter(Boolean)
+          await Promise.all(
+            ids.map((id) =>
+              fetch(`${getBackendUrl()}/api/listings/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  followMasterPrice: true, followMasterTitle: true,
+                  followMasterDescription: true, followMasterQuantity: true,
+                  followMasterBulletPoints: true,
+                }),
+              }),
+            ),
+          )
+          void ctx.onReload()
+        }}
+        disabled={!ctx.rows.length}
+        className="h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-40"
+      >
+        <GitFork className="w-3.5 h-3.5 rotate-180" />
+      </button>
+    </>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [showOverrideBadges, showCascadeButtons])
+
+  // ── Slot: Bar3 left ────────────────────────────────────────────────────
+
+  const renderBar3Left = useCallback(() => (
+    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap flex-shrink-0">
+      All markets
+    </span>
+  ), [])
 
   // ── Slot: modals ───────────────────────────────────────────────────────
 

@@ -82,11 +82,18 @@ export class ProductReadCacheService {
         listingStatus: true,
         lastSyncStatus: true,
         isPublished: true,
+        followMasterPrice: true,
+        followMasterTitle: true,
+        followMasterDescription: true,
+        followMasterQuantity: true,
+        followMasterImages: true,
+        followMasterBulletPoints: true,
       },
     })
 
     const channelKeys: string[] = []
     const coverageMap: Record<string, { live: number; draft: number; error: number; total: number }> = {}
+    let driftCount = 0
 
     for (const l of listings) {
       // Key format: "AMAZON_IT", "EBAY_DE", "SHOPIFY_MAIN"
@@ -103,6 +110,18 @@ export class ProductReadCacheService {
         coverageMap[l.channel].error++
       } else {
         coverageMap[l.channel].draft++
+      }
+
+      // IN.4 — count listings with any active field override
+      if (
+        l.followMasterPrice === false ||
+        l.followMasterTitle === false ||
+        l.followMasterDescription === false ||
+        l.followMasterQuantity === false ||
+        l.followMasterImages === false ||
+        l.followMasterBulletPoints === false
+      ) {
+        driftCount++
       }
     }
 
@@ -138,6 +157,7 @@ export class ProductReadCacheService {
       hasGtin: !!product.gtin && product.gtin.trim().length > 0,
       hasPhotos: product._count.images > 0,
       channelKeys,
+      driftCount,
       coverageJson: Object.keys(coverageMap).length > 0
         ? (coverageMap as Prisma.InputJsonValue)
         : null,
