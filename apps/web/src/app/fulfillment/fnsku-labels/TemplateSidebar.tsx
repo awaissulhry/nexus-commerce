@@ -337,7 +337,8 @@ export function TemplateSidebar({ template, onChange, savedTemplates, activeTemp
         {/* ── Barcode ─────────────────────────────── */}
         <Section title="Barcode">
           <SliderRow label="Height" value={barcodeH} min={10} max={55} unit="%" onChange={v => patch({ barcodeHeightPct: v })} />
-          <SliderRow label="Width"  value={template.barcodeWidthPct ?? 100} min={20} max={100} unit="%" onChange={v => patch({ barcodeWidthPct: v })} />
+          <SliderRow label="Width"  value={template.barcodeWidthPct ?? 100} min={20} max={200} unit="%" onChange={v => patch({ barcodeWidthPct: v })} />
+          <p className="text-[10px] text-slate-400 mt-0.5">&gt;100% extends into left column.</p>
           <SliderRow label="FNSKU text" value={template.fnskuTextScale ?? 1} min={0.5} max={2.0} step={0.05} unit="×"
             onChange={v => patch({ fnskuTextScale: v })} />
           <p className="text-[10px] text-slate-400 mt-1">

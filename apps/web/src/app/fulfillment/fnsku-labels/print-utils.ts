@@ -79,7 +79,8 @@ function renderLabelHtml(item: LabelItem, template: TemplateConfig): string {
   const leftColMm  = widthMm - rightColMm
   const padMm      = template.paddingMm ?? 2
   const innerMm    = rightColMm - padMm * 2
-  const barW       = Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100))
+  const fullInnerMm = widthMm - 2 * padMm
+  const barW        = Math.min(Math.max(5, innerMm * ((template.barcodeWidthPct ?? 100) / 100)), fullInnerMm)
   // Cap at 55% — matches PDF service and LabelPreview
   const barH       = heightMm * (Math.min(template.barcodeHeightPct ?? 32, 55) / 100)
   const fontFam    = cssFontStack(template.fontFamily)

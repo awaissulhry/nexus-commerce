@@ -51,10 +51,30 @@ export function LabelPreview({ item, template }: Props) {
   const leftColPx  = wPx - rightColPx
 
   const padPx = (template.paddingMm ?? 2) * MM_TO_PX
-  // Cap barcode height at 55% — matches PDF service cap
-  const barcodeH = Math.round(hPx * (Math.min(template.barcodeHeightPct ?? 32, 55) / 100))
-  const innerW   = rightColPx - padPx * 2
-  const barcodeW = Math.max(20, innerW * ((template.barcodeWidthPct ?? 100) / 100))
+  const innerW      = rightColPx - padPx * 2
+  const fullInnerPx = wPx - 2 * padPx
+
+  // Barcode width: allow > 100% to extend into left col; cap at full label inner width
+  const barcodeW = Math.min(Math.max(20, innerW * ((template.barcodeWidthPct ?? 100) / 100)), fullInnerPx)
+
+  // Estimate info stack height to ensure FNSKU text never gets clipped
+  const fnskuEstH = hPx * 0.063 * (template.fnskuTextScale ?? 1) * 1.4
+  const titleEstH = (template.showListingTitle)
+    ? hPx * 0.052 * (template.listingTitleScale ?? 1) * 1.25 * (template.listingTitleLines ?? 2) + 6
+    : 0
+  const condEstH  = template.showCondition ? hPx * 0.052 * (template.conditionScale ?? 1) * 1.4 + 4 : 0
+  // Approximate size box height
+  const sizeBoxEstH = template.showSizeBox
+    ? (hPx * 0.06 * (template.sizeHeaderScale ?? 1) + hPx * 0.01 + hPx * 0.19 * (template.sizeValueScale ?? 1) + padPx + hPx * 0.025)
+    : 0
+  const rightAvailH = hPx - 2 * padPx - sizeBoxEstH
+  const maxBarcodeH = Math.max(20, rightAvailH - fnskuEstH - titleEstH - condEstH - 8)
+
+  // Cap barcode height at 55% and also at computed max to prevent FNSKU text clipping
+  const barcodeH = Math.min(
+    Math.round(hPx * (Math.min(template.barcodeHeightPct ?? 32, 55) / 100)),
+    maxBarcodeH,
+  )
 
   // Fine-grained scale factors (new optional controls)
   const sizeValueScale    = template.sizeValueScale    ?? 1
@@ -198,11 +218,14 @@ export function LabelPreview({ item, template }: Props) {
             </div>
           )}
 
-          {/* Barcode area */}
+          {/* Barcode area — when barcode wider than right col, shift all content left to
+               centre in full label. marginLeft = (rightColPx - wPx) / 2 */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
             {item.fnsku ? (
-              <>
-                {/* maxWidthPx guarantees the barcode never overflows — see Barcode128.tsx */}
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                marginLeft: barcodeW > innerW ? (rightColPx - wPx) / 2 : 0,
+              }}>
                 <Barcode128
                   value={item.fnsku}
                   height={barcodeH}
@@ -267,7 +290,7 @@ export function LabelPreview({ item, template }: Props) {
                     {template.condition || 'New'}
                   </div>
                 )}
-              </>
+              </div>
             ) : (
               <div style={{
                 width: barcodeW, height: barcodeH,

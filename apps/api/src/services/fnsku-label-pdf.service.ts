@@ -378,10 +378,16 @@ async function drawLabel(
   const sizeBoxMB = template.showSizeBox ? hPt * L.SIZE_MB : 0
 
   // ── Barcode + info stack dimensions ──────────────────────────────
-  const barcodeHPct  = Math.min(template.barcodeHeightPct ?? 32, 55)
-  const barcodeHPt   = hPt * barcodeHPct / 100
-  const effBarcodeW  = Math.max(mm(5), innerRightW * ((template.barcodeWidthPct ?? 100) / 100))
-  const bcX          = rx + (innerRightW - effBarcodeW) / 2
+  // Barcode width: allow > 100% to extend into left col; cap at full label inner width
+  const fullInnerW  = wPt - 2 * padPt
+  const effBarcodeW = Math.min(
+    Math.max(mm(5), innerRightW * ((template.barcodeWidthPct ?? 100) / 100)),
+    fullInnerW,
+  )
+  // When barcode is wider than the right col, centre it in the full label width
+  const bcX = effBarcodeW > innerRightW
+    ? xPt + padPt + (fullInnerW - effBarcodeW) / 2
+    : rx + (innerRightW - effBarcodeW) / 2
 
   const isMono = /mono|courier/i.test(template.fontFamily ?? '')
   const charWR = isMono ? 0.62 : 0.58
@@ -393,6 +399,10 @@ async function drawLabel(
     ? smartTruncateTitle(rawTitle, template.titleFirstWords ?? 5, template.titleLastWords ?? 4)
     : rawTitle
 
+  // Remaining right-col height after size box
+  const rightUsedBySize = sizeBoxTotalH + sizeBoxMB
+  const rightRemaining  = hPt - 2 * padPt - rightUsedBySize
+
   // Font sizes for info stack (same ratios as preview, with scale factors applied)
   const fnskuFsRaw   = item.fnsku
     ? Math.min(hPt * L.BARCODE_FS, effBarcodeW / (item.fnsku.length * charWR + 2)) * fnskuTextScale
@@ -401,17 +411,21 @@ async function drawLabel(
   const titleFsRaw   = (template.showListingTitle && displayTitle) ? hPt * L.TITLE_FS * listingTitleScale : 0
   const condFsRaw    = template.showCondition ? hPt * L.COND_FS * conditionScale : 0
 
-  // Stack height: barcode + gap + FNSKU text + title + condition
-  // Matches preview flex column with margins
-  const fnskuH  = fnskuFsRaw > 0 ? fnskuFsRaw + hPt * L.BARCODE_MT : 0
-  const titleH  = titleFsRaw > 0 ? titleFsRaw * L.TITLE_LH * maxTitleLines + hPt * L.TITLE_MT : 0
-  const condH   = condFsRaw  > 0 ? condFsRaw + hPt * L.COND_MT : 0
-  const stackH  = barcodeHPt + mm(1) + fnskuH + titleH + condH
+  // Info stack height (everything below the barcode bars)
+  const fnskuH = fnskuFsRaw > 0 ? fnskuFsRaw + hPt * L.BARCODE_MT : 0
+  const titleH = titleFsRaw > 0 ? titleFsRaw * L.TITLE_LH * maxTitleLines + hPt * L.TITLE_MT : 0
+  const condH  = condFsRaw  > 0 ? condFsRaw + hPt * L.COND_MT : 0
+  const infoH  = fnskuH + titleH + condH
 
-  // Remaining right-col height after size box — centre stack in it (CSS justifyContent:'center')
-  const rightUsedBySize = sizeBoxTotalH + sizeBoxMB
-  const rightRemaining  = hPt - 2 * padPt - rightUsedBySize
-  const stackOffsetY    = Math.max(0, (rightRemaining - stackH) / 2)
+  // Cap barcode height so the info stack always has room — prevents FNSKU text being clipped
+  const barcodeHPct = Math.min(template.barcodeHeightPct ?? 32, 55)
+  const barcodeHPt  = Math.max(mm(5), Math.min(
+    hPt * barcodeHPct / 100,
+    rightRemaining - infoH - mm(1),
+  ))
+
+  const stackH      = barcodeHPt + mm(1) + infoH
+  const stackOffsetY = Math.max(0, (rightRemaining - stackH) / 2)
 
   // ── Draw right column ─────────────────────────────────────────────
   let ry = yPt + padPt
