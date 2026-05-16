@@ -1,5 +1,5 @@
 /**
- * AD.3 — Five Italian advertising automation rule templates.
+ * AD.3 — Five advertising automation rule templates.
  *
  * Seeded on operator demand via POST /api/advertising/automation-rules/seed-templates.
  * Idempotent — keyed on (name, domain='advertising') so re-running is safe.
@@ -26,9 +26,9 @@ export interface AdvertisingRuleTemplate {
 
 export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
   {
-    name: 'Pausa pubblicità per stock invecchiato',
+    name: 'Pause ads for aged stock',
     description:
-      'Quando uno SKU ha unità FBA che entreranno nella fascia LTS entro 14 giorni, mette in pausa l\'ad-group che pubblicizza prodotti NUOVI dello stesso productType e crea un coupon-promo del 15% per 14 giorni. Riduce la spesa pubblicitaria sul fresco e accelera la liquidazione del vecchio.',
+      'When an FBA SKU has units that will enter the LTS band within 14 days, pauses the ad-group advertising NEW products of the same productType and creates a 15%-off promotion for 14 days. Cuts ad spend on fresh stock and accelerates liquidation of the aged units.',
     trigger: 'FBA_AGE_THRESHOLD_REACHED',
     conditions: [
       { field: 'fbaAge.daysToLtsThreshold', op: 'lte', value: 14 },
@@ -39,9 +39,9 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
         type: 'create_amazon_promotion',
         discountPct: 15,
         durationDays: 14,
-        reason: 'Auto-promo per liquidare stock invecchiato',
+        reason: 'Auto-promo to liquidate aged stock',
       },
-      { type: 'notify', target: 'operator', message: 'Pausa ad-group + promo 15% per SKU sotto soglia LTS' },
+      { type: 'notify', target: 'operator', message: 'Ad-group paused + 15% promo for SKU approaching LTS threshold' },
     ],
     maxExecutionsPerDay: 20,
     maxValueCentsEur: 50000,
@@ -49,16 +49,16 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     scopeMarketplace: null,
   },
   {
-    name: 'Riduci bid su ACOS spike',
+    name: 'Reduce bids on ACOS spike',
     description:
-      'Quando l\'ACOS di una campagna supera 1.0 (= spesa ≥ vendite, break-even o peggio) con spesa ≥ €100, abbassa il bid di default dell\'ad-group del 20% (con floor €0.05). Difensivo: previene emorragie di budget su keyword diventate non redditizie.',
+      'When a campaign ACOS exceeds 1.0 (spend ≥ sales, break-even or worse) with spend ≥ €100, lowers the ad-group default bid by 20% (floor €0.05). Defensive: prevents budget haemorrhage on keywords that have become unprofitable.',
     trigger: 'CAC_SPIKE',
     conditions: [
       { field: 'campaign.acos', op: 'gte', value: 1.0 },
     ],
     actions: [
       { type: 'bid_down', target: 'ad_group', percent: 20, reason: 'ACOS spike — bid -20%' },
-      { type: 'notify', target: 'operator', message: 'Bid ridotto del 20% per ACOS > 1.0' },
+      { type: 'notify', target: 'operator', message: 'Bid reduced 20% — ACOS > 1.0' },
     ],
     maxExecutionsPerDay: 30,
     maxValueCentsEur: 0,
@@ -66,17 +66,17 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     scopeMarketplace: null,
   },
   {
-    name: 'Pausa target non redditizio',
+    name: 'Pause underperforming target',
     description:
-      'Quando un target (keyword o ASIN) ha speso ≥ €20 senza generare vendite, mette in pausa l\'ad-group che lo contiene. Trade-off: l\'azione è grossolana (pause dell\'intero ad-group, non solo del target) perché Amazon Ads non espone bid-zero affidabile. Operatore può perfezionare manualmente.',
+      'When a target (keyword or ASIN) has spent ≥ €20 with zero sales, pauses the ad-group containing it. Trade-off: the action is coarse (pauses the whole ad-group, not just the target) because Amazon Ads does not expose a reliable bid-zero. Operator can refine manually.',
     trigger: 'AD_TARGET_UNDERPERFORMING',
     conditions: [
       { field: 'adTarget.spendCents', op: 'gte', value: 2000 },
       { field: 'adTarget.salesCents', op: 'eq', value: 0 },
     ],
     actions: [
-      { type: 'pause_ad_group', reason: 'Target non redditizio — ad-group pausato' },
-      { type: 'notify', target: 'operator', message: 'Ad-group pausato per target senza vendite' },
+      { type: 'pause_ad_group', reason: 'Underperforming target — ad-group paused' },
+      { type: 'notify', target: 'operator', message: 'Ad-group paused — target has no sales' },
     ],
     maxExecutionsPerDay: 30,
     maxValueCentsEur: 0,
@@ -84,9 +84,9 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     scopeMarketplace: null,
   },
   {
-    name: 'Allerta margine pubblicitario negativo',
+    name: 'Alert: negative advertising margin',
     description:
-      'Notifica l\'operatore quando la spesa pubblicitaria di una campagna nelle ultime 30 giornate supera il profitto reale dei prodotti che pubblicizza. Solo notify — l\'operatore decide l\'azione correttiva (riduzione budget, pausa, cambio creatività).',
+      'Notifies the operator when a campaign\'s ad spend over the last 30 days exceeds the true profit of the products it advertises. Notify-only — operator decides the corrective action (budget cut, pause, creative change).',
     trigger: 'AD_SPEND_PROFITABILITY_BREACH',
     conditions: [
       { field: 'profit.netCents', op: 'lt', value: 0 },
@@ -95,7 +95,7 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
       {
         type: 'notify',
         target: 'operator',
-        message: 'Spesa pubblicitaria > profitto reale negli ultimi 30g — rivedi la campagna',
+        message: 'Ad spend > true profit over last 30d — review this campaign',
       },
     ],
     maxExecutionsPerDay: 10,
@@ -104,9 +104,9 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     scopeMarketplace: null,
   },
   {
-    name: 'Aumenta budget su campagne redditizie',
+    name: 'Boost budget on profitable campaigns',
     description:
-      'Quando l\'ACOS è basso (< 0.20) e impressioni > 5000, suggerisce un +15% al budget giornaliero della campagna (rispettando maxDailyAdSpendCentsEur). Dry-run di default — l\'operatore approva l\'auto-up per ciascuna campagna.',
+      'When ACOS is low (< 0.20) and impressions > 5000, suggests a +15% increase to the campaign daily budget (respecting maxDailyAdSpendCentsEur). Dry-run by default — operator approves auto-up per campaign.',
     trigger: 'AD_TARGET_UNDERPERFORMING', // inverse-signal proxy until a dedicated trigger lands in AD.5
     conditions: [
       { field: 'campaign.acos', op: 'lte', value: 0.2 },
@@ -116,9 +116,9 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
       {
         type: 'adjust_ad_budget',
         percent: 15,
-        reason: 'Campagna redditizia (ACOS < 0.20) — budget +15%',
+        reason: 'Profitable campaign (ACOS < 0.20) — budget +15%',
       },
-      { type: 'notify', target: 'operator', message: 'Budget aumentato del 15% su campagna ad alto ROAS' },
+      { type: 'notify', target: 'operator', message: 'Budget increased 15% on high-ROAS campaign' },
     ],
     maxExecutionsPerDay: 10,
     maxValueCentsEur: 50000,
@@ -126,6 +126,15 @@ export const ADVERTISING_TEMPLATES: AdvertisingRuleTemplate[] = [
     scopeMarketplace: null,
   },
 ]
+
+/** Maps old Italian template names → current English names for rename-on-reseed. */
+const ITALIAN_NAME_MAP: Record<string, string> = {
+  'Pausa pubblicità per stock invecchiato': 'Pause ads for aged stock',
+  'Riduci bid su ACOS spike': 'Reduce bids on ACOS spike',
+  'Pausa target non redditizio': 'Pause underperforming target',
+  'Allerta margine pubblicitario negativo': 'Alert: negative advertising margin',
+  'Aumenta budget su campagne redditizie': 'Boost budget on profitable campaigns',
+}
 
 export interface SeedAdvertisingTemplatesResult {
   created: string[]
@@ -136,10 +145,28 @@ export async function seedAdvertisingTemplates(): Promise<SeedAdvertisingTemplat
   const created: string[] = []
   const skippedExisting: string[] = []
   for (const tmpl of ADVERTISING_TEMPLATES) {
-    const existing = await prisma.automationRule.findFirst({
+    // Find by current name first, then by old Italian name.
+    let existing = await prisma.automationRule.findFirst({
       where: { name: tmpl.name, domain: 'advertising' },
       select: { id: true },
     })
+    if (!existing) {
+      const oldName = Object.entries(ITALIAN_NAME_MAP).find(([, en]) => en === tmpl.name)?.[0]
+      if (oldName) {
+        existing = await prisma.automationRule.findFirst({
+          where: { name: oldName, domain: 'advertising' },
+          select: { id: true },
+        })
+        if (existing) {
+          await prisma.automationRule.update({
+            where: { id: existing.id },
+            data: { name: tmpl.name, description: tmpl.description },
+          })
+          skippedExisting.push(tmpl.name)
+          continue
+        }
+      }
+    }
     if (existing) {
       skippedExisting.push(tmpl.name)
       continue
