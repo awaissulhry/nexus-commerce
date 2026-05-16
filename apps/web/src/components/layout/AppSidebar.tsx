@@ -9,7 +9,6 @@ import {
   Package,
   Layers,
   FileSpreadsheet,
-  LayoutGrid,
   Boxes,
   ChevronRight,
   ChevronDown,
@@ -398,12 +397,6 @@ export default function AppSidebar() {
               pathname === '/bulk-operations' ||
               pathname.startsWith('/bulk-operations/')
             }
-          />
-          <NavItem
-            href="/command-matrix"
-            icon={LayoutGrid}
-            label="Command Matrix"
-            active={pathname === '/command-matrix'}
           />
         </NavGroup>
 
