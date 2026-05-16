@@ -85,6 +85,13 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
     Date.now() - RECENT_OBSERVATION_HOURS * 3600 * 1000,
   )
 
+  // CE.3: gate for live price writes. When NEXUS_REPRICER_LIVE=1, the
+  // evaluator passes applyToProduct=true so changed prices are written
+  // to ChannelListing and enqueued to OutboundSyncQueue. Without the
+  // flag, decisions are still logged (applied=false) for operator review.
+  const repricerLive = process.env.NEXUS_REPRICER_LIVE === '1'
+  const winBoxLookback = new Date(Date.now() - 14 * 24 * 3600 * 1000)
+
   for (const rule of rules) {
     try {
       // Find matching ChannelListing for currentPrice.
@@ -94,7 +101,7 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
           channel: rule.channel,
           ...(rule.marketplace ? { marketplace: rule.marketplace } : {}),
         },
-        select: { price: true, marketplace: true },
+        select: { id: true, price: true, marketplace: true },
         orderBy: { updatedAt: 'desc' },
       })
       if (!listing) {
@@ -120,6 +127,43 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
       // own no-data branches), but record so summary reflects it.
       if (!obs) summary.skippedStaleObservation++
 
+      // CE.3 — MAXIMIZE_MARGIN_WIN_BOX: compute the highest price at
+      // which we won ≥70% of buy-box observations in the last 14 days.
+      let maxMarginWinPrice: number | null = null
+      if (rule.strategy === 'maximize_margin_win_box') {
+        const observations = await prisma.buyBoxHistory.findMany({
+          where: {
+            productId: rule.productId,
+            channel: rule.channel,
+            marketplace: rule.marketplace ?? listing.marketplace,
+            observedAt: { gte: winBoxLookback },
+            buyBoxPrice: { not: null },
+          },
+          select: { buyBoxPrice: true, isOurOffer: true },
+          orderBy: { observedAt: 'desc' },
+          take: 200,
+        })
+
+        if (observations.length >= 5) {
+          // Group by price (rounded to nearest €0.50 to avoid noise)
+          const priceBuckets = new Map<number, { wins: number; total: number }>()
+          for (const o of observations) {
+            const price = Math.round(Number(o.buyBoxPrice as unknown as Prisma.Decimal) * 2) / 2
+            const bucket = priceBuckets.get(price) ?? { wins: 0, total: 0 }
+            bucket.total++
+            if (o.isOurOffer) bucket.wins++
+            priceBuckets.set(price, bucket)
+          }
+          // Find the highest price where win rate ≥ 70%
+          const eligible = [...priceBuckets.entries()]
+            .filter(([, b]) => b.total >= 3 && b.wins / b.total >= 0.7)
+            .map(([price]) => price)
+          if (eligible.length > 0) {
+            maxMarginWinPrice = Math.max(...eligible)
+          }
+        }
+      }
+
       const result = await repricingEngineService.evaluate(
         rule.id,
         {
@@ -137,13 +181,29 @@ export async function runRepricingEvaluatorOnce(): Promise<RunSummary> {
                   obs.lowestCompetitorPrice as unknown as Prisma.Decimal,
                 ),
           competitorCount: null,
+          maxMarginWinPrice,
         },
-        // applyToProduct=false on the cron path until the channel-
-        // override push integration lands (W4.10b). Decisions are
-        // logged regardless so operators see what the engine WOULD
-        // do.
-        { applyToProduct: false },
+        // CE.3: applyToProduct=true when NEXUS_REPRICER_LIVE=1.
+        // Decisions are logged regardless; applied=true marks live writes.
+        { applyToProduct: repricerLive },
       )
+
+      // CE.3: when live and applied, enqueue PRICE_UPDATE to OutboundSyncQueue.
+      if (repricerLive && result.changed) {
+        await prisma.outboundSyncQueue.create({
+          data: {
+            productId: rule.productId,
+            targetChannel: rule.channel as never,
+            targetRegion: rule.marketplace ?? listing.marketplace ?? 'IT',
+            syncType: 'PRICE_UPDATE',
+            payload: { newPrice: result.price, ruleId: rule.id },
+            syncStatus: 'PENDING',
+          },
+        }).catch(() => {
+          // Non-fatal: decision was still applied to the ChannelListing.
+          // OutboundSyncQueue failure is visible via its own monitoring.
+        })
+      }
 
       summary.evaluated++
       if (result.changed) summary.changed++

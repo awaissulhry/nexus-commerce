@@ -962,6 +962,40 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
   })
+
+  // ── CE.3: Repricing decisions feed ──────────────────────────────────────
+  // GET /api/pricing/repricing-decisions?limit=50&applied=true|false
+  fastify.get('/pricing/repricing-decisions', async (request) => {
+    const { limit = '50', applied, ruleId } = request.query as {
+      limit?: string
+      applied?: string
+      ruleId?: string
+    }
+
+    const where: Record<string, unknown> = {}
+    if (ruleId) where.ruleId = ruleId
+    if (applied === 'true') where.applied = true
+    if (applied === 'false') where.applied = false
+
+    const decisions = await prisma.repricingDecision.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(parseInt(limit, 10) || 50, 200),
+      include: {
+        rule: {
+          select: {
+            id: true,
+            channel: true,
+            marketplace: true,
+            strategy: true,
+            product: { select: { id: true, name: true, brand: true } },
+          },
+        },
+      },
+    })
+
+    return { decisions }
+  })
 }
 
 export default pricingRoutes

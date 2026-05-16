@@ -58,6 +58,7 @@ export type RepricingStrategyV2 =
   | 'beat_lowest_by_pct'
   | 'beat_lowest_by_amount'
   | 'fixed_to_buy_box_minus'
+  | 'maximize_margin_win_box'
   | 'manual'
 
 export interface RuleConfig {
@@ -81,6 +82,13 @@ export interface MarketContext {
   lowestCompPrice?: number | null
   /** Number of active competitor offers. */
   competitorCount?: number | null
+  /**
+   * CE.3 — MAXIMIZE_MARGIN_WIN_BOX: the highest buy-box price at which
+   * we historically won ≥70% of observations over the last 14 days.
+   * Pre-computed by the evaluator from BuyBoxHistory before calling pickPrice.
+   * null = insufficient history, strategy falls back to match_buy_box.
+   */
+  maxMarginWinPrice?: number | null
 }
 
 export interface PickResult {
@@ -221,6 +229,27 @@ export function pickPrice(
           price: market.currentPrice,
           changed: false,
           reason: 'hold-no-buy-box-data',
+          capped: null,
+        }
+      }
+      break
+
+    case 'maximize_margin_win_box':
+      // CE.3 — target the highest price at which we historically won ≥70%
+      // of buy-box observations over the last 14 days. Pre-computed by the
+      // evaluator from BuyBoxHistory and passed in as maxMarginWinPrice.
+      if (market.maxMarginWinPrice != null) {
+        target = market.maxMarginWinPrice
+        reason = `max-margin-win-box at ${market.maxMarginWinPrice} (14d win-rate analysis)`
+      } else if (market.buyBoxPrice != null) {
+        // Insufficient history — fall back to matching the current buy box
+        target = market.buyBoxPrice
+        reason = `max-margin-win-box fallback: match-buy-box at ${market.buyBoxPrice} (no 14d history)`
+      } else {
+        return {
+          price: market.currentPrice,
+          changed: false,
+          reason: 'hold-no-win-box-history',
           capped: null,
         }
       }

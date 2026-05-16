@@ -3641,6 +3641,12 @@ model BuyBoxHistory {
   winnerSellerId    String? // SP-API SellerId; null when un-exposed
   fulfillmentMethod String? // 'FBA' | 'FBM' from the winning offer
 
+  // CE.3 — margin at the time of this observation.
+  // (buyBoxPrice - costPrice) / buyBoxPrice. Null when costPrice unknown.
+  // Used by MAXIMIZE_MARGIN_WIN_BOX to compute the highest price at which
+  // we historically won the box with acceptable margin.
+  marginAtObservation Decimal? @db.Decimal(8, 4)
+
   @@index([productId, observedAt])
   @@index([channel, marketplace, observedAt])
   @@index([isOurOffer, observedAt])
