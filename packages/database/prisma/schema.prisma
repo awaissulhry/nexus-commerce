@@ -9654,3 +9654,61 @@ model ProductEvent {
   // Admin event explorer sorted by time.
   @@index([createdAt(sort: Desc)])
 }
+
+// ── CE.1 — Feed Transform Engine ─────────────────────────────────────────
+//
+// FeedTransformRule: IF/THEN field-level rules that turn the master
+// Product record into a channel-correct attribute package.
+//
+// Condition DSL (same operators as AutomationRule):
+//   { field: 'brand', op: 'eq', value: 'Xavia' }
+//   field refers to a dot-path on the Product object (brand, productType,
+//   name, etc.). null condition = unconditional (always applies).
+//
+// Action DSL:
+//   { type: 'set',      value: 'Hardcoded string' }
+//   { type: 'append',   value: ' - Premium Motorcycle Gear' }
+//   { type: 'prepend',  value: 'XAVIA ' }
+//   { type: 'template', template: '{name} - {brand} Premium Gear' }
+//   template vars: any top-level product field wrapped in {braces}.
+//
+// Priority: lower number = evaluated first. Rules sharing the same
+// (channel, field, priority) are ordered by createdAt ascending.
+// Only the first matching rule per field is applied (first-match-wins).
+model FeedTransformRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  channel     String // AMAZON | EBAY | SHOPIFY | ALL
+  marketplace String? // IT | DE | FR | null = all marketplaces
+  field       String // target field: title | description | bullets | price | brand | etc.
+  priority    Int      @default(100)
+  enabled     Boolean  @default(true)
+  condition   Json? // { field, op, value } — null = unconditional
+  action      Json     @default("{}") // { type, value/template }
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([channel, field, priority])
+  @@unique([name, channel, marketplace])
+}
+
+// ChannelSchema: per-channel field definitions used to validate the
+// transform output and drive the rule builder's field selector UI.
+// Seeded by POST /api/feed-transform/seed-schemas with built-in
+// Amazon/eBay/Shopify definitions; operators can add custom fields.
+model ChannelSchema {
+  id            String   @id @default(cuid())
+  channel       String // AMAZON | EBAY | SHOPIFY
+  marketplace   String? // null = applies to all marketplaces for this channel
+  fieldKey      String // e.g. "title", "bullet_points", "browse_node_id"
+  label         String // human-readable label shown in UI
+  maxLength     Int?
+  required      Boolean  @default(false)
+  allowedValues Json? // null = free text; array of strings = enum
+  notes         String?
+
+  @@unique([channel, marketplace, fieldKey])
+  @@index([channel, marketplace])
+}
