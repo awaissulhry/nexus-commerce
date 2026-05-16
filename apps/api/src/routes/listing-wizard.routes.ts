@@ -4255,6 +4255,25 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
 
+        // PA.2 — persist quality snapshot per channel for trend tracking.
+        // Non-throwing: snapshot save failure doesn't affect the score response.
+        prisma.listingQualitySnapshot.createMany({
+          data: result.perChannel.map((ch) => {
+            const dims: Record<string, number> = {}
+            for (const d of ch.dimensions ?? []) dims[d.name] = d.score
+            return {
+              productId: product.id,
+              channel: (ch.platform ?? 'AMAZON').toUpperCase(),
+              marketplace: ch.marketplace ?? null,
+              overallScore: ch.overallScore ?? 0,
+              dimensions: dims,
+              triggeredBy: 'manual',
+            }
+          }),
+        }).catch(() => {
+          // Non-fatal — score result still returned
+        })
+
         return {
           wizard: { id: wizard.id, productId: wizard.productId },
           perChannel: result.perChannel,

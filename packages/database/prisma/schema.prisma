@@ -337,6 +337,7 @@ model Product {
   productProfitDailies      ProductProfitDaily[] // AD.1: per-day True Profit roll-up
   reviews                   Review[] // SR.1: ingested customer reviews
   reviewSpikes              ReviewSpike[] // SR.1: detected category spikes
+  qualitySnapshots          ListingQualitySnapshot[] // PA.2: listing quality history
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -9659,6 +9660,29 @@ model ProductEvent {
   @@index([aggregateType, aggregateId])
   @@index([eventType, createdAt(sort: Desc)])
   // Admin event explorer sorted by time.
+  @@index([createdAt(sort: Desc)])
+}
+
+// ── PA.2 — Listing Quality Snapshot ──────────────────────────────────────
+//
+// Persists quality score results from listingContentService.scoreListingQuality()
+// so operators can track improvement trends over time. One row per
+// product × channel × scoring event (manual | publish | weekly cron).
+//
+// Dimensions JSON shape mirrors the scorer output:
+//   { title: 80, bullets: 60, keywords: 70, images: 90, pricing: 50 }
+model ListingQualitySnapshot {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channel     String // 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  marketplace String?
+  overallScore Int // 0–100
+  dimensions  Json // { title, bullets, keywords, images, pricing } all 0–100
+  triggeredBy String  @default("manual") // 'manual' | 'publish' | 'cron'
+  createdAt   DateTime @default(now())
+
+  @@index([productId, channel, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
 }
 

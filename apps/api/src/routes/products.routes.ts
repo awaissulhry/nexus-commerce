@@ -3878,6 +3878,45 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
+
+  // ── PA.1: Product Analytics ──────────────────────────────────────────────
+  // GET /api/products/:id/analytics?days=30
+  fastify.get<{ Params: { id: string }; Querystring: { days?: string } }>(
+    '/products/:id/analytics',
+    async (request, reply) => {
+      const { id } = request.params
+      const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 7), 90)
+      const { getProductAnalytics } = await import('../services/product-analytics.service.js')
+      const analytics = await getProductAnalytics(prisma, id, days)
+      if (!analytics) return reply.code(404).send({ error: 'Product not found' })
+      return { analytics }
+    },
+  )
+
+  // GET /api/products/:id/analytics/trend?days=30
+  fastify.get<{ Params: { id: string }; Querystring: { days?: string } }>(
+    '/products/:id/analytics/trend',
+    async (request) => {
+      const { id } = request.params
+      const days = Math.min(Math.max(parseInt(request.query.days ?? '30', 10) || 30, 7), 90)
+      const { getProductTrend } = await import('../services/product-analytics.service.js')
+      const trend = await getProductTrend(prisma, id, days)
+      return { trend }
+    },
+  )
+
+  // GET /api/products/:id/quality-history?channel=AMAZON&days=90
+  fastify.get<{ Params: { id: string }; Querystring: { channel?: string; days?: string } }>(
+    '/products/:id/quality-history',
+    async (request) => {
+      const { id } = request.params
+      const channel = (request.query.channel ?? 'AMAZON').toUpperCase()
+      const days = Math.min(parseInt(request.query.days ?? '90', 10) || 90, 365)
+      const { getQualityHistory } = await import('../services/product-analytics.service.js')
+      const snapshots = await getQualityHistory(prisma, id, channel, days)
+      return { snapshots }
+    },
+  )
 }
 
 // EE.5 — canonical-name mapping for cross-channel replicate. Keys

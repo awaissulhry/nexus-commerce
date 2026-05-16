@@ -56,6 +56,7 @@ import reviewsRoutes from "./routes/reviews.routes.js";
 import brandBrainRoutes from "./routes/brand-brain.routes.js";
 import feedTransformRoutes from "./routes/feed-transform.routes.js";
 import feedExportRoutes from "./routes/feed-export.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 import ordersRoutingRoutes from "./routes/orders-routing.routes.js";
 import productsRoutes from "./routes/products.routes.js";
 import listingRecoveryRoutes from "./routes/listing-recovery.routes.js";
@@ -465,6 +466,7 @@ app.register(reviewsRoutes, { prefix: '/api' });
 app.register(brandBrainRoutes, { prefix: '/api' });
 app.register(feedTransformRoutes, { prefix: '/api/feed-transform' });
 app.register(feedExportRoutes, { prefix: '/api/feed-export' });
+app.register(analyticsRoutes, { prefix: '/api' });
 app.register(ordersRoutingRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
 app.register(listingRecoveryRoutes, { prefix: '/api' });
@@ -992,6 +994,12 @@ async function start() {
     {
       const { startFeedExportCron } = await import('./jobs/feed-export.job.js');
       startFeedExportCron();
+    }
+
+    // PA.2 — Listing Quality Snapshot (weekly; always on).
+    {
+      const { startListingQualitySnapshotCron } = await import('./jobs/listing-quality-snapshot.job.js');
+      startListingQualitySnapshotCron();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts

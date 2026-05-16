@@ -21,6 +21,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
+import { AnalyticsTab } from './tabs/AnalyticsTab'
 import { TimelineTab } from './tabs/TimelineTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
@@ -359,6 +360,7 @@ export default function ProductEditClient({
       'relations',
       'activity',
       'matrix',
+      'analytics',
     ]
     return [...base, ...orderedChannels]
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -689,6 +691,13 @@ export default function ProductEditClient({
             >
               Matrix
             </TopTabButton>
+            <TopTabButton
+              tabKey="analytics"
+              active={topTab === 'analytics'}
+              onClick={() => goToTab('analytics')}
+            >
+              Analytics
+            </TopTabButton>
             {orderedChannels.map((channel) => {
               const isActive = topTab === channel
               const channelListings = clientListings[channel] ?? []
@@ -858,6 +867,12 @@ export default function ProductEditClient({
               onDirtyChange={() => {}}
               discardSignal={discardSignal}
             />
+          </div>
+        )}
+
+        {topTab === 'analytics' && (
+          <div role="tabpanel" id="panel-analytics" aria-labelledby="tab-analytics">
+            <AnalyticsTab productId={product.id} />
           </div>
         )}
 

@@ -94,6 +94,8 @@ import { runEmbeddingIngesterCron } from './embedding-ingester.job.js'
 import { runBrowseNodePredictorCron } from './browse-node-predictor.job.js'
 // CE.5 — Cross-RMN Feed Export.
 import { runFeedExportCron } from './feed-export.job.js'
+// PA.2 — Listing Quality Snapshot.
+import { runListingQualitySnapshotCron } from './listing-quality-snapshot.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -180,6 +182,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'browse-node-predictor': () => runBrowseNodePredictorCron(),
   // CE.5 — Cross-RMN Feed Export (GMC + Meta). Always on.
   'feed-export': () => runFeedExportCron(),
+  // PA.2 — Listing Quality Snapshot (weekly sweep). Always on.
+  'listing-quality-snapshot': () => runListingQualitySnapshotCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {
