@@ -34,6 +34,7 @@
 
 import {
   createContext,
+  forwardRef,
   memo,
   useCallback,
   useContext,
@@ -278,9 +279,17 @@ export function VirtualizedGrid({
   const [contextMenu, setContextMenu] = useState<
     { x: number; y: number; product: ProductRowType } | null
   >(null)
+  // Ref forwarded to RowContextMenu so onAway can use contains() instead
+  // of relying on e.stopPropagation() — React synthetic stopPropagation
+  // does not reliably block native document listeners in all Next.js
+  // configurations, causing the menu to close before item clicks fire.
+  const menuRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (!contextMenu) return
-    const onAway = () => setContextMenu(null)
+    const onAway = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return
+      setContextMenu(null)
+    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setContextMenu(null)
     }
@@ -633,6 +642,7 @@ export function VirtualizedGrid({
           </div>
           {contextMenu && (
             <RowContextMenu
+              ref={menuRef}
               x={contextMenu.x}
               y={contextMenu.y}
               product={contextMenu.product}
@@ -795,19 +805,19 @@ function ColumnResizeHandle({
 // actions stay in the bottom-rising bulk action bar. Status flips
 // and duplicate hit the existing bulk-status / bulk-duplicate
 // endpoints with a one-element productIds array.
-function RowContextMenu({
-  x,
-  y,
-  product,
-  onClose,
-  onChanged,
-}: {
+const RowContextMenu = forwardRef<HTMLDivElement, {
   x: number
   y: number
   product: ProductRowType
   onClose: () => void
   onChanged: () => void
-}) {
+}>(function RowContextMenu({
+  x,
+  y,
+  product,
+  onClose,
+  onChanged,
+}, ref) {
   const [busy, setBusy] = useState(false)
   // Clamp position to viewport so the menu doesn't render off-screen
   // when right-clicked near the right or bottom edge. 240×340 = the
@@ -889,13 +899,11 @@ function RowContextMenu({
       <span className="flex-1">{label}</span>
     </button>
   )
-  // Stop the menu's own mousedown from triggering the outside-click
-  // close handler; click-outside still works for clicks elsewhere.
   return (
     <div
+      ref={ref}
       role="menu"
       aria-label={`Actions for ${product.sku}`}
-      onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: adjX, top: adjY }}
       className="fixed z-50 w-60 bg-white border border-slate-200 rounded-md shadow-xl p-1 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
@@ -930,7 +938,7 @@ function RowContextMenu({
       {item(<Copy size={14} />, 'Duplicate', duplicate)}
     </div>
   )
-}
+})
 
 /**
  * Renders one product row's cells (checkbox + chevron + visible
