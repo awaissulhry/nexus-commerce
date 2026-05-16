@@ -79,9 +79,6 @@ import {
 } from '@/lib/products/theme'
 import type { ProductRow as ProductRowType } from '../_types'
 import type { ColumnDef } from '../_columns'
-import { MatrixChannelCell } from '../_lenses/_matrix/MatrixChannelCell'
-import { getCoverageCell } from '../_lenses/_matrix/useMatrixCoverage'
-import { CHANNEL_MARKETPLACES, type TrafficLight } from '../_lenses/_matrix/types'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -110,15 +107,6 @@ const SearchContext = createContext<string>('')
 // avoids busting the cell's memo when the set is otherwise stable
 // across the workspace lifetime.
 const RiskFlaggedContext = createContext<Set<string>>(new Set())
-
-// Matrix view-mode context. Publishes the workspace's gridViewMode +
-// contentLocale to ProductCell so the channel-cell cases + the
-// locale-aware Name cell can read them without prop-drilling through
-// VirtualizedGrid → ProductRow → ProductCell.
-const MatrixViewContext = createContext<{
-  viewMode: 'standard' | 'matrix'
-  contentLocale: string
-}>({ viewMode: 'standard', contentLocale: 'en' })
 
 type FlatRow =
   | { kind: 'parent'; product: ProductRowType }
@@ -156,12 +144,6 @@ interface VirtualizedGridProps {
   stagedProductIds?: Set<string>
   /** ID of the product currently being dragged (opacity-40 row tint). */
   activeProductId?: string | null
-  /** Status Matrix view-mode. When 'matrix', the Name column renders
-   *  static locale-translated text (read-only) and the channel/
-   *  marketplace columns become traffic-light cells. */
-  viewMode?: 'standard' | 'matrix'
-  /** Content locale for the Matrix view-mode (it/en/de/fr/es). */
-  contentLocale?: string
 }
 
 const EMPTY_SET = new Set<never>()
@@ -189,8 +171,6 @@ export function VirtualizedGrid({
   draggable = false,
   stagedProductIds,
   activeProductId = null,
-  viewMode = 'standard',
-  contentLocale = 'en',
 }: VirtualizedGridProps) {
   const _stagedProductIds = stagedProductIds ?? (EMPTY_SET as Set<string>)
   const { t } = useTranslations()
@@ -371,17 +351,9 @@ export function VirtualizedGrid({
     updated: 'updated',
   }
 
-  // Stable context value so MatrixViewContext consumers only re-render
-  // when viewMode or contentLocale actually change.
-  const matrixCtxValue = useMemo(
-    () => ({ viewMode, contentLocale }),
-    [viewMode, contentLocale],
-  )
-
   return (
     <SearchContext.Provider value={searchTerm}>
       <RiskFlaggedContext.Provider value={riskFlaggedSkus}>
-        <MatrixViewContext.Provider value={matrixCtxValue}>
         <Card noPadding>
           <div
             ref={containerRef}
@@ -669,7 +641,6 @@ export function VirtualizedGrid({
             />
           )}
         </Card>
-        </MatrixViewContext.Provider>
       </RiskFlaggedContext.Provider>
     </SearchContext.Provider>
   )
@@ -1876,11 +1847,6 @@ const ProductCell = memo(function ProductCell({
   // hook call doesn't bust ProductCell's React.memo.
   const { toast } = useToast()
   const { t } = useTranslations()
-  // Status Matrix view-mode + content-locale. In 'matrix' mode the
-  // Name column renders static locale-translated text (read-only).
-  // Reads via context so non-matrix cells don't subscribe.
-  const { viewMode: matrixViewMode, contentLocale: matrixContentLocale } =
-    useContext(MatrixViewContext)
   const p = product
 
   switch (col) {
@@ -2109,24 +2075,9 @@ const ProductCell = memo(function ProductCell({
           <RiskBadge sku={p.sku} />
         </div>
       )
-    // Name column: in Matrix view-mode, render static locale-aware
-    // text (read-only) using the ProductTranslation row for the
-    // selected content locale. In Standard mode, fall through to the
-    // shared editable cell so inline-edit still works.
-    case 'name': {
-      if (matrixViewMode === 'matrix' && matrixContentLocale !== 'en') {
-        const translated = p.translations?.[matrixContentLocale]?.name
-        const display = translated && translated.length > 0 ? translated : p.name
-        return (
-          <span className="text-sm text-slate-700 dark:text-slate-300 truncate" title={display}>
-            {display}
-          </span>
-        )
-      }
-      return <EditableCell field={col} product={p} onChanged={onChanged} />
-    }
-    // F.5 — seven editable columns share one EditableCell. Per-field
+    // F.5 — eight editable columns share one EditableCell. Per-field
     // editor type, options, and display logic live in EDITABLE_FIELDS.
+    case 'name':
     case 'status':
     case 'price':
     case 'stock':
@@ -2468,62 +2419,6 @@ const ProductCell = memo(function ProductCell({
           })}
         </span>
       )
-    // ── Status Matrix: rolled-up channel cells ────────────────────────
-    // Reads ProductRow.marketplaceCoverage (set when
-    // /api/products?includeMarketplaceCoverage=true). The cell folds
-    // across all marketplaces for the channel (worst-status wins) and
-    // sums error/override counts so a parent row can warn "2/5 errors".
-    case 'ch_AMAZON':
-    case 'ch_EBAY':
-    case 'ch_SHOPIFY': {
-      const channel = col.slice(3) as 'AMAZON' | 'EBAY' | 'SHOPIFY'
-      const marketplaces = CHANNEL_MARKETPLACES[channel]
-      let worst: TrafficLight = 'none'
-      let errorChildCount = 0
-      let overrideChildCount = 0
-      let totalChildren = 0
-      for (const mp of marketplaces) {
-        const c = getCoverageCell(p, channel, mp)
-        if (c.status === 'error') worst = 'error'
-        else if (c.status === 'override' && worst !== 'error') worst = 'override'
-        else if (c.status === 'live' && worst === 'none') worst = 'live'
-        errorChildCount += c.errorChildCount
-        overrideChildCount += c.overrideChildCount
-        totalChildren = Math.max(totalChildren, c.totalChildren)
-      }
-      return (
-        <MatrixChannelCell
-          status={worst}
-          isParent={p.isParent}
-          errorChildCount={errorChildCount}
-          overrideChildCount={overrideChildCount}
-          totalChildren={totalChildren}
-        />
-      )
-    }
-
-    // ── Status Matrix: per-marketplace traffic-light cells ───────────
-    case 'mkt_AMAZON_IT': case 'mkt_AMAZON_DE': case 'mkt_AMAZON_FR':
-    case 'mkt_AMAZON_UK': case 'mkt_AMAZON_ES':
-    case 'mkt_EBAY_IT': case 'mkt_EBAY_DE': case 'mkt_EBAY_FR': case 'mkt_EBAY_UK':
-    case 'mkt_SHOPIFY_GLOBAL': {
-      // 'mkt_AMAZON_IT' → channel 'AMAZON', marketplace 'IT'
-      const rest = col.slice(4) // 'AMAZON_IT'
-      const underscore = rest.indexOf('_')
-      const channel = rest.slice(0, underscore)
-      const marketplace = rest.slice(underscore + 1)
-      const c = getCoverageCell(p, channel, marketplace)
-      return (
-        <MatrixChannelCell
-          status={c.status}
-          isParent={p.isParent}
-          errorChildCount={c.errorChildCount}
-          overrideChildCount={c.overrideChildCount}
-          totalChildren={c.totalChildren}
-        />
-      )
-    }
-
     case 'actions':
       return (
         <div className="flex items-center justify-end">

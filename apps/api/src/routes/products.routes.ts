@@ -19,10 +19,6 @@ import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { productEventService } from '../services/product-event.service.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
-import {
-  computeMarketplaceCoverage,
-  fetchProductTranslations,
-} from '../services/marketplace-coverage.service.js'
 
 // ES.3 — module-level cache-ready flag (re-checked every 60s).
 // Avoids a DB round-trip on every single request; a stale "false"
@@ -178,8 +174,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       driftOnly?: string
       includeCoverage?: string
       includeTags?: string
-      includeMarketplaceCoverage?: string
-      includeTranslations?: string
       // Lazy-load children of this parent. Pass the parent's ID
       // verbatim. Disables the default parentId=null filter.
       parentId?: string
@@ -234,8 +228,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const sort = q.sort ?? 'updated'
       const includeCoverage = q.includeCoverage === 'true' || q.includeCoverage === '1'
       const includeTags = q.includeTags === 'true' || q.includeTags === '1'
-      const includeMarketplaceCoverage = q.includeMarketplaceCoverage === 'true' || q.includeMarketplaceCoverage === '1'
-      const includeTranslations = q.includeTranslations === 'true' || q.includeTranslations === '1'
 
       // Default scope: top-level rows only. Override with ?parentId=<id>
       // to fetch children of a specific parent (used by the grid's
@@ -731,13 +723,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           .filter((p): p is (typeof rawProducts)[number] => !!p)
       }
 
-      // Optional marketplace coverage + translations — both fetched in parallel.
-      const sortedIds = sortedRawProducts.map((p) => p.id)
-      const [marketplaceCoverageByProduct, translationsByProduct] = await Promise.all([
-        includeMarketplaceCoverage ? computeMarketplaceCoverage(sortedIds) : Promise.resolve({}),
-        includeTranslations ? fetchProductTranslations(sortedIds) : Promise.resolve({}),
-      ])
-
       // Optional tag rollup — single grouped query, fan out client-side
       let tagsByProduct: Map<string, Array<{ id: string; name: string; color: string | null }>> = new Map()
       if (includeTags) {
@@ -793,8 +778,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             childCount: p.childCount,
             driftCount: (p as any).driftCount ?? 0,
             coverage,
-            marketplaceCoverage: includeMarketplaceCoverage ? (marketplaceCoverageByProduct[p.id] ?? {}) : undefined,
-            translations: includeTranslations ? (translationsByProduct[p.id] ?? {}) : undefined,
             tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
           }
         }
@@ -837,8 +820,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           variantCount: p._count?.variations ?? 0,
           childCount: p._count?.children ?? 0,
           coverage,
-          marketplaceCoverage: includeMarketplaceCoverage ? (marketplaceCoverageByProduct[p.id] ?? {}) : undefined,
-          translations: includeTranslations ? (translationsByProduct[p.id] ?? {}) : undefined,
           tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
         }
       })

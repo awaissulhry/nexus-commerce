@@ -35,13 +35,6 @@ import {
   type Density,
   DENSITY_CELL_CLASS,
 } from '@/lib/products/theme'
-// Reused matrix utilities for the in-grid Matrix view-mode.
-import {
-  CONTENT_LOCALES,
-  CONTENT_LOCALE_FLAGS,
-  CONTENT_LOCALE_LABELS,
-  type ContentLocale,
-} from './_lenses/_matrix/types'
 // P.1a — lens components extracted to /_lenses/* in this commit and
 // follow-ups. HierarchyLens is the first; CoverageLens, PricingLens,
 // HealthLens, DraftsLens follow in the same sweep.
@@ -325,37 +318,6 @@ export default function ProductsWorkspace() {
     } catch {}
   }, [density])
 
-  // Matrix view-mode for the Grid lens. When 'matrix', the column picker
-  // pre-applies a channel-rollup preset and the Name column renders the
-  // contentLocale-translated value (read-only). Toggling back to 'standard'
-  // restores the user's prior visibleColumns snapshot.
-  const [gridViewMode, setGridViewMode] = useState<'standard' | 'matrix'>(() => {
-    if (typeof window === 'undefined') return 'standard'
-    try {
-      const saved = window.localStorage.getItem('products.grid.viewMode')
-      return saved === 'matrix' ? 'matrix' : 'standard'
-    } catch { return 'standard' }
-  })
-  useEffect(() => {
-    try { window.localStorage.setItem('products.grid.viewMode', gridViewMode) } catch {}
-  }, [gridViewMode])
-
-  // Content locale for the Matrix view-mode. Independent of the UI locale.
-  // Defaults to the UI locale on first load, then drifts independently.
-  const [contentLocale, setContentLocale] = useState<ContentLocale>('en')
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const saved = window.localStorage.getItem('products.grid.contentLocale')
-      if (saved && (CONTENT_LOCALES as readonly string[]).includes(saved)) {
-        setContentLocale(saved as ContentLocale)
-      }
-    } catch {}
-  }, [])
-  useEffect(() => {
-    try { window.localStorage.setItem('products.grid.contentLocale', contentLocale) } catch {}
-  }, [contentLocale])
-
   // Debounced search → URL
   useEffect(() => {
     const t = setTimeout(() => {
@@ -431,21 +393,6 @@ export default function ProductsWorkspace() {
     if (sortStack.length > 0) qs.set('sorts', sortStack.join(','))
     qs.set('includeCoverage', 'true')
     qs.set('includeTags', 'true')
-    // Matrix view-mode (Step 2): request per-marketplace coverage + translations
-    // when matrix mode is on OR any matrix column is currently visible.
-    if (
-      gridViewMode === 'matrix' ||
-      visibleColumns.some(
-        (c) =>
-          c.startsWith('mkt_') ||
-          c === 'ch_AMAZON' ||
-          c === 'ch_EBAY' ||
-          c === 'ch_SHOPIFY',
-      )
-    ) {
-      qs.set('includeMarketplaceCoverage', 'true')
-      qs.set('includeTranslations', 'true')
-    }
     return `/api/products?${qs.toString()}`
   }, [lens, page, pageSize, search, statusFilters, channelFilters, marketplaceFilters, productTypeFilters, brandFilters, familyFilters, workflowStageFilters, tagFilters, fulfillmentFilters, missingChannelFilters, stockLevel, hasPhotos, hasDescription, hasBrand, hasGtin, driftOnly, showDeleted, sortBy, sortStack.join(',')])
 
@@ -646,28 +593,6 @@ export default function ProductsWorkspace() {
   const onTopLevelRefresh = useCallback(() => {
     setChildrenByParent({})
   }, [])
-
-  // Toggle the Matrix view-mode. On ON: snapshot the current
-  // visibleColumns and apply the channel-rollup preset. On OFF: restore
-  // from the snapshot (fall back to DEFAULT_VISIBLE if missing). The
-  // snapshot lives in localStorage so the restore survives a reload.
-  const MATRIX_PRESET = ['product', 'status', 'ch_AMAZON', 'ch_EBAY', 'ch_SHOPIFY', 'actions']
-  const STANDARD_SNAPSHOT_KEY = 'products.grid.standardVisibleColumns'
-  const handleViewModeChange = useCallback((next: 'standard' | 'matrix') => {
-    if (next === gridViewMode) return
-    if (next === 'matrix') {
-      try { window.localStorage.setItem(STANDARD_SNAPSHOT_KEY, JSON.stringify(visibleColumns)) } catch {}
-      setVisibleColumns(MATRIX_PRESET)
-    } else {
-      let restored: string[] | null = null
-      try {
-        const raw = window.localStorage.getItem(STANDARD_SNAPSHOT_KEY)
-        if (raw) restored = JSON.parse(raw)
-      } catch {}
-      setVisibleColumns(restored && Array.isArray(restored) && restored.length > 0 ? restored : DEFAULT_VISIBLE)
-    }
-    setGridViewMode(next)
-  }, [gridViewMode, visibleColumns])
 
   // E.1 — stable refs for the row-level callbacks. Without these,
   // ProductRow's React.memo can't skip re-renders because every
@@ -1210,8 +1135,6 @@ export default function ProductsWorkspace() {
                 columnWidths: f._columnWidths as
                   | Record<string, number>
                   | undefined,
-                viewMode: f._viewMode as 'standard' | 'matrix' | undefined,
-                contentLocale: f._contentLocale as ContentLocale | undefined,
               }
               if (Array.isArray(viewLocal.visibleColumns)) {
                 setVisibleColumns(viewLocal.visibleColumns)
@@ -1222,15 +1145,6 @@ export default function ProductsWorkspace() {
                 viewLocal.density === 'spacious'
               ) {
                 setDensity(viewLocal.density)
-              }
-              if (viewLocal.viewMode === 'standard' || viewLocal.viewMode === 'matrix') {
-                setGridViewMode(viewLocal.viewMode)
-              }
-              if (
-                viewLocal.contentLocale &&
-                (CONTENT_LOCALES as readonly string[]).includes(viewLocal.contentLocale)
-              ) {
-                setContentLocale(viewLocal.contentLocale)
               }
               // P.3 — push view-local column widths into the
               // localStorage-backed setter via a custom event so
@@ -1292,12 +1206,6 @@ export default function ProductsWorkspace() {
               }
               if (pageSize !== 100) {
                 filters._pageSize = pageSize
-              }
-              if (gridViewMode !== 'standard') {
-                filters._viewMode = gridViewMode
-              }
-              if (contentLocale !== 'en') {
-                filters._contentLocale = contentLocale
               }
               // P.3 — read current column widths from localStorage
               // (E.12 stores them there) and snapshot into the view.
@@ -1469,10 +1377,6 @@ export default function ProductsWorkspace() {
           onDensityChange={setDensity}
           searchTerm={search}
           riskFlaggedSkus={riskFlaggedSkus}
-          gridViewMode={gridViewMode}
-          onViewModeChange={handleViewModeChange}
-          contentLocale={contentLocale}
-          onContentLocaleChange={setContentLocale}
         />
       )}
 
@@ -1594,11 +1498,6 @@ function GridLens(props: any) {
     // SearchContext + RiskFlaggedContext providers internally.
     searchTerm,
     riskFlaggedSkus,
-    // Status Matrix view-mode controls.
-    gridViewMode,
-    onViewModeChange,
-    contentLocale,
-    onContentLocaleChange,
   } = props as {
     products: ProductRow[]
     loading: boolean
@@ -1635,10 +1534,6 @@ function GridLens(props: any) {
     onDensityChange: (d: Density) => void
     searchTerm: string
     riskFlaggedSkus: Set<string>
-    gridViewMode: 'standard' | 'matrix'
-    onViewModeChange: (mode: 'standard' | 'matrix') => void
-    contentLocale: ContentLocale
-    onContentLocaleChange: (locale: ContentLocale) => void
   }
   const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
 
@@ -1833,64 +1728,6 @@ function GridLens(props: any) {
             )
           })}
         </div>
-        {/* Status Matrix view-mode toggle. Standard = the regular editable grid;
-            Matrix = swaps to per-channel traffic-light columns + locale-aware
-            Name cell. Mirrors the density toggle visual pattern. */}
-        <div
-          className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded overflow-hidden h-7 text-sm"
-          role="group"
-          aria-label="View mode"
-        >
-          {(['standard', 'matrix'] as const).map((m) => {
-            const labelTitle = m === 'standard' ? 'Standard editable grid' : 'Status Matrix view'
-            return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => onViewModeChange(m)}
-                title={labelTitle}
-                aria-label={labelTitle}
-                aria-pressed={gridViewMode === m}
-                className={`px-2 h-full inline-flex items-center justify-center text-xs font-medium ${
-                  gridViewMode === m
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
-                }`}
-              >
-                {m === 'standard' ? 'Standard' : 'Matrix'}
-              </button>
-            )
-          })}
-        </div>
-        {/* Content-locale picker, only shown in Matrix mode. Switches the
-            Name column between ProductTranslation rows without affecting the
-            UI locale. */}
-        {gridViewMode === 'matrix' && (
-          <div
-            className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded overflow-hidden h-7 text-xs"
-            role="group"
-            aria-label="Content locale"
-          >
-            {CONTENT_LOCALES.map((loc) => (
-              <button
-                key={loc}
-                type="button"
-                onClick={() => onContentLocaleChange(loc)}
-                title={CONTENT_LOCALE_LABELS[loc]}
-                aria-label={CONTENT_LOCALE_LABELS[loc]}
-                aria-pressed={contentLocale === loc}
-                className={`px-1.5 h-full inline-flex items-center gap-1 ${
-                  contentLocale === loc
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
-                }`}
-              >
-                <span>{CONTENT_LOCALE_FLAGS[loc]}</span>
-                <span className="uppercase">{loc}</span>
-              </button>
-            ))}
-          </div>
-        )}
         <div className="relative">
           <Button
             size="sm"
@@ -1933,8 +1770,6 @@ function GridLens(props: any) {
           focusedRowId={focusedRowId}
           searchTerm={searchTerm}
           riskFlaggedSkus={riskFlaggedSkus}
-          viewMode={gridViewMode}
-          contentLocale={contentLocale}
         />
       </div>
       {/* Mobile + tablet card list — lg:hidden. Shows the same product
