@@ -57,6 +57,7 @@ import brandBrainRoutes from "./routes/brand-brain.routes.js";
 import feedTransformRoutes from "./routes/feed-transform.routes.js";
 import feedExportRoutes from "./routes/feed-export.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
+import customerSegmentsRoutes from "./routes/customer-segments.routes.js";
 import ordersRoutingRoutes from "./routes/orders-routing.routes.js";
 import productsRoutes from "./routes/products.routes.js";
 import listingRecoveryRoutes from "./routes/listing-recovery.routes.js";
@@ -467,6 +468,7 @@ app.register(brandBrainRoutes, { prefix: '/api' });
 app.register(feedTransformRoutes, { prefix: '/api/feed-transform' });
 app.register(feedExportRoutes, { prefix: '/api/feed-export' });
 app.register(analyticsRoutes, { prefix: '/api' });
+app.register(customerSegmentsRoutes, { prefix: '/api' });
 app.register(ordersRoutingRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
 app.register(listingRecoveryRoutes, { prefix: '/api' });
@@ -1000,6 +1002,18 @@ async function start() {
     {
       const { startListingQualitySnapshotCron } = await import('./jobs/listing-quality-snapshot.job.js');
       startListingQualitySnapshotCron();
+    }
+
+    // CI.1 — RFM Scoring (nightly; always on).
+    {
+      const { startRFMScoringCron } = await import('./jobs/rfm-scoring.job.js');
+      startRFMScoringCron();
+    }
+
+    // CI.2 — Segment Recount (weekly; always on).
+    {
+      const { startSegmentRecountCron } = await import('./jobs/segment-recount.job.js');
+      startSegmentRecountCron();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts

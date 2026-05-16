@@ -96,6 +96,10 @@ import { runBrowseNodePredictorCron } from './browse-node-predictor.job.js'
 import { runFeedExportCron } from './feed-export.job.js'
 // PA.2 — Listing Quality Snapshot.
 import { runListingQualitySnapshotCron } from './listing-quality-snapshot.job.js'
+// CI.1 — RFM Scoring.
+import { runRFMScoringCron } from './rfm-scoring.job.js'
+// CI.2 — Segment Recount.
+import { runSegmentRecountCron } from './segment-recount.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -184,6 +188,10 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'feed-export': () => runFeedExportCron(),
   // PA.2 — Listing Quality Snapshot (weekly sweep). Always on.
   'listing-quality-snapshot': () => runListingQualitySnapshotCron(),
+  // CI.1 — RFM scoring (nightly). Always on.
+  'rfm-scoring': () => runRFMScoringCron(),
+  // CI.2 — Segment recount (weekly). Always on.
+  'segment-recount': () => runSegmentRecountCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {

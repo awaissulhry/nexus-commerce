@@ -2995,6 +2995,14 @@ model Customer {
   // re-scored on every recent order).
   lastRiskComputedAt DateTime?
 
+  // CI.1 — RFM scoring (Recency × Frequency × Monetary).
+  // Computed nightly by rfm-scoring.job.ts. Each dimension is a quintile
+  // 1–5 (5 = best). rfmScore is a 3-digit code e.g. '554'.
+  // rfmLabel drives the segment color-coding and filter DSL.
+  rfmScore      String?   // e.g. '554' (R=5, F=5, M=4)
+  rfmLabel      String?   // CHAMPION | LOYAL | POTENTIAL | AT_RISK | LOST | NEW | ONE_TIME
+  rfmComputedAt DateTime?
+
   // Relations
   orders    Order[]
   addresses CustomerAddress[]
@@ -3007,6 +3015,33 @@ model Customer {
   @@index([totalSpentCents])
   @@index([riskFlag])
   @@index([fiscalKind]) // F.1 — drives B2B/B2C filtering on /customers
+  @@index([rfmLabel])   // CI.1 — segment filter + distribution query
+}
+
+// CI.2 — Customer Segment / Cohort.
+//
+// Named cohorts defined by a multi-field filter DSL (same operators as
+// AutomationRule). The engine evaluates conditions against Customer fields
+// and caches the count. Operators use segments for bulk tagging, email
+// export, and review-request scheduling.
+//
+// Condition DSL shape (same as AutomationRule.conditions):
+//   [{ field: 'totalSpentCents', op: 'gte', value: 100000 },
+//    { field: 'rfmLabel', op: 'in', value: ['CHAMPION', 'LOYAL'] }]
+// Supported fields: totalSpentCents, totalOrders, riskFlag, fiscalKind,
+//   rfmLabel, rfmScore, lastOrderAt (date ops), firstOrderAt, tags.
+model CustomerSegment {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  description   String?
+  conditions    Json     @default("[]")
+  customerCount Int      @default(0)
+  lastCountedAt DateTime?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt(sort: Desc)])
 }
 
 model CustomerAddress {

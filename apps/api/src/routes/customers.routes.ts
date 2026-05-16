@@ -532,4 +532,85 @@ export async function customersRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: err?.message ?? 'failed' })
     }
   })
+
+  // ── CI.1: RFM distribution ────────────────────────────────────────────────
+  app.get('/api/customers/analytics/rfm', async (_req, reply) => {
+    try {
+      const { getRFMDistribution } = await import('../services/customer-rfm.service.js')
+      return await getRFMDistribution(prisma)
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
+
+  app.post('/api/customers/analytics/rfm/recompute', async (_req) => {
+    const { computeRFMForAll } = await import('../services/customer-rfm.service.js')
+    const result = await computeRFMForAll(prisma)
+    return { ok: true, ...result }
+  })
+
+  // ── CI.3: Analytics overview ──────────────────────────────────────────────
+  app.get('/api/customers/analytics/overview', async (_req, reply) => {
+    try {
+      const now = new Date()
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000)
+
+      const [totalCustomers, b2bCount, b2cCount, newLast30d, atRiskCount, lostCount, championCount, repeatCustomers, avgAgg] =
+        await Promise.all([
+          prisma.customer.count(),
+          prisma.customer.count({ where: { fiscalKind: 'B2B' } }),
+          prisma.customer.count({ where: { fiscalKind: 'B2C' } }),
+          prisma.customer.count({ where: { firstOrderAt: { gte: thirtyDaysAgo } } }),
+          prisma.customer.count({ where: { rfmLabel: 'AT_RISK' } }),
+          prisma.customer.count({ where: { rfmLabel: 'LOST' } }),
+          prisma.customer.count({ where: { rfmLabel: 'CHAMPION' } }),
+          prisma.customer.count({ where: { totalOrders: { gt: 1 } } }),
+          prisma.customer.aggregate({ _avg: { totalOrders: true } }),
+        ])
+
+      const rfmRows = await prisma.customer.groupBy({
+        by: ['rfmLabel'],
+        _count: { _all: true },
+        where: { rfmLabel: { not: null } },
+      })
+      const rfmDistribution: Record<string, number> = {}
+      for (const r of rfmRows) {
+        if (r.rfmLabel) rfmDistribution[r.rfmLabel] = r._count._all
+      }
+
+      const ltv = await prisma.$queryRaw<Array<{ p10: string; p25: string; p50: string; p75: string; p90: string }>>`
+        SELECT
+          percentile_cont(0.10) WITHIN GROUP (ORDER BY "totalSpentCents") AS p10,
+          percentile_cont(0.25) WITHIN GROUP (ORDER BY "totalSpentCents") AS p25,
+          percentile_cont(0.50) WITHIN GROUP (ORDER BY "totalSpentCents") AS p50,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY "totalSpentCents") AS p75,
+          percentile_cont(0.90) WITHIN GROUP (ORDER BY "totalSpentCents") AS p90
+        FROM "Customer" WHERE "totalSpentCents" > 0
+      `
+      const ltvRow = ltv[0] ?? { p10: '0', p25: '0', p50: '0', p75: '0', p90: '0' }
+
+      const channelRows = await prisma.$queryRaw<Array<{ channel: string; cnt: string }>>`
+        SELECT key AS channel, count(*)::text AS cnt
+        FROM "Customer", jsonb_object_keys("channelOrderCounts") AS key
+        WHERE "channelOrderCounts" IS NOT NULL
+        GROUP BY key ORDER BY cnt DESC LIMIT 5
+      `
+
+      return {
+        totalCustomers, b2bCount, b2cCount,
+        unknownCount: totalCustomers - b2bCount - b2cCount,
+        newLast30d, atRiskCount, lostCount, championCount,
+        repeatRate: totalCustomers > 0 ? repeatCustomers / totalCustomers : 0,
+        avgOrderFrequency: Number(avgAgg._avg.totalOrders ?? 0),
+        ltvPercentiles: {
+          p10: Number(ltvRow.p10), p25: Number(ltvRow.p25), p50: Number(ltvRow.p50),
+          p75: Number(ltvRow.p75), p90: Number(ltvRow.p90),
+        },
+        rfmDistribution,
+        topChannels: channelRows.map((r) => ({ channel: r.channel, customerCount: Number(r.cnt) })),
+      }
+    } catch (err: any) {
+      return reply.status(500).send({ error: err?.message ?? 'failed' })
+    }
+  })
 }
