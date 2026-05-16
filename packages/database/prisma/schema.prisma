@@ -2920,6 +2920,7 @@ model Order {
   riskScore             OrderRiskScore? // O.22 — at most one per order
   fiscalInvoice         FiscalInvoice? // F.2 — at most one IT invoice per order
   notes                 OrderNote[] // AU.5 — per-order operator notes
+  routingDecisions      RoutingDecision[] // CE.4 — routing audit trail
 
   // Metadata
   amazonMetadata      Json?
@@ -9658,6 +9659,28 @@ model ProductEvent {
   @@index([aggregateType, aggregateId])
   @@index([eventType, createdAt(sort: Desc)])
   // Admin event explorer sorted by time.
+  @@index([createdAt(sort: Desc)])
+}
+
+// ── CE.4 — Smart Order Routing: RoutingDecision audit log ────────────────
+//
+// One row per resolveWarehouseForOrder() call. Captures which routing
+// method was used (rule-match / cost-scored / fallback) and the score
+// breakdown so operators can see WHY an order went to a specific warehouse
+// without replaying the routing engine state.
+model RoutingDecision {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  warehouseId String?
+  method      String // 'rule' | 'scored' | 'fallback' | 'none'
+  ruleId      String?
+  // Score breakdown for 'scored' method:
+  //   { warehouseId: { proximity: N, stockScore: N, total: N } }
+  scoreSummary Json?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
   @@index([createdAt(sort: Desc)])
 }
 

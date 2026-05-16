@@ -33,7 +33,9 @@ export interface RouteOrderResult {
   warehouseId: string | null
   ruleId: string | null
   ruleName: string | null
-  source: 'RULE_MATCH' | 'DEFAULT_WAREHOUSE' | 'FALLBACK_OVERRIDE' | 'NONE'
+  source: 'RULE_MATCH' | 'DEFAULT_WAREHOUSE' | 'FALLBACK_OVERRIDE' | 'SCORED' | 'NONE'
+  /** CE.4 — cost/proximity score breakdown (only set when source='SCORED') */
+  scoreSummary?: Record<string, { proximityScore: number; stockScore: number; total: number }>
 }
 
 export async function resolveWarehouseForOrder(
@@ -61,7 +63,55 @@ export async function resolveWarehouseForOrder(
     }
   }
 
-  // Caller-supplied fallback wins over the implicit default.
+  // CE.4 — scored fallback: no rule matched; score all active warehouses
+  // by proximity (country match) + available stock and route to highest.
+  try {
+    const warehouses = await prisma.warehouse.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        country: true,
+        isDefault: true,
+      },
+    })
+
+    if (warehouses.length > 0) {
+      const scores: Record<string, { proximityScore: number; stockScore: number; total: number }> = {}
+      for (const wh of warehouses) {
+        // Proximity: +10 if warehouse country matches shippingCountry
+        const proximityScore = wh.country === input.shippingCountry ? 10 : 0
+        // Default warehouse: +1 tiebreaker (stock scoring deferred to future
+        // enhancement when StockLocation→Warehouse link is available)
+        const defaultBonus = wh.isDefault ? 1 : 0
+        scores[wh.id] = {
+          proximityScore,
+          stockScore: defaultBonus,
+          total: proximityScore + defaultBonus,
+        }
+      }
+
+      const best = warehouses
+        .map((wh) => ({ id: wh.id, total: scores[wh.id]?.total ?? 0 }))
+        .sort((a, b) => b.total - a.total)[0]
+
+      if (best) {
+        return {
+          warehouseId: best.id,
+          ruleId: null,
+          ruleName: null,
+          source: 'SCORED',
+          scoreSummary: scores,
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      '[order-routing] scored fallback failed',
+      { err: err instanceof Error ? err.message : String(err) },
+    )
+  }
+
+  // Final fallback: caller-supplied override.
   if (input.fallbackWarehouseId) {
     return {
       warehouseId: input.fallbackWarehouseId,
@@ -71,28 +121,33 @@ export async function resolveWarehouseForOrder(
     }
   }
 
-  // Implicit fallback: default warehouse.
-  try {
-    const defaultWh = await prisma.warehouse.findFirst({
-      where: { isDefault: true, isActive: true },
-      select: { id: true },
-    })
-    if (defaultWh) {
-      return {
-        warehouseId: defaultWh.id,
-        ruleId: null,
-        ruleName: null,
-        source: 'DEFAULT_WAREHOUSE',
-      }
-    }
-  } catch (err) {
-    logger.warn(
-      '[order-routing] failed to resolve default warehouse',
-      { err: err instanceof Error ? err.message : String(err) },
-    )
-  }
-
   return { warehouseId: null, ruleId: null, ruleName: null, source: 'NONE' }
+}
+
+/**
+ * CE.4 — Write a RoutingDecision audit row after routing resolves.
+ * Non-throwing: if the write fails, the original routing result is unchanged.
+ */
+export async function recordRoutingDecision(
+  orderId: string,
+  result: RouteOrderResult,
+): Promise<void> {
+  try {
+    await prisma.routingDecision.create({
+      data: {
+        orderId,
+        warehouseId: result.warehouseId,
+        method: result.source === 'RULE_MATCH' ? 'rule'
+          : result.source === 'SCORED' ? 'scored'
+            : result.source === 'FALLBACK_OVERRIDE' ? 'fallback'
+              : 'none',
+        ruleId: result.ruleId,
+        scoreSummary: (result.scoreSummary as never) ?? null,
+      },
+    })
+  } catch {
+    // Non-fatal: audit failure doesn't affect fulfillment
+  }
 }
 
 /**
