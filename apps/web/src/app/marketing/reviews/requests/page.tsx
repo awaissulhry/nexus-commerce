@@ -10,7 +10,6 @@
  * 4h under NEXUS_ENABLE_REVIEW_INGEST=1.
  */
 
-import Link from 'next/link'
 import { Mail, AlertCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
@@ -225,14 +224,7 @@ export default async function ReviewRequestsPage() {
             .
           </div>
           <div>
-            See also:{' '}
-            <Link
-              href="/settings/review-rules"
-              className="underline text-amber-700 dark:text-amber-300"
-            >
-              Review Rules (D.7)
-            </Link>{' '}
-            for the D.7 engine configuration.
+            See also: Review Rules (D.7) in Settings → Review Automation for D.7 engine configuration.
           </div>
         </div>
       </div>
