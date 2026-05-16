@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { Search, Users, RefreshCw, Download } from 'lucide-react'
+import { Search, Users, RefreshCw, Download, BarChart2, Filter } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -147,8 +147,40 @@ export default function CustomersWorkspace() {
     return code === 'EUR' ? `€${v}` : `${v} ${code}`
   }
 
+  const customerTabs = [
+    { href: '/customers',          label: 'Customers', icon: Users,    exact: true  },
+    { href: '/customers/analytics', label: 'Analytics', icon: BarChart2, exact: false },
+    { href: '/customers/segments',  label: 'Segments',  icon: Filter,   exact: false },
+  ]
+
   return (
     <div className="space-y-5">
+      {/* Sub-navigation */}
+      <nav className="border-b border-slate-200 dark:border-slate-800">
+        <ul className="flex items-center gap-1 -mb-px">
+          {customerTabs.map((tab) => {
+            const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href)
+            const Icon = tab.icon
+            return (
+              <li key={tab.href}>
+                <Link
+                  href={tab.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors ${
+                    active
+                      ? 'border-blue-600 text-blue-700 dark:text-blue-300 dark:border-blue-400'
+                      : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {tab.label}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+
       <PageHeader
         title={t('customers.title')}
         description={

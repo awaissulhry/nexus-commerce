@@ -8,6 +8,7 @@ import Link from 'next/link'
 import {
   Truck, PackageCheck, Boxes, Undo2, TrendingDown, RefreshCw,
   Warehouse as WarehouseIcon, AlertTriangle, ArrowRight, ShoppingCart,
+  TrendingUp, GitBranch,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -165,6 +166,24 @@ export default function FulfillmentOverview() {
                 { label: 'Suppliers', value: data.suppliers.active },
               ]}
               cta="Sendcloud · Buy Shipping"
+            />
+
+            <SectionCard
+              icon={TrendingUp}
+              title="Repricing"
+              tone="bg-violet-50 text-violet-600"
+              href="/fulfillment/repricing"
+              stats={[]}
+              cta="Buy Box decisions · price history"
+            />
+
+            <SectionCard
+              icon={GitBranch}
+              title="Routing Log"
+              tone="bg-teal-50 text-teal-600"
+              href="/fulfillment/routing-log"
+              stats={[]}
+              cta="Warehouse routing decisions"
             />
           </div>
         </>

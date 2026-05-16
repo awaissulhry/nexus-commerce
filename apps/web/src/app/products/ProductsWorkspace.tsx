@@ -18,6 +18,7 @@ import {
   Trash2,
   GitBranch,
   Globe,
+  BarChart2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -970,6 +971,13 @@ export default function ProductsWorkspace() {
             >
               Bundles
             </Button>
+            <Link
+              href="/analytics/products"
+              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+              title="Portfolio Intelligence — health scores, stockout risk, ROAS"
+            >
+              <BarChart2 size={12} /> Portfolio
+            </Link>
             {/* F.1 — recycle-bin toggle. Subdued styling so it doesn't
                 steal attention from the primary actions; flips active
                 when the operator is inside the bin so it's obvious how
