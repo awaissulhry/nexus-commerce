@@ -1,0 +1,42 @@
+[
+  {
+    "date": "2026-05-14",
+    "externalCampaignId": "SANDBOX-CAMP-001",
+    "impressions": 12500,
+    "clicks": 187,
+    "costMicros": 95430000,
+    "attributedSales7d": 412.5,
+    "attributedOrders7d": 6,
+    "attributedUnits7d": 7
+  },
+  {
+    "date": "2026-05-14",
+    "externalCampaignId": "SANDBOX-CAMP-002",
+    "impressions": 28100,
+    "clicks": 412,
+    "costMicros": 318600000,
+    "attributedSales7d": 1245.0,
+    "attributedOrders7d": 12,
+    "attributedUnits7d": 12
+  },
+  {
+    "date": "2026-05-15",
+    "externalCampaignId": "SANDBOX-CAMP-001",
+    "impressions": 13200,
+    "clicks": 201,
+    "costMicros": 102450000,
+    "attributedSales7d": 495.0,
+    "attributedOrders7d": 7,
+    "attributedUnits7d": 8
+  },
+  {
+    "date": "2026-05-15",
+    "externalCampaignId": "SANDBOX-CAMP-002",
+    "impressions": 31200,
+    "clicks": 478,
+    "costMicros": 357300000,
+    "attributedSales7d": 1395.0,
+    "attributedOrders7d": 14,
+    "attributedUnits7d": 14
+  }
+]

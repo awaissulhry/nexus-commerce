@@ -1,0 +1,26 @@
+[
+  {
+    "adId": "SANDBOX-PA-001",
+    "adGroupId": "SANDBOX-AG-001",
+    "campaignId": "SANDBOX-CAMP-001",
+    "state": "enabled",
+    "asin": "B0SANDBOXGIACCA01",
+    "sku": "XAV-GIACCA-NERO-M"
+  },
+  {
+    "adId": "SANDBOX-PA-002",
+    "adGroupId": "SANDBOX-AG-002",
+    "campaignId": "SANDBOX-CAMP-002",
+    "state": "enabled",
+    "asin": "B0SANDBOXCASCO01",
+    "sku": "XAV-CASCO-INT-L"
+  },
+  {
+    "adId": "SANDBOX-PA-003",
+    "adGroupId": "SANDBOX-AG-003",
+    "campaignId": "SANDBOX-CAMP-003",
+    "state": "paused",
+    "asin": "B0SANDBOXPELLE01",
+    "sku": "XAV-PELLE-BLU-M"
+  }
+]

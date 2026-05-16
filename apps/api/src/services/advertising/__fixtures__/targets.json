@@ -1,0 +1,32 @@
+[
+  {
+    "targetId": "SANDBOX-T-001",
+    "adGroupId": "SANDBOX-AG-002",
+    "campaignId": "SANDBOX-CAMP-002",
+    "state": "enabled",
+    "kind": "KEYWORD",
+    "expressionType": "EXACT",
+    "expressionValue": "casco moto integrale",
+    "bid": 1.35
+  },
+  {
+    "targetId": "SANDBOX-T-002",
+    "adGroupId": "SANDBOX-AG-002",
+    "campaignId": "SANDBOX-CAMP-002",
+    "state": "enabled",
+    "kind": "KEYWORD",
+    "expressionType": "PHRASE",
+    "expressionValue": "casco moto",
+    "bid": 0.95
+  },
+  {
+    "targetId": "SANDBOX-T-003",
+    "adGroupId": "SANDBOX-AG-002",
+    "campaignId": "SANDBOX-CAMP-002",
+    "state": "enabled",
+    "kind": "PRODUCT",
+    "expressionType": "ASIN",
+    "expressionValue": "B0COMPETITOR1",
+    "bid": 1.5
+  }
+]

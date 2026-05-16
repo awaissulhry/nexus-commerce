@@ -1,0 +1,29 @@
+[
+  {
+    "campaignId": "SANDBOX-CAMP-001",
+    "name": "Xavia Giacca Sandbox IT - SP Auto",
+    "campaignType": "sponsoredProducts",
+    "state": "enabled",
+    "dailyBudget": 25.0,
+    "startDate": "20260101",
+    "biddingStrategy": "legacyForSales"
+  },
+  {
+    "campaignId": "SANDBOX-CAMP-002",
+    "name": "Xavia Casco Sandbox IT - SP Manual",
+    "campaignType": "sponsoredProducts",
+    "state": "enabled",
+    "dailyBudget": 50.0,
+    "startDate": "20260101",
+    "biddingStrategy": "manual"
+  },
+  {
+    "campaignId": "SANDBOX-CAMP-003",
+    "name": "Xavia Pelle Sandbox DE - SB",
+    "campaignType": "sponsoredBrands",
+    "state": "paused",
+    "dailyBudget": 75.0,
+    "startDate": "20260201",
+    "biddingStrategy": "autoForSales"
+  }
+]

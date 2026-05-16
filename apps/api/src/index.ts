@@ -51,6 +51,8 @@ import returnsRoutes from "./routes/returns.routes.js";
 import stockRoutes from "./routes/stock.routes.js";
 import brandSettingsRoutes from "./routes/brand-settings.routes.js";
 import marketingRoutes from "./routes/marketing.routes.js";
+import advertisingRoutes from "./routes/advertising.routes.js";
+import reviewsRoutes from "./routes/reviews.routes.js";
 import productsRoutes from "./routes/products.routes.js";
 import listingRecoveryRoutes from "./routes/listing-recovery.routes.js";
 import familiesRoutes from "./routes/families.routes.js";
@@ -454,6 +456,8 @@ app.register(brandSettingsRoutes, { prefix: '/api' });
 app.register(pricingRoutes, { prefix: '/api' });
 app.register(pricingRulesRoutes, { prefix: '/api' });
 app.register(marketingRoutes, { prefix: '/api' });
+app.register(advertisingRoutes, { prefix: '/api' });
+app.register(reviewsRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
 app.register(listingRecoveryRoutes, { prefix: '/api' });
 app.register(familiesRoutes, { prefix: '/api' });
@@ -929,6 +933,36 @@ async function start() {
     // once a rule is taken out of dry-run.
     if (process.env.NEXUS_ENABLE_AUTOMATION_RULE_CRON === '1') {
       startAutomationRuleEvaluatorCron();
+    }
+
+    // AD.1 + AD.2 — Trading Desk crons:
+    //   ads-sync               every 30 min — pulls campaign structure
+    //   fba-storage-age-ingest every 6 hours — Amazon Aged Inventory
+    //   true-profit-rollup     nightly 03:00 UTC — yesterday's P&L
+    //   ads-metrics-ingest     hourly — Amazon Ads Reports API
+    // Plus the BullMQ ads-sync worker (consumes AD_* mutations).
+    // Default-OFF — opt in via NEXUS_ENABLE_AMAZON_ADS_CRON=1.
+    if (process.env.NEXUS_ENABLE_AMAZON_ADS_CRON === '1') {
+      const { startAllAdvertisingCrons } = await import('./jobs/ads-sync.job.js');
+      const { initializeAdsSyncWorker } = await import('./workers/ads-sync.worker.js');
+      // AD.3 — advertising-domain AutomationRule evaluator (every 15 min).
+      const { startAdvertisingRuleEvaluatorCron } = await import('./jobs/advertising-rule-evaluator.job.js');
+      // AD.5 — BudgetPool rebalancer (every 15 min; pool cooldown is the real gate).
+      const { startBudgetPoolRebalanceCron } = await import('./jobs/budget-pool-rebalance.job.js');
+      // Side-effect: registers the 8 action handlers into ACTION_HANDLERS.
+      await import('./services/advertising/automation-action-handlers.js');
+      startAllAdvertisingCrons();
+      startAdvertisingRuleEvaluatorCron();
+      startBudgetPoolRebalanceCron();
+      initializeAdsSyncWorker();
+    }
+
+    // SR.1 — Sentient Review Loop. Default-OFF — opt in via
+    // NEXUS_ENABLE_REVIEW_INGEST=1. Sandbox mode (default) uses
+    // fixture reviews; live mode pulls from configured channel sources.
+    if (process.env.NEXUS_ENABLE_REVIEW_INGEST === '1') {
+      const { startAllReviewCrons } = await import('./jobs/review-pipeline.job.js');
+      startAllReviewCrons();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts

@@ -68,6 +68,22 @@ import {
 import { runAllEstySyncJobs } from './etsy-sync.job.js'
 import { runAllShopifySyncJobs } from './shopify-sync.job.js'
 import { runAllWooCommerceSyncJobs } from './woocommerce-sync.job.js'
+// AD.1 + AD.2 — Trading Desk cron entrypoints.
+import {
+  runAdsSyncCron,
+  runFbaStorageAgeIngestCron,
+  runTrueProfitRollupCron,
+  runAdsMetricsIngestCron,
+} from './ads-sync.job.js'
+// AD.3 — advertising-domain AutomationRule evaluator.
+import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
+// AD.5 — cross-marketplace BudgetPool rebalancer.
+import { runBudgetPoolRebalanceCron } from './budget-pool-rebalance.job.js'
+// SR.1 — Sentient Review Loop ingest + spike detector.
+import {
+  runReviewIngestCron,
+  runReviewSpikeDetectorCron,
+} from './review-pipeline.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -130,6 +146,20 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'etsy-sync': () => runAllEstySyncJobs(),
   'shopify-sync': () => runAllShopifySyncJobs(),
   'woocommerce-sync': () => runAllWooCommerceSyncJobs(),
+
+  // AD.1 + AD.2 — Trading Desk substrate + metrics ingest.
+  // AD.3 — advertising-domain AutomationRule evaluator.
+  // Gated by NEXUS_ENABLE_AMAZON_ADS_CRON=1; sandbox-safe.
+  'ads-sync': () => runAdsSyncCron(),
+  'fba-storage-age-ingest': () => runFbaStorageAgeIngestCron(),
+  'true-profit-rollup': () => runTrueProfitRollupCron(),
+  'ads-metrics-ingest': () => runAdsMetricsIngestCron(),
+  'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorCron(),
+  'budget-pool-rebalance': () => runBudgetPoolRebalanceCron(),
+
+  // SR.1 — Sentient Review Loop. Gated by NEXUS_ENABLE_REVIEW_INGEST=1.
+  'review-ingest': () => runReviewIngestCron(),
+  'review-spike-detector': () => runReviewSpikeDetectorCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {

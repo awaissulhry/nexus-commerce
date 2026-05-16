@@ -1,0 +1,23 @@
+[
+  {
+    "adGroupId": "SANDBOX-AG-001",
+    "campaignId": "SANDBOX-CAMP-001",
+    "name": "Giacca Auto AdGroup",
+    "state": "enabled",
+    "defaultBid": 0.85
+  },
+  {
+    "adGroupId": "SANDBOX-AG-002",
+    "campaignId": "SANDBOX-CAMP-002",
+    "name": "Casco Manual AdGroup",
+    "state": "enabled",
+    "defaultBid": 1.2
+  },
+  {
+    "adGroupId": "SANDBOX-AG-003",
+    "campaignId": "SANDBOX-CAMP-003",
+    "name": "Pelle DE AdGroup",
+    "state": "paused",
+    "defaultBid": 1.5
+  }
+]

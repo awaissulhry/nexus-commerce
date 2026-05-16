@@ -22,6 +22,27 @@ enum CampaignStatus {
   ENABLED
   PAUSED
   ARCHIVED
+  DRAFT // AD.1: pre-sync locally-authored campaigns
+}
+
+// AD.1 — Amazon Advertising bidding strategy (SP campaigns only;
+// SB / SD use different shapes Amazon-side).
+enum BiddingStrategy {
+  LEGACY_FOR_SALES // up-to-100% downward, no upward
+  AUTO_FOR_SALES // dynamic, up + down
+  MANUAL // operator-set
+}
+
+// AD.1 — sync-lifecycle status for advertising entities (campaign,
+// ad-group, target). Mirrors OutboundSyncStatus shape but kept
+// distinct so a future schema change to OutboundSyncStatus doesn't
+// bleed into operator-visible advertising state.
+enum AdSyncStatus {
+  PENDING
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+  SKIPPED
 }
 
 enum ShipmentStatus {
@@ -307,10 +328,15 @@ model Product {
   substitutionsAsSubstitute ProductSubstitution[]         @relation("SubstitutionSubstitute") // R.17
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
   channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
-  amazonImageFeedJobs       AmazonImageFeedJob[]    // IM.1: Amazon image feed submissions
+  amazonImageFeedJobs       AmazonImageFeedJob[] // IM.1: Amazon image feed submissions
   listingRecoveryEvents     ListingRecoveryEvent[] // W5.49: delete+relist audit
   buyBoxHistory             BuyBoxHistory[] // Pricing F.1: Buy Box observation log
   scheduledChanges          ScheduledProductChange[] // F.3: deferred mutations
+  adProductAds              AdProductAd[] // AD.1: Amazon Ads product-ad joins
+  fbaStorageAges            FbaStorageAge[] // AD.1: aged-stock snapshots per poll
+  productProfitDailies      ProductProfitDaily[] // AD.1: per-day True Profit roll-up
+  reviews                   Review[] // SR.1: ingested customer reviews
+  reviewSpikes              ReviewSpike[] // SR.1: detected category spikes
 
   // H.16 — Compliance master data. HS code = customs classification,
   // mostly 6-digit (HS) or 8-10 digit (CN/HTS); stored as text since
@@ -881,7 +907,7 @@ model DigitalAsset {
   // file already in the catalogue. Indexed unique so a duplicate
   // hash collides at the DB layer instead of racing two requests
   // into separate Cloudinary calls.
-  contentHash      String? @unique
+  contentHash String? @unique
 
   // Free-form metadata: alt text, photographer credit, color tags,
   // dominant colors, captions, etc. JSON keeps the schema flexible
@@ -925,15 +951,15 @@ model DigitalAsset {
 /// Drag-reorder writes a fresh sequence on commit, same pattern as
 /// ProductImage.sortOrder (W8.1).
 model AssetFolder {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   name      String
   parentId  String?
-  parent    AssetFolder?  @relation("AssetFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children  AssetFolder[] @relation("AssetFolderTree")
+  parent    AssetFolder?   @relation("AssetFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  AssetFolder[]  @relation("AssetFolderTree")
   assets    DigitalAsset[]
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  order     Int            @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   @@index([parentId, order])
 }
@@ -1149,9 +1175,9 @@ model ProductVariation {
   stockBuffer Int @default(0)
 
   // ── Per-variant identifiers ───────────────────────────────────────
-  upc  String?
-  ean  String?
-  gtin String?
+  upc   String?
+  ean   String?
+  gtin  String?
   fnsku String? // Amazon Fulfillment Network SKU — cached after first SP-API lookup
 
   // ── Per-variant physical attributes (override parent defaults) ────
@@ -2198,6 +2224,357 @@ model Campaign {
   sales       Decimal        @default(0) @db.Decimal(10, 2)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  // AD.1 — Trading Desk fields. marketplace + externalCampaignId are
+  // additive: null = legacy Phase-1 stub row; non-null = synced from
+  // Amazon Ads API (or sandbox fixture). Existing rows keep working.
+  marketplace         String? // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  externalCampaignId  String? // Amazon-issued ID (campaignId in Ads API)
+  portfolioId         String? // Amazon Ads Portfolio grouping
+  // AD.2 — currency for dailyBudget. Defaults EUR; non-EUR marketplaces
+  // (e.g. UK GBP) override at sync time from the Ads API profile.
+  dailyBudgetCurrency String          @default("EUR")
+  biddingStrategy     BiddingStrategy @default(LEGACY_FOR_SALES)
+  // True Profit aggregates (computed by true-profit-rollup.service).
+  // acos = spend / sales (Amazon's metric). roas = sales / spend.
+  // trueProfit nets COGS + referral + FBA + storage + refunds.
+  acos                Decimal?        @db.Decimal(8, 4)
+  roas                Decimal?        @db.Decimal(8, 4)
+  trueProfitCents     Int             @default(0)
+  trueProfitMarginPct Decimal?        @db.Decimal(8, 4)
+  lastSyncedAt        DateTime?
+  lastSyncStatus      AdSyncStatus?
+  lastSyncError       String?
+
+  adGroups   AdGroup[]
+  bidHistory CampaignBidHistory[]
+
+  @@unique([externalCampaignId, marketplace])
+  @@index([marketplace, status])
+  @@index([lastSyncStatus])
+}
+
+// AD.1 — Sponsored Products/Brands/Display ad group. Owns the default
+// bid + targeting mode; child targets carry per-keyword overrides.
+model AdGroup {
+  id                String         @id @default(cuid())
+  campaignId        String
+  campaign          Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  externalAdGroupId String?
+  name              String
+  defaultBidCents   Int            @default(50)
+  status            CampaignStatus @default(ENABLED)
+  targetingType     String         @default("MANUAL") // AUTO | MANUAL
+  impressions       Int            @default(0)
+  clicks            Int            @default(0)
+  spendCents        Int            @default(0)
+  salesCents        Int            @default(0)
+  lastSyncedAt      DateTime?
+  lastSyncStatus    AdSyncStatus?
+  lastSyncError     String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  targets    AdTarget[]
+  productAds AdProductAd[]
+
+  @@unique([externalAdGroupId, campaignId])
+  @@index([campaignId, status])
+}
+
+// AD.1 — Unified target row (keyword | product | category | audience).
+// Amazon reports performance at this grain.
+model AdTarget {
+  id               String         @id @default(cuid())
+  adGroupId        String
+  adGroup          AdGroup        @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  externalTargetId String?
+  kind             String // KEYWORD | PRODUCT | CATEGORY | AUDIENCE
+  expressionType   String // EXACT | PHRASE | BROAD | ASIN | CATEGORY_REFINEMENT
+  expressionValue  String
+  bidCents         Int            @default(50)
+  status           CampaignStatus @default(ENABLED)
+  impressions      Int            @default(0)
+  clicks           Int            @default(0)
+  spendCents       Int            @default(0)
+  salesCents       Int            @default(0)
+  ordersCount      Int            @default(0)
+  lastSyncedAt     DateTime?
+  lastSyncStatus   AdSyncStatus?
+  lastSyncError    String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([adGroupId, status])
+  @@index([externalTargetId])
+}
+
+// AD.1 — Links ad-groups to local Product rows (via ASIN/SKU). The
+// join the "bid down on this helmet" automation rule uses to resolve
+// Product → its advertised ad-groups.
+model AdProductAd {
+  id           String         @id @default(cuid())
+  adGroupId    String
+  adGroup      AdGroup        @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  asin         String?
+  sku          String?
+  externalAdId String?
+  status       CampaignStatus @default(ENABLED)
+  impressions  Int            @default(0)
+  clicks       Int            @default(0)
+  spendCents   Int            @default(0)
+  salesCents   Int            @default(0)
+  lastSyncedAt DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([adGroupId, asin])
+  @@index([productId])
+  @@index([asin])
+}
+
+// AD.1 — Amazon Advertising API connection envelope. Distinct from
+// ChannelConnection because Ads API uses a separate LWA-for-
+// Advertising scope. One row per Amazon Ads profileId.
+//
+// Two-key live-write gating (AD.4 lands the operator UI):
+//   1. NEXUS_AMAZON_ADS_MODE=live (deploy-wide env flag)
+//   2. mode='production' AND writesEnabledAt != null
+model AmazonAdsConnection {
+  id                   String    @id @default(cuid())
+  profileId            String    @unique
+  marketplace          String
+  region               String    @default("EU") // EU | NA | FE
+  accountLabel         String?
+  // AES-256-GCM via apps/api/src/lib/crypto.ts; payload shape:
+  // { clientId, clientSecret, refreshToken }
+  credentialsEncrypted String?
+  mode                 String    @default("sandbox") // 'sandbox' | 'production'
+  writesEnabledAt      DateTime? // AD.4 — operator opt-in for live writes
+  lastWriteAt          DateTime?
+  isActive             Boolean   @default(false)
+  lastVerifiedAt       DateTime?
+  lastErrorAt          DateTime?
+  lastError            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([marketplace, isActive])
+}
+
+// AD.1 — Snapshot of Amazon FBA Aged Inventory report (SP-API
+// GET_FBA_MYI_AGED_INVENTORY_DATA). Per-poll (not in-place update)
+// so AD.3's spike detector can compare today vs yesterday.
+model FbaStorageAge {
+  id          String   @id @default(cuid())
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sku         String
+  asin        String?
+  marketplace String
+  polledAt    DateTime @default(now())
+
+  quantityInAge0_90    Int @default(0)
+  quantityInAge91_180  Int @default(0)
+  quantityInAge181_270 Int @default(0)
+  quantityInAge271_365 Int @default(0)
+  quantityInAge365Plus Int @default(0)
+
+  projectedLtsFee30dCents Int @default(0)
+  projectedLtsFee60dCents Int @default(0)
+  projectedLtsFee90dCents Int @default(0)
+  currentStorageFeeCents  Int @default(0)
+
+  // Min days until ANY aged-quantity tips into the next LTS bracket.
+  // Null when stock too young (entirely 0-90 days).
+  daysToLtsThreshold Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([sku, marketplace, polledAt])
+  @@index([productId, marketplace])
+  @@index([marketplace, daysToLtsThreshold])
+}
+
+// AD.1 — Pre-aggregated daily P&L per (productId, marketplace, date).
+// Additive-only: roll-up rewrites the same row when fees lag (Amazon
+// posts financial events 24-48h late), never deletes historic rows.
+// coverage JSON lets the UI render "67% coverage" badges.
+model ProductProfitDaily {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketplace String
+  date        DateTime @db.Date
+
+  unitsSold               Int @default(0)
+  grossRevenueCents       Int @default(0)
+  cogsCents               Int @default(0)
+  referralFeesCents       Int @default(0)
+  fbaFulfillmentFeesCents Int @default(0)
+  fbaStorageFeesCents     Int @default(0)
+  advertisingSpendCents   Int @default(0)
+  returnsRefundsCents     Int @default(0)
+  otherFeesCents          Int @default(0)
+
+  trueProfitCents     Int      @default(0)
+  trueProfitMarginPct Decimal? @db.Decimal(8, 4)
+
+  // { hasCostPrice, hasReferralFee, hasFbaFee, hasAdSpend } booleans
+  coverage Json?
+
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productId, marketplace, date])
+  @@index([marketplace, date])
+  @@index([trueProfitMarginPct])
+}
+
+// AD.4 — Unified write log for every Trading Desk action (both
+// operator-triggered and automation-rule-triggered). Distinct from
+// CampaignBidHistory: that's field-level scalar audit; this is
+// action-level with full payloadBefore/payloadAfter JSON snapshots
+// for rollback.
+//
+// executionId nullable so operator writes (no rule) still land here.
+// Rollback walks AdvertisingActionLog.payloadBefore to invert each
+// operation within a 24h window.
+model AdvertisingActionLog {
+  id                   String    @id @default(cuid())
+  // Set when the write came from a rule. SetNull on delete so the
+  // audit row survives if the rule is deleted later.
+  executionId          String?
+  userId               String? // operator id when human-triggered
+  actionType           String // 'bid_down' | 'pause_campaign' | 'create_amazon_promotion' | 'liquidate_aged_stock' | ...
+  entityType           String // 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'RETAIL_EVENT'
+  entityId             String
+  // Snapshots for diffing + rollback. Shape per actionType.
+  payloadBefore        Json
+  payloadAfter         Json
+  // FK to the OutboundSyncQueue row this action enqueued (when
+  // applicable — composite actions like liquidate_aged_stock create
+  // multiple OutboundSyncQueue rows, only the primary is tracked here).
+  outboundQueueId      String?
+  amazonResponseId     String?
+  amazonResponseStatus String? // 'SUCCESS' | 'FAILED' | 'PENDING'
+  rolledBackAt         DateTime?
+  rollbackReason       String?
+  createdAt            DateTime  @default(now())
+
+  @@index([executionId, createdAt(sort: Desc)])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+// AD.5 — Cross-marketplace budget pool. Operator groups campaigns
+// across IT/DE/FR (etc.) under a shared daily budget; the rebalancer
+// reallocates per-campaign budget based on the configured strategy
+// (PROFIT_WEIGHTED, URGENCY_WEIGHTED, STATIC).
+//
+// Cross-channel (Meta / Google) deferred to Pillar 2.5 — these pools
+// are intra-Amazon only.
+model BudgetPool {
+  id                      String    @id @default(cuid())
+  name                    String
+  description             String?
+  currency                String    @default("EUR")
+  totalDailyBudgetCents   Int
+  // STATIC: enforce targetSharePct exactly
+  // PROFIT_WEIGHTED: weight by 30d trueProfitCents per marketplace
+  // URGENCY_WEIGHTED: weight by aged-stock units × projectedLtsFee30d
+  strategy                String    @default("STATIC")
+  // Don't rebalance again until lastRebalancedAt + coolDownMinutes.
+  // Default 60 min; production typically 360 (6h).
+  coolDownMinutes         Int       @default(60)
+  // Hard guardrail: a single rebalance can shift no more than this %
+  // of the pool's total. Prevents catastrophic redistribution on a
+  // spiky profit day.
+  maxShiftPerRebalancePct Int       @default(20)
+  enabled                 Boolean   @default(false)
+  // When true, rebalancer computes proposed budgets and writes the
+  // BudgetPoolRebalance audit row but never enqueues mutations.
+  dryRun                  Boolean   @default(true)
+  lastRebalancedAt        DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  createdBy               String?
+
+  allocations BudgetPoolAllocation[]
+  rebalances  BudgetPoolRebalance[]
+
+  @@index([enabled, lastRebalancedAt])
+}
+
+// AD.5 — One campaign membership in a budget pool. campaignId is
+// DB-unique across ALL allocations so two pools can't fight over the
+// same Campaign.dailyBudget.
+model BudgetPoolAllocation {
+  id                  String     @id @default(cuid())
+  budgetPoolId        String
+  budgetPool          BudgetPool @relation(fields: [budgetPoolId], references: [id], onDelete: Cascade)
+  // Marketplace denormalized from the linked Campaign for query speed.
+  marketplace         String
+  campaignId          String?
+  // Operator-set baseline share (used by STATIC strategy; ignored
+  // by PROFIT_WEIGHTED / URGENCY_WEIGHTED which compute dynamically).
+  targetSharePct      Decimal    @default(0) @db.Decimal(5, 2)
+  // Per-allocation floor/ceiling. Defaults: €1/day floor, no ceiling.
+  minDailyBudgetCents Int        @default(100)
+  maxDailyBudgetCents Int?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@unique([budgetPoolId, marketplace, campaignId])
+  @@unique([campaignId])
+  @@index([budgetPoolId])
+  @@index([marketplace])
+}
+
+// AD.5 — Append-only audit. Every rebalance run (cron + manual)
+// writes one row. inputs captures the snapshot data used (per-
+// marketplace profit, aged-stock counts, weights). outputs captures
+// the proposed budgets. appliedAt is null until pool.dryRun=false;
+// once set, the rebalance was actually enqueued via ads-mutation.
+model BudgetPoolRebalance {
+  id              String     @id @default(cuid())
+  budgetPoolId    String
+  budgetPool      BudgetPool @relation(fields: [budgetPoolId], references: [id], onDelete: Cascade)
+  // 'cron' | 'rule:<id>' | 'user:<id>'
+  triggeredBy     String
+  inputs          Json
+  outputs         Json
+  dryRun          Boolean
+  // null = dry-run preview; set = mutations enqueued
+  appliedAt       DateTime?
+  // Sum of |new - old| across all allocations, in cents. UI surfaces.
+  totalShiftCents Int        @default(0)
+  createdAt       DateTime   @default(now())
+
+  @@index([budgetPoolId, createdAt(sort: Desc)])
+}
+
+// AD.2 — Append-only audit of every bid/budget change to a Campaign,
+// AdGroup, or AdTarget. Both operator writes and automation-rule
+// writes (AD.3) land here. changedBy: "user:<id>" | "automation:<ruleId>".
+model CampaignBidHistory {
+  id         String    @id @default(cuid())
+  entityType String // 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET'
+  entityId   String
+  // FK only when entityType=CAMPAIGN; null for ad-group/target writes.
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  field      String // 'dailyBudget' | 'defaultBid' | 'bid' | 'status' | ...
+  oldValue   String? // stringified for cross-type uniformity
+  newValue   String?
+  changedAt  DateTime  @default(now())
+  changedBy  String // "user:<id>" | "automation:<ruleId>"
+  reason     String?
+
+  @@index([entityType, entityId, changedAt(sort: Desc)])
+  @@index([campaignId])
 }
 
 model Coupon {
@@ -2216,16 +2593,16 @@ model Coupon {
 // ── Settings & Configuration (Phase 6) ────────────────────────────────────
 
 model AccountSettings {
-  id           String   @id @default(cuid())
-  businessName String   @default("")
-  addressLine1 String   @default("")
-  addressLine2 String   @default("")
-  city         String   @default("")
-  state        String   @default("")
-  postalCode   String   @default("")
-  country      String   @default("US")
-  timezone     String   @default("America/New_York")
-  currency     String   @default("USD")
+  id           String @id @default(cuid())
+  businessName String @default("")
+  addressLine1 String @default("")
+  addressLine2 String @default("")
+  city         String @default("")
+  state        String @default("")
+  postalCode   String @default("")
+  country      String @default("US")
+  timezone     String @default("America/New_York")
+  currency     String @default("USD")
 
   // PSM.1 — primary marketplace ISO country code (e.g. "IT" for
   // Xavia's Amazon IT focus). Used to default-select on Step 1 of
@@ -2233,8 +2610,8 @@ model AccountSettings {
   // every consumer treats null as "no preference" rather than failing.
   primaryMarketplace String?
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model NotificationPreference {
@@ -4576,25 +4953,25 @@ model AuditLog {
 /// Stored as strings (not enums) so a future workflow tweak doesn't
 /// need a migration.
 model APlusContent {
-  id              String   @id @default(cuid())
+  id                String                @id @default(cuid())
   /// Operator-friendly title — "Premium A+ — Airmesh Jacket".
-  name            String
+  name              String
   /// Optional brand label. When set, this A+ applies to every
   /// product under that brand within the marketplace (Amazon's
   /// Brand-level A+ flow). When NULL, the A+ targets specific ASINs
   /// via the APlusContentAsin join.
-  brand           String?
+  brand             String?
   /// Marketplace key — 'AMAZON_IT' / 'AMAZON_DE' / ... matches the
   /// rest of the catalogue's marketplace identifiers.
-  marketplace     String
+  marketplace       String
   /// IETF locale tag — 'it-IT', 'de-DE', 'en-GB', ...
-  locale          String
+  locale            String
   /// Sibling-localization pointer. NULL = master row; otherwise the
   /// id of the IT-source content this row was translated from.
-  masterContentId String?
-  master          APlusContent?  @relation("APlusLocalizations", fields: [masterContentId], references: [id], onDelete: SetNull)
-  localizations   APlusContent[] @relation("APlusLocalizations")
-  status          String         @default("DRAFT")
+  masterContentId   String?
+  master            APlusContent?         @relation("APlusLocalizations", fields: [masterContentId], references: [id], onDelete: SetNull)
+  localizations     APlusContent[]        @relation("APlusLocalizations")
+  status            String                @default("DRAFT")
   /// Amazon-side document id returned by createContentDocument.
   /// Stays null until the first submission attempt.
   amazonDocumentId  String?
@@ -4613,8 +4990,8 @@ model APlusContent {
   asinAttachments   APlusContentAsin[]
   modules           APlusModule[]
   versions          APlusContentVersion[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   @@index([marketplace, status])
   @@index([brand])
@@ -4642,7 +5019,7 @@ model APlusContentVersion {
   /// an older one, so the rollback is itself undoable).
   reason    String
   snapshot  Json
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 
   @@unique([contentId, version])
   @@index([contentId, createdAt])
@@ -4661,8 +5038,8 @@ model APlusContentAsin {
   content    APlusContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
   asin       String
   productId  String?
-  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  attachedAt DateTime @default(now())
+  product    Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  attachedAt DateTime     @default(now())
 
   @@id([contentId, asin])
   @@index([asin])
@@ -4699,8 +5076,8 @@ model APlusModule {
   type      String
   position  Int          @default(0)
   payload   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
   @@index([contentId, position])
 }
@@ -4722,31 +5099,31 @@ model APlusModule {
 ///   - Module set is a tight 4 (vs A+ Content's 17). Validation
 ///     enforces presence of brand_header.
 model BrandStory {
-  id               String   @id @default(cuid())
+  id                String              @id @default(cuid())
   /// Operator-friendly title. Same shape as APlusContent.name.
-  name             String
+  name              String
   /// Brand label — required (brand-level surface). Mirrors the
   /// Product.brand string so the operator can pick from existing
   /// brand values.
-  brand            String
-  marketplace      String
-  locale           String
+  brand             String
+  marketplace       String
+  locale            String
   /// Sibling-localization pointer matching APlusContent.master.
   /// NULL = master row; non-null = translation of another row.
-  masterStoryId    String?
-  master           BrandStory?  @relation("BrandStoryLocalizations", fields: [masterStoryId], references: [id], onDelete: SetNull)
-  localizations    BrandStory[] @relation("BrandStoryLocalizations")
-  status           String   @default("DRAFT")
-  amazonDocumentId String?
-  submittedAt      DateTime?
+  masterStoryId     String?
+  master            BrandStory?         @relation("BrandStoryLocalizations", fields: [masterStoryId], references: [id], onDelete: SetNull)
+  localizations     BrandStory[]        @relation("BrandStoryLocalizations")
+  status            String              @default("DRAFT")
+  amazonDocumentId  String?
+  submittedAt       DateTime?
   submissionPayload Json?
-  publishedAt      DateTime?
-  notes            String?
-  scheduledFor     DateTime?
-  modules          BrandStoryModule[]
-  versions         BrandStoryVersion[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  publishedAt       DateTime?
+  notes             String?
+  scheduledFor      DateTime?
+  modules           BrandStoryModule[]
+  versions          BrandStoryVersion[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@unique([brand, marketplace, locale])
   @@index([marketplace, status])
@@ -4771,8 +5148,8 @@ model BrandStoryModule {
   type      String
   position  Int        @default(0)
   payload   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@index([storyId, position])
 }
@@ -4787,7 +5164,7 @@ model BrandStoryVersion {
   version   Int
   reason    String
   snapshot  Json
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 
   @@unique([storyId, version])
   @@index([storyId, createdAt])
@@ -4807,31 +5184,31 @@ model BrandStoryVersion {
 /// edit + read on submission), not analytical, so JSON beats
 /// dedicated tables here.
 model BrandKit {
-  id           String   @id @default(cuid())
-  brand        String   @unique
+  id          String                   @id @default(cuid())
+  brand       String                   @unique
   /// Operator-friendly display name (defaults to `brand` on create).
-  displayName  String?
+  displayName String?
   /// Tagline displayed in the brand portal + Brand Story header.
-  tagline      String?
+  tagline     String?
   /// Voice/tone notes — long-form. MC.4 feeds this into AI prompts
   /// once the AI work resumes.
-  voiceNotes   String?
+  voiceNotes  String?
   /// Color palette: [{ name, hex, role }]. Roles match the
   /// operator's mental model — primary / secondary / accent /
   /// neutral / status. Stored as JSON for forward-compat with new
   /// roles; consistency-monitoring rules read it as an array.
-  colors       Json     @default("[]")
+  colors      Json                     @default("[]")
   /// Typography: [{ name, family, weight, role }]. Roles:
   /// heading / body / mono / display.
-  fonts        Json     @default("[]")
+  fonts       Json                     @default("[]")
   /// Logo lockups: [{ name, assetId?, url?, role }]. Roles:
   /// primary / mark / wordmark / monochrome / inverse.
-  logos        Json     @default("[]")
+  logos       Json                     @default("[]")
   /// Free-form additional guideline notes.
-  notes        String?
-  watermarks   BrandWatermarkTemplate[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  notes       String?
+  watermarks  BrandWatermarkTemplate[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
 }
 
 /// MC.10.3 — per-brand watermark template.
@@ -4841,22 +5218,22 @@ model BrandKit {
 /// (MC.6.1 channel-variants service calls into this when the brand
 /// has a default watermark enabled).
 model BrandWatermarkTemplate {
-  id          String   @id @default(cuid())
-  brand       String
-  brandKit    BrandKit @relation(fields: [brand], references: [brand], onDelete: Cascade)
-  name        String
+  id        String   @id @default(cuid())
+  brand     String
+  brandKit  BrandKit @relation(fields: [brand], references: [brand], onDelete: Cascade)
+  name      String
   /// 'corner_logo' | 'badge' | 'overlay_band' | 'diagonal_text' — string
   /// for forward-compat with new template types.
-  type        String
+  type      String
   /// Renderer config: { logoAssetId, position, size, opacity,
   /// rotation, color, text? }. Per-type fields documented in the
   /// spec library at apps/web/.../brand-kit/_lib/watermarks.ts.
-  config      Json
+  config    Json
   /// When true, MC.6.1 auto-applies this template to channel
   /// variants for assets tagged with this brand.
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([brand, enabled])
 }
@@ -4996,17 +5373,17 @@ enum ImageRole {
 // status as Amazon processes the feed asynchronously. resultSummary
 // holds the parsed per-SKU outcomes from Amazon's processing report.
 model AmazonImageFeedJob {
-  id             String    @id @default(cuid())
+  id             String  @id @default(cuid())
   productId      String
-  marketplace    String    // IT | DE | FR | ES | UK | ALL
-  feedId         String?   // Amazon feedId (from createFeed response)
-  feedDocumentId String?   // Amazon feedDocumentId (from createFeedDocument)
+  marketplace    String // IT | DE | FR | ES | UK | ALL
+  feedId         String? // Amazon feedId (from createFeed response)
+  feedDocumentId String? // Amazon feedDocumentId (from createFeedDocument)
 
   // PENDING | SUBMITTING | IN_QUEUE | IN_PROGRESS | DONE | FATAL | CANCELLED
-  status       String   @default("PENDING")
-  skus         Json     // string[] — SKUs included in this feed submission
-  errorMessage String?  // top-level feed error (FATAL status)
-  resultSummary Json?   // parsed Amazon processingReport: { processed, successful, errors[] }
+  status        String  @default("PENDING")
+  skus          Json // string[] — SKUs included in this feed submission
+  errorMessage  String? // top-level feed error (FATAL status)
+  resultSummary Json? // parsed Amazon processingReport: { processed, successful, errors[] }
 
   submittedAt DateTime  @default(now())
   completedAt DateTime?
@@ -7860,6 +8237,137 @@ enum ReviewRuleScope {
   MANUAL
 }
 
+// SR.1 — Ingested review text. One row per (channel, externalReviewId).
+// Distinct from ReviewRequest (outbound solicitation): this captures
+// what customers actually wrote, for sentiment analysis + spike
+// detection. Amazon's customer review text isn't exposed via SP-API
+// today (Brand Analytics has a partial feed) — sandbox-mode seeds
+// fixtures so the loop runs end-to-end.
+model Review {
+  id               String   @id @default(cuid())
+  // Channel of origin + the channel-side review id for idempotency.
+  channel          String // 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  marketplace      String? // 'IT' | 'DE' | ...
+  externalReviewId String
+  // Soft link to the product. Reviews can land before we know which
+  // SKU they're for (Amazon ASIN lookup); productId is set when match.
+  productId        String?
+  product          Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  asin             String?
+  sku              String?
+  // Rating: 1-5 stars (Amazon convention). null when channel doesn't
+  // expose a numeric rating (e.g. some Shopify configs).
+  rating           Int?
+  title            String?
+  body             String // the review text — input to sentiment extraction
+  authorName       String?
+  authorId         String?
+  verifiedPurchase Boolean  @default(false)
+  helpfulVotes     Int      @default(0)
+  // When the customer posted the review (channel-side).
+  postedAt         DateTime
+  // When we ingested it (cron tick / webhook).
+  ingestedAt       DateTime @default(now())
+  // Raw payload from the channel for re-extraction without re-fetch.
+  rawPayload       Json?
+
+  sentiment ReviewSentiment?
+
+  @@unique([channel, externalReviewId])
+  @@index([productId, postedAt])
+  @@index([marketplace, postedAt])
+  @@index([postedAt])
+}
+
+// SR.1 — Per-review AI classification. 1:1 with Review. Categories
+// are a closed enum-ish set encoded as a string[] so a single review
+// can match multiple themes (e.g. "Fit/Sizing" + "Quality"). topPhrases
+// surface 1-3 short verbatims for the spike-feed UI.
+//
+// Anthropic Haiku is the default — fast + cheap + the prompt-caching
+// path keeps cost low for high-volume ingest.
+model ReviewSentiment {
+  id               String   @id @default(cuid())
+  reviewId         String   @unique
+  review           Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  // 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+  label            String
+  // Float in [-1, 1]: -1 = strongly negative, +1 = strongly positive.
+  score            Decimal  @db.Decimal(4, 3)
+  // Closed set:
+  //   FIT_SIZING | DURABILITY | SHIPPING | VALUE | DESIGN | QUALITY |
+  //   SAFETY | COMFORT | OTHER
+  // Stored as String[] so a single review can match multiple themes.
+  categories       String[]
+  // 1-3 short verbatims (max 80 chars) for UI surfaces. Reviewer's
+  // own words, not paraphrase — protects against AI fabrication.
+  topPhrases       String[] @default([])
+  // Telemetry — duplicates AiUsageLog for fast joins.
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheHitTokens   Int      @default(0) // Anthropic prompt-cache hit
+  cacheWriteTokens Int      @default(0) // Anthropic prompt-cache write
+  costUSD          Decimal  @default(0) @db.Decimal(10, 6)
+  extractedAt      DateTime @default(now())
+
+  @@index([label])
+  @@index([extractedAt])
+}
+
+// SR.1 — Rolling daily counters per (productId, marketplace, category, day).
+// The spike detector reads these instead of re-aggregating Review +
+// ReviewSentiment every cron tick. Updated by review-ingest as each
+// new review's sentiment lands.
+model ReviewCategoryRate {
+  id          String   @id @default(cuid())
+  productId   String
+  marketplace String
+  category    String // matches ReviewSentiment.categories
+  date        DateTime @db.Date // UTC midnight
+  total       Int      @default(0)
+  positive    Int      @default(0)
+  neutral     Int      @default(0)
+  negative    Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([productId, marketplace, category, date])
+  @@index([productId, marketplace, category, date(sort: Desc)])
+}
+
+// SR.1 — Audit log of detected review spikes. One row per
+// (productId, marketplace, category, detectedAt). The marketing-
+// correction action handlers (SR.3) read open spikes; operators can
+// acknowledge to suppress future fires until the underlying rate
+// returns to baseline.
+model ReviewSpike {
+  id                 String    @id @default(cuid())
+  productId          String?
+  product            Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  marketplace        String
+  category           String
+  // 7-day negative-review rate at detection time (numerator/denom).
+  rate7dNumerator    Int
+  rate7dDenominator  Int
+  // 28-day baseline rate.
+  rate28dNumerator   Int
+  rate28dDenominator Int
+  // Multiplier: rate7d / rate28d. Surfaced in the UI.
+  spikeMultiplier    Decimal?  @db.Decimal(6, 2)
+  // Sample of the 3 most-recent negative top-phrases at detection time
+  // (helps operators see "what they're complaining about" at a glance).
+  sampleTopPhrases   String[]  @default([])
+  // 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED'
+  status             String    @default("OPEN")
+  acknowledgedAt     DateTime?
+  acknowledgedBy     String?
+  resolvedAt         DateTime?
+  detectedAt         DateTime  @default(now())
+
+  @@index([productId, marketplace, category, detectedAt(sort: Desc)])
+  @@index([status, detectedAt(sort: Desc)])
+}
+
 model ReviewRequest {
   id                   String              @id @default(cuid())
   orderId              String
@@ -8723,8 +9231,18 @@ model AutomationRule {
   enabled Boolean @default(false)
   dryRun  Boolean @default(true)
 
-  maxExecutionsPerDay Int? @default(100)
-  maxValueCentsEur    Int?
+  maxExecutionsPerDay     Int?    @default(100)
+  maxValueCentsEur        Int?
+  // AD.3 — per-rule daily SUM cap across executions, complementary to
+  // maxValueCentsEur (which is per-execution). Defense-in-depth for
+  // advertising rules where a single trigger can fire many times in a
+  // day (one execution per matched FbaStorageAge row, say) and each
+  // execution can spend separately. Defaults to NULL = no cap.
+  maxDailyAdSpendCentsEur Int?
+  // AD.3 — when set, trigger context builders skip contexts whose
+  // marketplace ≠ scopeMarketplace. Lets operators run "DE-only" rules
+  // without conditions DSL boilerplate.
+  scopeMarketplace        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -8876,37 +9394,37 @@ model ScenarioRun {
 // upserts on this key so historical decisions are preserved.
 
 model ListingReconciliation {
-  id        String @id @default(cuid())
-  channel   String // 'AMAZON' | 'EBAY'
+  id          String @id @default(cuid())
+  channel     String // 'AMAZON' | 'EBAY'
   marketplace String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK' ...
 
   // ── Channel-side data ─────────────────────────────────────────────────
-  externalSku       String  // SKU on the channel (Amazon seller SKU / eBay custom label)
+  externalSku       String // SKU on the channel (Amazon seller SKU / eBay custom label)
   externalListingId String? // ASIN for Amazon, offerId for eBay
   parentAsin        String? // Amazon parent ASIN (if variation)
   title             String?
   channelPrice      Decimal? @db.Decimal(10, 2)
   channelQuantity   Int?
-  channelStatus     String?  // e.g. 'Active', 'Inactive', 'Incomplete'
+  channelStatus     String? // e.g. 'Active', 'Inactive', 'Incomplete'
 
   // ── Match result ──────────────────────────────────────────────────────
   // null = unmatched. Set after auto-match runs.
-  matchedProductId    String?
-  matchedVariationId  String?
-  matchMethod         String? // 'SKU' | 'PARENT_SKU' | 'ASIN' | 'GTIN' | 'MANUAL' | 'UNMATCHED'
-  matchConfidence     Float?  // 0.0 – 1.0
+  matchedProductId   String?
+  matchedVariationId String?
+  matchMethod        String? // 'SKU' | 'PARENT_SKU' | 'ASIN' | 'GTIN' | 'MANUAL' | 'UNMATCHED'
+  matchConfidence    Float? // 0.0 – 1.0
 
   // ── Operator decision ─────────────────────────────────────────────────
-  reconciliationStatus String @default("PENDING")
+  reconciliationStatus String    @default("PENDING")
   conflictNotes        String?
   reviewedBy           String?
   reviewedAt           DateTime?
 
   // ── Import tracking ───────────────────────────────────────────────────
-  runId      String   // Groups rows from one reconciliation run
-  importedAt DateTime?  // Set when CONFIRMED and ChannelListing updated
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  runId      String // Groups rows from one reconciliation run
+  importedAt DateTime? // Set when CONFIRMED and ChannelListing updated
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@unique([channel, marketplace, externalSku])
   @@index([channel, marketplace, reconciliationStatus])
@@ -8953,7 +9471,7 @@ model CatalogOrganizeChange {
   attributes Json?
 
   // APPLIED → UNDONE when the operator reverts this specific change.
-  status   String   @default("APPLIED")
+  status   String    @default("APPLIED")
   // OutboundSyncQueue row IDs created for this change (used in undo).
   queueIds String[]
   undoneAt DateTime?
@@ -9038,6 +9556,8 @@ model ProductReadCache {
 
   // ── Cache bookkeeping ──────────────────────────────────────────────
   cacheRefreshedAt DateTime @default(now())
+  // IN.4 — count of ChannelListings where any followMaster*=false
+  driftCount       Int      @default(0)
 
   @@index([status])
   @@index([brand])
@@ -9049,9 +9569,6 @@ model ProductReadCache {
   @@index([totalStock])
   @@index([updatedAt(sort: Desc)])
   @@index([deletedAt])
-  // IN.4 — count of ChannelListings where any followMaster*=false
-  driftCount Int @default(0)
-
   @@index([photoCount])
   @@index([channelCount])
   @@index([variantCount])

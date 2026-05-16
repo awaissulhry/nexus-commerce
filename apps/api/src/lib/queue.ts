@@ -121,6 +121,15 @@ export const bulkJobQueue: Queue = new Queue('bulk-job', {
   },
 })
 
+// AD.2 — Trading Desk mutation queue. Separate from outbound-sync
+// because Campaign/AdGroup/AdTarget rows aren't tied to a Product
+// or ChannelListing FK; the worker reads OutboundSyncQueue row by id
+// (carried in job.data.queueId) and dispatches by syncType.
+export const adsSyncQueue: Queue = new Queue('ads-sync', {
+  connection: redis.connection,
+  defaultJobOptions,
+})
+
 export const queueEvents: QueueEvents = new QueueEvents('outbound-sync', {
   connection: redis.connection,
 })

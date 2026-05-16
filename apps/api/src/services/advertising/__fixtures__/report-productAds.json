@@ -1,0 +1,26 @@
+[
+  {
+    "date": "2026-05-15",
+    "externalAdId": "SANDBOX-PA-001",
+    "externalAdGroupId": "SANDBOX-AG-001",
+    "externalCampaignId": "SANDBOX-CAMP-001",
+    "impressions": 13200,
+    "clicks": 201,
+    "costMicros": 102450000,
+    "attributedSales7d": 495.0,
+    "attributedOrders7d": 7,
+    "attributedUnits7d": 8
+  },
+  {
+    "date": "2026-05-15",
+    "externalAdId": "SANDBOX-PA-002",
+    "externalAdGroupId": "SANDBOX-AG-002",
+    "externalCampaignId": "SANDBOX-CAMP-002",
+    "impressions": 31200,
+    "clicks": 478,
+    "costMicros": 357300000,
+    "attributedSales7d": 1395.0,
+    "attributedOrders7d": 14,
+    "attributedUnits7d": 14
+  }
+]

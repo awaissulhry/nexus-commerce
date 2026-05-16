@@ -1,0 +1,26 @@
+[
+  {
+    "profileId": "SANDBOX-PROFILE-IT-001",
+    "countryCode": "IT",
+    "currencyCode": "EUR",
+    "timezone": "Europe/Rome",
+    "accountInfo": {
+      "marketplaceStringId": "APJ6JRA9NG5V4",
+      "id": "A3DQHX1Z4XS5SANDBOX",
+      "type": "seller",
+      "name": "Xavia Sandbox IT"
+    }
+  },
+  {
+    "profileId": "SANDBOX-PROFILE-DE-002",
+    "countryCode": "DE",
+    "currencyCode": "EUR",
+    "timezone": "Europe/Berlin",
+    "accountInfo": {
+      "marketplaceStringId": "A1PA6795UKMFR9",
+      "id": "A3DQHX1Z4XS5SANDBOX",
+      "type": "seller",
+      "name": "Xavia Sandbox DE"
+    }
+  }
+]
