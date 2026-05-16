@@ -71,22 +71,22 @@ export default async function ProfitPage() {
     <div className="px-4 py-4">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <TrendingUp className="h-5 w-5 text-emerald-500" />
-        Margine reale per giorno
+        Daily True Profit
       </h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-        Ricavi − COGS − Commissioni Amazon − Commissioni FBA − Stoccaggio − Pubblicità − Rimborsi.
-        Le righe con copertura parziale mostrano un badge — i campi non disponibili sono 0 di
-        default (es. spesa pubblicitaria prima dell&apos;ingest AD.2).
+        Revenue − COGS − Amazon Fees − FBA Fees − Storage − Ad Spend − Refunds.
+        Rows with partial coverage show a badge — missing fields default to 0
+        (e.g. ad spend before the AD.2 metrics ingest runs).
       </p>
       <AdvertisingNav />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        <Stat label="Ricavi" value={formatEur(totals.revenue)} />
+        <Stat label="Revenue" value={formatEur(totals.revenue)} />
         <Stat label="COGS" value={formatEur(totals.cogs)} />
-        <Stat label="Commissioni" value={formatEur(totals.fees)} />
-        <Stat label="Profitto reale" value={formatEur(totals.profit)} />
+        <Stat label="Fees" value={formatEur(totals.fees)} />
+        <Stat label="True Profit" value={formatEur(totals.profit)} />
         <Stat
-          label="Margine"
+          label="Margin"
           value={totalMargin != null ? formatPct(totalMargin) : '—'}
           band={marginBand(totalMargin)}
         />
@@ -96,16 +96,16 @@ export default async function ProfitPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <th className="px-3 py-2">Data</th>
+              <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">SKU</th>
               <th className="px-3 py-2">Mkt</th>
-              <th className="px-3 py-2 text-right">Unità</th>
-              <th className="px-3 py-2 text-right">Ricavi</th>
+              <th className="px-3 py-2 text-right">Units</th>
+              <th className="px-3 py-2 text-right">Revenue</th>
               <th className="px-3 py-2 text-right">COGS</th>
-              <th className="px-3 py-2 text-right">Commissioni</th>
+              <th className="px-3 py-2 text-right">Fees</th>
               <th className="px-3 py-2 text-right">Adv</th>
-              <th className="px-3 py-2 text-right">Profitto</th>
-              <th className="px-3 py-2 text-right">Margine</th>
+              <th className="px-3 py-2 text-right">Profit</th>
+              <th className="px-3 py-2 text-right">Margin</th>
               <th className="px-3 py-2">Cov.</th>
             </tr>
           </thead>
@@ -113,7 +113,7 @@ export default async function ProfitPage() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={11} className="px-3 py-6 text-center text-sm text-slate-500">
-                  Nessuna riga di P&amp;L. Esegui:{' '}
+                  No P&amp;L rows. Run:{' '}
                   <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
                     POST /api/advertising/cron/true-profit-rollup/trigger
                   </code>
@@ -127,7 +127,7 @@ export default async function ProfitPage() {
                 return (
                   <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/40">
                     <td className="px-3 py-2 text-xs font-mono tabular-nums">
-                      {new Date(r.date).toLocaleDateString('it-IT', {
+                      {new Date(r.date).toLocaleDateString('en-GB', {
                         month: '2-digit',
                         day: '2-digit',
                       })}
@@ -197,7 +197,7 @@ export default async function ProfitPage() {
       </div>
       {rows.length > 200 && (
         <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-          Mostrate prime 200 di {rows.length} righe. Usa i filtri per restringere (in arrivo in AD.2 polish).
+          Showing first 200 of {rows.length} rows. Filters coming in AD.2 polish.
         </div>
       )}
     </div>

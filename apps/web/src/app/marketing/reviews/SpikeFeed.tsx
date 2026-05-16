@@ -22,15 +22,15 @@ interface SpikeRow {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  FIT_SIZING: 'Vestibilità',
-  DURABILITY: 'Durabilità',
-  SHIPPING: 'Spedizione',
-  VALUE: 'Prezzo',
+  FIT_SIZING: 'Fit / Sizing',
+  DURABILITY: 'Durability',
+  SHIPPING: 'Shipping',
+  VALUE: 'Value',
   DESIGN: 'Design',
-  QUALITY: 'Qualità',
-  SAFETY: 'Sicurezza',
+  QUALITY: 'Quality',
+  SAFETY: 'Safety',
   COMFORT: 'Comfort',
-  OTHER: 'Altro',
+  OTHER: 'Other',
 }
 
 export function SpikeFeed({ initial }: { initial: SpikeRow[] }) {
@@ -58,8 +58,8 @@ export function SpikeFeed({ initial }: { initial: SpikeRow[] }) {
   if (items.length === 0) {
     return (
       <div className="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">
-        Nessuno spike aperto. Il rilevatore confronta i tassi 7g vs 28g e riconosce un
-        picco quando 7g supera 2× la baseline con ≥3 recensioni negative.
+        No open spikes. The detector compares 7d vs 28d rates and flags a spike when
+        the 7d rate exceeds 2× the baseline with ≥3 negative reviews.
       </div>
     )
   }
@@ -114,7 +114,7 @@ export function SpikeFeed({ initial }: { initial: SpikeRow[] }) {
                 className="text-[11px] px-2 py-0.5 rounded ring-1 ring-inset ring-amber-300 text-amber-700 hover:bg-amber-50 dark:ring-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/40 disabled:opacity-40"
               >
                 {busy === s.id && <Loader2 className="h-3 w-3 animate-spin inline mr-1" />}
-                Riconosci
+                Acknowledge
               </button>
               <button
                 type="button"
@@ -122,10 +122,10 @@ export function SpikeFeed({ initial }: { initial: SpikeRow[] }) {
                 disabled={busy === s.id}
                 className="text-[11px] px-2 py-0.5 rounded ring-1 ring-inset ring-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:ring-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950/40 disabled:opacity-40"
               >
-                Risolvi
+                Resolve
               </button>
               <span className="ml-auto text-[10px] text-slate-500">
-                {new Date(s.detectedAt).toLocaleString('it-IT', {
+                {new Date(s.detectedAt).toLocaleString('en-GB', {
                   month: '2-digit',
                   day: '2-digit',
                   hour: '2-digit',

@@ -49,7 +49,7 @@ async function fetchRules(): Promise<AutomationRule[]> {
 function statusLabel(rule: AutomationRule): { label: string; cls: string } {
   if (!rule.enabled) {
     return {
-      label: 'Disabilitata',
+      label: 'Disabled',
       cls: 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700',
     }
   }
@@ -66,10 +66,10 @@ function statusLabel(rule: AutomationRule): { label: string; cls: string } {
 }
 
 const TRIGGER_LABEL: Record<string, string> = {
-  FBA_AGE_THRESHOLD_REACHED: 'Stock invecchiato FBA',
-  AD_SPEND_PROFITABILITY_BREACH: 'Spesa > profitto',
-  CAC_SPIKE: 'ACOS spike',
-  AD_TARGET_UNDERPERFORMING: 'Target non redditizio',
+  FBA_AGE_THRESHOLD_REACHED: 'FBA Aged Stock',
+  AD_SPEND_PROFITABILITY_BREACH: 'Spend > Profit',
+  CAC_SPIKE: 'ACOS Spike',
+  AD_TARGET_UNDERPERFORMING: 'Underperforming Target',
 }
 
 export default async function AutomationPage() {
@@ -81,20 +81,20 @@ export default async function AutomationPage() {
     <div className="px-4 py-4">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <Bot className="h-5 w-5 text-blue-500" />
-        Automazione pubblicitaria
+        Advertising Automation
       </h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-        Regole del motore AutomationRule (dominio &quot;advertising&quot;). Ogni regola
-        di default parte disabilitata + dry-run; l&apos;operatore deve abilitarla
-        esplicitamente. Cap giornaliero anti-runaway su ogni regola che spende.
+        AutomationRule engine rules (domain &quot;advertising&quot;). Every rule starts
+        disabled + dry-run by default; the operator must explicitly enable it.
+        Per-rule daily spend cap prevents runaway execution.
       </p>
       <AdvertisingNav />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Stat label="Regole" value={rules.length} />
+        <Stat label="Rules" value={rules.length} />
         <Stat label="Live" value={live} tone={live > 0 ? 'emerald' : 'slate'} />
         <Stat label="Dry-run" value={dryRun} tone="amber" />
-        <Stat label="Disabilitate" value={rules.length - live - dryRun} tone="slate" />
+        <Stat label="Disabled" value={rules.length - live - dryRun} tone="slate" />
       </div>
 
       <AutomationActionsClient hasRules={rules.length > 0} />
@@ -102,8 +102,8 @@ export default async function AutomationPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
         {rules.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
-            Nessuna regola ancora. Clicca <strong>Carica template</strong> qui sopra per
-            seed-are i 5 modelli di partenza (Italian-first, dry-run di default).
+            No rules yet. Click <strong>Load templates</strong> above to seed the 5 starter
+            templates (dry-run by default).
           </div>
         ) : (
           <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -142,13 +142,13 @@ export default async function AutomationPage() {
                         )}
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
                           <span>
-                            Valutazioni {r.evaluationCount} · Match {r.matchCount} · Esecuzioni{' '}
+                            Evaluations {r.evaluationCount} · Matches {r.matchCount} · Executions{' '}
                             {r.executionCount}
                           </span>
                           {r.lastExecutedAt && (
                             <span>
-                              Ultima esecuzione{' '}
-                              {new Date(r.lastExecutedAt).toLocaleString('it-IT', {
+                              Last executed{' '}
+                              {new Date(r.lastExecutedAt).toLocaleString('en-GB', {
                                 month: '2-digit',
                                 day: '2-digit',
                                 hour: '2-digit',
@@ -158,7 +158,7 @@ export default async function AutomationPage() {
                           )}
                           {r.maxDailyAdSpendCentsEur != null && (
                             <span>
-                              Cap giornaliero €{(r.maxDailyAdSpendCentsEur / 100).toFixed(0)}
+                              Daily cap €{(r.maxDailyAdSpendCentsEur / 100).toFixed(0)}
                             </span>
                           )}
                         </div>
@@ -182,17 +182,17 @@ export default async function AutomationPage() {
           className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
         >
           <History className="h-3 w-3" />
-          Cronologia esecuzioni
+          Execution history
         </Link>
       </div>
 
       <div className="mt-6 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-md px-3 py-2 flex items-start gap-2">
         <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
         <div className="text-xs text-amber-900 dark:text-amber-100 leading-relaxed">
-          <strong>Modalità dry-run</strong> attiva di default per ogni nuova regola.
-          Per passare in live: apri la regola → toggle Dry-run off → assicurati che il cron
-          sia attivo (<code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50">NEXUS_ENABLE_AMAZON_ADS_CRON=1</code>).
-          AD.4 aggiunge la verifica two-key per le scritture live verso Amazon Ads API.
+          <strong>Dry-run mode</strong> is active by default for every new rule.
+          To go live: open the rule → toggle Dry-run off → ensure the cron is active (
+          <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50">NEXUS_ENABLE_AMAZON_ADS_CRON=1</code>).
+          The two-key write gate (AD.4) must also be enabled for live Amazon Ads API writes.
         </div>
       </div>
     </div>

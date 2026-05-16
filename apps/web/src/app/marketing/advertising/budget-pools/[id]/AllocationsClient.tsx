@@ -83,7 +83,7 @@ export function AllocationsClient({
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
       {allocations.length === 0 ? (
         <div className="px-3 py-4 text-sm text-slate-500">
-          Nessuna allocazione. Aggiungi almeno 2 campagne perché il rebalance abbia senso.
+          No allocations. Add at least 2 campaigns for the rebalancer to be meaningful.
         </div>
       ) : (
         <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -106,7 +106,7 @@ export function AllocationsClient({
                 )}
                 {c && (
                   <span className="text-slate-500 tabular-nums">
-                    Budget {formatEur(Math.round(Number(c.dailyBudget) * 100))}/g
+                    Budget {formatEur(Math.round(Number(c.dailyBudget) * 100))}/d
                   </span>
                 )}
                 <span className="text-slate-500">target {a.targetSharePct}%</span>
@@ -150,7 +150,7 @@ export function AllocationsClient({
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded ring-1 ring-inset ring-blue-300 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
             >
               {busy === 'add' && <Loader2 className="h-3 w-3 animate-spin" />}
-              Aggiungi
+              Add
             </button>
             <button
               type="button"
@@ -161,7 +161,7 @@ export function AllocationsClient({
               }}
               className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             >
-              Annulla
+              Cancel
             </button>
             {error && (
               <span className="basis-full text-xs text-rose-700 dark:text-rose-300">{error}</span>
@@ -174,7 +174,7 @@ export function AllocationsClient({
             className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
           >
             <Plus className="h-3 w-3" />
-            Aggiungi allocazione
+            Add allocation
           </button>
         )}
       </div>

@@ -113,7 +113,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
           href="/marketing/advertising/campaigns"
           className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
-          <ChevronLeft className="h-3 w-3" /> Campagne
+          <ChevronLeft className="h-3 w-3" /> Campaigns
         </Link>
       </div>
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{c.name}</h1>
@@ -134,12 +134,12 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        <Stat label="Budget €/g" value={formatEurAmount(Number(c.dailyBudget))} />
-        <Stat label="Spesa" value={formatEurAmount(Number(c.spend))} />
-        <Stat label="Vendite" value={formatEurAmount(Number(c.sales))} />
+        <Stat label="Budget €/d" value={formatEurAmount(Number(c.dailyBudget))} />
+        <Stat label="Spend" value={formatEurAmount(Number(c.spend))} />
+        <Stat label="Sales" value={formatEurAmount(Number(c.sales))} />
         <Stat label="ACOS" value={c.acos != null ? formatPct(Number(c.acos)) : '—'} />
         <Stat
-          label="Margine reale"
+          label="True Margin"
           value={c.trueProfitMarginPct != null ? formatPct(Number(c.trueProfitMarginPct)) : '—'}
         />
       </div>
@@ -151,7 +151,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md divide-y divide-slate-200 dark:divide-slate-800">
           {c.adGroups.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-slate-500">Nessun ad-group sincronizzato.</div>
+            <div className="px-3 py-4 text-sm text-slate-500">No ad groups synced.</div>
           ) : (
             c.adGroups.map((ag) => (
               <div key={ag.id} className="px-3 py-2">
@@ -161,8 +161,8 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
                     {ag.status}
                   </span>
                   <span className="text-xs text-slate-500 ml-auto tabular-nums">
-                    Bid €{(ag.defaultBidCents / 100).toFixed(2)} · Spesa{' '}
-                    {formatEurAmount(ag.spendCents / 100)} · Vendite{' '}
+                    Bid €{(ag.defaultBidCents / 100).toFixed(2)} · Spend{' '}
+                    {formatEurAmount(ag.spendCents / 100)} · Sales{' '}
                     {formatEurAmount(ag.salesCents / 100)}
                   </span>
                 </div>
@@ -180,8 +180,8 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
                           {t.kind} · {t.expressionType}
                         </span>
                         <span className="ml-auto tabular-nums">
-                          €{(t.bidCents / 100).toFixed(2)} · {t.impressions.toLocaleString('it-IT')} imp ·{' '}
-                          {formatEurAmount(t.spendCents / 100)} spesa
+                          €{(t.bidCents / 100).toFixed(2)} · {t.impressions.toLocaleString('en-US')} imp ·{' '}
+                          {formatEurAmount(t.spendCents / 100)} spend
                         </span>
                       </li>
                     ))}
@@ -221,19 +221,19 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
           <History className="h-4 w-4" />
-          Storico modifiche ({history.length})
+          Change history ({history.length})
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
           {history.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500">
-              Nessuna modifica registrata.
+              No changes recorded.
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-800">
               {history.map((h) => (
                 <li key={h.id} className="px-3 py-2 text-xs flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-slate-500 tabular-nums w-32">
-                    {new Date(h.changedAt).toLocaleString('it-IT', {
+                    {new Date(h.changedAt).toLocaleString('en-GB', {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     })}

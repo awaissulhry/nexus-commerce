@@ -74,7 +74,7 @@ export function RuleToggleClient({
           }`}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-          {enabled ? 'Abilitata' : 'Disabilitata'}
+          {enabled ? 'Enabled' : 'Disabled'}
         </button>
 
         <button
@@ -99,22 +99,22 @@ export function RuleToggleClient({
 
         <span className="text-xs text-slate-500 dark:text-slate-400">
           {!enabled
-            ? 'La regola è disabilitata — il cron non la valuta.'
+            ? 'Rule is disabled — the cron will not evaluate it.'
             : dryRun
-              ? 'Modalità dry-run: ogni esecuzione produce solo audit, nessuna scrittura.'
-              : 'Modalità live: le azioni vengono inviate a Amazon Ads tramite OutboundSyncQueue.'}
+              ? 'Dry-run mode: each execution produces only an audit entry, no writes.'
+              : 'Live mode: actions are sent to Amazon Ads via OutboundSyncQueue.'}
         </span>
       </div>
 
       {pendingLive && (
         <div className="mt-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-md px-3 py-2">
           <div className="text-sm font-medium text-rose-900 dark:text-rose-100 mb-1">
-            Confermi il passaggio in modalità live?
+            Confirm switch to live mode?
           </div>
           <p className="text-xs text-rose-700 dark:text-rose-300 mb-2 leading-relaxed">
-            In live le azioni di questa regola scrivono su Amazon Ads (modifiche di
-            bid/budget/stato + creazione promo). Le scritture verranno comunque accodate con
-            finestra di annullamento di 5 minuti. Mantieni il cap giornaliero come safety-net.
+            In live mode this rule&apos;s actions write to Amazon Ads (bid/budget/status changes +
+            promo creation). Writes are still queued with a 5-min undo window. Keep the daily
+            cap as a safety net.
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -123,7 +123,7 @@ export function RuleToggleClient({
               disabled={busy}
               className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded ring-1 ring-inset ring-rose-300 bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40"
             >
-              Conferma live
+              Confirm live
             </button>
             <button
               type="button"
@@ -131,7 +131,7 @@ export function RuleToggleClient({
               disabled={busy}
               className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded text-rose-700 hover:bg-rose-100 dark:text-rose-300 dark:hover:bg-rose-950/40"
             >
-              Annulla
+              Cancel
             </button>
           </div>
         </div>

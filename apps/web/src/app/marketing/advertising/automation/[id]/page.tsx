@@ -86,7 +86,7 @@ export default async function AutomationRuleDetailPage({
           href="/marketing/advertising/automation"
           className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
-          <ChevronLeft className="h-3 w-3" /> Automazione
+          <ChevronLeft className="h-3 w-3" /> Automation
         </Link>
       </div>
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{rule.name}</h1>
@@ -99,11 +99,11 @@ export default async function AutomationRuleDetailPage({
           </>
         )}
         <span>·</span>
-        <span>Valutazioni {rule.evaluationCount}</span>
+        <span>Evaluations {rule.evaluationCount}</span>
         <span>·</span>
-        <span>Match {rule.matchCount}</span>
+        <span>Matches {rule.matchCount}</span>
         <span>·</span>
-        <span>Esecuzioni {rule.executionCount}</span>
+        <span>Executions {rule.executionCount}</span>
       </div>
       <AdvertisingNav />
 
@@ -122,7 +122,7 @@ export default async function AutomationRuleDetailPage({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <section>
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Condizioni
+            Conditions
           </h2>
           <pre className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-700 dark:text-slate-300 overflow-auto max-h-[300px]">
             {JSON.stringify(rule.conditions, null, 2)}
@@ -130,7 +130,7 @@ export default async function AutomationRuleDetailPage({
         </section>
         <section>
           <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Azioni
+            Actions
           </h2>
           <pre className="bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-700 dark:text-slate-300 overflow-auto max-h-[300px]">
             {JSON.stringify(rule.actions, null, 2)}
@@ -139,26 +139,26 @@ export default async function AutomationRuleDetailPage({
       </div>
 
       <section className="mb-6">
-        <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Limiti</h2>
+        <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Limits</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Stat
-            label="Max esecuzioni/g"
-            value={rule.maxExecutionsPerDay != null ? String(rule.maxExecutionsPerDay) : 'illimitato'}
+            label="Max executions/d"
+            value={rule.maxExecutionsPerDay != null ? String(rule.maxExecutionsPerDay) : 'unlimited'}
           />
           <Stat
-            label="Cap valore/esecuzione"
+            label="Cap value/execution"
             value={
               rule.maxValueCentsEur != null
                 ? `€${(rule.maxValueCentsEur / 100).toFixed(0)}`
-                : 'illimitato'
+                : 'unlimited'
             }
           />
           <Stat
-            label="Cap spesa/g"
+            label="Daily spend cap"
             value={
               rule.maxDailyAdSpendCentsEur != null
                 ? `€${(rule.maxDailyAdSpendCentsEur / 100).toFixed(0)}`
-                : 'illimitato'
+                : 'unlimited'
             }
           />
         </div>
@@ -166,12 +166,12 @@ export default async function AutomationRuleDetailPage({
 
       <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Ultime esecuzioni ({executions.length})
+          Recent executions ({executions.length})
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
           {executions.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500">
-              Nessuna esecuzione ancora. Esegui l&apos;evaluator dalla pagina automazione.
+              No executions yet. Run the evaluator from the automation page.
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -188,7 +188,7 @@ export default async function AutomationRuleDetailPage({
                   <li key={ex.id} className="px-3 py-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-slate-500 tabular-nums w-32">
-                        {new Date(ex.startedAt).toLocaleString('it-IT', {
+                        {new Date(ex.startedAt).toLocaleString('en-GB', {
                           dateStyle: 'short',
                           timeStyle: 'short',
                         })}

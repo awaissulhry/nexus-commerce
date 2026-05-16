@@ -32,11 +32,11 @@ type Bucket = '0_90' | '91_180' | '181_270' | '271_365' | '365_plus'
 type Horizon = '30' | '60' | '90'
 
 const BUCKETS: { key: Bucket; label: string; quantityField: keyof StorageAgeRow }[] = [
-  { key: '0_90', label: '0-90 g', quantityField: 'quantityInAge0_90' },
-  { key: '91_180', label: '91-180 g', quantityField: 'quantityInAge91_180' },
-  { key: '181_270', label: '181-270 g', quantityField: 'quantityInAge181_270' },
-  { key: '271_365', label: '271-365 g', quantityField: 'quantityInAge271_365' },
-  { key: '365_plus', label: '365+ g', quantityField: 'quantityInAge365Plus' },
+  { key: '0_90', label: '0-90d', quantityField: 'quantityInAge0_90' },
+  { key: '91_180', label: '91-180d', quantityField: 'quantityInAge91_180' },
+  { key: '181_270', label: '181-270d', quantityField: 'quantityInAge181_270' },
+  { key: '271_365', label: '271-365d', quantityField: 'quantityInAge271_365' },
+  { key: '365_plus', label: '365+d', quantityField: 'quantityInAge365Plus' },
 ]
 
 function cellTone(units: number, bucket: Bucket): string {
@@ -112,7 +112,7 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
                 : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-700'
             }`}
           >
-            {h} giorni
+            {h}d
           </button>
         ))}
       </div>
@@ -219,7 +219,7 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
                     <span className="text-[10px] font-mono text-slate-500">{r.asin}</span>
                   )}
                   <span className="text-slate-600 dark:text-slate-400">
-                    {formatNumber(units)} unità
+                    {formatNumber(units)} units
                   </span>
                   {r.daysToLtsThreshold != null && (
                     <span
@@ -231,11 +231,11 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
                             : 'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
                       }`}
                     >
-                      {r.daysToLtsThreshold} g al LTS
+                      {r.daysToLtsThreshold}d to LTS
                     </span>
                   )}
                   <span className="ml-auto tabular-nums text-slate-500">
-                    LTS 30g {formatEur(r.projectedLtsFee30dCents)}
+                    LTS 30d {formatEur(r.projectedLtsFee30dCents)}
                   </span>
                 </li>
               )

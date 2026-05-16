@@ -48,18 +48,18 @@ export default async function ByProductPage() {
         <Package className="h-6 w-6 text-blue-500 dark:text-blue-400 mt-0.5" />
         <div className="flex-1">
           <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Recensioni per prodotto
+            Reviews by Product
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Aggregati ultimi 30 giorni. Ordina per % negative per scoprire gli SKU peggiori,
-            o per ultima recensione per tracking. Click sullo SKU per il drill-down.
+            Aggregates for the last 30 days. Sort by % negative to surface worst-performing
+            SKUs, or by last review for recency tracking. Click a SKU to drill down.
           </p>
         </div>
       </div>
       <ReviewsNav />
       {items.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          Nessuna recensione collegata a prodotti negli ultimi 30 giorni.
+          No reviews linked to products in the last 30 days.
         </div>
       ) : (
         <ByProductClient initial={items} />

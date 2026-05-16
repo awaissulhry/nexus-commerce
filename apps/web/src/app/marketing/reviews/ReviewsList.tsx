@@ -25,15 +25,15 @@ interface ReviewRow {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  FIT_SIZING: 'Vestibilità',
-  DURABILITY: 'Durabilità',
-  SHIPPING: 'Spedizione',
-  VALUE: 'Prezzo',
+  FIT_SIZING: 'Fit / Sizing',
+  DURABILITY: 'Durability',
+  SHIPPING: 'Shipping',
+  VALUE: 'Value',
   DESIGN: 'Design',
-  QUALITY: 'Qualità',
-  SAFETY: 'Sicurezza',
+  QUALITY: 'Quality',
+  SAFETY: 'Safety',
   COMFORT: 'Comfort',
-  OTHER: 'Altro',
+  OTHER: 'Other',
 }
 
 export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
@@ -83,9 +83,9 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
           onChange={(e) => setLabelFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti i sentimenti</option>
+          <option value="">All sentiments</option>
           <option value="POSITIVE">Positive</option>
-          <option value="NEUTRAL">Neutre</option>
+          <option value="NEUTRAL">Neutral</option>
           <option value="NEGATIVE">Negative</option>
         </select>
         <select
@@ -93,7 +93,7 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
           onChange={(e) => setCategoryFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutte le categorie</option>
+          <option value="">All categories</option>
           {categories.map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABEL[c] ?? c}
@@ -105,7 +105,7 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
           onChange={(e) => setMarketplaceFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti i marketplace</option>
+          <option value="">All marketplaces</option>
           {marketplaces.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -113,13 +113,13 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
           ))}
         </select>
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-          {items.length} recensioni
+          {items.length} reviews
         </span>
       </div>
 
       {items.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          Nessuna recensione. Esegui l&apos;ingest:{' '}
+          No reviews. Run the ingest:{' '}
           <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
             POST /api/reviews/cron/ingest/trigger
           </code>
@@ -155,18 +155,18 @@ export function ReviewsList({ initial }: { initial: ReviewRow[] }) {
                     {r.product.sku}
                   </Link>
                 ) : (
-                  <span className="text-xs text-slate-500">SKU non risolto</span>
+                  <span className="text-xs text-slate-500">Unresolved SKU</span>
                 )}
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                   {r.channel} · {r.marketplace ?? '—'}
                 </span>
                 {r.verifiedPurchase && (
                   <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">
-                    Verificato
+                    Verified
                   </span>
                 )}
                 <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-                  {new Date(r.postedAt).toLocaleDateString('it-IT', {
+                  {new Date(r.postedAt).toLocaleDateString('en-GB', {
                     month: '2-digit',
                     day: '2-digit',
                   })}
@@ -215,7 +215,7 @@ function SentimentBadge({ label, score }: { label: 'POSITIVE' | 'NEUTRAL' | 'NEG
   const Icon =
     label === 'POSITIVE' ? CheckCircle2 : label === 'NEGATIVE' ? AlertCircle : MinusCircle
   const labelText =
-    label === 'POSITIVE' ? 'Positiva' : label === 'NEGATIVE' ? 'Negativa' : 'Neutra'
+    label === 'POSITIVE' ? 'Positive' : label === 'NEGATIVE' ? 'Negative' : 'Neutral'
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${tone}`}

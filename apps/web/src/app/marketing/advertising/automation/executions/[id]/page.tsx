@@ -75,23 +75,23 @@ export default async function ExecutionDetailPage({
           href="/marketing/advertising/automation/executions"
           className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
-          <ChevronLeft className="h-3 w-3" /> Esecuzioni
+          <ChevronLeft className="h-3 w-3" /> Executions
         </Link>
       </div>
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <History className="h-5 w-5 text-slate-500" />
-        Esecuzione {params.id.slice(0, 8)}
+        Execution {params.id.slice(0, 8)}
       </h1>
       <div className="text-xs text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2 flex-wrap">
         <span>
-          {startedAt.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}
+          {startedAt.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}
         </span>
         <span>·</span>
-        <span>{log.count} azioni registrate</span>
+        <span>{log.count} actions recorded</span>
         {!within24h && (
           <>
             <span>·</span>
-            <span className="text-rose-700 dark:text-rose-300">finestra rollback scaduta (24h)</span>
+            <span className="text-rose-700 dark:text-rose-300">rollback window expired (24h)</span>
           </>
         )}
       </div>
@@ -107,13 +107,13 @@ export default async function ExecutionDetailPage({
 
       {alreadyRolledBack.length > 0 && (
         <div className="mb-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md px-3 py-2 text-xs text-blue-900 dark:text-blue-100">
-          {alreadyRolledBack.length} azioni già annullate. Vedi sotto.
+          {alreadyRolledBack.length} actions already rolled back. See below.
         </div>
       )}
 
       {log.items.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          Nessuna azione registrata per questa esecuzione.
+          No actions recorded for this execution.
         </div>
       ) : (
         <ol className="space-y-2">
@@ -148,7 +148,7 @@ export default async function ExecutionDetailPage({
                   </span>
                 )}
                 <span className={`text-[11px] text-slate-500 ${it.rolledBackAt ? '' : 'ml-auto'}`}>
-                  {new Date(it.createdAt).toLocaleTimeString('it-IT', {
+                  {new Date(it.createdAt).toLocaleTimeString('en-GB', {
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit',
@@ -157,13 +157,13 @@ export default async function ExecutionDetailPage({
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
                 <div className="p-2">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Prima</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Before</div>
                   <pre className="text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/60 rounded p-2 overflow-auto max-h-[200px]">
                     {JSON.stringify(it.payloadBefore, null, 2)}
                   </pre>
                 </div>
                 <div className="p-2">
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Dopo</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">After</div>
                   <pre className="text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/60 rounded p-2 overflow-auto max-h-[200px]">
                     {JSON.stringify(it.payloadAfter, null, 2)}
                   </pre>

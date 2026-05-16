@@ -52,15 +52,15 @@ export default async function AdvertisingCampaignsPage() {
     <div className="px-4 py-4">
       <div className="mb-3">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Campagne
+          Campaigns
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Modifica inline di budget + stato. Le scritture vengono inviate ad Amazon Ads
-          tramite OutboundSyncQueue (finestra di 5 min per annullare).
+          Inline edit of budget + status. Writes are queued to Amazon Ads via
+          OutboundSyncQueue (5-min undo window).
         </p>
       </div>
       <AdvertisingNav />
-      <Suspense fallback={<div className="text-sm text-slate-500">Caricamento…</div>}>
+      <Suspense fallback={<div className="text-sm text-slate-500">Loading…</div>}>
         <CampaignsListClient initial={initial} />
       </Suspense>
     </div>

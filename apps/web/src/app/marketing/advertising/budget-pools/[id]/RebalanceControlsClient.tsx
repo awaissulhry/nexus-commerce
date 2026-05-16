@@ -98,10 +98,10 @@ export function RebalanceControlsClient({ poolId }: { poolId: string }) {
           ) : (
             <PlayCircle className="h-4 w-4" />
           )}
-          Esegui rebalance
+          Run rebalance
         </button>
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
-          Il preview ignora il cooldown. L&apos;esecuzione rispetta pool.dryRun.
+          Preview ignores cooldown. Execution respects pool.dryRun.
         </span>
       </div>
 
@@ -114,7 +114,7 @@ export function RebalanceControlsClient({ poolId }: { poolId: string }) {
       {preview && (
         <div className="mt-3 border-t border-slate-200 dark:border-slate-800 pt-3">
           <div className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
-            Preview: strategia {preview.strategy} · shift totale {formatEur(preview.totalShiftCents)}
+            Preview: strategy {preview.strategy} · total shift {formatEur(preview.totalShiftCents)}
           </div>
           {preview.warnings.length > 0 && (
             <div className="text-xs text-amber-700 dark:text-amber-300 mb-2">
@@ -125,9 +125,9 @@ export function RebalanceControlsClient({ poolId }: { poolId: string }) {
             <thead className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <tr className="text-left">
                 <th className="py-1">Mkt</th>
-                <th className="py-1">Campagna</th>
-                <th className="py-1 text-right">Attuale</th>
-                <th className="py-1 text-right">Proposto</th>
+                <th className="py-1">Campaign</th>
+                <th className="py-1 text-right">Current</th>
+                <th className="py-1 text-right">Proposed</th>
                 <th className="py-1 text-right">Δ</th>
                 <th className="py-1">Clamp</th>
               </tr>

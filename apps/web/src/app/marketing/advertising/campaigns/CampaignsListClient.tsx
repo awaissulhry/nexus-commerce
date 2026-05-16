@@ -112,7 +112,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
     if (v == null) return
     const next = Number(v)
     if (!Number.isFinite(next) || next < 1) {
-      setToast(`Budget non valido per ${c.name}`)
+      setToast(`Invalid budget for ${c.name}`)
       return
     }
     if (Math.abs(next - Number(c.dailyBudget)) < 0.001) {
@@ -172,7 +172,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
           {
             outboundQueueId: json.outboundQueueId!,
             campaignId: c.id,
-            description: `${nextStatus === 'PAUSED' ? 'Pausa' : 'Riprende'}: ${c.name}`,
+            description: `${nextStatus === 'PAUSED' ? 'Paused' : 'Resumed'}: ${c.name}`,
             expiresAt: Date.now() + 5 * 60 * 1000,
           },
         ])
@@ -192,9 +192,9 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
     const json = (await res.json()) as { ok: boolean; error: string | null }
     if (json.ok) {
       setUndoStack((u) => u.filter((x) => x.outboundQueueId !== entry.outboundQueueId))
-      setToast('Modifica annullata. Lo stato locale è già stato applicato — rivedi manualmente se necessario.')
+      setToast('Change cancelled. Local state was already applied — review manually if needed.')
     } else {
-      setToast(`Annullamento non riuscito: ${json.error ?? 'unknown'}`)
+      setToast(`Undo failed: ${json.error ?? 'unknown'}`)
     }
   }
 
@@ -211,7 +211,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
       {undoStack.length > 0 && (
         <div className="mb-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md px-3 py-2 space-y-1">
           <div className="text-xs font-medium text-blue-900 dark:text-blue-200">
-            Modifiche in finestra di annullamento ({undoStack.length})
+            Changes in undo window ({undoStack.length})
           </div>
           {undoStack.map((u) => {
             const secsLeft = Math.max(0, Math.floor((u.expiresAt - Date.now()) / 1000))
@@ -229,7 +229,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded ring-1 ring-blue-300 bg-white text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 dark:ring-blue-800"
                 >
                   <RotateCcw className="h-3 w-3" />
-                  Annulla
+                  Undo
                 </button>
               </div>
             )
@@ -244,7 +244,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
           onChange={(e) => setMarketplaceFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti i marketplace</option>
+          <option value="">All marketplaces</option>
           {marketplaces.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -256,14 +256,14 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
           onChange={(e) => setStatusFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti gli stati</option>
-          <option value="ENABLED">Attivo</option>
-          <option value="PAUSED">In pausa</option>
-          <option value="ARCHIVED">Archiviato</option>
-          <option value="DRAFT">Bozza</option>
+          <option value="">All statuses</option>
+          <option value="ENABLED">Active</option>
+          <option value="PAUSED">Paused</option>
+          <option value="ARCHIVED">Archived</option>
+          <option value="DRAFT">Draft</option>
         </select>
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-          {filtered.length} di {items.length} campagne
+          {filtered.length} of {items.length} campaigns
         </span>
       </div>
 
@@ -272,16 +272,16 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <ThSort label="Nome" k="name" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('name')} />
+              <ThSort label="Name" k="name" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('name')} />
               <ThSort label="Mkt" k="marketplace" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('marketplace')} />
-              <th className="px-3 py-2">Tipo</th>
-              <th className="px-3 py-2">Budget €/g</th>
-              <th className="px-3 py-2">Stato</th>
-              <ThSort label="Spesa" k="spend" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('spend')} />
-              <ThSort label="Vendite" k="sales" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('sales')} />
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Budget €/d</th>
+              <th className="px-3 py-2">Status</th>
+              <ThSort label="Spend" k="spend" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('spend')} />
+              <ThSort label="Sales" k="sales" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('sales')} />
               <ThSort label="ACOS" k="acos" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('acos')} />
               <ThSort label="ROAS" k="roas" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('roas')} />
-              <ThSort label="Margine reale" k="margin" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('margin')} />
+              <ThSort label="True Margin" k="margin" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('margin')} />
               <th className="px-3 py-2">Sync</th>
               <th className="px-3 py-2"></th>
             </tr>
@@ -290,7 +290,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={12} className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-                  Nessuna campagna. Esegui il sync (POST /api/advertising/cron/ads-sync/trigger) per importare le fixture sandbox.
+                  No campaigns. Run sync (POST /api/advertising/cron/ads-sync/trigger) to import sandbox fixtures.
                 </td>
               </tr>
             ) : (
@@ -334,7 +334,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                             onClick={() => saveBudget(c)}
                             disabled={saving === c.id}
                             className="text-blue-600 dark:text-blue-400 hover:text-blue-800"
-                            title="Salva (Invio)"
+                            title="Save (Enter)"
                           >
                             {saving === c.id ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -376,17 +376,17 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                         onClick={() => toggleStatus(c)}
                         disabled={saving === c.id || c.status === 'ARCHIVED'}
                         className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40"
-                        title={c.status === 'ENABLED' ? 'Pausa' : 'Riprende'}
+                        title={c.status === 'ENABLED' ? 'Pause' : 'Resume'}
                       >
                         {c.status === 'ENABLED' ? (
                           <>
                             <Pause className="h-3 w-3" />
-                            Pausa
+                            Pause
                           </>
                         ) : (
                           <>
                             <Play className="h-3 w-3" />
-                            Avvia
+                            Resume
                           </>
                         )}
                       </button>
@@ -400,7 +400,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
       </div>
 
       <div className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">
-        Aggiornamento ogni 30s · {formatNumber(items.reduce((a, c) => a + c.impressions, 0))} impression totali
+        Refreshes every 30s · {formatNumber(items.reduce((a, c) => a + c.impressions, 0))} total impressions
       </div>
     </div>
   )
@@ -463,7 +463,7 @@ function StatusChip({ status }: { status: Campaign['status'] }) {
           ? 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
           : 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900'
   const label =
-    status === 'ENABLED' ? 'Attivo' : status === 'PAUSED' ? 'In pausa' : status === 'ARCHIVED' ? 'Archiviato' : 'Bozza'
+    status === 'ENABLED' ? 'Active' : status === 'PAUSED' ? 'Paused' : status === 'ARCHIVED' ? 'Archived' : 'Draft'
   return (
     <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${cls}`}>
       {label}

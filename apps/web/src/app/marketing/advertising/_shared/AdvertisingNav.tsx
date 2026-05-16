@@ -30,31 +30,31 @@ interface Tab {
 const TABS: Tab[] = [
   {
     href: '/marketing/advertising/campaigns',
-    label: 'Campagne',
+    label: 'Campaigns',
     icon: Activity,
     matchPrefix: '/marketing/advertising/campaigns',
   },
   {
     href: '/marketing/advertising/storage-age',
-    label: 'Stock invecchiato',
+    label: 'Aged Stock',
     icon: Warehouse,
     matchPrefix: '/marketing/advertising/storage-age',
   },
   {
     href: '/marketing/advertising/profit',
-    label: 'Margine reale',
+    label: 'True Profit',
     icon: TrendingUp,
     matchPrefix: '/marketing/advertising/profit',
   },
   {
     href: '/marketing/advertising/automation',
-    label: 'Automazione',
+    label: 'Automation',
     icon: Bot,
     matchPrefix: '/marketing/advertising/automation',
   },
   {
     href: '/marketing/advertising/budget-pools',
-    label: 'Budget pool',
+    label: 'Budget Pools',
     icon: Wallet,
     matchPrefix: '/marketing/advertising/budget-pools',
   },

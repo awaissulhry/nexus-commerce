@@ -54,11 +54,11 @@ export default async function ExecutionsPage() {
     <div className="px-4 py-4">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <History className="h-5 w-5 text-slate-500" />
-        Cronologia esecuzioni
+        Execution History
       </h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-        Ogni valutazione di regola advertising che ha matchato le condizioni produce un audit
-        qui. NO_MATCH non viene registrato — solo le esecuzioni reali.
+        Every advertising rule evaluation that matched its conditions is audited here.
+        NO_MATCH is not recorded — only real executions.
       </p>
       <AdvertisingNav />
 
@@ -78,7 +78,7 @@ export default async function ExecutionsPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
         {items.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
-            Nessuna esecuzione registrata. Esegui l&apos;evaluator dalla pagina automazione.
+            No executions recorded. Run the evaluator from the automation page.
           </div>
         ) : (
           <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -86,7 +86,7 @@ export default async function ExecutionsPage() {
               <li key={ex.id} className="px-3 py-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-xs text-slate-500 tabular-nums w-32">
-                    {new Date(ex.startedAt).toLocaleString('it-IT', {
+                    {new Date(ex.startedAt).toLocaleString('en-GB', {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     })}

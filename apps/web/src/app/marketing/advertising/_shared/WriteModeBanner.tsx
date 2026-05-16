@@ -64,13 +64,12 @@ export function WriteModeBanner() {
     return (
       <Banner tone="amber" icon={ShieldAlert}>
         <div className="flex items-center gap-2 flex-wrap text-sm">
-          <span className="font-medium">Sandbox mode attivo</span>
+          <span className="font-medium">Sandbox mode active</span>
           <span className="text-xs">
             <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50">
               NEXUS_AMAZON_ADS_MODE=sandbox
             </code>{' '}
-            — nessuna chiamata reale ad Amazon Ads. Le scritture aggiornano DB + audit ma
-            non lasciano il sistema.
+            — no real Amazon Ads API calls. Writes update the DB + audit log but stay local.
           </span>
         </div>
       </Banner>
@@ -81,13 +80,13 @@ export function WriteModeBanner() {
     return (
       <Banner tone="rose" icon={AlertTriangle}>
         <div className="flex items-center gap-2 flex-wrap text-sm">
-          <span className="font-medium">Live env ma nessuna connessione abilitata</span>
+          <span className="font-medium">Live env but no connection enabled</span>
           <span className="text-xs">
             <code className="px-1 py-0.5 rounded bg-rose-100 dark:bg-rose-900/50">
               NEXUS_AMAZON_ADS_MODE=live
             </code>{' '}
-            ma nessuna AmazonAdsConnection ha <code>writesEnabledAt</code> impostato. Le
-            scritture verranno bloccate dall&apos;ads-write-gate fino all&apos;abilitazione.
+            but no AmazonAdsConnection has <code>writesEnabledAt</code> set. Writes will be
+            blocked by the ads-write-gate until enabled.
           </span>
           {productionConns.length > 0 && (
             <EnableWritesButton
@@ -106,11 +105,10 @@ export function WriteModeBanner() {
       <div className="flex items-center gap-2 flex-wrap text-sm">
         <span className="font-medium">Live mode</span>
         <span className="text-xs">
-          {enabledConnections.length} connessione/i abilitata/e
+          {enabledConnections.length} connection(s) enabled
           {' '}
-          ({enabledConnections.map((c) => c.marketplace).join(', ')}). Le scritture passano per
-          ads-write-gate + finestra di 5 min holdUntil. Rollback disponibile entro 24h per
-          ogni esecuzione.
+          ({enabledConnections.map((c) => c.marketplace).join(', ')}). Writes go through
+          ads-write-gate + 5-min holdUntil window. Rollback available within 24h per execution.
         </span>
       </div>
     </Banner>

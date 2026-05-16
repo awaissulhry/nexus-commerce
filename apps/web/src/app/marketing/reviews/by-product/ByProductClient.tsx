@@ -61,17 +61,17 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
           onChange={(e) => setSortKey(e.target.value as SortKey)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="negativePct">Ordina: % negative ↓</option>
-          <option value="total">Ordina: volume ↓</option>
-          <option value="lastReview">Ordina: ultima recensione ↓</option>
-          <option value="sku">Ordina: SKU A→Z</option>
+          <option value="negativePct">Sort: % negative ↓</option>
+          <option value="total">Sort: volume ↓</option>
+          <option value="lastReview">Sort: last review ↓</option>
+          <option value="sku">Sort: SKU A→Z</option>
         </select>
         <select
           value={marketplaceFilter}
           onChange={(e) => setMarketplaceFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti i marketplace</option>
+          <option value="">All marketplaces</option>
           {marketplaces.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -79,7 +79,7 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
           ))}
         </select>
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-          {items.length} prodotti
+          {items.length} products
         </span>
       </div>
 
@@ -88,12 +88,12 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
           <thead className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800">
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="px-3 py-2">SKU</th>
-              <th className="px-3 py-2">Prodotto</th>
+              <th className="px-3 py-2">Product</th>
               <th className="px-3 py-2">Mkt</th>
-              <th className="px-3 py-2 text-right">Recensioni</th>
+              <th className="px-3 py-2 text-right">Reviews</th>
               <th className="px-3 py-2 text-right">% negative</th>
-              <th className="px-3 py-2">Top categorie</th>
-              <th className="px-3 py-2">Ultima</th>
+              <th className="px-3 py-2">Top categories</th>
+              <th className="px-3 py-2">Last</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -139,7 +139,7 @@ export function ByProductClient({ initial }: { initial: ProductBucket[] }) {
                 </td>
                 <td className="px-3 py-2 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
                   {b.lastReviewAt
-                    ? new Date(b.lastReviewAt).toLocaleDateString('it-IT', {
+                    ? new Date(b.lastReviewAt).toLocaleDateString('en-GB', {
                         month: '2-digit',
                         day: '2-digit',
                       })

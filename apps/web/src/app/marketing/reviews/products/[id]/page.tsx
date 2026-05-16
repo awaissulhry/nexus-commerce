@@ -131,7 +131,7 @@ export default async function ProductReviewDrillDown({
       <ReviewsNav />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        <Stat label="Recensioni 30g" value={t30.total} />
+        <Stat label="Reviews 30d" value={t30.total} />
         <Stat label="Positive" value={t30.positive} tone="emerald" />
         <Stat label="Negative" value={t30.negative} tone={t30.negative > 0 ? 'rose' : null} />
         <Stat
@@ -139,18 +139,18 @@ export default async function ProductReviewDrillDown({
           value={t30.total > 0 ? `${(negativePct * 100).toFixed(1)}%` : '—'}
           tone={negativePct > 0.15 ? 'rose' : negativePct > 0.05 ? 'amber' : null}
         />
-        <Stat label="Periodo" value={`${data.sinceDays}g`} />
+        <Stat label="Period" value={`${data.sinceDays}d`} />
       </div>
 
       {/* Timeline sparkline */}
       <section className="mb-6">
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Timeline (volume giornaliero {data.sinceDays}g)
+          Timeline (daily volume {data.sinceDays}d)
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 overflow-x-auto">
           {data.timeline.length === 0 ? (
             <div className="text-sm text-slate-500 py-4 text-center">
-              Nessun dato giornaliero per questo prodotto in {data.sinceDays}g.
+              No daily data for this product in {data.sinceDays}d.
             </div>
           ) : (
             <div className="flex items-end gap-0.5 min-w-[600px] h-32">
@@ -189,7 +189,7 @@ export default async function ProductReviewDrillDown({
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-sm bg-slate-300 dark:bg-slate-600" />
-              Neutre
+              Neutral
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-sm bg-rose-500" />
@@ -202,12 +202,12 @@ export default async function ProductReviewDrillDown({
       {/* Category breakdown */}
       <section className="mb-6">
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Categorie (ultimi 30g)
+          Categories (last 30d)
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
           {data.categories.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500 text-center">
-              Nessuna categorizzazione disponibile.
+              No categorization available.
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -219,7 +219,7 @@ export default async function ProductReviewDrillDown({
                       {CATEGORY_LABEL[c.category] ?? c.category}
                     </span>
                     <span className="text-xs text-slate-500 tabular-nums">
-                      {c.total} totali ({c.positive}/{c.neutral}/{c.negative})
+                      {c.total} total ({c.positive}/{c.neutral}/{c.negative})
                     </span>
                     <span
                       className={`ml-auto text-[11px] tabular-nums px-1.5 py-0.5 rounded ring-1 ring-inset ${
@@ -243,7 +243,7 @@ export default async function ProductReviewDrillDown({
       {/* Recent reviews */}
       <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Ultime recensioni ({data.recent.length})
+          Recent reviews ({data.recent.length})
         </h2>
         <ul className="space-y-2">
           {data.recent.map((r) => (
@@ -263,10 +263,10 @@ export default async function ProductReviewDrillDown({
                     }`}
                   >
                     {r.sentiment.label === 'POSITIVE'
-                      ? 'Positiva'
+                      ? 'Positive'
                       : r.sentiment.label === 'NEGATIVE'
-                        ? 'Negativa'
-                        : 'Neutra'}
+                        ? 'Negative'
+                        : 'Neutral'}
                   </span>
                 )}
                 {r.rating != null && (
@@ -287,7 +287,7 @@ export default async function ProductReviewDrillDown({
                   {r.channel} · {r.marketplace ?? '—'}
                 </span>
                 <span className="ml-auto text-xs text-slate-500">
-                  {new Date(r.postedAt).toLocaleDateString('it-IT', {
+                  {new Date(r.postedAt).toLocaleDateString('en-GB', {
                     month: '2-digit',
                     day: '2-digit',
                   })}

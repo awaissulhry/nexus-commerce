@@ -80,17 +80,17 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
           onChange={(e) => setStatusFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti gli stati</option>
-          <option value="OPEN">Aperti</option>
-          <option value="ACKNOWLEDGED">Riconosciuti</option>
-          <option value="RESOLVED">Risolti</option>
+          <option value="">All statuses</option>
+          <option value="OPEN">Open</option>
+          <option value="ACKNOWLEDGED">Acknowledged</option>
+          <option value="RESOLVED">Resolved</option>
         </select>
         <select
           value={marketplaceFilter}
           onChange={(e) => setMarketplaceFilter(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="">Tutti i marketplace</option>
+          <option value="">All marketplaces</option>
           {marketplaces.map((m) => (
             <option key={m} value={m}>
               {m}
@@ -98,13 +98,13 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
           ))}
         </select>
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-          {visible.length} di {items.length}
+          {visible.length} of {items.length}
         </span>
       </div>
 
       {visible.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          Nessuno spike con questi filtri.
+          No spikes matching these filters.
         </div>
       ) : (
         <ul className="space-y-2">
@@ -125,10 +125,10 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                     }`}
                   >
                     {s.status === 'OPEN'
-                      ? 'Aperto'
+                      ? 'Open'
                       : s.status === 'ACKNOWLEDGED'
-                        ? 'Riconosciuto'
-                        : 'Risolto'}
+                        ? 'Acknowledged'
+                        : 'Resolved'}
                   </span>
                   <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900">
                     {CATEGORY_LABEL[s.category] ?? s.category}
@@ -148,7 +148,7 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                     </Link>
                   )}
                   <span className="ml-auto text-xs text-slate-500">
-                    {new Date(s.detectedAt).toLocaleString('it-IT', {
+                    {new Date(s.detectedAt).toLocaleString('en-GB', {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     })}
@@ -180,7 +180,7 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                       className="text-xs px-2 py-1 rounded ring-1 ring-inset ring-amber-300 text-amber-700 hover:bg-amber-50 dark:ring-amber-700 dark:text-amber-300 dark:hover:bg-amber-950/40 disabled:opacity-40 inline-flex items-center gap-1"
                     >
                       {busy === s.id && <Loader2 className="h-3 w-3 animate-spin" />}
-                      Riconosci
+                      Acknowledge
                     </button>
                     <button
                       type="button"
@@ -188,7 +188,7 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                       disabled={busy === s.id}
                       className="text-xs px-2 py-1 rounded ring-1 ring-inset ring-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:ring-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950/40 disabled:opacity-40"
                     >
-                      Risolvi
+                      Resolve
                     </button>
                   </div>
                 )}
@@ -201,11 +201,11 @@ export function SpikesFullClient({ initial }: { initial: SpikeRow[] }) {
                       className="text-xs px-2 py-1 rounded ring-1 ring-inset ring-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:ring-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950/40 disabled:opacity-40 inline-flex items-center gap-1"
                     >
                       {busy === s.id && <Loader2 className="h-3 w-3 animate-spin" />}
-                      Risolvi
+                      Resolve
                     </button>
                     {s.acknowledgedBy && (
                       <span className="text-[11px] text-slate-500 ml-2">
-                        Riconosciuto da {s.acknowledgedBy}
+                        Acknowledged by {s.acknowledgedBy}
                       </span>
                     )}
                   </div>

@@ -24,13 +24,13 @@ const TABS = [
   },
   {
     href: '/marketing/reviews/by-product',
-    label: 'Per prodotto',
+    label: 'By Product',
     icon: Package,
     exact: false,
   },
   {
     href: '/marketing/reviews/spikes',
-    label: 'Spike',
+    label: 'Spikes',
     icon: AlertTriangle,
     exact: false,
   },
@@ -67,13 +67,13 @@ export function ReviewsNav() {
 }
 
 export const CATEGORY_LABEL: Record<string, string> = {
-  FIT_SIZING: 'Vestibilità',
-  DURABILITY: 'Durabilità',
-  SHIPPING: 'Spedizione',
-  VALUE: 'Prezzo',
+  FIT_SIZING: 'Fit / Sizing',
+  DURABILITY: 'Durability',
+  SHIPPING: 'Shipping',
+  VALUE: 'Value',
   DESIGN: 'Design',
-  QUALITY: 'Qualità',
-  SAFETY: 'Sicurezza',
+  QUALITY: 'Quality',
+  SAFETY: 'Safety',
   COMFORT: 'Comfort',
-  OTHER: 'Altro',
+  OTHER: 'Other',
 }

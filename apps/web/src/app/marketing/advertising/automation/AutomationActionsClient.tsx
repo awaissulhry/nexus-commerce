@@ -31,8 +31,8 @@ export function AutomationActionsClient({ hasRules }: { hasRules: boolean }) {
       }
       setResult(
         json.ok
-          ? `${json.created.length} create, ${json.skippedExisting.length} esistenti.`
-          : 'Seed fallito',
+          ? `${json.created.length} created, ${json.skippedExisting.length} already exist.`
+          : 'Seed failed',
       )
       router.refresh()
     } finally {
@@ -63,10 +63,10 @@ export function AutomationActionsClient({ hasRules }: { hasRules: boolean }) {
       if (json.ok) {
         const s = json.summary
         setResult(
-          `Valutati ${s.totalEvaluations} · Match ${s.totalMatches} · contesti: fba=${s.fbaAgeContexts} prof=${s.profitabilityContexts} acos=${s.cacSpikeContexts} under=${s.underperformContexts} · ${s.durationMs}ms`,
+          `Evaluated ${s.totalEvaluations} · Matches ${s.totalMatches} · contexts: fba=${s.fbaAgeContexts} prof=${s.profitabilityContexts} acos=${s.cacSpikeContexts} under=${s.underperformContexts} · ${s.durationMs}ms`,
         )
       } else {
-        setResult('Esecuzione fallita')
+        setResult('Execution failed')
       }
       router.refresh()
     } finally {
@@ -87,7 +87,7 @@ export function AutomationActionsClient({ hasRules }: { hasRules: boolean }) {
         ) : (
           <Download className="h-4 w-4" />
         )}
-        {hasRules ? 'Carica template mancanti' : 'Carica template iniziali'}
+        {hasRules ? 'Load missing templates' : 'Load starter templates'}
       </button>
       <button
         type="button"
@@ -100,7 +100,7 @@ export function AutomationActionsClient({ hasRules }: { hasRules: boolean }) {
         ) : (
           <Play className="h-4 w-4" />
         )}
-        Esegui evaluator ora
+        Run evaluator now
       </button>
       <button
         type="button"

@@ -56,7 +56,7 @@ export function PoolToggleClient({
           }`}
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-          {enabled ? 'Pool attivo' : 'Pool disattivato'}
+          {enabled ? 'Pool active' : 'Pool disabled'}
         </button>
         <button
           type="button"
@@ -72,7 +72,7 @@ export function PoolToggleClient({
           {dryRun ? 'Dry-run' : 'Live'}
         </button>
         <div className="text-xs text-slate-500 dark:text-slate-400 ml-auto flex items-center gap-3 flex-wrap">
-          <span>Strategia: <strong className="text-slate-700 dark:text-slate-300">{strategy}</strong></span>
+          <span>Strategy: <strong className="text-slate-700 dark:text-slate-300">{strategy}</strong></span>
           <span>Cooldown: {coolDownMinutes}m</span>
           <span>Max shift: {maxShiftPerRebalancePct}%</span>
         </div>

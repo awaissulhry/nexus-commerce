@@ -123,9 +123,9 @@ export default async function AdvertisingLandingPage() {
             Trading Desk
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Pubblicità Amazon basata sul vero profitto (Ricavi − COGS − Commissioni −
-            Spesa pubblicitaria). Trigger automatici su stock invecchiato FBA, pool budget
-            cross-marketplace, audit completo + rollback 24h.
+            Amazon advertising based on true profit (Revenue − COGS − Fees −
+            Ad Spend). Automatic triggers on FBA aged stock, cross-marketplace budget pools,
+            full audit + 24h rollback.
           </p>
         </div>
         <span
@@ -154,20 +154,20 @@ export default async function AdvertisingLandingPage() {
             />
             <div className="flex-1">
               <div className="text-sm font-medium text-rose-900 dark:text-rose-100">
-                {summary.agedSkusFlagged} SKU verso commissioni LTS entro 30 giorni
+                {summary.agedSkusFlagged} SKUs approaching LTS fees within 30 days
               </div>
               {criticalAged.count > 0 && (
                 <div className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
-                  {criticalAged.count} critici (≤14 giorni):{' '}
+                  {criticalAged.count} critical (≤14 days):{' '}
                   {criticalAged.items
                     .slice(0, 3)
                     .map((r) => `${r.sku} (${r.marketplace})`)
                     .join(', ')}
-                  {criticalAged.count > 3 && ` + ${criticalAged.count - 3} altri`}
+                  {criticalAged.count > 3 && ` + ${criticalAged.count - 3} more`}
                 </div>
               )}
             </div>
-            <span className="text-xs text-rose-600 dark:text-rose-400">Vedi →</span>
+            <span className="text-xs text-rose-600 dark:text-rose-400">View →</span>
           </div>
         </Link>
       )}
@@ -177,31 +177,31 @@ export default async function AdvertisingLandingPage() {
         <Card
           href="/marketing/advertising/campaigns"
           icon={Activity}
-          label="Campagne"
+          label="Campaigns"
           value={summary.campaignCount}
           sublabel={
             summary.campaignCount === 0
-              ? 'Esegui ads-sync per importare'
-              : `${formatEur(summary.adSpend30dCents)} spesa 30g`
+              ? 'Run ads-sync to import'
+              : `${formatEur(summary.adSpend30dCents)} spend 30d`
           }
         />
         <Card
           href="/marketing/advertising/storage-age"
           icon={Warehouse}
-          label="Stock invecchiato"
+          label="Aged Stock"
           value={summary.agedSkusFlagged}
-          sublabel="SKU sotto soglia LTS 30g"
+          sublabel="SKUs below LTS threshold 30d"
           tone={summary.agedSkusFlagged > 0 ? 'rose' : null}
         />
         <Card
           href="/marketing/advertising/profit"
           icon={TrendingUp}
-          label="Margine reale 30g"
+          label="True Profit 30d"
           value={formatPct(summary.trueProfitMargin30dPct)}
           sublabel={
             summary.grossRevenue30dCents > 0
-              ? `${formatEur(summary.trueProfit30dCents)} su ${formatEur(summary.grossRevenue30dCents)}`
-              : 'Nessun dato P&L'
+              ? `${formatEur(summary.trueProfit30dCents)} of ${formatEur(summary.grossRevenue30dCents)}`
+              : 'No P&L data'
           }
           tone={
             summary.trueProfitMargin30dPct == null
@@ -216,11 +216,11 @@ export default async function AdvertisingLandingPage() {
         <Card
           href="/marketing/advertising/automation"
           icon={Bot}
-          label="Automazione"
+          label="Automation"
           value={automationRules.items.length}
           sublabel={
             automationRules.items.length === 0
-              ? 'Carica i template per iniziare'
+              ? 'Load templates to get started'
               : `${liveRules} live · ${dryRunRules} dry-run`
           }
           tone={liveRules > 0 ? 'emerald' : dryRunRules > 0 ? 'amber' : null}
@@ -228,12 +228,12 @@ export default async function AdvertisingLandingPage() {
         <Card
           href="/marketing/advertising/budget-pools"
           icon={Wallet}
-          label="Budget pool"
+          label="Budget Pools"
           value={budgetPools.items.length}
           sublabel={
             budgetPools.items.length === 0
-              ? 'Nessun pool configurato'
-              : `${activePools} attivi · ${formatEur(totalPoolBudgetCents)}/g totali`
+              ? 'No pools configured'
+              : `${activePools} active · ${formatEur(totalPoolBudgetCents)}/d total`
           }
         />
       </div>
@@ -241,7 +241,7 @@ export default async function AdvertisingLandingPage() {
       {/* Status footer */}
       <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3">
         <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-          Pillar 2 · Inventory-Aware Advertising · 5 wave shipped
+          Pillar 2 · Inventory-Aware Advertising · 5 waves shipped
         </div>
         <ul className="text-xs text-slate-500 dark:text-slate-400 space-y-1 list-disc pl-4">
           <li>
@@ -249,26 +249,26 @@ export default async function AdvertisingLandingPage() {
             ProductProfitDaily + Amazon Ads API sandbox client
           </li>
           <li>
-            <strong>AD.2</strong> workspace: campaigns / storage-age / profit con bid history
+            <strong>AD.2</strong> workspace: campaigns / storage-age / profit with bid history
             via OutboundSyncQueue
           </li>
           <li>
-            <strong>AD.3</strong> automation: 4 trigger context builders + 8 action handler +
-            5 template Italian
+            <strong>AD.3</strong> automation: 4 trigger context builders + 8 action handlers +
+            5 rule templates
           </li>
           <li>
             <strong>AD.4</strong> live mode: two-key write gate + AdvertisingActionLog +
-            liquidate_aged_stock composite + rollback 24h
+            liquidate_aged_stock composite + 24h rollback
           </li>
           <li>
-            <strong>AD.5</strong> budget pool: 3 strategie (STATIC / PROFIT_WEIGHTED /
+            <strong>AD.5</strong> budget pools: 3 strategies (STATIC / PROFIT_WEIGHTED /
             URGENCY_WEIGHTED) + cross-marketplace rebalancer
           </li>
         </ul>
         <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-2">
           {summary.mode === 'sandbox'
-            ? 'Modalità sandbox · imposta NEXUS_AMAZON_ADS_MODE=live + AmazonAdsConnection.writesEnabledAt per produzione.'
-            : 'Modalità live · le scritture passano per ads-write-gate e finestra di annullamento di 5 min.'}
+            ? 'Sandbox mode · set NEXUS_AMAZON_ADS_MODE=live + AmazonAdsConnection.writesEnabledAt for production.'
+            : 'Live mode · writes go through ads-write-gate with a 5-min undo window.'}
         </div>
       </div>
     </div>

@@ -72,22 +72,21 @@ export default async function StorageAgePage() {
     <div className="px-4 py-4">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <Warehouse className="h-5 w-5 text-amber-500" />
-        Stock invecchiato FBA
+        FBA Aged Stock
       </h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-        Snapshot dell&apos;ultimo ingest per marketplace × fascia d&apos;età. Click su una
-        cella per vedere gli SKU. Il toggle 30g/60g/90g mostra le commissioni LTS proiettate
-        in quell&apos;orizzonte.
+        Latest ingest snapshot by marketplace × age band. Click a cell to see the SKUs.
+        The 30d/60d/90d toggle shows projected LTS fees at each horizon.
       </p>
       <AdvertisingNav />
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-        <Stat label="SKU" value={formatNumber(totals.skus)} />
-        <Stat label="Unità" value={formatNumber(totals.units)} />
-        <Stat label="LTS proietti 30g" value={formatEur(totals.fee30)} />
-        <Stat label="LTS proietti 60g" value={formatEur(totals.fee60)} />
+        <Stat label="SKUs" value={formatNumber(totals.skus)} />
+        <Stat label="Units" value={formatNumber(totals.units)} />
+        <Stat label="Projected LTS 30d" value={formatEur(totals.fee30)} />
+        <Stat label="Projected LTS 60d" value={formatEur(totals.fee60)} />
         <Stat
-          label="Critici (≤14g)"
+          label="Critical (≤14d)"
           value={formatNumber(totals.critical)}
           accent={totals.critical > 0 ? 'rose' : null}
         />
@@ -95,7 +94,7 @@ export default async function StorageAgePage() {
 
       {rows.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          Nessun dato. Esegui l&apos;ingest:{' '}
+          No data. Run the ingest:{' '}
           <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
             POST /api/advertising/cron/fba-storage-age-ingest/trigger
           </code>
@@ -105,14 +104,14 @@ export default async function StorageAgePage() {
       )}
 
       <div className="mt-4 text-[11px] text-slate-400 dark:text-slate-500">
-        Crons:{' '}
+        Cron:{' '}
         <Link
           href="/sync-logs"
           className="underline hover:text-slate-600 dark:hover:text-slate-300"
         >
           fba-storage-age-ingest
         </Link>{' '}
-        ogni 6 ore
+        every 6 hours
       </div>
     </div>
   )

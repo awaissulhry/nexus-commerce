@@ -58,10 +58,10 @@ export function RollbackButton({ executionId, count }: { executionId: string; co
     return (
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3">
         <div className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">
-          Rollback completato
+          Rollback complete
         </div>
         <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
-          {result.reversed} annullate · {result.skipped} skip · {result.failed} fallite
+          {result.reversed} reversed · {result.skipped} skipped · {result.failed} failed
         </div>
         <ul className="text-[11px] space-y-0.5 max-h-[200px] overflow-auto">
           {result.details.map((d) => (
@@ -92,16 +92,16 @@ export function RollbackButton({ executionId, count }: { executionId: string; co
     return (
       <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-md px-3 py-3">
         <div className="text-sm font-medium text-rose-900 dark:text-rose-100 mb-1">
-          Confermi il rollback di {count} azione/i?
+          Confirm rollback of {count} action(s)?
         </div>
         <p className="text-xs text-rose-700 dark:text-rose-300 mb-2 leading-relaxed">
-          Ogni azione invertirà la modifica corrispondente tramite la stessa OutboundSyncQueue
-          (con grace di 5 min). Le RetailEvent verranno disattivate (isActive=false). Le
-          azioni già rolled-back vengono saltate.
+          Each action will invert the corresponding change via the same OutboundSyncQueue
+          (5-min grace). RetailEvents will be deactivated (isActive=false). Already
+          rolled-back actions are skipped.
         </p>
         <input
           type="text"
-          placeholder="Motivo (opzionale)"
+          placeholder="Reason (optional)"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           className="block w-full text-xs rounded border border-rose-300 dark:border-rose-700 bg-white dark:bg-slate-900 px-2 py-1 mb-2"
@@ -113,7 +113,7 @@ export function RollbackButton({ executionId, count }: { executionId: string; co
             disabled={busy}
             className="px-3 py-1 text-sm rounded text-rose-700 hover:bg-rose-100 dark:text-rose-300 dark:hover:bg-rose-950/60"
           >
-            Annulla
+            Cancel
           </button>
           <button
             type="button"
@@ -122,7 +122,7 @@ export function RollbackButton({ executionId, count }: { executionId: string; co
             className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded ring-1 ring-inset ring-rose-300 bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40"
           >
             {busy && <Loader2 className="h-3 w-3 animate-spin" />}
-            Esegui rollback
+            Execute rollback
           </button>
         </div>
       </div>
@@ -136,7 +136,7 @@ export function RollbackButton({ executionId, count }: { executionId: string; co
       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded ring-1 ring-inset ring-rose-300 dark:ring-rose-700 bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
     >
       <RotateCcw className="h-4 w-4" />
-      Rollback {count} azione/i
+      Rollback {count} action(s)
     </button>
   )
 }

@@ -93,7 +93,7 @@ export default async function BudgetPoolDetailPage({
           href="/marketing/advertising/budget-pools"
           className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
-          <ChevronLeft className="h-3 w-3" /> Budget pool
+          <ChevronLeft className="h-3 w-3" /> Budget Pools
         </Link>
       </div>
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -107,11 +107,11 @@ export default async function BudgetPoolDetailPage({
       <WriteModeBanner />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Stat label="Budget target/g" value={formatEur(pool.totalDailyBudgetCents)} />
-        <Stat label="Allocazioni" value={pool.allocations.length} />
-        <Stat label="Somma attuale" value={formatEur(currentTotal)} />
+        <Stat label="Target budget/d" value={formatEur(pool.totalDailyBudgetCents)} />
+        <Stat label="Allocations" value={pool.allocations.length} />
+        <Stat label="Current total" value={formatEur(currentTotal)} />
         <Stat
-          label="Δ rispetto al target"
+          label="Δ vs target"
           value={`${currentVsTargetDelta >= 0 ? '+' : ''}${formatEur(currentVsTargetDelta)}`}
           tone={Math.abs(currentVsTargetDelta) > pool.totalDailyBudgetCents * 0.1 ? 'amber' : null}
         />
@@ -130,7 +130,7 @@ export default async function BudgetPoolDetailPage({
 
       <section className="mt-4">
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Allocazioni
+          Allocations
         </h2>
         <AllocationsClient
           poolId={pool.id}
@@ -141,12 +141,12 @@ export default async function BudgetPoolDetailPage({
 
       <section className="mt-6">
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Storico rebalance ({pool.rebalances.length})
+          Rebalance history ({pool.rebalances.length})
         </h2>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md">
           {pool.rebalances.length === 0 ? (
             <div className="px-3 py-4 text-sm text-slate-500">
-              Nessun rebalance registrato. Esegui un dry-run dal pulsante sopra.
+              No rebalances recorded. Run a dry-run from the button above.
             </div>
           ) : (
             <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -154,7 +154,7 @@ export default async function BudgetPoolDetailPage({
                 <li key={rb.id} className="px-3 py-2">
                   <div className="flex items-center gap-2 flex-wrap text-xs">
                     <span className="font-mono text-slate-500 tabular-nums w-32">
-                      {new Date(rb.createdAt).toLocaleString('it-IT', {
+                      {new Date(rb.createdAt).toLocaleString('en-GB', {
                         dateStyle: 'short',
                         timeStyle: 'short',
                       })}
@@ -166,7 +166,7 @@ export default async function BudgetPoolDetailPage({
                           : 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900'
                       }`}
                     >
-                      {rb.appliedAt ? 'APPLICATO' : 'DRY-RUN'}
+                      {rb.appliedAt ? 'APPLIED' : 'DRY-RUN'}
                     </span>
                     <span className="font-mono text-[11px] text-slate-500">{rb.triggeredBy}</span>
                     <span className="text-slate-600 dark:text-slate-300 tabular-nums">

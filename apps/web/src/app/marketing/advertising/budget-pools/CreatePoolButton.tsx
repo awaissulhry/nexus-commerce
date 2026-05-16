@@ -18,12 +18,12 @@ export function CreatePoolButton() {
 
   async function commit() {
     if (!name.trim()) {
-      setError('Nome obbligatorio')
+      setError('Name is required')
       return
     }
     const totalDailyBudgetCents = Math.round(Number(budget) * 100)
     if (!Number.isFinite(totalDailyBudgetCents) || totalDailyBudgetCents <= 0) {
-      setError('Budget non valido')
+      setError('Invalid budget')
       return
     }
     setBusy(true)
@@ -59,7 +59,7 @@ export function CreatePoolButton() {
         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded ring-1 ring-inset ring-blue-300 dark:ring-blue-700 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
       >
         <Plus className="h-4 w-4" />
-        Nuovo pool
+        New pool
       </button>
     )
   }
@@ -67,12 +67,12 @@ export function CreatePoolButton() {
   return (
     <div className="bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900 rounded-md p-3 w-full max-w-xl">
       <div className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
-        Nuovo budget pool
+        New budget pool
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
         <input
           type="text"
-          placeholder="Nome"
+          placeholder="Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
@@ -81,7 +81,7 @@ export function CreatePoolButton() {
           type="number"
           step="1"
           min="1"
-          placeholder="Budget €/g"
+          placeholder="Budget €/d"
           value={budget}
           onChange={(e) => setBudget(e.target.value)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
@@ -91,9 +91,9 @@ export function CreatePoolButton() {
           onChange={(e) => setStrategy(e.target.value as typeof strategy)}
           className="text-sm rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1"
         >
-          <option value="STATIC">Statico (target%)</option>
-          <option value="PROFIT_WEIGHTED">Pesato sul profitto</option>
-          <option value="URGENCY_WEIGHTED">Pesato su urgenza stock</option>
+          <option value="STATIC">Static (target%)</option>
+          <option value="PROFIT_WEIGHTED">Profit-weighted</option>
+          <option value="URGENCY_WEIGHTED">Urgency-weighted (aged stock)</option>
         </select>
       </div>
       {error && <div className="text-xs text-rose-700 dark:text-rose-300 mb-2">{error}</div>}
@@ -104,7 +104,7 @@ export function CreatePoolButton() {
           disabled={busy}
           className="px-3 py-1 text-sm rounded text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
-          Annulla
+          Cancel
         </button>
         <button
           type="button"
@@ -113,7 +113,7 @@ export function CreatePoolButton() {
           className="inline-flex items-center gap-1 px-3 py-1 text-sm rounded ring-1 ring-inset ring-blue-300 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
         >
           {busy && <Loader2 className="h-3 w-3 animate-spin" />}
-          Crea
+          Create
         </button>
       </div>
     </div>

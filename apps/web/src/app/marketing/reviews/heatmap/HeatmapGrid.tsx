@@ -59,7 +59,7 @@ export function HeatmapGrid({
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Colore:
+          Color:
         </span>
         {(['volume', 'rate'] as Mode[]).map((m) => (
           <button
@@ -72,11 +72,11 @@ export function HeatmapGrid({
                 : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-700'
             }`}
           >
-            {m === 'volume' ? 'Volume' : 'Tasso negative'}
+            {m === 'volume' ? 'Volume' : 'Negative rate'}
           </button>
         ))}
         <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-          {dates.length} giorni × {categories.length} categorie
+          {dates.length} days × {categories.length} categories
         </span>
       </div>
 
@@ -85,7 +85,7 @@ export function HeatmapGrid({
           <thead>
             <tr>
               <th className="sticky left-0 bg-white dark:bg-slate-900 px-2 py-1 text-left text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 z-10">
-                Categoria
+                Category
               </th>
               {dates.map((d) => (
                 <th
@@ -141,8 +141,8 @@ export function HeatmapGrid({
       </div>
 
       <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-        Click su una cella → feed filtrato per categoria. La modalità &quot;Tasso negative&quot;
-        rivela problemi anche su volumi bassi.
+        Click a cell → feed filtered by category. &quot;Negative rate&quot; mode surfaces issues
+        even on low volumes.
       </div>
     </div>
   )

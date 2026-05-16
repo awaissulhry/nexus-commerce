@@ -75,15 +75,15 @@ async function fetchJson<T>(url: string, fallback: T): Promise<T> {
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  FIT_SIZING: 'Vestibilità',
-  DURABILITY: 'Durabilità',
-  SHIPPING: 'Spedizione',
-  VALUE: 'Rapporto qualità/prezzo',
+  FIT_SIZING: 'Fit / Sizing',
+  DURABILITY: 'Durability',
+  SHIPPING: 'Shipping',
+  VALUE: 'Value',
   DESIGN: 'Design',
-  QUALITY: 'Qualità',
-  SAFETY: 'Sicurezza',
+  QUALITY: 'Quality',
+  SAFETY: 'Safety',
   COMFORT: 'Comfort',
-  OTHER: 'Altro',
+  OTHER: 'Other',
 }
 
 export default async function ReviewsPage() {
@@ -116,9 +116,9 @@ export default async function ReviewsPage() {
             Sentient Review Loop
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Sentiment + categorizzazione AI (Anthropic Haiku con prompt caching) su ogni
-            recensione. Il rilevatore di spike confronta le ultime 7g vs baseline 28g per
-            categoria — i picchi alimentano l&apos;automation rule engine (SR.3+).
+            AI sentiment + categorization (Anthropic Haiku with prompt caching) on every
+            review. The spike detector compares the last 7d vs 28d baseline per category —
+            spikes feed the automation rule engine (SR.3+).
           </p>
         </div>
         <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded ring-1 ring-inset bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
@@ -131,7 +131,7 @@ export default async function ReviewsPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <Stat
-          label="Recensioni 30g"
+          label="Reviews 30d"
           value={summary.totalReviews}
         />
         <Stat
@@ -158,7 +158,7 @@ export default async function ReviewsPage() {
           }
         />
         <Stat
-          label="Spike aperti"
+          label="Open Spikes"
           value={summary.openSpikes}
           tone={summary.openSpikes > 0 ? 'rose' : null}
         />
@@ -168,7 +168,7 @@ export default async function ReviewsPage() {
       {summary.topCategories.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 mb-4">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-            Top categorie negative (30g)
+            Top negative categories (30d)
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {summary.topCategories.map((c) => (
@@ -195,7 +195,7 @@ export default async function ReviewsPage() {
             <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-rose-500 dark:text-rose-400" />
               <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                Spike aperti
+                Open Spikes
               </div>
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 {spikes.items.length}
@@ -207,16 +207,16 @@ export default async function ReviewsPage() {
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               <div className="text-xs font-medium text-blue-900 dark:text-blue-200">
-                In arrivo
+                Coming up
               </div>
             </div>
             <ul className="text-[11px] text-blue-800 dark:text-blue-200 space-y-1 list-disc pl-4">
-              <li>SR.2 — dashboard heatmap (giorno × categoria)</li>
+              <li>SR.2 — dashboard heatmap (day × category)</li>
               <li>
-                SR.3 — azioni REVIEW_SPIKE_DETECTED → create_aplus_module_from_review +
+                SR.3 — REVIEW_SPIKE_DETECTED actions → create_aplus_module_from_review +
                 update_product_bullets_from_review
               </li>
-              <li>SR.4 — email post-acquisto + timing ottimo per productType</li>
+              <li>SR.4 — post-purchase email + optimal send time per productType</li>
             </ul>
           </div>
         </aside>

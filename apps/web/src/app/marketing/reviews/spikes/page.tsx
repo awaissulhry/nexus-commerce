@@ -55,20 +55,20 @@ export default async function SpikesPage() {
         <AlertTriangle className="h-6 w-6 text-rose-500 dark:text-rose-400 mt-0.5" />
         <div className="flex-1">
           <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Spike feed
+            Spike Feed
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Picchi rilevati dal confronto 7g vs 28g per (prodotto × marketplace × categoria).
-            Riconoscere uno spike sospende future ri-attivazioni finché il tasso non torna
-            sotto soglia. SR.3 collegherà gli spike OPEN al motore AutomationRule.
+            Spikes detected by comparing 7d vs 28d rates per (product × marketplace × category).
+            Acknowledging a spike suppresses future re-triggers until the rate returns below
+            threshold. SR.3 will wire OPEN spikes into the AutomationRule engine.
           </p>
         </div>
       </div>
       <ReviewsNav />
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <Stat label="Aperti" value={open} tone={open > 0 ? 'rose' : null} />
-        <Stat label="Riconosciuti" value={ack} tone="amber" />
-        <Stat label="Risolti" value={resolved} tone="emerald" />
+        <Stat label="Open" value={open} tone={open > 0 ? 'rose' : null} />
+        <Stat label="Acknowledged" value={ack} tone="amber" />
+        <Stat label="Resolved" value={resolved} tone="emerald" />
       </div>
       <SpikesFullClient initial={items} />
     </div>

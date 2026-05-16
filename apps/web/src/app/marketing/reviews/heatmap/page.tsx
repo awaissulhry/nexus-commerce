@@ -53,21 +53,21 @@ export default async function HeatmapPage() {
         <Grid className="h-6 w-6 text-blue-500 dark:text-blue-400 mt-0.5" />
         <div className="flex-1">
           <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-            Heatmap sentiment
+            Sentiment Heatmap
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Volume e tasso di recensioni negative per giorno × categoria. Le celle più calde
-            indicano picchi: incrocia con il feed Spike per capire se è già attivo un alert.
+            Volume and negative review rate by day × category. Hotter cells indicate spikes —
+            cross-reference with the Spikes feed to see if an alert is already active.
           </p>
         </div>
       </div>
       <ReviewsNav />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        <Stat label="Recensioni nel periodo" value={totalReviews} />
-        <Stat label="Categorie attive" value={data.categories.length} />
+        <Stat label="Reviews in period" value={totalReviews} />
+        <Stat label="Active categories" value={data.categories.length} />
         <Stat
-          label="Totale negative"
+          label="Total negative"
           value={totalNegative}
           tone={totalNegative > 0 ? 'rose' : null}
         />
@@ -75,7 +75,7 @@ export default async function HeatmapPage() {
 
       {data.cells.length === 0 ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-4 py-6 text-center text-sm text-slate-500">
-          Nessun dato in {data.sinceDays} giorni. Esegui l&apos;ingest:{' '}
+          No data in {data.sinceDays} days. Run the ingest:{' '}
           <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
             POST /api/reviews/cron/ingest/trigger
           </code>

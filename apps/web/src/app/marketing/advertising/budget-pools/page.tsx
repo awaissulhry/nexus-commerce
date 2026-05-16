@@ -51,9 +51,9 @@ async function fetchPools(): Promise<Pool[]> {
 }
 
 const STRATEGY_LABEL: Record<Pool['strategy'], string> = {
-  STATIC: 'Statico',
-  PROFIT_WEIGHTED: 'Pesato sul profitto',
-  URGENCY_WEIGHTED: 'Pesato su urgenza',
+  STATIC: 'Static',
+  PROFIT_WEIGHTED: 'Profit-weighted',
+  URGENCY_WEIGHTED: 'Urgency-weighted',
 }
 
 export default async function BudgetPoolsPage() {
@@ -67,22 +67,22 @@ export default async function BudgetPoolsPage() {
     <div className="px-4 py-4">
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <Wallet className="h-5 w-5 text-blue-500" />
-        Budget pool
+        Budget Pools
       </h1>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-        Raggruppa campagne Amazon attraverso IT/DE/FR sotto un budget giornaliero
-        condiviso. Tre strategie di ripartizione: statica (target%), pesata sul profitto
-        reale 30g, o pesata sull&apos;urgenza dello stock invecchiato.
+        Group Amazon campaigns across IT/DE/FR under a shared daily budget.
+        Three allocation strategies: static (target%), profit-weighted (30d true profit),
+        or urgency-weighted (aged stock pressure).
       </p>
       <AdvertisingNav />
       <WriteModeBanner />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Stat label="Pool" value={pools.length} />
-        <Stat label="Attivi" value={pools.filter((p) => p.enabled).length} tone="emerald" />
-        <Stat label="Budget tot. attivo/g" value={formatEur(totalBudgetCents)} />
+        <Stat label="Pools" value={pools.length} />
+        <Stat label="Active" value={pools.filter((p) => p.enabled).length} tone="emerald" />
+        <Stat label="Active budget/day" value={formatEur(totalBudgetCents)} />
         <Stat
-          label="Allocazioni"
+          label="Allocations"
           value={pools.reduce((a, p) => a + p._count.allocations, 0)}
         />
       </div>
@@ -94,8 +94,8 @@ export default async function BudgetPoolsPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden">
         {pools.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-slate-500">
-            Nessun pool ancora. Crea il primo per iniziare a bilanciare il budget
-            cross-marketplace.
+            No pools yet. Create the first one to start balancing budget across
+            marketplaces.
           </div>
         ) : (
           <ul className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -122,7 +122,7 @@ export default async function BudgetPoolsPage() {
                                 : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
                             }`}
                           >
-                            {p.enabled ? (p.dryRun ? 'Dry-run' : 'Live') : 'Disabilitato'}
+                            {p.enabled ? (p.dryRun ? 'Dry-run' : 'Live') : 'Disabled'}
                           </span>
                           <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900">
                             {STRATEGY_LABEL[p.strategy]}
@@ -142,9 +142,9 @@ export default async function BudgetPoolsPage() {
                           </p>
                         )}
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
-                          <span>Budget {formatEur(p.totalDailyBudgetCents)}/g</span>
+                          <span>Budget {formatEur(p.totalDailyBudgetCents)}/d</span>
                           <span>·</span>
-                          <span>{p._count.allocations} allocazioni</span>
+                          <span>{p._count.allocations} allocations</span>
                           <span>·</span>
                           <span>Max shift {p.maxShiftPerRebalancePct}%</span>
                           <span>·</span>
@@ -153,8 +153,8 @@ export default async function BudgetPoolsPage() {
                             <>
                               <span>·</span>
                               <span>
-                                Ultimo rebalance{' '}
-                                {new Date(p.lastRebalancedAt).toLocaleString('it-IT', {
+                                Last rebalance{' '}
+                                {new Date(p.lastRebalancedAt).toLocaleString('en-GB', {
                                   month: '2-digit',
                                   day: '2-digit',
                                   hour: '2-digit',
