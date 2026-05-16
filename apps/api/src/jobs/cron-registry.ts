@@ -92,6 +92,8 @@ import { runReviewMailerCron } from './review-request-mailer.job.js'
 import { runEmbeddingIngesterCron } from './embedding-ingester.job.js'
 // CE.2 — Browse node predictor.
 import { runBrowseNodePredictorCron } from './browse-node-predictor.job.js'
+// CE.5 — Cross-RMN Feed Export.
+import { runFeedExportCron } from './feed-export.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -176,6 +178,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'embedding-ingester': () => runEmbeddingIngesterCron(),
   // CE.2 — Browse node predictor. Gate: NEXUS_ENABLE_BRAND_BRAIN=1.
   'browse-node-predictor': () => runBrowseNodePredictorCron(),
+  // CE.5 — Cross-RMN Feed Export (GMC + Meta). Always on.
+  'feed-export': () => runFeedExportCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {
