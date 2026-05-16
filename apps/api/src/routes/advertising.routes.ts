@@ -887,6 +887,56 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { items, count: items.length, adsMode: adsMode() }
   })
 
+  // ── POST /advertising/connections — create or update credentials ─────
+  fastify.post('/advertising/connections', async (request, reply) => {
+    const {
+      profileId, marketplace, region, accountLabel,
+      clientId, clientSecret, refreshToken,
+    } = request.body as {
+      profileId: string; marketplace: string; region?: string; accountLabel?: string
+      clientId: string; clientSecret: string; refreshToken: string
+    }
+    if (!profileId || !clientId || !clientSecret || !refreshToken || !marketplace) {
+      return reply.code(400).send({ error: 'missing_required_fields' })
+    }
+    const { encryptSecret } = await import('../lib/crypto.js')
+    const credentialsEncrypted = encryptSecret(
+      JSON.stringify({ clientId, clientSecret, refreshToken }),
+    )
+    const conn = await prisma.amazonAdsConnection.upsert({
+      where: { profileId },
+      create: {
+        profileId,
+        marketplace,
+        region: region ?? 'EU',
+        accountLabel: accountLabel ?? null,
+        credentialsEncrypted,
+        mode: 'sandbox',
+        isActive: true,
+      },
+      update: {
+        marketplace,
+        region: region ?? 'EU',
+        accountLabel: accountLabel ?? null,
+        credentialsEncrypted,
+        updatedAt: new Date(),
+      },
+      select: { id: true, profileId: true, marketplace: true, mode: true, isActive: true },
+    })
+    return { ok: true, connection: conn }
+  })
+
+  // ── DELETE /advertising/connections/:profileId ───────────────────────
+  fastify.delete('/advertising/connections/:profileId', async (request, reply) => {
+    const { profileId } = request.params as { profileId: string }
+    try {
+      await prisma.amazonAdsConnection.delete({ where: { profileId } })
+      return { ok: true }
+    } catch {
+      return reply.code(404).send({ error: 'not_found' })
+    }
+  })
+
   // ── AD.4: rollback ──────────────────────────────────────────────────
 
   fastify.post('/advertising/actions/:executionId/rollback', async (request, reply) => {

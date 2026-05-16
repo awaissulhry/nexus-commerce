@@ -13,6 +13,7 @@ const SETTINGS_TABS = [
   // W4.11 — DAM (Plytix cornerstone). Asset library + per-asset
   // detail panel + usage list.
   { label: 'DAM', href: '/settings/dam', icon: '🖼️' },
+  { label: 'Advertising', href: '/settings/advertising', icon: '📡' },
 ]
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

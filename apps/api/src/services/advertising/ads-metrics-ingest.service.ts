@@ -36,6 +36,7 @@ interface IngestSummary {
     adGroups: number
     targets: number
     productAds: number
+    profitRows: number
   }
   errors: string[]
   mode: 'sandbox' | 'live'
@@ -203,13 +204,102 @@ async function applyProductAdMetrics(agg: Map<string, Aggregate>): Promise<numbe
   return updated
 }
 
+// Backfill daily ad spend into ProductProfitDaily so True Profit is accurate.
+// Uses the per-day rows from the DAILY Report to attribute spendCents per
+// (productId, marketplace, date). Rows without a productId link are skipped.
+async function backfillAdSpendToProfit(
+  productAdRows: ReportRow[],
+  marketplace: string,
+): Promise<number> {
+  // Group: Map<externalAdId, Map<date, spendCents>>
+  const byAd = new Map<string, Map<string, number>>()
+  for (const row of productAdRows) {
+    if (!row.externalAdId || !row.date) continue
+    const spendCents = Math.round((row.costMicros ?? 0) / 10_000)
+    if (!byAd.has(row.externalAdId)) byAd.set(row.externalAdId, new Map())
+    const dateMap = byAd.get(row.externalAdId)!
+    dateMap.set(row.date, (dateMap.get(row.date) ?? 0) + spendCents)
+  }
+
+  let updated = 0
+  for (const [externalAdId, dateMap] of byAd) {
+    const pa = await prisma.adProductAd.findFirst({
+      where: { externalAdId },
+      select: { productId: true },
+    })
+    if (!pa?.productId) continue
+
+    for (const [dateStr, spendCents] of dateMap) {
+      if (spendCents === 0) continue
+      const date = new Date(`${dateStr}T00:00:00.000Z`)
+      // Pull existing row to recompute trueProfit with ad spend included.
+      const existing = await prisma.productProfitDaily.findUnique({
+        where: {
+          productId_marketplace_date: {
+            productId: pa.productId,
+            marketplace,
+            date,
+          },
+        },
+        select: {
+          grossRevenueCents: true,
+          cogsCents: true,
+          referralFeesCents: true,
+          fbaFulfillmentFeesCents: true,
+          fbaStorageFeesCents: true,
+          returnsRefundsCents: true,
+          otherFeesCents: true,
+          coverage: true,
+        },
+      })
+      if (!existing) continue
+
+      const trueProfitCents =
+        existing.grossRevenueCents -
+        existing.cogsCents -
+        existing.referralFeesCents -
+        existing.fbaFulfillmentFeesCents -
+        existing.fbaStorageFeesCents -
+        spendCents -
+        existing.returnsRefundsCents -
+        existing.otherFeesCents
+
+      const marginPct =
+        existing.grossRevenueCents > 0
+          ? trueProfitCents / existing.grossRevenueCents
+          : null
+
+      const prevCoverage =
+        (existing.coverage as Record<string, boolean> | null) ?? {}
+
+      await prisma.productProfitDaily.update({
+        where: {
+          productId_marketplace_date: {
+            productId: pa.productId,
+            marketplace,
+            date,
+          },
+        },
+        data: {
+          advertisingSpendCents: spendCents,
+          trueProfitCents,
+          trueProfitMarginPct: marginPct,
+          coverage: { ...prevCoverage, hasAdSpend: true },
+        },
+      })
+      updated += 1
+    }
+  }
+  return updated
+}
+
 export async function runAdsMetricsIngestOnce(): Promise<IngestSummary> {
   const mode = adsMode()
   const profiles = await discoverActiveProfiles()
   const summary: IngestSummary = {
     profileCount: profiles.length,
     reportRows: { campaigns: 0, adGroups: 0, keywords: 0, productAds: 0 },
-    entitiesUpdated: { campaigns: 0, adGroups: 0, targets: 0, productAds: 0 },
+    entitiesUpdated: { campaigns: 0, adGroups: 0, targets: 0, productAds: 0, profitRows: 0 },
     errors: [],
     mode,
   }
@@ -244,6 +334,12 @@ export async function runAdsMetricsIngestOnce(): Promise<IngestSummary> {
       summary.entitiesUpdated.productAds += await applyProductAdMetrics(
         aggregateByKey(productAdRows, (r) => r.externalAdId),
       )
+      // Back-fill daily ad spend into ProductProfitDaily so True Profit
+      // reflects real advertising costs per SKU per day.
+      summary.entitiesUpdated.profitRows += await backfillAdSpendToProfit(
+        productAdRows,
+        profile.marketplace,
+      )
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       summary.errors.push(`profile ${profile.profileId}: ${msg}`)
@@ -262,7 +358,7 @@ export function summarizeAdsMetricsIngest(s: IngestSummary): string {
     `mode=${s.mode}`,
     `profiles=${s.profileCount}`,
     `rows=${s.reportRows.campaigns}c+${s.reportRows.adGroups}ag+${s.reportRows.keywords}k+${s.reportRows.productAds}pa`,
-    `updated=${s.entitiesUpdated.campaigns}c+${s.entitiesUpdated.adGroups}ag+${s.entitiesUpdated.targets}t+${s.entitiesUpdated.productAds}pa`,
+    `updated=${s.entitiesUpdated.campaigns}c+${s.entitiesUpdated.adGroups}ag+${s.entitiesUpdated.targets}t+${s.entitiesUpdated.productAds}pa+${s.entitiesUpdated.profitRows}profit`,
     s.errors.length > 0 ? `errors=${s.errors.length}` : null,
   ]
     .filter(Boolean)

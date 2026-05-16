@@ -135,7 +135,7 @@ async function loadFixture<T>(name: string, fallback: T): Promise<T> {
   }
 }
 
-// ── Live-mode HTTP shell (stubbed; AD.4 wires the real call) ───────────
+// ── Live-mode HTTP client (AD.4) ───────────────────────────────────────
 
 interface LiveCallOptions {
   profileId: string
@@ -145,15 +145,85 @@ interface LiveCallOptions {
   body?: unknown
 }
 
+interface AdsCredentials {
+  clientId: string
+  clientSecret: string
+  refreshToken: string
+}
+
+// In-process token cache keyed by profileId. Avoids LWA round-trips on
+// every API call; tokens are evicted 60 s before their stated expiry.
+const _tokenCache = new Map<string, { token: string; expiresAt: number }>()
+
+async function getLwaToken(
+  profileId: string,
+  creds: AdsCredentials,
+): Promise<string> {
+  const now = Date.now()
+  const cached = _tokenCache.get(profileId)
+  if (cached && now < cached.expiresAt) return cached.token
+
+  logger.debug('[ADS-LIVE] refreshing LWA token', { profileId })
+  const res = await fetch('https://api.amazon.com/auth/o2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: creds.refreshToken,
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+    }).toString(),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`[ADS-LWA] token exchange failed ${res.status}: ${text}`)
+  }
+  const data = (await res.json()) as { access_token: string; expires_in: number }
+  _tokenCache.set(profileId, {
+    token: data.access_token,
+    expiresAt: now + (data.expires_in - 60) * 1000,
+  })
+  return data.access_token
+}
+
+async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
+  const { default: prisma } = await import('../../db.js')
+  const { decryptSecret } = await import('../../lib/crypto.js')
+  // profileId='n/a' means profile-agnostic call (e.g. GET /v2/profiles).
+  // Use the first active connection's credentials.
+  const conn =
+    profileId === 'n/a'
+      ? await prisma.amazonAdsConnection.findFirst({ where: { isActive: true } })
+      : await prisma.amazonAdsConnection.findUnique({ where: { profileId } })
+  if (!conn?.credentialsEncrypted) {
+    throw new Error(`[ADS-LIVE] no credentials for profileId=${profileId}`)
+  }
+  return JSON.parse(decryptSecret(conn.credentialsEncrypted)) as AdsCredentials
+}
+
 async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
-  // Intentionally minimal: throw with a clear message so any code path
-  // that flips to live before AD.4 fails loudly rather than silently
-  // returning bogus data. The thrown error is caught by the calling
-  // service and surfaced via lastSyncError.
-  void opts
-  throw new Error(
-    '[ADS-LIVE] live mode not yet wired — set NEXUS_AMAZON_ADS_MODE=sandbox or wait for AD.4',
-  )
+  const creds = await resolveCredentials(opts.profileId)
+  const token = await getLwaToken(opts.profileId, creds)
+  const base = REGION_ENDPOINT[opts.region]
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Amazon-Advertising-API-ClientId': creds.clientId,
+    'Content-Type': 'application/json',
+  }
+  // Scope header is only required for profile-scoped endpoints.
+  if (opts.profileId !== 'n/a') {
+    headers['Amazon-Advertising-API-Scope'] = opts.profileId
+  }
+  const res = await fetch(`${base}${opts.path}`, {
+    method: opts.method,
+    headers,
+    body: opts.body != null ? JSON.stringify(opts.body) : undefined,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`[ADS-LIVE] ${opts.method} ${opts.path} → ${res.status}: ${text}`)
+  }
+  return res.json() as T
 }
 
 // ── Public methods ─────────────────────────────────────────────────────
@@ -361,14 +431,63 @@ export async function fetchReport(
     logger.debug('[ADS-SANDBOX] fetchReport', { profileId: ctx.profileId, req })
     return loadFixture<ReportRow[]>(`report-${req.reportType}`, [])
   }
-  // Live flow: POST /reporting/reports → poll status → GET location
-  // → gunzip → parse JSON. Stubbed until AD.4.
-  return liveCall<ReportRow[]>({
+
+  // Amazon Advertising Reports API v3 is async:
+  //   POST /reporting/reports  → { reportId }
+  //   GET  /reporting/reports/:reportId  → poll until status=COMPLETED
+  //   GET  location (S3 presigned URL)   → download + parse JSON/gzip
+  const created = await liveCall<{ reportId: string }>({
     ...ctx,
     method: 'POST',
     path: '/reporting/reports',
-    body: req,
+    body: {
+      name: `nexus-${req.reportType}-${req.startDate}`,
+      startDate: req.startDate,
+      endDate: req.endDate,
+      configuration: {
+        adProduct: 'SPONSORED_PRODUCTS',
+        groupBy: [req.reportType === 'campaigns' ? 'campaign' : req.reportType.replace(/s$/, '')],
+        columns: [
+          'date', 'campaignId', 'adGroupId', 'keywordId', 'adId',
+          'impressions', 'clicks', 'cost', 'sales1d', 'sales7d', 'sales14d',
+          'orders1d', 'orders7d', 'unitsSoldClicks7d',
+        ],
+        reportTypeId: `spCampaigns`,
+        timeUnit: 'DAILY',
+        format: 'GZIP_JSON',
+      },
+    },
   })
+
+  const { reportId } = created
+  logger.info('[ADS-LIVE] report created, polling', { reportId })
+
+  // Poll for up to 10 minutes (60 × 10 s)
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await new Promise((r) => setTimeout(r, 10_000))
+    const status = await liveCall<{
+      status: string
+      location?: string
+      fileSize?: number
+    }>({
+      ...ctx,
+      method: 'GET',
+      path: `/reporting/reports/${reportId}`,
+    })
+    if (status.status === 'COMPLETED' && status.location) {
+      logger.info('[ADS-LIVE] report ready, downloading', { reportId, fileSize: status.fileSize })
+      const dlRes = await fetch(status.location) // presigned URL — no auth header
+      if (!dlRes.ok) throw new Error(`[ADS-LIVE] report download failed ${dlRes.status}`)
+      const json = await dlRes.json()
+      return json as ReportRow[]
+    }
+    if (status.status === 'FAILURE') {
+      throw new Error(`[ADS-LIVE] report ${reportId} failed on Amazon side`)
+    }
+    logger.debug('[ADS-LIVE] report pending', { reportId, attempt, status: status.status })
+  }
+
+  throw new Error(`[ADS-LIVE] report ${reportId} timed out after 10 minutes`)
 }
 
 // ── Convenience helpers ────────────────────────────────────────────────
