@@ -84,6 +84,8 @@ import {
   runReviewIngestCron,
   runReviewSpikeDetectorCron,
 } from './review-pipeline.job.js'
+// SR.3 — review-domain AutomationRule evaluator.
+import { runReviewRuleEvaluatorCron } from './review-rule-evaluator.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -160,6 +162,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   // SR.1 — Sentient Review Loop. Gated by NEXUS_ENABLE_REVIEW_INGEST=1.
   'review-ingest': () => runReviewIngestCron(),
   'review-spike-detector': () => runReviewSpikeDetectorCron(),
+  // SR.3 — review-domain AutomationRule evaluator (same gate).
+  'review-rule-evaluator': () => runReviewRuleEvaluatorCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {

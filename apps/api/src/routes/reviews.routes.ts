@@ -20,6 +20,11 @@ import {
   runSpikeDetectorOnce,
   summarizeSpikeDetector,
 } from '../services/reviews/spike-detector.service.js'
+import { seedReviewTemplates } from '../services/reviews/review-templates.js'
+import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
+
+// SR.3 — register review action handlers (side-effect import)
+import '../services/reviews/review-action-handlers.js'
 
 const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /reviews ────────────────────────────────────────────────────
@@ -437,6 +442,23 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── SR.3 — review-domain automation rules ──────────────────────────
+  fastify.get('/reviews/automation-rules', async (request, _reply) => {
+    const q = request.query as { limit?: string }
+    const limit = Math.min(Number(q.limit) || 100, 500)
+    const items = await prisma.automationRule.findMany({
+      where: { domain: 'reviews' },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
+    return { items, count: items.length }
+  })
+
+  fastify.post('/reviews/automation-rules/seed-templates', async (_request, _reply) => {
+    const result = await seedReviewTemplates()
+    return { ok: true, ...result }
+  })
+
   // ── Manual cron triggers ────────────────────────────────────────────
   fastify.post('/reviews/cron/ingest/trigger', async (_request, _reply) => {
     const s = await runReviewIngestOnce()
@@ -446,6 +468,11 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/reviews/cron/spike-detector/trigger', async (_request, _reply) => {
     const s = await runSpikeDetectorOnce()
     return { ok: true, summary: summarizeSpikeDetector(s), detail: s }
+  })
+
+  fastify.post('/reviews/cron/review-rule-evaluator/trigger', async (_request, _reply) => {
+    const summary = await runReviewRuleEvaluatorOnce()
+    return { ok: true, summary }
   })
 }
 

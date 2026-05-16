@@ -12,7 +12,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { List, Grid, Package, AlertTriangle } from 'lucide-react'
+import { List, Grid, Package, AlertTriangle, Bot } from 'lucide-react'
 
 const TABS = [
   { href: '/marketing/reviews', label: 'Feed', icon: List, exact: true },
@@ -32,6 +32,12 @@ const TABS = [
     href: '/marketing/reviews/spikes',
     label: 'Spikes',
     icon: AlertTriangle,
+    exact: false,
+  },
+  {
+    href: '/marketing/reviews/automation',
+    label: 'Automation',
+    icon: Bot,
     exact: false,
   },
 ]

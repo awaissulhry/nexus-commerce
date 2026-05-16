@@ -963,6 +963,9 @@ async function start() {
     if (process.env.NEXUS_ENABLE_REVIEW_INGEST === '1') {
       const { startAllReviewCrons } = await import('./jobs/review-pipeline.job.js');
       startAllReviewCrons();
+      // SR.3 — review-domain AutomationRule evaluator (same gate).
+      const { startReviewRuleEvaluatorCron } = await import('./jobs/review-rule-evaluator.job.js');
+      startReviewRuleEvaluatorCron();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts
