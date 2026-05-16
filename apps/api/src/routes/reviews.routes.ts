@@ -22,6 +22,7 @@ import {
 } from '../services/reviews/spike-detector.service.js'
 import { seedReviewTemplates } from '../services/reviews/review-templates.js'
 import { runReviewRuleEvaluatorOnce } from '../jobs/review-rule-evaluator.job.js'
+import { runReviewMailerOnce } from '../jobs/review-request-mailer.job.js'
 
 // SR.3 — register review action handlers (side-effect import)
 import '../services/reviews/review-action-handlers.js'
@@ -473,6 +474,45 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/reviews/cron/review-rule-evaluator/trigger', async (_request, _reply) => {
     const summary = await runReviewRuleEvaluatorOnce()
     return { ok: true, summary }
+  })
+
+  // ── SR.4 — review request mailer endpoints ──────────────────────────
+  fastify.post('/reviews/cron/review-request-mailer/trigger', async (_request, _reply) => {
+    const result = await runReviewMailerOnce()
+    return { ok: true, result }
+  })
+
+  fastify.get('/reviews/requests/stats', async (_request, reply) => {
+    const [scheduled, sent, failed, skipped] = await Promise.all([
+      prisma.reviewRequest.count({ where: { status: 'SCHEDULED' } }),
+      prisma.reviewRequest.count({ where: { status: 'SENT' } }),
+      prisma.reviewRequest.count({ where: { status: 'FAILED' } }),
+      prisma.reviewRequest.count({ where: { status: 'SKIPPED' } }),
+    ])
+    const due = await prisma.reviewRequest.count({
+      where: { status: 'SCHEDULED', scheduledFor: { lte: new Date() } },
+    })
+    const upcoming = await prisma.reviewRequest.findMany({
+      where: { status: 'SCHEDULED', scheduledFor: { gt: new Date() } },
+      orderBy: { scheduledFor: 'asc' },
+      take: 20,
+      include: {
+        order: {
+          select: {
+            channelOrderId: true,
+            channel: true,
+            marketplace: true,
+            customerName: true,
+            items: {
+              take: 1,
+              select: { product: { select: { name: true, productType: true } } },
+            },
+          },
+        },
+      },
+    })
+    reply.header('Cache-Control', 'private, max-age=30')
+    return { scheduled, sent, failed, skipped, due, upcoming }
   })
 }
 

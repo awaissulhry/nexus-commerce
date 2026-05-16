@@ -966,6 +966,9 @@ async function start() {
       // SR.3 — review-domain AutomationRule evaluator (same gate).
       const { startReviewRuleEvaluatorCron } = await import('./jobs/review-rule-evaluator.job.js');
       startReviewRuleEvaluatorCron();
+      // SR.4 — post-purchase review request mailer (same gate).
+      const { startReviewMailerCron } = await import('./jobs/review-request-mailer.job.js');
+      startReviewMailerCron();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts

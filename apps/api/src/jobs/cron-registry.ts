@@ -86,6 +86,8 @@ import {
 } from './review-pipeline.job.js'
 // SR.3 — review-domain AutomationRule evaluator.
 import { runReviewRuleEvaluatorCron } from './review-rule-evaluator.job.js'
+// SR.4 — post-purchase review request mailer.
+import { runReviewMailerCron } from './review-request-mailer.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -164,6 +166,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'review-spike-detector': () => runReviewSpikeDetectorCron(),
   // SR.3 — review-domain AutomationRule evaluator (same gate).
   'review-rule-evaluator': () => runReviewRuleEvaluatorCron(),
+  // SR.4 — post-purchase review request mailer (same gate).
+  'review-request-mailer': () => runReviewMailerCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {
