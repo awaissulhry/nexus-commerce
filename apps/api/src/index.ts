@@ -979,6 +979,9 @@ async function start() {
     if (process.env.NEXUS_ENABLE_BRAND_BRAIN === '1') {
       const { startEmbeddingIngesterCron } = await import('./jobs/embedding-ingester.job.js');
       startEmbeddingIngesterCron();
+      // CE.2 — Browse node predictor (shares BRAND_BRAIN gate).
+      const { startBrowseNodePredictorCron } = await import('./jobs/browse-node-predictor.job.js');
+      startBrowseNodePredictorCron();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts

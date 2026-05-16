@@ -24,6 +24,10 @@ import {
   seedBuiltInSchemas,
   validatePackage,
 } from '../services/feed/channel-schema.service.js'
+import {
+  predictBrowseNode,
+  sweepMissingBrowseNodes,
+} from '../services/feed/browse-node-predictor.service.js'
 
 const feedTransformRoutes: FastifyPluginAsync = async (fastify) => {
   // ── List rules ────────────────────────────────────────────────────────────
@@ -127,6 +131,38 @@ const feedTransformRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/seed-schemas', async (_req, reply) => {
     const result = await seedBuiltInSchemas(prisma)
     return reply.status(200).send({ ok: true, ...result })
+  })
+
+  // ── CE.2: Predict browse node for a product ────────────────────────────────
+  fastify.post('/predict-browse-node/:productId', async (req, reply) => {
+    const { productId } = req.params as { productId: string }
+    const { channel = 'AMAZON', marketplace, force } = req.query as {
+      channel?: string
+      marketplace?: string
+      force?: string
+    }
+    const result = await predictBrowseNode(
+      prisma,
+      productId,
+      channel,
+      marketplace ?? null,
+      { force: force === 'true' },
+    )
+    if (!result) return reply.status(404).send({ error: 'Product not found' })
+    return { prediction: result }
+  })
+
+  // ── CE.2: Manual batch browse-node sweep ───────────────────────────────────
+  fastify.post('/cron/browse-node-predictor/trigger', async (req) => {
+    const { channel = 'AMAZON', limit = '50' } = req.query as {
+      channel?: string
+      limit?: string
+    }
+    const result = await sweepMissingBrowseNodes(prisma, {
+      channel,
+      limit: parseInt(limit, 10),
+    })
+    return { ok: true, ...result }
   })
 }
 

@@ -151,6 +151,9 @@ export function MappingCanvasClient({
   const [previewChannel, setPreviewChannel] = useState<string>('AMAZON')
   const [previewBusy, setPreviewBusy] = useState(false)
   const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null)
+  const [browseNode, setBrowseNode] = useState<{
+    nodeId: string; nodePath: string; confidence: number; reasoning: string
+  } | null>(null)
   const [, startTransition] = useTransition()
 
   const displayed = channelFilter === 'ALL'
@@ -220,14 +223,27 @@ export function MappingCanvasClient({
     if (!previewProductId.trim()) return
     setPreviewBusy(true)
     setPreviewResult(null)
+    setBrowseNode(null)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/feed-transform/preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: previewProductId.trim(), channel: previewChannel }),
-      })
-      const json = (await res.json()) as PreviewResult
+      const [transformRes, browseRes] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/feed-transform/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: previewProductId.trim(), channel: previewChannel }),
+        }),
+        fetch(
+          `${getBackendUrl()}/api/feed-transform/predict-browse-node/${previewProductId.trim()}?channel=${previewChannel}`,
+          { method: 'POST' },
+        ).catch(() => null),
+      ])
+      const json = (await transformRes.json()) as PreviewResult
       setPreviewResult(json)
+      if (browseRes?.ok) {
+        const bn = (await browseRes.json()) as {
+          prediction: { nodeId: string; nodePath: string; confidence: number; reasoning: string }
+        }
+        setBrowseNode(bn.prediction)
+      }
     } finally {
       setPreviewBusy(false)
     }
@@ -432,6 +448,29 @@ export function MappingCanvasClient({
               Preview
             </button>
           </div>
+
+          {browseNode && (
+            <div className="flex items-center gap-2 p-2 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <span className="text-xs text-slate-500 shrink-0">Browse node</span>
+              <span className="font-mono text-xs text-slate-700 dark:text-slate-300">
+                {browseNode.nodeId}
+              </span>
+              {browseNode.nodePath && (
+                <span className="text-xs text-slate-400 truncate">{browseNode.nodePath}</span>
+              )}
+              <span
+                className={`ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                  browseNode.confidence >= 0.85
+                    ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+                    : browseNode.confidence >= 0.65
+                      ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+                      : 'bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
+                }`}
+              >
+                {Math.round(browseNode.confidence * 100)}% conf
+              </span>
+            </div>
+          )}
 
           {previewResult && (
             <div className="space-y-3">
