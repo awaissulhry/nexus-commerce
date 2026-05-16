@@ -1860,8 +1860,20 @@ const ProductCell = memo(function ProductCell({
       const isChildRow  = !!p.parentId
       return (
         <div className="flex items-start gap-2.5 min-w-0 py-0.5">
-          {/* Thumbnail */}
-          <div className="flex-shrink-0 mt-0.5">
+          {/* Thumbnail — clicking opens the product drawer */}
+          <button
+            type="button"
+            className="flex-shrink-0 mt-0.5 cursor-pointer rounded focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            title="Open product drawer"
+            aria-label={`Open drawer for ${p.name}`}
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent('nexus:open-product-drawer', {
+                  detail: { productId: p.id },
+                }),
+              )
+            }
+          >
             {p.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={p.imageUrl} alt="" className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800" />
@@ -1870,7 +1882,7 @@ const ProductCell = memo(function ProductCell({
                 <ImageIcon size={14} />
               </div>
             )}
-          </div>
+          </button>
           {/* Name + identifiers */}
           <div className="min-w-0 flex-1">
             <Link
