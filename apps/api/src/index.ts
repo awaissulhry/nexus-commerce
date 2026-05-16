@@ -53,6 +53,7 @@ import brandSettingsRoutes from "./routes/brand-settings.routes.js";
 import marketingRoutes from "./routes/marketing.routes.js";
 import advertisingRoutes from "./routes/advertising.routes.js";
 import reviewsRoutes from "./routes/reviews.routes.js";
+import brandBrainRoutes from "./routes/brand-brain.routes.js";
 import productsRoutes from "./routes/products.routes.js";
 import listingRecoveryRoutes from "./routes/listing-recovery.routes.js";
 import familiesRoutes from "./routes/families.routes.js";
@@ -458,6 +459,7 @@ app.register(pricingRulesRoutes, { prefix: '/api' });
 app.register(marketingRoutes, { prefix: '/api' });
 app.register(advertisingRoutes, { prefix: '/api' });
 app.register(reviewsRoutes, { prefix: '/api' });
+app.register(brandBrainRoutes, { prefix: '/api' });
 app.register(productsRoutes, { prefix: '/api' });
 app.register(listingRecoveryRoutes, { prefix: '/api' });
 app.register(familiesRoutes, { prefix: '/api' });
@@ -969,6 +971,12 @@ async function start() {
       // SR.4 — post-purchase review request mailer (same gate).
       const { startReviewMailerCron } = await import('./jobs/review-request-mailer.job.js');
       startReviewMailerCron();
+    }
+
+    // MB.1 — Brand Brain embedding ingester. Gated by NEXUS_ENABLE_BRAND_BRAIN=1.
+    if (process.env.NEXUS_ENABLE_BRAND_BRAIN === '1') {
+      const { startEmbeddingIngesterCron } = await import('./jobs/embedding-ingester.job.js');
+      startEmbeddingIngesterCron();
     }
 
     // AI-2.2 (list-wizard) — seed the four Step 5 attribute prompts

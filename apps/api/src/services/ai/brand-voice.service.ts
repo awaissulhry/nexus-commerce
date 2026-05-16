@@ -96,8 +96,10 @@ export async function resolveBrandVoice(
  * assertion about the product. Returns an empty string when no
  * match — callers concat unconditionally without an "if" guard.
  *
- * The prefix is deliberately stable so prompt templates can reference
- * the convention; the body itself is operator-controlled.
+ * MB.1 — when NEXUS_ENABLE_BRAND_BRAIN=1, augments the block with up
+ * to 2 retrieved examples from the vector store so the LLM sees past
+ * high-performing A+ content that matched the same brand/productType.
+ * Degrades silently if pgvector is unavailable.
  */
 export async function renderBrandVoiceBlock(
   prisma: PrismaClient,
@@ -107,7 +109,27 @@ export async function renderBrandVoiceBlock(
   if (!row) return ''
   const body = row.body?.trim()
   if (!body) return ''
-  return `\n\nBrand voice:\n${body}`
+
+  let block = `\n\nBrand voice:\n${body}`
+
+  // MB.1 RAG augmentation — retrieve similar past content
+  if (process.env.NEXUS_ENABLE_BRAND_BRAIN === '1') {
+    try {
+      const { queryBrandBrain } = await import('./brand-brain.service.js')
+      const query = [scope.brand, body.slice(0, 200)].filter(Boolean).join(' ')
+      const hits = await queryBrandBrain(query, { entityType: 'APLUS_CONTENT', limit: 2 })
+      if (hits.length > 0) {
+        const examples = hits
+          .map((h, i) => `Example ${i + 1}: ${h.snippet.slice(0, 300)}`)
+          .join('\n')
+        block += `\n\nPast high-performing A+ content (retrieved for reference):\n${examples}`
+      }
+    } catch {
+      // Degrade gracefully — never let RAG failure break listing generation
+    }
+  }
+
+  return block
 }
 
 /**

@@ -88,6 +88,8 @@ import {
 import { runReviewRuleEvaluatorCron } from './review-rule-evaluator.job.js'
 // SR.4 — post-purchase review request mailer.
 import { runReviewMailerCron } from './review-request-mailer.job.js'
+// MB.1 — Brand Brain embedding ingester.
+import { runEmbeddingIngesterCron } from './embedding-ingester.job.js'
 
 // Each entry returns an unknown (some run functions return summary
 // objects, others return void). Manual-trigger callers don't need
@@ -168,6 +170,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'review-rule-evaluator': () => runReviewRuleEvaluatorCron(),
   // SR.4 — post-purchase review request mailer (same gate).
   'review-request-mailer': () => runReviewMailerCron(),
+  // MB.1 — Brand Brain embedding ingester. Gate: NEXUS_ENABLE_BRAND_BRAIN=1.
+  'embedding-ingester': () => runEmbeddingIngesterCron(),
 }
 
 export function isKnownCron(jobName: string): boolean {
