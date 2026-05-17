@@ -120,6 +120,15 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     const IT_PROFILE = '4117374346144545'
 
     const results: Record<string, unknown> = {
+      // Show exactly which credentials are stored in the DB for this connection
+      credentialsInDb: {
+        profileId: conn.profileId,
+        clientIdStored: creds.clientId,          // must == AMAZON_ADS_CLIENT_ID
+        clientIdMatchesEnvVar: creds.clientId === process.env.AMAZON_ADS_CLIENT_ID,
+        envVarClientId: process.env.AMAZON_ADS_CLIENT_ID ?? '(not set)',
+        hasClientSecret: !!creds.clientSecret,
+        refreshTokenPrefix: creds.refreshToken?.slice(0, 15),
+      },
       tokenWithoutScope: t1.ok ? { prefix: t1.token!.slice(0, 15), length: t1.token!.length } : { error: t1.body },
       tokenWithScope:    t2.ok ? { prefix: t2.token!.slice(0, 15), length: t2.token!.length } : { error: t2.body },
     }
