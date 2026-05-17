@@ -9,7 +9,7 @@
  * file while preserving the current ?marketplace= param.
  */
 
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { ShoppingCart, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -40,12 +40,22 @@ const CHANNELS = [
 ] as const
 
 export function ChannelStrip({ channel, marketplace, familyId }: Props) {
-  const router = useRouter()
+  const router   = useRouter()
+  const pathname = usePathname()
 
   function go(next: 'amazon' | 'ebay') {
     if (next === channel) return
-    const path = next === 'amazon' ? '/products/amazon-flat-file' : '/products/ebay-flat-file'
+    // When rendered inside /bulk-operations, stay within that route
+    const isBulkOps = pathname.startsWith('/bulk-operations')
+    const path = isBulkOps
+      ? `/bulk-operations?channel=${next}`
+      : (next === 'amazon' ? '/products/amazon-flat-file' : '/products/ebay-flat-file')
     const qs = new URLSearchParams({ marketplace })
+    if (isBulkOps) {
+      // channel is already in the path above; marketplace goes as a param too
+      router.push(`${path}&marketplace=${marketplace}${familyId ? `&familyId=${familyId}` : ''}`)
+      return
+    }
     if (familyId) qs.set('familyId', familyId)
     router.push(`${path}?${qs.toString()}`)
   }
