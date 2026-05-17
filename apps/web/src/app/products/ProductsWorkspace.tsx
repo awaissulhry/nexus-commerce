@@ -53,6 +53,7 @@ import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
 import { ColumnPickerMenu } from './_components/ColumnPickerMenu'
+import { LensPickerMenu } from './_components/LensPickerMenu'
 import { TagEditor } from './_components/TagEditor'
 import { VirtualizedGrid } from './_components/GridView'
 import { HygieneStrip } from './_components/HygieneStrip'
@@ -81,7 +82,7 @@ const BulkImageUploadModal = dynamic(
 import { useToast } from '@/components/ui/Toast'
 
 // ── Types ───────────────────────────────────────────────────────────
-type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness' | 'translations'
+export type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pricing' | 'workflow' | 'readiness' | 'translations'
 
 // ProductRow + Tag types moved to ./_types.ts (P.1f) so GridView and
 // the workspace share a canonical shape.
@@ -318,6 +319,19 @@ export default function ProductsWorkspace() {
       window.localStorage.setItem('products.density', density)
     } catch {}
   }, [density])
+
+  // User-configurable optional lens tab order. Grid + Health are always
+  // shown; the other 7 lenses start hidden and are added via the picker.
+  const [lensTabOrder, setLensTabOrder] = useState<Lens[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const saved = window.localStorage.getItem('products.lensTabOrder')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('products.lensTabOrder', JSON.stringify(lensTabOrder)) } catch {}
+  }, [lensTabOrder])
 
   // Debounced search → URL
   useEffect(() => {
@@ -1107,7 +1121,12 @@ export default function ProductsWorkspace() {
 
       {/* Lens switcher + saved views menu */}
       <div className="flex items-center gap-2 flex-wrap">
-        <LensTabs current={lens} onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })} />
+        <LensTabs
+          current={lens}
+          onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
+          lensTabOrder={lensTabOrder}
+          setLensTabOrder={setLensTabOrder}
+        />
         {/* W5.5 — Add-sort entry-point in the lens row. Always
             visible so the operator can layer sorts even from the
             grid lens. Opens a small inline picker. */}
@@ -1444,44 +1463,88 @@ export default function ProductsWorkspace() {
 // ────────────────────────────────────────────────────────────────────
 // LensTabs
 // ────────────────────────────────────────────────────────────────────
-function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) => void }) {
-  const tabs: Array<{ key: Lens; label: string; icon: any }> = [
-    { key: 'grid', label: 'Grid', icon: LayoutGrid },
-    { key: 'hierarchy', label: 'Hierarchy', icon: FolderTree },
-    { key: 'coverage', label: 'Coverage', icon: Network },
-    { key: 'pricing', label: 'Pricing', icon: DollarSign },
-    { key: 'health', label: 'Health', icon: AlertTriangle },
-    // DR-C.1 — was 'Drafts', renamed to disambiguate from
-    // /products/drafts (the wizard-resume surface). This lens
-    // shows per-channel publish readiness: draft listings ready
-    // to push + uncovered products on the selected channel. The
-    // URL key stays `lens=drafts` for bookmark stability.
-    { key: 'drafts', label: 'Channel coverage', icon: Sparkles },
-    // W3.7 — Wave 3 workflow lens. Pipeline view: per-stage product
-    // count + sample products + SLA hints. Empty when no workflows
-    // exist (operator gets an actionable EmptyState pointing at
-    // /settings/pim/workflows).
-    { key: 'workflow', label: 'Workflow', icon: GitBranch },
-    // W3.11 — Salsify channel-readiness matrix. Per-product per-
-    // channel score + missing-fields tooltip. Reuses the FilterBar
-    // products[] so filters compose cleanly.
-    { key: 'readiness', label: 'Readiness', icon: AlertTriangle },
-    // W5.6 — Akeneo per-locale completeness. Products × supported
-    // locales matrix; cell = N/4 fields filled in that language.
-    { key: 'translations', label: 'Translations', icon: Globe },
-  ]
+// All lens metadata — used by LensTabs and LensPickerMenu.
+export const ALL_LENS_META: Array<{ key: Lens; label: string; icon: any }> = [
+  { key: 'grid',         label: 'Grid',             icon: LayoutGrid },
+  { key: 'health',       label: 'Health',            icon: AlertTriangle },
+  { key: 'hierarchy',    label: 'Hierarchy',         icon: FolderTree },
+  { key: 'coverage',     label: 'Coverage',          icon: Network },
+  { key: 'pricing',      label: 'Pricing',           icon: DollarSign },
+  { key: 'drafts',       label: 'Channel coverage',  icon: Sparkles },
+  { key: 'workflow',     label: 'Workflow',           icon: GitBranch },
+  { key: 'readiness',    label: 'Readiness',         icon: AlertTriangle },
+  { key: 'translations', label: 'Translations',      icon: Globe },
+]
+
+// Always-visible lenses — cannot be removed from the tab bar.
+export const LOCKED_LENSES: Lens[] = ['grid', 'health']
+
+// Optional lenses shown only if the user adds them via the picker.
+export const OPTIONAL_LENSES: Lens[] = [
+  'hierarchy', 'coverage', 'pricing', 'drafts', 'workflow', 'readiness', 'translations',
+]
+
+function LensTabs({
+  current,
+  onChange,
+  lensTabOrder,
+  setLensTabOrder,
+}: {
+  current: Lens
+  onChange: (l: Lens) => void
+  lensTabOrder: Lens[]
+  setLensTabOrder: (order: Lens[]) => void
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const metaByKey = new Map(ALL_LENS_META.map((m) => [m.key, m]))
+
+  const tabBtn = (key: Lens) => {
+    const meta = metaByKey.get(key)!
+    const Icon = meta.icon
+    return (
+      <button
+        key={key}
+        onClick={() => onChange(key)}
+        className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+          current === key
+            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+        }`}
+      >
+        <Icon size={12} />
+        {meta.label}
+      </button>
+    )
+  }
+
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-      {tabs.map((t) => (
+      {/* Locked tabs — always shown */}
+      {LOCKED_LENSES.map((key) => tabBtn(key))}
+      {/* User-selected optional tabs in chosen order */}
+      {lensTabOrder.map((key) => tabBtn(key))}
+      {/* Customise button */}
+      <div className="relative">
         <button
-          key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${current === t.key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
+          onClick={() => setPickerOpen((o) => !o)}
+          title="Customise visible tabs"
+          className={`h-7 px-2 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+            pickerOpen
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+          }`}
         >
-          <t.icon size={12} />
-          {t.label}
+          <Settings2 size={12} />
+          <span className="text-xs">Views</span>
         </button>
-      ))}
+        {pickerOpen && (
+          <LensPickerMenu
+            visible={lensTabOrder}
+            onChange={setLensTabOrder}
+            onClose={() => setPickerOpen(false)}
+          />
+        )}
+      </div>
     </div>
   )
 }
