@@ -18,7 +18,7 @@ import {
   Trash2,
   GitBranch,
   Globe,
-  BarChart2,
+  Search, SlidersHorizontal, BarChart2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -48,7 +48,7 @@ import { WorkflowLens } from './_lenses/WorkflowLens'
 import { ReadinessLens } from './_lenses/ReadinessLens'
 import { TranslationsLens } from './_lenses/TranslationsLens'
 import { BulkActionBar } from './_components/BulkActionBar'
-import { FilterBar } from './_components/FilterBar'
+import { FiltersPopover } from './_components/FiltersPopover'
 import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
@@ -57,7 +57,10 @@ import { LensPickerMenu } from './_components/LensPickerMenu'
 import { TagEditor } from './_components/TagEditor'
 import { VirtualizedGrid } from './_components/GridView'
 import { HygieneStrip } from './_components/HygieneStrip'
-import { QuickFilters } from './_components/QuickFilters'
+import {
+  MultiSelectChips,
+  ACTIVE_CHANNELS_OPTIONS,
+} from '@/components/ui/MultiSelectChips'
 
 // E.3 — lazy-load the heavy modals so they don't ship in /products'
 // initial bundle. Each is gated by a boolean state in the workspace,
@@ -638,6 +641,25 @@ export default function ProductsWorkspace() {
     fetchProducts()
   }, [onTopLevelRefresh, fetchProducts])
 
+  // nexus:focus-search — fired by CommandPalette "/" shortcut.
+  useEffect(() => {
+    const onFocusSearch = () => {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    }
+    window.addEventListener('nexus:focus-search', onFocusSearch)
+    return () => window.removeEventListener('nexus:focus-search', onFocusSearch)
+  }, [])
+
+  // nexus:open-filter-menu — fired by bare-F shortcut.
+  useEffect(() => {
+    const onOpenFilter = () => {
+      setFilterBtnAnchor(filterBtnRef.current?.getBoundingClientRect() ?? null)
+    }
+    window.addEventListener('nexus:open-filter-menu', onOpenFilter)
+    return () => window.removeEventListener('nexus:open-filter-menu', onOpenFilter)
+  }, [])
+
   // U.33 — these were inline arrows in JSX (recreated every render),
   // which busted child memo on GridLens + ProductDrawer. The
   // onClearFilters payload is a static object literal so we memoize
@@ -940,6 +962,37 @@ export default function ProductsWorkspace() {
     (stockLevel !== 'all' ? 1 : 0) + (hasPhotos ? 1 : 0) +
     (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) + (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0)
 
+  // Secondary filter count — only the filters that live in the FiltersPopover
+  // (status/channel/stock are shown inline in Row 2, not counted here).
+  const secondaryFilterCount =
+    (marketplaceFilters.length > 0 ? 1 : 0) + (productTypeFilters.length > 0 ? 1 : 0) +
+    (brandFilters.length > 0 ? 1 : 0) + (familyFilters.length > 0 ? 1 : 0) +
+    (workflowStageFilters.length > 0 ? 1 : 0) + (tagFilters.length > 0 ? 1 : 0) +
+    (fulfillmentFilters.length > 0 ? 1 : 0) + (missingChannelFilters.length > 0 ? 1 : 0) +
+    (hasPhotos ? 1 : 0) + (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) +
+    (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0)
+
+  // Active pills shown in Row 2 right-side (only secondary/popover filters).
+  const activePills: Array<{ key: string; label: string; value: string; clear: () => void }> = []
+  if (missingChannelFilters.length > 0) activePills.push({ key: 'missing', label: 'Missing on', value: missingChannelFilters.join(', '), clear: () => updateUrl({ missingChannels: undefined, page: undefined }) })
+  if (marketplaceFilters.length > 0) activePills.push({ key: 'mkt', label: 'Marketplace', value: marketplaceFilters.join(', '), clear: () => updateUrl({ marketplaces: undefined, page: undefined }) })
+  if (fulfillmentFilters.length > 0) activePills.push({ key: 'fba', label: 'FBA/FBM', value: fulfillmentFilters.join(', '), clear: () => updateUrl({ fulfillment: undefined, page: undefined }) })
+  if (productTypeFilters.length > 0) activePills.push({ key: 'type', label: 'Type', value: productTypeFilters.join(', '), clear: () => updateUrl({ productTypes: undefined, page: undefined }) })
+  if (brandFilters.length > 0) activePills.push({ key: 'brand', label: 'Brand', value: brandFilters.join(', '), clear: () => updateUrl({ brands: undefined, page: undefined }) })
+  if (familyFilters.length > 0) activePills.push({ key: 'family', label: 'Family', value: familyFilters.join(', '), clear: () => updateUrl({ families: undefined, page: undefined }) })
+  if (workflowStageFilters.length > 0) activePills.push({ key: 'stage', label: 'Stage', value: workflowStageFilters.join(', '), clear: () => updateUrl({ workflowStages: undefined, page: undefined }) })
+  if (tagFilters.length > 0) activePills.push({ key: 'tags', label: 'Tags', value: tagFilters.join(', '), clear: () => updateUrl({ tags: undefined, page: undefined }) })
+  if (driftOnly === 'true') activePills.push({ key: 'drift', label: 'Drift', value: 'Has overrides', clear: () => updateUrl({ driftOnly: undefined, page: undefined }) })
+  if (hasPhotos) activePills.push({ key: 'photos', label: 'Photos', value: hasPhotos === 'true' ? 'With photos' : 'No photos', clear: () => updateUrl({ hasPhotos: undefined, page: undefined }) })
+  if (hasDescription) activePills.push({ key: 'desc', label: 'Description', value: hasDescription === 'true' ? 'With desc.' : 'No desc.', clear: () => updateUrl({ hasDescription: undefined, page: undefined }) })
+  if (hasBrand) activePills.push({ key: 'brand-set', label: 'Brand set', value: hasBrand === 'true' ? 'Brand set' : 'No brand', clear: () => updateUrl({ hasBrand: undefined, page: undefined }) })
+  if (hasGtin) activePills.push({ key: 'gtin', label: 'GTIN', value: hasGtin === 'true' ? 'With GTIN' : 'No GTIN', clear: () => updateUrl({ hasGtin: undefined, page: undefined }) })
+
+  // Refs for search focus + filter popover anchor.
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const filterBtnRef = useRef<HTMLButtonElement | null>(null)
+  const [filterBtnAnchor, setFilterBtnAnchor] = useState<DOMRect | null>(null)
+
   return (
     // P.1f — SearchContext + RiskFlaggedContext moved into VirtualizedGrid
     // (the only consumer of these contexts). The workspace now passes
@@ -1054,93 +1107,92 @@ export default function ProductsWorkspace() {
         }
       />
 
-      {/* AM.1 — Amazon-style status tab pills: All · Fix · Draft */}
-      {lens === 'grid' && !showDeleted && (
-        <div className="flex items-center gap-2">
-          {/* All */}
-          <button
-            type="button"
-            onClick={() => updateUrl({ status: '', page: undefined })}
-            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium transition-colors border ${
-              statusFilters.length === 0
-                ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
-            }`}
-          >
-            All
-            <span className={`text-xs tabular-nums ${statusFilters.length === 0 ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
-              ({stats.total.toLocaleString()})
-            </span>
-          </button>
-          {/* Fix — active products with 0 channel coverage */}
-          <button
-            type="button"
-            onClick={() => updateUrl({ status: 'ACTIVE', stockLevel: 'all', missingChannels: '', page: undefined })}
-            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium transition-colors border ${
-              statusFilters.includes('ACTIVE') && statusFilters.length === 1
-                ? 'bg-amber-600 text-white border-amber-600'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
-            }`}
-          >
-            Fix
-            <span className={`text-xs tabular-nums ${statusFilters.includes('ACTIVE') && statusFilters.length === 1 ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
-              ({(stats.active - (facets?.hygiene?.total ?? 0) < 0 ? 0 : stats.active - stats.inStock).toLocaleString()})
-            </span>
-          </button>
-          {/* Draft */}
-          <button
-            type="button"
-            onClick={() => updateUrl({ status: 'DRAFT', page: undefined })}
-            className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-sm font-medium transition-colors border ${
-              statusFilters.includes('DRAFT') && statusFilters.length === 1
-                ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
-            }`}
-          >
-            Draft
-            <span className={`text-xs tabular-nums ${statusFilters.includes('DRAFT') && statusFilters.length === 1 ? 'opacity-80' : 'text-slate-400 dark:text-slate-500'}`}>
-              ({stats.draft.toLocaleString()})
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* W5.5 — multi-column sort chip stack. Renders above lens
-          switcher when active; hidden when sortStack is empty. */}
-      {sortStack.length > 0 && (
-        <SortStackBar
-          stack={sortStack}
-          onChange={(next) =>
-            updateUrl({
-              sorts: next.length > 0 ? next.join(',') : undefined,
-              page: undefined,
-            })
-          }
-        />
-      )}
-
-      {/* Lens switcher + saved views menu */}
+      {/* ── Row 1: Command bar ─────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <LensTabs
-          current={lens}
-          onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
-          lensTabOrder={lensTabOrder}
-          setLensTabOrder={setLensTabOrder}
-        />
-        {/* W5.5 — Add-sort entry-point in the lens row. Always
-            visible so the operator can layer sorts even from the
-            grid lens. Opens a small inline picker. */}
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search products…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full h-8 pl-8 pr-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
+          />
+        </div>
+
+        {/* Filter button + popover */}
+        <button
+          ref={filterBtnRef}
+          type="button"
+          onClick={() => setFilterBtnAnchor(filterBtnAnchor ? null : filterBtnRef.current?.getBoundingClientRect() ?? null)}
+          className={`h-8 px-3 text-sm border rounded-md inline-flex items-center gap-1.5 transition-colors ${
+            filterBtnAnchor
+              ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+              : secondaryFilterCount > 0
+              ? 'border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+              : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <SlidersHorizontal size={13} />
+          Filter
+          {secondaryFilterCount > 0 && (
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${filterBtnAnchor ? 'bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100' : 'bg-slate-700 text-white dark:bg-slate-300 dark:text-slate-900'}`}>
+              {secondaryFilterCount}
+            </span>
+          )}
+        </button>
+        {filterBtnAnchor && (
+          <FiltersPopover
+            anchorRect={filterBtnAnchor}
+            marketplaceFilters={marketplaceFilters}
+            fulfillmentFilters={fulfillmentFilters}
+            productTypeFilters={productTypeFilters}
+            brandFilters={brandFilters}
+            familyFilters={familyFilters}
+            workflowStageFilters={workflowStageFilters}
+            tagFilters={tagFilters}
+            missingChannelFilters={missingChannelFilters}
+            driftOnly={driftOnly}
+            facets={facets}
+            tags={tags}
+            updateUrl={updateUrl}
+            onClose={() => setFilterBtnAnchor(null)}
+          />
+        )}
+
+        {/* Sort */}
         <AddSortButton
           activeStack={sortStack}
-          onAdd={(field, dir) =>
-            updateUrl({
-              sorts: [...sortStack, `${field}:${dir}`].join(','),
-              page: undefined,
-            })
-          }
+          onAdd={(field, dir) => updateUrl({ sorts: [...sortStack, `${field}:${dir}`].join(','), page: undefined })}
         />
+        {sortStack.length > 0 && (
+          <SortStackBar
+            stack={sortStack}
+            onChange={(next) => updateUrl({ sorts: next.length > 0 ? next.join(',') : undefined, page: undefined })}
+          />
+        )}
 
+        {/* Clear all when any filter active */}
+        {filterCount > 0 && (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="h-8 px-2.5 text-sm inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-md transition-colors"
+          >
+            <X size={13} /> Clear
+          </button>
+        )}
+
+        {/* LensTabs + SavedViews right-aligned */}
         <div className="ml-auto flex items-center gap-2">
+          <LensTabs
+            current={lens}
+            onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
+            lensTabOrder={lensTabOrder}
+            setLensTabOrder={setLensTabOrder}
+          />
           <SavedViewsButton
             open={savedViewMenuOpen}
             setOpen={setSavedViewMenuOpen}
@@ -1293,13 +1345,110 @@ export default function ProductsWorkspace() {
               setSavedViewMenuOpen(false)
             }}
           />
-          {/* E.6 — Bundles button moved to the page-header More menu. */}
         </div>
+        {/* ↑ ml-auto closes */}
       </div>
+      {/* ── End Row 1 ──────────────────────────────────────────────────── */}
 
-      {/* U.27 — catalog hygiene strip. Hidden in the recycle-bin
-          scope (deleted rows aren't actionable). */}
+      {/* ── Row 2: Quick filters + active pills (grid lens only) ─────── */}
       {lens === 'grid' && !showDeleted && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* All / Fix / Draft shortcuts */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => updateUrl({ status: '', page: undefined })}
+              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.length === 0 ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
+            >
+              All <span className="text-xs opacity-70 tabular-nums">({stats.total.toLocaleString()})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => updateUrl({ status: 'ACTIVE', stockLevel: 'all', missingChannels: '', page: undefined })}
+              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.includes('ACTIVE') && statusFilters.length === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
+            >
+              Fix <span className="text-xs opacity-70 tabular-nums">({Math.max(0, stats.active - stats.inStock).toLocaleString()})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => updateUrl({ status: 'DRAFT', page: undefined })}
+              className={`h-7 px-3 rounded-full text-sm font-medium border transition-colors ${statusFilters.includes('DRAFT') && statusFilters.length === 1 ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}`}
+            >
+              Draft <span className="text-xs opacity-70 tabular-nums">({stats.draft.toLocaleString()})</span>
+            </button>
+          </div>
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 shrink-0" />
+
+          {/* Status multi-select */}
+          <MultiSelectChips
+            label="Status"
+            options={[
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'DRAFT', label: 'Draft' },
+              { value: 'INACTIVE', label: 'Inactive' },
+            ]}
+            value={statusFilters}
+            onChange={(next) => updateUrl({ status: next.join(',') || undefined, page: undefined })}
+          />
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 shrink-0" />
+
+          {/* Stock single-select */}
+          <div className="inline-flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Stock</span>
+            <div className="inline-flex items-center gap-1">
+              {[
+                { value: '', label: 'All' },
+                { value: 'in', label: 'In' },
+                { value: 'low', label: 'Low' },
+                { value: 'out', label: 'Out' },
+              ].map((opt) => {
+                const active = opt.value ? stockLevel === opt.value : !stockLevel || stockLevel === 'all'
+                return (
+                  <button
+                    key={opt.value || 'all'}
+                    type="button"
+                    onClick={() => updateUrl({ stockLevel: opt.value || undefined, page: undefined })}
+                    className={`h-7 px-2.5 text-sm border rounded-full transition-colors ${active ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800'}`}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 shrink-0" />
+
+          {/* Channel multi-select */}
+          <MultiSelectChips
+            label="Channel"
+            options={ACTIVE_CHANNELS_OPTIONS}
+            value={channelFilters}
+            onChange={(next) => updateUrl({ channels: next.join(',') || undefined, page: undefined })}
+          />
+
+          {/* Active secondary filter pills — right-aligned */}
+          {activePills.length > 0 && (
+            <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+              {activePills.map((p) => (
+                <span key={p.key} className="inline-flex items-center h-6 text-xs rounded-full bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-100 dark:border-blue-800 pl-2 pr-1 gap-1">
+                  <span className="font-medium text-blue-700 dark:text-blue-300">{p.label}:</span>
+                  <span className="truncate max-w-[120px]">{p.value}</span>
+                  <button type="button" onClick={p.clear} className="hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full p-0.5">
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── End Row 2 ──────────────────────────────────────────────────── */}
+
+      {/* ── Row 3: HygieneStrip — only when catalog has gaps ─────────── */}
+      {lens === 'grid' && !showDeleted && (facets?.hygiene?.total ?? 0) > 0 && (
         <HygieneStrip
           hygiene={facets?.hygiene}
           hasPhotos={hasPhotos}
@@ -1309,48 +1458,6 @@ export default function ProductsWorkspace() {
           updateUrl={updateUrl}
         />
       )}
-
-      {/* U.36 — quick-filters row. Surfaces Status / Stock /
-          Marketplace / Channels permanently so daily-driver
-          filtering is zero-click. The accordion below stays for
-          advanced filters (Product type / Brand / Tags / Fulfillment
-          / Missing on…). Hidden in recycle-bin and on non-grid
-          lenses. */}
-      {lens === 'grid' && !showDeleted && (
-        <QuickFilters
-          statusFilters={statusFilters}
-          stockLevel={stockLevel}
-          marketplaceFilters={marketplaceFilters}
-          channelFilters={channelFilters}
-          updateUrl={updateUrl}
-        />
-      )}
-
-      {/* Filter bar */}
-      <FilterBar
-        searchInput={searchInput}
-        setSearchInput={setSearchInput}
-        statusFilters={statusFilters}
-        channelFilters={channelFilters}
-        marketplaceFilters={marketplaceFilters}
-        productTypeFilters={productTypeFilters}
-        brandFilters={brandFilters}
-        familyFilters={familyFilters}
-        workflowStageFilters={workflowStageFilters}
-        tagFilters={tagFilters}
-        fulfillmentFilters={fulfillmentFilters}
-        missingChannelFilters={missingChannelFilters}
-        stockLevel={stockLevel}
-        hasPhotos={hasPhotos}
-        hasDescription={hasDescription}
-        hasBrand={hasBrand}
-        hasGtin={hasGtin}
-        driftOnly={driftOnly}
-        filterCount={filterCount}
-        facets={facets}
-        tags={tags}
-        updateUrl={updateUrl}
-      />
 
       {/* U.22 — bulk action toolbar. Permanent + sticky-top, rendered
           whenever the grid lens is active (regardless of selection
