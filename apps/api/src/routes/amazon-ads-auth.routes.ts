@@ -62,6 +62,92 @@ const MARKETPLACE_COUNTRY: Record<string, string> = {
 }
 
 const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
+  // ── Debug: test auth step-by-step ─────────────────────────────────────
+  // GET /api/amazon-ads/debug/test-auth
+  // Returns token prefix, raw /v2/profiles response, and /sp/campaigns
+  // response for the first active connection. Remove once auth is stable.
+  fastify.get('/amazon-ads/debug/test-auth', async (_request, reply) => {
+    const { default: prisma } = await import('../db.js')
+    const { decryptSecret } = await import('../lib/crypto.js')
+
+    const conn = await prisma.amazonAdsConnection.findFirst({ where: { isActive: true } })
+    if (!conn?.credentialsEncrypted) {
+      return reply.code(404).send({ error: 'no_active_connection' })
+    }
+
+    let creds: { clientId: string; clientSecret: string; refreshToken: string }
+    try {
+      creds = JSON.parse(decryptSecret(conn.credentialsEncrypted))
+    } catch (err) {
+      return reply.code(500).send({ error: 'decrypt_failed', detail: String(err) })
+    }
+
+    // Exchange refresh token for access token
+    const tokenRes = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: creds.refreshToken,
+        client_id: creds.clientId,
+        client_secret: creds.clientSecret,
+      }).toString(),
+    })
+    const tokenBody = await tokenRes.json() as Record<string, unknown>
+    if (!tokenRes.ok) {
+      return reply.send({
+        step: 'lwa_token_exchange',
+        status: tokenRes.status,
+        error: tokenBody,
+        credentialsShape: {
+          hasClientId: !!creds.clientId,
+          clientIdPrefix: creds.clientId?.slice(0, 30),
+          hasClientSecret: !!creds.clientSecret,
+          hasRefreshToken: !!creds.refreshToken,
+          refreshTokenPrefix: creds.refreshToken?.slice(0, 20),
+        },
+      })
+    }
+
+    const accessToken = tokenBody.access_token as string
+    const tokenPrefix = accessToken?.slice(0, 30)
+    const tokenSuffix = accessToken?.slice(-10)
+
+    // Test /v2/profiles (no scope header)
+    const profilesRes = await fetch('https://advertising-api-eu.amazon.com/v2/profiles', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Amazon-Advertising-API-ClientId': creds.clientId,
+      },
+    })
+    const profilesBody = await profilesRes.json()
+
+    // Test /sp/campaigns with the first profile's ID
+    const profileId = conn.profileId
+    const campaignsRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Amazon-Advertising-API-ClientId': creds.clientId,
+        'Amazon-Advertising-API-Scope': profileId,
+      },
+    })
+    const campaignsBody = await campaignsRes.json()
+
+    return reply.send({
+      tokenInfo: {
+        prefix: tokenPrefix,
+        suffix: tokenSuffix,
+        length: accessToken?.length,
+        tokenType: tokenBody.token_type,
+      },
+      profilesEndpoint: { status: profilesRes.status, body: profilesBody },
+      spCampaigns: {
+        status: campaignsRes.status,
+        profileIdUsed: profileId,
+        body: campaignsBody,
+      },
+    })
+  })
   // ── Step 1: redirect operator to Amazon consent page ──────────────────
   fastify.get('/amazon-ads/auth/connect', async (_request, reply) => {
     if (!CLIENT_ID) {

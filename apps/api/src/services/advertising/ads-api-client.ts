@@ -208,7 +208,10 @@ async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     'Amazon-Advertising-API-ClientId': creds.clientId,
-    'Content-Type': 'application/json',
+  }
+  // Only send Content-Type when there is a body (GET/DELETE have none).
+  if (opts.body != null) {
+    headers['Content-Type'] = 'application/json'
   }
   // Scope header is only required for profile-scoped endpoints.
   if (opts.profileId !== 'n/a') {
