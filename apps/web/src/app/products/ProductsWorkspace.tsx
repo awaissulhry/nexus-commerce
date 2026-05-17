@@ -1495,8 +1495,19 @@ function LensTabs({
   lensTabOrder: Lens[]
   setLensTabOrder: (order: Lens[]) => void
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false)
+  // Store the button's DOMRect so LensPickerMenu can position itself
+  // with fixed coordinates — escaping any ancestor overflow/stacking context.
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const metaByKey = new Map(ALL_LENS_META.map((m) => [m.key, m]))
+
+  const handleTogglePicker = () => {
+    if (anchorRect) {
+      setAnchorRect(null)
+    } else {
+      setAnchorRect(btnRef.current?.getBoundingClientRect() ?? null)
+    }
+  }
 
   const tabBtn = (key: Lens) => {
     const meta = metaByKey.get(key)!
@@ -1519,32 +1530,29 @@ function LensTabs({
 
   return (
     <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-      {/* Locked tabs — always shown */}
       {LOCKED_LENSES.map((key) => tabBtn(key))}
-      {/* User-selected optional tabs in chosen order */}
       {lensTabOrder.map((key) => tabBtn(key))}
-      {/* Customise button */}
-      <div className="relative">
-        <button
-          onClick={() => setPickerOpen((o) => !o)}
-          title="Customise visible tabs"
-          className={`h-7 px-2 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
-            pickerOpen
-              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-          }`}
-        >
-          <Settings2 size={12} />
-          <span className="text-xs">Views</span>
-        </button>
-        {pickerOpen && (
-          <LensPickerMenu
-            visible={lensTabOrder}
-            onChange={setLensTabOrder}
-            onClose={() => setPickerOpen(false)}
-          />
-        )}
-      </div>
+      <button
+        ref={btnRef}
+        onClick={handleTogglePicker}
+        title="Customise visible tabs"
+        className={`h-7 px-2 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
+          anchorRect
+            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+        }`}
+      >
+        <Settings2 size={12} />
+        <span className="text-xs">Views</span>
+      </button>
+      {anchorRect && (
+        <LensPickerMenu
+          anchorRect={anchorRect}
+          visible={lensTabOrder}
+          onChange={setLensTabOrder}
+          onClose={() => setAnchorRect(null)}
+        />
+      )}
     </div>
   )
 }

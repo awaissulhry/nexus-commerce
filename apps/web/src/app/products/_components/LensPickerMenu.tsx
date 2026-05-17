@@ -1,19 +1,27 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ALL_LENS_META, OPTIONAL_LENSES } from '../ProductsWorkspace'
 import type { Lens } from '../ProductsWorkspace'
 
 interface Props {
+  anchorRect: DOMRect
   visible: Lens[]
   onChange: (next: Lens[]) => void
   onClose: () => void
 }
 
-export function LensPickerMenu({ visible, onChange, onClose }: Props) {
+export function LensPickerMenu({ anchorRect, visible, onChange, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [dragKey, setDragKey] = useState<Lens | null>(null)
+  const [mounted, setMounted] = useState(false)
 
+  // Defer portal render until after hydration
+  useEffect(() => { setMounted(true) }, [])
+
+  // Close on outside mousedown — uses contains() so clicks inside the
+  // menu are never treated as "outside" clicks.
   useEffect(() => {
     const onOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
@@ -24,13 +32,11 @@ export function LensPickerMenu({ visible, onChange, onClose }: Props) {
 
   const metaByKey = new Map(ALL_LENS_META.map((m) => [m.key, m]))
 
-  // Optional lenses currently shown, in user's order.
   const shownOptional = visible
     .filter((k) => OPTIONAL_LENSES.includes(k))
     .map((k) => metaByKey.get(k)!)
     .filter(Boolean)
 
-  // Optional lenses not yet selected.
   const hiddenOptional = OPTIONAL_LENSES
     .filter((k) => !visible.includes(k))
     .map((k) => metaByKey.get(k)!)
@@ -57,10 +63,17 @@ export function LensPickerMenu({ visible, onChange, onClose }: Props) {
     setDragKey(null)
   }
 
-  return (
+  // Position: align right edge of menu with right edge of anchor button,
+  // open below the anchor. Clamp so the menu never overflows the viewport.
+  const W = 224
+  const top = anchorRect.bottom + 6
+  const right = Math.max(8, window.innerWidth - anchorRect.right)
+
+  const menu = (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 dark:bg-slate-900 dark:border-slate-800"
+      style={{ position: 'fixed', top, right, width: W, zIndex: 9999 }}
+      className="bg-white border border-slate-200 rounded-md shadow-xl p-1.5 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
     >
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
         Shown
@@ -85,11 +98,11 @@ export function LensPickerMenu({ visible, onChange, onClose }: Props) {
           >
             <span className="text-slate-300 dark:text-slate-600 font-mono select-none">⠿</span>
             <Icon size={12} className="text-slate-400 shrink-0" />
-            <span className="flex-1 text-slate-700 dark:text-slate-300">{meta.label}</span>
+            <span className="flex-1 text-slate-700 dark:text-slate-300 text-sm">{meta.label}</span>
             <button
               type="button"
               onClick={() => onChange(visible.filter((k) => k !== meta.key))}
-              className="text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 text-xs leading-none"
+              className="text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-300 text-xs leading-none px-1"
               title={`Remove ${meta.label}`}
             >
               ✕
@@ -114,8 +127,8 @@ export function LensPickerMenu({ visible, onChange, onClose }: Props) {
               >
                 <span className="text-transparent select-none font-mono">⠿</span>
                 <Icon size={12} className="text-slate-400 shrink-0" />
-                <span className="flex-1 text-slate-700 dark:text-slate-300">{meta.label}</span>
-                <span className="text-slate-400 text-xs">+</span>
+                <span className="flex-1 text-slate-700 dark:text-slate-300 text-sm">{meta.label}</span>
+                <span className="text-slate-400 text-xs font-medium">+</span>
               </button>
             )
           })}
@@ -140,4 +153,7 @@ export function LensPickerMenu({ visible, onChange, onClose }: Props) {
       </div>
     </div>
   )
+
+  if (!mounted) return null
+  return createPortal(menu, document.body)
 }
