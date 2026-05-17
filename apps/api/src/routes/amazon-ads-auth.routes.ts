@@ -10,10 +10,23 @@
  * goes to Settings → Advertising to test + enable live mode.
  */
 
+import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { encryptSecret } from '../lib/crypto.js'
 import { logger } from '../utils/logger.js'
+
+// In-memory PKCE store — keyed by random state param, expires in 15 min.
+// Acceptable for a single-operator setup flow (connect→callback in one session).
+const PKCE_STORE = new Map<string, { verifier: string; expiresAt: number }>()
+
+function generateCodeVerifier(): string {
+  return randomBytes(32).toString('base64url') // 43-char URL-safe string
+}
+
+function generateCodeChallenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url')
+}
 
 const CLIENT_ID = process.env.AMAZON_ADS_CLIENT_ID ?? ''
 const CLIENT_SECRET = process.env.AMAZON_ADS_CLIENT_SECRET ?? ''
@@ -225,26 +238,32 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
-    // Request profile scope alongside campaign_management — some Amazon
-    // auth validators require profile scope for per-profile token binding.
-    // Do NOT include advertising::test:create_account — that scope causes
-    // Amazon to issue sandbox-mode tokens which fail on production endpoints.
+    // PKCE — generates a JWT-format access token instead of the legacy
+    // Atza| opaque token. Required for Amazon Advertising API SP v3
+    // profile-scoped endpoints which use a JWT validator.
+    const state = randomBytes(16).toString('hex')
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = generateCodeChallenge(codeVerifier)
+    PKCE_STORE.set(state, { verifier: codeVerifier, expiresAt: Date.now() + 15 * 60 * 1000 })
+
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
       scope: 'profile advertising::campaign_management',
       response_type: 'code',
       redirect_uri: REDIRECT_URI,
-      state: 'nexus-ads-oauth',
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     })
 
     const consentUrl = `https://www.amazon.com/ap/oa?${params.toString()}`
-    logger.info('[amazon-ads-auth] redirecting to consent page', { consentUrl })
+    logger.info('[amazon-ads-auth] redirecting to PKCE consent page', { state })
     return reply.redirect(consentUrl)
   })
 
   // ── Step 2: exchange code for tokens, discover + save profiles ─────────
   fastify.get('/amazon-ads/auth/callback', async (request, reply) => {
-    const { code, error, error_description } = request.query as Record<string, string>
+    const { code, error, error_description, state } = request.query as Record<string, string>
 
     if (error) {
       logger.error('[amazon-ads-auth] OAuth error', { error, error_description })
@@ -255,19 +274,29 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'missing_code' })
     }
 
+    // Retrieve PKCE code_verifier from in-memory store
+    const pkce = state ? PKCE_STORE.get(state) : undefined
+    if (pkce) PKCE_STORE.delete(state) // one-time use
+
     // Exchange auth code for access + refresh tokens
     let tokens: LWATokenResponse
     try {
+      const exchangeParams: Record<string, string> = {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+      }
+      // Include PKCE verifier if this flow used it — causes Amazon to issue
+      // JWT-format access tokens instead of legacy Atza| opaque tokens.
+      if (pkce && Date.now() < pkce.expiresAt) {
+        exchangeParams.code_verifier = pkce.verifier
+      }
       const tokenRes = await fetch(LWA_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: REDIRECT_URI,
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-        }).toString(),
+        body: new URLSearchParams(exchangeParams).toString(),
       })
       if (!tokenRes.ok) {
         const text = await tokenRes.text()
@@ -345,16 +374,22 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       logger.info('[amazon-ads-auth] saved connection', { profileId, country, accountLabel })
     }
 
+    const accessTokenPrefix = tokens.access_token?.slice(0, 10) ?? '?'
+    const isJwt = tokens.access_token?.startsWith('eyJ')
+
     // Return a simple success page the operator can read in the browser
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Amazon Ads Connected</title>
 <style>body{font-family:sans-serif;max-width:600px;margin:60px auto;padding:20px}
-.ok{color:#16a34a}.card{border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:12px 0}
+.ok{color:#16a34a}.warn{color:#d97706}.card{border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:12px 0}
 code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px}</style>
 </head>
 <body>
 <h2 class="ok">✓ Amazon Advertising API Connected</h2>
+<p class="${isJwt ? 'ok' : 'warn'}">
+  Token format: <code>${accessTokenPrefix}...</code> — ${isJwt ? '✓ JWT (will work with SP v3 campaign endpoints)' : '⚠ Legacy Atza| opaque token (SP v3 campaign endpoints may reject this)'}
+</p>
 <p>${saved.length} profile(s) saved and encrypted.</p>
 ${saved.map(p => `<div class="card">
   <strong>Profile ID:</strong> <code>${p.profileId}</code><br>
