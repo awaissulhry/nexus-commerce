@@ -107,7 +107,7 @@ export interface ReplicateCtx {
 // ── Main grid props ───────────────────────────────────────────────────────
 
 export interface FlatFileGridProps {
-  channel: 'amazon' | 'ebay' | 'shopify'
+  channel: 'amazon' | 'ebay' | 'shopify' | 'all'
   title: string
   titleIcon?: React.ReactNode
   marketplace: string

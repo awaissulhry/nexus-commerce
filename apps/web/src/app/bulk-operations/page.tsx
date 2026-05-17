@@ -3,7 +3,7 @@ import { CalendarClock, Download, History as HistoryIcon, LayoutGrid, Upload, Wa
 import PageHeader from '@/components/layout/PageHeader'
 import ActiveJobsStrip from './ActiveJobsStrip'
 import QueueStatsBanner from './QueueStatsBanner'
-import BulkOperationsClient from './BulkOperationsClient'
+import UnifiedFlatFileClient from './UnifiedFlatFileClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +21,7 @@ export default function BulkOperationsPage() {
     <div className="space-y-3">
       <PageHeader
         title="Bulk Operations"
-        description="Click any cell to edit (Phase B) · Cmd+S to save"
+        description="Unified all-channel flat file · Amazon · eBay · Shopify · Cmd+S to save"
         actions={
           <div className="flex items-center gap-1.5">
             <Link
@@ -73,7 +73,7 @@ export default function BulkOperationsPage() {
       />
       <QueueStatsBanner />
       <ActiveJobsStrip />
-      <BulkOperationsClient />
+      <UnifiedFlatFileClient />
     </div>
   )
 }
