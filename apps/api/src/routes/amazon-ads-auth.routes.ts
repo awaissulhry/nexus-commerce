@@ -158,6 +158,30 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     if (t1.token) {
       // Baseline (known failing)
       results.v3_refreshToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+
+      // Try entity ID as Amazon-Advertising-API-ClientId instead of LWA client ID
+      const ENTITY_ID = 'A1VRHKTGYO1JNU'
+      const entityClientRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
+        headers: {
+          Authorization: `Bearer ${t1.token}`,
+          'Amazon-Advertising-API-ClientId': ENTITY_ID,
+          'Amazon-Advertising-API-Scope': IT_PROFILE,
+        },
+      })
+      let entityClientBody: unknown
+      try { entityClientBody = await entityClientRes.json() } catch { entityClientBody = await entityClientRes.text() }
+      results.v3_entityAsClientId = { status: entityClientRes.status, body: entityClientBody }
+
+      // Try with no ClientId header at all
+      const noClientIdRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
+        headers: {
+          Authorization: `Bearer ${t1.token}`,
+          'Amazon-Advertising-API-Scope': IT_PROFILE,
+        },
+      })
+      let noClientIdBody: unknown
+      try { noClientIdBody = await noClientIdRes.json() } catch { noClientIdBody = await noClientIdRes.text() }
+      results.v3_noClientId = { status: noClientIdRes.status, body: noClientIdBody }
     }
 
     // Try client_credentials token with /sp/campaigns
