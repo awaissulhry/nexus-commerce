@@ -124,39 +124,62 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       tokenWithScope:    t2.ok ? { prefix: t2.token!.slice(0, 15), length: t2.token!.length } : { error: t2.body },
     }
 
+    // Test client_credentials grant — might return JWT (eyJ...) instead of Atza|
+    const ccRes = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: creds.clientId,
+        client_secret: creds.clientSecret,
+        scope: 'advertising::campaign_management',
+      }).toString(),
+    })
+    const ccBody = await ccRes.json() as Record<string, unknown>
+    const ccToken = ccBody.access_token as string | undefined
+    results.clientCredentialsToken = {
+      status: ccRes.status,
+      ok: ccRes.ok,
+      tokenPrefix: ccToken?.slice(0, 20),
+      tokenLength: ccToken?.length,
+      tokenType: ccBody.token_type,
+      error: ccRes.ok ? undefined : ccBody,
+    }
+
     if (t1.token) {
-      // 1. Standard Bearer + Scope header (known failing)
-      results.v3_bearerWithScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+      // Baseline (known failing)
+      results.v3_refreshToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+    }
 
-      // 2. SP-API style: token in x-amz-access-token, no Authorization header
-      const spStyleRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
-        headers: {
-          'x-amz-access-token': t1.token,
-          'Amazon-Advertising-API-ClientId': creds.clientId,
-          'Amazon-Advertising-API-Scope': IT_PROFILE,
-        },
-      })
-      let spStyleBody: unknown
-      try { spStyleBody = await spStyleRes.json() } catch { spStyleBody = await spStyleRes.text() }
-      results.v3_xAmzAccessToken = { status: spStyleRes.status, body: spStyleBody }
+    // Try client_credentials token with /sp/campaigns
+    if (ccToken) {
+      results.v3_clientCredentials = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', ccToken, IT_PROFILE)
+    }
 
-      // 3. Entity ID as scope instead of profile ID
-      const ENTITY_ID = 'A1VRHKTGYO1JNU'
-      results.v3_entityIdScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, ENTITY_ID)
+    // Try refresh token with openid scope → might return JWT
+    const oidcRes = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: creds.refreshToken,
+        client_id: creds.clientId,
+        client_secret: creds.clientSecret,
+        scope: 'openid advertising::campaign_management',
+      }).toString(),
+    })
+    const oidcBody = await oidcRes.json() as Record<string, unknown>
+    const oidcToken = (oidcBody.access_token ?? oidcBody.id_token) as string | undefined
+    results.oidcToken = {
+      status: oidcRes.status,
+      ok: oidcRes.ok,
+      tokenPrefix: oidcToken?.slice(0, 20),
+      tokenLength: oidcToken?.length,
+      error: oidcRes.ok ? undefined : oidcBody,
+    }
 
-      // 4. Profile ID in query string, no scope header
-      const qsRes = await fetch(`https://advertising-api-eu.amazon.com/sp/campaigns?profileId=${IT_PROFILE}`, {
-        headers: {
-          Authorization: `Bearer ${t1.token}`,
-          'Amazon-Advertising-API-ClientId': creds.clientId,
-        },
-      })
-      let qsBody: unknown
-      try { qsBody = await qsRes.json() } catch { qsBody = await qsRes.text() }
-      results.v3_profileInQueryString = { status: qsRes.status, body: qsBody }
-
-      // 5. Completely different path: /advertising/v3/sp/campaigns (alt URL pattern)
-      results.v3_altPath = await tryUrl('https://advertising-api-eu.amazon.com/advertising/v3/sp/campaigns', t1.token, IT_PROFILE)
+    if (oidcToken && oidcRes.ok) {
+      results.v3_oidcToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', oidcToken, IT_PROFILE)
     }
 
     return reply.send(results)
