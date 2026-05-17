@@ -82,14 +82,14 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'decrypt_failed', detail: String(err) })
     }
 
-    async function getToken(withScope: boolean) {
+    async function getToken(scope?: string) {
       const params: Record<string, string> = {
         grant_type: 'refresh_token',
         refresh_token: creds.refreshToken,
         client_id: creds.clientId,
         client_secret: creds.clientSecret,
       }
-      if (withScope) params.scope = 'advertising::campaign_management'
+      if (scope) params.scope = scope
       const r = await fetch('https://api.amazon.com/auth/o2/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -112,9 +112,9 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     // Token without scope (current approach)
-    const t1 = await getToken(false)
-    // Token WITH scope (might return different format)
-    const t2 = await getToken(true)
+    const t1 = await getToken()
+    // Token with profile + campaign scope (matches new connect URL)
+    const t2 = await getToken('profile advertising::campaign_management')
 
     // Use IT profile for campaign tests (main Xavia market)
     const IT_PROFILE = '4117374346144545'
@@ -192,9 +192,13 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       })
     }
 
+    // Request profile scope alongside campaign_management — some Amazon
+    // auth validators require profile scope for per-profile token binding.
+    // Do NOT include advertising::test:create_account — that scope causes
+    // Amazon to issue sandbox-mode tokens which fail on production endpoints.
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
-      scope: 'advertising::campaign_management',
+      scope: 'profile advertising::campaign_management',
       response_type: 'code',
       redirect_uri: REDIRECT_URI,
       state: 'nexus-ads-oauth',
