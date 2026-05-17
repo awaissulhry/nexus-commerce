@@ -82,71 +82,65 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'decrypt_failed', detail: String(err) })
     }
 
-    // Exchange refresh token for access token
-    const tokenRes = await fetch('https://api.amazon.com/auth/o2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
+    async function getToken(withScope: boolean) {
+      const params: Record<string, string> = {
         grant_type: 'refresh_token',
         refresh_token: creds.refreshToken,
         client_id: creds.clientId,
         client_secret: creds.clientSecret,
-      }).toString(),
-    })
-    const tokenBody = await tokenRes.json() as Record<string, unknown>
-    if (!tokenRes.ok) {
-      return reply.send({
-        step: 'lwa_token_exchange',
-        status: tokenRes.status,
-        error: tokenBody,
-        credentialsShape: {
-          hasClientId: !!creds.clientId,
-          clientIdPrefix: creds.clientId?.slice(0, 30),
-          hasClientSecret: !!creds.clientSecret,
-          hasRefreshToken: !!creds.refreshToken,
-          refreshTokenPrefix: creds.refreshToken?.slice(0, 20),
-        },
+      }
+      if (withScope) params.scope = 'advertising::campaign_management'
+      const r = await fetch('https://api.amazon.com/auth/o2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params).toString(),
       })
+      const body = await r.json() as Record<string, unknown>
+      return { ok: r.ok, status: r.status, body, token: r.ok ? body.access_token as string : null }
     }
 
-    const accessToken = tokenBody.access_token as string
-    const tokenPrefix = accessToken?.slice(0, 30)
-    const tokenSuffix = accessToken?.slice(-10)
-
-    // Test /v2/profiles (no scope header)
-    const profilesRes = await fetch('https://advertising-api-eu.amazon.com/v2/profiles', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    async function tryUrl(url: string, token: string, profileId?: string) {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
         'Amazon-Advertising-API-ClientId': creds.clientId,
-      },
-    })
-    const profilesBody = await profilesRes.json()
+      }
+      if (profileId) headers['Amazon-Advertising-API-Scope'] = profileId
+      const r = await fetch(url, { headers })
+      let body: unknown
+      try { body = await r.json() } catch { body = await r.text() }
+      return { status: r.status, body }
+    }
 
-    // Test /sp/campaigns with the first profile's ID
-    const profileId = conn.profileId
-    const campaignsRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Amazon-Advertising-API-ClientId': creds.clientId,
-        'Amazon-Advertising-API-Scope': profileId,
-      },
-    })
-    const campaignsBody = await campaignsRes.json()
+    // Token without scope (current approach)
+    const t1 = await getToken(false)
+    // Token WITH scope (might return different format)
+    const t2 = await getToken(true)
 
-    return reply.send({
-      tokenInfo: {
-        prefix: tokenPrefix,
-        suffix: tokenSuffix,
-        length: accessToken?.length,
-        tokenType: tokenBody.token_type,
-      },
-      profilesEndpoint: { status: profilesRes.status, body: profilesBody },
-      spCampaigns: {
-        status: campaignsRes.status,
-        profileIdUsed: profileId,
-        body: campaignsBody,
-      },
-    })
+    // Use IT profile for campaign tests (main Xavia market)
+    const IT_PROFILE = '4117374346144545'
+
+    const results: Record<string, unknown> = {
+      tokenWithoutScope: t1.ok ? { prefix: t1.token!.slice(0, 15), length: t1.token!.length } : { error: t1.body },
+      tokenWithScope:    t2.ok ? { prefix: t2.token!.slice(0, 15), length: t2.token!.length } : { error: t2.body },
+    }
+
+    if (t1.token) {
+      // 1. v3 path, with scope header (current, failing)
+      results.v3_withScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+      // 2. v3 path, NO scope header (see what error changes)
+      results.v3_noScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token)
+      // 3. Old v2 path (might still work with Atza| tokens)
+      results.v2_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/campaigns', t1.token, IT_PROFILE)
+      // 4. v3 with stateFilter (different URL)
+      results.v3_withFilter = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns?stateFilter=enabled,paused,archived', t1.token, IT_PROFILE)
+    }
+
+    if (t2.token) {
+      // 5. v3 path with scoped token
+      results.v3_scopedToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t2.token, IT_PROFILE)
+    }
+
+    return reply.send(results)
   })
   // ── Step 1: redirect operator to Amazon consent page ──────────────────
   fastify.get('/amazon-ads/auth/connect', async (_request, reply) => {
