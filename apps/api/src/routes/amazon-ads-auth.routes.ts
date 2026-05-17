@@ -170,31 +170,44 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (t1.token) {
       // Baseline (known failing)
-      results.v3_refreshToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+      results.v3_GET_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
 
-      // Try entity ID as Amazon-Advertising-API-ClientId instead of LWA client ID
-      const ENTITY_ID = 'A1VRHKTGYO1JNU'
-      const entityClientRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
+      // POST /sp/campaigns/list — v3 list endpoint, different HTTP method,
+      // may use a different auth validator than GET /sp/campaigns
+      const postListRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns/list', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${t1.token}`,
-          'Amazon-Advertising-API-ClientId': ENTITY_ID,
+          'Amazon-Advertising-API-ClientId': creds.clientId,
           'Amazon-Advertising-API-Scope': IT_PROFILE,
+          'Content-Type': 'application/vnd.spCampaign.v3+json',
         },
+        body: JSON.stringify({ stateFilter: { include: ['ENABLED', 'PAUSED', 'ARCHIVED'] } }),
       })
-      let entityClientBody: unknown
-      try { entityClientBody = await entityClientRes.json() } catch { entityClientBody = await entityClientRes.text() }
-      results.v3_entityAsClientId = { status: entityClientRes.status, body: entityClientBody }
+      let postListBody: unknown
+      try { postListBody = await postListRes.json() } catch { postListBody = await postListRes.text() }
+      results.v3_POST_campaignsList = { status: postListRes.status, body: postListBody }
 
-      // Try with no ClientId header at all
-      const noClientIdRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
+      // Sponsored Brands (hsa) — different product, may use different validator
+      results.hsa_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/hsa/campaigns', t1.token, IT_PROFILE)
+
+      // Sponsored Display (sd) — another product type
+      results.sd_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/sd/campaigns', t1.token, IT_PROFILE)
+
+      // v2 reports — older reporting endpoint, likely uses legacy validator
+      const v2ReportRes = await fetch('https://advertising-api-eu.amazon.com/v2/reports', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${t1.token}`,
+          'Amazon-Advertising-API-ClientId': creds.clientId,
           'Amazon-Advertising-API-Scope': IT_PROFILE,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ reportDate: '20260516', metrics: 'impressions,clicks,cost', recordType: 'campaigns' }),
       })
-      let noClientIdBody: unknown
-      try { noClientIdBody = await noClientIdRes.json() } catch { noClientIdBody = await noClientIdRes.text() }
-      results.v3_noClientId = { status: noClientIdRes.status, body: noClientIdBody }
+      let v2ReportBody: unknown
+      try { v2ReportBody = await v2ReportRes.json() } catch { v2ReportBody = await v2ReportRes.text() }
+      results.v2_reports_POST = { status: v2ReportRes.status, body: v2ReportBody }
     }
 
     // Try client_credentials token with /sp/campaigns
