@@ -1,79 +1,36 @@
-import Link from 'next/link'
-import { CalendarClock, Download, History as HistoryIcon, LayoutGrid, Upload, Wand2 } from 'lucide-react'
-import PageHeader from '@/components/layout/PageHeader'
-import ActiveJobsStrip from './ActiveJobsStrip'
-import QueueStatsBanner from './QueueStatsBanner'
+import { getBackendUrl } from '@/lib/backend-url'
 import UnifiedFlatFileClient from './UnifiedFlatFileClient'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-/**
- * Server shell only — does NOT fetch data on the server.
- *
- * At 10k+ rows, server-fetching means Next.js inlines the entire JSON
- * payload into the HTML response (~6 MB before gzip), which blows past
- * the <1s page-load target. Instead the client component fetches on
- * mount, gets a small (gzipped) JSON payload directly, and renders
- * progressively.
- */
-export default function BulkOperationsPage() {
+interface PageProps {
+  searchParams: Promise<{ productIds?: string; search?: string }>
+}
+
+export default async function BulkOperationsPage({ searchParams }: PageProps) {
+  const { productIds, search } = await searchParams
+  const backend = getBackendUrl()
+
+  const qs = new URLSearchParams()
+  if (productIds) qs.set('productIds', productIds)
+  if (search) qs.set('search', search)
+
+  const [tmplRes, rowsRes] = await Promise.all([
+    fetch(`${backend}/api/flat-file/unified-template`, { cache: 'no-store' }).catch(() => null),
+    fetch(`${backend}/api/flat-file/unified-rows?${qs.toString()}`, { cache: 'no-store' }).catch(() => null),
+  ])
+
+  const tmplJson = tmplRes?.ok ? await tmplRes.json().catch(() => null) : null
+  const rowsJson = rowsRes?.ok ? await rowsRes.json().catch(() => null) : null
+
   return (
-    <div className="space-y-3">
-      <PageHeader
-        title="Bulk Operations"
-        description="Unified all-channel flat file · Amazon · eBay · Shopify · Cmd+S to save"
-        actions={
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/command-matrix"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              Command Matrix
-            </Link>
-            <Link
-              href="/bulk-operations/imports"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              Imports
-            </Link>
-            <Link
-              href="/bulk-operations/exports"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Exports
-            </Link>
-            <Link
-              href="/bulk-operations/automation"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              Automation
-            </Link>
-            <Link
-              href="/bulk-operations/schedules"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-            >
-              <CalendarClock className="w-3.5 h-3.5" />
-              Schedules
-            </Link>
-            <Link
-              href="/bulk-operations/history"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-11 sm:min-h-0 text-base font-medium text-slate-700 bg-white border border-slate-200 rounded hover:border-slate-300 hover:bg-slate-50 transition-colors dark:text-slate-300 dark:bg-slate-900 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-800"
-            >
-              <HistoryIcon className="w-3.5 h-3.5" />
-              Job History
-            </Link>
-          </div>
-        }
-      />
-      <QueueStatsBanner />
-      <ActiveJobsStrip />
-      <UnifiedFlatFileClient />
-    </div>
+    <UnifiedFlatFileClient
+      initialColumnGroups={tmplJson?.groups ?? []}
+      initialRows={rowsJson?.rows ?? []}
+      initialNextCursor={rowsJson?.nextCursor ?? null}
+      initialProductIds={productIds}
+      initialSearch={search}
+    />
   )
 }

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Layers, RefreshCw, Save } from 'lucide-react'
+import { CalendarClock, Download, History as HistoryIcon, Layers, Upload, Wand2 } from 'lucide-react'
+import Link from 'next/link'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type {
   BaseRow,
@@ -17,21 +18,21 @@ import { FFFilterPanel, type FFFilterState, FF_FILTER_DEFAULT } from '@/app/prod
 import { FFSavedViews, type FFViewState } from '@/app/products/_shared/FFSavedViews'
 import { UnifiedFilterExtras, type UnifiedFilterState, UNIFIED_FILTER_DEFAULT, unifiedFilterActiveCount } from './UnifiedFilterExtras'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Props from server ────────────────────────────────────────────────────────
 
-interface UnifiedRow extends BaseRow {
-  _isMaster: boolean
-  _parentId: string | null
-  _thumbnailUrl: string | null
-  sku: string
-  name: string
+interface Props {
+  initialColumnGroups: FlatFileColumnGroup[]
+  initialRows: BaseRow[]
+  initialNextCursor: string | null
+  initialProductIds?: string
+  initialSearch?: string
 }
 
 // ─── Blank row factory ────────────────────────────────────────────────────────
 
 function makeBlankRow(): BaseRow {
   return {
-    _rowId: `new-${Date.now()}`,
+    _rowId: `new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     _isNew: true,
     _dirty: true,
     _status: 'idle',
@@ -40,48 +41,66 @@ function makeBlankRow(): BaseRow {
   }
 }
 
-// ─── Row grouping key ─────────────────────────────────────────────────────────
+// ─── Row grouping key (parent → children) ────────────────────────────────────
 
 function getGroupKey(row: BaseRow): string {
-  const r = row as UnifiedRow
-  return r._parentId ?? r._rowId
+  return (row._parentId as string | null) ?? row._rowId
 }
 
-// ─── Row validation ───────────────────────────────────────────────────────────
+// ─── Validation ───────────────────────────────────────────────────────────────
 
 function validateRows(rows: BaseRow[]) {
   const issues: { level: 'error' | 'warn'; sku: string; field: string; msg: string }[] = []
   for (const row of rows) {
-    const r = row as UnifiedRow
-    if (!String(r.sku ?? '').trim()) {
-      issues.push({ level: 'error', sku: '', field: 'sku', msg: 'SKU is required' })
+    if (!String(row.sku ?? '').trim()) {
+      issues.push({ level: 'error', sku: String(row.sku ?? ''), field: 'sku', msg: 'SKU is required' })
     }
   }
   return issues
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Sub-page link button (matches existing page style) ──────────────────────
 
-export default function UnifiedFlatFileClient() {
+function SubPageLink({ href, icon: Icon, label }: { href: string; icon: React.ComponentType<{ className?: string }>; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {label}
+    </Link>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function UnifiedFlatFileClient({
+  initialColumnGroups,
+  initialRows,
+  initialNextCursor,
+  initialProductIds,
+  initialSearch,
+}: Props) {
   const searchParams = useSearchParams()
 
   // ── Data state ────────────────────────────────────────────────────
-  const [columnGroups, setColumnGroups] = useState<FlatFileColumnGroup[]>([])
-  const [initialRows, setInitialRows]   = useState<BaseRow[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState<string | null>(null)
-  const [nextCursor, setNextCursor]     = useState<string | null>(null)
+  const [columnGroups, setColumnGroups] = useState<FlatFileColumnGroup[]>(initialColumnGroups)
+  const [nextCursor, setNextCursor]     = useState<string | null>(initialNextCursor)
   const [loadingMore, setLoadingMore]   = useState(false)
 
   // ── Filters ───────────────────────────────────────────────────────
   const [filterOpen, setFilterOpen]       = useState(false)
   const [ffFilter, setFfFilter]           = useState<FFFilterState>(FF_FILTER_DEFAULT)
-  const [unifiedFilter, setUnifiedFilter] = useState<UnifiedFilterState>(UNIFIED_FILTER_DEFAULT)
+  const [unifiedFilter, setUnifiedFilter] = useState<UnifiedFilterState>({
+    ...UNIFIED_FILTER_DEFAULT,
+    search: initialSearch ?? '',
+  })
 
   // ── Saved views ───────────────────────────────────────────────────
-  const [closedGroups, setClosedGroups]   = useState<string[]>([])
-  const [sortConfig, setSortConfig]       = useState<any[]>([])
-  const [cfRules, setCfRules]             = useState<any[]>([])
+  const [closedGroups, setClosedGroups]     = useState<string[]>([])
+  const [sortConfig, setSortConfig]         = useState<any[]>([])
+  const [cfRules, setCfRules]               = useState<any[]>([])
   const [frozenColCount, setFrozenColCount] = useState(1)
 
   const currentViewState: FFViewState = useMemo(
@@ -89,91 +108,45 @@ export default function UnifiedFlatFileClient() {
     [closedGroups, ffFilter, sortConfig, cfRules, frozenColCount],
   )
 
-  // ── Draft recovery ────────────────────────────────────────────────
-  const [hasDraft, setHasDraft] = useState(false)
-  const DRAFT_KEY = 'unified-bulk-ops-draft'
-
-  // ── Build query string from filters ──────────────────────────────
-  const buildQueryString = useCallback(
+  // ── Build query string ────────────────────────────────────────────
+  const buildQs = useCallback(
     (cursor?: string) => {
       const params = new URLSearchParams()
-
-      // Deep-link: ?productIds from /products BulkActionBar
-      const productIds = searchParams.get('productIds')
+      const productIds = initialProductIds ?? searchParams.get('productIds')
       if (productIds) params.set('productIds', productIds)
-
-      if (unifiedFilter.search)       params.set('search', unifiedFilter.search)
-      if (unifiedFilter.productTypes.length)
-        params.set('productTypes', unifiedFilter.productTypes.join(','))
-      if (unifiedFilter.status.length)
-        params.set('status', unifiedFilter.status.join(','))
-      if (unifiedFilter.stockLevel !== 'all')
-        params.set('stockLevel', unifiedFilter.stockLevel)
-      if (ffFilter.parentage !== 'any') params.set('parentage', ffFilter.parentage)
-      if (ffFilter.hasAsin !== 'any')   params.set('hasAsin', ffFilter.hasAsin)
-      for (const bn of unifiedFilter.browseNodeIds)
-        params.append('browseNodeId', bn)
-      if (unifiedFilter.ebayCategory)  params.set('ebayCategory', unifiedFilter.ebayCategory)
+      if (unifiedFilter.search)             params.set('search', unifiedFilter.search)
+      if (unifiedFilter.productTypes.length) params.set('productTypes', unifiedFilter.productTypes.join(','))
+      if (unifiedFilter.status.length)      params.set('status', unifiedFilter.status.join(','))
+      if (unifiedFilter.stockLevel !== 'all') params.set('stockLevel', unifiedFilter.stockLevel)
+      if (ffFilter.parentage !== 'any')     params.set('parentage', ffFilter.parentage)
+      if (ffFilter.hasAsin !== 'any')       params.set('hasAsin', ffFilter.hasAsin)
+      for (const bn of unifiedFilter.browseNodeIds) params.append('browseNodeId', bn)
+      if (unifiedFilter.ebayCategory)       params.set('ebayCategory', unifiedFilter.ebayCategory)
       if (cursor) params.set('cursor', cursor)
-
       return params.toString()
     },
-    [searchParams, ffFilter, unifiedFilter],
+    [initialProductIds, searchParams, ffFilter, unifiedFilter],
   )
 
-  // ── Fetch template + rows ─────────────────────────────────────────
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    const backend = getBackendUrl()
-    try {
-      const [tmplRes, rowsRes] = await Promise.all([
-        fetch(`${backend}/api/flat-file/unified-template`, { cache: 'no-store' }),
-        fetch(`${backend}/api/flat-file/unified-rows?${buildQueryString()}`, { cache: 'no-store' }),
-      ])
-      if (!tmplRes.ok) throw new Error(`Template: HTTP ${tmplRes.status}`)
-      if (!rowsRes.ok) throw new Error(`Rows: HTTP ${rowsRes.status}`)
-      const tmplJson = await tmplRes.json()
-      const rowsJson = await rowsRes.json()
-      setColumnGroups(tmplJson.groups ?? [])
-      setInitialRows(rowsJson.rows ?? [])
-      setNextCursor(rowsJson.nextCursor ?? null)
+  // ── Refetch on filter change (triggers onReload via key prop change) ─
+  const [filterVersion, setFilterVersion] = useState(0)
+  void filterVersion // consumed by FlatFileGrid key prop below
+  useEffect(() => { setFilterVersion((v) => v + 1) }, [ffFilter, unifiedFilter])
 
-      // Check for draft
-      try {
-        const draft = localStorage.getItem(DRAFT_KEY)
-        setHasDraft(!!draft)
-      } catch {}
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-    }
-  }, [buildQueryString])
+  // ── onReload (called by FlatFileGrid on Reload action) ───────────
+  const onReload = useCallback(async (): Promise<BaseRow[]> => {
+    const res = await fetch(
+      `${getBackendUrl()}/api/flat-file/unified-rows?${buildQs()}`,
+      { cache: 'no-store' },
+    )
+    const json = await res.json()
+    setColumnGroups(prev => prev) // template stays stable
+    setNextCursor(json.nextCursor ?? null)
+    return json.rows ?? []
+  }, [buildQs])
 
-  useEffect(() => { void fetchData() }, [fetchData])
-
-  // ── Load more ─────────────────────────────────────────────────────
-  const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return
-    setLoadingMore(true)
-    const backend = getBackendUrl()
-    try {
-      const res = await fetch(
-        `${backend}/api/flat-file/unified-rows?${buildQueryString(nextCursor)}`,
-        { cache: 'no-store' },
-      )
-      const json = await res.json()
-      setInitialRows((prev) => [...prev, ...(json.rows ?? [])])
-      setNextCursor(json.nextCursor ?? null)
-    } finally {
-      setLoadingMore(false)
-    }
-  }, [nextCursor, loadingMore, buildQueryString])
-
-  // ── Save ──────────────────────────────────────────────────────────
+  // ── onSave ────────────────────────────────────────────────────────
   const onSave = useCallback(async (dirty: BaseRow[]): Promise<{ saved: number }> => {
-    // Collect all changes as individual column changes
     const changes: Array<{ rowId: string; colId: string; value: unknown }> = []
     for (const row of dirty) {
       const rowId = row._rowId as string
@@ -182,31 +155,15 @@ export default function UnifiedFlatFileClient() {
         changes.push({ rowId, colId, value })
       }
     }
-    const backend = getBackendUrl()
-    const res = await fetch(`${backend}/api/flat-file/unified-rows`, {
+    const res = await fetch(`${getBackendUrl()}/api/flat-file/unified-rows`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ changes }),
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? `Save failed: HTTP ${res.status}`)
-    // Clear draft on successful save
-    try { localStorage.removeItem(DRAFT_KEY) } catch {}
-    setHasDraft(false)
     return { saved: json.saved ?? dirty.length }
   }, [])
-
-  // ── Reload ────────────────────────────────────────────────────────
-  const onReload = useCallback(async (): Promise<BaseRow[]> => {
-    const backend = getBackendUrl()
-    const res = await fetch(
-      `${backend}/api/flat-file/unified-rows?${buildQueryString()}`,
-      { cache: 'no-store' },
-    )
-    const json = await res.json()
-    setNextCursor(json.nextCursor ?? null)
-    return json.rows ?? []
-  }, [buildQueryString])
 
   // ── Saved views apply ─────────────────────────────────────────────
   const handleApplyView = useCallback((state: FFViewState) => {
@@ -217,7 +174,32 @@ export default function UnifiedFlatFileClient() {
     setFrozenColCount(state.frozenColCount)
   }, [])
 
-  // ── Filter bar (rendered inside FlatFileGrid via renderBar3Left) ──
+  // ── Load more (cursor pagination) ─────────────────────────────────
+  const [moreRows, setMoreRows] = useState<BaseRow[]>([])
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/flat-file/unified-rows?${buildQs(nextCursor)}`,
+        { cache: 'no-store' },
+      )
+      const json = await res.json()
+      setMoreRows((prev) => [...prev, ...(json.rows ?? [])])
+      setNextCursor(json.nextCursor ?? null)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [nextCursor, loadingMore, buildQs])
+
+  // Combined initial + loaded rows
+  const allInitialRows = useMemo(
+    () => [...initialRows, ...moreRows] as BaseRow[],
+    [initialRows, moreRows],
+  )
+
+  // ── renderBar3Left ────────────────────────────────────────────────
+  // Matches eBay's pattern — shown in Bar 3 left slot
   const renderBar3Left = useCallback(() => (
     <div className="flex items-center gap-2">
       <FFFilterPanel
@@ -227,10 +209,7 @@ export default function UnifiedFlatFileClient() {
         onChange={setFfFilter}
         extraActiveCount={unifiedFilterActiveCount(unifiedFilter)}
         extraDimensions={
-          <UnifiedFilterExtras
-            value={unifiedFilter}
-            onChange={setUnifiedFilter}
-          />
+          <UnifiedFilterExtras value={unifiedFilter} onChange={setUnifiedFilter} />
         }
       />
       <FFSavedViews
@@ -241,84 +220,55 @@ export default function UnifiedFlatFileClient() {
     </div>
   ), [filterOpen, ffFilter, unifiedFilter, currentViewState, handleApplyView])
 
-  // ── Feed banner: draft recovery + load more ───────────────────────
+  // ── renderPushExtras ──────────────────────────────────────────────
+  // Sub-page links in Bar 1 (right side, after Save button)
+  const renderPushExtras = useCallback((_ctx: PushExtrasCtx) => (
+    <div className="flex items-center gap-0.5 ml-1">
+      <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mr-0.5 flex-shrink-0" />
+      <SubPageLink href="/bulk-operations/imports"   icon={Upload}       label="Imports" />
+      <SubPageLink href="/bulk-operations/exports"   icon={Download}     label="Exports" />
+      <SubPageLink href="/bulk-operations/automation" icon={Wand2}       label="Automation" />
+      <SubPageLink href="/bulk-operations/schedules" icon={CalendarClock} label="Schedules" />
+      <SubPageLink href="/bulk-operations/history"   icon={HistoryIcon}  label="History" />
+    </div>
+  ), [])
+
+  // ── renderFeedBanner ──────────────────────────────────────────────
   const renderFeedBanner = useCallback(() => (
-    <>
-      {hasDraft && (
-        <div className="flex items-center gap-3 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
-          <Save className="w-3.5 h-3.5 flex-shrink-0" />
-          You have unsaved draft changes from a previous session.
-          <button
-            onClick={() => {
-              try {
-                const draft = localStorage.getItem(DRAFT_KEY)
-                if (draft) {
-                  // Draft recovery: for now just notify; full undo-redo wiring in Phase 5
-                  console.info('[UnifiedFlatFile] Draft recovery pending Phase 5')
-                }
-              } catch {}
-              setHasDraft(false)
-            }}
-            className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-200"
-          >
-            Restore
-          </button>
-          <button
-            onClick={() => {
-              try { localStorage.removeItem(DRAFT_KEY) } catch {}
-              setHasDraft(false)
-            }}
-            className="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-      {nextCursor && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900 text-xs text-blue-700 dark:text-blue-300">
-          <RefreshCw className="w-3.5 h-3.5" />
-          Showing first {initialRows.length} rows.
-          <button
-            onClick={loadMore}
-            disabled={loadingMore}
-            className="font-semibold underline hover:text-blue-900 dark:hover:text-blue-100 disabled:opacity-50"
-          >
-            {loadingMore ? 'Loading…' : 'Load more'}
-          </button>
-        </div>
-      )}
-    </>
-  ), [hasDraft, nextCursor, initialRows.length, loadingMore, loadMore])
-
-  // ── Error state ───────────────────────────────────────────────────
-  if (error && !loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-sm text-red-600 dark:text-red-400">
-        Failed to load unified catalog: {error}
+    nextCursor ? (
+      <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900 text-xs text-blue-700 dark:text-blue-300">
+        <span>Showing first {allInitialRows.length} rows —</span>
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="font-semibold underline hover:text-blue-900 dark:hover:text-blue-100 disabled:opacity-50"
+        >
+          {loadingMore ? 'Loading…' : 'Load more'}
+        </button>
       </div>
-    )
-  }
+    ) : null
+  ), [nextCursor, allInitialRows.length, loadingMore, loadMore])
 
-  // ── Grid ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   return (
     <FlatFileGrid
       channel="all"
       title="Bulk Operations"
       titleIcon={<Layers className="w-4 h-4 text-slate-400" />}
-      marketplace="ALL"
+      marketplace="ALL CHANNELS"
       storageKey="unified-bulk-ops"
       columnGroups={columnGroups}
-      initialRows={loading ? [] : initialRows}
+      initialRows={allInitialRows}
       makeBlankRow={makeBlankRow}
-      minRows={loading ? 20 : 10}
+      minRows={15}
       getGroupKey={getGroupKey}
       validate={validateRows}
       onSave={onSave}
       onReload={onReload}
       renderBar3Left={renderBar3Left}
+      renderPushExtras={renderPushExtras}
       renderFeedBanner={renderFeedBanner}
       renderModals={(_ctx: ModalsCtx) => null}
-      renderPushExtras={(_ctx: PushExtrasCtx) => null}
       renderToolbarFetch={(_ctx: ToolbarFetchCtx) => null}
       renderToolbarImport={(_ctx: ToolbarImportCtx) => null}
     />
