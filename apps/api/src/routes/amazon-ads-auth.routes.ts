@@ -125,19 +125,38 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (t1.token) {
-      // 1. v3 path, with scope header (current, failing)
-      results.v3_withScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
-      // 2. v3 path, NO scope header (see what error changes)
-      results.v3_noScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token)
-      // 3. Old v2 path (might still work with Atza| tokens)
-      results.v2_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/campaigns', t1.token, IT_PROFILE)
-      // 4. v3 with stateFilter (different URL)
-      results.v3_withFilter = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns?stateFilter=enabled,paused,archived', t1.token, IT_PROFILE)
-    }
+      // 1. Standard Bearer + Scope header (known failing)
+      results.v3_bearerWithScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
 
-    if (t2.token) {
-      // 5. v3 path with scoped token
-      results.v3_scopedToken = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t2.token, IT_PROFILE)
+      // 2. SP-API style: token in x-amz-access-token, no Authorization header
+      const spStyleRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns', {
+        headers: {
+          'x-amz-access-token': t1.token,
+          'Amazon-Advertising-API-ClientId': creds.clientId,
+          'Amazon-Advertising-API-Scope': IT_PROFILE,
+        },
+      })
+      let spStyleBody: unknown
+      try { spStyleBody = await spStyleRes.json() } catch { spStyleBody = await spStyleRes.text() }
+      results.v3_xAmzAccessToken = { status: spStyleRes.status, body: spStyleBody }
+
+      // 3. Entity ID as scope instead of profile ID
+      const ENTITY_ID = 'A1VRHKTGYO1JNU'
+      results.v3_entityIdScope = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, ENTITY_ID)
+
+      // 4. Profile ID in query string, no scope header
+      const qsRes = await fetch(`https://advertising-api-eu.amazon.com/sp/campaigns?profileId=${IT_PROFILE}`, {
+        headers: {
+          Authorization: `Bearer ${t1.token}`,
+          'Amazon-Advertising-API-ClientId': creds.clientId,
+        },
+      })
+      let qsBody: unknown
+      try { qsBody = await qsRes.json() } catch { qsBody = await qsRes.text() }
+      results.v3_profileInQueryString = { status: qsRes.status, body: qsBody }
+
+      // 5. Completely different path: /advertising/v3/sp/campaigns (alt URL pattern)
+      results.v3_altPath = await tryUrl('https://advertising-api-eu.amazon.com/advertising/v3/sp/campaigns', t1.token, IT_PROFILE)
     }
 
     return reply.send(results)
