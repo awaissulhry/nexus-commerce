@@ -161,20 +161,20 @@ interface Props {
 }
 
 const ALL_COLUMNS = [
-  { key: 'thumb', label: '', width: 40 },
-  { key: 'product', label: 'Product', width: 280 },
-  { key: 'channel', label: 'Channel', width: 100 },
-  { key: 'marketplace', label: 'Market', width: 80 },
-  { key: 'status', label: 'Status', width: 110 },
-  { key: 'syncStatus', label: 'Sync', width: 90 },
-  { key: 'price', label: 'Price', width: 110 },
-  { key: 'pricingRule', label: 'Rule', width: 110 },
-  { key: 'masterDelta', label: 'vs Master', width: 90 },
-  { key: 'quantity', label: 'Stock', width: 80 },
-  { key: 'follow', label: 'Follow', width: 80 },
-  { key: 'externalId', label: 'External ID', width: 140 },
-  { key: 'lastSync', label: 'Last Sync', width: 110 },
-  { key: 'actions', label: '', width: 140 },
+  { key: 'thumb',       label: '',            width: 64 },
+  { key: 'product',     label: 'Product',     subLabel: 'Name | SKU',       width: 360 },
+  { key: 'channel',     label: 'Channel',     subLabel: 'Platform',         width: 110 },
+  { key: 'marketplace', label: 'Market',      subLabel: 'Code',             width: 80  },
+  { key: 'status',      label: 'Status',      subLabel: 'Listing state',    width: 130 },
+  { key: 'syncStatus',  label: 'Sync',        subLabel: 'Sync state',       width: 110 },
+  { key: 'price',       label: 'Price',       subLabel: 'Channel price',    width: 120 },
+  { key: 'pricingRule', label: 'Rule',        subLabel: 'Rule type',        width: 120 },
+  { key: 'masterDelta', label: 'vs Master',   subLabel: 'Price delta',      width: 100 },
+  { key: 'quantity',    label: 'Stock',       subLabel: 'Qty override',     width: 90  },
+  { key: 'follow',      label: 'Follow',      subLabel: 'T · P · Q flags',  width: 90  },
+  { key: 'externalId',  label: 'External ID', subLabel: 'ID / ASIN',        width: 150 },
+  { key: 'lastSync',    label: 'Last Sync',   subLabel: 'Timestamp',        width: 120 },
+  { key: 'actions',     label: '',                                           width: 140 },
 ] as const
 
 const DEFAULT_VISIBLE = ['thumb', 'product', 'channel', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'lastSync', 'actions']
@@ -1511,7 +1511,7 @@ function ToggleChip({ active, label, onClick, tone }: { active: boolean; label: 
 // ────────────────────────────────────────────────────────────────────
 function GridLens(props: {
   grid: { listings: Listing[]; total: number; totalPages: number; loading: boolean; error: string | null }
-  visible: ReadonlyArray<{ key: string; label: string; width: number }>
+  visible: ReadonlyArray<{ key: string; label: string; subLabel?: string; width: number }>
   visibleColumns: string[]
   setVisibleColumns: (cols: string[]) => void
   columnPickerOpen: boolean
@@ -1803,10 +1803,11 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
   switch (col) {
     case 'thumb':
       return l.product.thumbnailUrl ? (
-        <img src={l.product.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 dark:bg-slate-800" />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={l.product.thumbnailUrl} alt="" className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800" />
       ) : (
-        <div className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
-          <Package size={14} />
+        <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+          <Package size={16} />
         </div>
       )
     case 'product':
