@@ -138,7 +138,10 @@ const STOCK_SORT_KEYS: Record<string, string> = {
   onHand: 'onHand', reserved: 'reserved', available: 'available',
   cost: 'cost', value: 'value', abcClass: 'abcClass', updated: 'updated',
 }
-type StockGridRow = StockRow & GridLensRow
+type StockGridRow = StockRow & GridLensRow & {
+  /** F.5 — FBA / own-warehouse quantity split, populated only on isParent=true rows. */
+  _breakdown?: { fba: number; own: number; fbaAvailable: number; ownAvailable: number }
+}
 
 // Stable empties for unused VirtualizedGrid props in table mode.
 const _GRID_EMPTY_SET = new Set<string>()
@@ -920,14 +923,18 @@ export default function StockWorkspace() {
       const totalReserved  = children.reduce((s, c) => s + c.reserved, 0)
       const totalAvailable = children.reduce((s, c) => s + c.available, 0)
       const locCount = new Set(children.map((c) => c.location.id)).size
-      const locTypes = new Set(children.map((c) => c.location.type))
-      // 3-level breadcrumb: when this parent is itself a child, surface
-      // the grandparent so operators can tell "FBA parent of GALE-JACKET"
-      // from "FBM parent of GALE-JACKET" at a glance.
       const locSuffix = locCount > 1
         ? `${locCount} loc`
         : children[0]?.location.code ?? `${locCount} loc`
-      void locTypes // reserved for F.4 fulfillment-type filter
+      // F.5 — FBA vs own-warehouse sub-totals for the onHand cell.
+      const fbaChildren = children.filter((c) => c.location.type === 'AMAZON_FBA')
+      const ownChildren = children.filter((c) => c.location.type === 'WAREHOUSE')
+      const breakdown = (fbaChildren.length > 0 || ownChildren.length > 0) ? {
+        fba:          fbaChildren.reduce((s, c) => s + c.quantity, 0),
+        own:          ownChildren.reduce((s, c) => s + c.quantity, 0),
+        fbaAvailable: fbaChildren.reduce((s, c) => s + c.available, 0),
+        ownAvailable: ownChildren.reduce((s, c) => s + c.available, 0),
+      } : undefined
       return {
         id: pid,
         isParent: true as const,
@@ -956,6 +963,7 @@ export default function StockWorkspace() {
           parentProduct: null,
         },
         variation: null,
+        _breakdown: breakdown,
       }
     })
 
@@ -994,6 +1002,22 @@ export default function StockWorkspace() {
             {grandparentSku && <span className="ml-1 text-slate-400">· under {grandparentSku}</span>}
           </div>
         </button>
+      )
+    }
+    if (colKey === 'onHand' && row.isParent && row._breakdown) {
+      const { fba, own } = row._breakdown
+      const hasSplit = fba > 0 || own > 0
+      const stockTone = row.quantity === 0 ? 'text-rose-600' : 'text-slate-900 dark:text-slate-100'
+      return (
+        <div className="text-right">
+          <div className={`tabular-nums font-semibold ${stockTone}`}>{row.quantity}</div>
+          {hasSplit && (
+            <div className="text-xs mt-0.5 flex items-center justify-end gap-2">
+              {fba > 0 && <span className="text-orange-600 dark:text-orange-400 tabular-nums">FBA {fba}</span>}
+              {own > 0 && <span className="text-emerald-700 dark:text-emerald-400 tabular-nums">Own {own}</span>}
+            </div>
+          )}
+        </div>
       )
     }
     if (colKey === 'open') {
