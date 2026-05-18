@@ -106,6 +106,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         id: true,
         name: true,
         type: true,
+        adProduct: true,
         status: true,
         marketplace: true,
         externalCampaignId: true,
@@ -121,6 +122,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         trueProfitMarginPct: true,
         lastSyncedAt: true,
         lastSyncStatus: true,
+        // H.2: v1 export populates these — surface in the table for
+        // operators to see *why* a campaign isn't serving.
+        deliveryStatus: true,
+        deliveryReasons: true,
       },
     })
     reply.header('Cache-Control', 'private, max-age=60')

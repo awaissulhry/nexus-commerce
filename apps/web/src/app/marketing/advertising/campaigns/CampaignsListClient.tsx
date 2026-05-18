@@ -19,6 +19,7 @@ interface Campaign {
   id: string
   name: string
   type: 'SP' | 'SB' | 'SD'
+  adProduct: string | null // 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY'
   status: 'ENABLED' | 'PAUSED' | 'ARCHIVED' | 'DRAFT'
   marketplace: string | null
   externalCampaignId: string | null
@@ -34,6 +35,9 @@ interface Campaign {
   trueProfitMarginPct: string | null
   lastSyncedAt: string | null
   lastSyncStatus: string | null
+  // H.2 v1 export signals — surface in the table.
+  deliveryStatus: string | null      // DELIVERING | NOT_DELIVERING
+  deliveryReasons: string[]          // CAMPAIGN_PAUSED, OUT_OF_BUDGET, etc.
 }
 
 interface UndoEntry {
@@ -277,6 +281,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
               <th className="px-3 py-2">Type</th>
               <th className="px-3 py-2">Budget €/d</th>
               <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Delivery</th>
               <ThSort label="Spend" k="spend" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('spend')} />
               <ThSort label="Sales" k="sales" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('sales')} />
               <ThSort label="ACOS" k="acos" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('acos')} />
@@ -289,7 +294,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                <td colSpan={13} className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
                   No campaigns. Run sync (POST /api/advertising/cron/ads-sync/trigger) to import sandbox fixtures.
                 </td>
               </tr>
@@ -347,6 +352,9 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                     </td>
                     <td className="px-3 py-2">
                       <StatusChip status={c.status} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <DeliveryChip status={c.deliveryStatus} reasons={c.deliveryReasons ?? []} />
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {formatEurAmount(Number(c.spend))}
@@ -467,6 +475,53 @@ function StatusChip({ status }: { status: Campaign['status'] }) {
   return (
     <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ring-inset ${cls}`}>
       {label}
+    </span>
+  )
+}
+
+// H.2: surface v1 export's deliveryStatus + deliveryReasons. Operators
+// see *why* a campaign isn't serving (paused / out-of-budget / suspended)
+// without a separate Amazon UI dive.
+const DELIVERY_REASON_LABEL: Record<string, string> = {
+  CAMPAIGN_PAUSED: 'Paused',
+  CAMPAIGN_ARCHIVED: 'Archived',
+  CAMPAIGN_OUT_OF_BUDGET: 'Budget',
+  CAMPAIGN_INCOMPLETE: 'Incomplete',
+  CAMPAIGN_STATUS_ENABLED: 'Live',
+  AD_GROUP_PAUSED: 'AG Paused',
+  AD_GROUP_INCOMPLETE: 'AG Incomplete',
+  ENDED: 'Ended',
+  PENDING_START_DATE: 'Pending',
+  BILLING_ERROR: 'Billing',
+  ACCOUNT_OUT_OF_BUDGET: 'Acct Budget',
+  PORTFOLIO_OUT_OF_BUDGET: 'Portfolio Budget',
+  REJECTED: 'Rejected',
+  IN_MODERATION_REVIEW: 'Review',
+}
+function DeliveryChip({ status, reasons }: { status: string | null; reasons: string[] }) {
+  if (!status) {
+    return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+  }
+  if (status === 'DELIVERING') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Live
+      </span>
+    )
+  }
+  // NOT_DELIVERING — show first reason as a chip, others in tooltip
+  const first = reasons[0] ?? 'UNKNOWN'
+  const label = DELIVERY_REASON_LABEL[first] ?? first.replace(/_/g, ' ')
+  const extra = reasons.length > 1 ? ` (+${reasons.length - 1} more)` : ''
+  const tooltip = reasons.join(', ')
+  return (
+    <span
+      title={tooltip}
+      className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+      {label}{extra}
     </span>
   )
 }

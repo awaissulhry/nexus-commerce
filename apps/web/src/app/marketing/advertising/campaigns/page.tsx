@@ -23,6 +23,7 @@ interface Campaign {
   id: string
   name: string
   type: 'SP' | 'SB' | 'SD'
+  adProduct: string | null
   status: 'ENABLED' | 'PAUSED' | 'ARCHIVED' | 'DRAFT'
   marketplace: string | null
   externalCampaignId: string | null
@@ -38,6 +39,8 @@ interface Campaign {
   trueProfitMarginPct: string | null
   lastSyncedAt: string | null
   lastSyncStatus: string | null
+  deliveryStatus: string | null
+  deliveryReasons: string[]
 }
 
 interface CampaignsResponse {
