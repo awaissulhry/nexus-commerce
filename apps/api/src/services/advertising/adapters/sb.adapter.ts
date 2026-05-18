@@ -1,24 +1,24 @@
 /**
- * Sponsored Brands adapter — ready but blocked.
+ * Sponsored Brands adapter — LIVE on v4 (Phase B).
  *
- * Like SP, /hsa/* (Amazon's path for SB campaign endpoints) returns 403
- * with the JWT-validator error on profile-scoped requests. The list
- * methods below stub return empty arrays — flipping `live=true` plus
- * implementing the four list methods against /sb/* or the unified
- * /amazon-ads/v1/* endpoints (when they unblock) activates the adapter.
+ * Phase A probes confirmed POST /sb/v4/campaigns/list (with the
+ * vnd.sbcampaignresource.v4+json Accept header) returns 200 for our
+ * Atza| LWA token where the legacy GET /sb/v4/campaigns returned 404.
  *
- * SB-specific shape considerations when wiring:
- *   - SB campaigns carry creative assets (headline, brand logo URL,
- *     landing page URL, optional video) → Campaign.creativeAssetJson
- *   - SB uses a different default-bid model on ad groups → AdGroup.bidStrategyJson
- *   - SB keywords use the same v3 path as SP keywords
- *   - SB has a separate negative-keywords endpoint
+ * SB v4 uses similar paginated POST /list pattern to SP v3 — the
+ * listV3Paginated helper in ads-api-client.ts is reused. SB has no
+ * "product ads" concept (it has creative-bearing ads attached to ad
+ * groups instead); listProductAds returns an empty array. SB creative
+ * ingestion (headline, brand logo, video) can land as a follow-up
+ * that writes to Campaign.creativeAssetJson.
  */
 
+import {
+  listSbCampaigns,
+  listSbAdGroups,
+  listSbTargets,
+} from '../ads-api-client.js'
 import type {
-  AdsCampaignDTO,
-  AdsAdGroupDTO,
-  AdsTargetDTO,
   AdsProductAdDTO,
   ClientContext,
 } from '../ads-api-client.js'
@@ -27,14 +27,12 @@ import type { AdsAdapter } from './types.js'
 export const sbAdapter: AdsAdapter = {
   adProduct: 'SPONSORED_BRANDS',
   campaignTypeDtoValue: 'sponsoredBrands',
-  live: false,
-  liveBlockerReason:
-    'Amazon /hsa/* (Sponsored Brands) endpoints reject Atza| LWA tokens with the same JWT-validator error as /sp/*',
+  live: true,
 
-  // Stubs return empty so an accidental call doesn't 403; the orchestrator
-  // checks `live` first and skips entirely.
-  listCampaigns: async (_ctx: ClientContext): Promise<AdsCampaignDTO[]> => [],
-  listAdGroups: async (_ctx: ClientContext): Promise<AdsAdGroupDTO[]> => [],
-  listTargets: async (_ctx: ClientContext): Promise<AdsTargetDTO[]> => [],
+  listCampaigns: listSbCampaigns,
+  listAdGroups: listSbAdGroups,
+  listTargets: listSbTargets,
+  // SB has no SP-style product ads; creatives are attached directly to
+  // ad groups. Returns empty until SB creative ingestion lands.
   listProductAds: async (_ctx: ClientContext): Promise<AdsProductAdDTO[]> => [],
 }

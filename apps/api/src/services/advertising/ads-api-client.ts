@@ -147,6 +147,10 @@ interface LiveCallOptions {
   // 'application/vnd.createasyncreportrequest.v3+json'; per-resource v3
   // endpoints want their own vnd.* type. Defaults to application/json.
   contentType?: string
+  // Optional Accept override. v3 endpoints require the versioned MIME
+  // type as Accept header — same value as Content-Type for symmetric
+  // negotiation. Defaults to '*/*' (let server pick).
+  acceptHeader?: string
 }
 
 interface AdsCredentials {
@@ -257,6 +261,10 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   if (opts.body != null) {
     headers['Content-Type'] = opts.contentType ?? 'application/json'
   }
+  // Accept header — v3 endpoints require versioned vnd.* MIME types.
+  if (opts.acceptHeader) {
+    headers['Accept'] = opts.acceptHeader
+  }
   // Scope header is only required for profile-scoped endpoints.
   if (opts.profileId !== 'n/a') {
     headers['Amazon-Advertising-API-Scope'] = opts.profileId
@@ -293,29 +301,107 @@ export async function listProfiles(): Promise<AdsProfileDTO[]> {
   })
 }
 
+// ── v3 API helpers (Phase B) ─────────────────────────────────────────
+//
+// Amazon's current SP/SB endpoints use POST /list with versioned MIME
+// types and paginated `{ items, nextToken }` envelopes. v3 state values
+// arrive uppercase ('ENABLED') and dates arrive ISO ('2026-01-01');
+// normalize both to the lowercase / YYYYMMDD shape the sync service
+// already expects from the SD adapter so the rest of the pipeline is
+// unchanged.
+
+function normalizeStateV3(s: unknown): string {
+  if (typeof s !== 'string') return 'enabled'
+  return s.toLowerCase()
+}
+
+function stripDateDashes(s: unknown): string {
+  if (typeof s !== 'string') return ''
+  return s.replace(/-/g, '')
+}
+
+const V3_BIDDING_MAP: Record<string, AdsCampaignDTO['biddingStrategy']> = {
+  LEGACY_FOR_SALES: 'legacyForSales',
+  AUTO_FOR_SALES:   'autoForSales',
+  MANUAL:           'manual',
+}
+
+function normalizeBiddingV3(v: unknown): AdsCampaignDTO['biddingStrategy'] | undefined {
+  if (typeof v !== 'string') return undefined
+  return V3_BIDDING_MAP[v]
+}
+
+/**
+ * Generic v3 paginated list executor. Pulls every page (max 10 — guards
+ * against runaway loops) and returns the flattened item array. The
+ * caller passes a transformer that converts each raw page item into our
+ * DTO shape.
+ */
+async function listV3Paginated<TItem>(args: {
+  ctx: ClientContext
+  path: string
+  accept: string
+  itemsKey: string
+  extraFilters?: Record<string, unknown>
+}): Promise<Array<Record<string, unknown>>> {
+  const MAX_PAGES = 10
+  const PAGE_SIZE = 100
+  const out: Array<Record<string, unknown>> = []
+  let nextToken: string | undefined
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const body: Record<string, unknown> = {
+      stateFilter: { include: ['ENABLED', 'PAUSED', 'ARCHIVED'] },
+      maxResults: PAGE_SIZE,
+      ...(args.extraFilters ?? {}),
+    }
+    if (nextToken) body.nextToken = nextToken
+    const resp = await liveCall<Record<string, unknown>>({
+      ...args.ctx,
+      method: 'POST',
+      path: args.path,
+      body,
+      contentType: args.accept,
+      acceptHeader: args.accept,
+    })
+    const items = (resp[args.itemsKey] as Array<Record<string, unknown>> | undefined) ?? []
+    out.push(...items)
+    const next = resp.nextToken
+    if (typeof next !== 'string' || next.length === 0) break
+    nextToken = next
+  }
+  return out
+}
+
 export async function listCampaigns(ctx: ClientContext): Promise<AdsCampaignDTO[]> {
   if (adsMode() === 'sandbox') {
     logger.debug('[ADS-SANDBOX] listCampaigns', { profileId: ctx.profileId })
     return loadFixture<AdsCampaignDTO[]>('campaigns', [])
   }
-  const raw = await liveCall<Array<Record<string, unknown>>>({
-    ...ctx,
-    method: 'GET',
-    path: '/sp/campaigns',
+  // v3: POST /sp/campaigns/list with vnd.spCampaign.v3+json envelope.
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sp/campaigns/list',
+    accept: 'application/vnd.spCampaign.v3+json',
+    itemsKey: 'campaigns',
   })
-  // Same boundary normalization as SD — Amazon returns IDs as JSON
-  // numbers, but Prisma stores them as strings.
-  return raw.map((c) => ({
-    campaignId: toStrId(c.campaignId as number | string),
-    name: c.name as string,
-    campaignType: 'sponsoredProducts' as const,
-    state: c.state as string,
-    dailyBudget: (c.dailyBudget as number) ?? 0,
-    startDate: (c.startDate as string) ?? '',
-    endDate: c.endDate as string | undefined,
-    portfolioId: c.portfolioId != null ? toStrId(c.portfolioId as number | string) : undefined,
-    biddingStrategy: c.biddingStrategy as AdsCampaignDTO['biddingStrategy'],
-  }))
+  return raw.map((c) => {
+    // SP v3 budget shape: { budget: 50.0, budgetType: "DAILY" }
+    const budgetObj = (c.budget as Record<string, unknown> | undefined) ?? {}
+    const dailyBudget = typeof budgetObj.budget === 'number' ? budgetObj.budget : 0
+    // SP v3 dynamic bidding: { strategy: "AUTO_FOR_SALES", ... }
+    const dynBid = (c.dynamicBidding as Record<string, unknown> | undefined) ?? {}
+    return {
+      campaignId: toStrId(c.campaignId as number | string),
+      name: c.name as string,
+      campaignType: 'sponsoredProducts' as const,
+      state: normalizeStateV3(c.state),
+      dailyBudget,
+      startDate: stripDateDashes(c.startDate),
+      endDate: typeof c.endDate === 'string' ? stripDateDashes(c.endDate) : undefined,
+      portfolioId: c.portfolioId != null ? toStrId(c.portfolioId as number | string) : undefined,
+      biddingStrategy: normalizeBiddingV3(dynBid.strategy),
+    }
+  })
 }
 
 export async function getCampaign(
@@ -326,11 +412,11 @@ export async function getCampaign(
     const all = await loadFixture<AdsCampaignDTO[]>('campaigns', [])
     return all.find((c) => c.campaignId === externalCampaignId) ?? null
   }
-  return liveCall<AdsCampaignDTO | null>({
+  // v3: list with campaignIdFilter to fetch a single record.
+  const list = await listCampaigns({
     ...ctx,
-    method: 'GET',
-    path: `/sp/campaigns/${externalCampaignId}`,
   })
+  return list.find((c) => c.campaignId === externalCampaignId) ?? null
 }
 
 export interface CampaignPatch {
@@ -353,11 +439,28 @@ export async function updateCampaign(
     })
     return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch } }
   }
+  // v3: PUT /sp/campaigns with batch body. Single update is wrapped
+  // in a campaigns array. v3 state values are uppercase; budget is
+  // nested under {budget: {budget, budgetType}}.
+  const v3Campaign: Record<string, unknown> = { campaignId: externalCampaignId }
+  if (patch.state) v3Campaign.state = patch.state.toUpperCase()
+  if (patch.dailyBudget != null) v3Campaign.budget = { budget: patch.dailyBudget, budgetType: 'DAILY' }
+  if (patch.biddingStrategy) {
+    const map: Record<string, string> = {
+      legacyForSales: 'LEGACY_FOR_SALES',
+      autoForSales: 'AUTO_FOR_SALES',
+      manual: 'MANUAL',
+    }
+    v3Campaign.dynamicBidding = { strategy: map[patch.biddingStrategy] }
+  }
+  if (patch.endDate !== undefined) v3Campaign.endDate = patch.endDate
   const response = await liveCall<unknown>({
     ...ctx,
     method: 'PUT',
-    path: `/sp/campaigns/${externalCampaignId}`,
-    body: patch,
+    path: '/sp/campaigns',
+    body: { campaigns: [v3Campaign] },
+    contentType: 'application/vnd.spCampaign.v3+json',
+    acceptHeader: 'application/vnd.spCampaign.v3+json',
   })
   return { ok: true, mode: 'live', rawResponse: response }
 }
@@ -366,16 +469,18 @@ export async function listAdGroups(ctx: ClientContext): Promise<AdsAdGroupDTO[]>
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsAdGroupDTO[]>('adGroups', [])
   }
-  const raw = await liveCall<Array<Record<string, unknown>>>({
-    ...ctx,
-    method: 'GET',
-    path: '/sp/adGroups',
+  // v3: POST /sp/adGroups/list with vnd.spAdGroup.v3+json
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sp/adGroups/list',
+    accept: 'application/vnd.spAdGroup.v3+json',
+    itemsKey: 'adGroups',
   })
   return raw.map((ag) => ({
     adGroupId: toStrId(ag.adGroupId as number | string),
     campaignId: toStrId(ag.campaignId as number | string),
     name: ag.name as string,
-    state: ag.state as string,
+    state: normalizeStateV3(ag.state),
     defaultBid: (ag.defaultBid as number) ?? 0,
   }))
 }
@@ -398,11 +503,17 @@ export async function updateAdGroup(
     })
     return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch } }
   }
+  // v3: PUT /sp/adGroups with batch body.
+  const v3AdGroup: Record<string, unknown> = { adGroupId: externalAdGroupId }
+  if (patch.state) v3AdGroup.state = patch.state.toUpperCase()
+  if (patch.defaultBid != null) v3AdGroup.defaultBid = patch.defaultBid
   const response = await liveCall<unknown>({
     ...ctx,
     method: 'PUT',
-    path: `/sp/adGroups/${externalAdGroupId}`,
-    body: patch,
+    path: '/sp/adGroups',
+    body: { adGroups: [v3AdGroup] },
+    contentType: 'application/vnd.spAdGroup.v3+json',
+    acceptHeader: 'application/vnd.spAdGroup.v3+json',
   })
   return { ok: true, mode: 'live', rawResponse: response }
 }
@@ -411,16 +522,18 @@ export async function listTargets(ctx: ClientContext): Promise<AdsTargetDTO[]> {
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsTargetDTO[]>('targets', [])
   }
-  const raw = await liveCall<Array<Record<string, unknown>>>({
-    ...ctx,
-    method: 'GET',
-    path: '/sp/keywords',
+  // v3: POST /sp/keywords/list with vnd.spKeyword.v3+json
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sp/keywords/list',
+    accept: 'application/vnd.spKeyword.v3+json',
+    itemsKey: 'keywords',
   })
   return raw.map((t) => ({
     targetId: toStrId((t.keywordId ?? t.targetId) as number | string),
     adGroupId: toStrId(t.adGroupId as number | string),
     campaignId: toStrId(t.campaignId as number | string),
-    state: t.state as string,
+    state: normalizeStateV3(t.state),
     kind: 'KEYWORD' as const,
     expressionType: ((t.matchType as string) ?? 'BROAD').toUpperCase(),
     expressionValue: (t.keywordText as string) ?? '',
@@ -446,11 +559,17 @@ export async function updateTarget(
     })
     return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, patch } }
   }
+  // v3: PUT /sp/keywords with batch body.
+  const v3Keyword: Record<string, unknown> = { keywordId: externalTargetId }
+  if (patch.state) v3Keyword.state = patch.state.toUpperCase()
+  if (patch.bid != null) v3Keyword.bid = patch.bid
   const response = await liveCall<unknown>({
     ...ctx,
     method: 'PUT',
-    path: `/sp/keywords/${externalTargetId}`,
-    body: patch,
+    path: '/sp/keywords',
+    body: { keywords: [v3Keyword] },
+    contentType: 'application/vnd.spKeyword.v3+json',
+    acceptHeader: 'application/vnd.spKeyword.v3+json',
   })
   return { ok: true, mode: 'live', rawResponse: response }
 }
@@ -459,16 +578,18 @@ export async function listProductAds(ctx: ClientContext): Promise<AdsProductAdDT
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsProductAdDTO[]>('productAds', [])
   }
-  const raw = await liveCall<Array<Record<string, unknown>>>({
-    ...ctx,
-    method: 'GET',
-    path: '/sp/productAds',
+  // v3: POST /sp/productAds/list with vnd.spProductAd.v3+json
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sp/productAds/list',
+    accept: 'application/vnd.spProductAd.v3+json',
+    itemsKey: 'productAds',
   })
   return raw.map((pa) => ({
     adId: toStrId(pa.adId as number | string),
     adGroupId: toStrId(pa.adGroupId as number | string),
     campaignId: toStrId(pa.campaignId as number | string),
-    state: pa.state as string,
+    state: normalizeStateV3(pa.state),
     asin: pa.asin as string | undefined,
     sku: pa.sku as string | undefined,
   }))
@@ -623,6 +744,93 @@ export async function listSdTargets(ctx: ClientContext): Promise<AdsTargetDTO[]>
       bid: t.bid ?? 0,
     }
   })
+}
+
+// ── Sponsored Brands (SB) — v4 list endpoints (Phase B) ────────────────
+//
+// SB uses the same POST /list paginated envelope pattern as SP v3 but
+// with v4 MIME types (vnd.sbcampaignresource.v4+json etc.). Same auth
+// flow as the SD adapter — the v4 endpoints accept Atza| LWA tokens
+// where the legacy /sb/v2/* paths returned 404.
+//
+// SB has no "product ads" concept in the SP sense — SB ads attach
+// creatives (headlines + brand logo) directly to ad groups. We model
+// these as zero AdProductAd rows for now; SB creative ingestion can
+// land as a follow-up.
+
+export async function listSbCampaigns(ctx: ClientContext): Promise<AdsCampaignDTO[]> {
+  if (adsMode() === 'sandbox') {
+    logger.debug('[ADS-SANDBOX] listSbCampaigns', { profileId: ctx.profileId })
+    const all = await loadFixture<AdsCampaignDTO[]>('campaigns', [])
+    return all.filter((c) => c.campaignType === 'sponsoredBrands')
+  }
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sb/v4/campaigns/list',
+    accept: 'application/vnd.sbcampaignresource.v4+json',
+    itemsKey: 'campaigns',
+  })
+  return raw.map((c) => {
+    // SB v4 budget shape varies — may be flat number or nested object.
+    let dailyBudget = 0
+    if (typeof c.budget === 'number') dailyBudget = c.budget
+    else if (typeof c.budget === 'object' && c.budget != null) {
+      const b = c.budget as Record<string, unknown>
+      if (typeof b.budget === 'number') dailyBudget = b.budget
+    }
+    return {
+      campaignId: toStrId(c.campaignId as number | string),
+      name: c.name as string,
+      campaignType: 'sponsoredBrands' as const,
+      state: normalizeStateV3(c.state),
+      dailyBudget,
+      startDate: stripDateDashes(c.startDate),
+      endDate: typeof c.endDate === 'string' ? stripDateDashes(c.endDate) : undefined,
+      portfolioId: c.portfolioId != null ? toStrId(c.portfolioId as number | string) : undefined,
+      biddingStrategy: undefined, // SB uses bidOptimization, not a strategy enum
+    }
+  })
+}
+
+export async function listSbAdGroups(ctx: ClientContext): Promise<AdsAdGroupDTO[]> {
+  if (adsMode() === 'sandbox') {
+    return loadFixture<AdsAdGroupDTO[]>('adGroups', [])
+  }
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sb/v4/adGroups/list',
+    accept: 'application/vnd.sbadgroupresource.v4+json',
+    itemsKey: 'adGroups',
+  })
+  return raw.map((ag) => ({
+    adGroupId: toStrId(ag.adGroupId as number | string),
+    campaignId: toStrId(ag.campaignId as number | string),
+    name: ag.name as string,
+    state: normalizeStateV3(ag.state),
+    defaultBid: (ag.defaultBid as number) ?? 0,
+  }))
+}
+
+export async function listSbTargets(ctx: ClientContext): Promise<AdsTargetDTO[]> {
+  if (adsMode() === 'sandbox') {
+    return loadFixture<AdsTargetDTO[]>('targets', [])
+  }
+  const raw = await listV3Paginated({
+    ctx,
+    path: '/sb/v4/keywords/list',
+    accept: 'application/vnd.sbkeywordresource.v4+json',
+    itemsKey: 'keywords',
+  })
+  return raw.map((t) => ({
+    targetId: toStrId((t.keywordId ?? t.targetId) as number | string),
+    adGroupId: toStrId(t.adGroupId as number | string),
+    campaignId: toStrId(t.campaignId as number | string),
+    state: normalizeStateV3(t.state),
+    kind: 'KEYWORD' as const,
+    expressionType: ((t.matchType as string) ?? 'BROAD').toUpperCase(),
+    expressionValue: (t.keywordText as string) ?? '',
+    bid: (t.bid as number) ?? 0,
+  }))
 }
 
 // ── Reports (Amazon's async request → poll → download pattern) ─────────
