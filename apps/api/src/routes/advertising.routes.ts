@@ -651,6 +651,101 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // GET /api/advertising/reports/search-terms — broad listing with filters
+  //   ?lookbackDays=30&profileId=&marketplace=&adProduct=&minSpend=0
+  //   &hasOrders=any|none|some&sortBy=spend|clicks|orders|acos&limit=200
+  fastify.get('/advertising/reports/search-terms', async (request, _reply) => {
+    const query = request.query as {
+      lookbackDays?: string
+      profileId?: string
+      marketplace?: string
+      adProduct?: string
+      minSpend?: string
+      minImpressions?: string
+      hasOrders?: 'any' | 'none' | 'some'
+      sortBy?: 'spend' | 'clicks' | 'orders' | 'impressions'
+      limit?: string
+    }
+    const lookbackDays = query.lookbackDays
+      ? Math.max(1, Math.min(180, Number(query.lookbackDays))) : 30
+    const limit = query.limit ? Math.max(1, Math.min(1000, Number(query.limit))) : 200
+    const minSpend = query.minSpend ? Math.max(0, Number(query.minSpend)) : 0
+    const minImpressions = query.minImpressions ? Math.max(0, Number(query.minImpressions)) : 0
+    const minMicros = BigInt(Math.round(minSpend * 1_000_000))
+
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - lookbackDays)
+    since.setUTCHours(0, 0, 0, 0)
+
+    // Build dynamic having clause based on hasOrders filter
+    const having: Record<string, unknown> = {}
+    if (minSpend > 0) having.costMicros = { _sum: { gte: minMicros } }
+    if (minImpressions > 0) having.impressions = { _sum: { gte: minImpressions } }
+    if (query.hasOrders === 'none') {
+      having.orders7d = { _sum: { equals: 0 } }
+    } else if (query.hasOrders === 'some') {
+      having.orders7d = { _sum: { gt: 0 } }
+    }
+
+    const sortField = query.sortBy === 'clicks' ? 'clicks'
+      : query.sortBy === 'orders' ? 'orders7d'
+      : query.sortBy === 'impressions' ? 'impressions'
+      : 'costMicros'
+
+    const rows = await prisma.amazonAdsSearchTerm.groupBy({
+      by: ['query', 'matchType', 'campaignId', 'adGroupId', 'marketplace', 'adProduct', 'currencyCode'],
+      where: {
+        date: { gte: since },
+        ...(query.profileId ? { profileId: query.profileId } : {}),
+        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+        ...(query.adProduct ? { adProduct: query.adProduct } : {}),
+      },
+      _sum: {
+        impressions: true,
+        clicks: true,
+        costMicros: true,
+        orders7d: true,
+        sales7dCents: true,
+      },
+      having,
+      orderBy: { _sum: { [sortField]: 'desc' } },
+      take: limit,
+    })
+
+    const items = rows.map((r) => {
+      const costMicros = r._sum.costMicros ?? 0n
+      const costUnits = Number(costMicros) / 1_000_000
+      const salesCents = r._sum.sales7dCents ?? 0
+      const orders = r._sum.orders7d ?? 0
+      const impressions = r._sum.impressions ?? 0
+      const clicks = r._sum.clicks ?? 0
+      const acos = salesCents > 0 ? (costUnits * 100) / salesCents : null
+      const roas = costUnits > 0 ? salesCents / 100 / costUnits : null
+      const ctr = impressions > 0 ? clicks / impressions : null
+      const cpc = clicks > 0 ? costUnits / clicks : null
+      // Negative-keyword candidate heuristic: ≥ 2 currency units spent, zero orders
+      const isCandidate = costUnits >= 2 && orders === 0
+      return {
+        query: r.query,
+        matchType: r.matchType,
+        campaignId: r.campaignId,
+        adGroupId: r.adGroupId,
+        marketplace: r.marketplace,
+        adProduct: r.adProduct,
+        currencyCode: r.currencyCode,
+        impressions, clicks,
+        costMicros: costMicros.toString(),
+        costUnits,
+        salesCents,
+        orders,
+        acos, roas, ctr, cpc,
+        isCandidate,
+      }
+    })
+
+    return { lookbackDays, count: items.length, items }
+  })
+
   // GET /api/advertising/reports/negative-keyword-candidates
   //    ?lookbackDays=30&minSpend=5&limit=100&profileId=&marketplace=
   fastify.get('/advertising/reports/negative-keyword-candidates', async (request, _reply) => {

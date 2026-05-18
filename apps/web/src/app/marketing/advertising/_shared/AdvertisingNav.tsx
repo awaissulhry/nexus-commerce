@@ -15,7 +15,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss } from 'lucide-react'
+import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -57,6 +57,12 @@ const TABS: Tab[] = [
     label: 'Budget Pools',
     icon: Wallet,
     matchPrefix: '/marketing/advertising/budget-pools',
+  },
+  {
+    href: '/marketing/advertising/search-terms',
+    label: 'Search Terms',
+    icon: Search,
+    matchPrefix: '/marketing/advertising/search-terms',
   },
   {
     href: '/marketing/advertising/feeds',
