@@ -1214,21 +1214,67 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       statusError = err instanceof Error ? err.message : String(err)
     }
 
-    // If Amazon returned a signed URL, fetch first 1KB to inspect format
-    let downloadPreview: { contentType: string; bytesPreview: string; truncated: boolean } | null = null
+    // If Amazon returned a signed URL, fetch + decompress + parse the
+    // first 1-2 records so we can see the actual v1 record shape (for
+    // H.2's ingest mapper). Phase H.1 confirmed the file is gzipped
+    // JSON via magic bytes 1f 8b at offset 0.
+    let downloadPreview: {
+      contentType: string
+      totalBytes: number
+      decompressedBytes: number
+      isGzip: boolean
+      sampleRecords: unknown
+      recordCount: number | null
+      parseError?: string
+    } | null = null
     let downloadError: string | null = null
     const url = statusResp?.url as string | undefined
     if (url) {
       try {
+        const { gunzipSync } = await import('zlib')
         const res = await fetch(url)
         const contentType = res.headers.get('content-type') ?? ''
         const buf = await res.arrayBuffer()
-        const truncated = buf.byteLength > 1024
-        const bytes = new Uint8Array(buf.slice(0, 1024))
-        // Try to render as UTF-8 first; if it's gzip the first bytes
-        // will be 1f 8b and the string will be garbage — useful signal.
-        const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-        downloadPreview = { contentType, bytesPreview: text, truncated }
+        const bytes = Buffer.from(buf)
+        const isGzip = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+        let decoded: Buffer = bytes
+        if (isGzip) {
+          try { decoded = gunzipSync(bytes) }
+          catch (err) {
+            downloadPreview = {
+              contentType, totalBytes: bytes.length, decompressedBytes: 0,
+              isGzip: true, sampleRecords: null, recordCount: null,
+              parseError: `gunzip failed: ${String(err)}`,
+            }
+            return reply.send({
+              profileId: q.profileId, exportId: q.exportId,
+              amazonStatus: statusResp, statusError, downloadPreview, downloadError,
+            })
+          }
+        }
+        let parsed: unknown = null
+        let recordCount: number | null = null
+        let parseError: string | undefined
+        const decodedText = decoded.toString('utf-8')
+        try {
+          parsed = JSON.parse(decodedText)
+          if (Array.isArray(parsed)) recordCount = parsed.length
+        } catch (err) {
+          // Try NDJSON
+          const lines = decodedText.split('\n').filter((l) => l.trim())
+          try {
+            parsed = lines.slice(0, 2).map((l) => JSON.parse(l))
+            recordCount = lines.length
+          } catch {
+            parseError = `JSON parse failed: ${String(err)}`
+          }
+        }
+        // Trim to first 2 records to keep response small
+        const sample = Array.isArray(parsed) ? parsed.slice(0, 2) : parsed
+        downloadPreview = {
+          contentType, totalBytes: bytes.length, decompressedBytes: decoded.length,
+          isGzip, sampleRecords: sample, recordCount, parseError,
+        }
       } catch (err) {
         downloadError = err instanceof Error ? err.message : String(err)
       }
