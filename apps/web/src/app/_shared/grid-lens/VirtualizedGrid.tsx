@@ -101,6 +101,12 @@ export interface VirtualizedGridProps<T extends GridLensRow> {
   renderDragHandle?: (row: T, rowBg: string) => React.ReactNode
   /** Droppable overlay rendered on parent rows. Only called when draggable=true. */
   renderDropOverlay?: (row: T) => React.ReactNode
+  /**
+   * When false, the 24 px chevron column is hidden entirely (header + rows).
+   * Set to false on surfaces that have no parent/child expansion (e.g. /listings).
+   * Defaults to true so /products keeps its expand/collapse behaviour unchanged.
+   */
+  showExpandColumn?: boolean
 }
 
 const EMPTY_SET = new Set<never>()
@@ -134,6 +140,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
   onTagEdit,
   renderDragHandle,
   renderDropOverlay,
+  showExpandColumn = true,
 }: VirtualizedGridProps<T>): React.ReactElement {
   const _stagedIds = stagedIds ?? (EMPTY_SET as Set<string>)
   const { t } = useTranslations()
@@ -220,15 +227,15 @@ export function VirtualizedGrid<T extends GridLensRow>({
     return style as React.CSSProperties
   }, [visible, colWidth])
 
-  // Total table width = [drag(28)] + checkbox(32) + chevron(24) + [star(22)] + sum(col widths)
+  // Total table width = [drag(28)] + checkbox(32) + [chevron(24)] + [star(22)] + sum(col widths)
   const totalWidth = useMemo(
     () =>
       (draggable ? 28 : 0) +
       32 +
-      24 +
+      (showExpandColumn ? 24 : 0) +
       (onTagEdit ? 22 : 0) +
       visible.reduce((acc, c) => acc + colWidth(c.key, c.width), 0),
-    [visible, colWidth, draggable, onTagEdit],
+    [visible, colWidth, draggable, onTagEdit, showExpandColumn],
   )
 
   // ── Context menu ───────────────────────────────────────────────────────────
@@ -345,12 +352,14 @@ export function VirtualizedGrid<T extends GridLensRow>({
                     {allSelected && <Check className="w-3 h-3" strokeWidth={3} />}
                   </button>
                 </div>
-                <div
-                  className="px-1 py-2"
-                  style={{ width: 24, minWidth: 24 }}
-                  role="columnheader"
-                  aria-label={t('products.grid.expandVariants')}
-                />
+                {showExpandColumn && (
+                  <div
+                    className="px-1 py-2"
+                    style={{ width: 24, minWidth: 24 }}
+                    role="columnheader"
+                    aria-label={t('products.grid.expandVariants')}
+                  />
+                )}
                 {onTagEdit && (
                   <div
                     className="px-0.5 py-2"
@@ -497,6 +506,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                             isActivelyDragged={activeId === row.product.id}
                             renderCell={renderCell}
                             renderDragHandle={renderDragHandle}
+                            showExpandColumn={showExpandColumn}
                           />
                           {draggable && renderDropOverlay?.(row.product)}
                         </>
@@ -518,6 +528,7 @@ export function VirtualizedGrid<T extends GridLensRow>({
                           isActivelyDragged={activeId === row.product.id}
                           renderCell={renderCell}
                           renderDragHandle={renderDragHandle}
+                          showExpandColumn={showExpandColumn}
                         />
                       )}
                       {row.kind === 'loading' && (
@@ -594,6 +605,7 @@ interface GridRowProps<T extends GridLensRow> {
   isActivelyDragged?: boolean
   renderCell: (row: T, colKey: string, isChild: boolean) => React.ReactNode
   renderDragHandle?: (row: T, rowBg: string) => React.ReactNode
+  showExpandColumn?: boolean
 }
 
 // Inner component is memo'd but uses `any` for T to satisfy React.memo
@@ -615,6 +627,7 @@ const GridRowInner = memo(function GridRowInner({
   isActivelyDragged = false,
   renderCell,
   renderDragHandle,
+  showExpandColumn = true,
 }: GridRowProps<any>) {
   const { t } = useTranslations()
   const childCount = product.childCount ?? 0
@@ -679,7 +692,7 @@ const GridRowInner = memo(function GridRowInner({
           {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
         </button>
       </div>
-      <div
+      {showExpandColumn && <div
         className={`px-1 py-2 flex items-center ${rowBg}`}
         style={{ width: 24, minWidth: 24 }}
         role="cell"
@@ -713,7 +726,7 @@ const GridRowInner = memo(function GridRowInner({
         ) : isChild ? (
           <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
         ) : null}
-      </div>
+      </div>}
       {/* AM.1 — ★ star slot (only when onTagEdit is provided) */}
       {onTagEdit && (
         <div

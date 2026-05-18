@@ -1781,6 +1781,7 @@ function GridLens(props: {
         searchTerm={props.search}
         riskFlaggedSkus={_EMPTY_SET}
         storageKey={storageKey}
+        showExpandColumn={false}
         renderCell={(listing, colKey) => (
           <CellRenderer
             col={colKey}
