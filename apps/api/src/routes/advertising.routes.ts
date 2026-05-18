@@ -1671,7 +1671,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       : query.sortBy === 'impressions' ? 'impressions'
       : 'costMicros'
 
-    const rows = await prisma.amazonAdsSearchTerm.groupBy({
+    // Workaround for Prisma Rust engine panic when orderBy uses _sum on
+    // a BigInt aggregate (costMicros). Drop the SQL orderBy + limit and
+    // sort/slice in JS — same end result, no engine panic. Apply
+    // having-emulated filtering in JS too if it would otherwise force
+    // Prisma to compile a sort that panics. The dataset is bounded
+    // (max ~50K rows for our 9-profile setup) so in-memory is fine.
+    const allRows = await prisma.amazonAdsSearchTerm.groupBy({
       by: ['query', 'matchType', 'campaignId', 'adGroupId', 'marketplace', 'adProduct', 'currencyCode'],
       where: {
         date: { gte: since },
@@ -1687,9 +1693,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         sales7dCents: true,
       },
       having,
-      orderBy: { _sum: { [sortField]: 'desc' } },
-      take: limit,
     })
+
+    // JS-side sort + take to dodge the engine bug.
+    const sorted = [...allRows].sort((a, b) => {
+      const fa = sortField === 'costMicros'
+        ? Number(a._sum.costMicros ?? 0n)
+        : Number((a._sum as unknown as Record<string, number | null>)[sortField] ?? 0)
+      const fb = sortField === 'costMicros'
+        ? Number(b._sum.costMicros ?? 0n)
+        : Number((b._sum as unknown as Record<string, number | null>)[sortField] ?? 0)
+      return fb - fa
+    })
+    const rows = sorted.slice(0, limit)
 
     const items = rows.map((r) => {
       const costMicros = r._sum.costMicros ?? 0n
