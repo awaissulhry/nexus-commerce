@@ -1142,7 +1142,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       '../services/advertising/ads-v1-sync.service.js'
     )
     const jobs = await prisma.amazonAdsExportJob.findMany({
-      where: { status: 'COMPLETED', url: { not: null } },
+      // Match cron filter: never re-ingest already-ingested jobs, and
+      // don't waste cycles on jobs whose presigned URL has expired.
+      where: {
+        status: 'COMPLETED',
+        url: { not: null },
+        rowsIngested: 0,
+        OR: [
+          { urlExpiresAt: null },
+          { urlExpiresAt: { gt: new Date() } },
+        ],
+      },
       select: { id: true },
       orderBy: { completedAt: 'asc' },
       take: 10,
@@ -1170,6 +1180,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       take: limit,
     })
     return { items, count: items.length }
+  })
+
+  // POST /api/advertising/debug/clear-stale-export-errors — H.2 follow-up
+  //
+  // Clears errorMessage on AmazonAdsExportJob rows that successfully
+  // ingested data (rowsIngested > 0) but were re-processed by the cron
+  // before the rowsIngested filter was added. Pure cleanup — the jobs
+  // are healthy, the errorMessage is a historical artifact.
+  fastify.post('/advertising/debug/clear-stale-export-errors', async (_request, _reply) => {
+    const r = await prisma.amazonAdsExportJob.updateMany({
+      where: { errorMessage: { not: null }, rowsIngested: { gt: 0 } },
+      data: { errorMessage: null },
+    })
+    return { ok: true, cleared: r.count }
   })
 
   // POST /api/advertising/debug/reset-stuck-completed-jobs — Phase G follow-up

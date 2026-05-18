@@ -343,7 +343,9 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
 
   await prisma.amazonAdsExportJob.update({
     where: { id: jobId },
-    data: { rowsIngested },
+    // Clear any stale errorMessage left by a prior failed retry — this
+    // run succeeded, so the record is now clean.
+    data: { rowsIngested, errorMessage: null },
   })
   return { jobId, resource, rowsIngested }
 }

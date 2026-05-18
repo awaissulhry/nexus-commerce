@@ -372,7 +372,21 @@ export function startV1ExportPollCron(): void {
 export async function runV1ExportIngestCron(): Promise<void> {
   await recordCronRun('ads-v1-export-ingest', async () => {
     const jobs = await prisma.amazonAdsExportJob.findMany({
-      where: { status: 'COMPLETED', url: { not: null } },
+      // H.2 follow-up: only pick jobs that haven't been ingested AND
+      // whose signed S3 URL is still valid. Without this:
+      //  - rowsIngested > 0 jobs get re-downloaded each cron tick
+      //    (Amazon's presigned URLs aren't reliably re-usable across
+      //     multiple GETs even within TTL → spurious s3_download_400)
+      //  - expired-URL jobs with 0 legitimate rows get retried forever
+      where: {
+        status: 'COMPLETED',
+        url: { not: null },
+        rowsIngested: 0,
+        OR: [
+          { urlExpiresAt: null }, // legacy rows missing expiry
+          { urlExpiresAt: { gt: new Date() } },
+        ],
+      },
       select: { id: true },
       orderBy: { completedAt: 'asc' },
       take: 10,
