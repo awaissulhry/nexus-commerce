@@ -81,6 +81,10 @@ export type InvalidationType =
   // Consumed by ChannelPricingSection + ChannelInventorySection to
   // re-fetch without a full page reload.
   | 'channel-pricing.updated'
+  // S.X — stock mutation events. Emitted after adjustments / transfers so
+  // the stock workspace and any other open stock tab refreshes immediately.
+  | 'stock.adjusted'
+  | 'stock.transferred'
 
 export interface InvalidationEvent {
   type: InvalidationType

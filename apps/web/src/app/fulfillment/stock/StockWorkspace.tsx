@@ -48,6 +48,7 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 
 type StockRow = {
   id: string
@@ -120,6 +121,7 @@ const STOCK_COLUMNS: GridLensColumn[] = [
   { key: 'value',     label: 'Value',      subLabel: '€ cost × qty',  width: 100 },
   { key: 'abcClass',  label: 'ABC',        subLabel: 'Pareto band',   width: 70  },
   { key: 'updated',   label: 'Updated',    subLabel: 'Last movement', width: 120 },
+  { key: 'open',      label: '',                                      width: 44  },
 ]
 
 // S.5 — client-side sort keys for the table view (current page only).
@@ -712,6 +714,13 @@ export default function StockWorkspace() {
     }
   }, [fetchStock, fetchSidecar])
 
+  // Real-time cross-tab sync — fires whenever /products, /listings, or another
+  // stock tab emits an invalidation event over the BroadcastChannel.
+  useInvalidationChannel(
+    ['product.updated', 'product.created', 'product.deleted', 'stock.adjusted', 'stock.transferred', 'pim.changed'],
+    useCallback(() => { fetchStock(); fetchSidecar() }, [fetchStock, fetchSidecar]),
+  )
+
   const filterCount = useMemo(
     () => [locationCode, status, search].filter(Boolean).length,
     [locationCode, status, search],
@@ -829,7 +838,7 @@ export default function StockWorkspace() {
   const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
   const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
   const visible = useMemo(
-    () => STOCK_COLUMNS.filter((c) => visibleColumns.includes(c.key as ColumnKey)),
+    () => STOCK_COLUMNS.filter((c) => c.key === 'open' || visibleColumns.includes(c.key as ColumnKey)),
     [visibleColumns],
   )
   // S.4 tree — parent/child grouping matching the /listings GridLens pattern.
@@ -922,6 +931,19 @@ export default function StockWorkspace() {
     }
   }, [items, sortBy])
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
+    if (colKey === 'open') {
+      return (
+        <button
+          type="button"
+          onClick={() => setDrawerProductId(row.product.id)}
+          title="Open product"
+          aria-label="Open product"
+          className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <ChevronRight size={14} />
+        </button>
+      )
+    }
     const threshold = row.reorderThreshold ?? row.product.lowStockThreshold
     const stockTone =
       row.quantity === 0 ? 'text-rose-600' :
@@ -931,7 +953,7 @@ export default function StockWorkspace() {
     if (!meta) return null
     const ctx: ColumnRenderCtx = { it: row, padY: '', density, threshold, stockTone, t }
     return meta.cell(ctx)
-  }, [density, t])
+  }, [density, t, setDrawerProductId])
 
   // Bulk operation runners — sequential calls with progress reporting.
   // Sequential is intentional: 50 parallel PATCHes would let the cron
@@ -961,6 +983,7 @@ export default function StockWorkspace() {
     setSelected(new Set())
     if (undoEntries.length > 0) {
       setUndoBundle({ kind: 'adjust', entries: undoEntries, expiresAt: Date.now() + 30000 })
+      emitInvalidation({ type: 'stock.adjusted', meta: { count: undoEntries.length } })
     }
     fetchStock()
     fetchSidecar()
@@ -994,6 +1017,7 @@ export default function StockWorkspace() {
     setBulkProgress(null)
     setBulkAction(null)
     setSelected(new Set())
+    emitInvalidation({ type: 'stock.transferred' })
     fetchStock()
     fetchSidecar()
   }, [items, selected, fetchStock, fetchSidecar])
