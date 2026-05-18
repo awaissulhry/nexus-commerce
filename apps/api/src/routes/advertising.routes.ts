@@ -1247,6 +1247,44 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // via /reporting/reports/:externalReportId. Used to inspect what
   // Amazon is actually returning so we can fix our status-mapping or
   // identify report-not-progressing root cause.
+  // GET /api/advertising/debug/report-download/:jobId
+  //
+  // Downloads + decompresses + parses the first 2 records from a
+  // COMPLETED report job's S3 file. Used to inspect actual field
+  // names Amazon returns when our ingest produces 0 rows. URL must
+  // still be valid (within 1h TTL from completedAt).
+  fastify.get('/advertising/debug/report-download/:jobId', async (request, reply) => {
+    const { jobId } = request.params as { jobId: string }
+    const job = await prisma.amazonAdsReportJob.findUnique({
+      where: { id: jobId },
+      select: { id: true, reportTypeId: true, location: true, fileSize: true,
+                rowsIngested: true, completedAt: true, configuration: true },
+    })
+    if (!job) return reply.code(404).send({ error: 'job_not_found' })
+    if (!job.location) return reply.code(400).send({ error: 'no_url_on_job' })
+    try {
+      const { gunzipSync } = await import('zlib')
+      const res = await fetch(job.location)
+      if (!res.ok) return reply.code(502).send({ error: `s3_${res.status}` })
+      const buf = Buffer.from(await res.arrayBuffer())
+      const isGzip = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b
+      const decoded = isGzip ? gunzipSync(buf) : buf
+      const text = decoded.toString('utf-8')
+      let parsed: unknown
+      try { parsed = JSON.parse(text) }
+      catch { parsed = text.slice(0, 2000) }
+      const sample = Array.isArray(parsed) ? parsed.slice(0, 2) : parsed
+      return {
+        job, isGzip,
+        decompressedBytes: decoded.length,
+        recordCount: Array.isArray(parsed) ? parsed.length : null,
+        sampleRecords: sample,
+      }
+    } catch (err) {
+      return reply.code(500).send({ error: String(err) })
+    }
+  })
+
   fastify.get('/advertising/debug/report-status/:jobId', async (request, reply) => {
     const { jobId } = request.params as { jobId: string }
     const job = await prisma.amazonAdsReportJob.findUnique({
