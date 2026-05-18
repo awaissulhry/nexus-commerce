@@ -1099,6 +1099,47 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // bypassed via local LWA fetch).
   //
   // Body: { profileId: string }
+  // GET /api/advertising/debug/report-status/:jobId — Phase G diagnostic
+  //
+  // Fetches Amazon's raw status response for a single AmazonAdsReportJob
+  // via /reporting/reports/:externalReportId. Used to inspect what
+  // Amazon is actually returning so we can fix our status-mapping or
+  // identify report-not-progressing root cause.
+  fastify.get('/advertising/debug/report-status/:jobId', async (request, reply) => {
+    const { jobId } = request.params as { jobId: string }
+    const job = await prisma.amazonAdsReportJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true, profileId: true, externalReportId: true, status: true,
+        attempts: true, lastPolledAt: true,
+      },
+    })
+    if (!job) return reply.code(404).send({ error: 'job_not_found' })
+    if (!job.externalReportId) return reply.code(400).send({ error: 'no_external_report_id' })
+
+    const conn = await prisma.amazonAdsConnection.findUnique({
+      where: { profileId: job.profileId },
+      select: { region: true },
+    })
+    const region = (conn?.region === 'NA' || conn?.region === 'FE') ? conn.region : 'EU'
+
+    const { liveCall } = await import('../services/advertising/ads-api-client.js')
+    try {
+      const status = await liveCall<Record<string, unknown>>({
+        profileId: job.profileId,
+        region: region as 'EU' | 'NA' | 'FE',
+        method: 'GET',
+        path: `/reporting/reports/${job.externalReportId}`,
+      })
+      return { job, amazonRawResponse: status }
+    } catch (err) {
+      return {
+        job,
+        amazonError: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
   fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
     const body = request.body as { profileId?: string }
     if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })
