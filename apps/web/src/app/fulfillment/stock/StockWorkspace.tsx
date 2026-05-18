@@ -88,7 +88,8 @@ type LocationSummary = {
 }
 
 type Density = 'compact' | 'comfortable' | 'spacious'
-type ColumnKey = 'thumb' | 'product' | 'location' | 'onHand' | 'reserved' | 'available' | 'threshold' | 'cost' | 'updated'
+// S.5 — abcClass + value added as standalone sortable columns.
+type ColumnKey = 'thumb' | 'product' | 'location' | 'onHand' | 'reserved' | 'available' | 'threshold' | 'cost' | 'updated' | 'abcClass' | 'value'
 const ALL_COLUMNS: Array<{ key: ColumnKey; label: string; alwaysOn?: boolean }> = [
   { key: 'thumb',     label: 'Thumb',     alwaysOn: true },
   { key: 'product',   label: 'Product',   alwaysOn: true },
@@ -98,11 +99,13 @@ const ALL_COLUMNS: Array<{ key: ColumnKey; label: string; alwaysOn?: boolean }> 
   { key: 'available', label: 'Available' },
   { key: 'threshold', label: 'Threshold' },
   { key: 'cost',      label: 'Cost' },
+  { key: 'value',     label: 'Value' },
+  { key: 'abcClass',  label: 'ABC' },
   { key: 'updated',   label: 'Updated' },
 ]
 const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['thumb', 'product', 'location', 'onHand', 'reserved', 'available', 'threshold', 'cost', 'updated']
 
-// S.4 — GridLens column definitions for the table view.
+// S.4/S.5 — GridLens column definitions for the table view.
 const STOCK_COLUMNS: GridLensColumn[] = [
   { key: 'thumb',     label: '',           width: 60,  locked: true },
   { key: 'product',   label: 'Product',    subLabel: 'SKU · ASIN',    width: 300, locked: true },
@@ -112,8 +115,16 @@ const STOCK_COLUMNS: GridLensColumn[] = [
   { key: 'available', label: 'Available',  subLabel: 'Free stock',    width: 90  },
   { key: 'threshold', label: 'Threshold',  subLabel: 'ROP · +EOQ',    width: 110 },
   { key: 'cost',      label: 'Cost',       subLabel: '€ unit cost',   width: 90  },
+  { key: 'value',     label: 'Value',      subLabel: '€ cost × qty',  width: 100 },
+  { key: 'abcClass',  label: 'ABC',        subLabel: 'Pareto band',   width: 70  },
   { key: 'updated',   label: 'Updated',    subLabel: 'Last movement', width: 120 },
 ]
+
+// S.5 — client-side sort keys for the table view (current page only).
+const STOCK_SORT_KEYS: Record<string, string> = {
+  onHand: 'onHand', reserved: 'reserved', available: 'available',
+  cost: 'cost', value: 'value', abcClass: 'abcClass', updated: 'updated',
+}
 type StockGridRow = StockRow & GridLensRow
 
 // Stable empties for unused VirtualizedGrid props in table mode.
@@ -804,17 +815,43 @@ export default function StockWorkspace() {
     setLastSelectedIdx(null)
   }, [items])
 
-  // S.4 — GridLens computed values for the table view.
+  // S.4/S.5 — GridLens computed values for the table view.
+  const [sortBy, setSortBy] = useState('')
+  const onSort = useCallback((key: string) => {
+    setSortBy((prev) => {
+      const base = key.replace(/-asc$/, '')
+      if (prev === base) return `${base}-asc`
+      if (prev === `${base}-asc`) return base
+      return base
+    })
+  }, [])
+
   const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
   const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
   const visible = useMemo(
     () => STOCK_COLUMNS.filter((c) => visibleColumns.includes(c.key as ColumnKey)),
     [visibleColumns],
   )
-  const gridRows = useMemo(
-    (): StockGridRow[] => items.map((it) => ({ ...it, isParent: false as const, childCount: 0, parentId: null })),
-    [items],
-  )
+  const gridRows = useMemo((): StockGridRow[] => {
+    const base = items.map((it) => ({ ...it, isParent: false as const, childCount: 0, parentId: null }))
+    if (!sortBy) return base
+    const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
+    return [...base].sort((a, b) => {
+      let av: any, bv: any
+      switch (key) {
+        case 'onHand':    av = a.quantity;                        bv = b.quantity;                        break
+        case 'reserved':  av = a.reserved;                       bv = b.reserved;                        break
+        case 'available': av = a.available;                      bv = b.available;                       break
+        case 'cost':      av = a.product.costPrice ?? 0;         bv = b.product.costPrice ?? 0;          break
+        case 'value':     av = (a.product.costPrice ?? 0) * a.quantity; bv = (b.product.costPrice ?? 0) * b.quantity; break
+        case 'abcClass':  av = a.product.abcClass ?? 'Z';        bv = b.product.abcClass ?? 'Z';         break
+        case 'updated':   av = a.lastUpdatedAt;                  bv = b.lastUpdatedAt;                   break
+        default: return 0
+      }
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
+      return dir === 'asc' ? cmp : -cmp
+    })
+  }, [items, sortBy])
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
     const threshold = row.reorderThreshold ?? row.product.lowStockThreshold
     const stockTone =
@@ -1214,8 +1251,9 @@ export default function StockWorkspace() {
             toggleSelect={toggleSelect}
             toggleSelectAll={toggleSelectAll}
             allSelected={allSelected}
-            sortBy=""
-            onSort={_GRID_NOOP as any}
+            sortBy={sortBy}
+            onSort={onSort}
+            sortKeys={STOCK_SORT_KEYS}
             expandedParents={_GRID_EMPTY_SET}
             childrenByParent={_GRID_EMPTY_MAP}
             loadingChildren={_GRID_EMPTY_SET}
@@ -3312,6 +3350,24 @@ const COLUMN_META: Record<ColumnKey, {
         {formatRelative(it.lastUpdatedAt, t)}
       </span>
     ),
+  },
+  // S.5 — standalone sortable columns.
+  value: {
+    align: 'right',
+    head: 'Value',
+    cell: ({ it }) => {
+      if (it.product.costPrice == null) return <span className="text-slate-300 dark:text-slate-600">—</span>
+      const v = it.product.costPrice * it.quantity
+      return <span className="tabular-nums text-slate-700 dark:text-slate-300">€{v.toFixed(2)}</span>
+    },
+  },
+  abcClass: {
+    align: 'left',
+    head: 'ABC',
+    cell: ({ it }) =>
+      it.product.abcClass
+        ? <AbcBadge cls={it.product.abcClass} />
+        : <span className="text-slate-300 dark:text-slate-600">—</span>,
   },
 }
 
