@@ -8,38 +8,29 @@
  * right-click context menu all live together because they share the
  * memo + context boundary.
  *
+ * G.0 — the core VirtualizedGrid infrastructure (column resize, row
+ * virtualizer, context menu state, flat-row construction, GridRow)
+ * has been extracted to @/app/_shared/grid-lens/VirtualizedGrid.
+ * This file keeps:
+ *   - Product-specific cell renderer (ProductCell + EditableCell + EditSplitButton)
+ *   - DraggableHandle + DroppableRowOverlay (@dnd-kit, product-specific)
+ *   - RowContextMenu (product actions: status flip, duplicate)
+ *   - IT_TERMS Italian glossary
+ *   - A VirtualizedGrid re-export wrapper with the SAME props interface as
+ *     before so ProductsWorkspace.tsx needs zero changes.
+ *
  * Public surface:
  *   - VirtualizedGrid — the only export consumed externally (by
  *     GridLens in ProductsWorkspace.tsx). Accepts the products + a
  *     bag of selection / expand / sort callbacks plus `searchTerm`
  *     and `riskFlaggedSkus` for cell-level highlight + risk badges.
- *
- * File-local (not exported):
- *   - FlatRow type + flatRows construction
- *   - ColumnResizeHandle (E.12)
- *   - RowContextMenu (E.9)
- *   - ProductRow (memo'd)
- *   - ProductCell (memo'd, big switch by column key)
- *   - RiskBadge + Highlight helpers
- *   - SearchContext + RiskFlaggedContext (consumed only by
- *     ProductCell + RiskBadge, both file-local)
- *   - IT_TERMS glossary lookup used by the productType cell
- *
- * The contexts are wrapped *inside* VirtualizedGrid (not the
- * workspace) so the workspace doesn't need to know they exist. The
- * providers cover only the rendered grid — the rest of the page
- * (header, filter bar, lens tabs) doesn't pay the re-render cost
- * when the search term changes.
  */
 
 import {
-  createContext,
-  forwardRef,
   memo,
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -47,10 +38,8 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   AlertCircle,
-  Check,
-  ChevronDown,
-  ChevronRight,
   CheckCircle2,
+  ChevronDown,
   Copy,
   Eye,
   EyeOff,
@@ -60,13 +49,10 @@ import {
   Layers,
   Pencil,
   Sparkles,
-  Star,
   X,
   XCircle,
 } from 'lucide-react'
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
@@ -76,10 +62,14 @@ import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   type Density,
-  DENSITY_ROW_HEIGHT,
 } from '@/lib/products/theme'
 import type { ProductRow as ProductRowType } from '../_types'
 import type { ColumnDef } from '../_columns'
+import {
+  VirtualizedGrid as SharedVirtualizedGrid,
+  SearchContext,
+  RiskFlaggedContext,
+} from '@/app/_shared/grid-lens/VirtualizedGrid'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -94,27 +84,8 @@ const IT_TERMS: Record<string, string> = {
   BAG: 'Borsa',
 }
 
-// E.14 — search-term highlighting context. VirtualizedGrid publishes
-// the debounced URL search term here; cells consume it via useContext
-// to wrap matches in <mark>. Context (not prop) so the search term
-// doesn't have to thread through 4 levels of props + bust memo on
-// every input change. Search updates are already debounced 250ms,
-// so re-renders are bounded.
-const SearchContext = createContext<string>('')
-
-// R7.2 — flagged-SKU context. ProductCell reads it to render the
-// "high return rate" badge on the SKU cell when the product's SKU is
-// in the set. Same context-not-prop reasoning as SearchContext:
-// avoids busting the cell's memo when the set is otherwise stable
-// across the workspace lifetime.
-const RiskFlaggedContext = createContext<Set<string>>(new Set())
-
-type FlatRow =
-  | { kind: 'parent'; product: ProductRowType }
-  | { kind: 'child'; product: ProductRowType; parentId: string }
-  | { kind: 'loading'; parentId: string }
-  | { kind: 'empty'; parentId: string; childCount: number }
-
+// ── Original VirtualizedGrid props interface ─────────────────────────────────
+// Preserved verbatim so ProductsWorkspace.tsx needs zero changes.
 interface VirtualizedGridProps {
   products: ProductRowType[]
   visible: ColumnDef[]
@@ -147,8 +118,29 @@ interface VirtualizedGridProps {
   activeProductId?: string | null
 }
 
-const EMPTY_SET = new Set<never>()
+// Sort key map — matches the original hard-coded sortKeys in VirtualizedGrid.
+const PRODUCT_SORT_KEYS: Record<string, string> = {
+  sku: 'sku',
+  name: 'name',
+  price: 'price-asc',
+  stock: 'stock-asc',
+  photos: 'photos-asc',
+  coverage: 'channels-asc',
+  variants: 'variants-asc',
+  completeness: 'completeness-asc',
+  updated: 'updated',
+}
 
+const noop = () => {}
+
+/**
+ * VirtualizedGrid — re-export wrapper with the original props interface.
+ *
+ * Delegates to the shared VirtualizedGrid from @/app/_shared/grid-lens,
+ * injecting product-specific renderers via the render-prop API.
+ * ProductsWorkspace.tsx continues to import this and passes the same props
+ * as before — no changes required there.
+ */
 export function VirtualizedGrid({
   products,
   visible,
@@ -173,490 +165,65 @@ export function VirtualizedGrid({
   stagedProductIds,
   activeProductId = null,
 }: VirtualizedGridProps) {
-  const _stagedProductIds = stagedProductIds ?? (EMPTY_SET as Set<string>)
-  const { t } = useTranslations()
-  // Build the flat row list. Order: each parent followed by its
-  // expanded children (or a loading/empty placeholder). Memo deps
-  // cover everything that can change row identity.
-  const flatRows: FlatRow[] = useMemo(() => {
-    const rows: FlatRow[] = []
-    for (const p of products) {
-      rows.push({ kind: 'parent', product: p })
-      if (!expandedParents.has(p.id)) continue
-      if (loadingChildren.has(p.id)) {
-        rows.push({ kind: 'loading', parentId: p.id })
-        continue
-      }
-      const kids = childrenByParent[p.id] ?? []
-      if (kids.length === 0) {
-        rows.push({
-          kind: 'empty',
-          parentId: p.id,
-          childCount: p.childCount ?? 0,
-        })
-        continue
-      }
-      for (const k of kids) {
-        rows.push({ kind: 'child', product: k, parentId: p.id })
-      }
-    }
-    return rows
-  }, [products, expandedParents, childrenByParent, loadingChildren])
-
-  // E.12 — column resize. Per-column overrides hydrated from
-  // localStorage on mount, persisted on commit. The width state is
-  // ONLY committed on mouseUp; the live drag updates a CSS custom
-  // property directly on the table root via tableRootRef so no React
-  // re-render fires per pixel of drag (the cells reference
-  // `var(--col-<key>-width)` which updates live).
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
-    () => {
-      if (typeof window === 'undefined') return {}
-      try {
-        const raw = window.localStorage.getItem('products.columnWidths')
-        return raw ? JSON.parse(raw) : {}
-      } catch {
-        return {}
-      }
-    },
+  // Stable renderCell so GridRow memo skips re-renders when unrelated
+  // selections change. Depends on onTagEdit + onChanged so they're
+  // in the dep array; both are stable refs from the workspace.
+  const renderCellCb = useCallback(
+    (row: ProductRowType, colKey: string, _isChild: boolean) => (
+      <ProductCell
+        col={colKey}
+        product={row}
+        onTagEdit={onTagEdit ?? noop}
+        onChanged={onChanged}
+      />
+    ),
+    [onTagEdit, onChanged],
   )
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        'products.columnWidths',
-        JSON.stringify(columnWidths),
-      )
-    } catch {
-      /* ignore quota errors */
-    }
-  }, [columnWidths])
-  // P.3 — listen for view-applied widths and replace state. Triggered
-  // by SavedViewsButton's onApply when the view carries _columnWidths.
-  useEffect(() => {
-    const onApplyWidths = (e: Event) => {
-      const detail = (e as CustomEvent).detail as
-        | { widths?: Record<string, number> }
-        | undefined
-      if (detail?.widths && typeof detail.widths === 'object') {
-        setColumnWidths(detail.widths)
-      }
-    }
-    window.addEventListener('nexus:apply-column-widths', onApplyWidths)
-    return () =>
-      window.removeEventListener('nexus:apply-column-widths', onApplyWidths)
-  }, [])
-  const colWidth = useCallback(
-    (key: string, fallback?: number) => columnWidths[key] ?? fallback ?? 100,
-    [columnWidths],
-  )
-  // CSS variables for every visible column; cells reference these via
-  // `var(--col-<key>-width)`. Set as inline style on the table root
-  // so the cascade picks them up everywhere underneath.
-  const tableRootRef = useRef<HTMLDivElement>(null)
-  const cssVarStyle = useMemo(() => {
-    const style: Record<string, string> = {}
-    for (const c of visible) {
-      style[`--col-${c.key}-width`] = `${colWidth(c.key, c.width)}px`
-    }
-    return style as React.CSSProperties
-  }, [visible, colWidth])
-  // Total table width = [drag(28)] + checkbox(32) + chevron(24) + sum(effective
-  // widths). Used for both header + body min-width so horizontal
-  // overflow works correctly inside the scroll container.
-  const totalWidth = useMemo(
-    () =>
-      (draggable ? 28 : 0) +
-      32 +
-      24 +
-      visible.reduce((acc, c) => acc + colWidth(c.key, c.width), 0),
-    [visible, colWidth, draggable],
-  )
-
-  // E.9 — right-click context menu state. Tracks the click position
-  // (so the menu pops where the cursor was) and which product was
-  // right-clicked. null means closed. Document-level listeners close
-  // it on outside click + Escape; the menu itself stops propagation.
-  const [contextMenu, setContextMenu] = useState<
-    { x: number; y: number; product: ProductRowType } | null
-  >(null)
-  // Ref forwarded to RowContextMenu so onAway can use contains() instead
-  // of relying on e.stopPropagation() — React synthetic stopPropagation
-  // does not reliably block native document listeners in all Next.js
-  // configurations, causing the menu to close before item clicks fire.
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    if (!contextMenu) return
-    const onAway = (e: Event) => {
-      if (menuRef.current?.contains(e.target as Node)) return
-      setContextMenu(null)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null)
-    }
-    document.addEventListener('mousedown', onAway)
-    document.addEventListener('keydown', onKey)
-    document.addEventListener('scroll', onAway, true)
-    return () => {
-      document.removeEventListener('mousedown', onAway)
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('scroll', onAway, true)
-    }
-  }, [contextMenu])
-  const onRowContextMenu = useCallback(
-    (e: React.MouseEvent, product: ProductRowType) => {
-      e.preventDefault()
-      setContextMenu({ x: e.clientX, y: e.clientY, product })
-    },
-    [],
-  )
-
-  const containerRef = useRef<HTMLDivElement>(null)
-  const rowVirtualizer = useVirtualizer({
-    count: flatRows.length,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => DENSITY_ROW_HEIGHT[density],
-    overscan: 12,
-    // Stable keys so toggling expand doesn't re-mount unrelated rows.
-    getItemKey: (index) => {
-      const r = flatRows[index]
-      if (!r) return index
-      if (r.kind === 'parent') return `p:${r.product.id}`
-      if (r.kind === 'child') return `c:${r.product.id}`
-      if (r.kind === 'loading') return `l:${r.parentId}`
-      return `e:${r.parentId}`
-    },
-  })
-
-  // E.10 — keep the J/K-focused row in view. Find its flat-row index
-  // then ask the virtualizer to scroll it within the viewport.
-  // align: 'auto' avoids unnecessary scrolling when the row is
-  // already visible.
-  useEffect(() => {
-    if (!focusedRowId) return
-    const idx = flatRows.findIndex(
-      (r) =>
-        (r.kind === 'parent' || r.kind === 'child') &&
-        r.product.id === focusedRowId,
-    )
-    if (idx >= 0) {
-      rowVirtualizer.scrollToIndex(idx, { align: 'auto' })
-    }
-  }, [focusedRowId, flatRows, rowVirtualizer])
-
-  // U.26 / U.29 — sortKey per column. Coverage sorts on channelCount;
-  // photos on photoCount; variants on variantCount; completeness on
-  // the F.2 6-axis hygiene score. Ascending defaults surface the
-  // rows that need attention (zero photos, zero channels, lowest
-  // completeness) first; flip to -desc via URL if needed.
-  const sortKeys: Record<string, string> = {
-    sku: 'sku',
-    name: 'name',
-    price: 'price-asc',
-    stock: 'stock-asc',
-    photos: 'photos-asc',
-    coverage: 'channels-asc',
-    variants: 'variants-asc',
-    completeness: 'completeness-asc',
-    updated: 'updated',
-  }
 
   return (
-    <SearchContext.Provider value={searchTerm}>
-      <RiskFlaggedContext.Provider value={riskFlaggedSkus}>
-        <Card noPadding>
-          <div
-            ref={containerRef}
-            className="overflow-auto relative"
-            style={{ maxHeight: '75vh' }}
-          >
-            <div
-              ref={tableRootRef}
-              style={{ minWidth: totalWidth, ...cssVarStyle }}
-            >
-              {/* Header — sticky, flex-aligned to the same column widths
-                  as the body rows. */}
-              <div
-                className="flex border-b border-slate-200 bg-slate-50 sticky top-0 z-10"
-                role="row"
-              >
-                {draggable && (
-                  <div
-                    className="px-1 py-2"
-                    style={{ width: 28, minWidth: 28 }}
-                    role="columnheader"
-                    aria-label="Drag"
-                  />
-                )}
-                <div
-                  className="px-3 py-2 flex items-center"
-                  style={{ width: 32, minWidth: 32 }}
-                  role="columnheader"
-                >
-                  {/* U.34 — custom-rendered checkbox. Native input
-                      tick was rendering hollow under Tailwind preflight
-                      (operator could select rows but the box never
-                      visually filled in). Now: a button with an inner
-                      filled-blue + Check icon for checked, slate
-                      outline for unchecked. Same pattern the mobile
-                      card list uses. */}
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={allSelected}
-                    aria-label={
-                      allSelected ? 'Deselect all rows' : 'Select all rows'
-                    }
-                    onClick={toggleSelectAll}
-                    className={`w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors ${
-                      allSelected
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400 dark:hover:border-slate-500'
-                    }`}
-                  >
-                    {allSelected && <Check className="w-3 h-3" strokeWidth={3} />}
-                  </button>
-                </div>
-                <div
-                  className="px-1 py-2"
-                  style={{ width: 24, minWidth: 24 }}
-                  role="columnheader"
-                  aria-label={t('products.grid.expandVariants')}
-                />
-                {visible.map((col) => {
-                  const sortable =
-                    col.key !== 'thumb' &&
-                    col.key !== 'actions' &&
-                    !!sortKeys[col.key]
-                  // P.20 — aria-sort surfaces the current sort state to
-                  // screen readers. We track ascending/descending only
-                  // for price + stock (the other sort keys are
-                  // direction-implicit per the sortKeys map). Defaults
-                  // to 'none' for sortable columns the user hasn't
-                  // touched, 'ascending' / 'descending' for the active
-                  // one based on sortBy suffix.
-                  const isActive =
-                    (col.key === 'sku' && sortBy === 'sku') ||
-                    (col.key === 'name' && sortBy === 'name') ||
-                    (col.key === 'price' && sortBy.startsWith('price')) ||
-                    (col.key === 'stock' && sortBy.startsWith('stock')) ||
-                    (col.key === 'photos' && sortBy.startsWith('photos')) ||
-                    (col.key === 'coverage' && sortBy.startsWith('channels')) ||
-                    (col.key === 'variants' &&
-                      sortBy.startsWith('variants')) ||
-                    (col.key === 'completeness' &&
-                      sortBy.startsWith('completeness')) ||
-                    (col.key === 'updated' && sortBy === 'updated')
-                  const sortDir: 'ascending' | 'descending' | 'none' =
-                    !sortable
-                      ? 'none'
-                      : !isActive
-                        ? 'none'
-                        : sortBy.endsWith('-asc')
-                          ? 'ascending'
-                          : 'descending'
-                  return (
-                    <div
-                      key={col.key}
-                      role="columnheader"
-                      aria-sort={sortable ? sortDir : undefined}
-                      // P.20 — keyboard sortability. tabIndex=0 makes
-                      // the header focusable; Enter / Space trigger the
-                      // sort the same way a click does.
-                      tabIndex={sortable ? 0 : undefined}
-                      onKeyDown={(e) => {
-                        if (!sortable) return
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          onSort(sortKeys[col.key])
-                        }
-                      }}
-                      className={`relative px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left flex items-start group/sort ${sortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-slate-100' : ''}`}
-                      style={{
-                        width: `var(--col-${col.key}-width)`,
-                        minWidth: `var(--col-${col.key}-width)`,
-                      }}
-                      onClick={() => {
-                        if (sortable) onSort(sortKeys[col.key])
-                      }}
-                    >
-                      <span className="flex flex-col items-start gap-0">
-                        <span className="inline-flex items-center gap-1">
-                          {col.labelKey ? t(col.labelKey) : col.label}
-                          {isActive ? (
-                            <span className="text-slate-400" aria-hidden="true">
-                              {sortDir === 'ascending' ? '↑' : '↓'}
-                            </span>
-                          ) : sortable ? (
-                            <span className="text-slate-300 opacity-0 group-hover/sort:opacity-100 transition-opacity" aria-hidden="true">
-                              ↕
-                            </span>
-                          ) : null}
-                        </span>
-                        {col.subLabel && (
-                          <span className="text-[10px] font-normal normal-case tracking-normal text-slate-400 dark:text-slate-500 leading-none mt-0.5">
-                            {col.subLabel}
-                          </span>
-                        )}
-                      </span>
-                      {/* E.12 — resize handle. Mouse-down captures
-                          starting width + clientX, then mousemove
-                          updates the CSS variable directly on the
-                          table root (zero React re-renders during
-                          drag). mouseUp commits to state +
-                          localStorage. */}
-                      <ColumnResizeHandle
-                        columnKey={col.key}
-                        fallbackWidth={col.width ?? 100}
-                        tableRootRef={tableRootRef}
-                        onCommit={(w) =>
-                          setColumnWidths((prev) => ({
-                            ...prev,
-                            [col.key]: w,
-                          }))
-                        }
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Body — relative spacer of total height, virtualized rows
-                  absolute-positioned within. */}
-              <div
-                role="rowgroup"
-                style={{
-                  height: `${rowVirtualizer.getTotalSize()}px`,
-                  position: 'relative',
-                }}
-              >
-                {rowVirtualizer.getVirtualItems().map((vRow) => {
-                  const row = flatRows[vRow.index]
-                  if (!row) return null
-                  // E.1 — pre-compute per-row booleans so React.memo can
-                  // skip re-renders for rows whose selection /
-                  // expansion didn't change.
-                  const productId =
-                    row.kind === 'parent' || row.kind === 'child'
-                      ? row.product.id
-                      : null
-                  const isSelected = productId
-                    ? selected.has(productId)
-                    : false
-                  const isExpanded = productId
-                    ? expandedParents.has(productId)
-                    : false
-                  const isFocused = productId
-                    ? focusedRowId === productId
-                    : false
-                  const productForMenu =
-                    row.kind === 'parent' || row.kind === 'child'
-                      ? row.product
-                      : null
-                  return (
-                    <div
-                      key={vRow.key}
-                      data-index={vRow.index}
-                      ref={rowVirtualizer.measureElement}
-                      role="row"
-                      className={`border-b border-slate-100 flex${draggable ? ' relative' : ''}`}
-                      onContextMenu={
-                        productForMenu
-                          ? (e) => onRowContextMenu(e, productForMenu)
-                          : undefined
-                      }
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${vRow.start}px)`,
-                      }}
-                    >
-                      {row.kind === 'parent' && (
-                        <>
-                          <ProductRow
-                            product={row.product}
-                            isChild={false}
-                            isSelected={isSelected}
-                            isExpanded={isExpanded}
-                            isFocused={isFocused}
-                            visible={visible}
-                            cellPad={cellPad}
-                            onToggleSelect={toggleSelect}
-                            onToggleExpand={onToggleExpand}
-                            onTagEdit={onTagEdit}
-                            onChanged={onChanged}
-                            isDraggable={draggable}
-                            isStaged={_stagedProductIds.has(row.product.id)}
-                            isActivelyDragged={activeProductId === row.product.id}
-                          />
-                          {draggable && <DroppableRowOverlay product={row.product} />}
-                        </>
-                      )}
-                      {row.kind === 'child' && (
-                        <ProductRow
-                          product={row.product}
-                          isChild={true}
-                          isSelected={isSelected}
-                          isExpanded={isExpanded}
-                          isFocused={isFocused}
-                          visible={visible}
-                          cellPad={cellPad}
-                          onToggleSelect={toggleSelect}
-                          onToggleExpand={onToggleExpand}
-                          onTagEdit={onTagEdit}
-                          onChanged={onChanged}
-                          isDraggable={draggable}
-                          isStaged={_stagedProductIds.has(row.product.id)}
-                          isActivelyDragged={activeProductId === row.product.id}
-                        />
-                      )}
-                      {row.kind === 'loading' && (
-                        // U.25 — `aria-colspan` is not a valid ARIA
-                        // attribute (only aria-colindex exists);
-                        // browsers silently drop it. Removed.
-                        <div
-                          className="bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2 text-base text-slate-500 dark:text-slate-400 italic flex-1"
-                          role="cell"
-                        >
-                          {t('products.grid.loadingVariants')}
-                        </div>
-                      )}
-                      {row.kind === 'empty' && (
-                        <div
-                          className="bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2 text-base text-slate-500 dark:text-slate-400 italic flex-1"
-                          role="cell"
-                        >
-                          No variants found
-                          {row.childCount > 0
-                            ? ' (fetch failed — try collapsing and re-opening)'
-                            : ''}
-                          .
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-          {contextMenu && (
-            <RowContextMenu
-              ref={menuRef}
-              x={contextMenu.x}
-              y={contextMenu.y}
-              product={contextMenu.product}
-              onClose={() => setContextMenu(null)}
-              onChanged={onChanged}
-            />
-          )}
-        </Card>
-      </RiskFlaggedContext.Provider>
-    </SearchContext.Provider>
+    <SharedVirtualizedGrid<ProductRowType>
+      rows={products}
+      visible={visible}
+      density={density}
+      cellPad={cellPad}
+      selected={selected}
+      toggleSelect={toggleSelect}
+      toggleSelectAll={toggleSelectAll}
+      allSelected={allSelected}
+      sortBy={sortBy}
+      onSort={onSort}
+      sortKeys={PRODUCT_SORT_KEYS}
+      expandedParents={expandedParents}
+      childrenByParent={childrenByParent}
+      loadingChildren={loadingChildren}
+      onToggleExpand={onToggleExpand}
+      focusedRowId={focusedRowId}
+      searchTerm={searchTerm}
+      riskFlaggedSkus={riskFlaggedSkus}
+      draggable={draggable}
+      stagedIds={stagedProductIds}
+      activeId={activeProductId}
+      storageKey="products"
+      onTagEdit={onTagEdit}
+      renderCell={renderCellCb}
+      renderRowContextMenu={(row, onClose) => (
+        <RowContextMenuContent
+          product={row}
+          onClose={onClose}
+          onChanged={onChanged}
+        />
+      )}
+      renderDragHandle={(row, rowBg) =>
+        draggable ? <DraggableHandle product={row} rowBg={rowBg} /> : null
+      }
+      renderDropOverlay={(row) =>
+        draggable ? <DroppableRowOverlay product={row} /> : null
+      }
+    />
   )
 }
 
-// DraggableHandle — rendered in ProductRow when isDraggable=true.
+// DraggableHandle — rendered in GridRow when isDraggable=true.
 // Must be a separate component so useDraggable is called consistently
 // (never inside a conditional). Only mounted when isDraggable=true,
 // which always means an OrganizeGridTab DndContext is an ancestor.
@@ -721,111 +288,20 @@ function DroppableRowOverlay({ product }: { product: ProductRowType }) {
   )
 }
 
-// E.12 — column resize handle. Sits absolute-right on each header
-// cell. mouseDown captures starting clientX + starting width;
-// document-level listeners track mousemove (updates the CSS variable
-// directly via tableRootRef — zero React updates during drag) and
-// mouseUp (commits the final width to state + localStorage via
-// onCommit, then removes the listeners).
-//
-// Width is clamped to [60, 600]. The handle visually disappears when
-// not hovered/dragged so headers stay clean; expands to a 4-px-wide
-// hit zone via padding.
-function ColumnResizeHandle({
-  columnKey,
-  fallbackWidth,
-  tableRootRef,
-  onCommit,
-}: {
-  columnKey: string
-  fallbackWidth: number
-  tableRootRef: React.RefObject<HTMLDivElement | null>
-  onCommit: (width: number) => void
-}) {
-  const { t } = useTranslations()
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const root = tableRootRef.current
-      if (!root) return
-      // Read the current rendered width — covers both saved overrides
-      // and the default (since the CSS variable is set on the root).
-      const computed = parseFloat(
-        getComputedStyle(root).getPropertyValue(`--col-${columnKey}-width`),
-      )
-      const startW = Number.isFinite(computed) ? computed : fallbackWidth
-      dragRef.current = { startX: e.clientX, startW }
-      const onMove = (ev: MouseEvent) => {
-        const ctx = dragRef.current
-        if (!ctx) return
-        const delta = ev.clientX - ctx.startX
-        const next = Math.max(60, Math.min(600, ctx.startW + delta))
-        // Direct DOM mutation — no React state update during drag.
-        // Cells inherit the new width via CSS variable cascade.
-        root.style.setProperty(`--col-${columnKey}-width`, `${next}px`)
-      }
-      const onUp = () => {
-        const ctx = dragRef.current
-        dragRef.current = null
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
-        if (!ctx) return
-        // Commit the final value (read from the CSS var which is the
-        // source of truth post-drag) so totalWidth updates + the new
-        // width persists in localStorage.
-        const finalComputed = parseFloat(
-          getComputedStyle(root).getPropertyValue(
-            `--col-${columnKey}-width`,
-          ),
-        )
-        if (Number.isFinite(finalComputed)) onCommit(finalComputed)
-      }
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
-    },
-    [columnKey, fallbackWidth, tableRootRef, onCommit],
-  )
-  return (
-    <div
-      onMouseDown={onMouseDown}
-      onClick={(e) => e.stopPropagation()}
-      role="separator"
-      aria-label={t('products.grid.resizeAria', { column: columnKey })}
-      title={t('products.grid.resizeAria', { column: columnKey })}
-      className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 transition-colors"
-    />
-  )
-}
-
-// E.9 — right-click context menu for a product row. Pops at the
-// click position; closes on outside-click, Escape, or scroll. Actions
-// are scoped to a single product (the right-clicked one) — bulk
-// actions stay in the bottom-rising bulk action bar. Status flips
-// and duplicate hit the existing bulk-status / bulk-duplicate
-// endpoints with a one-element productIds array.
-const RowContextMenu = forwardRef<HTMLDivElement, {
-  x: number
-  y: number
-  product: ProductRowType
-  onClose: () => void
-  onChanged: () => void
-}>(function RowContextMenu({
-  x,
-  y,
+// E.9 — right-click context menu content for a product row.
+// The shared VirtualizedGrid handles the fixed-positioned wrapper,
+// portal mounting, and dismiss logic. This component renders only
+// the menu CONTENT (header + action buttons).
+function RowContextMenuContent({
   product,
   onClose,
   onChanged,
-}, ref) {
+}: {
+  product: ProductRowType
+  onClose: () => void
+  onChanged: () => void
+}) {
   const [busy, setBusy] = useState(false)
-  // Clamp position to viewport so the menu doesn't render off-screen
-  // when right-clicked near the right or bottom edge. 240×340 = the
-  // menu's max footprint (8 items + gutters + label header).
-  const W = 240
-  const H = 340
-  const adjX = Math.min(x, window.innerWidth - W - 8)
-  const adjY = Math.min(y, window.innerHeight - H - 8)
   const flip = async (status: 'ACTIVE' | 'DRAFT' | 'INACTIVE') => {
     setBusy(true)
     try {
@@ -900,14 +376,7 @@ const RowContextMenu = forwardRef<HTMLDivElement, {
     </button>
   )
   return (
-    <div
-      ref={ref}
-      role="menu"
-      aria-label={`Actions for ${product.sku}`}
-      onContextMenu={(e) => e.preventDefault()}
-      style={{ left: adjX, top: adjY }}
-      className="fixed z-50 w-60 bg-white border border-slate-200 rounded-md shadow-xl p-1 dark:bg-slate-900 dark:border-slate-800 animate-fade-in"
-    >
+    <>
       <div className="px-2.5 py-1.5 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-100 mb-1 truncate dark:text-slate-400 dark:border-slate-800">
         {product.sku}
       </div>
@@ -936,219 +405,9 @@ const RowContextMenu = forwardRef<HTMLDivElement, {
         )}
       <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
       {item(<Copy size={14} />, 'Duplicate', duplicate)}
-    </div>
-  )
-})
-
-/**
- * Renders one product row's cells (checkbox + chevron + visible
- * columns). Used by both parent and child rows; child rows get a
- * tinted background + tree-line glyph in the chevron column.
- *
- * E.1 — ProductRow as a memoized component. Was previously
- * `renderProductRow({...})` returning a Fragment, which meant every
- * parent re-render (including every keystroke in the search box)
- * re-ran the full row render for every visible virtualized row.
- *
- * Memoization needs *boolean* per-row props (isSelected, isExpanded)
- * rather than the parent's Sets — otherwise React.memo's shallow
- * compare sees a new Set ref on every selection change and re-renders
- * every row anyway. The caller (VirtualizedGrid) computes these
- * booleans once per visible row, so a single selection change
- * re-renders exactly two rows (old + new).
- */
-const ProductRow = memo(function ProductRow({
-  product,
-  isChild,
-  isSelected,
-  isExpanded,
-  isFocused,
-  visible,
-  cellPad,
-  onToggleSelect,
-  onToggleExpand,
-  onTagEdit,
-  onChanged,
-  isDraggable = false,
-  isStaged = false,
-  isActivelyDragged = false,
-}: {
-  product: ProductRowType
-  isChild: boolean
-  isSelected: boolean
-  isExpanded: boolean
-  isFocused: boolean
-  visible: ColumnDef[]
-  cellPad: string
-  onToggleSelect: (id: string, shiftKey: boolean) => void
-  onToggleExpand: (parentId: string) => void
-  onTagEdit: (id: string) => void
-  onChanged: () => void
-  isDraggable?: boolean
-  isStaged?: boolean
-  isActivelyDragged?: boolean
-}) {
-  const { t } = useTranslations()
-  const childCount = product.childCount ?? 0
-  const canExpand = !isChild && product.isParent && childCount > 0
-  // E.10 — focus ring (ring-2 ring-blue-500) applied to every cell of
-  // the J/K-focused row. inset-ring prevents the ring from offsetting
-  // the row position; combined with bg, gives the Linear-style glow.
-  const focusRing = isFocused ? 'ring-2 ring-inset ring-blue-500' : ''
-
-  // W5.3 — Conditional row formatting (Airtable parity). Subtle
-  // background tint by row state so the operator can scan a 50-row
-  // page and pick out the rows that need attention without hunting
-  // through chip columns.
-  //
-  // Priority order (selection always wins, focus + selection
-  // compose):
-  //   selected           → blue (handled below)
-  //   inactive status    → slate dim
-  //   draft status       → amber tint
-  //   active + 0 stock   → rose tint (out-of-stock-and-live = bad)
-  //   default            → no tint
-  //
-  // Tint intensity is /20 in light, /30 in dark — visible enough
-  // to scan but doesn't compete with selection or focus.
-  const stateTint = (() => {
-    if (isSelected) return ''
-    if (product.status === 'INACTIVE')
-      return 'bg-slate-100/50 dark:bg-slate-900/60'
-    if (product.status === 'DRAFT')
-      return 'bg-amber-50/40 dark:bg-amber-950/20'
-    if (product.status === 'ACTIVE' && product.totalStock === 0)
-      return 'bg-rose-50/40 dark:bg-rose-950/20'
-    return ''
-  })()
-
-  const stagedTint = isStaged && !isSelected
-    ? 'bg-teal-50/60 dark:bg-teal-950/25'
-    : ''
-
-  const rowBg = isActivelyDragged
-    ? 'opacity-40'
-    : isChild
-      ? isSelected
-        ? `bg-blue-50/40 ${focusRing}`
-        : `${stagedTint || stateTint || 'bg-slate-50/40'} hover:bg-slate-100/60 ${focusRing}`
-      : isSelected
-        ? `bg-blue-50/30 ${focusRing}`
-        : `${stagedTint || stateTint} hover:bg-slate-50 dark:hover:bg-slate-900 ${focusRing}`
-
-  return (
-    <>
-      {isDraggable && <DraggableHandle product={product} rowBg={rowBg} />}
-      <div
-        className={`px-3 py-2 flex items-center ${rowBg}`}
-        style={{ width: 32, minWidth: 32 }}
-        role="cell"
-      >
-        {/* U.34 — custom-rendered checkbox. The native input rendered
-            hollow under preflight; rows could be selected but the box
-            never visually filled. Button-with-inner-icon makes the
-            checked state unmistakable in light + dark.
-            E.7 — onClick captures shiftKey for range-select; Space
-            toggles via keyboard. */}
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={isSelected}
-          aria-label={isSelected ? 'Deselect row' : 'Select row'}
-          onClick={(e) => {
-            e.preventDefault()
-            onToggleSelect(product.id, e.shiftKey)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === ' ') {
-              e.preventDefault()
-              onToggleSelect(product.id, e.shiftKey)
-            }
-          }}
-          className={`w-4 h-4 rounded border-2 flex-shrink-0 inline-flex items-center justify-center cursor-pointer transition-colors ${
-            isSelected
-              ? 'bg-blue-600 border-blue-600 text-white'
-              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-slate-400 dark:hover:border-slate-500'
-          }`}
-        >
-          {isSelected && <Check className="w-3 h-3" strokeWidth={3} />}
-        </button>
-      </div>
-      <div
-        className={`px-1 py-2 flex items-center ${rowBg}`}
-        style={{ width: 24, minWidth: 24 }}
-        role="cell"
-      >
-        {canExpand ? (
-          <button
-            type="button"
-            onClick={() => onToggleExpand(product.id)}
-            aria-expanded={isExpanded}
-            aria-label={
-              isExpanded
-                ? t('products.grid.collapseVariantsAria', { sku: product.sku })
-                : t('products.grid.expandVariantsAria', {
-                    sku: product.sku,
-                    count: childCount,
-                  })
-            }
-            title={t(
-              childCount === 1
-                ? 'products.mobile.variants.one'
-                : 'products.mobile.variants.other',
-              { count: childCount },
-            )}
-            className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-slate-200 text-slate-500 hover:text-slate-900"
-          >
-            <ChevronRight
-              size={14}
-              className={`transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
-            />
-          </button>
-        ) : isChild ? (
-          <span className="block h-4 w-4 ml-1 border-l-2 border-b-2 border-slate-300 rounded-bl" />
-        ) : null}
-      </div>
-      {/* AM.1 — ★ favourite / star slot. Opens the tag editor so operators
-          can mark products; same slot Amazon uses for favourites. */}
-      <div
-        className={`px-0.5 py-2 flex items-center justify-center ${rowBg}`}
-        style={{ width: 22, minWidth: 22 }}
-        role="cell"
-      >
-        <button
-          type="button"
-          onClick={() => onTagEdit(product.id)}
-          aria-label="Star / tag product"
-          title="Star / tag product"
-          className="text-slate-300 hover:text-amber-400 dark:text-slate-600 dark:hover:text-amber-400 transition-colors"
-        >
-          <Star size={12} />
-        </button>
-      </div>
-      {visible.map((col) => (
-        <div
-          key={col.key}
-          role="cell"
-          className={`${cellPad} flex items-center ${rowBg} overflow-hidden`}
-          // E.12 — CSS variables drive width so column resize updates
-          // every cell live without a React re-render.
-          style={{
-            width: `var(--col-${col.key}-width)`,
-            minWidth: `var(--col-${col.key}-width)`,
-          }}
-        >
-          <ProductCell
-            col={col.key}
-            product={product}
-            onTagEdit={onTagEdit}
-            onChanged={onChanged}
-          />
-        </div>
-      ))}
     </>
   )
-})
+}
 
 // R7.2 — small inline badge surfaced on flagged SKUs. Click jumps to
 // the returns analytics page where the operator sees the bucket math
