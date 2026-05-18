@@ -1496,6 +1496,76 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // POST /api/advertising/reports/cleanup-search-terms?daysToKeep=90
+  // POST /api/advertising/negative-keywords — Phase J.3
+  //
+  // Creates a negative keyword in Amazon at either ad-group or campaign
+  // scope via the SP v3 endpoints (/sp/negativeKeywords or
+  // /sp/campaignNegativeKeywords — both confirmed working through our
+  // Atza| token in Phase J.1 probes).
+  //
+  // Body shape:
+  //   {
+  //     profileId, externalCampaignId, externalAdGroupId?,
+  //     keywordText, matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE',
+  //     scope: 'AD_GROUP' | 'CAMPAIGN', marketplace
+  //   }
+  //
+  // Goes through the Phase 9 write gate. Idempotent — re-clicking the
+  // same negative is a local DB lookup, no Amazon call.
+  fastify.post('/advertising/negative-keywords', async (request, reply) => {
+    const body = request.body as {
+      profileId?: string
+      externalCampaignId?: string
+      externalAdGroupId?: string
+      keywordText?: string
+      matchType?: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
+      scope?: 'AD_GROUP' | 'CAMPAIGN'
+      marketplace?: string
+    }
+    if (!body.profileId || !body.externalCampaignId || !body.keywordText
+        || !body.matchType || !body.scope || !body.marketplace) {
+      return reply.code(400).send({
+        error: 'missing_required_fields',
+        required: ['profileId', 'externalCampaignId', 'keywordText',
+                   'matchType', 'scope', 'marketplace'],
+      })
+    }
+    if (body.scope === 'AD_GROUP' && !body.externalAdGroupId) {
+      return reply.code(400).send({ error: 'externalAdGroupId_required_for_AD_GROUP' })
+    }
+    const { createNegative } = await import(
+      '../services/advertising/ads-negative-kw.service.js'
+    )
+    const result = await createNegative({
+      profileId: body.profileId,
+      externalCampaignId: body.externalCampaignId,
+      externalAdGroupId: body.externalAdGroupId,
+      keywordText: body.keywordText,
+      matchType: body.matchType,
+      scope: body.scope,
+      marketplace: body.marketplace,
+    })
+    if (result.denied) {
+      return reply.code(403).send({
+        error: 'write_gate_denied',
+        reason: result.denied.reason,
+        deniedAt: result.denied.deniedAt,
+      })
+    }
+    if (!result.ok) {
+      return reply.code(502).send({
+        error: 'amazon_rejected',
+        details: result.rawResponse,
+      })
+    }
+    return {
+      ok: true,
+      alreadyExisted: result.alreadyExisted,
+      mode: result.mode,
+      externalNegativeKeywordId: result.externalNegativeKeywordId,
+    }
+  })
+
   fastify.post('/advertising/reports/cleanup-search-terms', async (request, _reply) => {
     const query = request.query as { daysToKeep?: string }
     const daysToKeep = query.daysToKeep ? Math.max(7, Math.min(365, Number(query.daysToKeep))) : 90
