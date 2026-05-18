@@ -260,6 +260,44 @@ const PROBE_VARIANTS: ProbeVariant[] = [
     contentTypeHeader: 'application/vnd.negativetargets.v1+json',
     body: { negativeTargets: [] },
   },
+
+  // ── J.1 follow-up: v1 negativeTargets all blocked by gateway. Try
+  // the legacy per-product /sp/negativeKeywords and /sb/v4/negativeKeywords
+  // paths — these go through the SAME gateway as /sp/campaigns/list
+  // (which we know works for our token).
+
+  {
+    id: 'sp_v3_negative_keywords_list',
+    description: 'POST /sp/negativeKeywords/list (legacy SP v3 negatives — alt to v1)',
+    method: 'POST', path: '/sp/negativeKeywords/list',
+    acceptHeader: 'application/vnd.spNegativeKeyword.v3+json',
+    contentTypeHeader: 'application/vnd.spNegativeKeyword.v3+json',
+    body: { stateFilter: { include: ['ENABLED', 'PAUSED'] }, maxResults: 1 },
+  },
+  {
+    id: 'sp_v3_negative_keywords_create_probe',
+    description: 'POST /sp/negativeKeywords with empty body (auth check)',
+    method: 'POST', path: '/sp/negativeKeywords',
+    acceptHeader: 'application/vnd.spNegativeKeyword.v3+json',
+    contentTypeHeader: 'application/vnd.spNegativeKeyword.v3+json',
+    body: { negativeKeywords: [] },
+  },
+  {
+    id: 'sp_v3_campaign_negative_keywords_list',
+    description: 'POST /sp/campaignNegativeKeywords/list (campaign-level SP negatives)',
+    method: 'POST', path: '/sp/campaignNegativeKeywords/list',
+    acceptHeader: 'application/vnd.spCampaignNegativeKeyword.v3+json',
+    contentTypeHeader: 'application/vnd.spCampaignNegativeKeyword.v3+json',
+    body: { stateFilter: { include: ['ENABLED'] }, maxResults: 1 },
+  },
+  {
+    id: 'sb_v4_negative_keywords_list',
+    description: 'POST /sb/v4/negativeKeywords/list (SB v4 negatives)',
+    method: 'POST', path: '/sb/v4/negativeKeywords/list',
+    acceptHeader: 'application/vnd.sbnegativekeywordresource.v4+json',
+    contentTypeHeader: 'application/vnd.sbnegativekeywordresource.v4+json',
+    body: { maxResults: 1 },
+  },
 ]
 
 // ── Probe executor ───────────────────────────────────────────────────
