@@ -517,6 +517,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCHours(0, 0, 0, 0)
 
     // ── 1. Find all AdProductAd rows for this product ───────────────────
+    // Select creativeJson + adType so the UI can render multi-product
+    // creatives (especially SB ads where one creative bundles 3-4 ASINs).
     const productAds = await prisma.adProductAd.findMany({
       where: {
         OR: [
@@ -525,7 +527,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           ...(query.sku  ? [{ sku:  query.sku  }] : []),
         ],
       },
-      select: { id: true, asin: true, sku: true, adGroupId: true },
+      select: {
+        id: true, asin: true, sku: true, adGroupId: true,
+        externalAdId: true, status: true, adType: true,
+        creativeJson: true, deliveryStatus: true, deliveryReasons: true,
+      },
     })
     if (productAds.length === 0) {
       return { windowDays, productAds: 0, campaigns: [], searchTerms: [], summary: null }
@@ -625,20 +631,114 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     })
 
-    // ── 5. Summary ──────────────────────────────────────────────────────
+    // ── 5. Creatives — surface multi-product creativeJson, especially
+    // valuable for SB ads where one ad bundles multiple ASINs. We
+    // build a campaign-name + adGroup-name lookup so the UI can show
+    // "this product appears in Brand Builder XYZ alongside ASINs A, B,
+    // C" without extra round-trips.
+    const adGroupNameMap = new Map<string, string>(
+      adGroups.length === 0 ? [] :
+      (await prisma.adGroup.findMany({
+        where: { id: { in: adGroups.map((g) => g.id) } },
+        select: { id: true, name: true },
+      })).map((g) => [g.id, g.name]),
+    )
+    const adGroupToCampaign = new Map(adGroups.map((g) => [g.id, g.campaignId]))
+    const campaignNameMap = new Map(campaigns.map((c) => [c.id, { name: c.name, adProduct: c.adProduct, marketplace: c.marketplace }]))
+
+    // Collect ALL ASINs/SKUs referenced in creativeJson.products[] so
+    // we can resolve them to local Product names + thumbnails in one
+    // batch query. Skips the current product (it's the focus).
+    const siblingAsins = new Set<string>()
+    const siblingSkus = new Set<string>()
+    for (const pa of productAds) {
+      const products = (pa.creativeJson as { products?: Array<{ productIdType?: string; productId?: string }> } | null)
+        ?.products ?? []
+      for (const p of products) {
+        if (!p.productId) continue
+        if (p.productIdType === 'ASIN' && p.productId !== query.asin) siblingAsins.add(p.productId)
+        if (p.productIdType === 'SKU'  && p.productId !== query.sku ) siblingSkus.add(p.productId)
+      }
+    }
+    const siblingProducts = (siblingAsins.size > 0 || siblingSkus.size > 0)
+      ? await prisma.product.findMany({
+          where: {
+            OR: [
+              ...(siblingAsins.size > 0 ? [{ amazonAsin: { in: [...siblingAsins] } }] : []),
+              ...(siblingSkus.size  > 0 ? [{ sku:        { in: [...siblingSkus]  } }] : []),
+            ],
+          },
+          select: { id: true, sku: true, name: true, amazonAsin: true },
+        })
+      : []
+    const asinToSibling = new Map(siblingProducts.filter((p) => p.amazonAsin).map((p) => [p.amazonAsin!, p]))
+    const skuToSibling  = new Map(siblingProducts.map((p) => [p.sku, p]))
+
+    const creatives = productAds.map((pa) => {
+      const campId = adGroupToCampaign.get(pa.adGroupId)
+      const camp   = campId ? campaignNameMap.get(campId) : undefined
+      const products = (pa.creativeJson as { products?: Array<{ productIdType?: string; productId?: string }> } | null)
+        ?.products ?? []
+      // Annotate each entry: is it the current product? what's the
+      // sibling SKU/name?
+      const annotated = products.map((p) => {
+        const isCurrent =
+          (p.productIdType === 'ASIN' && p.productId === query.asin) ||
+          (p.productIdType === 'SKU'  && p.productId === query.sku)
+        let siblingName: string | null = null
+        let siblingSku:  string | null = null
+        let siblingProductId: string | null = null
+        if (!isCurrent) {
+          const sib = p.productIdType === 'ASIN'
+            ? (p.productId ? asinToSibling.get(p.productId) : undefined)
+            : (p.productId ? skuToSibling.get(p.productId)  : undefined)
+          if (sib) {
+            siblingName = sib.name
+            siblingSku  = sib.sku
+            siblingProductId = sib.id
+          }
+        }
+        return {
+          productIdType:  p.productIdType ?? null,
+          productId:      p.productId ?? null,
+          isCurrent,
+          siblingName, siblingSku, siblingProductId,
+        }
+      })
+      return {
+        id:             pa.id,
+        externalAdId:   pa.externalAdId,
+        adType:         pa.adType,
+        status:         pa.status,
+        deliveryStatus: pa.deliveryStatus,
+        deliveryReasons: pa.deliveryReasons,
+        campaignName:   camp?.name ?? null,
+        campaignAdProduct: camp?.adProduct ?? null,
+        marketplace:    camp?.marketplace ?? null,
+        adGroupName:    adGroupNameMap.get(pa.adGroupId) ?? null,
+        productCount:   products.length,
+        products:       annotated,
+      }
+    })
+
+    // ── 6. Summary ──────────────────────────────────────────────────────
     const totalSpend = campaignData.reduce((s, c) => s + c.spendCents, 0)
     const totalSales = campaignData.reduce((s, c) => s + c.adSalesCents, 0)
+    const sbCreatives = creatives.filter((c) => c.campaignAdProduct === 'SPONSORED_BRANDS').length
+    const multiProductCreatives = creatives.filter((c) => c.productCount > 1).length
     const summary = {
       campaignCount: campaigns.length,
       productAdCount: productAds.length,
       totalSpendCents: totalSpend,
       totalAdSalesCents: totalSales,
       acos: totalSales > 0 ? Math.round((totalSpend / totalSales) * 1000) / 10 : null,
+      sbCreatives,
+      multiProductCreatives,
       windowDays,
     }
 
     reply.header('Cache-Control', 'private, max-age=60')
-    return { windowDays, productAds: productAds.length, campaigns: campaignData, searchTerms, summary }
+    return { windowDays, productAds: productAds.length, campaigns: campaignData, searchTerms, creatives, summary }
   })
 
   //   STALE_CAMPAIGN  — ENABLED campaigns with 0 impressions in windowDays

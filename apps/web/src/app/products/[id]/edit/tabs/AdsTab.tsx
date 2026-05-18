@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react'
 import {
   Loader2, ExternalLink, TrendingDown, TrendingUp, Search,
-  Activity, AlertCircle, BarChart2,
+  Activity, AlertCircle, BarChart2, Layers, Star,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -56,6 +56,32 @@ interface Summary {
   totalAdSalesCents: number
   acos: number | null
   windowDays: number
+  sbCreatives?: number
+  multiProductCreatives?: number
+}
+
+interface CreativeProduct {
+  productIdType: 'ASIN' | 'SKU' | string | null
+  productId: string | null
+  isCurrent: boolean
+  siblingName: string | null
+  siblingSku: string | null
+  siblingProductId: string | null
+}
+
+interface CreativeRow {
+  id: string
+  externalAdId: string | null
+  adType: string | null
+  status: string
+  deliveryStatus: string | null
+  deliveryReasons: string[]
+  campaignName: string | null
+  campaignAdProduct: string | null
+  marketplace: string | null
+  adGroupName: string | null
+  productCount: number
+  products: CreativeProduct[]
 }
 
 interface ProductAdsData {
@@ -63,6 +89,7 @@ interface ProductAdsData {
   productAds: number
   campaigns: CampaignRow[]
   searchTerms: SearchTermRow[]
+  creatives?: CreativeRow[]
   summary: Summary | null
 }
 
@@ -186,6 +213,7 @@ export function AdsTab({
   }
 
   const { summary, campaigns, searchTerms } = data
+  const creatives = data.creatives ?? []
 
   return (
     <div className="space-y-5 py-2">
@@ -353,6 +381,110 @@ export function AdsTab({
             <a href="/marketing/advertising/search-terms" target="_blank" className="hover:underline text-blue-500">
               View all search terms →
             </a>
+          </p>
+        </section>
+      )}
+
+      {/* Creatives — multi-product creative envelope from v1 export */}
+      {creatives.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5" aria-hidden />
+            Ad Creatives ({creatives.length})
+            {summary?.multiProductCreatives ? (
+              <span className="ml-1 text-[10px] text-slate-400 normal-case tracking-normal">
+                · {summary.multiProductCreatives} multi-product
+              </span>
+            ) : null}
+          </h3>
+          <div className="space-y-2">
+            {creatives.map((cr) => (
+              <div key={cr.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                        {cr.campaignName ?? '(unknown campaign)'}
+                      </span>
+                      {cr.campaignAdProduct && (
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                          {cr.campaignAdProduct === 'SPONSORED_PRODUCTS' ? 'SP'
+                            : cr.campaignAdProduct === 'SPONSORED_BRANDS' ? 'SB'
+                            : 'SD'}
+                        </span>
+                      )}
+                      {cr.adType && cr.adType !== 'PRODUCT_AD' && (
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                          {cr.adType.replace('_', ' ')}
+                        </span>
+                      )}
+                      <StatusBadge status={cr.status} />
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                      {cr.adGroupName ?? '(no ad-group name)'}{' '}
+                      {cr.marketplace && <span className="text-slate-400">· {cr.marketplace}</span>}
+                    </p>
+                  </div>
+                  {cr.productCount > 1 && (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-200 dark:ring-amber-800">
+                      Multi · {cr.productCount}
+                    </span>
+                  )}
+                </div>
+
+                {/* Product entries */}
+                <ul className="space-y-1">
+                  {cr.products.map((p, i) => (
+                    <li
+                      key={i}
+                      className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${
+                        p.isCurrent
+                          ? 'bg-blue-50 dark:bg-blue-950/40 ring-1 ring-inset ring-blue-200 dark:ring-blue-800'
+                          : 'bg-slate-50 dark:bg-slate-800/40'
+                      }`}
+                    >
+                      {p.isCurrent ? (
+                        <Star className="h-3 w-3 text-blue-500 fill-blue-500 shrink-0" aria-label="This product" />
+                      ) : (
+                        <span className="h-3 w-3 shrink-0" />
+                      )}
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 w-8 shrink-0">
+                        {p.productIdType}
+                      </span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300 truncate">
+                        {p.productId ?? '—'}
+                      </span>
+                      {p.siblingName && (
+                        <a
+                          href={p.siblingProductId ? `/products/${p.siblingProductId}/edit?tab=ads` : '#'}
+                          className="text-slate-500 dark:text-slate-400 truncate hover:underline"
+                          title={p.siblingName}
+                        >
+                          → {p.siblingName}
+                        </a>
+                      )}
+                      {p.isCurrent && (
+                        <span className="ml-auto text-[10px] text-blue-700 dark:text-blue-300 font-medium uppercase tracking-wider shrink-0">
+                          This product
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Delivery status */}
+                {cr.deliveryStatus && cr.deliveryStatus !== 'DELIVERING' && cr.deliveryReasons.length > 0 && (
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-2">
+                    Not delivering: {cr.deliveryReasons.join(', ')}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5">
+            Creative data populated by the v1 export pipeline. SB ads typically
+            bundle multiple ASINs in one creative; SP ads usually serve one ASIN.
           </p>
         </section>
       )}
