@@ -144,6 +144,20 @@ interface Props {
   titleOverride?: string
   /** Breadcrumbs override. */
   breadcrumbs?: Array<{ label: string; href?: string }>
+  /**
+   * G.2 — localStorage key prefix for column visibility, column widths,
+   * and density. Defaults to 'listings' (the universal grid).
+   * Channel pages pass e.g. 'amazon', 'ebay', 'shopify' so their saved
+   * layout is isolated from the universal grid and from each other.
+   */
+  storageKey?: string
+  /**
+   * G.2 — default visible columns for this surface when no saved
+   * localStorage state exists yet. Channel pages pass a subset that
+   * hides the 'channel' column (redundant when locked) and shows
+   * channel-appropriate columns by default.
+   */
+  channelDefaultVisible?: string[]
 }
 
 const ALL_COLUMNS = [
@@ -197,7 +211,9 @@ const CHANNEL_TONE: Record<string, string> = {
 }
 
 // ── Component ───────────────────────────────────────────────────────
-export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleOverride, breadcrumbs }: Props) {
+export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleOverride, breadcrumbs, storageKey: storageKeyProp, channelDefaultVisible }: Props) {
+  const storageKey = storageKeyProp ?? 'listings'
+  const defaultVisible = channelDefaultVisible ?? DEFAULT_VISIBLE
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
@@ -238,11 +254,11 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // Local UI state
   const [searchInput, setSearchInput] = useState(search)
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return DEFAULT_VISIBLE
+    if (typeof window === 'undefined') return defaultVisible
     try {
-      const saved = window.localStorage.getItem('listings.visibleColumns')
-      return saved ? JSON.parse(saved) : DEFAULT_VISIBLE
-    } catch { return DEFAULT_VISIBLE }
+      const saved = window.localStorage.getItem(`${storageKey}.visibleColumns`)
+      return saved ? JSON.parse(saved) : defaultVisible
+    } catch { return defaultVisible }
   })
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -257,16 +273,16 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   const [activeRowIndex, setActiveRowIndex] = useState(-1)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  // G.1 — density persisted to localStorage per-surface.
+  // G.1/G.2 — density persisted per-surface (storageKey).
   const [density, setDensity] = useState<Density>(() => {
     if (typeof window === 'undefined') return 'comfortable'
     try {
-      return (window.localStorage.getItem('listings.density') as Density) ?? 'comfortable'
+      return (window.localStorage.getItem(`${storageKey}.density`) as Density) ?? 'comfortable'
     } catch { return 'comfortable' }
   })
   useEffect(() => {
-    try { window.localStorage.setItem('listings.density', density) } catch {}
-  }, [density])
+    try { window.localStorage.setItem(`${storageKey}.density`, density) } catch {}
+  }, [density, storageKey])
 
   // C.11 — saved views. Re-uses the existing /api/saved-views CRUD
   // shipped for /products (P.3); the SavedView model has a `surface`
@@ -321,12 +337,12 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // Toast for save-view failures (lock conflicts, network errors).
   const savedViewToast = useToast()
 
-  // Persist column choices
+  // Persist column choices (keyed by storageKey so channel pages don't share state)
   useEffect(() => {
     try {
-      window.localStorage.setItem('listings.visibleColumns', JSON.stringify(visibleColumns))
+      window.localStorage.setItem(`${storageKey}.visibleColumns`, JSON.stringify(visibleColumns))
     } catch {}
-  }, [visibleColumns])
+  }, [visibleColumns, storageKey])
 
   // Debounce search → URL
   useEffect(() => {
@@ -868,6 +884,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           activeRowIndex={activeRowIndex}
           density={density}
           setDensity={setDensity}
+          storageKey={storageKey}
         />
       )}
 
@@ -1522,8 +1539,10 @@ function GridLens(props: {
   // G.1 — row density, persisted in ListingsWorkspace and passed down.
   density: Density
   setDensity: (d: Density) => void
+  // G.2 — storage key namespace for column widths (matches visibleColumns key).
+  storageKey: string
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity } = props
+  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey } = props
 
   const allSelected = grid.listings.length > 0 && grid.listings.every((l) => selected.has(l.id))
 
@@ -1761,7 +1780,7 @@ function GridLens(props: {
         focusedRowId={focusedRowId}
         searchTerm={props.search}
         riskFlaggedSkus={_EMPTY_SET}
-        storageKey="listings"
+        storageKey={storageKey}
         renderCell={(listing, colKey) => (
           <CellRenderer
             col={colKey}

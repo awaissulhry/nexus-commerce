@@ -47,7 +47,12 @@ export default function ShopifyListingsClient({ breadcrumbs }: Props) {
   return (
     <div className="space-y-4">
       <ShopifyKpiStrip overview={overview} loading={loading} />
-      <ListingsWorkspace lockChannel="SHOPIFY" breadcrumbs={breadcrumbs} />
+      <ListingsWorkspace
+        lockChannel="SHOPIFY"
+        breadcrumbs={breadcrumbs}
+        storageKey="shopify"
+        channelDefaultVisible={['thumb', 'product', 'status', 'syncStatus', 'price', 'quantity', 'pricingRule', 'lastSync', 'actions']}
+      />
     </div>
   )
 }

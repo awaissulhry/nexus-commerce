@@ -120,6 +120,8 @@ export default function EbayListingsClient({
         lockChannel="EBAY"
         lockMarketplace={activeMarket}
         breadcrumbs={breadcrumbs}
+        storageKey="ebay"
+        channelDefaultVisible={['thumb', 'product', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'externalId', 'lastSync', 'actions']}
       />
     </div>
   )

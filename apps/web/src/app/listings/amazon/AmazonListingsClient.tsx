@@ -136,6 +136,8 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
         lockChannel="AMAZON"
         lockMarketplace={activeMarket}
         breadcrumbs={breadcrumbs}
+        storageKey="amazon"
+        channelDefaultVisible={['thumb', 'product', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'externalId', 'lastSync', 'actions']}
       />
     </div>
   )
