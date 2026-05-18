@@ -243,9 +243,22 @@ export async function pollPendingJobs(limit = 20): Promise<PollSummary> {
         ? (conn.region as AdsRegion)
         : 'EU'
 
+      // v3 Reports API status response shape:
+      //   status: PENDING | PROCESSING | COMPLETED | FAILED
+      //   url: signed S3 download URL when COMPLETED (NOT `location`)
+      //   urlExpiresAt: ISO timestamp
+      //   fileSize: bytes
+      //   failureReason: error message when FAILED
+      // Phase G fix: we were reading `location` (v2 field name) instead
+      // of `url` (v3 field name). When Amazon returned COMPLETED with
+      // a real url, the `if (upper === 'COMPLETED' && status.location)`
+      // check failed because location was undefined, falling through to
+      // the else branch which wrote status='COMPLETED' but with
+      // location=null. Ingest then refused the job ("not ingestable").
       const status = await liveCall<{
         status: string
-        location?: string
+        url?: string
+        urlExpiresAt?: string
         fileSize?: number
         failureReason?: string
       }>({
@@ -257,12 +270,12 @@ export async function pollPendingJobs(limit = 20): Promise<PollSummary> {
 
       const upper = status.status?.toUpperCase() ?? 'PENDING'
 
-      if (upper === 'COMPLETED' && status.location) {
+      if (upper === 'COMPLETED' && status.url) {
         await prisma.amazonAdsReportJob.update({
           where: { id: job.id },
           data: {
             status: 'COMPLETED',
-            location: status.location,
+            location: status.url,
             fileSize: status.fileSize,
             lastPolledAt: new Date(),
             completedAt: new Date(),
@@ -282,11 +295,19 @@ export async function pollPendingJobs(limit = 20): Promise<PollSummary> {
         })
         summary.failed += 1
       } else {
-        // PENDING | IN_PROGRESS | PROCESSING
+        // PENDING | IN_PROGRESS | PROCESSING (or COMPLETED-without-url race)
+        // Phase G fix: if Amazon says COMPLETED but the signed url hasn't
+        // materialized yet (a rare race during their report finalization),
+        // keep the job in the polling set by writing IN_PROGRESS instead
+        // of letting status='COMPLETED' through with location=null.
+        const writeStatus =
+          upper === 'PROCESSING' ? 'IN_PROGRESS'
+          : upper === 'COMPLETED' ? 'IN_PROGRESS' // url missing; re-poll
+          : upper
         await prisma.amazonAdsReportJob.update({
           where: { id: job.id },
           data: {
-            status: upper === 'PROCESSING' ? 'IN_PROGRESS' : upper,
+            status: writeStatus,
             lastPolledAt: new Date(),
             attempts: job.attempts + 1,
           },

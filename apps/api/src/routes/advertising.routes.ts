@@ -1099,6 +1099,20 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // bypassed via local LWA fetch).
   //
   // Body: { profileId: string }
+  // POST /api/advertising/debug/reset-stuck-completed-jobs — Phase G follow-up
+  //
+  // Resets jobs that are status=COMPLETED but location=null (a data state
+  // that should be impossible after the location→url fix). Sets them back
+  // to IN_PROGRESS so the polling cron re-queries Amazon and captures the
+  // signed URL on the next poll cycle.
+  fastify.post('/advertising/debug/reset-stuck-completed-jobs', async (_request, _reply) => {
+    const r = await prisma.amazonAdsReportJob.updateMany({
+      where: { status: 'COMPLETED', location: null },
+      data: { status: 'IN_PROGRESS', completedAt: null },
+    })
+    return { ok: true, jobsReset: r.count }
+  })
+
   // GET /api/advertising/debug/report-status/:jobId — Phase G diagnostic
   //
   // Fetches Amazon's raw status response for a single AmazonAdsReportJob
