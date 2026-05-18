@@ -308,6 +308,27 @@ export interface CampaignPatch {
   endDate?: string | null
 }
 
+// ── Write operations — v3 SP batch PUT (intentionally not v1) ────────
+//
+// Phase K.1 probes confirmed v1 unified writes (PUT /campaigns,
+// /adGroups, /targets, /ads — with both SP v3 and v1 unified MIME
+// types, plus POST/DELETE shapes) all return 403 with the AWS SigV4
+// "Invalid key=value pair (missing equal-sign) in Authorization
+// header" error. Amazon's v1 write gateway requires SigV4 signed
+// requests; LWA Bearer tokens (what we have) only authenticate v1
+// reads/exports.
+//
+// SigV4 migration would need AWS IAM credentials provisioned for the
+// Ads account (a DSP-tier requirement, not provided to LWA-only
+// operators) plus a v4 signing implementation. Until either of those
+// changes, v3 SP batch PUTs are the canonical write path for our
+// auth setup. They work, they're stable, they're gated by Phase 9.
+//
+// If Amazon ever shifts our gateway to accept LWA Bearer for v1
+// writes, this is where the migration lives — swap the path to
+// /campaigns, the MIME to vnd.campaign.v1+json, and the body
+// wrapping from {campaigns:[]} to a single object batch.
+
 export async function updateCampaign(
   ctx: ClientContext,
   externalCampaignId: string,
