@@ -21,6 +21,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { logger } from '../utils/logger.js'
 import { testConnection, adsMode } from '../services/advertising/ads-api-client.js'
 import {
   runAdsSyncOnce,
@@ -1061,6 +1062,34 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       endDate: body.endDate,
     })
     return { ok: true, ...result }
+  })
+
+  // POST /api/advertising/profit/backfill-ad-spend — Phase 11 close-out
+  //
+  // Manually triggers fillAdSpend for a date range. Use after the first
+  // successful report ingest cycle to back-fill advertisingSpendCents on
+  // ProductProfitDaily rows that were created with 0 (before AD data landed).
+  // Body: { startDate: "YYYY-MM-DD", endDate?: "YYYY-MM-DD" }
+  fastify.post('/advertising/profit/backfill-ad-spend', async (request, reply) => {
+    const body = request.body as { startDate?: string; endDate?: string }
+    if (!body?.startDate) return reply.code(400).send({ error: 'startDate required (YYYY-MM-DD)' })
+    const { fillAdSpend } = await import(
+      '../services/advertising/true-profit-rollup.service.js'
+    )
+    const start = new Date(body.startDate)
+    const end   = body.endDate ? new Date(body.endDate) : new Date(body.startDate)
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return reply.code(400).send({ error: 'invalid date format' })
+    }
+    const results: Array<{ date: string; productsUpdated: number; errors: number }> = []
+    let cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()))
+    const stop  = new Date(Date.UTC(end.getUTCFullYear(),   end.getUTCMonth(),   end.getUTCDate()))
+    while (cursor <= stop) {
+      const r = await fillAdSpend(new Date(cursor))
+      results.push({ date: cursor.toISOString().slice(0, 10), productsUpdated: r.productsUpdated, errors: r.errors.length })
+      cursor = new Date(cursor.getTime() + 86_400_000)
+    }
+    return { ok: true, datesProcessed: results.length, results }
   })
 
   // POST /api/advertising/reports/cleanup-search-terms?daysToKeep=90

@@ -24,6 +24,7 @@ interface RollupSummary {
   datesProcessed: string[]
   marketplacesProcessed: string[]
   rowsUpserted: number
+  adSpendProductsUpdated: number
   errors: string[]
 }
 
@@ -203,6 +204,7 @@ export async function runTrueProfitRollupOnce(
     datesProcessed: [],
     marketplacesProcessed: [],
     rowsUpserted: 0,
+    adSpendProductsUpdated: 0,
     errors: [],
   }
   const markets = new Set<string>()
@@ -257,7 +259,180 @@ export async function runTrueProfitRollupOnce(
   }
 
   summary.marketplacesProcessed = Array.from(markets).sort()
+
+  // Fill advertisingSpendCents for every date we processed — runs after
+  // the main loop so ProductProfitDaily rows already exist to patch.
+  for (const dateStr_ of summary.datesProcessed) {
+    try {
+      const result = await fillAdSpend(new Date(dateStr_))
+      summary.adSpendProductsUpdated += result.productsUpdated
+      summary.errors.push(...result.errors)
+    } catch (err) {
+      summary.errors.push(`adSpend-${dateStr_}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   return summary
+}
+
+// ── Ad-spend backfill (AD.4 / Phase 11 close-out) ────────────────────────
+//
+// Walks the join chain:
+//   AmazonAdsDailyPerformance (CAMPAIGN, date=X)
+//   → entityId = Campaign.externalCampaignId
+//   → Campaign → AdGroup → AdProductAd → Product
+//
+// Distributes each campaign's daily spend proportionally across its
+// products (1/N share per product), then patches the existing
+// ProductProfitDaily row with real advertisingSpendCents + recalculated
+// trueProfitCents. Sets coverage.hasAdSpend = true so the UI badge
+// shows 100% coverage instead of 75%.
+//
+// Called at the end of runTrueProfitRollupOnce so ad spend always
+// reflects the same day's reporting data.
+
+export async function fillAdSpend(
+  date: Date,
+): Promise<{ productsUpdated: number; errors: string[] }> {
+  const start = utcMidnight(date)
+  const end   = new Date(start.getTime() + 86_400_000)
+
+  // 1. Campaign-level spend aggregated by (entityId, marketplace) for this day
+  const perfRows = await prisma.amazonAdsDailyPerformance.groupBy({
+    by: ['entityId', 'marketplace'],
+    where: { date: { gte: start, lt: end }, entityType: 'CAMPAIGN' },
+    _sum: { costMicros: true },
+  })
+  if (perfRows.length === 0) return { productsUpdated: 0, errors: [] }
+
+  const extCampaignIds = [...new Set(perfRows.map((r) => r.entityId))]
+
+  // 2. Resolve join chain: Campaign → AdGroup → AdProductAd
+  const campaigns = await prisma.campaign.findMany({
+    where: { externalCampaignId: { in: extCampaignIds } },
+    select: {
+      id: true,
+      externalCampaignId: true,
+      marketplace: true,
+      adGroups: {
+        select: {
+          productAds: { select: { productId: true, asin: true, sku: true } },
+        },
+      },
+    },
+  })
+
+  // Batch-resolve asin/sku → productId in a single query
+  const unresolvedAsins = new Set<string>()
+  const unresolvedSkus  = new Set<string>()
+  for (const camp of campaigns) {
+    for (const ag of camp.adGroups) {
+      for (const pa of ag.productAds) {
+        if (!pa.productId) {
+          if (pa.asin) unresolvedAsins.add(pa.asin)
+          if (pa.sku)  unresolvedSkus.add(pa.sku)
+        }
+      }
+    }
+  }
+  const resolvedProducts =
+    unresolvedAsins.size > 0 || unresolvedSkus.size > 0
+      ? await prisma.product.findMany({
+          where: {
+            OR: [
+              ...(unresolvedAsins.size > 0 ? [{ amazonAsin: { in: [...unresolvedAsins] } }] : []),
+              ...(unresolvedSkus.size  > 0 ? [{ sku:        { in: [...unresolvedSkus]  } }] : []),
+            ],
+          },
+          select: { id: true, amazonAsin: true, sku: true },
+        })
+      : []
+  const asinToId = new Map(resolvedProducts.filter((p) => p.amazonAsin).map((p) => [p.amazonAsin!, p.id]))
+  const skuToId  = new Map(resolvedProducts.map((p) => [p.sku, p.id]))
+
+  // Build externalCampaignId → { marketplace, productIds[] }
+  const campMap = new Map<string, { marketplace: string; productIds: string[] }>()
+  for (const camp of campaigns) {
+    if (!camp.externalCampaignId) continue
+    const ids = new Set<string>()
+    for (const ag of camp.adGroups) {
+      for (const pa of ag.productAds) {
+        if (pa.productId) {
+          ids.add(pa.productId)
+        } else {
+          const resolved = (pa.asin ? asinToId.get(pa.asin) : undefined)
+            ?? (pa.sku  ? skuToId.get(pa.sku)   : undefined)
+          if (resolved) ids.add(resolved)
+        }
+      }
+    }
+    campMap.set(camp.externalCampaignId, {
+      marketplace: camp.marketplace ?? '',
+      productIds: [...ids],
+    })
+  }
+
+  // 3. Aggregate spend per (productId, marketplace) — equal share per product
+  const spendMap = new Map<string, number>() // key: `${productId}::${marketplace}`
+  for (const perf of perfRows) {
+    const camp = campMap.get(perf.entityId)
+    if (!camp || camp.productIds.length === 0) continue
+    const spendCents   = Math.round(Number(perf._sum.costMicros ?? 0n) / 10_000)
+    const perProduct   = Math.round(spendCents / camp.productIds.length)
+    const marketplace  = perf.marketplace || camp.marketplace
+    for (const productId of camp.productIds) {
+      const key = `${productId}::${marketplace}`
+      spendMap.set(key, (spendMap.get(key) ?? 0) + perProduct)
+    }
+  }
+
+  // 4. Patch ProductProfitDaily rows
+  let productsUpdated = 0
+  const errors: string[] = []
+  for (const [key, advertisingSpendCents] of spendMap) {
+    const [productId, marketplace] = key.split('::')
+    try {
+      const row = await prisma.productProfitDaily.findUnique({
+        where: { productId_marketplace_date: { productId, marketplace, date: start } },
+        select: {
+          grossRevenueCents: true,
+          cogsCents: true,
+          referralFeesCents: true,
+          fbaFulfillmentFeesCents: true,
+          returnsRefundsCents: true,
+          coverage: true,
+        },
+      })
+      if (!row) continue // rollup hasn't written this product yet — skip
+
+      const trueProfit =
+        row.grossRevenueCents
+        - row.cogsCents
+        - row.referralFeesCents
+        - row.fbaFulfillmentFeesCents
+        - advertisingSpendCents
+        - row.returnsRefundsCents
+      const marginPct =
+        row.grossRevenueCents > 0 ? trueProfit / row.grossRevenueCents : null
+      const coverage = { ...((row.coverage as object) ?? {}), hasAdSpend: true }
+
+      await prisma.productProfitDaily.update({
+        where: { productId_marketplace_date: { productId, marketplace, date: start } },
+        data: { advertisingSpendCents, trueProfitCents: trueProfit, trueProfitMarginPct: marginPct, coverage },
+      })
+      productsUpdated++
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      errors.push(`${key}: ${msg}`)
+      logger.warn('[true-profit-rollup] ad-spend patch failed', { key, error: msg })
+    }
+  }
+
+  logger.info('[true-profit-rollup] ad-spend fill complete', {
+    date: dateStr(date), campaignsResolved: campMap.size,
+    productsInSpendMap: spendMap.size, productsUpdated,
+  })
+  return { productsUpdated, errors }
 }
 
 export function summarizeTrueProfitRollup(s: RollupSummary): string {
@@ -265,6 +440,7 @@ export function summarizeTrueProfitRollup(s: RollupSummary): string {
     `dates=${s.datesProcessed.length}`,
     `markets=${s.marketplacesProcessed.join(',') || 'none'}`,
     `rows=${s.rowsUpserted}`,
+    s.adSpendProductsUpdated > 0 ? `adSpend=${s.adSpendProductsUpdated}` : null,
     s.errors.length > 0 ? `errors=${s.errors.length}` : null,
   ]
     .filter(Boolean)
