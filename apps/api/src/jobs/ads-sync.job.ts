@@ -4,11 +4,18 @@
  *   ads-sync                 every 30 min — pulls campaign structure
  *   fba-storage-age-ingest   every 6 hours — refreshes aged-stock feed
  *   true-profit-rollup       nightly 03:00 UTC — re-aggregates yesterday
+ *   ads-metrics-ingest       hourly :22 — legacy metrics path
  *
- * All three are gated by `NEXUS_ENABLE_AMAZON_ADS_CRON=1` and default
- * off in dev. In sandbox mode (`NEXUS_AMAZON_ADS_MODE=sandbox`, default)
- * they still write to DB but use fixture data instead of calling
- * Amazon. AD.2 adds `ads-metrics-ingest` (Reports API).
+ * Phase 11 — Reports API pipeline crons (all gated by same env flag):
+ *   ads-report-create        daily 01:15 UTC — creates yesterday's reports
+ *   ads-report-create-st     daily 01:30 UTC — creates search-term reports
+ *   ads-report-create-pl     daily 01:45 UTC — creates placement reports
+ *   ads-report-poll          every 10 min — advances PENDING → COMPLETED
+ *   ads-report-ingest        every 15 min :07 — downloads + writes rows
+ *   ads-search-term-cleanup  weekly Sunday 04:00 UTC — prunes old rows
+ *
+ * All jobs are gated by `NEXUS_ENABLE_AMAZON_ADS_CRON=1` and default
+ * off in dev. Sandbox mode writes to DB but skips live Amazon calls.
  */
 
 import cron from 'node-cron'
@@ -30,11 +37,26 @@ import {
   runAdsMetricsIngestOnce as runAdsMetricsIngestCore,
   summarizeAdsMetricsIngest,
 } from '../services/advertising/ads-metrics-ingest.service.js'
+import {
+  runReportCreationCycle,
+  runSearchTermReportCycle,
+  runPlacementReportCycle,
+  pollPendingJobs,
+  ingestCompletedJob,
+  cleanupOldSearchTerms,
+} from '../services/advertising/ads-reports.service.js'
+import prisma from '../db.js'
 
 let adsSyncTask: ReturnType<typeof cron.schedule> | null = null
 let fbaStorageAgeTask: ReturnType<typeof cron.schedule> | null = null
 let trueProfitRollupTask: ReturnType<typeof cron.schedule> | null = null
 let adsMetricsIngestTask: ReturnType<typeof cron.schedule> | null = null
+let reportCreateTask: ReturnType<typeof cron.schedule> | null = null
+let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
+let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
+let reportPollTask: ReturnType<typeof cron.schedule> | null = null
+let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
+let searchTermCleanupTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── ads-sync ──────────────────────────────────────────────────────────
 
@@ -176,6 +198,128 @@ export function startAdsMetricsIngestCron(): void {
   logger.info('ads-metrics-ingest cron: scheduled', { schedule })
 }
 
+// ── Phase 11: Reports API pipeline crons ─────────────────────────────
+//
+// Three creation crons (staggered 15 min apart) and two processing crons.
+// Yesterday's date is computed at runtime so no date is baked into the
+// schedule — safe across midnight rollovers.
+
+function yesterday(): { startDate: string; endDate: string } {
+  const d = new Date()
+  d.setUTCDate(d.getUTCDate() - 1)
+  const iso = d.toISOString().slice(0, 10)
+  return { startDate: iso, endDate: iso }
+}
+
+// 01:15 UTC daily — campaign-level performance reports
+export async function runReportCreateCron(): Promise<void> {
+  await recordCronRun('ads-report-create', async () => {
+    const { startDate, endDate } = yesterday()
+    const result = await runReportCreationCycle({ startDate, endDate })
+    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
+  }).catch((err) => logger.error('ads-report-create cron: failure', { error: String(err) }))
+}
+
+export function startReportCreateCron(): void {
+  if (reportCreateTask) { logger.warn('ads-report-create already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_CREATE_SCHEDULE ?? '15 1 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-create: invalid schedule', { schedule }); return }
+  reportCreateTask = cron.schedule(schedule, () => { void runReportCreateCron() })
+  logger.info('ads-report-create cron: scheduled', { schedule })
+}
+
+// 01:30 UTC daily — search-term reports (SP + SB)
+export async function runReportCreateStCron(): Promise<void> {
+  await recordCronRun('ads-report-create-st', async () => {
+    const { startDate, endDate } = yesterday()
+    const result = await runSearchTermReportCycle({ startDate, endDate })
+    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
+  }).catch((err) => logger.error('ads-report-create-st cron: failure', { error: String(err) }))
+}
+
+export function startReportCreateStCron(): void {
+  if (reportCreateStTask) { logger.warn('ads-report-create-st already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_CREATE_ST_SCHEDULE ?? '30 1 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-create-st: invalid schedule', { schedule }); return }
+  reportCreateStTask = cron.schedule(schedule, () => { void runReportCreateStCron() })
+  logger.info('ads-report-create-st cron: scheduled', { schedule })
+}
+
+// 01:45 UTC daily — placement reports (SP only)
+export async function runReportCreatePlCron(): Promise<void> {
+  await recordCronRun('ads-report-create-pl', async () => {
+    const { startDate, endDate } = yesterday()
+    const result = await runPlacementReportCycle({ startDate, endDate })
+    return `created=${result.jobsCreated} skipped=${result.jobsSkipped} errors=${result.errors.length}`
+  }).catch((err) => logger.error('ads-report-create-pl cron: failure', { error: String(err) }))
+}
+
+export function startReportCreatePlCron(): void {
+  if (reportCreatePlTask) { logger.warn('ads-report-create-pl already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_CREATE_PL_SCHEDULE ?? '45 1 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-create-pl: invalid schedule', { schedule }); return }
+  reportCreatePlTask = cron.schedule(schedule, () => { void runReportCreatePlCron() })
+  logger.info('ads-report-create-pl cron: scheduled', { schedule })
+}
+
+// Every 10 min — poll PENDING/IN_PROGRESS jobs → advance status
+export async function runReportPollCron(): Promise<void> {
+  await recordCronRun('ads-report-poll', async () => {
+    const summary = await pollPendingJobs(30)
+    return `polled=${summary.polled} completed=${summary.completed} failed=${summary.failed}`
+  }).catch((err) => logger.error('ads-report-poll cron: failure', { error: String(err) }))
+}
+
+export function startReportPollCron(): void {
+  if (reportPollTask) { logger.warn('ads-report-poll already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_POLL_SCHEDULE ?? '*/10 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-poll: invalid schedule', { schedule }); return }
+  reportPollTask = cron.schedule(schedule, () => { void runReportPollCron() })
+  logger.info('ads-report-poll cron: scheduled', { schedule })
+}
+
+// Every 15 min at :07 — ingest COMPLETED jobs (download S3 + write rows)
+export async function runReportIngestCron(): Promise<void> {
+  await recordCronRun('ads-report-ingest', async () => {
+    const jobs = await prisma.amazonAdsReportJob.findMany({
+      where: { status: 'COMPLETED', location: { not: null } },
+      select: { id: true },
+      orderBy: { completedAt: 'asc' },
+      take: 10,
+    })
+    let ingested = 0; let errors = 0
+    for (const job of jobs) {
+      try { await ingestCompletedJob(job.id); ingested++ }
+      catch (err) { errors++; logger.error('report ingest error', { jobId: job.id, error: String(err) }) }
+    }
+    return `ingested=${ingested} errors=${errors}`
+  }).catch((err) => logger.error('ads-report-ingest cron: failure', { error: String(err) }))
+}
+
+export function startReportIngestCron(): void {
+  if (reportIngestTask) { logger.warn('ads-report-ingest already started'); return }
+  const schedule = process.env.NEXUS_ADS_REPORT_INGEST_SCHEDULE ?? '7,22,37,52 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-report-ingest: invalid schedule', { schedule }); return }
+  reportIngestTask = cron.schedule(schedule, () => { void runReportIngestCron() })
+  logger.info('ads-report-ingest cron: scheduled', { schedule })
+}
+
+// Weekly Sunday 04:00 UTC — prune search-term rows older than 90 days
+export async function runSearchTermCleanupCron(): Promise<void> {
+  await recordCronRun('ads-search-term-cleanup', async () => {
+    const result = await cleanupOldSearchTerms(90)
+    return `deleted=${result.deletedSearchTerms} cutoff=${result.cutoffDate}`
+  }).catch((err) => logger.error('ads-search-term-cleanup cron: failure', { error: String(err) }))
+}
+
+export function startSearchTermCleanupCron(): void {
+  if (searchTermCleanupTask) { logger.warn('ads-search-term-cleanup already started'); return }
+  const schedule = process.env.NEXUS_ADS_SEARCH_TERM_CLEANUP_SCHEDULE ?? '0 4 * * 0'
+  if (!cron.validate(schedule)) { logger.error('ads-search-term-cleanup: invalid schedule', { schedule }); return }
+  searchTermCleanupTask = cron.schedule(schedule, () => { void runSearchTermCleanupCron() })
+  logger.info('ads-search-term-cleanup cron: scheduled', { schedule })
+}
+
 // ── Bulk start (called from index.ts when NEXUS_ENABLE_AMAZON_ADS_CRON=1) ──
 
 export function startAllAdvertisingCrons(): void {
@@ -183,6 +327,13 @@ export function startAllAdvertisingCrons(): void {
   startFbaStorageAgeIngestCron()
   startTrueProfitRollupCron()
   startAdsMetricsIngestCron()
+  // Phase 11: Reports API pipeline
+  startReportCreateCron()
+  startReportCreateStCron()
+  startReportCreatePlCron()
+  startReportPollCron()
+  startReportIngestCron()
+  startSearchTermCleanupCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
@@ -202,4 +353,16 @@ export function stopAllAdvertisingCrons(): void {
     adsMetricsIngestTask.stop()
     adsMetricsIngestTask = null
   }
+  for (const [key, task] of [
+    ['reportCreateTask',    reportCreateTask]    as const,
+    ['reportCreateStTask',  reportCreateStTask]  as const,
+    ['reportCreatePlTask',  reportCreatePlTask]  as const,
+    ['reportPollTask',      reportPollTask]      as const,
+    ['reportIngestTask',    reportIngestTask]    as const,
+    ['searchTermCleanupTask', searchTermCleanupTask] as const,
+  ]) {
+    if (task) { task.stop(); logger.debug(`${key} stopped`) }
+  }
+  reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null
+  reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
 }

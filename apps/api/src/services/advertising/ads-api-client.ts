@@ -159,6 +159,12 @@ interface AdsCredentials {
 // every API call; tokens are evicted 60 s before their stated expiry.
 const _tokenCache = new Map<string, { token: string; expiresAt: number }>()
 
+// Per-profileId in-flight refresh promise. Deduplicate concurrent callers
+// that all see an expired/missing cache entry at the same instant —
+// without this, N concurrent callers would each fire a separate LWA
+// token exchange, burning rate-limit quota and creating a thundering herd.
+const _tokenInflight = new Map<string, Promise<string>>()
+
 async function getLwaToken(
   profileId: string,
   creds: AdsCredentials,
@@ -167,27 +173,61 @@ async function getLwaToken(
   const cached = _tokenCache.get(profileId)
   if (cached && now < cached.expiresAt) return cached.token
 
+  // Deduplicate: if a refresh is already in flight for this profileId,
+  // join it rather than launching a second token exchange.
+  const inflight = _tokenInflight.get(profileId)
+  if (inflight) return inflight
+
   logger.debug('[ADS-LIVE] refreshing LWA token', { profileId })
-  const res = await fetch('https://api.amazon.com/auth/o2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: creds.refreshToken,
-      client_id: creds.clientId,
-      client_secret: creds.clientSecret,
-    }).toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`[ADS-LWA] token exchange failed ${res.status}: ${text}`)
+
+  const refreshPromise = (async (): Promise<string> => {
+    const res = await fetch('https://api.amazon.com/auth/o2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: creds.refreshToken,
+        client_id: creds.clientId,
+        client_secret: creds.clientSecret,
+      }).toString(),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`[ADS-LWA] token exchange failed ${res.status}: ${text}`)
+    }
+    const data = (await res.json()) as { access_token: string; expires_in: number }
+    _tokenCache.set(profileId, {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in - 60) * 1000,
+    })
+    return data.access_token
+  })().finally(() => _tokenInflight.delete(profileId))
+
+  _tokenInflight.set(profileId, refreshPromise)
+  return refreshPromise
+}
+
+// Retry fetch for rate-limit (429) and transient server errors (5xx).
+// Exponential backoff: 1 s → 2 s → 4 s (capped at 8 s). 4xx errors
+// other than 429 are not retried — they indicate a logic problem.
+async function fetchWithRetry(
+  url: string,
+  opts: RequestInit,
+  maxAttempts = 3,
+): Promise<Response> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(url, opts)
+    if (res.ok) return res
+    const retryable = res.status === 429 || res.status >= 500
+    if (!retryable || attempt === maxAttempts - 1) return res
+    const delayMs = Math.min(1000 * Math.pow(2, attempt), 8000)
+    logger.warn('[ADS-LIVE] retrying after transient error', {
+      status: res.status, attempt: attempt + 1, delayMs, url,
+    })
+    await new Promise((r) => setTimeout(r, delayMs))
   }
-  const data = (await res.json()) as { access_token: string; expires_in: number }
-  _tokenCache.set(profileId, {
-    token: data.access_token,
-    expiresAt: now + (data.expires_in - 60) * 1000,
-  })
-  return data.access_token
+  // Should be unreachable but TypeScript needs a return
+  return fetch(url, opts)
 }
 
 async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
@@ -221,7 +261,7 @@ export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   if (opts.profileId !== 'n/a') {
     headers['Amazon-Advertising-API-Scope'] = opts.profileId
   }
-  const res = await fetch(`${base}${opts.path}`, {
+  const res = await fetchWithRetry(`${base}${opts.path}`, {
     method: opts.method,
     headers,
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
