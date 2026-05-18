@@ -1,12 +1,9 @@
-// S.5 — Path B Amazon deep view. Replaces the prior thin
-// `<ListingsWorkspace lockChannel="AMAZON" />` wrapper with a
-// dedicated client that adds marketplace tabs, KPI strip, and
-// suppression resolver above the standard workspace.
-
+import type { Metadata } from 'next'
 import AmazonListingsClient from './AmazonListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const metadata: Metadata = { title: 'Amazon · Listings' }
 
 export default function AmazonListingsPage() {
   return (

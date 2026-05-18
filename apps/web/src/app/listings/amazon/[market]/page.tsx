@@ -1,12 +1,19 @@
+import type { Metadata } from 'next'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import AmazonListingsClient from '../AmazonListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// S.5 — per-market route locks the AmazonListingsClient to a specific
-// marketplace; the marketplace tab strip is hidden in lockMarketplace
-// mode (URL is the source of truth).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>
+}): Promise<Metadata> {
+  const { market } = await params
+  const label = COUNTRY_NAMES[market.toUpperCase()] ?? market.toUpperCase()
+  return { title: `Amazon ${label} · Listings` }
+}
 
 export default async function AmazonMarketPage({
   params,

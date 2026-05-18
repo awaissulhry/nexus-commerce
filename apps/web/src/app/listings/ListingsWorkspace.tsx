@@ -597,14 +597,19 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   useEffect(() => { setSelected(new Set()) }, [page, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), syncStatusFilters.join(','), hasError, lowStock, publishedOnly])
 
   // ── Computed ───────────────────────────────────────────────────────
-  const channelLabel = lockChannel
-    ? lockChannel.charAt(0) + lockChannel.slice(1).toLowerCase()
-    : null
+  // Proper display name per channel — avoids "Ebay" capitalisation bug.
+  const CHANNEL_DISPLAY: Record<string, string> = {
+    AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify',
+    WOOCOMMERCE: 'WooCommerce', ETSY: 'Etsy',
+  }
+  const channelLabel = lockChannel ? (CHANNEL_DISPLAY[lockChannel] ?? lockChannel) : null
+  const marketLabel  = lockMarketplace ? (COUNTRY_NAMES[lockMarketplace] ?? lockMarketplace) : null
+
   const title = titleOverride ?? (channelLabel
-    ? `${channelLabel}${lockMarketplace ? ` · ${COUNTRY_NAMES[lockMarketplace] ?? lockMarketplace}` : ''} Listings`
+    ? `${channelLabel}${marketLabel ? ` · ${marketLabel}` : ''} Listings`
     : 'All Listings')
   const description = lockChannel
-    ? `Manage listings on ${channelLabel}${lockMarketplace ? ` ${lockMarketplace}` : ''}. All lenses, filters, and bulk actions are scoped to this view.`
+    ? `${channelLabel}${marketLabel ? ` ${marketLabel}` : ''} listings — sync, pricing, status and bulk actions scoped to this view.`
     : 'Every published listing across all channels and marketplaces. Switch lenses, filter, and bulk-edit.'
 
   const visible = useMemo(() => ALL_COLUMNS.filter((c) => visibleColumns.includes(c.key)), [visibleColumns])

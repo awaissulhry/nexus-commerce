@@ -1,8 +1,19 @@
+import type { Metadata } from 'next'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import EbayListingsClient from '../EbayListingsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ market: string }>
+}): Promise<Metadata> {
+  const { market } = await params
+  const label = COUNTRY_NAMES[market.toUpperCase()] ?? market.toUpperCase()
+  return { title: `eBay ${label} · Listings` }
+}
 
 export default async function EbayMarketPage({
   params,
