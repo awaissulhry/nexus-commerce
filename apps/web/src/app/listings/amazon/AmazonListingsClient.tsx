@@ -13,7 +13,7 @@
 // section when channel='AMAZON' (see AmazonContextSection in
 // ListingsWorkspace).
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import ListingsWorkspace from '../ListingsWorkspace'
@@ -69,6 +69,11 @@ export default function AmazonListingsClient({ lockMarketplace, breadcrumbs }: P
   // [market]), this is local state. When it's /listings/amazon/[market]
   // (lockMarketplace set), the tab is fixed.
   const [activeMarket, setActiveMarket] = useState<string>(lockMarketplace ?? 'IT')
+
+  useEffect(() => {
+    const country = COUNTRY_NAMES[activeMarket] ?? activeMarket
+    document.title = `Amazon ${country} · Listings`
+  }, [activeMarket])
 
   const overviewUrl = useMemo(
     () => `/api/listings/amazon/overview?marketplace=${activeMarket}`,

@@ -6,6 +6,7 @@
  * Per-pool detail at /budget-pools/[id].
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Wallet, ChevronRight } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
@@ -14,6 +15,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { formatEur } from '../_shared/formatters'
 import { CreatePoolButton } from './CreatePoolButton'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Budget Pools' }
 export const dynamic = 'force-dynamic'
 
 interface Allocation {

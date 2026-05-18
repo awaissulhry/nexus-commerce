@@ -2,6 +2,7 @@
  * AD.5 — BudgetPool detail with rebalance controls + history.
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft, Wallet } from 'lucide-react'
@@ -14,6 +15,13 @@ import { AllocationsClient } from './AllocationsClient'
 import { PoolToggleClient } from './PoolToggleClient'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const res = await fetch(`${getBackendUrl()}/api/advertising/budget-pools/${params.id}`, { cache: 'no-store' }).catch(() => null)
+  const data = res?.ok ? await res.json().catch(() => null) : null
+  const name: string = data?.pool?.name ?? 'Budget Pool'
+  return { title: `${name} · Amazon Ads` }
+}
 
 interface Allocation {
   id: string

@@ -5,11 +5,13 @@
  * Expandable payload viewer per row.
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { History } from 'lucide-react'
 import { AdvertisingNav } from '../../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Execution History' }
 export const dynamic = 'force-dynamic'
 
 interface Execution {

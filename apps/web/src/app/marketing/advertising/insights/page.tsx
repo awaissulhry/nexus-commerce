@@ -10,6 +10,7 @@
  * Server-rendered — no client state needed. Refresh the page to re-run.
  */
 
+import type { Metadata } from 'next'
 import {
   AlertTriangle, AlertCircle, Info, TrendingDown, TrendingUp,
   Search, Activity, Lightbulb, CheckCircle2,
@@ -17,6 +18,7 @@ import {
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Insights' }
 export const dynamic = 'force-dynamic'
 
 // ── Types ────────────────────────────────────────────────────────────────────

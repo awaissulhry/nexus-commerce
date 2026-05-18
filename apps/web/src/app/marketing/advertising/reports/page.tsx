@@ -10,11 +10,13 @@
  * S3 file and writes rows to AmazonAdsDailyPerformance / AmazonAdsSearchTerm.
  */
 
+import type { Metadata } from 'next'
 import { ClipboardList } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { ReportsPipelineClient, type ReportJobRow } from './ReportsPipelineClient'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Report Feeds' }
 export const dynamic = 'force-dynamic'
 
 interface ReportJobsResponse {

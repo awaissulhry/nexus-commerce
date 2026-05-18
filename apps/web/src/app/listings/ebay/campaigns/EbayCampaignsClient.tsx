@@ -14,7 +14,7 @@
 // top of the page is honest about this gap so the operator doesn't
 // expect a Nexus-side create to surface on eBay automatically.
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Play, Pause, Square, Trash2, AlertCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { COUNTRY_NAMES } from '@/lib/country-names'
@@ -27,6 +27,9 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
 
+const EBAY_MARKET_CODES = ['IT', 'DE', 'ES', 'FR', 'GB']
+
+// Kept for the create modal dropdown
 const EBAY_MARKETPLACES = [
   { id: 'EBAY_IT', label: 'Italy (EBAY_IT)' },
   { id: 'EBAY_DE', label: 'Germany (EBAY_DE)' },
@@ -70,6 +73,12 @@ export default function EbayCampaignsClient() {
   const [createOpen, setCreateOpen] = useState(false)
   const { toast } = useToast()
   const askConfirm = useConfirm()
+
+  useEffect(() => {
+    const mp = marketplaceFilter.replace('EBAY_', '')
+    const country = mp ? (COUNTRY_NAMES[mp] ?? mp) : null
+    document.title = country ? `eBay Promoted Listings · ${country}` : 'eBay Promoted Listings · Campaigns'
+  }, [marketplaceFilter])
 
   const url = useMemo(() => {
     const qs = new URLSearchParams()
@@ -157,6 +166,25 @@ export default function EbayCampaignsClient() {
         ]}
       />
 
+      {/* Marketplace tab strip */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setMarketplaceFilter('')}
+          className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === '' ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+        >
+          All markets
+        </button>
+        {EBAY_MARKET_CODES.map(mp => (
+          <button
+            key={mp}
+            onClick={() => setMarketplaceFilter(`EBAY_${mp}`)}
+            className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === `EBAY_${mp}` ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+          >
+            {COUNTRY_NAMES[mp] ?? mp}
+          </button>
+        ))}
+      </div>
+
       {/* Honest banner — no auto-push to eBay yet. */}
       <Card>
         <div className="flex items-start gap-2 text-sm">
@@ -174,19 +202,6 @@ export default function EbayCampaignsClient() {
 
       {/* Filters + Create */}
       <div className="flex items-center gap-2 flex-wrap">
-        <select
-          value={marketplaceFilter}
-          onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
-          aria-label="Filter by marketplace"
-        >
-          <option value="">All marketplaces</option>
-          {EBAY_MARKETPLACES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}

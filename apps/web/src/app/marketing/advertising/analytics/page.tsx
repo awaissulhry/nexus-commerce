@@ -11,10 +11,12 @@
  * Charts are inline SVG — no charting library dependency.
  */
 
+import type { Metadata } from 'next'
 import { TrendingDown, TrendingUp, BarChart2, MousePointerClick, ShoppingCart } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Analytics' }
 export const dynamic = 'force-dynamic'
 
 interface TrendsRow {

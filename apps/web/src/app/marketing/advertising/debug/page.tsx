@@ -9,12 +9,14 @@
  * Manual-trigger only. Server-rendered profile picker + client probe runner.
  */
 
+import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { ProbeRunnerClient } from './ProbeRunnerClient'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Stethoscope } from 'lucide-react'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Debug Console' }
 export const dynamic = 'force-dynamic'
 
 interface ProfileRow {

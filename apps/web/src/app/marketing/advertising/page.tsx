@@ -28,9 +28,11 @@ import {
   Search,
   FileText,
 } from 'lucide-react'
+import type { Metadata } from 'next'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdvertisingNav } from './_shared/AdvertisingNav'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Trading Desk' }
 export const dynamic = 'force-dynamic'
 
 interface SummaryPayload {

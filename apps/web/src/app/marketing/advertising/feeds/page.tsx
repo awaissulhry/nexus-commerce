@@ -7,10 +7,12 @@
  * and custom labels match the channel-optimized versions.
  */
 
+import type { Metadata } from 'next'
 import { Rss, Download } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FeedsClient } from './FeedsClient'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Feed Exports' }
 export const dynamic = 'force-dynamic'
 
 interface FeedPreviewSummary {

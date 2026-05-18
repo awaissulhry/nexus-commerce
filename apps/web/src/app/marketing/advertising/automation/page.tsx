@@ -9,12 +9,14 @@
  *   - Per-rule edit link
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AlertCircle, Bot, History, ChevronRight } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AutomationActionsClient } from './AutomationActionsClient'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Automation Rules' }
 export const dynamic = 'force-dynamic'
 
 interface AutomationRule {

@@ -12,11 +12,13 @@
  * sees the same field shape; it just gets accurate numbers.
  */
 
+import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { CampaignsListClient } from './CampaignsListClient'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Campaigns' }
 export const dynamic = 'force-dynamic'
 
 interface Campaign {

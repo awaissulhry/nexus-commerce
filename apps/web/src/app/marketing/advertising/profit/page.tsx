@@ -6,12 +6,14 @@
  * vs zero-by-default (e.g. ad spend before AD.2's metrics-ingest runs).
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { TrendingUp } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { formatEur, formatPct, MARGIN_BAND_CLASS, marginBand } from '../_shared/formatters'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Profit & Margin' }
 export const dynamic = 'force-dynamic'
 
 interface ProfitRow {

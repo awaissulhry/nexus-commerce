@@ -105,6 +105,26 @@ function listingUrlFor(channel: string, marketplace: string, externalId: string 
   }
 }
 
+// G.3 — extract locale-specific title from platformAttributes.
+// Amazon stores it in attributes.item_name[].value keyed by language_tag.
+// eBay stores it directly as the listing title (l.title); return null here
+// so the frontend falls back to l.title for eBay.
+const LOCALE_LANG_TAG: Record<string, string> = {
+  IT: 'it_IT', DE: 'de_DE', FR: 'fr_FR', ES: 'es_ES',
+  GB: 'en_GB', UK: 'en_GB', NL: 'nl_NL', PL: 'pl_PL', SE: 'sv_SE', US: 'en_US',
+}
+function extractLocaleTitle(pa: unknown, marketplace: string): string | null {
+  if (!pa || typeof pa !== 'object') return null
+  const attrs = (pa as any).attributes
+  if (!attrs || typeof attrs !== 'object') return null
+  const itemName = attrs.item_name
+  if (!Array.isArray(itemName) || itemName.length === 0) return null
+  const langTag = LOCALE_LANG_TAG[marketplace.toUpperCase()]
+  const match = langTag ? itemName.find((n: any) => n?.language_tag === langTag) : null
+  const value = match?.value ?? itemName[0]?.value
+  return typeof value === 'string' && value.length > 0 ? value.slice(0, 200) : null
+}
+
 export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // ─────────────────────────────────────────────────────────────────
   // GET /api/listings — paginated, filterable, sortable
@@ -286,6 +306,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           currency: m?.currency ?? null,
           language: m?.language ?? null,
           marketplaceName: m?.marketplaceName ?? null,
+          // G.3 — per-marketplace platformAttributes overlays
+          browseNodePath: (l.platformAttributes as any)?.browseNodePath ?? null,
+          browseNodeId: (l.platformAttributes as any)?.browseNodeId ?? null,
+          ebayCategoryId: (l.platformAttributes as any)?.categoryId ?? null,
+          localeTitle: l.channel === 'AMAZON' ? extractLocaleTitle(l.platformAttributes, l.marketplace) : null,
           product: {
             id: l.product.id,
             sku: l.product.sku,

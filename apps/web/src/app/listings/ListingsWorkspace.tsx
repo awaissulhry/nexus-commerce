@@ -105,6 +105,11 @@ type Listing = {
   currency: string | null
   language: string | null
   marketplaceName: string | null
+  // G.3 — per-marketplace platformAttributes overlays
+  browseNodePath: string | null
+  browseNodeId: string | null
+  ebayCategoryId: string | null
+  localeTitle: string | null
   product: {
     id: string
     sku: string
@@ -198,6 +203,10 @@ const ALL_COLUMNS = [
   { key: 'follow',      label: 'Follow',      subLabel: 'T · P · Q flags',  width: 90  },
   { key: 'externalId',  label: 'External ID', subLabel: 'ID / ASIN',        width: 150 },
   { key: 'lastSync',    label: 'Last Sync',   subLabel: 'Timestamp',        width: 120 },
+  // G.3 — per-channel / per-marketplace overlays
+  { key: 'browseNode',  label: 'Browse Node', subLabel: 'Amazon category',  width: 200 },
+  { key: 'ebayCat',     label: 'Category',    subLabel: 'eBay ID',          width: 110 },
+  { key: 'localeTitle', label: 'Locale Title',subLabel: 'Market title',     width: 240 },
   { key: 'actions',     label: '',                                           width: 140 },
 ] as const
 
@@ -246,6 +255,10 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     let base = channelDefaultVisible ?? DEFAULT_VISIBLE
     if (lockChannel) base = base.filter(k => k !== 'channel')
     if (lockMarketplace) base = base.filter(k => k !== 'marketplace')
+    // G.3 — channel/market overlay columns: auto-show when surface is locked
+    if (lockChannel === 'AMAZON' && !base.includes('browseNode')) base = [...base, 'browseNode']
+    if (lockChannel === 'EBAY' && !base.includes('ebayCat')) base = [...base, 'ebayCat']
+    if (lockMarketplace && !base.includes('localeTitle')) base = [...base, 'localeTitle']
     return base
   }, [channelDefaultVisible, lockChannel, lockMarketplace])
   const router = useRouter()
@@ -2131,6 +2144,38 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
             ? new Date(l.lastSyncedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
             : 'Never'}
         </span>
+      )
+    // G.3 — per-channel / per-marketplace overlay columns
+    case 'browseNode':
+      if (isParentRow) return null
+      return l.browseNodePath ? (
+        <span className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-snug" title={l.browseNodePath}>
+          {l.browseNodePath}
+        </span>
+      ) : l.browseNodeId ? (
+        <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{l.browseNodeId}</span>
+      ) : (
+        <span className="text-slate-300 dark:text-slate-600">—</span>
+      )
+    case 'ebayCat':
+      if (isParentRow) return null
+      return l.ebayCategoryId ? (
+        <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{l.ebayCategoryId}</span>
+      ) : (
+        <span className="text-slate-300 dark:text-slate-600">—</span>
+      )
+    case 'localeTitle':
+      if (isParentRow) return null
+      return l.localeTitle ? (
+        <span className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-snug" title={l.localeTitle}>
+          {l.localeTitle}
+        </span>
+      ) : l.title ? (
+        <span className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-snug italic" title={l.title}>
+          {l.title}
+        </span>
+      ) : (
+        <span className="text-slate-300 dark:text-slate-600">—</span>
       )
     case 'actions':
       if (isParentRow) {

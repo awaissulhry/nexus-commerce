@@ -6,6 +6,7 @@
  * automation-rule writes (AD.3+).
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft, History } from 'lucide-react'
@@ -14,6 +15,13 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { formatEurAmount, formatPct } from '../../_shared/formatters'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const res = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${params.id}`, { cache: 'no-store' }).catch(() => null)
+  const data = res?.ok ? await res.json().catch(() => null) : null
+  const name: string = data?.campaign?.name ?? 'Campaign'
+  return { title: `${name} · Amazon Ads` }
+}
 
 interface CampaignDetail {
   campaign: {

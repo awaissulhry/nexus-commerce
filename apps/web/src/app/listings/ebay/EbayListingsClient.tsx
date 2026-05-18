@@ -14,7 +14,7 @@
 // reaches via dedicated nav items; this file is focused on the
 // per-marketplace overview.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Megaphone } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
@@ -58,6 +58,11 @@ export default function EbayListingsClient({
   const [activeMarket, setActiveMarket] = useState<string>(
     lockMarketplace ?? 'IT',
   )
+
+  useEffect(() => {
+    const country = COUNTRY_NAMES[activeMarket] ?? activeMarket
+    document.title = `eBay ${country} · Listings`
+  }, [activeMarket])
 
   const overviewUrl = useMemo(
     () => `/api/listings/ebay/overview?marketplace=${activeMarket}`,

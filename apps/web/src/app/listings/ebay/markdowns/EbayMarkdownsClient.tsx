@@ -18,6 +18,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Plus, Square, Trash2, AlertCircle, Tag, Repeat, MessageCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { COUNTRY_NAMES } from '@/lib/country-names'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
@@ -61,6 +62,8 @@ interface ListingRow {
   price: number | null
 }
 
+const EBAY_MARKET_CODES = ['IT', 'DE', 'ES', 'FR', 'GB']
+
 const STATUS_TONE: Record<string, string> = {
   DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
   SCHEDULED: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
@@ -71,10 +74,16 @@ const STATUS_TONE: Record<string, string> = {
 }
 
 export default function EbayMarkdownsClient() {
+  const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [createOpen, setCreateOpen] = useState(false)
   const { toast } = useToast()
   const askConfirm = useConfirm()
+
+  useEffect(() => {
+    const country = marketplaceFilter ? (COUNTRY_NAMES[marketplaceFilter.replace('EBAY_', '')] ?? marketplaceFilter) : null
+    document.title = country ? `eBay Markdowns · ${country}` : 'eBay Markdowns · Sale Events'
+  }, [marketplaceFilter])
 
   const url = useMemo(() => {
     const qs = new URLSearchParams()
@@ -89,7 +98,10 @@ export default function EbayMarkdownsClient() {
     intervalMs: 30_000,
   })
 
-  const markdowns = data?.markdowns ?? []
+  const allMarkdowns = data?.markdowns ?? []
+  const markdowns = marketplaceFilter
+    ? allMarkdowns.filter(m => m.listing.marketplace === marketplaceFilter)
+    : allMarkdowns
 
   const transition = async (id: string, nextStatus: 'CANCELLED' | 'ENDED') => {
     try {
@@ -139,7 +151,11 @@ export default function EbayMarkdownsClient() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="eBay Markdowns · Sale Events"
+        title={(() => {
+          const mp = marketplaceFilter.replace('EBAY_', '')
+          const country = mp ? (COUNTRY_NAMES[mp] ?? mp) : null
+          return country ? `eBay Markdowns · ${country}` : 'eBay Markdowns · Sale Events'
+        })()}
         description="Schedule percentage or fixed-price discounts on eBay listings. PERCENTAGE computes against the listing's current price; FIXED_PRICE sets an absolute sale price."
         breadcrumbs={[
           { label: 'Listings', href: '/listings' },
@@ -147,6 +163,25 @@ export default function EbayMarkdownsClient() {
           { label: 'Markdowns' },
         ]}
       />
+
+      {/* Marketplace tab strip */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setMarketplaceFilter('')}
+          className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === '' ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+        >
+          All markets
+        </button>
+        {EBAY_MARKET_CODES.map(mp => (
+          <button
+            key={mp}
+            onClick={() => setMarketplaceFilter(`EBAY_${mp}`)}
+            className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplaceFilter === `EBAY_${mp}` ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+          >
+            {COUNTRY_NAMES[mp] ?? mp}
+          </button>
+        ))}
+      </div>
 
       <Card>
         <div className="flex items-start gap-2 text-sm">

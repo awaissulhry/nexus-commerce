@@ -7,6 +7,7 @@
  * inline conditions-tree editor.
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
@@ -16,6 +17,13 @@ import { RuleToggleClient } from './RuleToggleClient'
 import { GateStatusClient } from './GateStatusClient'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${params.id}`, { cache: 'no-store' }).catch(() => null)
+  const data = res?.ok ? await res.json().catch(() => null) : null
+  const name: string = data?.name ?? 'Automation Rule'
+  return { title: `${name} · Amazon Ads` }
+}
 
 interface Rule {
   id: string

@@ -7,6 +7,7 @@
  * label between projected LTS fees in those horizons.
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Warehouse } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
@@ -14,6 +15,7 @@ import { formatEur, formatNumber } from '../_shared/formatters'
 import { getBackendUrl } from '@/lib/backend-url'
 import { StorageAgeHeatmap } from './StorageAgeHeatmap'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Storage Age' }
 export const dynamic = 'force-dynamic'
 
 interface StorageAgeRow {

@@ -12,11 +12,13 @@
  * equivalent so it never appears here.
  */
 
+import type { Metadata } from 'next'
 import { Search, AlertTriangle, Filter } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AddAsNegativeButton } from './AddAsNegativeButton'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Search Terms' }
 export const dynamic = 'force-dynamic'
 
 interface SearchTermRow {

@@ -7,6 +7,7 @@
  * shown for executions within the 24h window.
  */
 
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft, History } from 'lucide-react'
@@ -15,6 +16,7 @@ import { WriteModeBanner } from '../../../_shared/WriteModeBanner'
 import { RollbackButton } from './RollbackButton'
 import { getBackendUrl } from '@/lib/backend-url'
 
+export const metadata: Metadata = { title: 'Amazon Ads · Execution Log' }
 export const dynamic = 'force-dynamic'
 
 interface ExecutionLog {
