@@ -22,6 +22,11 @@ import {
   Bot,
   Wallet,
   ChevronRight,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Search,
+  FileText,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdvertisingNav } from './_shared/AdvertisingNav'
@@ -56,6 +61,29 @@ interface BudgetPool {
   totalDailyBudgetCents: number
 }
 
+interface V1Overview {
+  windowDays: number
+  spend: Array<{
+    currencyCode: string
+    impressions: number
+    clicks: number
+    costMicros: string
+    costUnits: number
+    salesCents: number
+    orders: number
+    acos: number | null
+    roas: number | null
+  }>
+  adapters: Array<{
+    adProduct: 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY' | 'SPONSORED_TELEVISION'
+    live: boolean
+    blockerReason: string | null
+  }>
+  campaigns: { byAdProduct: Record<string, number> }
+  reports: Record<string, number>
+  searchTerms: { total: number; negativeKeywordCandidates: number }
+}
+
 async function fetchJson<T>(url: string, fallback: T): Promise<T> {
   try {
     const res = await fetch(url, { cache: 'no-store' })
@@ -82,7 +110,7 @@ function formatPct(value: number | null): string {
 
 export default async function AdvertisingLandingPage() {
   const backend = getBackendUrl()
-  const [summary, criticalAged, automationRules, budgetPools] = await Promise.all([
+  const [summary, criticalAged, automationRules, budgetPools, v1] = await Promise.all([
     fetchJson<SummaryPayload>(`${backend}/api/advertising/summary`, {
       campaignCount: 0,
       adSpend30dCents: 0,
@@ -102,6 +130,14 @@ export default async function AdvertisingLandingPage() {
     ),
     fetchJson<{ items: BudgetPool[] }>(`${backend}/api/advertising/budget-pools`, {
       items: [],
+    }),
+    fetchJson<V1Overview>(`${backend}/api/advertising/overview/v1`, {
+      windowDays: 30,
+      spend: [],
+      adapters: [],
+      campaigns: { byAdProduct: {} },
+      reports: { PENDING: 0, IN_PROGRESS: 0, COMPLETED: 0, FAILED: 0, EXPIRED: 0 },
+      searchTerms: { total: 0, negativeKeywordCandidates: 0 },
     }),
   ])
 
@@ -238,6 +274,9 @@ export default async function AdvertisingLandingPage() {
         />
       </div>
 
+      {/* ── Phase 5a: v1 substrate status ────────────────────────────── */}
+      <V1OverviewSection v1={v1} />
+
       {/* Status footer */}
       <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-3">
         <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
@@ -315,5 +354,195 @@ function Card({
         {sublabel}
       </div>
     </Link>
+  )
+}
+
+// ── Phase 5a: v1 substrate status ──────────────────────────────────────
+// Surfaces Phase 2/4/6 data: adapter health, per-currency spend, report
+// job pipeline, search-term volume. Replaces the static "5 waves shipped"
+// strip with live operational data.
+
+function formatMoney(amount: number, currency: string): string {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+function V1OverviewSection({ v1 }: { v1: V1Overview }) {
+  const blockedAdapters = v1.adapters.filter((a) => !a.live)
+  const liveAdapters = v1.adapters.filter((a) => a.live)
+  const pendingReports = (v1.reports.PENDING ?? 0) + (v1.reports.IN_PROGRESS ?? 0)
+  const totalCampaigns = Object.values(v1.campaigns.byAdProduct).reduce((a, b) => a + b, 0)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          v1 Substrate — Last {v1.windowDays} days
+        </h2>
+        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300">
+          Phase 2/4/6
+        </span>
+      </div>
+
+      {/* Adapter health row */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+        <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+          Adapter status
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {v1.adapters.length === 0 ? (
+            <span className="text-xs text-slate-400">No adapters registered yet</span>
+          ) : (
+            v1.adapters.map((a) => (
+              <div
+                key={a.adProduct}
+                className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded ring-1 ring-inset ${
+                  a.live
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900'
+                    : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900'
+                }`}
+                title={a.blockerReason ?? undefined}
+              >
+                {a.live ? (
+                  <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                ) : (
+                  <XCircle className="h-3 w-3" aria-hidden="true" />
+                )}
+                <span className="font-medium">{a.adProduct.replace('SPONSORED_', 'SP_').replace('SP_PRODUCTS', 'SP').replace('SP_BRANDS', 'SB').replace('SP_DISPLAY', 'SD').replace('SP_TELEVISION', 'STV')}</span>
+                <span className="text-[10px] opacity-70">
+                  · {v1.campaigns.byAdProduct[a.adProduct] ?? 0} campaigns
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+        {blockedAdapters.length > 0 && (
+          <div className="text-[11px] text-rose-700 dark:text-rose-300 mt-2">
+            {blockedAdapters.length} adapter(s) blocked — Amazon support pending. SD remains
+            fully operational.
+          </div>
+        )}
+      </div>
+
+      {/* Per-currency spend grid */}
+      {v1.spend.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3">
+          <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+            Per-currency spend ({v1.windowDays}d)
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {v1.spend.map((s) => (
+              <div
+                key={s.currencyCode}
+                className="border border-slate-200 dark:border-slate-800 rounded p-2 bg-slate-50 dark:bg-slate-950/40"
+              >
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {s.currencyCode}
+                </div>
+                <div className="text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                  {formatMoney(s.costUnits, s.currencyCode)}
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  {s.clicks.toLocaleString()} clicks · ACOS{' '}
+                  {s.acos == null ? '—' : `${(s.acos * 100).toFixed(1)}%`}
+                </div>
+              </div>
+            ))}
+          </div>
+          {liveAdapters.length === 1 && v1.adapters.find((a) => a.live)?.adProduct === 'SPONSORED_DISPLAY' && (
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 italic">
+              Showing Sponsored Display only — SP + SB blocked by Amazon auth.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reports + search-terms row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Link
+          href="/marketing/advertising"
+          className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 hover:border-blue-300 dark:hover:border-blue-700"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <FileText className="h-4 w-4 text-slate-500" />
+            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Report jobs
+            </span>
+          </div>
+          <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+            {totalCampaigns > 0 ? v1.reports.COMPLETED ?? 0 : '—'}
+            <span className="text-sm font-normal text-slate-500 dark:text-slate-400 ml-2">
+              completed
+            </span>
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-3">
+            {pendingReports > 0 && (
+              <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                <Clock className="h-3 w-3" aria-hidden="true" />
+                {pendingReports} pending
+              </span>
+            )}
+            {(v1.reports.FAILED ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
+                <XCircle className="h-3 w-3" aria-hidden="true" />
+                {v1.reports.FAILED} failed
+              </span>
+            )}
+          </div>
+        </Link>
+
+        <Link
+          href="/marketing/advertising"
+          className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md p-3 hover:border-blue-300 dark:hover:border-blue-700"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Search className="h-4 w-4 text-slate-500" />
+            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Search terms
+            </span>
+          </div>
+          <div className="text-2xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+            {v1.searchTerms.total.toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            ingested (90-day rolling)
+          </div>
+        </Link>
+
+        <Link
+          href="/marketing/advertising"
+          className={`block border rounded-md p-3 transition-colors ${
+            v1.searchTerms.negativeKeywordCandidates > 0
+              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 hover:border-amber-300 dark:hover:border-amber-700'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle className={`h-4 w-4 ${
+              v1.searchTerms.negativeKeywordCandidates > 0
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-slate-500'
+            }`} />
+            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Negative kw candidates
+            </span>
+          </div>
+          <div className={`text-2xl font-semibold tabular-nums ${
+            v1.searchTerms.negativeKeywordCandidates > 0
+              ? 'text-amber-700 dark:text-amber-300'
+              : 'text-slate-900 dark:text-slate-100'
+          }`}>
+            {v1.searchTerms.negativeKeywordCandidates}
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            queries spending with zero orders
+          </div>
+        </Link>
+      </div>
+    </div>
   )
 }

@@ -401,6 +401,128 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return job
   })
 
+  // ── Phase 5a: v1 overview endpoint ────────────────────────────────────
+  // Returns a comprehensive snapshot of every v1 substrate (Phase 2/4/6):
+  //   - per-currency spend + sales in the last 30 days
+  //   - per-adProduct live status from the adapter registry
+  //   - report job counts by status
+  //   - search-term cardinality + negative-keyword-candidate count
+  // Designed for the Trading Desk landing page; one round-trip, no FK joins.
+  fastify.get('/advertising/overview/v1', async (_request, reply) => {
+    const { ADAPTERS } = await import('../services/advertising/adapters/index.js')
+    const { findNegativeKeywordCandidates } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+
+    const since30d = new Date()
+    since30d.setUTCDate(since30d.getUTCDate() - 30)
+    since30d.setUTCHours(0, 0, 0, 0)
+
+    // Per-currency aggregates from the universal time-series table.
+    const perfRows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['currencyCode', 'adProduct'],
+      where: { date: { gte: since30d }, entityType: 'CAMPAIGN' },
+      _sum: {
+        impressions: true,
+        clicks: true,
+        costMicros: true,
+        sales7dCents: true,
+        sales14dCents: true,
+        orders7d: true,
+      },
+    })
+
+    // Roll up to per-currency totals across all ad products
+    type CurrencyAgg = {
+      currencyCode: string
+      impressions: number
+      clicks: number
+      costMicros: bigint
+      salesCents: number
+      orders: number
+    }
+    const byCurrency = new Map<string, CurrencyAgg>()
+    for (const r of perfRows) {
+      const existing = byCurrency.get(r.currencyCode) ?? {
+        currencyCode: r.currencyCode,
+        impressions: 0, clicks: 0, costMicros: 0n, salesCents: 0, orders: 0,
+      }
+      existing.impressions += r._sum.impressions ?? 0
+      existing.clicks += r._sum.clicks ?? 0
+      existing.costMicros += r._sum.costMicros ?? 0n
+      // Use whichever attribution window has data (SP/SD = 7d, SB = 14d)
+      existing.salesCents += (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      existing.orders += r._sum.orders7d ?? 0
+      byCurrency.set(r.currencyCode, existing)
+    }
+
+    // Report job counts by status
+    const jobsByStatus = await prisma.amazonAdsReportJob.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    })
+    const reportJobs: Record<string, number> = {
+      PENDING: 0, IN_PROGRESS: 0, COMPLETED: 0, FAILED: 0, EXPIRED: 0,
+    }
+    for (const j of jobsByStatus) {
+      reportJobs[j.status] = j._count._all
+    }
+
+    // Search-term cardinality
+    const searchTermCount = await prisma.amazonAdsSearchTerm.count()
+    const candidates = await findNegativeKeywordCandidates({ lookbackDays: 30, minSpend: 2, limit: 1 })
+    const negativeKwCandidates = await prisma.amazonAdsSearchTerm.groupBy({
+      by: ['query', 'campaignId', 'adGroupId'],
+      where: { date: { gte: since30d } },
+      _sum: { costMicros: true, orders7d: true },
+      having: {
+        costMicros: { _sum: { gte: 2_000_000n } },
+        orders7d: { _sum: { equals: 0 } },
+      },
+    }).then((r) => r.length).catch(() => candidates.length)
+
+    // Campaign counts per adProduct (from Campaign table — populated by SD sync today)
+    const campaignsByProduct = await prisma.campaign.groupBy({
+      by: ['adProduct'],
+      where: { adProduct: { not: null } },
+      _count: { _all: true },
+    })
+    const byAdProduct = Object.fromEntries(
+      campaignsByProduct.map((c) => [c.adProduct ?? 'UNKNOWN', c._count._all]),
+    )
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return {
+      windowDays: 30,
+      spend: Array.from(byCurrency.values()).map((c) => ({
+        currencyCode: c.currencyCode,
+        impressions: c.impressions,
+        clicks: c.clicks,
+        costMicros: c.costMicros.toString(),
+        costUnits: Number(c.costMicros) / 1_000_000,
+        salesCents: c.salesCents,
+        orders: c.orders,
+        acos: c.salesCents > 0
+          ? Number(c.costMicros / 10_000n) / c.salesCents
+          : null,
+        roas: c.costMicros > 0n
+          ? c.salesCents / (Number(c.costMicros) / 1_000_000) / 100
+          : null,
+      })),
+      adapters: ADAPTERS.map((a) => ({
+        adProduct: a.adProduct,
+        live: a.live,
+        blockerReason: a.liveBlockerReason ?? null,
+      })),
+      campaigns: { byAdProduct },
+      reports: reportJobs,
+      searchTerms: {
+        total: searchTermCount,
+        negativeKeywordCandidates: negativeKwCandidates,
+      },
+    }
+  })
+
   // ── Phase 6: search-term + placement cycles + cleanup + neg-kw query ──
 
   // POST /api/advertising/reports/create-search-terms-cycle
