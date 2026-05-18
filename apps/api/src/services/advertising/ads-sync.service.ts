@@ -19,6 +19,10 @@ import {
   listAdGroups,
   listTargets,
   listProductAds,
+  listSdCampaigns,
+  listSdAdGroups,
+  listSdProductAds,
+  listSdTargets,
   adsMode,
   type ClientContext,
   type AdsCampaignDTO,
@@ -303,6 +307,11 @@ export async function runAdsSyncOnce(): Promise<SyncSummary> {
 
   for (const profile of profiles) {
     const ctx: ClientContext = { profileId: profile.profileId, region: profile.region }
+
+    // ── Sponsored Products (SP) ──────────────────────────────────────────
+    // Currently 403s in live mode due to Amazon-side JWT validator
+    // mismatch (see plan: here-is-the-blueprint-humming-beaver.md). Caught
+    // so SD sync still runs.
     try {
       const campaigns = await listCampaigns(ctx)
       const campaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, campaigns)
@@ -310,7 +319,6 @@ export async function runAdsSyncOnce(): Promise<SyncSummary> {
       summary.campaigns.skipped += campaignResult.skipped
 
       const adGroups = await listAdGroups(ctx)
-      // Filter to ad-groups whose campaign we know locally.
       const knownCampaignAdGroups = adGroups.filter((ag) =>
         campaignResult.map.has(ag.campaignId),
       )
@@ -332,10 +340,43 @@ export async function runAdsSyncOnce(): Promise<SyncSummary> {
       summary.productAds.skipped += productAdResult.skipped
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      summary.errors.push(`profile ${profile.profileId}: ${msg}`)
-      logger.error('[ads-sync] profile failed', { profileId: profile.profileId, error: msg })
-      // Touch the connection's lastError if it's a real row (skip for
-      // the synthetic sandbox profile that has no DB representation).
+      summary.errors.push(`profile ${profile.profileId} SP: ${msg}`)
+      logger.error('[ads-sync] SP failed', { profileId: profile.profileId, error: msg })
+    }
+
+    // ── Sponsored Display (SD) ───────────────────────────────────────────
+    // SD endpoints use a different auth validator that accepts Atza|
+    // tokens — usable today.
+    try {
+      const sdCampaigns = await listSdCampaigns(ctx)
+      const sdCampaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, sdCampaigns)
+      summary.campaigns.upserted += sdCampaignResult.upserted
+      summary.campaigns.skipped += sdCampaignResult.skipped
+
+      const sdAdGroups = await listSdAdGroups(ctx)
+      const knownSdAdGroups = sdAdGroups.filter((ag) =>
+        sdCampaignResult.map.has(ag.campaignId),
+      )
+      const sdAdGroupResult = await syncAdGroupsForProfile(
+        sdCampaignResult.map,
+        knownSdAdGroups,
+      )
+      summary.adGroups.upserted += sdAdGroupResult.upserted
+      summary.adGroups.skipped += sdAdGroupResult.skipped
+
+      const sdTargets = await listSdTargets(ctx)
+      const sdTargetResult = await syncTargetsForProfile(sdAdGroupResult.map, sdTargets)
+      summary.targets.upserted += sdTargetResult.upserted
+      summary.targets.skipped += sdTargetResult.skipped
+
+      const sdProductAds = await listSdProductAds(ctx)
+      const sdProductAdResult = await syncProductAdsForProfile(sdAdGroupResult.map, sdProductAds)
+      summary.productAds.upserted += sdProductAdResult.upserted
+      summary.productAds.skipped += sdProductAdResult.skipped
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      summary.errors.push(`profile ${profile.profileId} SD: ${msg}`)
+      logger.error('[ads-sync] SD failed', { profileId: profile.profileId, error: msg })
       if (mode === 'live') {
         await prisma.amazonAdsConnection
           .updateMany({

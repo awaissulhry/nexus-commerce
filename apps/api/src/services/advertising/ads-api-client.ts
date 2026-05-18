@@ -394,6 +394,56 @@ export async function listProductAds(ctx: ClientContext): Promise<AdsProductAdDT
   })
 }
 
+// ── Sponsored Display (SD) — uses a different auth validator that accepts
+// Atza| tokens. While SP v3 is blocked on the Amazon-side JWT issue, SD
+// endpoints are usable today. Once Amazon resolves the SP auth, the SP
+// methods above will start returning data without further code changes.
+
+export async function listSdCampaigns(ctx: ClientContext): Promise<AdsCampaignDTO[]> {
+  if (adsMode() === 'sandbox') {
+    logger.debug('[ADS-SANDBOX] listSdCampaigns', { profileId: ctx.profileId })
+    return loadFixture<AdsCampaignDTO[]>('sd-campaigns', [])
+  }
+  return liveCall<AdsCampaignDTO[]>({
+    ...ctx,
+    method: 'GET',
+    path: '/sd/campaigns',
+  })
+}
+
+export async function listSdAdGroups(ctx: ClientContext): Promise<AdsAdGroupDTO[]> {
+  if (adsMode() === 'sandbox') {
+    return loadFixture<AdsAdGroupDTO[]>('sd-adGroups', [])
+  }
+  return liveCall<AdsAdGroupDTO[]>({
+    ...ctx,
+    method: 'GET',
+    path: '/sd/adGroups',
+  })
+}
+
+export async function listSdProductAds(ctx: ClientContext): Promise<AdsProductAdDTO[]> {
+  if (adsMode() === 'sandbox') {
+    return loadFixture<AdsProductAdDTO[]>('sd-productAds', [])
+  }
+  return liveCall<AdsProductAdDTO[]>({
+    ...ctx,
+    method: 'GET',
+    path: '/sd/productAds',
+  })
+}
+
+export async function listSdTargets(ctx: ClientContext): Promise<AdsTargetDTO[]> {
+  if (adsMode() === 'sandbox') {
+    return loadFixture<AdsTargetDTO[]>('sd-targets', [])
+  }
+  return liveCall<AdsTargetDTO[]>({
+    ...ctx,
+    method: 'GET',
+    path: '/sd/targets',
+  })
+}
+
 // ── Reports (Amazon's async request → poll → download pattern) ─────────
 
 export type ReportType =

@@ -169,17 +169,44 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (t1.token) {
-      // ── v1 unified API (amazon-ads/v1 prefix) ───────────────────────────
-      results.v1_campaigns        = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/campaigns', t1.token, IT_PROFILE)
-      results.v1_campaigns_sp     = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/campaigns?adProduct=SPONSORED_PRODUCTS', t1.token, IT_PROFILE)
-      results.v1_adGroups         = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/adGroups', t1.token, IT_PROFILE)
-      results.v1_productAds       = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/productAds', t1.token, IT_PROFILE)
+      // ── Reports API — try all 3 adProducts ────────────────────────────────
+      async function tryReport(adProduct: string, reportTypeId: string) {
+        const r = await fetch('https://advertising-api-eu.amazon.com/reporting/reports', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${t1.token}`,
+            'Amazon-Advertising-API-ClientId': creds.clientId,
+            'Amazon-Advertising-API-Scope': IT_PROFILE,
+            'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
+          },
+          body: JSON.stringify({
+            name: `test-${adProduct.toLowerCase()}`,
+            startDate: '2026-05-01',
+            endDate: '2026-05-07',
+            configuration: {
+              adProduct,
+              groupBy: ['campaign'],
+              columns: ['impressions', 'clicks', 'cost', 'campaignId', 'campaignName'],
+              reportTypeId,
+              timeUnit: 'DAILY',
+              format: 'GZIP_JSON_LINES',
+            },
+          }),
+        })
+        let body: unknown
+        try { body = await r.json() } catch { body = await r.text() }
+        return { status: r.status, body }
+      }
 
-      // ── v1 without amazon-ads prefix (alt path) ──────────────────────────
-      results.v1_alt_campaigns    = await tryUrl('https://advertising-api-eu.amazon.com/v1/campaigns', t1.token, IT_PROFILE)
+      results.reports_SP = await tryReport('SPONSORED_PRODUCTS', 'spCampaigns')
+      results.reports_SD = await tryReport('SPONSORED_DISPLAY', 'sdCampaigns')
+      results.reports_SB = await tryReport('SPONSORED_BRANDS', 'sbCampaigns')
 
-      // ── SD (user says this works — confirm + baseline) ───────────────────
+      // ── Confirm SD still works ───────────────────────────────────────────
       results.sd_campaigns        = await tryUrl('https://advertising-api-eu.amazon.com/sd/campaigns', t1.token, IT_PROFILE)
+      results.sd_adGroups         = await tryUrl('https://advertising-api-eu.amazon.com/sd/adGroups', t1.token, IT_PROFILE)
+      results.sd_productAds       = await tryUrl('https://advertising-api-eu.amazon.com/sd/productAds', t1.token, IT_PROFILE)
+      results.sd_targets          = await tryUrl('https://advertising-api-eu.amazon.com/sd/targets', t1.token, IT_PROFILE)
 
       // ── v3 SP (known 403 — comparison baseline) ──────────────────────────
       results.v3_sp_campaigns_403 = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
