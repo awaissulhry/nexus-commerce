@@ -14,6 +14,12 @@
  *   ads-report-ingest        every 15 min :07 — downloads + writes rows
  *   ads-search-term-cleanup  weekly Sunday 04:00 UTC — prunes old rows
  *
+ * H.2d — Amazon Ads API v1 unified export pipeline (parallel to ads-sync
+ * until H.2e cuts that over):
+ *   ads-v1-export-create     every 6h — exports 4 resources per profile
+ *   ads-v1-export-poll       every 5 min — advances PENDING → COMPLETED
+ *   ads-v1-export-ingest     every 5 min :02,:07,... — downloads + upsert
+ *
  * All jobs are gated by `NEXUS_ENABLE_AMAZON_ADS_CRON=1` and default
  * off in dev. Sandbox mode writes to DB but skips live Amazon calls.
  */
@@ -49,6 +55,12 @@ import {
   runFbaFeesIngest,
   summarizeFbaFeesIngest,
 } from '../services/advertising/fba-fees-ingest.service.js'
+import {
+  runV1ExportCycle,
+  pollPendingExports,
+  ingestCompletedExport,
+  summarizeCycle as summarizeV1Cycle,
+} from '../services/advertising/ads-v1-sync.service.js'
 import prisma from '../db.js'
 
 let adsSyncTask: ReturnType<typeof cron.schedule> | null = null
@@ -62,6 +74,9 @@ let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
 let reportPollTask: ReturnType<typeof cron.schedule> | null = null
 let reportIngestTask: ReturnType<typeof cron.schedule> | null = null
 let searchTermCleanupTask: ReturnType<typeof cron.schedule> | null = null
+let v1ExportCreateTask: ReturnType<typeof cron.schedule> | null = null
+let v1ExportPollTask: ReturnType<typeof cron.schedule> | null = null
+let v1ExportIngestTask: ReturnType<typeof cron.schedule> | null = null
 
 // ── ads-sync ──────────────────────────────────────────────────────────
 
@@ -345,6 +360,83 @@ export function startSearchTermCleanupCron(): void {
   logger.info('ads-search-term-cleanup cron: scheduled', { schedule })
 }
 
+// ── H.2d: Amazon Ads API v1 unified export crons ────────────────────
+// Three crons that together replace Phase B's per-product /sp/ /sb/v4/
+// /sd/ list-call pattern with the v1 unified export flow. Run in
+// parallel to ads-sync (Phase B path) until H.2e cuts that over —
+// both pipelines populate the same Campaign/AdGroup/AdTarget/AdProductAd
+// tables, last writer wins on upsert (same upsert key).
+
+// Every 6h — full create cycle (4 resources × N profiles)
+export async function runV1ExportCreateCron(): Promise<void> {
+  await recordCronRun('ads-v1-export-create', async () => {
+    const result = await runV1ExportCycle({})
+    return summarizeV1Cycle(result)
+  }).catch((err) => logger.error('ads-v1-export-create cron: failure', { error: String(err) }))
+}
+
+export function startV1ExportCreateCron(): void {
+  if (v1ExportCreateTask) { logger.warn('ads-v1-export-create already started'); return }
+  const schedule = process.env.NEXUS_ADS_V1_EXPORT_CREATE_SCHEDULE ?? '0 */6 * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-v1-export-create: invalid schedule', { schedule }); return }
+  v1ExportCreateTask = cron.schedule(schedule, () => { void runV1ExportCreateCron() })
+  logger.info('ads-v1-export-create cron: scheduled', { schedule })
+}
+
+// Every 5 min — advance PENDING/IN_PROGRESS jobs by polling Amazon's
+// /exports/{id} endpoint. v1 exports complete in ~10-30s typically, so
+// 5-min cadence catches them within at most one full cycle.
+export async function runV1ExportPollCron(): Promise<void> {
+  await recordCronRun('ads-v1-export-poll', async () => {
+    const s = await pollPendingExports(30)
+    return `polled=${s.polled} completed=${s.completed} failed=${s.failed} stillPending=${s.stillPending}`
+  }).catch((err) => logger.error('ads-v1-export-poll cron: failure', { error: String(err) }))
+}
+
+export function startV1ExportPollCron(): void {
+  if (v1ExportPollTask) { logger.warn('ads-v1-export-poll already started'); return }
+  const schedule = process.env.NEXUS_ADS_V1_EXPORT_POLL_SCHEDULE ?? '*/5 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-v1-export-poll: invalid schedule', { schedule }); return }
+  v1ExportPollTask = cron.schedule(schedule, () => { void runV1ExportPollCron() })
+  logger.info('ads-v1-export-poll cron: scheduled', { schedule })
+}
+
+// Every 5 min staggered at :02,:07,:12,...,:57 — process up to 10
+// COMPLETED jobs per tick (download + decompress + upsert). Stagger
+// off the poll cron so the two don't contend on the same minute.
+// 1-hour S3 URL TTL means we have plenty of headroom.
+export async function runV1ExportIngestCron(): Promise<void> {
+  await recordCronRun('ads-v1-export-ingest', async () => {
+    const jobs = await prisma.amazonAdsExportJob.findMany({
+      where: { status: 'COMPLETED', url: { not: null } },
+      select: { id: true },
+      orderBy: { completedAt: 'asc' },
+      take: 10,
+    })
+    let ingested = 0; let totalRows = 0; let errors = 0
+    for (const job of jobs) {
+      try {
+        const r = await ingestCompletedExport(job.id)
+        ingested += 1
+        totalRows += r.rowsIngested
+        if (r.error) errors += 1
+      } catch (err) {
+        errors += 1
+        logger.error('v1 export ingest error', { jobId: job.id, error: String(err) })
+      }
+    }
+    return `ingested=${ingested} rows=${totalRows} errors=${errors}`
+  }).catch((err) => logger.error('ads-v1-export-ingest cron: failure', { error: String(err) }))
+}
+
+export function startV1ExportIngestCron(): void {
+  if (v1ExportIngestTask) { logger.warn('ads-v1-export-ingest already started'); return }
+  const schedule = process.env.NEXUS_ADS_V1_EXPORT_INGEST_SCHEDULE ?? '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+  if (!cron.validate(schedule)) { logger.error('ads-v1-export-ingest: invalid schedule', { schedule }); return }
+  v1ExportIngestTask = cron.schedule(schedule, () => { void runV1ExportIngestCron() })
+  logger.info('ads-v1-export-ingest cron: scheduled', { schedule })
+}
+
 // ── Bulk start (called from index.ts when NEXUS_ENABLE_AMAZON_ADS_CRON=1) ──
 
 export function startAllAdvertisingCrons(): void {
@@ -368,6 +460,10 @@ export function startAllAdvertisingCrons(): void {
   startReportPollCron()
   startReportIngestCron()
   startSearchTermCleanupCron()
+  // H.2d: v1 unified export pipeline (parallel to ads-sync until H.2e)
+  startV1ExportCreateCron()
+  startV1ExportPollCron()
+  startV1ExportIngestCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
@@ -395,9 +491,13 @@ export function stopAllAdvertisingCrons(): void {
     ['reportPollTask',      reportPollTask]      as const,
     ['reportIngestTask',    reportIngestTask]    as const,
     ['searchTermCleanupTask', searchTermCleanupTask] as const,
+    ['v1ExportCreateTask',  v1ExportCreateTask]  as const,
+    ['v1ExportPollTask',    v1ExportPollTask]    as const,
+    ['v1ExportIngestTask',  v1ExportIngestTask]  as const,
   ]) {
     if (task) { task.stop(); logger.debug(`${key} stopped`) }
   }
   reportCreateTask = null; reportCreateStTask = null; reportCreatePlTask = null
   reportPollTask = null; reportIngestTask = null; searchTermCleanupTask = null
+  v1ExportCreateTask = null; v1ExportPollTask = null; v1ExportIngestTask = null
 }
