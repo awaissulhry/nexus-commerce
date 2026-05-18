@@ -14,7 +14,12 @@ import {
   ArrowUpRight, Layers, Package, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
   Download, FilterX, AlertCircle, Activity, TrendingUp,
+  AlignJustify, Menu as MenuIcon, Equal,
 } from 'lucide-react'
+import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
+import {
+  VirtualizedGrid as SharedVirtualizedGrid,
+} from '@/app/_shared/grid-lens/VirtualizedGrid'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   MultiSelectChips,
@@ -160,6 +165,12 @@ const ALL_COLUMNS = [
 
 const DEFAULT_VISIBLE = ['thumb', 'product', 'channel', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'lastSync', 'actions']
 
+// G.1 — module-level stable refs passed to SharedVirtualizedGrid when a
+// feature (expand, drag, risk) is not used on this surface.
+const _EMPTY_SET = new Set<string>()
+const _EMPTY_RECORD: Record<string, never[]> = {}
+const _NOOP = () => {}
+
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'info'> = {
   ACTIVE: 'success',
   PUBLISHED: 'success',
@@ -245,6 +256,17 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // Search input is targeted by id (no ref drilling through FilterBar).
   const [activeRowIndex, setActiveRowIndex] = useState(-1)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  // G.1 — density persisted to localStorage per-surface.
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    try {
+      return (window.localStorage.getItem('listings.density') as Density) ?? 'comfortable'
+    } catch { return 'comfortable' }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('listings.density', density) } catch {}
+  }, [density])
 
   // C.11 — saved views. Re-uses the existing /api/saved-views CRUD
   // shipped for /products (P.3); the SavedView model has a `surface`
@@ -844,6 +866,8 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           }}
           onListingChanged={() => { fetchGrid(); fetchFacets() }}
           activeRowIndex={activeRowIndex}
+          density={density}
+          setDensity={setDensity}
         />
       )}
 
@@ -1495,8 +1519,11 @@ function GridLens(props: {
   // U.1 — activeRowIndex is the keyboard-cursor row (j/k navigation).
   // -1 = no active row; rendered as a blue ring on the matching <tr>.
   activeRowIndex: number
+  // G.1 — row density, persisted in ListingsWorkspace and passed down.
+  density: Density
+  setDensity: (d: Density) => void
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex } = props
+  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity } = props
 
   const allSelected = grid.listings.length > 0 && grid.listings.every((l) => selected.has(l.id))
 
@@ -1510,12 +1537,25 @@ function GridLens(props: {
     setSelected(next)
   }
 
-  const toggleSelect = (id: string) => {
+  // G.1 — second param (_shiftKey) accepted to match SharedVirtualizedGrid
+  // interface; range-select is a future enhancement for listings.
+  const toggleSelect = (id: string, _shiftKey?: boolean) => {
     const next = new Set(selected)
     if (next.has(id)) next.delete(id)
     else next.add(id)
     setSelected(next)
   }
+
+  // G.1 — derive focusedRowId from keyboard nav index for the shared grid.
+  const focusedRowId = activeRowIndex >= 0 && activeRowIndex < grid.listings.length
+    ? grid.listings[activeRowIndex].id
+    : null
+
+  // G.1 — embed sortDir into sortBy string so SharedVirtualizedGrid can
+  // derive the active column + direction indicator from a single prop.
+  const gridSortBy = sortDir === 'asc' ? `${sortBy}-asc` : sortBy
+
+  const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
 
   if (grid.loading && grid.listings.length === 0) {
     return <Card><div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center">Loading listings…</div></Card>
@@ -1636,6 +1676,7 @@ function GridLens(props: {
 
   return (
     <div className="space-y-3">
+      {/* G.1 — toolbar: export, density toggle, column picker */}
       <div className="flex items-center gap-2 justify-end">
         <button
           onClick={exportCsv}
@@ -1650,6 +1691,30 @@ function GridLens(props: {
         >
           <Download size={12} /> Export CSV
         </button>
+        {/* Density toggle — same three-segment control as /products */}
+        <div className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded overflow-hidden h-7 text-sm">
+          {(['compact', 'comfortable', 'spacious'] as const).map((d) => {
+            const Icon = d === 'compact' ? AlignJustify : d === 'comfortable' ? MenuIcon : Equal
+            const labelTitle = `${d.charAt(0).toUpperCase()}${d.slice(1)} row density`
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDensity(d)}
+                title={labelTitle}
+                aria-label={labelTitle}
+                aria-pressed={density === d}
+                className={`px-2 h-full inline-flex items-center justify-center ${
+                  density === d
+                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )
+          })}
+        </div>
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
@@ -1667,72 +1732,46 @@ function GridLens(props: {
         </div>
       </div>
 
-      <Card noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full text-md">
-            <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 sticky top-0">
-              <tr>
-                <th className="px-3 py-2 w-8">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleSelectAll}
-                    className="cursor-pointer"
-                  />
-                </th>
-                {visible.map((col) => (
-                  <th
-                    key={col.key}
-                    className={`px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-left ${col.key !== 'thumb' && col.key !== 'actions' ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700' : ''}`}
-                    style={{ width: col.width, minWidth: col.width }}
-                    onClick={() => {
-                      const sortableKeys: Record<string, string> = {
-                        product: 'name', channel: 'channel', marketplace: 'marketplace',
-                        price: 'price', quantity: 'quantity', lastSync: 'lastSyncedAt',
-                      }
-                      if (sortableKeys[col.key]) onSort(sortableKeys[col.key])
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {sortBy === ({ product: 'name', channel: 'channel', marketplace: 'marketplace', price: 'price', quantity: 'quantity', lastSync: 'lastSyncedAt' } as any)[col.key] && (
-                        <span className="text-slate-400 dark:text-slate-500">{sortDir === 'asc' ? '↑' : '↓'}</span>
-                      )}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {grid.listings.map((l, idx) => {
-                const isSelected = selected.has(l.id)
-                const isActive = idx === activeRowIndex
-                return (
-                  <tr
-                    key={l.id}
-                    data-row-index={idx}
-                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${isSelected ? 'bg-blue-50/30' : ''} ${isActive ? 'ring-2 ring-blue-400 ring-inset' : ''}`}
-                  >
-                    <td className="px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelect(l.id)}
-                        className="cursor-pointer"
-                      />
-                    </td>
-                    {visible.map((col) => (
-                      <td key={col.key} className="px-3 py-2 align-middle" style={{ width: col.width, minWidth: col.width }}>
-                        <CellRenderer col={col.key} listing={l} onOpenDrawer={onOpenDrawer} onResync={onResync} onListingChanged={onListingChanged} />
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* G.1 — shared VirtualizedGrid replaces the bespoke HTML table.
+          Flat rows (no parent expansion for listings); riskFlaggedSkus
+          not applicable; draggable not used. */}
+      <SharedVirtualizedGrid<Listing>
+        rows={grid.listings}
+        visible={visible as any}
+        density={density}
+        cellPad={cellPad}
+        selected={selected}
+        toggleSelect={toggleSelect}
+        toggleSelectAll={toggleSelectAll}
+        allSelected={allSelected}
+        sortBy={gridSortBy}
+        onSort={onSort}
+        sortKeys={{
+          product: 'name',
+          channel: 'channel',
+          marketplace: 'marketplace',
+          price: 'price',
+          quantity: 'quantity',
+          lastSync: 'lastSyncedAt',
+        }}
+        expandedParents={_EMPTY_SET}
+        childrenByParent={_EMPTY_RECORD as Record<string, Listing[]>}
+        loadingChildren={_EMPTY_SET}
+        onToggleExpand={_NOOP}
+        focusedRowId={focusedRowId}
+        searchTerm={props.search}
+        riskFlaggedSkus={_EMPTY_SET}
+        storageKey="listings"
+        renderCell={(listing, colKey) => (
+          <CellRenderer
+            col={colKey}
+            listing={listing}
+            onOpenDrawer={onOpenDrawer}
+            onResync={onResync}
+            onListingChanged={onListingChanged}
+          />
+        )}
+      />
 
       <Pagination page={page} totalPages={grid.totalPages} onPage={onPage} />
     </div>
