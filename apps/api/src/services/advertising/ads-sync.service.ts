@@ -15,14 +15,6 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import {
-  listCampaigns,
-  listAdGroups,
-  listTargets,
-  listProductAds,
-  listSdCampaigns,
-  listSdAdGroups,
-  listSdProductAds,
-  listSdTargets,
   adsMode,
   type ClientContext,
   type AdsCampaignDTO,
@@ -31,6 +23,7 @@ import {
   type AdsProductAdDTO,
   type AdsRegion,
 } from './ads-api-client.js'
+import { ADAPTERS, type AdsAdapter } from './adapters/index.js'
 
 interface SyncSummary {
   profileCount: number
@@ -310,103 +303,95 @@ export async function runAdsSyncOnce(): Promise<SyncSummary> {
 
   for (const profile of profiles) {
     const ctx: ClientContext = { profileId: profile.profileId, region: profile.region }
+    let anyAdapterSucceeded = false
+    let lastSuccessfulAdapter: AdsAdapter | null = null
 
-    // ── Sponsored Products (SP) ──────────────────────────────────────────
-    // Currently 403s in live mode due to Amazon-side JWT validator
-    // mismatch (see plan: here-is-the-blueprint-humming-beaver.md). Caught
-    // so SD sync still runs.
-    try {
-      const campaigns = await listCampaigns(ctx)
-      const campaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, campaigns)
-      summary.campaigns.upserted += campaignResult.upserted
-      summary.campaigns.skipped += campaignResult.skipped
+    // Iterate every registered adapter (SP, SB, SD today). Each is
+    // independent — a failing adapter doesn't block the next one.
+    for (const adapter of ADAPTERS) {
+      if (!adapter.live) {
+        summary.errors.push(
+          `profile ${profile.profileId} ${adapter.adProduct}: skipped — ${adapter.liveBlockerReason ?? 'adapter marked not live'}`,
+        )
+        continue
+      }
+      try {
+        const campaigns = await adapter.listCampaigns(ctx)
+        logger.info('[ads-sync] adapter fetched campaigns', {
+          adProduct: adapter.adProduct,
+          profileId: profile.profileId,
+          marketplace: profile.marketplace,
+          campaignsFromAmazon: campaigns.length,
+        })
+        const campaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, campaigns)
+        summary.campaigns.upserted += campaignResult.upserted
+        summary.campaigns.skipped += campaignResult.skipped
+        if (campaignResult.errors.length > 0) {
+          summary.campaigns.sampleErrors = [
+            ...(summary.campaigns.sampleErrors ?? []),
+            ...campaignResult.errors,
+          ].slice(0, 5)
+        }
 
-      const adGroups = await listAdGroups(ctx)
-      const knownCampaignAdGroups = adGroups.filter((ag) =>
-        campaignResult.map.has(ag.campaignId),
-      )
-      const adGroupResult = await syncAdGroupsForProfile(
-        campaignResult.map,
-        knownCampaignAdGroups,
-      )
-      summary.adGroups.upserted += adGroupResult.upserted
-      summary.adGroups.skipped += adGroupResult.skipped
+        const adGroups = await adapter.listAdGroups(ctx)
+        const knownAdGroups = adGroups.filter((ag) => campaignResult.map.has(ag.campaignId))
+        const adGroupResult = await syncAdGroupsForProfile(
+          campaignResult.map,
+          knownAdGroups,
+        )
+        summary.adGroups.upserted += adGroupResult.upserted
+        summary.adGroups.skipped += adGroupResult.skipped
 
-      const targets = await listTargets(ctx)
-      const targetResult = await syncTargetsForProfile(adGroupResult.map, targets)
-      summary.targets.upserted += targetResult.upserted
-      summary.targets.skipped += targetResult.skipped
+        const targets = await adapter.listTargets(ctx)
+        const targetResult = await syncTargetsForProfile(adGroupResult.map, targets)
+        summary.targets.upserted += targetResult.upserted
+        summary.targets.skipped += targetResult.skipped
 
-      const productAds = await listProductAds(ctx)
-      const productAdResult = await syncProductAdsForProfile(adGroupResult.map, productAds)
-      summary.productAds.upserted += productAdResult.upserted
-      summary.productAds.skipped += productAdResult.skipped
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      summary.errors.push(`profile ${profile.profileId} SP: ${msg}`)
-      logger.error('[ads-sync] SP failed', { profileId: profile.profileId, error: msg })
+        const productAds = await adapter.listProductAds(ctx)
+        const productAdResult = await syncProductAdsForProfile(adGroupResult.map, productAds)
+        summary.productAds.upserted += productAdResult.upserted
+        summary.productAds.skipped += productAdResult.skipped
+
+        anyAdapterSucceeded = true
+        lastSuccessfulAdapter = adapter
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        summary.errors.push(`profile ${profile.profileId} ${adapter.adProduct}: ${msg}`)
+        logger.error('[ads-sync] adapter failed', {
+          adProduct: adapter.adProduct,
+          profileId: profile.profileId,
+          error: msg,
+        })
+      }
     }
 
-    // ── Sponsored Display (SD) ───────────────────────────────────────────
-    // SD endpoints use a different auth validator that accepts Atza|
-    // tokens — usable today.
-    try {
-      const sdCampaigns = await listSdCampaigns(ctx)
-      logger.info('[ads-sync] SD fetched', {
-        profileId: profile.profileId,
-        marketplace: profile.marketplace,
-        campaignsFromAmazon: sdCampaigns.length,
-      })
-      const sdCampaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, sdCampaigns)
-      logger.info('[ads-sync] SD campaigns upserted', {
-        profileId: profile.profileId,
-        upserted: sdCampaignResult.upserted,
-        skipped: sdCampaignResult.skipped,
-        firstError: sdCampaignResult.errors[0],
-      })
-      summary.campaigns.upserted += sdCampaignResult.upserted
-      summary.campaigns.skipped += sdCampaignResult.skipped
-      if (sdCampaignResult.errors.length > 0) {
-        summary.campaigns.sampleErrors = [
-          ...(summary.campaigns.sampleErrors ?? []),
-          ...sdCampaignResult.errors,
-        ].slice(0, 5)
-      }
-
-      const sdAdGroups = await listSdAdGroups(ctx)
-      const knownSdAdGroups = sdAdGroups.filter((ag) =>
-        sdCampaignResult.map.has(ag.campaignId),
-      )
-      const sdAdGroupResult = await syncAdGroupsForProfile(
-        sdCampaignResult.map,
-        knownSdAdGroups,
-      )
-      summary.adGroups.upserted += sdAdGroupResult.upserted
-      summary.adGroups.skipped += sdAdGroupResult.skipped
-
-      const sdTargets = await listSdTargets(ctx)
-      const sdTargetResult = await syncTargetsForProfile(sdAdGroupResult.map, sdTargets)
-      summary.targets.upserted += sdTargetResult.upserted
-      summary.targets.skipped += sdTargetResult.skipped
-
-      const sdProductAds = await listSdProductAds(ctx)
-      const sdProductAdResult = await syncProductAdsForProfile(sdAdGroupResult.map, sdProductAds)
-      summary.productAds.upserted += sdProductAdResult.upserted
-      summary.productAds.skipped += sdProductAdResult.skipped
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      summary.errors.push(`profile ${profile.profileId} SD: ${msg}`)
-      logger.error('[ads-sync] SD failed', { profileId: profile.profileId, error: msg })
-      if (mode === 'live') {
+    // Update connection health based on whether at least one adapter
+    // succeeded for this profile.
+    if (mode === 'live') {
+      if (anyAdapterSucceeded) {
         await prisma.amazonAdsConnection
           .updateMany({
             where: { profileId: profile.profileId },
-            data: { lastErrorAt: new Date(), lastError: msg },
+            data: {
+              lastVerifiedAt: new Date(),
+              lastError: null,
+              lastErrorAt: null,
+            },
           })
-          .catch(() => {
-            /* swallow */
+          .catch(() => { /* swallow */ })
+      } else {
+        const allBlocked = ADAPTERS.every((a) => !a.live)
+        const reason = allBlocked
+          ? 'all adapters blocked (Amazon support pending)'
+          : 'every live adapter errored — see sync log'
+        await prisma.amazonAdsConnection
+          .updateMany({
+            where: { profileId: profile.profileId },
+            data: { lastErrorAt: new Date(), lastError: reason },
           })
+          .catch(() => { /* swallow */ })
       }
+      void lastSuccessfulAdapter
     }
   }
 
