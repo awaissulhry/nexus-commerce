@@ -148,6 +148,13 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
                 id: true, sku: true, name: true, amazonAsin: true,
                 lowStockThreshold: true, costPrice: true, basePrice: true,
                 abcClass: true,
+                parentId: true,
+                parent: {
+                  select: {
+                    id: true, sku: true, name: true,
+                    images: { select: { url: true }, take: 1 },
+                  },
+                },
                 images: { select: { url: true }, take: 1 },
               },
             },
@@ -181,6 +188,13 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             costPrice: r.product.costPrice == null ? null : Number(r.product.costPrice),
             basePrice: r.product.basePrice == null ? null : Number(r.product.basePrice),
             thumbnailUrl: r.product.images?.[0]?.url ?? null,
+            parentId: r.product.parentId ?? null,
+            parentProduct: r.product.parent ? {
+              id: r.product.parent.id,
+              sku: r.product.parent.sku,
+              name: r.product.parent.name,
+              thumbnailUrl: r.product.parent.images?.[0]?.url ?? null,
+            } : null,
           },
           variation: r.variation,
         })),

@@ -72,6 +72,8 @@ type StockRow = {
     thumbnailUrl: string | null
     /** S.16 — Pareto band materialized weekly. */
     abcClass: 'A' | 'B' | 'C' | 'D' | null
+    parentId: string | null
+    parentProduct: { id: string; sku: string; name: string; thumbnailUrl: string | null } | null
   }
   variation: { id: string; sku: string; variationAttributes: any } | null
 }
@@ -129,8 +131,6 @@ type StockGridRow = StockRow & GridLensRow
 
 // Stable empties for unused VirtualizedGrid props in table mode.
 const _GRID_EMPTY_SET = new Set<string>()
-const _GRID_EMPTY_MAP = {}
-const _GRID_NOOP = () => {}
 
 
 type SyncStatus = {
@@ -832,25 +832,94 @@ export default function StockWorkspace() {
     () => STOCK_COLUMNS.filter((c) => visibleColumns.includes(c.key as ColumnKey)),
     [visibleColumns],
   )
-  const gridRows = useMemo((): StockGridRow[] => {
-    const base = items.map((it) => ({ ...it, isParent: false as const, childCount: 0, parentId: null }))
-    if (!sortBy) return base
-    const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
-    return [...base].sort((a, b) => {
-      let av: any, bv: any
-      switch (key) {
-        case 'onHand':    av = a.quantity;                        bv = b.quantity;                        break
-        case 'reserved':  av = a.reserved;                       bv = b.reserved;                        break
-        case 'available': av = a.available;                      bv = b.available;                       break
-        case 'cost':      av = a.product.costPrice ?? 0;         bv = b.product.costPrice ?? 0;          break
-        case 'value':     av = (a.product.costPrice ?? 0) * a.quantity; bv = (b.product.costPrice ?? 0) * b.quantity; break
-        case 'abcClass':  av = a.product.abcClass ?? 'Z';        bv = b.product.abcClass ?? 'Z';         break
-        case 'updated':   av = a.lastUpdatedAt;                  bv = b.lastUpdatedAt;                   break
-        default: return 0
-      }
-      const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
-      return dir === 'asc' ? cmp : -cmp
+  // S.4 tree — parent/child grouping matching the /listings GridLens pattern.
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const onToggleExpand = useCallback((pid: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      next.has(pid) ? next.delete(pid) : next.add(pid)
+      return next
     })
+  }, [])
+
+  const { gridRows, childrenByParent } = useMemo(() => {
+    // Sort the flat items first.
+    const sorted = (() => {
+      if (!sortBy) return items
+      const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
+      return [...items].sort((a, b) => {
+        let av: any, bv: any
+        switch (key) {
+          case 'onHand':    av = a.quantity;                        bv = b.quantity;                        break
+          case 'reserved':  av = a.reserved;                       bv = b.reserved;                        break
+          case 'available': av = a.available;                      bv = b.available;                       break
+          case 'cost':      av = a.product.costPrice ?? 0;         bv = b.product.costPrice ?? 0;          break
+          case 'value':     av = (a.product.costPrice ?? 0) * a.quantity; bv = (b.product.costPrice ?? 0) * b.quantity; break
+          case 'abcClass':  av = a.product.abcClass ?? 'Z';        bv = b.product.abcClass ?? 'Z';         break
+          case 'updated':   av = a.lastUpdatedAt;                  bv = b.lastUpdatedAt;                   break
+          default: return 0
+        }
+        const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
+        return dir === 'asc' ? cmp : -cmp
+      })
+    })()
+
+    // Group by parentId — products with a parent are children.
+    const byParent: Record<string, StockGridRow[]> = {}
+    const standalone: StockGridRow[] = []
+    for (const it of sorted) {
+      const pid = it.product.parentId
+      const row: StockGridRow = { ...it, isParent: false as const, childCount: 0, parentId: pid ?? null }
+      if (pid) {
+        if (!byParent[pid]) byParent[pid] = []
+        byParent[pid].push(row)
+      } else {
+        standalone.push(row)
+      }
+    }
+
+    // Build synthetic parent rows with aggregated totals.
+    const parentRows: StockGridRow[] = Object.entries(byParent).map(([pid, children]) => {
+      const pp = children[0]?.product.parentProduct
+      const totalQty       = children.reduce((s, c) => s + c.quantity, 0)
+      const totalReserved  = children.reduce((s, c) => s + c.reserved, 0)
+      const totalAvailable = children.reduce((s, c) => s + c.available, 0)
+      const locCount = new Set(children.map((c) => c.location.id)).size
+      return {
+        id: pid,
+        isParent: true as const,
+        childCount: children.length,
+        parentId: null,
+        quantity: totalQty,
+        reserved: totalReserved,
+        available: totalAvailable,
+        reorderThreshold: null,
+        reorderQuantity: null,
+        syncStatus: 'IDLE',
+        lastUpdatedAt: children[0]?.lastUpdatedAt ?? '',
+        lastSyncedAt: null,
+        location: { id: '', code: `${locCount} loc`, name: '', type: '' },
+        product: {
+          id: pid,
+          sku: pp?.sku ?? '',
+          name: pp?.name ?? pid,
+          amazonAsin: null,
+          lowStockThreshold: 0,
+          costPrice: null,
+          basePrice: null,
+          thumbnailUrl: pp?.thumbnailUrl ?? null,
+          abcClass: null,
+          parentId: null,
+          parentProduct: null,
+        },
+        variation: null,
+      }
+    })
+
+    return {
+      gridRows: [...parentRows, ...standalone],
+      childrenByParent: byParent,
+    }
   }, [items, sortBy])
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
     const threshold = row.reorderThreshold ?? row.product.lowStockThreshold
@@ -1254,15 +1323,14 @@ export default function StockWorkspace() {
             sortBy={sortBy}
             onSort={onSort}
             sortKeys={STOCK_SORT_KEYS}
-            expandedParents={_GRID_EMPTY_SET}
-            childrenByParent={_GRID_EMPTY_MAP}
+            expandedParents={expandedParents}
+            childrenByParent={childrenByParent}
             loadingChildren={_GRID_EMPTY_SET}
-            onToggleExpand={_GRID_NOOP}
+            onToggleExpand={onToggleExpand}
             focusedRowId={null}
             searchTerm={search}
             riskFlaggedSkus={_GRID_EMPTY_SET}
             storageKey="stock"
-            showExpandColumn={false}
             renderCell={renderCell}
           />
         )
@@ -3272,17 +3340,17 @@ const COLUMN_META: Record<ColumnKey, {
     align: 'left',
     head: 'Product',
     cell: ({ it }) => (
-      <>
-        <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-md inline-flex items-center gap-1.5">
-          {it.product.name}
+      <div className="min-w-0 overflow-hidden">
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate inline-flex items-center gap-1.5 max-w-full">
+          <span className="truncate">{it.product.name}</span>
           {it.product.abcClass && <AbcBadge cls={it.product.abcClass} />}
         </div>
-        <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">
+        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
           {it.product.sku}
           {it.variation && <span> · {it.variation.sku}</span>}
           {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
         </div>
-      </>
+      </div>
     ),
   },
   location: {
