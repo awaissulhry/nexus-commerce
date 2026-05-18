@@ -2247,12 +2247,40 @@ model Campaign {
   lastSyncStatus      AdSyncStatus?
   lastSyncError       String?
 
+  // ── Phase 2: v1 unified API additions ─────────────────────────────────
+  // adProduct is the v1 discriminator. The legacy `type` enum stays for
+  // back-compat reads; sync code populates BOTH columns until M3 cutover.
+  // Values: 'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY' | 'SPONSORED_TELEVISION'
+  adProduct          String?
+  // v1 budget shape: { amount, type: 'DAILY'|'LIFETIME', recurrenceTimePeriod? }
+  budgetJson         Json?
+  // Full v1 bidding strategy (per-adProduct varies). For SP: { strategy, adjustments[] }.
+  bidStrategyJson    Json?
+  // SP placement bid adjustments + adjustmentByPlacement table.
+  dynamicBidding     Json?
+  // SD-only: tactic discriminator (T00020 = product targeting, T00030 = audience).
+  tactic             String?
+  // SD-only: pacing profile (e.g. 'as_soon_as_possible').
+  deliveryProfile    String?
+  // SD-only: cost model (cpc | vcpm).
+  costType           String?
+  // SB-only: creative assets — headline, brand logo, landing URL, video etc.
+  creativeAssetJson  Json?
+  // SB-only: brand registry binding (links to a Brand Profile).
+  brandEntityId      String?
+  // v1 MULTI_MARKETPLACE support: a single campaign serving multiple
+  // marketplaces with a shared budget. SINGLE_MARKETPLACE matches today's
+  // behavior; MULTI_MARKETPLACE populates linkedMarketplaces.
+  budgetScope        String   @default("SINGLE_MARKETPLACE")
+  linkedMarketplaces String[] @default([])
+
   adGroups   AdGroup[]
   bidHistory CampaignBidHistory[]
 
   @@unique([externalCampaignId, marketplace])
   @@index([marketplace, status])
   @@index([lastSyncStatus])
+  @@index([adProduct, marketplace, status])
 }
 
 // AD.1 — Sponsored Products/Brands/Display ad group. Owns the default
@@ -2275,6 +2303,11 @@ model AdGroup {
   lastSyncError     String?
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+
+  // ── Phase 2: v1 unified API additions ─────────────────────────────────
+  bidStrategyJson Json?
+  // SD-only: creativeType (e.g. 'IMAGE' | 'VIDEO' | 'CAROUSEL').
+  creativeType    String?
 
   targets    AdTarget[]
   productAds AdProductAd[]
@@ -2306,8 +2339,17 @@ model AdTarget {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
+  // ── Phase 2: v1 unified API additions ─────────────────────────────────
+  // Distinguishes positive (default) from negative targets/keywords. v1
+  // returns both via a single endpoint with a state-level flag.
+  isNegative    Boolean @default(false)
+  // Scope at which the negative applies: CAMPAIGN | AD_GROUP. Null for
+  // positive targets.
+  negativeLevel String?
+
   @@index([adGroupId, status])
   @@index([externalTargetId])
+  @@index([adGroupId, isNegative])
 }
 
 // AD.1 — Links ad-groups to local Product rows (via ASIN/SKU). The
@@ -2363,6 +2405,222 @@ model AmazonAdsConnection {
   updatedAt            DateTime  @updatedAt
 
   @@index([marketplace, isActive])
+}
+
+// ── Phase 2: v1 unified Amazon Ads API substrate ─────────────────────────
+// Seven new tables that the v1 sync + reports layer reads/writes. All are
+// additive — existing Campaign/AdGroup/AdTarget/AdProductAd unchanged
+// except for the v1 columns added above. None of these tables are read
+// by current code; they sit dormant until Phase 3 services land.
+
+// First-class profile metadata. Today's AmazonAdsConnection only carries
+// credentials + state; this table holds per-profile currency, timezone,
+// account-type info needed for currency conversion + TZ-aware report
+// ingestion. Populated by Phase 3 sync from GET /v2/profiles.
+model AmazonAdsProfile {
+  id                 String    @id @default(cuid())
+  profileId          String    @unique
+  marketplace        String
+  region             String    @default("EU") // EU | NA | FE
+  countryCode        String? // IT | DE | FR | ES | UK | NL | BE | PL | SE | US ...
+  currencyCode       String    @default("EUR")
+  timezone           String? // Europe/Rome | Europe/London | ...
+  accountType        String    @default("seller") // seller | vendor | author | agency
+  accountEntityId    String?
+  accountName        String?
+  validPaymentMethod Boolean   @default(true)
+  lastSyncedAt       DateTime?
+  lastProfileFetchAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([countryCode])
+  @@index([currencyCode])
+  @@index([marketplace])
+}
+
+// Amazon-native portfolio (campaign grouping). Linked to Campaign via
+// Campaign.portfolioId (already exists as a string column).
+model AmazonAdsPortfolio {
+  id                  String    @id @default(cuid())
+  profileId           String
+  externalPortfolioId String
+  name                String
+  state               String? // ENABLED | PAUSED | ARCHIVED
+  budgetAmount        Decimal?  @db.Decimal(12, 2)
+  budgetCurrencyCode  String?
+  // NO_CAP | MONTHLY_RECURRING | DATE_RANGE
+  budgetPolicy        String?
+  startDate           DateTime?
+  endDate             DateTime?
+  inBudget            Boolean   @default(true)
+  lastSyncedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([profileId, externalPortfolioId])
+  @@index([profileId, state])
+}
+
+// Universal daily time-series for every advertising entity. One row per
+// (profile, adProduct, entityType, entityId, date). Replaces today's
+// pattern of mutating Campaign.spend/sales/impressions counters in-place
+// with a true time-series the rollup + charts can query.
+//
+// Monetary fields use BigInt micros (1 EUR = 1_000_000) to handle
+// cross-currency conversion (GBP/PLN/SEK) without precision loss. Every
+// row carries currencyCode explicitly so the rollup knows what to
+// convert from.
+model AmazonAdsDailyPerformance {
+  id            String   @id @default(cuid())
+  profileId     String
+  marketplace   String
+  adProduct     String // SPONSORED_PRODUCTS | SPONSORED_BRANDS | SPONSORED_DISPLAY | SPONSORED_TELEVISION
+  date          DateTime @db.Date
+  // CAMPAIGN | AD_GROUP | AD_TARGET | PRODUCT_AD | SEARCH_TERM | PLACEMENT
+  entityType    String
+  entityId      String // external Amazon ID
+  // FK to Campaign.id / AdGroup.id / AdTarget.id / AdProductAd.id — null
+  // when the entity isn't tracked locally (search terms / placements).
+  localEntityId String?
+
+  // Universal metrics
+  impressions  Int    @default(0)
+  clicks       Int    @default(0)
+  costMicros   BigInt @default(0)
+  currencyCode String
+
+  // Attribution windows (available varies per adProduct)
+  sales1dCents  Int? @default(0)
+  sales7dCents  Int? @default(0)
+  sales14dCents Int? @default(0)
+  sales30dCents Int? @default(0)
+  orders7d      Int? @default(0)
+  units7d       Int? @default(0)
+
+  // New-to-brand (SB/SD only)
+  ntbOrders14d     Int? @default(0)
+  ntbSalesCents14d Int? @default(0)
+
+  // Engagement (SD/SB only)
+  viewableImpressions Int? @default(0)
+  detailPageViews7d   Int? @default(0)
+
+  // Derived — indexed for filtering "show me campaigns with ACOS > 50%"
+  acos7d Decimal? @db.Decimal(8, 4)
+  roas7d Decimal? @db.Decimal(8, 4)
+
+  reportRunId String?
+  reportedAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([profileId, adProduct, entityType, entityId, date])
+  @@index([profileId, adProduct, date])
+  @@index([localEntityId, date])
+  @@index([marketplace, date, adProduct])
+}
+
+// Search terms that triggered ads. High-cardinality; 90-day rolling
+// delete enforced by a separate cleanup job. Used for negative keyword
+// mining and "what queries are we actually winning" analytics.
+model AmazonAdsSearchTerm {
+  id               String   @id @default(cuid())
+  profileId        String
+  marketplace      String
+  adProduct        String
+  date             DateTime @db.Date
+  campaignId       String // external Amazon ID
+  adGroupId        String // external Amazon ID
+  matchedKeywordId String?
+  matchedTargetId  String?
+  matchType        String? // BROAD | PHRASE | EXACT
+  query            String // user search query
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  costMicros       BigInt   @default(0)
+  currencyCode     String
+  sales7dCents     Int?     @default(0)
+  orders7d         Int?     @default(0)
+  reportRunId      String?
+  createdAt        DateTime @default(now())
+
+  @@index([profileId, date])
+  @@index([campaignId, date])
+  @@index([profileId, query])
+}
+
+// Placement-level performance: TOP_OF_SEARCH | PRODUCT_PAGE |
+// REST_OF_SEARCH | HOME_PAGE. Drives placement bid adjustments.
+model AmazonAdsPlacementReport {
+  id              String   @id @default(cuid())
+  profileId       String
+  marketplace     String
+  adProduct       String
+  date            DateTime @db.Date
+  campaignId      String // external Amazon ID
+  localCampaignId String?
+  placement       String
+  impressions     Int      @default(0)
+  clicks          Int      @default(0)
+  costMicros      BigInt   @default(0)
+  currencyCode    String
+  sales7dCents    Int?     @default(0)
+  orders7d        Int?     @default(0)
+  reportRunId     String?
+  createdAt       DateTime @default(now())
+
+  @@unique([campaignId, date, placement])
+  @@index([profileId, adProduct, date])
+}
+
+// Brand Metrics API output — search impression share, branded queries,
+// branded conversion share. One row per (profile, brand, day).
+model AmazonAdsBrandMetric {
+  id                    String   @id @default(cuid())
+  profileId             String
+  marketplace           String
+  brandName             String
+  date                  DateTime @db.Date
+  searchImpressionShare Decimal? @db.Decimal(8, 4)
+  brandSearches         BigInt?
+  brandConversionShare  Decimal? @db.Decimal(8, 4)
+  categoryRank          Int?
+  reportedAt            DateTime
+  createdAt             DateTime @default(now())
+
+  @@unique([profileId, brandName, date])
+}
+
+// Persistent state for async Reports API polling. Amazon's flow: POST to
+// create → poll status (1-60 min) → download S3 presigned URL → parse +
+// upsert. Storing the externalReportId per request means polling
+// resumes correctly across server restarts and deploys.
+model AmazonAdsReportJob {
+  id               String    @id @default(cuid())
+  profileId        String
+  adProduct        String
+  reportTypeId     String
+  externalReportId String
+  startDate        DateTime
+  endDate          DateTime
+  // Exact request body for replay/debug.
+  configuration    Json
+  // PENDING | IN_PROGRESS | COMPLETED | FAILED | EXPIRED
+  status           String    @default("PENDING")
+  // S3 presigned URL when status=COMPLETED.
+  location         String?
+  fileSize         Int?
+  rowsIngested     Int       @default(0)
+  errorMessage     String?
+  attempts         Int       @default(0)
+  lastPolledAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  completedAt      DateTime?
+
+  @@index([status, lastPolledAt])
+  @@index([profileId, adProduct, createdAt(sort: Desc)])
+  @@index([externalReportId])
 }
 
 // AD.1 — Snapshot of Amazon FBA Aged Inventory report (SP-API
@@ -2999,8 +3257,8 @@ model Customer {
   // Computed nightly by rfm-scoring.job.ts. Each dimension is a quintile
   // 1–5 (5 = best). rfmScore is a 3-digit code e.g. '554'.
   // rfmLabel drives the segment color-coding and filter DSL.
-  rfmScore      String?   // e.g. '554' (R=5, F=5, M=4)
-  rfmLabel      String?   // CHAMPION | LOYAL | POTENTIAL | AT_RISK | LOST | NEW | ONE_TIME
+  rfmScore      String? // e.g. '554' (R=5, F=5, M=4)
+  rfmLabel      String? // CHAMPION | LOYAL | POTENTIAL | AT_RISK | LOST | NEW | ONE_TIME
   rfmComputedAt DateTime?
 
   // Relations
@@ -3015,7 +3273,7 @@ model Customer {
   @@index([totalSpentCents])
   @@index([riskFlag])
   @@index([fiscalKind]) // F.1 — drives B2B/B2C filtering on /customers
-  @@index([rfmLabel])   // CI.1 — segment filter + distribution query
+  @@index([rfmLabel]) // CI.1 — segment filter + distribution query
 }
 
 // CI.2 — Customer Segment / Cohort.
@@ -3031,15 +3289,15 @@ model Customer {
 // Supported fields: totalSpentCents, totalOrders, riskFlag, fiscalKind,
 //   rfmLabel, rfmScore, lastOrderAt (date ops), firstOrderAt, tags.
 model CustomerSegment {
-  id            String   @id @default(cuid())
-  name          String   @unique
+  id            String    @id @default(cuid())
+  name          String    @unique
   description   String?
-  conditions    Json     @default("[]")
-  customerCount Int      @default(0)
+  conditions    Json      @default("[]")
+  customerCount Int       @default(0)
   lastCountedAt DateTime?
   createdBy     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([createdAt(sort: Desc)])
 }
@@ -9707,15 +9965,15 @@ model ProductEvent {
 // Dimensions JSON shape mirrors the scorer output:
 //   { title: 80, bullets: 60, keywords: 70, images: 90, pricing: 50 }
 model ListingQualitySnapshot {
-  id          String  @id @default(cuid())
-  productId   String
-  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  channel     String // 'AMAZON' | 'EBAY' | 'SHOPIFY'
-  marketplace String?
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channel      String // 'AMAZON' | 'EBAY' | 'SHOPIFY'
+  marketplace  String?
   overallScore Int // 0–100
-  dimensions  Json // { title, bullets, keywords, images, pricing } all 0–100
-  triggeredBy String  @default("manual") // 'manual' | 'publish' | 'cron'
-  createdAt   DateTime @default(now())
+  dimensions   Json // { title, bullets, keywords, images, pricing } all 0–100
+  triggeredBy  String   @default("manual") // 'manual' | 'publish' | 'cron'
+  createdAt    DateTime @default(now())
 
   @@index([productId, channel, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
@@ -9728,16 +9986,16 @@ model ListingQualitySnapshot {
 // breakdown so operators can see WHY an order went to a specific warehouse
 // without replaying the routing engine state.
 model RoutingDecision {
-  id          String   @id @default(cuid())
-  orderId     String
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  warehouseId String?
-  method      String // 'rule' | 'scored' | 'fallback' | 'none'
-  ruleId      String?
+  id           String   @id @default(cuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  warehouseId  String?
+  method       String // 'rule' | 'scored' | 'fallback' | 'none'
+  ruleId       String?
   // Score breakdown for 'scored' method:
   //   { warehouseId: { proximity: N, stockScore: N, total: N } }
   scoreSummary Json?
-  createdAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   @@index([orderId])
   @@index([createdAt(sort: Desc)])
@@ -9778,8 +10036,8 @@ model FeedTransformRule {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([channel, field, priority])
   @@unique([name, channel, marketplace])
+  @@index([channel, field, priority])
 }
 
 // ChannelSchema: per-channel field definitions used to validate the
@@ -9787,13 +10045,13 @@ model FeedTransformRule {
 // Seeded by POST /api/feed-transform/seed-schemas with built-in
 // Amazon/eBay/Shopify definitions; operators can add custom fields.
 model ChannelSchema {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   channel       String // AMAZON | EBAY | SHOPIFY
   marketplace   String? // null = applies to all marketplaces for this channel
   fieldKey      String // e.g. "title", "bullet_points", "browse_node_id"
   label         String // human-readable label shown in UI
   maxLength     Int?
-  required      Boolean  @default(false)
+  required      Boolean @default(false)
   allowedValues Json? // null = free text; array of strings = enum
   notes         String?
 
