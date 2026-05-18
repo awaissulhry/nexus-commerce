@@ -15,7 +15,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList } from 'lucide-react'
+import { Activity, Warehouse, TrendingUp, Bot, Wallet, Rss, Search, ClipboardList, BarChart2 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -75,6 +75,12 @@ const TABS: Tab[] = [
     label: 'Reports',
     icon: ClipboardList,
     matchPrefix: '/marketing/advertising/reports',
+  },
+  {
+    href: '/marketing/advertising/analytics',
+    label: 'Analytics',
+    icon: BarChart2,
+    matchPrefix: '/marketing/advertising/analytics',
   },
 ]
 

@@ -482,6 +482,105 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Phase 5a: v1 overview endpoint ────────────────────────────────────
   // Returns a comprehensive snapshot of every v1 substrate (Phase 2/4/6):
   //   - per-currency spend + sales in the last 30 days
+  // GET /api/advertising/trends — daily TACOS + ACOS time-series
+  //
+  // Merges two Prisma queries:
+  //   1. AmazonAdsDailyPerformance grouped by date → ad spend + ad sales
+  //   2. DailySalesAggregate grouped by day (channel=AMAZON) → total revenue
+  //
+  // TACOS = adSpend / totalRevenue * 100 (requires both sources)
+  // ACOS  = adSpend / adSales     * 100 (ads-only, always available)
+  fastify.get('/advertising/trends', async (request, reply) => {
+    const query = request.query as {
+      windowDays?: string
+      marketplace?: string
+      adProduct?: string
+      currencyCode?: string
+    }
+    const windowDays = Math.max(7, Math.min(180, Number(query.windowDays ?? 30)))
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - windowDays)
+    since.setUTCHours(0, 0, 0, 0)
+
+    // ── Ad performance per day ──────────────────────────────────────────
+    const perfByDay = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['date'],
+      where: {
+        date: { gte: since },
+        entityType: 'CAMPAIGN',
+        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+        ...(query.adProduct   ? { adProduct:   query.adProduct   } : {}),
+        ...(query.currencyCode ? { currencyCode: query.currencyCode } : {}),
+      },
+      _sum: {
+        impressions:   true,
+        clicks:        true,
+        costMicros:    true,
+        sales7dCents:  true,
+        sales14dCents: true,
+        orders7d:      true,
+      },
+      orderBy: { date: 'asc' },
+    })
+
+    // ── Total Amazon revenue per day (SP-API Sales & Traffic) ──────────
+    const salesByDay = await prisma.dailySalesAggregate.groupBy({
+      by: ['day'],
+      where: {
+        day:     { gte: since },
+        channel: 'AMAZON',
+        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+      },
+      _sum: { grossRevenue: true, unitsSold: true, ordersCount: true },
+      orderBy: { day: 'asc' },
+    })
+
+    // Index total revenue by ISO date string for O(1) merge
+    const revenueMap = new Map<string, { revenueCents: number; units: number; orders: number }>()
+    for (const r of salesByDay) {
+      const key = r.day.toISOString().slice(0, 10)
+      revenueMap.set(key, {
+        revenueCents: Math.round(Number(r._sum.grossRevenue ?? 0) * 100),
+        units:  r._sum.unitsSold  ?? 0,
+        orders: r._sum.ordersCount ?? 0,
+      })
+    }
+
+    // ── Merge ───────────────────────────────────────────────────────────
+    const rows = perfByDay.map((p) => {
+      const dateKey = p.date.toISOString().slice(0, 10)
+      const spendMicros = Number(p._sum.costMicros ?? 0n)
+      const adSpendCents = spendMicros / 10_000          // micros → cents
+      // SP/SD 7d + SB 14d — avoid double-counting by using only one window
+      const adSalesCents = (p._sum.sales7dCents ?? 0) + (p._sum.sales14dCents ?? 0)
+      const rev = revenueMap.get(dateKey)
+      const totalRevenueCents = rev?.revenueCents ?? 0
+
+      const acos  = adSalesCents > 0
+        ? (adSpendCents / adSalesCents) * 100 : null
+      const tacos = totalRevenueCents > 0
+        ? (adSpendCents / totalRevenueCents) * 100 : null
+      const ctr = (p._sum.impressions ?? 0) > 0
+        ? ((p._sum.clicks ?? 0) / (p._sum.impressions ?? 1)) * 100 : null
+
+      return {
+        date:             dateKey,
+        impressions:      p._sum.impressions  ?? 0,
+        clicks:           p._sum.clicks       ?? 0,
+        orders:           p._sum.orders7d     ?? 0,
+        adSpendCents:     Math.round(adSpendCents),
+        adSalesCents,
+        totalRevenueCents,
+        acos:             acos  != null ? Math.round(acos  * 100) / 100 : null,
+        tacos:            tacos != null ? Math.round(tacos * 100) / 100 : null,
+        ctr:              ctr   != null ? Math.round(ctr   * 100) / 100 : null,
+      }
+    })
+
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { windowDays, count: rows.length, rows }
+  })
+
   //   - per-adProduct live status from the adapter registry
   //   - report job counts by status
   //   - search-term cardinality + negative-keyword-candidate count
