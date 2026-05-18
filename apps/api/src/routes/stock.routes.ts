@@ -94,6 +94,194 @@ function safeNum(v: unknown, fallback?: number): number | undefined {
 }
 
 const stockRoutes: FastifyPluginAsync = async (fastify) => {
+  // ── GET /api/stock/products ──────────────────────────────────────
+  // Product-hierarchy view for the stock table. Mirrors /api/products:
+  //   ?parentId omitted / 'null'  → top-level products (parentId IS NULL)
+  //   ?parentId=<id>              → direct children of that product
+  // Each row is a Product with aggregated StockLevel totals. Parent rows
+  // (isParent=true) aggregate stock from all leaf descendants (up to 3
+  // levels deep). Leaf rows carry their individual stockLevels[].
+  fastify.get('/stock/products', async (request, reply) => {
+    try {
+      const q = request.query as any
+      const rawParentId = q.parentId
+      const parentId = rawParentId && rawParentId !== 'null' ? rawParentId : null
+      const page = Math.max(1, parseInt(q.page ?? '1', 10) || 1)
+      const pageSize = Math.min(200, Math.max(1, parseInt(q.pageSize ?? '50', 10) || 50))
+      const skip = (page - 1) * pageSize
+
+      // Base where: mirror /api/products top-level / child scope
+      const where: any = { parentId, deletedAt: null }
+
+      if (q.search?.trim()) {
+        const s = q.search.trim()
+        where.OR = [
+          { sku: { contains: s, mode: 'insensitive' } },
+          { name: { contains: s, mode: 'insensitive' } },
+          { amazonAsin: { contains: s, mode: 'insensitive' } },
+        ]
+      }
+
+      // Status filter applies to leaf rows. For parent rows, always include
+      // (operators need to see the parent to navigate to its children).
+      if (q.status) {
+        const stockWhere: any = {}
+        if (q.status === 'OUT_OF_STOCK') stockWhere.quantity = 0
+        else if (q.status === 'CRITICAL') stockWhere.quantity = { gt: 0, lte: 5 }
+        else if (q.status === 'LOW') stockWhere.quantity = { gt: 5, lte: 15 }
+        else if (q.status === 'IN_STOCK') stockWhere.quantity = { gt: 15 }
+        where.AND = [
+          ...(where.AND ?? []),
+          { OR: [{ isParent: true }, { stockLevels: { some: stockWhere } }] },
+        ]
+      }
+
+      // Location filters: include parent rows always; filter leaf rows by location.
+      if (q.locationCode) {
+        const loc = await prisma.stockLocation.findUnique({ where: { code: q.locationCode }, select: { id: true } })
+        if (!loc) return { items: [], total: 0, page, pageSize, totalPages: 0 }
+        where.AND = [
+          ...(where.AND ?? []),
+          { OR: [{ isParent: true }, { stockLevels: { some: { locationId: loc.id } } }] },
+        ]
+      }
+      if (q.locationType) {
+        where.AND = [
+          ...(where.AND ?? []),
+          { OR: [{ isParent: true }, { stockLevels: { some: { location: { type: q.locationType } } } }] },
+        ]
+      }
+
+      const [total, products] = await Promise.all([
+        prisma.product.count({ where }),
+        prisma.product.findMany({
+          where,
+          select: {
+            id: true, sku: true, name: true, amazonAsin: true,
+            isParent: true, parentId: true,
+            abcClass: true, lowStockThreshold: true, costPrice: true, basePrice: true,
+            images: { select: { url: true }, take: 1 },
+            _count: { select: { children: true } },
+            stockLevels: {
+              include: {
+                location: { select: { id: true, code: true, name: true, type: true } },
+              },
+              orderBy: { quantity: 'desc' },
+            },
+          },
+          orderBy: [{ isParent: 'desc' }, { sku: 'asc' }],
+          skip,
+          take: pageSize,
+        }),
+      ])
+
+      // Aggregate stock for parent products from all leaf descendants.
+      // Handles up to 3-level hierarchy (grandparent → intermediate → leaf).
+      const parentProductIds = products.filter((p) => p.isParent).map((p) => p.id)
+      const parentAgg = new Map<string, {
+        qty: number; reserved: number; available: number
+        byType: Record<string, number>
+        lastUpdatedAt: Date | null
+      }>()
+
+      if (parentProductIds.length > 0) {
+        const descendantLevels = await prisma.stockLevel.findMany({
+          where: {
+            product: {
+              OR: [
+                // Direct children (2-level)
+                { parentId: { in: parentProductIds }, isParent: false },
+                // Grandchildren (3-level): product whose parent's parentId is in our list
+                { isParent: false, parent: { parentId: { in: parentProductIds } } },
+              ],
+            },
+          },
+          select: {
+            quantity: true, reserved: true, available: true, lastUpdatedAt: true,
+            location: { select: { type: true } },
+            product: {
+              select: {
+                parentId: true,
+                parent: { select: { parentId: true } },
+              },
+            },
+          },
+        })
+
+        for (const sl of descendantLevels) {
+          // Resolve which top-level parent this stock belongs to
+          const topId =
+            parentProductIds.includes(sl.product.parentId ?? '')
+              ? sl.product.parentId!
+              : sl.product.parent?.parentId ?? null
+          if (!topId) continue
+          const cur = parentAgg.get(topId) ?? { qty: 0, reserved: 0, available: 0, byType: {}, lastUpdatedAt: null }
+          cur.qty += sl.quantity
+          cur.reserved += sl.reserved
+          cur.available += sl.available
+          cur.byType[sl.location.type] = (cur.byType[sl.location.type] ?? 0) + sl.quantity
+          if (!cur.lastUpdatedAt || sl.lastUpdatedAt > cur.lastUpdatedAt) {
+            cur.lastUpdatedAt = sl.lastUpdatedAt
+          }
+          parentAgg.set(topId, cur)
+        }
+      }
+
+      return {
+        items: products.map((p) => {
+          const agg = parentAgg.get(p.id)
+          const ownQty       = p.stockLevels.reduce((s, sl) => s + sl.quantity, 0)
+          const ownReserved  = p.stockLevels.reduce((s, sl) => s + sl.reserved, 0)
+          const ownAvailable = p.stockLevels.reduce((s, sl) => s + sl.available, 0)
+          const lastUpdated  = agg?.lastUpdatedAt
+            ?? (p.stockLevels[0]?.lastUpdatedAt ?? null)
+          return {
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            amazonAsin: p.amazonAsin,
+            isParent: p.isParent,
+            parentId: p.parentId,
+            abcClass: p.abcClass,
+            lowStockThreshold: p.lowStockThreshold,
+            costPrice: p.costPrice == null ? null : Number(p.costPrice),
+            basePrice: p.basePrice == null ? null : Number(p.basePrice),
+            thumbnailUrl: p.images?.[0]?.url ?? null,
+            childCount: p._count.children,
+            totalStock:     agg?.qty      ?? ownQty,
+            totalReserved:  agg?.reserved ?? ownReserved,
+            totalAvailable: agg?.available ?? ownAvailable,
+            fbaStock: agg?.byType['AMAZON_FBA']
+              ?? p.stockLevels.filter((sl) => sl.location.type === 'AMAZON_FBA').reduce((s, sl) => s + sl.quantity, 0),
+            ownStock: agg?.byType['WAREHOUSE']
+              ?? p.stockLevels.filter((sl) => sl.location.type === 'WAREHOUSE').reduce((s, sl) => s + sl.quantity, 0),
+            lastUpdatedAt: lastUpdated ? lastUpdated.toISOString() : null,
+            // Full StockLevel rows for leaf products — used by the drawer.
+            stockLevels: p.isParent ? [] : p.stockLevels.map((sl) => ({
+              id: sl.id,
+              location: sl.location,
+              quantity: sl.quantity,
+              reserved: sl.reserved,
+              available: sl.available,
+              reorderThreshold: sl.reorderThreshold,
+              reorderQuantity: sl.reorderQuantity,
+              syncStatus: sl.syncStatus,
+              lastUpdatedAt: sl.lastUpdatedAt.toISOString(),
+              lastSyncedAt: sl.lastSyncedAt?.toISOString() ?? null,
+            })),
+          }
+        }),
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      }
+    } catch (error: any) {
+      fastify.log.error({ err: error }, '[stock/products] failed')
+      return reply.code(500).send({ error: error?.message ?? String(error) })
+    }
+  })
+
   // ── GET /api/stock ──────────────────────────────────────────────
   // Paginated, filtered StockLevel list joined with product + location.
   // Supported filters:

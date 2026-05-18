@@ -50,42 +50,39 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 
+// Product-centric row — mirrors /api/stock/products response.
+// One row = one Product, same hierarchy as /products page.
 type StockRow = {
-  id: string
-  quantity: number
-  reserved: number
-  available: number
-  reorderThreshold: number | null
-  /** T.32 — EOQ surfaced inline next to threshold for at-reorder rows. */
-  reorderQuantity: number | null
-  syncStatus: string
-  lastUpdatedAt: string
-  lastSyncedAt: string | null
-  location: { id: string; code: string; name: string; type: string }
-  product: {
+  id: string          // product ID
+  sku: string
+  name: string
+  amazonAsin: string | null
+  isParent: boolean
+  parentId: string | null
+  abcClass: 'A' | 'B' | 'C' | 'D' | null
+  lowStockThreshold: number
+  costPrice: number | null
+  basePrice: number | null
+  thumbnailUrl: string | null
+  childCount: number
+  totalStock: number
+  totalReserved: number
+  totalAvailable: number
+  fbaStock: number
+  ownStock: number
+  lastUpdatedAt: string | null
+  stockLevels: Array<{
     id: string
-    sku: string
-    name: string
-    amazonAsin: string | null
-    lowStockThreshold: number
-    costPrice: number | null
-    basePrice: number | null
-    thumbnailUrl: string | null
-    /** S.16 — Pareto band materialized weekly. */
-    abcClass: 'A' | 'B' | 'C' | 'D' | null
-    parentId: string | null
-    parentProduct: {
-      id: string
-      sku: string
-      name: string
-      thumbnailUrl: string | null
-      /** grandparentId is non-null when this parent is itself a child
-       *  in a 3-level hierarchy (grandparent → FBA/FBM parent → variant).
-       *  The UI uses this to show a breadcrumb on the synthetic parent row. */
-      grandparentId: string | null
-    } | null
-  }
-  variation: { id: string; sku: string; variationAttributes: any } | null
+    location: { id: string; code: string; name: string; type: string }
+    quantity: number
+    reserved: number
+    available: number
+    reorderThreshold: number | null
+    reorderQuantity: number | null
+    syncStatus: string
+    lastUpdatedAt: string
+    lastSyncedAt: string | null
+  }>
 }
 
 type LocationSummary = {
@@ -138,10 +135,7 @@ const STOCK_SORT_KEYS: Record<string, string> = {
   onHand: 'onHand', reserved: 'reserved', available: 'available',
   cost: 'cost', value: 'value', abcClass: 'abcClass', updated: 'updated',
 }
-type StockGridRow = StockRow & GridLensRow & {
-  /** F.5 — FBA / own-warehouse quantity split, populated only on isParent=true rows. */
-  _breakdown?: { fba: number; own: number; fbaAvailable: number; ownAvailable: number }
-}
+type StockGridRow = StockRow & GridLensRow
 
 // Stable empties for unused VirtualizedGrid props in table mode.
 const _GRID_EMPTY_SET = new Set<string>()
@@ -523,8 +517,6 @@ export default function StockWorkspace() {
 
   const view = (searchParams.get('view') as ViewMode) ?? 'table'
   const locationCode = searchParams.get('location') ?? ''
-  // 'FBA' → AMAZON_FBA locations only · 'OWN' → WAREHOUSE only · '' → all
-  const fulfillmentType = (searchParams.get('fulfillment') ?? '') as '' | 'FBA' | 'OWN'
   const status = searchParams.get('status') ?? ''
   const search = searchParams.get('search') ?? ''
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
@@ -643,27 +635,21 @@ export default function StockWorkspace() {
     try {
       const qs = new URLSearchParams()
       qs.set('page', String(page))
-      // Matrix + Cards aggregate by product, so they need a higher
-      // pageSize ceiling to avoid splitting a single product across
-      // pages. Table stays at the dense 50-row default.
       qs.set('pageSize', view === 'table' ? String(pageSize) : '100')
       if (status) qs.set('status', status)
       if (search) qs.set('search', search)
-      // locationCode only applies to table (filters per-StockLevel rows).
-      // Matrix shows all locations as columns; cards show all in badges.
       if (view === 'table' && locationCode) qs.set('locationCode', locationCode)
-      if (view === 'table' && fulfillmentType) {
-        qs.set('locationType', fulfillmentType === 'FBA' ? 'AMAZON_FBA' : 'WAREHOUSE')
-      }
-      const endpoint = view === 'table' ? '/api/stock' : '/api/stock/by-product'
+      // Table view uses the product-hierarchy endpoint (mirrors /products).
+      // Matrix + Cards still use the per-product flat view.
+      const endpoint = view === 'table' ? '/api/stock/products' : '/api/stock/by-product'
       const res = await fetch(`${getBackendUrl()}${endpoint}?${qs.toString()}`, { cache: 'no-store' })
-      if (!res.ok) {
-        throw new Error(`stock list failed: ${res.status}`)
-      }
+      if (!res.ok) throw new Error(`stock list failed: ${res.status}`)
       const data = await res.json()
       if (view === 'table') {
         setItems(data.items ?? [])
         setProductBundles([])
+        // Clear child cache so expanding reflects fresh data.
+        setChildrenByParentState({})
       } else {
         setProductBundles(data.products ?? [])
         setItems([])
@@ -675,7 +661,7 @@ export default function StockWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [view, locationCode, fulfillmentType, status, search, page])
+  }, [view, locationCode, status, search, page])
 
   const fetchSidecar = useCallback(async () => {
     try {
@@ -746,8 +732,8 @@ export default function StockWorkspace() {
   )
 
   const filterCount = useMemo(
-    () => [locationCode, fulfillmentType, status, search].filter(Boolean).length,
-    [locationCode, fulfillmentType, status, search],
+    () => [locationCode, status, search].filter(Boolean).length,
+    [locationCode, status, search],
   )
 
   // Clear selection when the data set changes underneath us. Otherwise
@@ -755,7 +741,7 @@ export default function StockWorkspace() {
   useEffect(() => {
     setSelected(new Set())
     setLastSelectedIdx(null)
-  }, [view, locationCode, fulfillmentType, status, search, page])
+  }, [view, locationCode, status, search, page])
 
   // Keyboard shortcuts. Skipped when focus is in an input/textarea/select
   // (so typing isn't hijacked) unless the key is Escape.
@@ -870,108 +856,79 @@ export default function StockWorkspace() {
     () => STOCK_COLUMNS.filter((c) => c.key === 'open' || visibleColumns.includes(c.key as ColumnKey)),
     [visibleColumns],
   )
-  // S.4 tree — parent/child grouping matching the /listings GridLens pattern.
+  // Hierarchy — mirrors /products lazy-load pattern exactly.
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
+  const [childrenByParentState, setChildrenByParentState] = useState<Record<string, StockRow[]>>({})
+
+  const fetchChildrenFor = useCallback(async (parentId: string) => {
+    if (childrenByParentState[parentId]) return // cache hit
+    setLoadingChildren((prev) => new Set([...prev, parentId]))
+    try {
+      const res = await fetch(
+        `${getBackendUrl()}/api/stock/products?parentId=${parentId}`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = await res.json()
+      setChildrenByParentState((prev) => ({ ...prev, [parentId]: data.items ?? [] }))
+    } catch {
+      // Failure: show empty so the row doesn't spin forever.
+      setChildrenByParentState((prev) => ({ ...prev, [parentId]: [] }))
+    } finally {
+      setLoadingChildren((prev) => { const next = new Set(prev); next.delete(parentId); return next })
+    }
+  }, [childrenByParentState])
+
   const onToggleExpand = useCallback((pid: string) => {
     setExpandedParents((prev) => {
       const next = new Set(prev)
-      next.has(pid) ? next.delete(pid) : next.add(pid)
+      if (next.has(pid)) {
+        next.delete(pid)
+      } else {
+        next.add(pid)
+        void fetchChildrenFor(pid)
+      }
       return next
     })
-  }, [])
+  }, [fetchChildrenFor])
 
-  const { gridRows, childrenByParent } = useMemo(() => {
-    // Sort the flat items first.
-    const sorted = (() => {
-      if (!sortBy) return items
-      const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
-      return [...items].sort((a, b) => {
-        let av: any, bv: any
-        switch (key) {
-          case 'onHand':    av = a.quantity;                        bv = b.quantity;                        break
-          case 'reserved':  av = a.reserved;                       bv = b.reserved;                        break
-          case 'available': av = a.available;                      bv = b.available;                       break
-          case 'cost':      av = a.product.costPrice ?? 0;         bv = b.product.costPrice ?? 0;          break
-          case 'value':     av = (a.product.costPrice ?? 0) * a.quantity; bv = (b.product.costPrice ?? 0) * b.quantity; break
-          case 'abcClass':  av = a.product.abcClass ?? 'Z';        bv = b.product.abcClass ?? 'Z';         break
-          case 'updated':   av = a.lastUpdatedAt;                  bv = b.lastUpdatedAt;                   break
-          default: return 0
-        }
-        const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
-        return dir === 'asc' ? cmp : -cmp
-      })
-    })()
-
-    // Group by parentId — products with a parent are children.
-    const byParent: Record<string, StockGridRow[]> = {}
-    const standalone: StockGridRow[] = []
-    for (const it of sorted) {
-      const pid = it.product.parentId
-      const row: StockGridRow = { ...it, isParent: false as const, childCount: 0, parentId: pid ?? null }
-      if (pid) {
-        if (!byParent[pid]) byParent[pid] = []
-        byParent[pid].push(row)
-      } else {
-        standalone.push(row)
+  // gridRows: items are already top-level products (parentId=null) from
+  // the API, sorted client-side. childrenByParent is populated lazily
+  // by fetchChildrenFor — same pattern as /products page.
+  const gridRows = useMemo((): StockGridRow[] => {
+    const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
+    const sorted = !sortBy ? [...items] : [...items].sort((a, b) => {
+      let av: any, bv: any
+      switch (key) {
+        case 'onHand':    av = a.totalStock;                     bv = b.totalStock;                     break
+        case 'reserved':  av = a.totalReserved;                  bv = b.totalReserved;                  break
+        case 'available': av = a.totalAvailable;                 bv = b.totalAvailable;                 break
+        case 'cost':      av = a.costPrice ?? 0;                 bv = b.costPrice ?? 0;                 break
+        case 'value':     av = (a.costPrice ?? 0) * a.totalStock; bv = (b.costPrice ?? 0) * b.totalStock; break
+        case 'abcClass':  av = a.abcClass ?? 'Z';                bv = b.abcClass ?? 'Z';                break
+        case 'updated':   av = a.lastUpdatedAt ?? '';             bv = b.lastUpdatedAt ?? '';            break
+        default: return 0
       }
-    }
-
-    // Build synthetic parent rows with aggregated totals.
-    const parentRows: StockGridRow[] = Object.entries(byParent).map(([pid, children]) => {
-      const pp = children[0]?.product.parentProduct
-      const totalQty       = children.reduce((s, c) => s + c.quantity, 0)
-      const totalReserved  = children.reduce((s, c) => s + c.reserved, 0)
-      const totalAvailable = children.reduce((s, c) => s + c.available, 0)
-      const locCount = new Set(children.map((c) => c.location.id)).size
-      const locSuffix = locCount > 1
-        ? `${locCount} loc`
-        : children[0]?.location.code ?? `${locCount} loc`
-      // F.5 — FBA vs own-warehouse sub-totals for the onHand cell.
-      const fbaChildren = children.filter((c) => c.location.type === 'AMAZON_FBA')
-      const ownChildren = children.filter((c) => c.location.type === 'WAREHOUSE')
-      const breakdown = (fbaChildren.length > 0 || ownChildren.length > 0) ? {
-        fba:          fbaChildren.reduce((s, c) => s + c.quantity, 0),
-        own:          ownChildren.reduce((s, c) => s + c.quantity, 0),
-        fbaAvailable: fbaChildren.reduce((s, c) => s + c.available, 0),
-        ownAvailable: ownChildren.reduce((s, c) => s + c.available, 0),
-      } : undefined
-      return {
-        id: pid,
-        isParent: true as const,
-        childCount: children.length,
-        parentId: null,
-        quantity: totalQty,
-        reserved: totalReserved,
-        available: totalAvailable,
-        reorderThreshold: null,
-        reorderQuantity: null,
-        syncStatus: 'IDLE',
-        lastUpdatedAt: children[0]?.lastUpdatedAt ?? '',
-        lastSyncedAt: null,
-        location: { id: '', code: locSuffix, name: '', type: '' },
-        product: {
-          id: pid,
-          sku: pp?.sku ?? '',
-          name: pp?.name ?? pid,
-          amazonAsin: null,
-          lowStockThreshold: 0,
-          costPrice: null,
-          basePrice: null,
-          thumbnailUrl: pp?.thumbnailUrl ?? null,
-          abcClass: null,
-          parentId: pp?.grandparentId ?? null,
-          parentProduct: null,
-        },
-        variation: null,
-        _breakdown: breakdown,
-      }
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
+      return dir === 'asc' ? cmp : -cmp
     })
-
-    return {
-      gridRows: [...parentRows, ...standalone],
-      childrenByParent: byParent,
-    }
+    return sorted.map((p) => ({
+      ...p,
+      // GridLensRow shape — id already = product.id; parentId = null for
+      // top-level (API returns parentId=null products by default).
+      parentId: null,
+    }))
   }, [items, sortBy])
+
+  // childrenByParent: convert lazy-loaded children to StockGridRow[].
+  const childrenByParent = useMemo((): Record<string, StockGridRow[]> => {
+    const result: Record<string, StockGridRow[]> = {}
+    for (const [pid, children] of Object.entries(childrenByParentState)) {
+      result[pid] = children.map((c) => ({ ...c, parentId: pid }))
+    }
+    return result
+  }, [childrenByParentState])
 
   // Keep ref in sync so toggleSelectAll (defined earlier) always sees
   // the current gridRows without stale closure issues.
@@ -981,50 +938,11 @@ export default function StockWorkspace() {
   const allSelected = gridRows.length > 0 && gridRows.every((r) => selected.has(r.id))
 
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
-    if (colKey === 'product') {
-      const grandparentSku = row.isParent && row.product.parentId
-        ? items.find(it => it.product.parentProduct?.grandparentId && it.product.parentId === row.id)
-            ?.product.parentProduct?.sku ?? null
-        : null
-      return (
-        <button
-          type="button"
-          onClick={() => { setDrawerProductId(row.product.id); setDrawerIsParent(row.isParent ?? false) }}
-          className="min-w-0 overflow-hidden text-left w-full group"
-        >
-          <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-            {row.product.name}
-          </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-            {row.product.sku}
-            {row.variation && <span> · {row.variation.sku}</span>}
-            {row.product.amazonAsin && <span> · {row.product.amazonAsin}</span>}
-            {grandparentSku && <span className="ml-1 text-slate-400">· under {grandparentSku}</span>}
-          </div>
-        </button>
-      )
-    }
-    if (colKey === 'onHand' && row.isParent && row._breakdown) {
-      const { fba, own } = row._breakdown
-      const hasSplit = fba > 0 || own > 0
-      const stockTone = row.quantity === 0 ? 'text-rose-600' : 'text-slate-900 dark:text-slate-100'
-      return (
-        <div className="text-right">
-          <div className={`tabular-nums font-semibold ${stockTone}`}>{row.quantity}</div>
-          {hasSplit && (
-            <div className="text-xs mt-0.5 flex items-center justify-end gap-2">
-              {fba > 0 && <span className="text-orange-600 dark:text-orange-400 tabular-nums">FBA {fba}</span>}
-              {own > 0 && <span className="text-emerald-700 dark:text-emerald-400 tabular-nums">Own {own}</span>}
-            </div>
-          )}
-        </div>
-      )
-    }
     if (colKey === 'open') {
       return (
         <button
           type="button"
-          onClick={() => { setDrawerProductId(row.product.id); setDrawerIsParent(row.isParent ?? false) }}
+          onClick={() => { setDrawerProductId(row.id); setDrawerIsParent(row.isParent ?? false) }}
           title="Open product"
           aria-label="Open product"
           className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -1033,32 +951,37 @@ export default function StockWorkspace() {
         </button>
       )
     }
-    const threshold = row.reorderThreshold ?? row.product.lowStockThreshold
+    const threshold = row.stockLevels?.[0]?.reorderThreshold ?? row.lowStockThreshold
+    const qty = row.totalStock
     const stockTone =
-      row.quantity === 0 ? 'text-rose-600' :
-      row.quantity <= 5 ? 'text-orange-600' :
-      row.quantity <= threshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
+      qty === 0 ? 'text-rose-600' :
+      qty <= 5 ? 'text-orange-600' :
+      qty <= threshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
     const meta = COLUMN_META[colKey as ColumnKey]
     if (!meta) return null
     const ctx: ColumnRenderCtx = { it: row, padY: '', density, threshold, stockTone, t }
     return meta.cell(ctx)
   }, [density, t, setDrawerProductId])
 
-  // Resolve selected row IDs to actual StockLevel IDs.
-  // Parent group rows have id = parentProductId (not a StockLevel ID),
-  // so we expand them to their children's StockLevel IDs before API calls.
+  // Resolve selected product IDs → StockLevel IDs for bulk API calls.
+  // Parent rows expand into their loaded children's stockLevels.
+  // Leaf rows use their own stockLevels[].
   const resolveToStockLevelIds = useCallback((): string[] => {
     const result: string[] = []
+    const allRows: StockRow[] = [...items, ...Object.values(childrenByParentState).flat()]
     for (const id of selected) {
-      const children = childrenByParent[id]
-      if (children && children.length > 0) {
-        for (const c of children) result.push(c.id)
+      const row = allRows.find((r) => r.id === id)
+      if (!row) continue
+      if (row.isParent) {
+        // Use loaded children's StockLevel IDs
+        const children = childrenByParentState[id] ?? []
+        for (const c of children) result.push(...c.stockLevels.map((sl) => sl.id))
       } else {
-        result.push(id) // standalone row — id is already a StockLevel ID
+        result.push(...row.stockLevels.map((sl) => sl.id))
       }
     }
     return result
-  }, [selected, childrenByParent])
+  }, [selected, items, childrenByParentState])
 
   // Bulk operation runners — sequential calls with progress reporting.
   // Sequential is intentional: 50 parallel PATCHes would let the cron
@@ -1095,30 +1018,35 @@ export default function StockWorkspace() {
   }, [selected, fetchStock, fetchSidecar, resolveToStockLevelIds])
 
   const runBulkTransfer = useCallback(async (toLocationId: string, notes: string | null) => {
-    const slIds = new Set(resolveToStockLevelIds())
-    const rows = items.filter((it) => slIds.has(it.id))
-    if (rows.length === 0 || !toLocationId) return
-    setBulkProgress({ total: rows.length, done: 0, failed: 0 })
+    const slIdSet = new Set(resolveToStockLevelIds())
+    const allProductRows: StockRow[] = [...items, ...Object.values(childrenByParentState).flat()]
+    const transferItems: Array<{ productId: string; fromLocationId: string; quantity: number; notes: string | null }> = []
+    for (const row of allProductRows) {
+      for (const sl of row.stockLevels) {
+        if (slIdSet.has(sl.id)) {
+          transferItems.push({
+            productId: row.id,
+            fromLocationId: sl.location.id,
+            quantity: sl.available > 0 ? sl.available : sl.quantity,
+            notes,
+          })
+        }
+      }
+    }
+    if (transferItems.length === 0 || !toLocationId) return
+    setBulkProgress({ total: transferItems.length, done: 0, failed: 0 })
     try {
       const res = await fetch(`${getBackendUrl()}/api/stock/bulk-transfer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toLocationId,
-          items: rows.map((r) => ({
-            productId: r.product.id,
-            fromLocationId: r.location.id,
-            quantity: r.available > 0 ? r.available : r.quantity,
-            notes,
-          })),
-        }),
+        body: JSON.stringify({ toLocationId, items: transferItems }),
       })
       const body = await res.json().catch(() => ({}))
       const succeeded = body.succeeded ?? 0
-      const failed = body.failed ?? rows.length - succeeded
-      setBulkProgress({ total: rows.length, done: succeeded, failed })
+      const failed = body.failed ?? transferItems.length - succeeded
+      setBulkProgress({ total: transferItems.length, done: succeeded, failed })
     } catch {
-      setBulkProgress({ total: rows.length, done: 0, failed: rows.length })
+      setBulkProgress({ total: transferItems.length, done: 0, failed: transferItems.length })
     }
     setBulkProgress(null)
     setBulkAction(null)
@@ -1126,7 +1054,7 @@ export default function StockWorkspace() {
     emitInvalidation({ type: 'stock.transferred' })
     fetchStock()
     fetchSidecar()
-  }, [items, selected, fetchStock, fetchSidecar, resolveToStockLevelIds])
+  }, [items, childrenByParentState, selected, fetchStock, fetchSidecar, resolveToStockLevelIds])
 
   const runBulkThreshold = useCallback(async (threshold: number | null) => {
     const ids = resolveToStockLevelIds()
@@ -1239,20 +1167,20 @@ export default function StockWorkspace() {
   const exportSelectedCsv = useCallback(() => {
     const rows = items.filter((it) => selected.has(it.id))
     if (rows.length === 0) return
-    const headers = ['sku', 'name', 'asin', 'location', 'quantity', 'reserved', 'available', 'threshold', 'cost', 'updated']
+    const headers = ['sku', 'name', 'asin', 'locations', 'total_stock', 'reserved', 'available', 'threshold', 'cost', 'updated']
     const lines = [headers.join(',')]
     for (const r of rows) {
       const cells = [
-        r.product.sku,
-        `"${r.product.name.replace(/"/g, '""')}"`,
-        r.product.amazonAsin ?? '',
-        r.location.code,
-        r.quantity,
-        r.reserved,
-        r.available,
-        r.reorderThreshold ?? r.product.lowStockThreshold,
-        r.product.costPrice ?? '',
-        r.lastUpdatedAt,
+        r.sku,
+        `"${r.name.replace(/"/g, '""')}"`,
+        r.amazonAsin ?? '',
+        r.stockLevels.map(sl => sl.location.code).join('|'),
+        r.totalStock,
+        r.totalReserved,
+        r.totalAvailable,
+        r.stockLevels[0]?.reorderThreshold ?? r.lowStockThreshold,
+        r.costPrice ?? '',
+        r.lastUpdatedAt ?? '',
       ]
       lines.push(cells.join(','))
     }
@@ -1332,30 +1260,8 @@ export default function StockWorkspace() {
       {/* Filter bar */}
       <Card>
         <div className="space-y-3">
-          {/* Fulfillment type tabs */}
+          {/* Location chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">Fulfillment</span>
-            {([
-              { key: '' as const,    label: 'All',           tone: '' },
-              { key: 'FBA' as const, label: 'FBA',           tone: 'text-orange-700 dark:text-orange-400' },
-              { key: 'OWN' as const, label: 'Own warehouse', tone: 'text-emerald-700 dark:text-emerald-400' },
-            ] satisfies Array<{ key: ''|'FBA'|'OWN'; label: string; tone: string }>).map(({ key, label, tone }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => updateUrl({ fulfillment: key || undefined, location: undefined, page: undefined })}
-                className={cn(
-                  'h-11 sm:h-7 px-3 text-sm rounded-full font-medium border transition-colors',
-                  fulfillmentType === key
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : `bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 ${tone || 'text-slate-600 dark:text-slate-300'}`,
-                )}
-              >{label}</button>
-            ))}
-          </div>
-
-          {/* Location chips — scoped to the active fulfillment type */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
             <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">{t('stock.filters.location')}</span>
             <button
               onClick={() => updateUrl({ location: undefined, page: undefined })}
@@ -1365,29 +1271,23 @@ export default function StockWorkspace() {
                   : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
               }`}
             >{t('stock.filters.locationAll')}</button>
-            {locations
-              .filter((loc) =>
-                fulfillmentType === 'FBA' ? loc.type === 'AMAZON_FBA' :
-                fulfillmentType === 'OWN' ? loc.type === 'WAREHOUSE' :
-                true
-              )
-              .map((loc) => (
-                <button
-                  key={loc.id}
-                  onClick={() => updateUrl({ location: loc.code, page: undefined })}
-                  className={cn(
-                    'h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5',
-                    locationCode === loc.code
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                  )}
-                >
-                  {loc.code}
-                  <span className={`text-xs tabular-nums ${locationCode === loc.code ? 'text-slate-300' : 'text-slate-400'}`}>
-                    {loc.totalQuantity}
-                  </span>
-                </button>
-              ))}
+            {locations.map((loc) => (
+              <button
+                key={loc.id}
+                onClick={() => updateUrl({ location: loc.code, page: undefined })}
+                className={cn(
+                  'h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5',
+                  locationCode === loc.code
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                )}
+              >
+                {loc.code}
+                <span className={`text-xs tabular-nums ${locationCode === loc.code ? 'text-slate-300' : 'text-slate-400'}`}>
+                  {loc.totalQuantity}
+                </span>
+              </button>
+            ))}
           </div>
 
           {/* Search + status chips */}
@@ -1422,7 +1322,7 @@ export default function StockWorkspace() {
             })}
             {filterCount > 0 && (
               <button
-                onClick={() => updateUrl({ fulfillment: undefined, location: undefined, status: undefined, search: undefined, page: undefined })}
+                onClick={() => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined })}
                 className="h-11 sm:h-7 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1"
               >
                 <X size={12} /> {t('stock.filters.clear')}
@@ -1484,7 +1384,7 @@ export default function StockWorkspace() {
             sortKeys={STOCK_SORT_KEYS}
             expandedParents={expandedParents}
             childrenByParent={childrenByParent}
-            loadingChildren={_GRID_EMPTY_SET}
+            loadingChildren={loadingChildren}
             onToggleExpand={onToggleExpand}
             focusedRowId={null}
             searchTerm={search}
@@ -3581,8 +3481,8 @@ const COLUMN_META: Record<ColumnKey, {
     headWidthCls: 'w-10',
     head: '',
     cell: ({ it, density }) =>
-      it.product.thumbnailUrl ? (
-        <img src={it.product.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
+      it.thumbnailUrl ? (
+        <img src={it.thumbnailUrl} alt="" className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded object-cover bg-slate-100`} />
       ) : (
         <div className={`${density === 'compact' ? 'w-6 h-6' : 'w-8 h-8'} rounded bg-slate-100 flex items-center justify-center text-slate-400`}>
           <Package size={density === 'compact' ? 12 : 14} />
@@ -3592,16 +3492,13 @@ const COLUMN_META: Record<ColumnKey, {
   product: {
     align: 'left',
     head: 'Product',
-    // Badge-free fallback — the renderCell intercept handles this column
-    // with click-to-open behaviour. This entry is kept for the column
-    // picker metadata (head label) but its cell() is never called.
+    // renderCell intercept handles click-to-open; this entry provides the
+    // column picker label only.
     cell: ({ it }) => (
       <div className="min-w-0 overflow-hidden">
-        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{it.product.name}</div>
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{it.name}</div>
         <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-          {it.product.sku}
-          {it.variation && <span> · {it.variation.sku}</span>}
-          {it.product.amazonAsin && <span> · {it.product.amazonAsin}</span>}
+          {it.sku}{it.amazonAsin && <span> · {it.amazonAsin}</span>}
         </div>
       </div>
     ),
@@ -3609,57 +3506,70 @@ const COLUMN_META: Record<ColumnKey, {
   location: {
     align: 'left',
     head: 'Location',
-    cell: ({ it }) => (
-      <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${
-        LOCATION_TONE[it.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'
-      }`} title={it.location.name}>
-        {it.location.code}
-      </span>
-    ),
+    cell: ({ it }) => {
+      const locs = it.stockLevels
+      if (locs.length === 0) return <span className="text-slate-300 dark:text-slate-600">—</span>
+      if (locs.length === 1) {
+        const loc = locs[0].location
+        return (
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`} title={loc.name}>
+            {loc.code}
+          </span>
+        )
+      }
+      return (
+        <div className="flex items-center gap-1 flex-wrap">
+          {locs.map((sl) => (
+            <span key={sl.id} className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${LOCATION_TONE[sl.location.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`} title={sl.location.name}>
+              {sl.location.code}
+            </span>
+          ))}
+        </div>
+      )
+    },
   },
   onHand: {
     align: 'right',
     head: 'On hand',
     cell: ({ it, stockTone }) => (
-      <span className={`tabular-nums font-semibold ${stockTone}`}>{it.quantity}</span>
+      <span className={`tabular-nums font-semibold ${stockTone}`}>{it.totalStock}</span>
     ),
   },
   reserved: {
     align: 'right',
     head: 'Reserved',
     cell: ({ it }) => (
-      <span className="tabular-nums text-slate-500 dark:text-slate-400">{it.reserved}</span>
+      <span className="tabular-nums text-slate-500 dark:text-slate-400">{it.totalReserved}</span>
     ),
   },
   available: {
     align: 'right',
     head: 'Available',
     cell: ({ it }) => (
-      <span className="tabular-nums text-slate-700 dark:text-slate-300">{it.available}</span>
+      <span className="tabular-nums text-slate-700 dark:text-slate-300">{it.totalAvailable}</span>
     ),
   },
   threshold: {
     align: 'right',
     head: 'Threshold',
-    cell: ({ it, threshold }) => (
-      <span className="tabular-nums text-slate-500 dark:text-slate-400">
-        {/* T.32 — at-reorder rows show "12 · +50" so operator sees
-            ROP + EOQ inline; otherwise just the threshold value. */}
-        {threshold}
-        {it.quantity <= threshold && it.reorderQuantity != null && (
-          <span className="ml-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
-            · +{it.reorderQuantity}
-          </span>
-        )}
-      </span>
-    ),
+    cell: ({ it, threshold }) => {
+      const eoq = it.stockLevels[0]?.reorderQuantity
+      return (
+        <span className="tabular-nums text-slate-500 dark:text-slate-400">
+          {threshold}
+          {it.totalStock <= threshold && eoq != null && (
+            <span className="ml-1 text-xs text-amber-600 dark:text-amber-400 font-medium">· +{eoq}</span>
+          )}
+        </span>
+      )
+    },
   },
   cost: {
     align: 'right',
     head: 'Cost',
     cell: ({ it }) => (
       <span className="tabular-nums text-slate-600">
-        {it.product.costPrice != null ? `€${it.product.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
+        {it.costPrice != null ? `€${it.costPrice.toFixed(2)}` : <span className="text-slate-400">—</span>}
       </span>
     ),
   },
@@ -3668,17 +3578,16 @@ const COLUMN_META: Record<ColumnKey, {
     head: 'Updated',
     cell: ({ it, t }) => (
       <span className="tabular-nums text-slate-400 text-sm">
-        {formatRelative(it.lastUpdatedAt, t)}
+        {it.lastUpdatedAt ? formatRelative(it.lastUpdatedAt, t) : '—'}
       </span>
     ),
   },
-  // S.5 — standalone sortable columns.
   value: {
     align: 'right',
     head: 'Value',
     cell: ({ it }) => {
-      if (it.product.costPrice == null) return <span className="text-slate-300 dark:text-slate-600">—</span>
-      const v = it.product.costPrice * it.quantity
+      if (it.costPrice == null) return <span className="text-slate-300 dark:text-slate-600">—</span>
+      const v = it.costPrice * it.totalStock
       return <span className="tabular-nums text-slate-700 dark:text-slate-300">€{v.toFixed(2)}</span>
     },
   },
@@ -3686,8 +3595,8 @@ const COLUMN_META: Record<ColumnKey, {
     align: 'left',
     head: 'ABC',
     cell: ({ it }) =>
-      it.product.abcClass
-        ? <AbcBadge cls={it.product.abcClass} />
+      it.abcClass
+        ? <AbcBadge cls={it.abcClass} />
         : <span className="text-slate-300 dark:text-slate-600">—</span>,
   },
 }
@@ -4000,7 +3909,7 @@ function BulkAdjustModal({
   const [subReason, setSubReason] = useState<AdjustSubReason>('OTHER')
   const n = Number(change)
   const valid = Number.isFinite(n) && n !== 0
-  const wouldGoNegative = valid && selectedItems.some((it) => it.quantity + n < 0)
+  const wouldGoNegative = valid && selectedItems.some((it) => it.totalStock + n < 0)
 
   return (
     <Modal title={t('stock.bulkAdjust.title')} onClose={onCancel}>
@@ -4063,16 +3972,18 @@ function BulkAdjustModal({
           </div>
           <ul className="space-y-0.5 max-h-[160px] overflow-y-auto">
             {selectedItems.slice(0, 50).map((it) => {
-              const after = valid ? it.quantity + n : it.quantity
+              const after = valid ? it.totalStock + n : it.totalStock
               const negativeBound = after < 0
               return (
                 <li key={it.id} className="text-sm flex items-center justify-between gap-2 py-0.5">
                   <span className="truncate">
-                    <span className="font-mono text-slate-600">{it.product.sku}</span>
-                    <span className="text-slate-400"> · {it.location.code}</span>
+                    <span className="font-mono text-slate-600">{it.sku}</span>
+                    {it.stockLevels.length > 0 && (
+                      <span className="text-slate-400"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
+                    )}
                   </span>
                   <span className="tabular-nums flex-shrink-0">
-                    <span className="text-slate-500 dark:text-slate-400">{it.quantity}</span>
+                    <span className="text-slate-500 dark:text-slate-400">{it.totalStock}</span>
                     {valid && (
                       <>
                         <span className="text-slate-400 mx-1">→</span>
@@ -4128,7 +4039,7 @@ function BulkTransferModal({
   const { t } = useTranslations()
   // Pre-select the first location that isn't the source of any
   // selected row — saves a click for the common single-source case.
-  const sourceIds = new Set(selectedItems.map((it) => it.location.id))
+  const sourceIds = new Set(selectedItems.flatMap((it) => it.stockLevels.map((sl) => sl.location.id)))
   const firstNonSource = locations.find((l) => !sourceIds.has(l.id))
   const [toLocationId, setToLocationId] = useState<string>(firstNonSource?.id ?? '')
   const [notes, setNotes] = useState('')
@@ -4180,11 +4091,13 @@ function BulkTransferModal({
             {selectedItems.slice(0, 50).map((it) => (
               <li key={it.id} className="text-sm flex items-center justify-between gap-2 py-0.5">
                 <span className="truncate">
-                  <span className="font-mono text-slate-600">{it.product.sku}</span>
-                  <span className="text-slate-400"> · {it.location.code}</span>
+                  <span className="font-mono text-slate-600">{it.sku}</span>
+                  {it.stockLevels.length > 0 && (
+                    <span className="text-slate-400"> · {it.stockLevels.map(sl => sl.location.code).join(', ')}</span>
+                  )}
                 </span>
                 <span className="tabular-nums flex-shrink-0 text-slate-500 dark:text-slate-400">
-                  {it.available > 0 ? it.available : it.quantity}u
+                  {it.totalAvailable > 0 ? it.totalAvailable : it.totalStock}u
                 </span>
               </li>
             ))}
