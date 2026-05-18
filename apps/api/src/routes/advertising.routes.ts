@@ -401,6 +401,84 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return job
   })
 
+  // ── Phase 5b: per-campaign v1 metrics (last N days) ──────────────────
+  // Returns campaign-level aggregates from AmazonAdsDailyPerformance for
+  // the requested window. Keyed by externalCampaignId so the campaigns
+  // page server component can merge into its existing campaign list.
+  fastify.get('/advertising/campaigns/v1-metrics', async (request, reply) => {
+    const query = request.query as { windowDays?: string; marketplace?: string }
+    const windowDays = query.windowDays
+      ? Math.max(1, Math.min(180, Number(query.windowDays)))
+      : 7
+
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - windowDays)
+    since.setUTCHours(0, 0, 0, 0)
+
+    const rows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
+      where: {
+        date: { gte: since },
+        entityType: 'CAMPAIGN',
+        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+      },
+      _sum: {
+        impressions: true,
+        clicks: true,
+        costMicros: true,
+        sales7dCents: true,
+        sales14dCents: true,
+        orders7d: true,
+        units7d: true,
+      },
+    })
+
+    // Shape: { [externalCampaignId]: { impressions, clicks, ... } }
+    const byCampaign: Record<string, {
+      impressions: number
+      clicks: number
+      costMicros: string
+      costUnits: number
+      salesCents: number
+      orders: number
+      units: number
+      currencyCode: string
+      adProduct: string
+      marketplace: string
+      acos: number | null
+      roas: number | null
+      ctr: number | null
+      cpc: number | null
+    }> = {}
+
+    for (const r of rows) {
+      const impressions = r._sum.impressions ?? 0
+      const clicks = r._sum.clicks ?? 0
+      const costMicros = r._sum.costMicros ?? 0n
+      const costUnits = Number(costMicros) / 1_000_000
+      const salesCents = (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      const orders = r._sum.orders7d ?? 0
+      const units = r._sum.units7d ?? 0
+      const acos = salesCents > 0 ? (costUnits * 100) / salesCents : null
+      const roas = costUnits > 0 ? salesCents / 100 / costUnits : null
+      const ctr = impressions > 0 ? clicks / impressions : null
+      const cpc = clicks > 0 ? costUnits / clicks : null
+      byCampaign[r.entityId] = {
+        impressions, clicks,
+        costMicros: costMicros.toString(),
+        costUnits,
+        salesCents, orders, units,
+        currencyCode: r.currencyCode,
+        adProduct: r.adProduct,
+        marketplace: r.marketplace,
+        acos, roas, ctr, cpc,
+      }
+    }
+
+    reply.header('Cache-Control', 'private, max-age=30')
+    return { windowDays, count: Object.keys(byCampaign).length, byCampaign }
+  })
+
   // ── Phase 5a: v1 overview endpoint ────────────────────────────────────
   // Returns a comprehensive snapshot of every v1 substrate (Phase 2/4/6):
   //   - per-currency spend + sales in the last 30 days
