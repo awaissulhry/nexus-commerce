@@ -117,6 +117,22 @@ type Listing = {
   }
 }
 
+/**
+ * G-tree — extends Listing with GridLensRow fields so VirtualizedGrid
+ * can render the parent/child hierarchy.
+ *
+ * Parent rows:  id=productId, isParent=true, childCount=N
+ *               _channels / _markets populated for aggregate cells.
+ * Child rows:   id=listing.id, isParent=false, parentId=productId
+ */
+type ListingGridRow = Listing & {
+  isParent: boolean
+  childCount: number
+  parentId: string | null
+  _channels?: string[]   // distinct channels across all listings for this product
+  _markets?: string[]    // distinct marketplace codes
+}
+
 type Marketplace = {
   channel: string
   code: string
@@ -182,8 +198,6 @@ const DEFAULT_VISIBLE = ['thumb', 'product', 'channel', 'marketplace', 'status',
 // G.1 — module-level stable refs passed to SharedVirtualizedGrid when a
 // feature (expand, drag, risk) is not used on this surface.
 const _EMPTY_SET = new Set<string>()
-const _EMPTY_RECORD: Record<string, never[]> = {}
-const _NOOP = () => {}
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'info'> = {
   ACTIVE: 'success',
@@ -1544,6 +1558,59 @@ function GridLens(props: {
 }) {
   const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey } = props
 
+  // ── Parent/child grouping ─────────────────────────────────────────────────
+  // Group flat listings by productId so VirtualizedGrid shows one collapsible
+  // parent row per product and individual channel×marketplace listings as
+  // children. No new API endpoint needed — data is already loaded.
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+
+  const byProduct = useMemo(() => {
+    const m = new Map<string, Listing[]>()
+    for (const l of grid.listings) {
+      if (!m.has(l.productId)) m.set(l.productId, [])
+      m.get(l.productId)!.push(l)
+    }
+    return m
+  }, [grid.listings])
+
+  // One parent row per product — id = productId (guaranteed unique)
+  const parentRows = useMemo((): ListingGridRow[] =>
+    [...byProduct.entries()].map(([productId, ls]) => ({
+      ...ls[0],
+      id: productId,
+      isParent: true,
+      childCount: ls.length,
+      parentId: null,
+      _channels: [...new Set(ls.map(l => l.channel))],
+      _markets:  [...new Set(ls.map(l => l.marketplace))],
+    }))
+  , [byProduct])
+
+  // Children keyed by parent id (= productId)
+  const childrenByParent = useMemo((): Record<string, ListingGridRow[]> => {
+    const r: Record<string, ListingGridRow[]> = {}
+    for (const [productId, ls] of byProduct) {
+      r[productId] = ls.map(l => ({
+        ...l,
+        isParent: false,
+        childCount: 0,
+        parentId: productId,
+      }))
+    }
+    return r
+  }, [byProduct])
+
+  const onToggleExpand = useCallback((id: string) => {
+    setExpandedParents(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  // Selection operates on real listing IDs (child rows).
+  // Clicking a parent checkbox selects / deselects all its children.
   const allSelected = grid.listings.length > 0 && grid.listings.every((l) => selected.has(l.id))
 
   const toggleSelectAll = () => {
@@ -1556,18 +1623,23 @@ function GridLens(props: {
     setSelected(next)
   }
 
-  // G.1 — second param (_shiftKey) accepted to match SharedVirtualizedGrid
-  // interface; range-select is a future enhancement for listings.
-  const toggleSelect = (id: string, _shiftKey?: boolean) => {
+  const toggleSelect = useCallback((id: string, _shiftKey?: boolean) => {
+    const kids = childrenByParent[id]
     const next = new Set(selected)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    if (kids) {
+      // Parent row — toggle all child listing IDs
+      const allKidsSelected = kids.every(k => next.has(k.id))
+      kids.forEach(k => allKidsSelected ? next.delete(k.id) : next.add(k.id))
+    } else {
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+    }
     setSelected(next)
-  }
+  }, [childrenByParent, selected, setSelected])
 
-  // G.1 — derive focusedRowId from keyboard nav index for the shared grid.
-  const focusedRowId = activeRowIndex >= 0 && activeRowIndex < grid.listings.length
-    ? grid.listings[activeRowIndex].id
+  // Keyboard nav over parent rows
+  const focusedRowId = activeRowIndex >= 0 && activeRowIndex < parentRows.length
+    ? parentRows[activeRowIndex].id
     : null
 
   // G.1 — embed sortDir into sortBy string so SharedVirtualizedGrid can
@@ -1751,11 +1823,10 @@ function GridLens(props: {
         </div>
       </div>
 
-      {/* G.1 — shared VirtualizedGrid replaces the bespoke HTML table.
-          Flat rows (no parent expansion for listings); riskFlaggedSkus
-          not applicable; draggable not used. */}
-      <SharedVirtualizedGrid<Listing>
-        rows={grid.listings}
+      {/* G-tree — shared VirtualizedGrid with parent/child expansion.
+          parentRows = one row per product; children = individual listings. */}
+      <SharedVirtualizedGrid<ListingGridRow>
+        rows={parentRows}
         visible={visible as any}
         density={density}
         cellPad={cellPad}
@@ -1773,19 +1844,20 @@ function GridLens(props: {
           quantity: 'quantity',
           lastSync: 'lastSyncedAt',
         }}
-        expandedParents={_EMPTY_SET}
-        childrenByParent={_EMPTY_RECORD as Record<string, Listing[]>}
+        expandedParents={expandedParents}
+        childrenByParent={childrenByParent}
         loadingChildren={_EMPTY_SET}
-        onToggleExpand={_NOOP}
+        onToggleExpand={onToggleExpand}
         focusedRowId={focusedRowId}
         searchTerm={props.search}
         riskFlaggedSkus={_EMPTY_SET}
         storageKey={storageKey}
-        showExpandColumn={false}
-        renderCell={(listing, colKey) => (
+        showExpandColumn={true}
+        renderCell={(row, colKey, isChild) => (
           <CellRenderer
             col={colKey}
-            listing={listing}
+            listing={row}
+            isParentRow={!isChild && row.isParent}
             onOpenDrawer={onOpenDrawer}
             onResync={onResync}
             onListingChanged={onListingChanged}
@@ -1798,7 +1870,14 @@ function GridLens(props: {
   )
 }
 
-function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }: { col: string; listing: Listing; onOpenDrawer: (id: string) => void; onResync: (id: string) => void; onListingChanged: () => void }) {
+function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResync, onListingChanged }: {
+  col: string
+  listing: ListingGridRow
+  isParentRow?: boolean
+  onOpenDrawer: (id: string) => void
+  onResync: (id: string) => void
+  onListingChanged: () => void
+}) {
   const l = listing
   switch (col) {
     case 'thumb':
@@ -1814,30 +1893,69 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
       return (
         <div className="min-w-0">
           <button
-            onClick={() => onOpenDrawer(l.id)}
+            onClick={() => isParentRow
+              ? (window.location.href = `/products/${l.product.id}/edit`)
+              : onOpenDrawer(l.id)
+            }
             className="text-md font-medium text-slate-900 dark:text-slate-100 hover:text-blue-600 text-left truncate block max-w-full"
           >
             {l.product.name}
             {l.product.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
           </button>
-          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">{l.product.sku}</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">
+            {l.product.sku}
+            {isParentRow && l.childCount > 1 && (
+              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+                {l.childCount} listings
+              </span>
+            )}
+          </div>
         </div>
       )
     case 'channel':
+      if (isParentRow && l._channels) {
+        return (
+          <div className="flex flex-wrap gap-0.5">
+            {l._channels.map(ch => (
+              <span key={ch} className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[ch] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
+                {ch}
+              </span>
+            ))}
+          </div>
+        )
+      }
       return (
         <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${CHANNEL_TONE[l.channel] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}>
           {l.channel}
         </span>
       )
     case 'marketplace':
+      if (isParentRow && l._markets) {
+        return (
+          <div className="flex flex-wrap gap-0.5">
+            {l._markets.map(m => (
+              <span key={m} className="font-mono text-xs font-semibold bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                {m}
+              </span>
+            ))}
+          </div>
+        )
+      }
       return (
         <span className="font-mono text-sm font-semibold bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
           {l.marketplace}
         </span>
       )
     case 'status':
+      if (isParentRow) {
+        // Aggregate: show error count if any, else dominant status
+        return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+      }
       return <Badge variant={STATUS_VARIANT[l.listingStatus] ?? 'default'} size="sm">{l.listingStatus}</Badge>
     case 'syncStatus': {
+      if (isParentRow) {
+        return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+      }
       const status = l.syncStatus ?? 'IDLE'
       const variant = STATUS_VARIANT[status] ?? 'default'
       return (
@@ -1848,12 +1966,9 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
       )
     }
     case 'price':
-      // U.1 — inline edit: click cell, type new price, Enter or blur
-      // saves via PATCH; Esc cancels. Optimistic concurrency via the
-      // listing's `version` field (the endpoint returns 409 when the
-      // version doesn't match — we surface that to the operator with
-      // a "Reload" hint). Sale price stays read-only here; complex
-      // editing flows live in the drawer.
+      if (isParentRow) {
+        return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+      }
       return (
         <InlineNumberCell
           value={l.price ?? null}
@@ -1889,11 +2004,9 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
       )
     }
     case 'quantity': {
-      // U.1 — inline edit, integer-only. Same PATCH path as price.
-      // The empty-state '—' rendering stays via passing null
-      // through; the cell renders the dash but stays clickable
-      // so operators can set an initial qty without opening the
-      // drawer.
+      if (isParentRow) {
+        return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+      }
       const q = l.quantity
       const tone = q === 0 ? 'text-rose-600 dark:text-rose-400' : q != null && q <= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
       return (
@@ -1940,6 +2053,18 @@ function CellRenderer({ col, listing, onOpenDrawer, onResync, onListingChanged }
         </span>
       )
     case 'actions':
+      if (isParentRow) {
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            <Link
+              href={`/products/${l.product.id}/edit`}
+              className="h-6 px-2 text-sm inline-flex items-center text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
+            >
+              Edit product
+            </Link>
+          </div>
+        )
+      }
       return (
         <div className="flex items-center gap-1 justify-end">
           <button
