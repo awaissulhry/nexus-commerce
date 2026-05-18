@@ -114,6 +114,13 @@ type Listing = {
     isParent: boolean
     parentId: string | null
     thumbnailUrl: string | null
+    /** Populated by the API when this product is a variant (parentId != null). */
+    parentProduct: {
+      id: string
+      sku: string
+      name: string
+      thumbnailUrl: string | null
+    } | null
   }
 }
 
@@ -386,7 +393,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     if (lens !== 'grid') return null
     const qs = new URLSearchParams()
     qs.set('page', String(page))
-    qs.set('pageSize', '50')
+    qs.set('pageSize', '200')
     qs.set('sortBy', sortBy)
     qs.set('sortDir', sortDir)
     if (search) qs.set('search', search)
@@ -1559,93 +1566,93 @@ function GridLens(props: {
   const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey } = props
 
   // ── Parent/child hierarchy — mirrors /products parent → variant structure ──
-  // Uses product.parentId (from the listing's product field) to build the same
-  // tree /products shows. Parent products get a chevron; their variant products
-  // appear as child rows. Standalone products show flat (no chevron).
-  // No new API endpoint needed; all product relationships come from the loaded
-  // listing data.
+  // The API now returns product.parentProduct (actual parent name/sku/thumb)
+  // so parent rows are built from real data, not inferred from variant info.
+  // pageSize=200 means most product families load in one request.
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
 
-  // listings grouped by their productId
-  const byProductId = useMemo(() => {
-    const m = new Map<string, Listing[]>()
-    for (const l of grid.listings) {
-      if (!m.has(l.productId)) m.set(l.productId, [])
-      m.get(l.productId)!.push(l)
-    }
-    return m
-  }, [grid.listings])
-
-  // variantProductId → parentProductId (from product.parentId)
-  const variantToParent = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const l of grid.listings) {
-      if (l.product.parentId) m.set(l.productId, l.product.parentId)
-    }
-    return m
-  }, [grid.listings])
-
-  const variantProductIds = useMemo(
-    () => new Set(variantToParent.keys()),
-    [variantToParent],
-  )
-
-  // parentProductId → [variantProductId, ...]
-  const parentToVariantIds = useMemo(() => {
-    const m = new Map<string, string[]>()
-    for (const [variantId, parentId] of variantToParent) {
-      if (!m.has(parentId)) m.set(parentId, [])
-      m.get(parentId)!.push(variantId)
-    }
-    return m
-  }, [variantToParent])
-
   const { parentRows, childrenByParent } = useMemo(() => {
+    // Index listings by productId for fast lookup
+    const byProductId = new Map<string, Listing[]>()
+    for (const l of grid.listings) {
+      if (!byProductId.has(l.productId)) byProductId.set(l.productId, [])
+      byProductId.get(l.productId)!.push(l)
+    }
+
+    // Collect all unique parentIds from variant listings
+    // parentId → { parentProduct info, [variantProductId, ...] }
+    const parentMap = new Map<string, {
+      info: NonNullable<Listing['product']['parentProduct']>
+      variantIds: Set<string>
+    }>()
+    for (const l of grid.listings) {
+      const pp = l.product.parentProduct
+      if (!pp || !l.product.parentId) continue
+      if (!parentMap.has(pp.id)) {
+        parentMap.set(pp.id, { info: pp, variantIds: new Set() })
+      }
+      parentMap.get(pp.id)!.variantIds.add(l.productId)
+    }
+
+    // Products that are variants (children) — skip from top-level
+    const variantProductIds = new Set<string>()
+    for (const l of grid.listings) {
+      if (l.product.parentId) variantProductIds.add(l.productId)
+    }
+
     const rows: ListingGridRow[] = []
     const children: Record<string, ListingGridRow[]> = {}
     const added = new Set<string>()
 
-    // Step 1 — parent rows: products that own variant products
-    for (const [parentId, variantIds] of parentToVariantIds) {
+    // ── Step 1: parent product rows (real data from parentProduct field) ─
+    for (const [parentId, { info, variantIds }] of parentMap) {
       if (added.has(parentId)) continue
       added.add(parentId)
 
-      // Use the parent's own listing if present; fall back to first variant listing
-      const parentListings = byProductId.get(parentId) ?? []
-      const firstVariantListings = byProductId.get(variantIds[0]) ?? []
-      const rep = parentListings[0] ?? firstVariantListings[0]
+      const allVariantListings = [...variantIds].flatMap(
+        id => byProductId.get(id) ?? [],
+      )
+      // Also include any direct listings for the parent itself
+      const parentOwnListings = byProductId.get(parentId) ?? []
+      const allListings = [...parentOwnListings, ...allVariantListings]
+
+      // Representative listing used for non-product fields (price, channel, etc.)
+      // on the collapsed parent row — use parent's own listing first, then first variant
+      const rep = parentOwnListings[0] ?? allVariantListings[0]
       if (!rep) continue
 
-      const allListings = [
-        ...parentListings,
-        ...variantIds.flatMap(id => byProductId.get(id) ?? []),
-      ]
       rows.push({
         ...rep,
         id: parentId,
         productId: parentId,
+        // Use REAL parent product info — correct name, sku, thumbnail
         product: {
-          ...(parentListings[0]?.product ?? rep.product),
-          id: parentId,
+          id: info.id,
+          sku: info.sku,
+          name: info.name,
+          amazonAsin: null,
+          basePrice: null,
+          totalStock: 0,
           isParent: true,
           parentId: null,
+          thumbnailUrl: info.thumbnailUrl,
+          parentProduct: null,
         },
         isParent: true,
-        childCount: variantIds.length,
+        childCount: variantIds.size,
         parentId: null,
         _channels: [...new Set(allListings.map(l => l.channel))],
         _markets:  [...new Set(allListings.map(l => l.marketplace))],
       })
 
-      // One child row per variant — keeps the first listing's actual id so
-      // inline edit, drawer open, and resync all target the right listing.
-      children[parentId] = variantIds.flatMap(variantId => {
+      // ── Children: one row per variant product ─────────────────────────
+      // id = first listing's id so inline-edit / drawer / resync work
+      children[parentId] = [...variantIds].flatMap(variantId => {
         const vls = byProductId.get(variantId) ?? []
         const first = vls[0]
         if (!first) return []
         return [{
           ...first,
-          // id = listing.id (not productId) so inline-edit / drawer work
           isParent: false,
           childCount: 0,
           parentId,
@@ -1655,10 +1662,10 @@ function GridLens(props: {
       })
     }
 
-    // Step 2 — standalone / directly-listed products (not variants of anything)
+    // ── Step 2: products with direct listings that are NOT variants ──────
     for (const [productId, listings] of byProductId) {
       if (added.has(productId)) continue
-      if (variantProductIds.has(productId)) continue // handled as children above
+      if (variantProductIds.has(productId)) continue
       added.add(productId)
 
       const first = listings[0]
@@ -1674,7 +1681,7 @@ function GridLens(props: {
     }
 
     return { parentRows: rows, childrenByParent: children }
-  }, [byProductId, parentToVariantIds, variantProductIds])
+  }, [grid.listings])
 
   const onToggleExpand = useCallback((id: string) => {
     setExpandedParents(prev => {
