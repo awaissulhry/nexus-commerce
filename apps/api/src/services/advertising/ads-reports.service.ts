@@ -41,7 +41,16 @@ export interface ReportSpec {
   marketplace: string
   currencyCode: string
   adProduct: AdProduct
-  reportTypeId: string  // spCampaigns | sdCampaigns | sbCampaigns | ...
+  reportTypeId: string  // INTERNAL identifier — stored on the DB row.
+                        // For most reports this matches the Amazon v3
+                        // reportTypeId. Placement reports are special:
+                        // v3 uses 'spCampaigns' but we store 'spPlacement'
+                        // so dispatch + idempotency are distinct from
+                        // regular campaign reports.
+  /** Optional Amazon-API-side override. When set, sent to Amazon in
+   *  configuration.reportTypeId; reportTypeId above is used only for
+   *  our DB columns + dispatcher. Defaults to reportTypeId. */
+  apiReportTypeId?: string
   startDate: string      // YYYY-MM-DD
   endDate: string        // YYYY-MM-DD
   groupBy: string[]
@@ -102,8 +111,11 @@ export const SEARCH_TERM_COLUMNS: Partial<Record<AdProduct, string[]>> = {
   ],
   SPONSORED_BRANDS: [
     // Phase G fix: same v2→v3 column rename as CAMPAIGN_COLUMNS above.
+    // Backfill fix: SB v3 search-term uses 'keywordText' not 'keyword'
+    // (Amazon's "Allowed values" hint listed keywordText, keywordType
+    // but rejected the bare 'keyword' name SP accepts).
     'date', 'campaignId', 'adGroupId',
-    'keywordId', 'keyword', 'matchType', 'searchTerm',
+    'keywordId', 'keywordText', 'matchType', 'searchTerm',
     'impressions', 'clicks', 'cost',
     'sales', 'purchases',
   ],
@@ -121,7 +133,12 @@ export const PLACEMENT_COLUMNS: string[] = [
   'sales7d', 'purchases7d', 'unitsSoldClicks7d',
 ]
 
-export const PLACEMENT_REPORT_TYPE_ID = 'spPlacement'
+// v3 has no standalone 'spPlacement' reportTypeId. Placement data comes
+// from spCampaigns + groupBy=['campaignPlacement']. To keep our internal
+// dispatch + idempotency key distinct from regular campaign reports we
+// store 'spPlacement' in the DB but send 'spCampaigns' over the wire.
+export const PLACEMENT_REPORT_TYPE_ID = 'spPlacement'         // DB / dispatch
+export const PLACEMENT_API_REPORT_TYPE_ID = 'spCampaigns'     // Amazon API
 
 // ── Stage 1: create a report job ─────────────────────────────────────
 
@@ -155,6 +172,7 @@ export async function createReportJob(spec: ReportSpec): Promise<CreateReportJob
     }
   }
 
+  const apiReportTypeId = spec.apiReportTypeId ?? spec.reportTypeId
   const body = {
     name: `${spec.adProduct.toLowerCase()}-${spec.reportTypeId}-${spec.startDate}-${spec.endDate}-${Date.now()}`,
     startDate: spec.startDate,
@@ -163,7 +181,7 @@ export async function createReportJob(spec: ReportSpec): Promise<CreateReportJob
       adProduct: spec.adProduct,
       groupBy: spec.groupBy,
       columns: spec.columns,
-      reportTypeId: spec.reportTypeId,
+      reportTypeId: apiReportTypeId,
       timeUnit: spec.timeUnit ?? 'DAILY',
       format: 'GZIP_JSON',
     },
@@ -799,6 +817,7 @@ export async function runPlacementReportCycle(
         currencyCode,
         adProduct: 'SPONSORED_PRODUCTS',
         reportTypeId: PLACEMENT_REPORT_TYPE_ID,
+        apiReportTypeId: PLACEMENT_API_REPORT_TYPE_ID,
         startDate: args.startDate,
         endDate: args.endDate,
         groupBy: ['campaignPlacement'],
