@@ -337,6 +337,42 @@ const PROBE_VARIANTS: ProbeVariant[] = [
     contentTypeHeader: 'application/vnd.spProductAd.v3+json',
     body: { productAds: [] },
   },
+
+  // K.1b: Retry with the v1-unified MIME types (vnd.campaign.v1+json)
+  // instead of v3 SP-specific. Theory: the previous block might be MIME
+  // negotiation failing, not gateway auth.
+  {
+    id: 'v1_campaigns_put_unified_mime',
+    description: 'PUT /campaigns with vnd.campaign.v1+json (unified MIME)',
+    method: 'PUT', path: '/campaigns',
+    acceptHeader: 'application/vnd.campaign.v1+json',
+    contentTypeHeader: 'application/vnd.campaign.v1+json',
+    body: { campaigns: [] },
+  },
+  {
+    id: 'v1_campaigns_put_plural_mime',
+    description: 'PUT /campaigns with vnd.campaigns.v1+json (plural)',
+    method: 'PUT', path: '/campaigns',
+    acceptHeader: 'application/vnd.campaigns.v1+json',
+    contentTypeHeader: 'application/vnd.campaigns.v1+json',
+    body: { campaigns: [] },
+  },
+  {
+    id: 'v1_campaigns_post_unified',
+    description: 'POST /campaigns with vnd.campaign.v1+json (create batch)',
+    method: 'POST', path: '/campaigns',
+    acceptHeader: 'application/vnd.campaign.v1+json',
+    contentTypeHeader: 'application/vnd.campaign.v1+json',
+    body: { campaigns: [] },
+  },
+  {
+    id: 'v1_campaigns_delete',
+    description: 'POST /campaigns/delete (v1 delete batch — separate endpoint shape)',
+    method: 'POST', path: '/campaigns/delete',
+    acceptHeader: 'application/vnd.campaign.v1+json',
+    contentTypeHeader: 'application/vnd.campaign.v1+json',
+    body: { campaignIdFilter: { include: [] } },
+  },
 ]
 
 // ── Probe executor ───────────────────────────────────────────────────
