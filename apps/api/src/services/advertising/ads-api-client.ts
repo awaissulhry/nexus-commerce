@@ -399,48 +399,135 @@ export async function listProductAds(ctx: ClientContext): Promise<AdsProductAdDT
 // endpoints are usable today. Once Amazon resolves the SP auth, the SP
 // methods above will start returning data without further code changes.
 
+// SD raw response shapes — Amazon uses `budget` not `dailyBudget`, omits
+// campaignType (it's implicit from the endpoint), and uses different
+// bidding strategy enum values.
+interface SdCampaignRaw {
+  campaignId: string
+  name: string
+  state: string
+  tactic?: string
+  budget?: number
+  budgetType?: string
+  startDate?: string
+  endDate?: string
+  costType?: string
+  deliveryProfile?: string
+  portfolioId?: string
+  bidOptimization?: boolean
+}
+interface SdAdGroupRaw {
+  adGroupId: string
+  campaignId: string
+  name: string
+  state: string
+  defaultBid?: number
+  tactic?: string
+  creativeType?: string
+}
+interface SdProductAdRaw {
+  adId: string
+  adGroupId: string
+  campaignId: string
+  state: string
+  asin?: string
+  sku?: string
+}
+interface SdTargetRaw {
+  targetId: string
+  adGroupId: string
+  campaignId: string
+  state: string
+  expression?: Array<{ type?: string; value?: string }>
+  bid?: number
+  expressionType?: string
+}
+
 export async function listSdCampaigns(ctx: ClientContext): Promise<AdsCampaignDTO[]> {
   if (adsMode() === 'sandbox') {
     logger.debug('[ADS-SANDBOX] listSdCampaigns', { profileId: ctx.profileId })
     return loadFixture<AdsCampaignDTO[]>('sd-campaigns', [])
   }
-  return liveCall<AdsCampaignDTO[]>({
+  const raw = await liveCall<SdCampaignRaw[]>({
     ...ctx,
     method: 'GET',
     path: '/sd/campaigns',
   })
+  return raw.map((c) => ({
+    campaignId: c.campaignId,
+    name: c.name,
+    campaignType: 'sponsoredDisplay' as const,
+    state: c.state,
+    dailyBudget: c.budget ?? 0,
+    startDate: c.startDate ?? '',
+    endDate: c.endDate,
+    portfolioId: c.portfolioId,
+    // SD doesn't use SP-style bidding strategy; leave undefined so the
+    // upsert maps to the schema default LEGACY_FOR_SALES.
+    biddingStrategy: undefined,
+  }))
 }
 
 export async function listSdAdGroups(ctx: ClientContext): Promise<AdsAdGroupDTO[]> {
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsAdGroupDTO[]>('sd-adGroups', [])
   }
-  return liveCall<AdsAdGroupDTO[]>({
+  const raw = await liveCall<SdAdGroupRaw[]>({
     ...ctx,
     method: 'GET',
     path: '/sd/adGroups',
   })
+  return raw.map((ag) => ({
+    adGroupId: ag.adGroupId,
+    campaignId: ag.campaignId,
+    name: ag.name,
+    state: ag.state,
+    defaultBid: ag.defaultBid ?? 0,
+  }))
 }
 
 export async function listSdProductAds(ctx: ClientContext): Promise<AdsProductAdDTO[]> {
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsProductAdDTO[]>('sd-productAds', [])
   }
-  return liveCall<AdsProductAdDTO[]>({
+  const raw = await liveCall<SdProductAdRaw[]>({
     ...ctx,
     method: 'GET',
     path: '/sd/productAds',
   })
+  return raw.map((pa) => ({
+    adId: pa.adId,
+    adGroupId: pa.adGroupId,
+    campaignId: pa.campaignId,
+    state: pa.state,
+    asin: pa.asin,
+    sku: pa.sku,
+  }))
 }
 
 export async function listSdTargets(ctx: ClientContext): Promise<AdsTargetDTO[]> {
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsTargetDTO[]>('sd-targets', [])
   }
-  return liveCall<AdsTargetDTO[]>({
+  const raw = await liveCall<SdTargetRaw[]>({
     ...ctx,
     method: 'GET',
     path: '/sd/targets',
+  })
+  return raw.map((t) => {
+    const firstExpr = t.expression?.[0]
+    return {
+      targetId: t.targetId,
+      adGroupId: t.adGroupId,
+      campaignId: t.campaignId,
+      state: t.state,
+      kind: (firstExpr?.type?.toUpperCase().includes('AUDIENCE') ? 'AUDIENCE' :
+             firstExpr?.type?.toUpperCase().includes('CATEGORY') ? 'CATEGORY' :
+             firstExpr?.type?.toUpperCase().includes('ASIN') ? 'PRODUCT' : 'PRODUCT') as 'KEYWORD' | 'PRODUCT' | 'CATEGORY' | 'AUDIENCE',
+      expressionType: t.expressionType ?? firstExpr?.type ?? 'UNKNOWN',
+      expressionValue: firstExpr?.value ?? '',
+      bid: t.bid ?? 0,
+    }
   })
 }
 

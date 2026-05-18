@@ -34,8 +34,8 @@ import {
 
 interface SyncSummary {
   profileCount: number
-  campaigns: { upserted: number; skipped: number }
-  adGroups: { upserted: number; skipped: number }
+  campaigns: { upserted: number; skipped: number; sampleErrors?: string[] }
+  adGroups: { upserted: number; skipped: number; sampleErrors?: string[] }
   targets: { upserted: number; skipped: number }
   productAds: { upserted: number; skipped: number }
   errors: string[]
@@ -95,10 +95,11 @@ async function syncCampaignsForProfile(
   ctx: ClientContext,
   marketplace: string,
   campaigns: AdsCampaignDTO[],
-): Promise<{ upserted: number; skipped: number; map: Map<string, string> }> {
+): Promise<{ upserted: number; skipped: number; map: Map<string, string>; errors: string[] }> {
   // Returns a map of externalCampaignId → local Campaign.id so the
   // ad-group sync can resolve the FK without an extra query per row.
   const out = new Map<string, string>()
+  const errors: string[] = []
   let upserted = 0
   let skipped = 0
   for (const c of campaigns) {
@@ -137,15 +138,17 @@ async function syncCampaignsForProfile(
       }
       upserted += 1
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       logger.warn('[ads-sync] campaign upsert failed', {
         campaignId: c.campaignId,
-        error: err instanceof Error ? err.message : String(err),
+        error: msg,
       })
+      if (errors.length < 3) errors.push(`${c.campaignId}: ${msg.slice(0, 200)}`)
       skipped += 1
     }
   }
   void ctx
-  return { upserted, skipped, map: out }
+  return { upserted, skipped, map: out, errors }
 }
 
 async function syncAdGroupsForProfile(
@@ -352,6 +355,12 @@ export async function runAdsSyncOnce(): Promise<SyncSummary> {
       const sdCampaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, sdCampaigns)
       summary.campaigns.upserted += sdCampaignResult.upserted
       summary.campaigns.skipped += sdCampaignResult.skipped
+      if (sdCampaignResult.errors.length > 0) {
+        summary.campaigns.sampleErrors = [
+          ...(summary.campaigns.sampleErrors ?? []),
+          ...sdCampaignResult.errors,
+        ].slice(0, 5)
+      }
 
       const sdAdGroups = await listSdAdGroups(ctx)
       const knownSdAdGroups = sdAdGroups.filter((ag) =>
