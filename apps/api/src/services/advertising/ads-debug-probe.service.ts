@@ -234,6 +234,32 @@ const PROBE_VARIANTS: ProbeVariant[] = [
     contentTypeHeader: 'application/vnd.portfoliosexport.v1+json',
     body: {},
   },
+
+  // ── J.1: v1 unified negative-target CRUD discovery ────────────────
+  // The export endpoint above is 403 (different gateway). CRUD on
+  // negativeTargets might use a different MIME (vnd.negativetargets.v1+json
+  // vs the export variant). If list/create accept our token even when
+  // export doesn't, Phase J can build on the CRUD path directly.
+
+  {
+    id: 'v1_negative_targets_list',
+    description: 'POST /negativeTargets/list (v1 negative kw list — auth check)',
+    method: 'POST', path: '/negativeTargets/list',
+    acceptHeader: 'application/vnd.negativetargets.v1+json',
+    contentTypeHeader: 'application/vnd.negativetargets.v1+json',
+    body: { adProductFilter: ['SPONSORED_PRODUCTS'], maxResults: 1 },
+  },
+  {
+    // Safe write probe: empty negativeTargets[] — Amazon should reject
+    // with 400 validation if the endpoint accepts our token, vs 403 if
+    // gateway-blocked. Either way no data is written.
+    id: 'v1_negative_targets_create_probe',
+    description: 'POST /negativeTargets with empty body (400 vs 403 distinguishes auth from validation)',
+    method: 'POST', path: '/negativeTargets',
+    acceptHeader: 'application/vnd.negativetargets.v1+json',
+    contentTypeHeader: 'application/vnd.negativetargets.v1+json',
+    body: { negativeTargets: [] },
+  },
 ]
 
 // ── Probe executor ───────────────────────────────────────────────────
