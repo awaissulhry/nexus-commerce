@@ -514,7 +514,11 @@ export default function StockWorkspace() {
   const status = searchParams.get('status') ?? ''
   const search = searchParams.get('search') ?? ''
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
-  const pageSize = parseInt(searchParams.get('pageSize') ?? '50', 10) || 50
+  // Page size is fixed at 200 StockLevel rows per fetch. A user-facing
+  // selector doesn't make sense here because StockLevel rows collapse
+  // into parent groups — "25/page" would show far fewer visible products
+  // than the operator expects.
+  const pageSize = 200
 
   const [searchInput, setSearchInput] = useState(search)
   const [items, setItems] = useState<StockRow[]>([])
@@ -653,7 +657,7 @@ export default function StockWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [view, locationCode, status, search, page, pageSize])
+  }, [view, locationCode, status, search, page])
 
   const fetchSidecar = useCallback(async () => {
     try {
@@ -732,7 +736,7 @@ export default function StockWorkspace() {
   useEffect(() => {
     setSelected(new Set())
     setLastSelectedIdx(null)
-  }, [view, locationCode, status, search, page, pageSize])
+  }, [view, locationCode, status, search, page])
 
   // Keyboard shortcuts. Skipped when focus is in an input/textarea/select
   // (so typing isn't hijacked) unless the key is Escape.
@@ -817,13 +821,17 @@ export default function StockWorkspace() {
     if (idx >= 0) setLastSelectedIdx(idx)
   }, [items, lastSelectedIdx])
 
+  const gridRowsRef = useRef<StockGridRow[]>([])
+
   const toggleSelectAll = useCallback(() => {
+    const rows = gridRowsRef.current
     setSelected((prev) => {
-      if (prev.size === items.length) return new Set()
-      return new Set(items.map((it) => it.id))
+      const allIds = rows.map((r) => r.id)
+      if (allIds.every((id) => prev.has(id))) return new Set()
+      return new Set(allIds)
     })
     setLastSelectedIdx(null)
-  }, [items])
+  }, [])
 
   // S.4/S.5 — GridLens computed values for the table view.
   const [sortBy, setSortBy] = useState('')
@@ -836,7 +844,8 @@ export default function StockWorkspace() {
     })
   }, [])
 
-  const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
+  // allSelected is wired after gridRows is computed (see below).
+  // Initialise to false; the real value is set via gridRowsRef each render.
   const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
   const visible = useMemo(
     () => STOCK_COLUMNS.filter((c) => c.key === 'open' || visibleColumns.includes(c.key as ColumnKey)),
@@ -931,6 +940,14 @@ export default function StockWorkspace() {
       childrenByParent: byParent,
     }
   }, [items, sortBy])
+
+  // Keep ref in sync so toggleSelectAll (defined earlier) always sees
+  // the current gridRows without stale closure issues.
+  gridRowsRef.current = gridRows
+
+  // allSelected: true only when every visible parent/standalone row is checked.
+  const allSelected = gridRows.length > 0 && gridRows.every((r) => selected.has(r.id))
+
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
     if (colKey === 'open') {
       return (
@@ -956,12 +973,28 @@ export default function StockWorkspace() {
     return meta.cell(ctx)
   }, [density, t, setDrawerProductId])
 
+  // Resolve selected row IDs to actual StockLevel IDs.
+  // Parent group rows have id = parentProductId (not a StockLevel ID),
+  // so we expand them to their children's StockLevel IDs before API calls.
+  const resolveToStockLevelIds = useCallback((): string[] => {
+    const result: string[] = []
+    for (const id of selected) {
+      const children = childrenByParent[id]
+      if (children && children.length > 0) {
+        for (const c of children) result.push(c.id)
+      } else {
+        result.push(id) // standalone row — id is already a StockLevel ID
+      }
+    }
+    return result
+  }, [selected, childrenByParent])
+
   // Bulk operation runners — sequential calls with progress reporting.
   // Sequential is intentional: 50 parallel PATCHes would let the cron
   // race with itself and the cascade fan-out would queue duplicate
   // OutboundSyncQueue rows. One at a time is honest and observable.
   const runBulkAdjust = useCallback(async (change: number, subReason: AdjustSubReason, notes: string | null) => {
-    const ids = Array.from(selected)
+    const ids = resolveToStockLevelIds()
     setBulkProgress({ total: ids.length, done: 0, failed: 0 })
     const undoEntries: Array<{ stockLevelId: string; inverseChange: number }> = []
     const payload = buildAdjustmentPayload(subReason, notes)
@@ -988,10 +1021,11 @@ export default function StockWorkspace() {
     }
     fetchStock()
     fetchSidecar()
-  }, [selected, fetchStock, fetchSidecar])
+  }, [selected, fetchStock, fetchSidecar, resolveToStockLevelIds])
 
   const runBulkTransfer = useCallback(async (toLocationId: string, notes: string | null) => {
-    const rows = items.filter((it) => selected.has(it.id))
+    const slIds = new Set(resolveToStockLevelIds())
+    const rows = items.filter((it) => slIds.has(it.id))
     if (rows.length === 0 || !toLocationId) return
     setBulkProgress({ total: rows.length, done: 0, failed: 0 })
     try {
@@ -1021,10 +1055,10 @@ export default function StockWorkspace() {
     emitInvalidation({ type: 'stock.transferred' })
     fetchStock()
     fetchSidecar()
-  }, [items, selected, fetchStock, fetchSidecar])
+  }, [items, selected, fetchStock, fetchSidecar, resolveToStockLevelIds])
 
   const runBulkThreshold = useCallback(async (threshold: number | null) => {
-    const ids = Array.from(selected)
+    const ids = resolveToStockLevelIds()
     setBulkProgress({ total: ids.length, done: 0, failed: 0 })
     for (const id of ids) {
       try {
@@ -1043,7 +1077,7 @@ export default function StockWorkspace() {
     setBulkAction(null)
     setSelected(new Set())
     fetchStock()
-  }, [selected, fetchStock])
+  }, [selected, fetchStock, resolveToStockLevelIds])
 
   const runUndo = useCallback(async () => {
     if (!undoBundle) return
@@ -1424,9 +1458,6 @@ export default function StockWorkspace() {
           page={page}
           totalPages={totalPages}
           onPage={(n) => updateUrl({ page: n <= 1 ? undefined : String(n) })}
-          pageSize={pageSize}
-          onPageSize={(n) => updateUrl({ pageSize: n === 50 ? undefined : String(n), page: undefined })}
-          pageSizeOptions={[25, 50, 100, 200]}
         />
       )}
 
