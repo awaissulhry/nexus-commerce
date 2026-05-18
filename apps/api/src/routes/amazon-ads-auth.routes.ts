@@ -169,45 +169,20 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (t1.token) {
-      const h = {
-        Authorization: `Bearer ${t1.token}`,
-        'Amazon-Advertising-API-ClientId': creds.clientId,
-        'Amazon-Advertising-API-Scope': IT_PROFILE,
-      }
+      // ── v1 unified API (amazon-ads/v1 prefix) ───────────────────────────
+      results.v1_campaigns        = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/campaigns', t1.token, IT_PROFILE)
+      results.v1_campaigns_sp     = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/campaigns?adProduct=SPONSORED_PRODUCTS', t1.token, IT_PROFILE)
+      results.v1_adGroups         = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/adGroups', t1.token, IT_PROFILE)
+      results.v1_productAds       = await tryUrl('https://advertising-api-eu.amazon.com/amazon-ads/v1/productAds', t1.token, IT_PROFILE)
 
-      // ── v2 SP endpoints (legacy path, may use Atza| validator) ──────────
-      results.v2_sp_campaigns  = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/campaigns', t1.token, IT_PROFILE)
-      results.v2_sp_adGroups   = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/adGroups', t1.token, IT_PROFILE)
-      results.v2_sp_keywords   = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/keywords', t1.token, IT_PROFILE)
-      results.v2_sp_productAds = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/productAds', t1.token, IT_PROFILE)
+      // ── v1 without amazon-ads prefix (alt path) ──────────────────────────
+      results.v1_alt_campaigns    = await tryUrl('https://advertising-api-eu.amazon.com/v1/campaigns', t1.token, IT_PROFILE)
 
-      // ── v3 Reports API (async report creation — different auth path?) ────
-      const reportRes = await fetch('https://advertising-api-eu.amazon.com/reporting/reports', {
-        method: 'POST',
-        headers: {
-          ...h,
-          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
-        },
-        body: JSON.stringify({
-          name: 'nexus-test',
-          startDate: '2026-05-01',
-          endDate: '2026-05-07',
-          configuration: {
-            adProduct: 'SPONSORED_PRODUCTS',
-            groupBy: ['campaign'],
-            columns: ['impressions', 'clicks', 'cost', 'campaignId', 'campaignName'],
-            reportTypeId: 'spCampaigns',
-            timeUnit: 'DAILY',
-            format: 'GZIP_JSON_LINES',
-          },
-        }),
-      })
-      let reportBody: unknown
-      try { reportBody = await reportRes.json() } catch { reportBody = await reportRes.text() }
-      results.v3_reporting_POST = { status: reportRes.status, body: reportBody }
+      // ── SD (user says this works — confirm + baseline) ───────────────────
+      results.sd_campaigns        = await tryUrl('https://advertising-api-eu.amazon.com/sd/campaigns', t1.token, IT_PROFILE)
 
-      // ── v3 baseline (known failing, for comparison) ──────────────────────
-      results.v3_sp_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+      // ── v3 SP (known 403 — comparison baseline) ──────────────────────────
+      results.v3_sp_campaigns_403 = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
     }
 
     // Try client_credentials token with /sp/campaigns
