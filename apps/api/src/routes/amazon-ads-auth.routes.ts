@@ -169,8 +169,10 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (t1.token) {
-      // ── Reports API — try all 3 adProducts ────────────────────────────────
-      async function tryReport(adProduct: string, reportTypeId: string) {
+      // ── Reports API — correct v3 column names per ad product ─────────────
+      // Each ad product has its own valid column vocabulary. Using a wrong
+      // column for the report type returns 400 "configuration format".
+      async function tryReport(adProduct: string, reportTypeId: string, columns: string[]) {
         const r = await fetch('https://advertising-api-eu.amazon.com/reporting/reports', {
           method: 'POST',
           headers: {
@@ -180,16 +182,16 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
             'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
           },
           body: JSON.stringify({
-            name: `test-${adProduct.toLowerCase()}`,
-            startDate: '2026-05-01',
-            endDate: '2026-05-07',
+            name: `test-${adProduct.toLowerCase()}-${Date.now()}`,
+            startDate: '2026-05-10',
+            endDate: '2026-05-16',
             configuration: {
               adProduct,
               groupBy: ['campaign'],
-              columns: ['impressions', 'clicks', 'cost', 'campaignId', 'campaignName'],
+              columns,
               reportTypeId,
               timeUnit: 'DAILY',
-              format: 'GZIP_JSON_LINES',
+              format: 'GZIP_JSON',
             },
           }),
         })
@@ -198,9 +200,29 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
         return { status: r.status, body }
       }
 
-      results.reports_SP = await tryReport('SPONSORED_PRODUCTS', 'spCampaigns')
-      results.reports_SD = await tryReport('SPONSORED_DISPLAY', 'sdCampaigns')
-      results.reports_SB = await tryReport('SPONSORED_BRANDS', 'sbCampaigns')
+      // SP v3 spCampaigns columns (groupBy=campaign): must include date when
+      // timeUnit=DAILY; cost (not spend); attribution windows are 1d/7d/14d/30d.
+      results.reports_SP = await tryReport('SPONSORED_PRODUCTS', 'spCampaigns', [
+        'date', 'campaignId', 'campaignName', 'campaignStatus',
+        'impressions', 'clicks', 'cost',
+        'sales7d', 'purchases7d', 'unitsSoldClicks7d',
+      ])
+
+      // SD v3 sdCampaigns columns (groupBy=campaign): uses sales/purchases
+      // (no attribution-window suffix) plus viewable metrics.
+      results.reports_SD = await tryReport('SPONSORED_DISPLAY', 'sdCampaigns', [
+        'date', 'campaignId', 'campaignName',
+        'impressions', 'clicks', 'cost',
+        'sales', 'purchases', 'viewableImpressions',
+      ])
+
+      // SB v3 sbCampaigns columns (groupBy=campaign): uses attributedSales14d
+      // and detailPageViews; no 7d sales window for campaign-level groupBy.
+      results.reports_SB = await tryReport('SPONSORED_BRANDS', 'sbCampaigns', [
+        'date', 'campaignId', 'campaignName',
+        'impressions', 'clicks', 'cost',
+        'attributedSales14d', 'attributedDetailPageViewsClicks14d',
+      ])
 
       // ── Confirm SD still works ───────────────────────────────────────────
       results.sd_campaigns        = await tryUrl('https://advertising-api-eu.amazon.com/sd/campaigns', t1.token, IT_PROFILE)

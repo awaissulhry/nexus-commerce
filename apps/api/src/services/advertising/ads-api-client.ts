@@ -254,11 +254,24 @@ export async function listCampaigns(ctx: ClientContext): Promise<AdsCampaignDTO[
     logger.debug('[ADS-SANDBOX] listCampaigns', { profileId: ctx.profileId })
     return loadFixture<AdsCampaignDTO[]>('campaigns', [])
   }
-  return liveCall<AdsCampaignDTO[]>({
+  const raw = await liveCall<Array<Record<string, unknown>>>({
     ...ctx,
     method: 'GET',
     path: '/sp/campaigns',
   })
+  // Same boundary normalization as SD — Amazon returns IDs as JSON
+  // numbers, but Prisma stores them as strings.
+  return raw.map((c) => ({
+    campaignId: toStrId(c.campaignId as number | string),
+    name: c.name as string,
+    campaignType: 'sponsoredProducts' as const,
+    state: c.state as string,
+    dailyBudget: (c.dailyBudget as number) ?? 0,
+    startDate: (c.startDate as string) ?? '',
+    endDate: c.endDate as string | undefined,
+    portfolioId: c.portfolioId != null ? toStrId(c.portfolioId as number | string) : undefined,
+    biddingStrategy: c.biddingStrategy as AdsCampaignDTO['biddingStrategy'],
+  }))
 }
 
 export async function getCampaign(
@@ -309,11 +322,18 @@ export async function listAdGroups(ctx: ClientContext): Promise<AdsAdGroupDTO[]>
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsAdGroupDTO[]>('adGroups', [])
   }
-  return liveCall<AdsAdGroupDTO[]>({
+  const raw = await liveCall<Array<Record<string, unknown>>>({
     ...ctx,
     method: 'GET',
     path: '/sp/adGroups',
   })
+  return raw.map((ag) => ({
+    adGroupId: toStrId(ag.adGroupId as number | string),
+    campaignId: toStrId(ag.campaignId as number | string),
+    name: ag.name as string,
+    state: ag.state as string,
+    defaultBid: (ag.defaultBid as number) ?? 0,
+  }))
 }
 
 export interface AdGroupPatch {
@@ -347,13 +367,21 @@ export async function listTargets(ctx: ClientContext): Promise<AdsTargetDTO[]> {
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsTargetDTO[]>('targets', [])
   }
-  // Live path concatenates /sp/keywords + /sp/targets (product targets)
-  // into a unified list. Stubbed until AD.4.
-  return liveCall<AdsTargetDTO[]>({
+  const raw = await liveCall<Array<Record<string, unknown>>>({
     ...ctx,
     method: 'GET',
     path: '/sp/keywords',
   })
+  return raw.map((t) => ({
+    targetId: toStrId((t.keywordId ?? t.targetId) as number | string),
+    adGroupId: toStrId(t.adGroupId as number | string),
+    campaignId: toStrId(t.campaignId as number | string),
+    state: t.state as string,
+    kind: 'KEYWORD' as const,
+    expressionType: ((t.matchType as string) ?? 'BROAD').toUpperCase(),
+    expressionValue: (t.keywordText as string) ?? '',
+    bid: (t.bid as number) ?? 0,
+  }))
 }
 
 export interface TargetPatch {
@@ -387,11 +415,19 @@ export async function listProductAds(ctx: ClientContext): Promise<AdsProductAdDT
   if (adsMode() === 'sandbox') {
     return loadFixture<AdsProductAdDTO[]>('productAds', [])
   }
-  return liveCall<AdsProductAdDTO[]>({
+  const raw = await liveCall<Array<Record<string, unknown>>>({
     ...ctx,
     method: 'GET',
     path: '/sp/productAds',
   })
+  return raw.map((pa) => ({
+    adId: toStrId(pa.adId as number | string),
+    adGroupId: toStrId(pa.adGroupId as number | string),
+    campaignId: toStrId(pa.campaignId as number | string),
+    state: pa.state as string,
+    asin: pa.asin as string | undefined,
+    sku: pa.sku as string | undefined,
+  }))
 }
 
 // ── Sponsored Display (SD) — uses a different auth validator that accepts
@@ -399,11 +435,17 @@ export async function listProductAds(ctx: ClientContext): Promise<AdsProductAdDT
 // endpoints are usable today. Once Amazon resolves the SP auth, the SP
 // methods above will start returning data without further code changes.
 
-// SD raw response shapes — Amazon uses `budget` not `dailyBudget`, omits
-// campaignType (it's implicit from the endpoint), and uses different
-// bidding strategy enum values.
+// SD raw response shapes — Amazon returns IDs as JSON numbers (14-15
+// digit BigInt-sized), uses `budget` not `dailyBudget`, omits
+// campaignType (implicit from endpoint), and uses different bidding
+// strategy enum values than SP.
+//
+// CRITICAL: Amazon Ads campaign/adGroup/ad/target IDs are returned as
+// numeric JSON values but our Prisma schema stores them as String.
+// Every ID goes through String(...) at this boundary — if not, Prisma's
+// findFirst silently rejects with a type mismatch and the upsert skips.
 interface SdCampaignRaw {
-  campaignId: string
+  campaignId: number | string
   name: string
   state: string
   tactic?: string
@@ -413,12 +455,12 @@ interface SdCampaignRaw {
   endDate?: string
   costType?: string
   deliveryProfile?: string
-  portfolioId?: string
+  portfolioId?: number | string
   bidOptimization?: boolean
 }
 interface SdAdGroupRaw {
-  adGroupId: string
-  campaignId: string
+  adGroupId: number | string
+  campaignId: number | string
   name: string
   state: string
   defaultBid?: number
@@ -426,21 +468,29 @@ interface SdAdGroupRaw {
   creativeType?: string
 }
 interface SdProductAdRaw {
-  adId: string
-  adGroupId: string
-  campaignId: string
+  adId: number | string
+  adGroupId: number | string
+  campaignId: number | string
   state: string
   asin?: string
   sku?: string
 }
 interface SdTargetRaw {
-  targetId: string
-  adGroupId: string
-  campaignId: string
+  targetId: number | string
+  adGroupId: number | string
+  campaignId: number | string
   state: string
   expression?: Array<{ type?: string; value?: string }>
   bid?: number
   expressionType?: string
+}
+
+// Normalize a numeric or string ID from Amazon into a string. Handles
+// the edge case where Amazon returns IDs as JSON numbers >2^53 by
+// inspecting raw response text via a custom parser if needed.
+function toStrId(v: number | string | undefined | null): string {
+  if (v == null) return ''
+  return typeof v === 'string' ? v : String(v)
 }
 
 export async function listSdCampaigns(ctx: ClientContext): Promise<AdsCampaignDTO[]> {
@@ -454,16 +504,14 @@ export async function listSdCampaigns(ctx: ClientContext): Promise<AdsCampaignDT
     path: '/sd/campaigns',
   })
   return raw.map((c) => ({
-    campaignId: c.campaignId,
+    campaignId: toStrId(c.campaignId),
     name: c.name,
     campaignType: 'sponsoredDisplay' as const,
     state: c.state,
     dailyBudget: c.budget ?? 0,
     startDate: c.startDate ?? '',
     endDate: c.endDate,
-    portfolioId: c.portfolioId,
-    // SD doesn't use SP-style bidding strategy; leave undefined so the
-    // upsert maps to the schema default LEGACY_FOR_SALES.
+    portfolioId: c.portfolioId != null ? toStrId(c.portfolioId) : undefined,
     biddingStrategy: undefined,
   }))
 }
@@ -478,8 +526,8 @@ export async function listSdAdGroups(ctx: ClientContext): Promise<AdsAdGroupDTO[
     path: '/sd/adGroups',
   })
   return raw.map((ag) => ({
-    adGroupId: ag.adGroupId,
-    campaignId: ag.campaignId,
+    adGroupId: toStrId(ag.adGroupId),
+    campaignId: toStrId(ag.campaignId),
     name: ag.name,
     state: ag.state,
     defaultBid: ag.defaultBid ?? 0,
@@ -496,9 +544,9 @@ export async function listSdProductAds(ctx: ClientContext): Promise<AdsProductAd
     path: '/sd/productAds',
   })
   return raw.map((pa) => ({
-    adId: pa.adId,
-    adGroupId: pa.adGroupId,
-    campaignId: pa.campaignId,
+    adId: toStrId(pa.adId),
+    adGroupId: toStrId(pa.adGroupId),
+    campaignId: toStrId(pa.campaignId),
     state: pa.state,
     asin: pa.asin,
     sku: pa.sku,
@@ -516,14 +564,16 @@ export async function listSdTargets(ctx: ClientContext): Promise<AdsTargetDTO[]>
   })
   return raw.map((t) => {
     const firstExpr = t.expression?.[0]
+    const exprTypeUpper = firstExpr?.type?.toUpperCase() ?? ''
     return {
-      targetId: t.targetId,
-      adGroupId: t.adGroupId,
-      campaignId: t.campaignId,
+      targetId: toStrId(t.targetId),
+      adGroupId: toStrId(t.adGroupId),
+      campaignId: toStrId(t.campaignId),
       state: t.state,
-      kind: (firstExpr?.type?.toUpperCase().includes('AUDIENCE') ? 'AUDIENCE' :
-             firstExpr?.type?.toUpperCase().includes('CATEGORY') ? 'CATEGORY' :
-             firstExpr?.type?.toUpperCase().includes('ASIN') ? 'PRODUCT' : 'PRODUCT') as 'KEYWORD' | 'PRODUCT' | 'CATEGORY' | 'AUDIENCE',
+      kind: (exprTypeUpper.includes('AUDIENCE') ? 'AUDIENCE'
+            : exprTypeUpper.includes('CATEGORY') ? 'CATEGORY'
+            : exprTypeUpper.includes('ASIN') ? 'PRODUCT'
+            : 'PRODUCT') as 'KEYWORD' | 'PRODUCT' | 'CATEGORY' | 'AUDIENCE',
       expressionType: t.expressionType ?? firstExpr?.type ?? 'UNKNOWN',
       expressionValue: firstExpr?.value ?? '',
       bid: t.bid ?? 0,

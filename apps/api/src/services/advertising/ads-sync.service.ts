@@ -352,7 +352,18 @@ export async function runAdsSyncOnce(): Promise<SyncSummary> {
     // tokens — usable today.
     try {
       const sdCampaigns = await listSdCampaigns(ctx)
+      logger.info('[ads-sync] SD fetched', {
+        profileId: profile.profileId,
+        marketplace: profile.marketplace,
+        campaignsFromAmazon: sdCampaigns.length,
+      })
       const sdCampaignResult = await syncCampaignsForProfile(ctx, profile.marketplace, sdCampaigns)
+      logger.info('[ads-sync] SD campaigns upserted', {
+        profileId: profile.profileId,
+        upserted: sdCampaignResult.upserted,
+        skipped: sdCampaignResult.skipped,
+        firstError: sdCampaignResult.errors[0],
+      })
       summary.campaigns.upserted += sdCampaignResult.upserted
       summary.campaigns.skipped += sdCampaignResult.skipped
       if (sdCampaignResult.errors.length > 0) {
