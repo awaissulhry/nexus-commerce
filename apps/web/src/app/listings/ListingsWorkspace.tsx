@@ -1558,13 +1558,16 @@ function GridLens(props: {
 }) {
   const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey } = props
 
-  // ── Parent/child grouping ─────────────────────────────────────────────────
-  // Group flat listings by productId so VirtualizedGrid shows one collapsible
-  // parent row per product and individual channel×marketplace listings as
-  // children. No new API endpoint needed — data is already loaded.
+  // ── Parent/child hierarchy — mirrors /products parent → variant structure ──
+  // Uses product.parentId (from the listing's product field) to build the same
+  // tree /products shows. Parent products get a chevron; their variant products
+  // appear as child rows. Standalone products show flat (no chevron).
+  // No new API endpoint needed; all product relationships come from the loaded
+  // listing data.
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
 
-  const byProduct = useMemo(() => {
+  // listings grouped by their productId
+  const byProductId = useMemo(() => {
     const m = new Map<string, Listing[]>()
     for (const l of grid.listings) {
       if (!m.has(l.productId)) m.set(l.productId, [])
@@ -1573,32 +1576,105 @@ function GridLens(props: {
     return m
   }, [grid.listings])
 
-  // One parent row per product — id = productId (guaranteed unique)
-  const parentRows = useMemo((): ListingGridRow[] =>
-    [...byProduct.entries()].map(([productId, ls]) => ({
-      ...ls[0],
-      id: productId,
-      isParent: true,
-      childCount: ls.length,
-      parentId: null,
-      _channels: [...new Set(ls.map(l => l.channel))],
-      _markets:  [...new Set(ls.map(l => l.marketplace))],
-    }))
-  , [byProduct])
+  // variantProductId → parentProductId (from product.parentId)
+  const variantToParent = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const l of grid.listings) {
+      if (l.product.parentId) m.set(l.productId, l.product.parentId)
+    }
+    return m
+  }, [grid.listings])
 
-  // Children keyed by parent id (= productId)
-  const childrenByParent = useMemo((): Record<string, ListingGridRow[]> => {
-    const r: Record<string, ListingGridRow[]> = {}
-    for (const [productId, ls] of byProduct) {
-      r[productId] = ls.map(l => ({
-        ...l,
+  const variantProductIds = useMemo(
+    () => new Set(variantToParent.keys()),
+    [variantToParent],
+  )
+
+  // parentProductId → [variantProductId, ...]
+  const parentToVariantIds = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const [variantId, parentId] of variantToParent) {
+      if (!m.has(parentId)) m.set(parentId, [])
+      m.get(parentId)!.push(variantId)
+    }
+    return m
+  }, [variantToParent])
+
+  const { parentRows, childrenByParent } = useMemo(() => {
+    const rows: ListingGridRow[] = []
+    const children: Record<string, ListingGridRow[]> = {}
+    const added = new Set<string>()
+
+    // Step 1 — parent rows: products that own variant products
+    for (const [parentId, variantIds] of parentToVariantIds) {
+      if (added.has(parentId)) continue
+      added.add(parentId)
+
+      // Use the parent's own listing if present; fall back to first variant listing
+      const parentListings = byProductId.get(parentId) ?? []
+      const firstVariantListings = byProductId.get(variantIds[0]) ?? []
+      const rep = parentListings[0] ?? firstVariantListings[0]
+      if (!rep) continue
+
+      const allListings = [
+        ...parentListings,
+        ...variantIds.flatMap(id => byProductId.get(id) ?? []),
+      ]
+      rows.push({
+        ...rep,
+        id: parentId,
+        productId: parentId,
+        product: {
+          ...(parentListings[0]?.product ?? rep.product),
+          id: parentId,
+          isParent: true,
+          parentId: null,
+        },
+        isParent: true,
+        childCount: variantIds.length,
+        parentId: null,
+        _channels: [...new Set(allListings.map(l => l.channel))],
+        _markets:  [...new Set(allListings.map(l => l.marketplace))],
+      })
+
+      // One child row per variant — keeps the first listing's actual id so
+      // inline edit, drawer open, and resync all target the right listing.
+      children[parentId] = variantIds.flatMap(variantId => {
+        const vls = byProductId.get(variantId) ?? []
+        const first = vls[0]
+        if (!first) return []
+        return [{
+          ...first,
+          // id = listing.id (not productId) so inline-edit / drawer work
+          isParent: false,
+          childCount: 0,
+          parentId,
+          _channels: [...new Set(vls.map(l => l.channel))],
+          _markets:  [...new Set(vls.map(l => l.marketplace))],
+        }]
+      })
+    }
+
+    // Step 2 — standalone / directly-listed products (not variants of anything)
+    for (const [productId, listings] of byProductId) {
+      if (added.has(productId)) continue
+      if (variantProductIds.has(productId)) continue // handled as children above
+      added.add(productId)
+
+      const first = listings[0]
+      rows.push({
+        ...first,
+        id: productId,
         isParent: false,
         childCount: 0,
-        parentId: productId,
-      }))
+        parentId: null,
+        _channels: [...new Set(listings.map(l => l.channel))],
+        _markets:  [...new Set(listings.map(l => l.marketplace))],
+      })
     }
-    return r
-  }, [byProduct])
+
+    return { parentRows: rows, childrenByParent: children }
+  }, [byProductId, parentToVariantIds, variantProductIds])
 
   const onToggleExpand = useCallback((id: string) => {
     setExpandedParents(prev => {
@@ -1609,38 +1685,28 @@ function GridLens(props: {
     })
   }, [])
 
-  // Selection operates on real listing IDs (child rows).
-  // Clicking a parent checkbox selects / deselects all its children.
-  const allSelected = grid.listings.length > 0 && grid.listings.every((l) => selected.has(l.id))
+  const allSelected =
+    grid.listings.length > 0 && grid.listings.every(l => selected.has(l.id))
 
   const toggleSelectAll = () => {
     const next = new Set(selected)
-    if (allSelected) {
-      grid.listings.forEach((l) => next.delete(l.id))
-    } else {
-      grid.listings.forEach((l) => next.add(l.id))
-    }
+    if (allSelected) grid.listings.forEach(l => next.delete(l.id))
+    else grid.listings.forEach(l => next.add(l.id))
     setSelected(next)
   }
 
+  // Simple id-based toggle; parent id toggling handled by bulk-action layer
   const toggleSelect = useCallback((id: string, _shiftKey?: boolean) => {
-    const kids = childrenByParent[id]
     const next = new Set(selected)
-    if (kids) {
-      // Parent row — toggle all child listing IDs
-      const allKidsSelected = kids.every(k => next.has(k.id))
-      kids.forEach(k => allKidsSelected ? next.delete(k.id) : next.add(k.id))
-    } else {
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-    }
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
     setSelected(next)
-  }, [childrenByParent, selected, setSelected])
+  }, [selected, setSelected])
 
-  // Keyboard nav over parent rows
-  const focusedRowId = activeRowIndex >= 0 && activeRowIndex < parentRows.length
-    ? parentRows[activeRowIndex].id
-    : null
+  const focusedRowId =
+    activeRowIndex >= 0 && activeRowIndex < parentRows.length
+      ? parentRows[activeRowIndex].id
+      : null
 
   // G.1 — embed sortDir into sortBy string so SharedVirtualizedGrid can
   // derive the active column + direction indicator from a single prop.
