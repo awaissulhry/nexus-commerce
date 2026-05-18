@@ -22,7 +22,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -361,7 +361,7 @@ export default function ChannelDriftClient() {
         <EmptyState icon={CheckCircle2} title={t('channelDrift.empty.title')} description={t('channelDrift.empty.description')} />
       )}
 
-      {rows.length > 0 && (
+      {rows.length > 0 && (<>
         <VirtualizedGrid
           rows={rows}
           visible={DRIFT_COLUMNS}
@@ -386,7 +386,8 @@ export default function ChannelDriftClient() {
           stagedIds={reviewIds}
           renderCell={renderCell}
         />
-      )}
+        <GridFooter count={rows.length} label="events" />
+      </>)}
 
       {/* Ignore reason modal — unchanged from original */}
       {ignoreModal && (

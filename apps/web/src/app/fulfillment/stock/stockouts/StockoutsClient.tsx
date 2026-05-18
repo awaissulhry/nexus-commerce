@@ -24,7 +24,7 @@ import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -446,6 +446,7 @@ export default function StockoutsClient() {
             stagedIds={openIds}
             renderCell={renderCell}
           />
+          <GridFooter count={rows.length} label="events" />
           {rows.length >= 200 && (
             <p className="text-xs text-slate-500 dark:text-slate-400 px-1">{t('stock.stockouts.limitNote')}</p>
           )}

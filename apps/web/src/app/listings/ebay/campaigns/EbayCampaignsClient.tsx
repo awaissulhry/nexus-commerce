@@ -22,7 +22,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -386,7 +386,7 @@ export default function EbayCampaignsClient() {
             </button>.
           </div>
         </Card>
-      ) : (
+      ) : (<>
         <VirtualizedGrid
           rows={rows}
           visible={CAMPAIGN_COLUMNS}
@@ -410,7 +410,9 @@ export default function EbayCampaignsClient() {
           showExpandColumn={false}
           renderCell={renderCell}
         />
-      )}
+        <GridFooter count={rows.length} label="campaigns" />
+      </>)
+      }
 
       {createOpen && (
         <CreateCampaignModal

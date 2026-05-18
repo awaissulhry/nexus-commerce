@@ -27,7 +27,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -585,6 +585,9 @@ export default function AnalyticsClient() {
                 showExpandColumn={false}
                 renderCell={renderEoqCell}
               />
+              <div className="px-4 pb-1">
+                <GridFooter count={eoqRows.length} label="recommendations" />
+              </div>
               <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">{t('stock.eoq.formula.title')}: </span>
                 {t('stock.eoq.formula.body')}
@@ -766,7 +769,7 @@ export default function AnalyticsClient() {
               description={t('stock.analytics.empty.description')}
               action={{ label: t('stock.title'), href: '/fulfillment/stock' }}
             />
-          ) : (
+          ) : (<>
             <VirtualizedGrid
               rows={analyticsRows}
               visible={ANALYTICS_COLUMNS}
@@ -790,7 +793,8 @@ export default function AnalyticsClient() {
               showExpandColumn={false}
               renderCell={renderAnalyticsCell}
             />
-          )}
+            <GridFooter count={analyticsRows.length} label="products" />
+          </>)}
 
           {/* Year-end valuation */}
           <YearEndValuationCard t={t} />

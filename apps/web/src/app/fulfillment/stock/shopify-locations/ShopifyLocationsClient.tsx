@@ -17,7 +17,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -252,7 +252,7 @@ export default function ShopifyLocationsClient() {
           action={{ label: t('stock.shopifyLocations.discover'), onClick: runDiscover }} />
       )}
 
-      {rows.length > 0 && (
+      {rows.length > 0 && (<>
         <VirtualizedGrid
           rows={rows}
           visible={LOCATION_COLUMNS}
@@ -276,7 +276,8 @@ export default function ShopifyLocationsClient() {
           showExpandColumn={false}
           renderCell={renderCell}
         />
-      )}
+        <GridFooter count={rows.length} label="locations" />
+      </>)}
     </div>
   )
 }

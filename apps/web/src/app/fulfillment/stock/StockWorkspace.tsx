@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
@@ -514,6 +514,7 @@ export default function StockWorkspace() {
   const status = searchParams.get('status') ?? ''
   const search = searchParams.get('search') ?? ''
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
+  const pageSize = parseInt(searchParams.get('pageSize') ?? '50', 10) || 50
 
   const [searchInput, setSearchInput] = useState(search)
   const [items, setItems] = useState<StockRow[]>([])
@@ -626,7 +627,7 @@ export default function StockWorkspace() {
       // Matrix + Cards aggregate by product, so they need a higher
       // pageSize ceiling to avoid splitting a single product across
       // pages. Table stays at the dense 50-row default.
-      qs.set('pageSize', view === 'table' ? '50' : '100')
+      qs.set('pageSize', view === 'table' ? String(pageSize) : '100')
       if (status) qs.set('status', status)
       if (search) qs.set('search', search)
       // locationCode only applies to table (filters per-StockLevel rows).
@@ -652,7 +653,7 @@ export default function StockWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [view, locationCode, status, search, page])
+  }, [view, locationCode, status, search, page, pageSize])
 
   const fetchSidecar = useCallback(async () => {
     try {
@@ -731,7 +732,7 @@ export default function StockWorkspace() {
   useEffect(() => {
     setSelected(new Set())
     setLastSelectedIdx(null)
-  }, [view, locationCode, status, search, page])
+  }, [view, locationCode, status, search, page, pageSize])
 
   // Keyboard shortcuts. Skipped when focus is in an input/textarea/select
   // (so typing isn't hijacked) unless the key is Escape.
@@ -1416,24 +1417,18 @@ export default function StockWorkspace() {
         />
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400">
-          <span>
-            {t('stock.pagination.pageOf', { page, total: totalPages })}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => updateUrl({ page: page <= 2 ? undefined : String(page - 1) })}
-              disabled={page === 1}
-              className="h-11 sm:h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-            >{t('stock.pagination.previous')}</button>
-            <button
-              onClick={() => updateUrl({ page: String(Math.min(totalPages, page + 1)) })}
-              disabled={page >= totalPages}
-              className="h-11 sm:h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-            >{t('stock.pagination.next')}</button>
-          </div>
-        </div>
+      {view === 'table' && (
+        <GridFooter
+          count={items.length}
+          label="products"
+          total={total}
+          page={page}
+          totalPages={totalPages}
+          onPage={(n) => updateUrl({ page: n <= 1 ? undefined : String(n) })}
+          pageSize={pageSize}
+          onPageSize={(n) => updateUrl({ pageSize: n === 50 ? undefined : String(n), page: undefined })}
+          pageSizeOptions={[25, 50, 100, 200]}
+        />
       )}
 
       {drawerProductId && (

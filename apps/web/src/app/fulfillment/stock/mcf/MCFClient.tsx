@@ -20,7 +20,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -317,7 +317,7 @@ export default function MCFClient() {
           action={{ label: t('stock.title'), href: '/fulfillment/stock' }} />
       )}
 
-      {rows.length > 0 && (
+      {rows.length > 0 && (<>
         <VirtualizedGrid
           rows={rows}
           visible={MCF_COLUMNS}
@@ -341,7 +341,8 @@ export default function MCFClient() {
           showExpandColumn={false}
           renderCell={renderCell}
         />
-      )}
+        <GridFooter count={rows.length} label="shipments" />
+      </>)}
     </div>
   )
 }

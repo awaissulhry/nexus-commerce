@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
-import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -237,7 +237,7 @@ export default function LotsClient() {
         <EmptyState icon={Package} title={t('stock.lots.empty.title')} description={t('stock.lots.empty.description')} />
       )}
 
-      {rows.length > 0 && (
+      {rows.length > 0 && (<>
         <VirtualizedGrid
           rows={rows}
           visible={LOT_COLUMNS}
@@ -261,7 +261,8 @@ export default function LotsClient() {
           showExpandColumn={false}
           renderCell={renderCell}
         />
-      )}
+        <GridFooter count={rows.length} label="lots" />
+      </>)}
     </div>
   )
 }
