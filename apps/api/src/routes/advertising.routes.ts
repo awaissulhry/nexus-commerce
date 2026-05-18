@@ -1522,22 +1522,38 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       scope?: 'AD_GROUP' | 'CAMPAIGN'
       marketplace?: string
     }
-    if (!body.profileId || !body.externalCampaignId || !body.keywordText
+    if (!body.externalCampaignId || !body.keywordText
         || !body.matchType || !body.scope || !body.marketplace) {
       return reply.code(400).send({
         error: 'missing_required_fields',
-        required: ['profileId', 'externalCampaignId', 'keywordText',
-                   'matchType', 'scope', 'marketplace'],
+        required: ['externalCampaignId', 'keywordText',
+                   'matchType', 'scope', 'marketplace',
+                   '(profileId optional — resolved from marketplace)'],
       })
     }
     if (body.scope === 'AD_GROUP' && !body.externalAdGroupId) {
       return reply.code(400).send({ error: 'externalAdGroupId_required_for_AD_GROUP' })
     }
+    // Resolve profileId from marketplace if not explicitly given
+    let profileId = body.profileId
+    if (!profileId) {
+      const conn = await prisma.amazonAdsConnection.findFirst({
+        where: { marketplace: body.marketplace, isActive: true },
+        select: { profileId: true },
+      })
+      if (!conn) {
+        return reply.code(404).send({
+          error: 'no_active_connection_for_marketplace',
+          marketplace: body.marketplace,
+        })
+      }
+      profileId = conn.profileId
+    }
     const { createNegative } = await import(
       '../services/advertising/ads-negative-kw.service.js'
     )
     const result = await createNegative({
-      profileId: body.profileId,
+      profileId,
       externalCampaignId: body.externalCampaignId,
       externalAdGroupId: body.externalAdGroupId,
       keywordText: body.keywordText,

@@ -15,6 +15,7 @@
 import { Search, AlertTriangle, Filter } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
+import { AddAsNegativeButton } from './AddAsNegativeButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -280,6 +281,7 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
                 <th className="text-right px-2 py-2 font-medium">Orders</th>
                 <th className="text-right px-2 py-2 font-medium">ACOS</th>
                 <th className="text-right px-2 py-2 font-medium">ROAS</th>
+                <th className="text-center px-2 py-2 font-medium">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -334,6 +336,18 @@ export default async function SearchTermsPage({ searchParams }: PageProps) {
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-400">
                     {formatRatio(r.roas)}
+                  </td>
+                  <td className="px-2 py-1.5 text-center">
+                    {r.adProduct === 'SPONSORED_PRODUCTS' ? (
+                      <AddAsNegativeButton
+                        externalCampaignId={r.campaignId}
+                        externalAdGroupId={r.adGroupId}
+                        keywordText={r.query}
+                        marketplace={r.marketplace}
+                      />
+                    ) : (
+                      <span className="text-[10px] text-slate-400" title="Only SP supports negative-keyword automation via API today.">SP only</span>
+                    )}
                   </td>
                 </tr>
               ))}
