@@ -2274,6 +2274,14 @@ model Campaign {
   budgetScope        String   @default("SINGLE_MARKETPLACE")
   linkedMarketplaces String[] @default([])
 
+  // ── H.2: v1 unified Ads API delivery signals ───────────────────────
+  // v1 exports include deliveryStatus + deliveryReasons[] that explain
+  // why a campaign isn't currently serving (paused, out of budget,
+  // suspended, etc). Operationally critical — answers "why isn't this
+  // running" without a separate getCampaignDeliveryDetails call.
+  deliveryStatus  String? // DELIVERING | NOT_DELIVERING
+  deliveryReasons String[] @default([])
+
   adGroups   AdGroup[]
   bidHistory CampaignBidHistory[]
 
@@ -2308,6 +2316,10 @@ model AdGroup {
   bidStrategyJson Json?
   // SD-only: creativeType (e.g. 'IMAGE' | 'VIDEO' | 'CAROUSEL').
   creativeType    String?
+
+  // ── H.2: v1 unified Ads API delivery signals ───────────────────────
+  deliveryStatus  String?
+  deliveryReasons String[] @default([])
 
   targets    AdTarget[]
   productAds AdProductAd[]
@@ -2347,6 +2359,10 @@ model AdTarget {
   // positive targets.
   negativeLevel String?
 
+  // ── H.2: v1 unified Ads API delivery signals ───────────────────────
+  deliveryStatus  String?
+  deliveryReasons String[] @default([])
+
   @@index([adGroupId, status])
   @@index([externalTargetId])
   @@index([adGroupId, isNegative])
@@ -2372,6 +2388,17 @@ model AdProductAd {
   lastSyncedAt DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+
+  // ── H.2: v1 unified Ads API ────────────────────────────────────────
+  // v1 returns ads with a creative.products[] array — a single ad can
+  // target multiple ASINs/SKUs. Store the full creative envelope here
+  // (includes adType, creative.products, headline, brand logo URL for
+  // SB creatives, etc.). The flat asin/sku columns above hold the
+  // FIRST product for back-compat with downstream queries.
+  creativeJson    Json?
+  adType          String? // PRODUCT_AD | BRAND_AD | VIDEO_AD ...
+  deliveryStatus  String?
+  deliveryReasons String[] @default([])
 
   @@unique([adGroupId, asin])
   @@index([productId])
@@ -2621,6 +2648,46 @@ model AmazonAdsReportJob {
   @@index([status, lastPolledAt])
   @@index([profileId, adProduct, createdAt(sort: Desc)])
   @@index([externalReportId])
+}
+
+// H.2 — Persistent state for the v1 unified Ads API export flow.
+// Parallels AmazonAdsReportJob but for structure (campaigns / ad-groups
+// / targets / ads) rather than performance data.
+//
+// Lifecycle: POST /{resource}/export → externalExportId (PENDING) →
+// poll GET /exports/{id} with per-resource MIME → COMPLETED with
+// signed S3 url (1h TTL) → download + gunzip + upsert local tables.
+model AmazonAdsExportJob {
+  id               String   @id @default(cuid())
+  profileId        String
+  // 'campaigns' | 'adGroups' | 'targets' | 'ads' — drives both the
+  // POST path and the Accept MIME on status polls.
+  resource         String
+  // Subset filter from the request; mostly informational since v1
+  // exports return records for ALL ad products by default. Common values:
+  // ['SPONSORED_PRODUCTS','SPONSORED_BRANDS','SPONSORED_DISPLAY'].
+  adProducts       String[] @default([])
+  externalExportId String
+  // PENDING | IN_PROGRESS | COMPLETED | FAILED
+  status           String   @default("PENDING")
+  // Signed S3 URL from Amazon when status=COMPLETED. Expires 1h after
+  // generation — ingest cron must fire within that window.
+  url              String?
+  urlExpiresAt     DateTime?
+  fileSize         Int?
+  rowsIngested     Int      @default(0)
+  errorMessage     String?
+  attempts         Int      @default(0)
+  // Original request body for replay/debug.
+  configuration    Json
+  lastPolledAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  completedAt      DateTime?
+
+  @@index([status, lastPolledAt])
+  @@index([profileId, resource, createdAt(sort: Desc)])
+  @@index([externalExportId])
 }
 
 // AD.1 — Snapshot of Amazon FBA Aged Inventory report (SP-API

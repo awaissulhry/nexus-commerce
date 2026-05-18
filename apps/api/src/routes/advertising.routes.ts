@@ -1099,6 +1099,79 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // bypassed via local LWA fetch).
   //
   // Body: { profileId: string }
+  // ── H.2: v1 unified Ads API export routes ───────────────────────────
+  //
+  // Manual triggers for the new v1 sync service. Once H.2d wires the
+  // cron registrations these will mostly be used for ad-hoc backfills
+  // and for the H.2c verification step against a single profile.
+
+  // POST /api/advertising/v1/export-cycle
+  // Body: { profileIds?: string[], resources?: V1Resource[], adProducts?: V1AdProduct[] }
+  fastify.post('/advertising/v1/export-cycle', async (request, _reply) => {
+    const body = request.body as {
+      profileIds?: string[]
+      resources?: Array<'campaigns' | 'adGroups' | 'targets' | 'ads'>
+      adProducts?: Array<'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY'>
+    } | undefined
+    const { runV1ExportCycle, summarizeCycle } = await import(
+      '../services/advertising/ads-v1-sync.service.js'
+    )
+    const result = await runV1ExportCycle({
+      profileIds: body?.profileIds,
+      resources: body?.resources,
+      adProducts: body?.adProducts,
+    })
+    return { ok: true, summary: summarizeCycle(result), ...result }
+  })
+
+  // POST /api/advertising/v1/exports/poll?limit=N
+  fastify.post('/advertising/v1/exports/poll', async (request, _reply) => {
+    const q = request.query as { limit?: string }
+    const limit = q.limit ? Math.max(1, Math.min(100, Number(q.limit))) : 20
+    const { pollPendingExports } = await import(
+      '../services/advertising/ads-v1-sync.service.js'
+    )
+    const summary = await pollPendingExports(limit)
+    return { ok: true, ...summary }
+  })
+
+  // POST /api/advertising/v1/exports/ingest-completed
+  // Ingests up to 10 COMPLETED jobs per call.
+  fastify.post('/advertising/v1/exports/ingest-completed', async (_request, _reply) => {
+    const { ingestCompletedExport } = await import(
+      '../services/advertising/ads-v1-sync.service.js'
+    )
+    const jobs = await prisma.amazonAdsExportJob.findMany({
+      where: { status: 'COMPLETED', url: { not: null } },
+      select: { id: true },
+      orderBy: { completedAt: 'asc' },
+      take: 10,
+    })
+    const results = await Promise.all(jobs.map((j) => ingestCompletedExport(j.id)))
+    return { ok: true, ingested: results.length, results }
+  })
+
+  // GET /api/advertising/v1/exports?status=...&resource=...&limit=N
+  fastify.get('/advertising/v1/exports', async (request, _reply) => {
+    const q = request.query as {
+      status?: string
+      resource?: string
+      profileId?: string
+      limit?: string
+    }
+    const limit = q.limit ? Math.max(1, Math.min(200, Number(q.limit))) : 50
+    const items = await prisma.amazonAdsExportJob.findMany({
+      where: {
+        ...(q.status ? { status: q.status } : {}),
+        ...(q.resource ? { resource: q.resource } : {}),
+        ...(q.profileId ? { profileId: q.profileId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    })
+    return { items, count: items.length }
+  })
+
   // POST /api/advertising/debug/reset-stuck-completed-jobs — Phase G follow-up
   //
   // Resets jobs that are status=COMPLETED but location=null (a data state
