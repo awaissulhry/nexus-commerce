@@ -1064,6 +1064,22 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // POST /api/advertising/profit/ingest-fba-fees — AD.4 Step 6
+  //
+  // Manual trigger for the FBA fees ingest. Accepts an optional
+  // marketplaceId and rollupWindowDays. The weekly cron runs Sunday 02:00.
+  fastify.post('/advertising/profit/ingest-fba-fees', async (request, reply) => {
+    const body = request.body as { marketplaceId?: string; rollupWindowDays?: number } | undefined
+    const { runFbaFeesIngest, summarizeFbaFeesIngest } = await import(
+      '../services/advertising/fba-fees-ingest.service.js'
+    )
+    const result = await runFbaFeesIngest({
+      marketplaceId: body?.marketplaceId,
+      rollupWindowDays: body?.rollupWindowDays ?? 30,
+    })
+    return { ok: true, summary: summarizeFbaFeesIngest(result), ...result }
+  })
+
   // POST /api/advertising/profit/backfill-ad-spend — Phase 11 close-out
   //
   // Manually triggers fillAdSpend for a date range. Use after the first

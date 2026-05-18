@@ -45,12 +45,17 @@ import {
   ingestCompletedJob,
   cleanupOldSearchTerms,
 } from '../services/advertising/ads-reports.service.js'
+import {
+  runFbaFeesIngest,
+  summarizeFbaFeesIngest,
+} from '../services/advertising/fba-fees-ingest.service.js'
 import prisma from '../db.js'
 
 let adsSyncTask: ReturnType<typeof cron.schedule> | null = null
 let fbaStorageAgeTask: ReturnType<typeof cron.schedule> | null = null
 let trueProfitRollupTask: ReturnType<typeof cron.schedule> | null = null
 let adsMetricsIngestTask: ReturnType<typeof cron.schedule> | null = null
+let fbaFeesIngestTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreateStTask: ReturnType<typeof cron.schedule> | null = null
 let reportCreatePlTask: ReturnType<typeof cron.schedule> | null = null
@@ -198,6 +203,26 @@ export function startAdsMetricsIngestCron(): void {
   logger.info('ads-metrics-ingest cron: scheduled', { schedule })
 }
 
+// ── AD.4 Step 6: FBA fees ingest cron ────────────────────────────────
+// Sunday 02:00 UTC weekly — fee estimates change slowly (size-tier
+// reclassifications happen at most monthly). Staggered 2h before the
+// search-term cleanup at 04:00 so both don't fire simultaneously.
+
+export async function runFbaFeesIngestCron(): Promise<void> {
+  await recordCronRun('fba-fees-ingest', async () => {
+    const r = await runFbaFeesIngest({ rollupWindowDays: 30 })
+    return summarizeFbaFeesIngest(r)
+  }).catch((err) => logger.error('fba-fees-ingest cron: failure', { error: String(err) }))
+}
+
+export function startFbaFeesIngestCron(): void {
+  if (fbaFeesIngestTask) { logger.warn('fba-fees-ingest already started'); return }
+  const schedule = process.env.NEXUS_FBA_FEES_SCHEDULE ?? '0 2 * * 0'
+  if (!cron.validate(schedule)) { logger.error('fba-fees-ingest: invalid schedule', { schedule }); return }
+  fbaFeesIngestTask = cron.schedule(schedule, () => { void runFbaFeesIngestCron() })
+  logger.info('fba-fees-ingest cron: scheduled', { schedule })
+}
+
 // ── Phase 11: Reports API pipeline crons ─────────────────────────────
 //
 // Three creation crons (staggered 15 min apart) and two processing crons.
@@ -327,6 +352,8 @@ export function startAllAdvertisingCrons(): void {
   startFbaStorageAgeIngestCron()
   startTrueProfitRollupCron()
   startAdsMetricsIngestCron()
+  // AD.4 Step 6: FBA fees
+  startFbaFeesIngestCron()
   // Phase 11: Reports API pipeline
   startReportCreateCron()
   startReportCreateStCron()
@@ -353,6 +380,7 @@ export function stopAllAdvertisingCrons(): void {
     adsMetricsIngestTask.stop()
     adsMetricsIngestTask = null
   }
+  if (fbaFeesIngestTask) { fbaFeesIngestTask.stop(); fbaFeesIngestTask = null }
   for (const [key, task] of [
     ['reportCreateTask',    reportCreateTask]    as const,
     ['reportCreateStTask',  reportCreateStTask]  as const,
