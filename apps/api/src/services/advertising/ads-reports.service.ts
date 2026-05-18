@@ -570,12 +570,23 @@ async function ingestSearchTermRows(
   }
 
   const inserts: Array<Parameters<typeof prisma.amazonAdsSearchTerm.create>[0]['data']> = []
+  // Backfill investigation: with groupBy=['searchTerm'] Amazon can
+  // return rows aggregated across multiple ad groups, in which case
+  // adGroupId is null. Previously we hard-skipped those rows — the
+  // spend was real, we just couldn't pin it to one ad-group. Store
+  // them with adGroupId='' so the query-level rollups still work;
+  // joins on real adGroupIds naturally exclude these aggregated rows.
+  let skipped = { noDate: 0, noCampaign: 0, noQuery: 0, badDate: 0, noQueryField: 0 }
   for (const r of rows) {
-    if (!r.date || r.campaignId == null || r.adGroupId == null) continue
-    const query = (r.searchTerm ?? '').toString().trim()
-    if (!query) continue
+    if (!r.date) { skipped.noDate += 1; continue }
+    if (r.campaignId == null) { skipped.noCampaign += 1; continue }
+    // searchTerm OR query — Amazon's v3 spSearchTerm response might
+    // use either field name. Check both before giving up.
+    const rawQuery = (r.searchTerm ?? (r as Record<string, unknown>).query ?? '')
+    const query = String(rawQuery).trim()
+    if (!query) { skipped.noQuery += 1; continue }
     const date = new Date(r.date)
-    if (Number.isNaN(date.getTime())) continue
+    if (Number.isNaN(date.getTime())) { skipped.badDate += 1; continue }
 
     // Per-adProduct attribution mapping (Phase G: SB v3 uses unsuffixed
     // sales/purchases instead of attributedSales14d).
@@ -594,7 +605,7 @@ async function ingestSearchTermRows(
       adProduct: job.adProduct,
       date,
       campaignId: toStrIdOrNull(r.campaignId) ?? '',
-      adGroupId: toStrIdOrNull(r.adGroupId) ?? '',
+      adGroupId: toStrIdOrNull(r.adGroupId) ?? '', // '' when aggregated across ad groups
       matchedKeywordId: toStrIdOrNull(r.keywordId),
       matchType: r.matchType ?? null,
       query,
@@ -608,7 +619,16 @@ async function ingestSearchTermRows(
     })
   }
 
-  if (inserts.length === 0) return 0
+  if (inserts.length === 0) {
+    // Log skip diagnostics so we can spot field-shape regressions.
+    // If rows came in but all got skipped, this tells us where.
+    logger.warn('[ads-reports] search-term ingest produced 0 rows', {
+      jobId: job.id, adProduct: job.adProduct,
+      rowsIn: rows.length, skipped,
+      sampleKeys: rows[0] ? Object.keys(rows[0]).slice(0, 15) : [],
+    })
+    return 0
+  }
   // createMany is faster than per-row create for high-cardinality
   // search-term data (potentially 1K+ rows per profile per day).
   const result = await prisma.amazonAdsSearchTerm.createMany({ data: inserts })
