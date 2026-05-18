@@ -1243,6 +1243,158 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { result }
   })
 
+  // GET /api/advertising/automation-rules/:id/gate-status — Phase 9
+  //
+  // Returns a structured 8-check checklist for graduating a rule from
+  // dryRun=true to dryRun=false. Each check has { id, label, detail, passed }.
+  // gateOpen=true only when ALL checks pass. Callers render this as a
+  // progress checklist; the graduate endpoint re-validates server-side.
+  //
+  // OBSERVATION_WINDOW uses rule.createdAt as a conservative proxy for
+  // "how long has this rule been deployed". We require 14 full days.
+  fastify.get('/advertising/automation-rules/:id/gate-status', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const rule = await prisma.automationRule.findUnique({
+      where: { id },
+      select: {
+        id: true, domain: true, enabled: true, dryRun: true,
+        createdAt: true, evaluationCount: true, matchCount: true,
+        executionCount: true,
+      },
+    })
+    if (!rule || rule.domain !== 'advertising') return reply.code(404).send({ error: 'not_found' })
+
+    const conn = await prisma.amazonAdsConnection.findFirst({
+      where: { isActive: true },
+      select: { mode: true, writesEnabledAt: true },
+    })
+
+    const daysInDryRun = Math.floor(
+      (Date.now() - rule.createdAt.getTime()) / (1000 * 60 * 60 * 24),
+    )
+    const OBSERVATION_DAYS = 14
+    const liveMode = (process.env.NEXUS_AMAZON_ADS_MODE ?? 'sandbox') === 'live'
+
+    const checks = [
+      {
+        id: 'RULE_ENABLED',
+        label: 'Rule is enabled',
+        detail: rule.enabled ? 'Enabled' : 'Rule must be enabled (toggle it on first)',
+        passed: rule.enabled,
+      },
+      {
+        id: 'RULE_DRY_RUN',
+        label: 'Rule is in dry-run mode',
+        detail: rule.dryRun ? 'Currently dry-run (safe to graduate)' : 'Already live — nothing to graduate',
+        passed: rule.dryRun,
+      },
+      {
+        id: 'OBSERVATION_WINDOW',
+        label: `${OBSERVATION_DAYS}-day observation period`,
+        detail: daysInDryRun >= OBSERVATION_DAYS
+          ? `${daysInDryRun} days since rule created — window complete`
+          : `${daysInDryRun}/${OBSERVATION_DAYS} days — ${OBSERVATION_DAYS - daysInDryRun} days remaining`,
+        passed: daysInDryRun >= OBSERVATION_DAYS,
+      },
+      {
+        id: 'HAS_EVALUATIONS',
+        label: 'Rule has evaluation history',
+        detail: rule.evaluationCount >= 10
+          ? `${rule.evaluationCount} evaluations recorded`
+          : `${rule.evaluationCount} evaluations — need at least 10 to prove the rule has run`,
+        passed: rule.evaluationCount >= 10,
+      },
+      {
+        id: 'HAS_MATCHES',
+        label: 'Rule has matched at least once',
+        detail: rule.matchCount > 0
+          ? `${rule.matchCount} matches — rule has found real candidates`
+          : 'Zero matches — rule may not be triggering correctly (check conditions)',
+        passed: rule.matchCount > 0,
+      },
+      {
+        id: 'CONNECTION_PRODUCTION',
+        label: 'Ads connection in production mode',
+        detail: conn?.mode === 'production'
+          ? 'AmazonAdsConnection.mode = production'
+          : `AmazonAdsConnection.mode = ${conn?.mode ?? 'none'} (must be production)`,
+        passed: conn?.mode === 'production',
+      },
+      {
+        id: 'WRITES_ENABLED',
+        label: 'Live writes explicitly enabled',
+        detail: conn?.writesEnabledAt != null
+          ? `Writes enabled at ${conn.writesEnabledAt.toISOString()}`
+          : 'Run /advertising/connection/preview-writes + /enable-writes first',
+        passed: conn?.writesEnabledAt != null,
+      },
+      {
+        id: 'LIVE_MODE_ENV',
+        label: 'NEXUS_AMAZON_ADS_MODE=live deployed',
+        detail: liveMode
+          ? 'Environment variable confirmed'
+          : 'Set NEXUS_AMAZON_ADS_MODE=live on Railway and redeploy',
+        passed: liveMode,
+      },
+    ]
+
+    const gateOpen = checks.every((c) => c.passed)
+    return { gateOpen, daysInDryRun, observationDaysRequired: OBSERVATION_DAYS, checks }
+  })
+
+  // POST /api/advertising/automation-rules/:id/graduate — Phase 9
+  //
+  // Flips dryRun=false after re-running all 8 gate checks server-side.
+  // Returns 409 with structured failures if any check hasn't passed.
+  // The operator is responsible for monitoring the first live executions.
+  fastify.post('/advertising/automation-rules/:id/graduate', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const rule = await prisma.automationRule.findUnique({
+      where: { id },
+      select: {
+        id: true, domain: true, name: true, enabled: true, dryRun: true,
+        createdAt: true, evaluationCount: true, matchCount: true,
+      },
+    })
+    if (!rule || rule.domain !== 'advertising') return reply.code(404).send({ error: 'not_found' })
+
+    // Re-validate gate server-side — never trust the client's gate result
+    const conn = await prisma.amazonAdsConnection.findFirst({
+      where: { isActive: true },
+      select: { profileId: true, mode: true, writesEnabledAt: true },
+    })
+    const daysInDryRun = Math.floor((Date.now() - rule.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+    const liveMode = (process.env.NEXUS_AMAZON_ADS_MODE ?? 'sandbox') === 'live'
+
+    const failures: string[] = []
+    if (!rule.enabled)            failures.push('RULE_ENABLED')
+    if (!rule.dryRun)             failures.push('RULE_DRY_RUN')
+    if (daysInDryRun < 14)        failures.push(`OBSERVATION_WINDOW (${daysInDryRun}/14 days)`)
+    if (rule.evaluationCount < 10) failures.push(`HAS_EVALUATIONS (${rule.evaluationCount}/10)`)
+    if (rule.matchCount < 1)      failures.push('HAS_MATCHES')
+    if (conn?.mode !== 'production') failures.push('CONNECTION_PRODUCTION')
+    if (!conn?.writesEnabledAt)   failures.push('WRITES_ENABLED')
+    if (!liveMode)                failures.push('LIVE_MODE_ENV')
+
+    if (failures.length > 0) {
+      return reply.code(409).send({
+        error: 'gate_not_open',
+        failures,
+        message: 'Not all gate checks passed — resolve the listed items first',
+      })
+    }
+
+    const updated = await prisma.automationRule.update({
+      where: { id },
+      data: { dryRun: false },
+      select: { id: true, name: true, dryRun: true, enabled: true },
+    })
+    logger.info('[ADS-GRADUATE] rule graduated to live', {
+      ruleId: id, ruleName: rule.name, profileId: conn?.profileId,
+    })
+    return { ok: true, rule: updated, graduatedAt: new Date().toISOString() }
+  })
+
   fastify.post('/advertising/automation-rules/seed-templates', async (_request, _reply) => {
     const result = await seedAdvertisingTemplates()
     return { ok: true, ...result }

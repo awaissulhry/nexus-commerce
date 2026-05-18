@@ -13,6 +13,7 @@ import { ChevronLeft } from 'lucide-react'
 import { AdvertisingNav } from '../../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
 import { RuleToggleClient } from './RuleToggleClient'
+import { GateStatusClient } from './GateStatusClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -163,6 +164,16 @@ export default async function AutomationRuleDetailPage({
           />
         </div>
       </section>
+
+      {/* Phase 9 — live-write graduation gate (shown only for dry-run rules) */}
+      {rule.dryRun && (
+        <section className="mb-6">
+          <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            Graduate to live writes
+          </h2>
+          <GateStatusClient ruleId={rule.id} backendUrl={getBackendUrl()} />
+        </section>
+      )}
 
       <section>
         <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
