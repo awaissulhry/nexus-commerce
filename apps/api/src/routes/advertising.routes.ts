@@ -1154,6 +1154,76 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/advertising/debug/export-status — Phase H.1 v1 chained probe
+  //
+  // Once a probe created an export (e.g. exports_v1_campaigns_sp returned
+  // 202 with an exportId in its responseSnippet), pass the exportId +
+  // profileId here to:
+  //   1. Poll Amazon's GET /exports/{exportId} once and surface the
+  //      raw response (so we can see the v1 status payload shape —
+  //      this is what H.2's service will key on)
+  //   2. If COMPLETED, attempt to download the signed URL (first 1KB)
+  //      so we can confirm the file format (JSON / NDJSON / GZIP)
+  //
+  // No DB writes. Manual-trigger only. Use with the exportIds harvested
+  // from the H.1 probe results.
+  fastify.get('/advertising/debug/export-status', async (request, reply) => {
+    const q = request.query as { profileId?: string; exportId?: string }
+    if (!q.profileId || !q.exportId) {
+      return reply.code(400).send({ error: 'profileId and exportId both required' })
+    }
+    const conn = await prisma.amazonAdsConnection.findUnique({
+      where: { profileId: q.profileId },
+      select: { region: true, credentialsEncrypted: true },
+    })
+    if (!conn?.credentialsEncrypted) return reply.code(404).send({ error: 'connection_not_found' })
+    const region = (conn.region === 'NA' || conn.region === 'FE') ? conn.region : 'EU'
+
+    const { liveCall } = await import('../services/advertising/ads-api-client.js')
+    let statusResp: Record<string, unknown> | null = null
+    let statusError: string | null = null
+    try {
+      statusResp = await liveCall<Record<string, unknown>>({
+        profileId: q.profileId,
+        region: region as 'EU' | 'NA' | 'FE',
+        method: 'GET',
+        path: `/exports/${q.exportId}`,
+        acceptHeader: 'application/vnd.export.v1+json',
+      })
+    } catch (err) {
+      statusError = err instanceof Error ? err.message : String(err)
+    }
+
+    // If Amazon returned a signed URL, fetch first 1KB to inspect format
+    let downloadPreview: { contentType: string; bytesPreview: string; truncated: boolean } | null = null
+    let downloadError: string | null = null
+    const url = statusResp?.url as string | undefined
+    if (url) {
+      try {
+        const res = await fetch(url)
+        const contentType = res.headers.get('content-type') ?? ''
+        const buf = await res.arrayBuffer()
+        const truncated = buf.byteLength > 1024
+        const bytes = new Uint8Array(buf.slice(0, 1024))
+        // Try to render as UTF-8 first; if it's gzip the first bytes
+        // will be 1f 8b and the string will be garbage — useful signal.
+        const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+        downloadPreview = { contentType, bytesPreview: text, truncated }
+      } catch (err) {
+        downloadError = err instanceof Error ? err.message : String(err)
+      }
+    }
+
+    return {
+      profileId: q.profileId,
+      exportId: q.exportId,
+      amazonStatus: statusResp,
+      statusError,
+      downloadPreview,
+      downloadError,
+    }
+  })
+
   fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
     const body = request.body as { profileId?: string }
     if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })

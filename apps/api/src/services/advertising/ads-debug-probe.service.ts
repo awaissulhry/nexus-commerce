@@ -169,6 +169,71 @@ const PROBE_VARIANTS: ProbeVariant[] = [
     contentTypeHeader: 'application/vnd.targetsexport.v1+json',
     body: { adProductFilter: ['SPONSORED_PRODUCTS'] },
   },
+
+  // ── H.1: Amazon Ads API v1 unified discovery ──────────────────────
+  // The probes above test single-adProduct calls. The new unified v1
+  // model uses adProductFilter arrays to scope across SP/SB/SD/STV/DSP
+  // in a single request. The following probes verify the unified
+  // multi-product call shape, plus expansion endpoints we haven't
+  // touched (ads, negativeTargets, portfolios) that are part of the
+  // v1 surface.
+
+  {
+    id: 'v1_campaigns_export_multi',
+    description: 'POST /campaigns/export with [SP, SB, SD] in a single call (true v1 unified)',
+    method: 'POST', path: '/campaigns/export',
+    acceptHeader: 'application/vnd.campaignsexport.v1+json',
+    contentTypeHeader: 'application/vnd.campaignsexport.v1+json',
+    body: { adProductFilter: ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS', 'SPONSORED_DISPLAY'] },
+  },
+  {
+    id: 'v1_adgroups_export_multi',
+    description: 'POST /adGroups/export with [SP, SB, SD] (v1 unified ad-group level)',
+    method: 'POST', path: '/adGroups/export',
+    acceptHeader: 'application/vnd.adgroupsexport.v1+json',
+    contentTypeHeader: 'application/vnd.adgroupsexport.v1+json',
+    body: { adProductFilter: ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS', 'SPONSORED_DISPLAY'] },
+  },
+  {
+    id: 'v1_targets_export_multi',
+    description: 'POST /targets/export with [SP, SB] (v1 unified targets — SD has no targets)',
+    method: 'POST', path: '/targets/export',
+    acceptHeader: 'application/vnd.targetsexport.v1+json',
+    contentTypeHeader: 'application/vnd.targetsexport.v1+json',
+    body: { adProductFilter: ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS'] },
+  },
+  {
+    id: 'v1_ads_export_sp',
+    description: 'POST /ads/export (v1 ad-level for SP product-ad ASINs)',
+    method: 'POST', path: '/ads/export',
+    acceptHeader: 'application/vnd.adsexport.v1+json',
+    contentTypeHeader: 'application/vnd.adsexport.v1+json',
+    body: { adProductFilter: ['SPONSORED_PRODUCTS'] },
+  },
+  {
+    id: 'v1_ads_export_sb',
+    description: 'POST /ads/export (v1 ad-level for SB creatives — headlines, brand logo)',
+    method: 'POST', path: '/ads/export',
+    acceptHeader: 'application/vnd.adsexport.v1+json',
+    contentTypeHeader: 'application/vnd.adsexport.v1+json',
+    body: { adProductFilter: ['SPONSORED_BRANDS'] },
+  },
+  {
+    id: 'v1_negative_targets_export',
+    description: 'POST /negativeTargets/export (v1 negative kw/target — closes Insights loop)',
+    method: 'POST', path: '/negativeTargets/export',
+    acceptHeader: 'application/vnd.negativetargetsexport.v1+json',
+    contentTypeHeader: 'application/vnd.negativetargetsexport.v1+json',
+    body: { adProductFilter: ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS'] },
+  },
+  {
+    id: 'v1_portfolios_export',
+    description: 'POST /portfolios/export (v1 portfolios — budget grouping)',
+    method: 'POST', path: '/portfolios/export',
+    acceptHeader: 'application/vnd.portfoliosexport.v1+json',
+    contentTypeHeader: 'application/vnd.portfoliosexport.v1+json',
+    body: {},
+  },
 ]
 
 // ── Probe executor ───────────────────────────────────────────────────
@@ -217,7 +282,7 @@ async function runProbe(
     status = res.status
     res.headers.forEach((v, k) => { responseHeaders[k] = v })
     const text = await res.text()
-    snippet = text.slice(0, 400)
+    snippet = text.slice(0, 1200)
   } catch (err) {
     snippet = `[network error] ${err instanceof Error ? err.message : String(err)}`
   }
