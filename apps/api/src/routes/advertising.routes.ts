@@ -1656,44 +1656,79 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     since.setUTCDate(since.getUTCDate() - lookbackDays)
     since.setUTCHours(0, 0, 0, 0)
 
-    // Build dynamic having clause based on hasOrders filter
-    const having: Record<string, unknown> = {}
-    if (minSpend > 0) having.costMicros = { _sum: { gte: minMicros } }
-    if (minImpressions > 0) having.impressions = { _sum: { gte: minImpressions } }
-    if (query.hasOrders === 'none') {
-      having.orders7d = { _sum: { equals: 0 } }
-    } else if (query.hasOrders === 'some') {
-      having.orders7d = { _sum: { gt: 0 } }
-    }
+    // Having + sortBy filters are applied in JS after the in-memory
+    // groupBy below. The Prisma SQL groupBy on this table panics
+    // (engine bug); JS aggregation is the workaround.
 
     const sortField = query.sortBy === 'clicks' ? 'clicks'
       : query.sortBy === 'orders' ? 'orders7d'
       : query.sortBy === 'impressions' ? 'impressions'
       : 'costMicros'
 
-    // Workaround for Prisma Rust engine panic when orderBy uses _sum on
-    // a BigInt aggregate (costMicros). Drop the SQL orderBy + limit and
-    // sort/slice in JS — same end result, no engine panic. Apply
-    // having-emulated filtering in JS too if it would otherwise force
-    // Prisma to compile a sort that panics. The dataset is bounded
-    // (max ~50K rows for our 9-profile setup) so in-memory is fine.
-    const allRows = await prisma.amazonAdsSearchTerm.groupBy({
-      by: ['query', 'matchType', 'campaignId', 'adGroupId', 'marketplace', 'adProduct', 'currencyCode'],
+    // Workaround Prisma 6.19.3 Rust engine panic: the groupBy with 7
+    // by-columns + 5 _sum aggregates (including BigInt costMicros) +
+    // having clause crashes with 'internal error: entered unreachable
+    // code'. Drop the groupBy entirely and aggregate in JS — bounded
+    // dataset (~50K rows max) so in-memory grouping is fine.
+    const rawRows = await prisma.amazonAdsSearchTerm.findMany({
       where: {
         date: { gte: since },
         ...(query.profileId ? { profileId: query.profileId } : {}),
         ...(query.marketplace ? { marketplace: query.marketplace } : {}),
         ...(query.adProduct ? { adProduct: query.adProduct } : {}),
       },
-      _sum: {
-        impressions: true,
-        clicks: true,
-        costMicros: true,
-        orders7d: true,
-        sales7dCents: true,
+      select: {
+        query: true, matchType: true, campaignId: true, adGroupId: true,
+        marketplace: true, adProduct: true, currencyCode: true,
+        impressions: true, clicks: true, costMicros: true,
+        orders7d: true, sales7dCents: true,
       },
-      having,
+      take: 10_000,
     })
+
+    // Group in JS by (query|matchType|campaignId|adGroupId|marketplace|adProduct|currencyCode)
+    type Bucket = {
+      query: string; matchType: string | null
+      campaignId: string; adGroupId: string
+      marketplace: string; adProduct: string; currencyCode: string
+      _sum: {
+        impressions: number; clicks: number
+        costMicros: bigint
+        orders7d: number; sales7dCents: number
+      }
+    }
+    const buckets = new Map<string, Bucket>()
+    for (const r of rawRows) {
+      const k = `${r.query} ${r.matchType ?? ''} ${r.campaignId} ${r.adGroupId} ${r.marketplace} ${r.adProduct} ${r.currencyCode}`
+      let b = buckets.get(k)
+      if (!b) {
+        b = {
+          query: r.query, matchType: r.matchType,
+          campaignId: r.campaignId, adGroupId: r.adGroupId,
+          marketplace: r.marketplace, adProduct: r.adProduct, currencyCode: r.currencyCode,
+          _sum: { impressions: 0, clicks: 0, costMicros: 0n, orders7d: 0, sales7dCents: 0 },
+        }
+        buckets.set(k, b)
+      }
+      b._sum.impressions  += r.impressions
+      b._sum.clicks       += r.clicks
+      b._sum.costMicros   += r.costMicros
+      b._sum.orders7d     += r.orders7d ?? 0
+      b._sum.sales7dCents += r.sales7dCents ?? 0
+    }
+    // Apply having-style filters in JS
+    let allRows = [...buckets.values()]
+    if (minSpend > 0) {
+      allRows = allRows.filter((b) => b._sum.costMicros >= minMicros)
+    }
+    if (minImpressions > 0) {
+      allRows = allRows.filter((b) => b._sum.impressions >= minImpressions)
+    }
+    if (query.hasOrders === 'none') {
+      allRows = allRows.filter((b) => b._sum.orders7d === 0)
+    } else if (query.hasOrders === 'some') {
+      allRows = allRows.filter((b) => b._sum.orders7d > 0)
+    }
 
     // JS-side sort + take to dodge the engine bug.
     const sorted = [...allRows].sort((a, b) => {
