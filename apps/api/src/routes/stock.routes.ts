@@ -115,6 +115,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       // mirrors the variant-level product structure shown in /products.
       const where: any = { product: { isParent: false } }
 
+      // locationType — 'AMAZON_FBA' | 'WAREHOUSE' | ... — filters by
+      // location.type. Powers the FBA / Own warehouse tab strip.
+      if (q.locationType) {
+        where.location = { type: q.locationType }
+      }
+
       if (q.locationCode) {
         const loc = await prisma.stockLocation.findUnique({
           where: { code: q.locationCode },
@@ -133,7 +139,11 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (q.search?.trim()) {
         const s = q.search.trim()
+        // Merge with the existing product filter (isParent: false must
+        // survive the search condition — overwriting where.product would
+        // drop the isParent guard and let parent rows leak back in).
         where.product = {
+          ...where.product,
           OR: [
             { sku: { contains: s, mode: 'insensitive' } },
             { name: { contains: s, mode: 'insensitive' } },

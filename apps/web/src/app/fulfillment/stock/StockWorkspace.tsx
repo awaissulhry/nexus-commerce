@@ -520,6 +520,8 @@ export default function StockWorkspace() {
 
   const view = (searchParams.get('view') as ViewMode) ?? 'table'
   const locationCode = searchParams.get('location') ?? ''
+  // 'FBA' → AMAZON_FBA locations only · 'OWN' → WAREHOUSE only · '' → all
+  const fulfillmentType = (searchParams.get('fulfillment') ?? '') as '' | 'FBA' | 'OWN'
   const status = searchParams.get('status') ?? ''
   const search = searchParams.get('search') ?? ''
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
@@ -647,6 +649,9 @@ export default function StockWorkspace() {
       // locationCode only applies to table (filters per-StockLevel rows).
       // Matrix shows all locations as columns; cards show all in badges.
       if (view === 'table' && locationCode) qs.set('locationCode', locationCode)
+      if (view === 'table' && fulfillmentType) {
+        qs.set('locationType', fulfillmentType === 'FBA' ? 'AMAZON_FBA' : 'WAREHOUSE')
+      }
       const endpoint = view === 'table' ? '/api/stock' : '/api/stock/by-product'
       const res = await fetch(`${getBackendUrl()}${endpoint}?${qs.toString()}`, { cache: 'no-store' })
       if (!res.ok) {
@@ -667,7 +672,7 @@ export default function StockWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [view, locationCode, status, search, page])
+  }, [view, locationCode, fulfillmentType, status, search, page])
 
   const fetchSidecar = useCallback(async () => {
     try {
@@ -738,8 +743,8 @@ export default function StockWorkspace() {
   )
 
   const filterCount = useMemo(
-    () => [locationCode, status, search].filter(Boolean).length,
-    [locationCode, status, search],
+    () => [locationCode, fulfillmentType, status, search].filter(Boolean).length,
+    [locationCode, fulfillmentType, status, search],
   )
 
   // Clear selection when the data set changes underneath us. Otherwise
@@ -747,7 +752,7 @@ export default function StockWorkspace() {
   useEffect(() => {
     setSelected(new Set())
     setLastSelectedIdx(null)
-  }, [view, locationCode, status, search, page])
+  }, [view, locationCode, fulfillmentType, status, search, page])
 
   // Keyboard shortcuts. Skipped when focus is in an input/textarea/select
   // (so typing isn't hijacked) unless the key is Escape.
@@ -1303,33 +1308,62 @@ export default function StockWorkspace() {
       {/* Filter bar */}
       <Card>
         <div className="space-y-3">
-          {/* Location chips */}
+          {/* Fulfillment type tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">Fulfillment</span>
+            {([
+              { key: '' as const,    label: 'All',           tone: '' },
+              { key: 'FBA' as const, label: 'FBA',           tone: 'text-orange-700 dark:text-orange-400' },
+              { key: 'OWN' as const, label: 'Own warehouse', tone: 'text-emerald-700 dark:text-emerald-400' },
+            ] satisfies Array<{ key: ''|'FBA'|'OWN'; label: string; tone: string }>).map(({ key, label, tone }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => updateUrl({ fulfillment: key || undefined, location: undefined, page: undefined })}
+                className={cn(
+                  'h-11 sm:h-7 px-3 text-sm rounded-full font-medium border transition-colors',
+                  fulfillmentType === key
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : `bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 ${tone || 'text-slate-600 dark:text-slate-300'}`,
+                )}
+              >{label}</button>
+            ))}
+          </div>
+
+          {/* Location chips — scoped to the active fulfillment type */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
             <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">{t('stock.filters.location')}</span>
             <button
               onClick={() => updateUrl({ location: undefined, page: undefined })}
               className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border ${
                 !locationCode
                   ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
               }`}
             >{t('stock.filters.locationAll')}</button>
-            {locations.map((loc) => (
-              <button
-                key={loc.id}
-                onClick={() => updateUrl({ location: loc.code, page: undefined })}
-                className={`h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5 ${
-                  locationCode === loc.code
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : `bg-white dark:bg-slate-900 text-slate-600 border-slate-200 dark:border-slate-700 hover:border-slate-300`
-                }`}
-              >
-                {loc.code}
-                <span className={`text-xs tabular-nums ${locationCode === loc.code ? 'text-slate-300' : 'text-slate-400'}`}>
-                  {loc.totalQuantity}
-                </span>
-              </button>
-            ))}
+            {locations
+              .filter((loc) =>
+                fulfillmentType === 'FBA' ? loc.type === 'AMAZON_FBA' :
+                fulfillmentType === 'OWN' ? loc.type === 'WAREHOUSE' :
+                true
+              )
+              .map((loc) => (
+                <button
+                  key={loc.id}
+                  onClick={() => updateUrl({ location: loc.code, page: undefined })}
+                  className={cn(
+                    'h-11 sm:h-7 px-3 text-sm rounded-full font-medium border inline-flex items-center gap-1.5',
+                    locationCode === loc.code
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  )}
+                >
+                  {loc.code}
+                  <span className={`text-xs tabular-nums ${locationCode === loc.code ? 'text-slate-300' : 'text-slate-400'}`}>
+                    {loc.totalQuantity}
+                  </span>
+                </button>
+              ))}
           </div>
 
           {/* Search + status chips */}
@@ -1364,7 +1398,7 @@ export default function StockWorkspace() {
             })}
             {filterCount > 0 && (
               <button
-                onClick={() => updateUrl({ location: undefined, status: undefined, search: undefined, page: undefined })}
+                onClick={() => updateUrl({ fulfillment: undefined, location: undefined, status: undefined, search: undefined, page: undefined })}
                 className="h-11 sm:h-7 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-slate-100 inline-flex items-center gap-1"
               >
                 <X size={12} /> {t('stock.filters.clear')}
