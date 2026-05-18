@@ -9,6 +9,9 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
+import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -98,11 +101,26 @@ const ALL_COLUMNS: Array<{ key: ColumnKey; label: string; alwaysOn?: boolean }> 
   { key: 'updated',   label: 'Updated' },
 ]
 const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['thumb', 'product', 'location', 'onHand', 'reserved', 'available', 'threshold', 'cost', 'updated']
-const DENSITY_PADDING: Record<Density, string> = {
-  compact:     'py-1',
-  comfortable: 'py-2',
-  spacious:    'py-3',
-}
+
+// S.4 — GridLens column definitions for the table view.
+const STOCK_COLUMNS: GridLensColumn[] = [
+  { key: 'thumb',     label: '',           width: 60,  locked: true },
+  { key: 'product',   label: 'Product',    subLabel: 'SKU · ASIN',    width: 300, locked: true },
+  { key: 'location',  label: 'Location',   subLabel: 'Code',          width: 110 },
+  { key: 'onHand',    label: 'On Hand',    subLabel: 'Quantity',      width: 90  },
+  { key: 'reserved',  label: 'Reserved',   subLabel: 'Held',          width: 90  },
+  { key: 'available', label: 'Available',  subLabel: 'Free stock',    width: 90  },
+  { key: 'threshold', label: 'Threshold',  subLabel: 'ROP · +EOQ',    width: 110 },
+  { key: 'cost',      label: 'Cost',       subLabel: '€ unit cost',   width: 90  },
+  { key: 'updated',   label: 'Updated',    subLabel: 'Last movement', width: 120 },
+]
+type StockGridRow = StockRow & GridLensRow
+
+// Stable empties for unused VirtualizedGrid props in table mode.
+const _GRID_EMPTY_SET = new Set<string>()
+const _GRID_EMPTY_MAP = {}
+const _GRID_NOOP = () => {}
+
 
 type SyncStatus = {
   amazonFbaCron: {
@@ -505,11 +523,8 @@ export default function StockWorkspace() {
   // doesn't crash on a missing window.
   const [density, setDensity] = useState<Density>('comfortable')
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMNS)
-  // CR.1 — per-column widths in pixels, keyed by ColumnKey. Persists in
-  // localStorage so a resize survives reload. Auto when missing — the
-  // table is `w-full`, so an absent width falls back to the browser's
-  // natural sizing rather than collapsing the column.
-  const [columnWidths, setColumnWidths] = useState<Partial<Record<ColumnKey, number>>>({})
+  // S.4 — column widths now managed by VirtualizedGrid via storageKey='stock'.
+  // The bespoke columnWidths state + ResizeHandle are removed.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   useEffect(() => {
     try {
@@ -522,26 +537,7 @@ export default function StockWorkspace() {
           setVisibleColumns(parsed)
         }
       }
-      const w = localStorage.getItem('stock.columnWidths')
-      if (w) {
-        const parsed = JSON.parse(w) as Record<string, number>
-        if (parsed && typeof parsed === 'object') {
-          // Filter to known column keys + numeric widths so a stale or
-          // tampered storage row doesn't propagate garbage into render.
-          const valid: Partial<Record<ColumnKey, number>> = {}
-          for (const [k, v] of Object.entries(parsed)) {
-            if (
-              ALL_COLUMNS.some((col) => col.key === k) &&
-              typeof v === 'number' &&
-              v >= 40 &&
-              v <= 800
-            ) {
-              valid[k as ColumnKey] = v
-            }
-          }
-          setColumnWidths(valid)
-        }
-      }
+      // stock.columnWidths now managed by VirtualizedGrid (storageKey='stock').
     } catch { /* ignore */ }
   }, [])
   useEffect(() => {
@@ -550,11 +546,6 @@ export default function StockWorkspace() {
   useEffect(() => {
     try { localStorage.setItem('stock.columns', JSON.stringify(visibleColumns)) } catch { /* ignore */ }
   }, [visibleColumns])
-  useEffect(() => {
-    try {
-      localStorage.setItem('stock.columnWidths', JSON.stringify(columnWidths))
-    } catch { /* ignore */ }
-  }, [columnWidths])
   // S.18 — saved views. Hydrate from localStorage on mount; the
   // operator's current filter/view/columns capture into a named view
   // they can restore in one click. No schema change; one operator per
@@ -784,11 +775,13 @@ export default function StockWorkspace() {
     return () => clearInterval(id)
   }, [undoBundle])
 
-  // Selection helpers — table-view only, shift-click range, cmd-click toggle.
-  const toggleSelect = useCallback((id: string, idx: number, ev: React.MouseEvent) => {
+  // Selection helpers — table-view only, shift-click range, toggle.
+  // S.4 — signature adapted to VirtualizedGrid's (id, shiftKey) interface.
+  const toggleSelect = useCallback((id: string, shiftKey: boolean) => {
+    const idx = items.findIndex((it) => it.id === id)
     setSelected((prev) => {
       const next = new Set(prev)
-      if (ev.shiftKey && lastSelectedIdx != null) {
+      if (shiftKey && lastSelectedIdx != null && idx >= 0) {
         const [lo, hi] = idx < lastSelectedIdx ? [idx, lastSelectedIdx] : [lastSelectedIdx, idx]
         for (let i = lo; i <= hi; i++) {
           const sl = items[i]
@@ -800,7 +793,7 @@ export default function StockWorkspace() {
       }
       return next
     })
-    setLastSelectedIdx(idx)
+    if (idx >= 0) setLastSelectedIdx(idx)
   }, [items, lastSelectedIdx])
 
   const toggleSelectAll = useCallback(() => {
@@ -810,6 +803,29 @@ export default function StockWorkspace() {
     })
     setLastSelectedIdx(null)
   }, [items])
+
+  // S.4 — GridLens computed values for the table view.
+  const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
+  const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
+  const visible = useMemo(
+    () => STOCK_COLUMNS.filter((c) => visibleColumns.includes(c.key as ColumnKey)),
+    [visibleColumns],
+  )
+  const gridRows = useMemo(
+    (): StockGridRow[] => items.map((it) => ({ ...it, isParent: false as const, childCount: 0, parentId: null })),
+    [items],
+  )
+  const renderCell = useCallback((row: StockGridRow, colKey: string) => {
+    const threshold = row.reorderThreshold ?? row.product.lowStockThreshold
+    const stockTone =
+      row.quantity === 0 ? 'text-rose-600' :
+      row.quantity <= 5 ? 'text-orange-600' :
+      row.quantity <= threshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
+    const meta = COLUMN_META[colKey as ColumnKey]
+    if (!meta) return null
+    const ctx: ColumnRenderCtx = { it: row, padY: '', density, threshold, stockTone, t }
+    return meta.cell(ctx)
+  }, [density, t])
 
   // Bulk operation runners — sequential calls with progress reporting.
   // Sequential is intentional: 50 parallel PATCHes would let the cron
@@ -1189,24 +1205,27 @@ export default function StockWorkspace() {
           return <CardsView products={productBundles} locations={locations} onOpenProduct={setDrawerProductId} />
         }
         return (
-          <TableView
-            items={items}
-            onOpenProduct={setDrawerProductId}
-            selected={selected}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAll={toggleSelectAll}
+          <VirtualizedGrid
+            rows={gridRows}
+            visible={visible}
             density={density}
-            visibleColumns={visibleColumns}
-            columnWidths={columnWidths}
-            onColumnWidthChange={(key, width) =>
-              setColumnWidths((prev) => ({ ...prev, [key]: width }))
-            }
-            onColumnWidthReset={(key) =>
-              setColumnWidths((prev) => {
-                const { [key]: _omit, ...rest } = prev
-                return rest
-              })
-            }
+            cellPad={cellPad}
+            selected={selected}
+            toggleSelect={toggleSelect}
+            toggleSelectAll={toggleSelectAll}
+            allSelected={allSelected}
+            sortBy=""
+            onSort={_GRID_NOOP as any}
+            expandedParents={_GRID_EMPTY_SET}
+            childrenByParent={_GRID_EMPTY_MAP}
+            loadingChildren={_GRID_EMPTY_SET}
+            onToggleExpand={_GRID_NOOP}
+            focusedRowId={null}
+            searchTerm={search}
+            riskFlaggedSkus={_GRID_EMPTY_SET}
+            storageKey="stock"
+            showExpandColumn={false}
+            renderCell={renderCell}
           />
         )
       })()}
@@ -3294,178 +3313,6 @@ const COLUMN_META: Record<ColumnKey, {
       </span>
     ),
   },
-}
-
-// CR.1 — column resize handle on each thead <th>. mousedown captures
-// the starting clientX + width, mousemove drags, mouseup commits.
-// Width is clamped to [40, 800] px (matches the localStorage hydrate
-// validator). Double-click clears the override so the column returns
-// to auto sizing. Pointer-events:none on the handle's parent <th>
-// hover so the column header text doesn't fight for the click.
-function ResizeHandle({
-  currentWidth,
-  onResize,
-  onReset,
-}: {
-  currentWidth: number | undefined
-  onResize: (width: number) => void
-  onReset: () => void
-}) {
-  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const startX = e.clientX
-    // Use the parent <th> width as the baseline — covers both the
-    // explicit currentWidth case and the auto-sizing initial case.
-    const th = (e.currentTarget.parentElement as HTMLElement | null) ?? null
-    const startWidth =
-      typeof currentWidth === 'number'
-        ? currentWidth
-        : th?.getBoundingClientRect().width ?? 120
-    const onMove = (ev: MouseEvent) => {
-      const next = Math.max(40, Math.min(800, startWidth + (ev.clientX - startX)))
-      onResize(next)
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize column"
-      onMouseDown={onMouseDown}
-      onDoubleClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        onReset()
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none opacity-0 group-hover:opacity-100 hover:bg-blue-400/60 dark:hover:bg-blue-500/60 transition-opacity"
-      title="Drag to resize · double-click to reset"
-    />
-  )
-}
-
-function TableView({
-  items, onOpenProduct, selected, onToggleSelect, onToggleSelectAll,
-  density, visibleColumns, columnWidths, onColumnWidthChange, onColumnWidthReset,
-}: {
-  items: StockRow[]
-  onOpenProduct: (id: string) => void
-  selected: Set<string>
-  onToggleSelect: (id: string, idx: number, ev: React.MouseEvent) => void
-  onToggleSelectAll: () => void
-  density: Density
-  visibleColumns: ColumnKey[]
-  columnWidths: Partial<Record<ColumnKey, number>>
-  onColumnWidthChange: (key: ColumnKey, width: number) => void
-  onColumnWidthReset: (key: ColumnKey) => void
-}) {
-  const { t } = useTranslations()
-  const allSelected = items.length > 0 && items.every((it) => selected.has(it.id))
-  const someSelected = !allSelected && items.some((it) => selected.has(it.id))
-  const padY = DENSITY_PADDING[density]
-
-  return (
-    <Card noPadding>
-      <div className="overflow-x-auto">
-        <table className="w-full text-md">
-          <thead className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-            <tr>
-              <th className={`px-3 ${padY} w-10`}>
-                <input
-                  type="checkbox"
-                  aria-label="Select all rows"
-                  checked={allSelected}
-                  ref={(el) => { if (el) el.indeterminate = someSelected }}
-                  onChange={onToggleSelectAll}
-                  className="cursor-pointer"
-                />
-              </th>
-              {visibleColumns.map((key) => {
-                const meta = COLUMN_META[key]
-                const width = columnWidths[key]
-                return (
-                  <th
-                    key={key}
-                    className={`px-3 ${padY} text-${meta.align} text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 ${meta.headWidthCls ?? ''} relative group`}
-                    style={
-                      typeof width === 'number'
-                        ? { width: `${width}px`, minWidth: `${width}px` }
-                        : undefined
-                    }
-                  >
-                    {meta.head}
-                    {/* CR.1 — column resize handle. Right edge drags to
-                        change width; double-click resets to auto.
-                        Hidden on the last column (last visible) so the
-                        end of the table doesn't sprout a phantom
-                        handle. The thumb column has fixed width and
-                        skips this entirely. */}
-                    {key !== 'thumb' && (
-                      <ResizeHandle
-                        currentWidth={width}
-                        onResize={(w) => onColumnWidthChange(key, w)}
-                        onReset={() => onColumnWidthReset(key)}
-                      />
-                    )}
-                  </th>
-                )
-              })}
-              <th className={`px-3 ${padY} text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300`}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, idx) => {
-              const threshold = it.reorderThreshold ?? it.product.lowStockThreshold
-              const stockTone =
-                it.quantity === 0 ? 'text-rose-600' :
-                it.quantity <= 5 ? 'text-orange-600' :
-                it.quantity <= threshold ? 'text-amber-600' : 'text-slate-900 dark:text-slate-100'
-              const isSelected = selected.has(it.id)
-              const ctx: ColumnRenderCtx = { it, padY, density, threshold, stockTone, t }
-              return (
-                <tr
-                  key={it.id}
-                  onClick={() => onOpenProduct(it.product.id)}
-                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}
-                >
-                  <td className={`px-3 ${padY}`} onClick={(e) => { e.stopPropagation(); onToggleSelect(it.id, idx, e) }}>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${it.product.sku}`}
-                      checked={isSelected}
-                      readOnly
-                      className="cursor-pointer"
-                    />
-                  </td>
-                  {visibleColumns.map((key) => {
-                    const meta = COLUMN_META[key]
-                    return (
-                      <td
-                        key={key}
-                        className={`px-3 ${padY} text-${meta.align}`}
-                      >
-                        {meta.cell(ctx)}
-                      </td>
-                    )
-                  })}
-                  <td className={`px-3 ${padY} text-right`}>
-                    <ChevronRight size={14} className="text-slate-400 inline" />
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  )
 }
 
 // Color-coded heatmap. Cells show quantity; tone is a function of
