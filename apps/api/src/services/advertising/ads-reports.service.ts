@@ -61,14 +61,24 @@ export const CAMPAIGN_COLUMNS: Record<AdProduct, string[]> = {
     'sales7d', 'purchases7d', 'unitsSoldClicks7d',
   ],
   SPONSORED_DISPLAY: [
+    // Phase G fix: v3 SD reports rejected viewableImpressions. The v3
+    // SD vocabulary moved it to viewabilityRate / aggregated metrics
+    // accessed via a different report type. Dropping it keeps the
+    // base campaign report working; the field stays in the ingest row
+    // interface but defaults to 0 when absent from the response.
     'date', 'campaignId', 'campaignName',
     'impressions', 'clicks', 'cost',
-    'sales', 'purchases', 'viewableImpressions',
+    'sales', 'purchases',
   ],
   SPONSORED_BRANDS: [
+    // Phase G fix: v3 SB reports rejected attributedSales14d /
+    // attributedDetailPageViewsClicks14d. Those names belong to the v2
+    // SB Reports API. v3 SB uses unsuffixed metric column names (sales,
+    // purchases) consistent with SD; attribution windows are inferred
+    // from the report configuration rather than the column suffix.
     'date', 'campaignId', 'campaignName',
     'impressions', 'clicks', 'cost',
-    'attributedSales14d', 'attributedDetailPageViewsClicks14d',
+    'sales', 'purchases',
   ],
 }
 
@@ -91,10 +101,11 @@ export const SEARCH_TERM_COLUMNS: Partial<Record<AdProduct, string[]>> = {
     'sales7d', 'purchases7d',
   ],
   SPONSORED_BRANDS: [
+    // Phase G fix: same v2→v3 column rename as CAMPAIGN_COLUMNS above.
     'date', 'campaignId', 'adGroupId',
     'keywordId', 'keyword', 'matchType', 'searchTerm',
     'impressions', 'clicks', 'cost',
-    'attributedSales14d', 'attributedDetailPageViewsClicks14d',
+    'sales', 'purchases',
   ],
 }
 
@@ -284,7 +295,7 @@ export async function pollPendingJobs(limit = 20): Promise<PollSummary> {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      summary.errors.push(`job ${job.id}: ${msg.slice(0, 200)}`)
+      summary.errors.push(`job ${job.id}: ${msg.slice(0, 800)}`)
       logger.warn('[ads-reports] poll failed', { jobId: job.id, error: msg })
       await prisma.amazonAdsReportJob.update({
         where: { id: job.id },
@@ -449,16 +460,21 @@ async function ingestCampaignRows(
       select: { id: true },
     })
 
-    // Per-adProduct attribution mapping (see Phase 4 commit message)
+    // Per-adProduct attribution mapping. Phase G: SB v3 reports return
+    // unsuffixed `sales`/`purchases` (same shape as SD v3) rather than
+    // the v2 attributedSales14d/attributedConversions14d names. Store
+    // SB sales in sales14dCents to preserve the original 14d-window
+    // semantic; analytics sums both fields anyway.
     const sales7dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
       : job.adProduct === 'SPONSORED_DISPLAY' ? toCents(r.sales)
       : 0
     const sales14dCents =
-      job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.attributedSales14d) : 0
+      job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.sales) : 0
     const orders7d =
       job.adProduct === 'SPONSORED_PRODUCTS' ? (r.purchases7d ?? 0)
       : job.adProduct === 'SPONSORED_DISPLAY' ? (r.purchases ?? 0)
+      : job.adProduct === 'SPONSORED_BRANDS' ? (r.purchases ?? 0)
       : 0
     const units7d = r.unitsSoldClicks7d ?? 0
     const viewableImpressions = r.viewableImpressions ?? 0
@@ -522,13 +538,15 @@ async function ingestSearchTermRows(
     const date = new Date(r.date)
     if (Number.isNaN(date.getTime())) continue
 
-    // Per-adProduct attribution mapping
+    // Per-adProduct attribution mapping (Phase G: SB v3 uses unsuffixed
+    // sales/purchases instead of attributedSales14d).
     const sales7dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
-      : job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.attributedSales14d)
+      : job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.sales)
       : 0
     const orders7d =
       job.adProduct === 'SPONSORED_PRODUCTS' ? (r.purchases7d ?? 0)
+      : job.adProduct === 'SPONSORED_BRANDS' ? (r.purchases ?? 0)
       : 0
 
     inserts.push({
@@ -671,7 +689,7 @@ export async function runReportCreationCycle(
         else result.jobsCreated += 1
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        result.errors.push(`${profile.profileId} ${adProduct}: ${msg.slice(0, 200)}`)
+        result.errors.push(`${profile.profileId} ${adProduct}: ${msg.slice(0, 800)}`)
       }
     }
   }
@@ -726,7 +744,7 @@ export async function runSearchTermReportCycle(
         else result.jobsCreated += 1
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        result.errors.push(`${profile.profileId} ${adProduct} search-term: ${msg.slice(0, 200)}`)
+        result.errors.push(`${profile.profileId} ${adProduct} search-term: ${msg.slice(0, 800)}`)
       }
     }
   }
@@ -770,7 +788,7 @@ export async function runPlacementReportCycle(
       else result.jobsCreated += 1
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      result.errors.push(`${profile.profileId} placement: ${msg.slice(0, 200)}`)
+      result.errors.push(`${profile.profileId} placement: ${msg.slice(0, 800)}`)
     }
   }
   return result
