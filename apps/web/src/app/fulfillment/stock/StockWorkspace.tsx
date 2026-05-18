@@ -1419,9 +1419,8 @@ export default function StockWorkspace() {
 
       {view === 'table' && (
         <GridFooter
-          count={items.length}
+          count={gridRows.length}
           label="products"
-          total={total}
           page={page}
           totalPages={totalPages}
           onPage={(n) => updateUrl({ page: n <= 1 ? undefined : String(n) })}
