@@ -1064,6 +1064,50 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // POST /api/advertising/debug/probe-endpoints — Phase A diagnostic
+  //
+  // Fires 12+ probes against Amazon Ads endpoints (legacy v2, v3 list,
+  // Exports v1) for the given profileId and returns a structured report:
+  // which variant Amazon accepts, status codes, response snippets.
+  //
+  // Manual-trigger only. Each invocation costs ~12 Amazon requests.
+  // No DB writes, no production-path side effects (token cache is
+  // bypassed via local LWA fetch).
+  //
+  // Body: { profileId: string }
+  fastify.post('/advertising/debug/probe-endpoints', async (request, reply) => {
+    const body = request.body as { profileId?: string }
+    if (!body?.profileId) return reply.code(400).send({ error: 'profileId required' })
+    const { probeAdvertisingEndpoints } = await import(
+      '../services/advertising/ads-debug-probe.service.js'
+    )
+    try {
+      const report = await probeAdvertisingEndpoints({ profileId: body.profileId })
+      return report
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({ error: msg })
+    }
+  })
+
+  // GET /api/advertising/debug/probe-endpoints/profiles — list profiles
+  // available for probing. Convenience for the UI dropdown.
+  fastify.get('/advertising/debug/probe-endpoints/profiles', async (_request, _reply) => {
+    const items = await prisma.amazonAdsConnection.findMany({
+      where: { credentialsEncrypted: { not: null } },
+      select: {
+        profileId: true,
+        marketplace: true,
+        region: true,
+        accountLabel: true,
+        mode: true,
+        isActive: true,
+      },
+      orderBy: { marketplace: 'asc' },
+    })
+    return { count: items.length, items }
+  })
+
   // POST /api/advertising/profit/ingest-fba-fees — AD.4 Step 6
   //
   // Manual trigger for the FBA fees ingest. Accepts an optional
