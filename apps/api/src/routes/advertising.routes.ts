@@ -479,6 +479,183 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { windowDays, count: Object.keys(byCampaign).length, byCampaign }
   })
 
+  // GET /api/advertising/insights — rule-based insight engine (Phase 8)
+  //
+  // Four insight types derived from live aggregates:
+  //   NEGATIVE_KW     — search terms with high spend + zero orders
+  //   HIGH_ACOS       — campaigns with ACOS > acosTarget (default 35%)
+  //   LOW_ACOS        — campaigns with ACOS < lowTarget (default 8%) + spend ≥ floor
+  //   STALE_CAMPAIGN  — ENABLED campaigns with 0 impressions in windowDays
+  //
+  // Each insight has a severity (critical | warning | info), a title,
+  // a description and up to 5 representative items for quick scanning.
+  fastify.get('/advertising/insights', async (request, reply) => {
+    const query = request.query as {
+      windowDays?: string
+      minSpendEur?: string
+      acosTarget?: string
+      lowAcosTarget?: string
+      marketplace?: string
+    }
+    const windowDays   = Math.max(7, Math.min(90, Number(query.windowDays   ?? 14)))
+    const minSpendEur  = Math.max(0, Number(query.minSpendEur  ?? 1))
+    const acosTarget   = Math.max(1, Number(query.acosTarget   ?? 35))
+    const lowAcosTarget = Math.max(1, Number(query.lowAcosTarget ?? 8))
+    const minMicros    = BigInt(Math.round(minSpendEur * 1_000_000))
+
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - windowDays)
+    since.setUTCHours(0, 0, 0, 0)
+
+    const { findNegativeKeywordCandidates } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+
+    // ── 1. Negative keyword candidates ──────────────────────────────────
+    const negKwRaw = await findNegativeKeywordCandidates({
+      lookbackDays: windowDays,
+      minSpend: minSpendEur,
+      limit: 200,
+      ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+    })
+    const negKwTotalMicros = negKwRaw.reduce((s, r) => s + BigInt(r.totalCostMicros.toString()), 0n)
+    const negKwInsight = negKwRaw.length === 0 ? null : {
+      type: 'NEGATIVE_KW' as const,
+      severity: negKwRaw.length >= 10 ? 'critical' : 'warning',
+      title: `${negKwRaw.length} search term${negKwRaw.length === 1 ? '' : 's'} spend without converting`,
+      description: `${negKwRaw.length} queries used €${(Number(negKwTotalMicros) / 1_000_000).toFixed(2)} in the last ${windowDays} days with zero orders. Add them as negative keywords to stop the bleed.`,
+      count: negKwRaw.length,
+      totalSpendCents: Math.round(Number(negKwTotalMicros) / 10_000),
+      items: negKwRaw.slice(0, 5).map((r) => ({
+        query:      r.query,
+        matchType:  r.matchType,
+        adProduct:  r.adProduct,
+        marketplace: r.marketplace,
+        clicks:     r.totalClicks,
+        costEur:    Number(BigInt(r.totalCostMicros.toString())) / 1_000_000,
+      })),
+    }
+
+    // ── 2 + 3. Per-campaign ACOS (HIGH + LOW) ───────────────────────────
+    const perfByCampaign = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['entityId', 'adProduct', 'marketplace'],
+      where: {
+        date: { gte: since },
+        entityType: 'CAMPAIGN',
+        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+      },
+      _sum: {
+        costMicros:    true,
+        sales7dCents:  true,
+        sales14dCents: true,
+        impressions:   true,
+      },
+      having: { costMicros: { _sum: { gte: minMicros } } },
+    })
+
+    // Enrich with campaign names from the Campaign table
+    const campaignIds = [...new Set(perfByCampaign.map((r) => r.entityId))]
+    const campaignNames = await prisma.campaign.findMany({
+      where: { externalCampaignId: { in: campaignIds } },
+      select: { externalCampaignId: true, name: true },
+    })
+    const nameMap = new Map(campaignNames.map((c) => [c.externalCampaignId ?? '', c.name]))
+
+    type CampRow = {
+      entityId: string; adProduct: string; marketplace: string
+      spendEur: number; adSalesCents: number; acos: number; impressions: number
+      name: string
+    }
+    const campRows: CampRow[] = perfByCampaign.map((r) => {
+      const spendMicros  = Number(r._sum.costMicros ?? 0n)
+      const adSalesCents = (r._sum.sales7dCents ?? 0) + (r._sum.sales14dCents ?? 0)
+      const spendCents   = spendMicros / 10_000
+      const acos = adSalesCents > 0 ? (spendCents / adSalesCents) * 100 : 999
+      return {
+        entityId:    r.entityId,
+        adProduct:   r.adProduct ?? 'UNKNOWN',
+        marketplace: r.marketplace,
+        spendEur:    spendMicros / 1_000_000,
+        adSalesCents,
+        acos,
+        impressions: r._sum.impressions ?? 0,
+        name:        nameMap.get(r.entityId) ?? r.entityId,
+      }
+    })
+
+    const highAcos = campRows
+      .filter((r) => r.acos > acosTarget && r.adSalesCents > 0)
+      .sort((a, b) => b.acos - a.acos)
+    const lowAcos = campRows
+      .filter((r) => r.acos < lowAcosTarget && r.acos >= 0 && r.adSalesCents > 0 && r.spendEur >= 5)
+      .sort((a, b) => a.acos - b.acos)
+
+    const highAcosInsight = highAcos.length === 0 ? null : {
+      type: 'HIGH_ACOS' as const,
+      severity: highAcos.length >= 3 ? 'critical' : 'warning',
+      title: `${highAcos.length} campaign${highAcos.length === 1 ? '' : 's'} above ${acosTarget}% ACOS`,
+      description: `These campaigns are spending more on ads than they return in attributed sales. Consider lowering bids or adding negative keywords.`,
+      count: highAcos.length,
+      totalSpendCents: Math.round(highAcos.reduce((s, r) => s + r.spendEur * 100, 0)),
+      items: highAcos.slice(0, 5).map((r) => ({
+        name: r.name, adProduct: r.adProduct, marketplace: r.marketplace,
+        acos: Math.round(r.acos * 10) / 10, spendEur: Math.round(r.spendEur * 100) / 100,
+      })),
+    }
+
+    const lowAcosInsight = lowAcos.length === 0 ? null : {
+      type: 'LOW_ACOS' as const,
+      severity: 'info',
+      title: `${lowAcos.length} campaign${lowAcos.length === 1 ? '' : 's'} below ${lowAcosTarget}% ACOS — room to scale`,
+      description: `Very low ACOS with real spend means headroom exists. Raising bids or daily budgets could capture more sales profitably.`,
+      count: lowAcos.length,
+      totalSpendCents: Math.round(lowAcos.reduce((s, r) => s + r.spendEur * 100, 0)),
+      items: lowAcos.slice(0, 5).map((r) => ({
+        name: r.name, adProduct: r.adProduct, marketplace: r.marketplace,
+        acos: Math.round(r.acos * 10) / 10, spendEur: Math.round(r.spendEur * 100) / 100,
+      })),
+    }
+
+    // ── 4. Stale ENABLED campaigns (no impressions in window) ───────────
+    const activeCampaigns = await prisma.campaign.findMany({
+      where: {
+        status: 'ENABLED',
+        externalCampaignId: { not: null },
+        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
+      },
+      select: { externalCampaignId: true, name: true, adProduct: true, marketplace: true },
+    })
+    const withImpressions = new Set(
+      perfByCampaign.filter((r) => (r._sum.impressions ?? 0) > 0).map((r) => r.entityId),
+    )
+    const stale = activeCampaigns.filter(
+      (c) => c.externalCampaignId && !withImpressions.has(c.externalCampaignId),
+    )
+    const staleInsight = stale.length === 0 ? null : {
+      type: 'STALE_CAMPAIGN' as const,
+      severity: stale.length >= 5 ? 'warning' : 'info',
+      title: `${stale.length} enabled campaign${stale.length === 1 ? '' : 's'} with zero impressions`,
+      description: `These campaigns are ENABLED but received no impressions in the last ${windowDays} days. Check for budget exhaustion, paused ad groups, or poor bid coverage.`,
+      count: stale.length,
+      totalSpendCents: 0,
+      items: stale.slice(0, 5).map((c) => ({
+        name: c.name, adProduct: c.adProduct ?? 'UNKNOWN', marketplace: c.marketplace ?? '—',
+      })),
+    }
+
+    const insights = [negKwInsight, highAcosInsight, staleInsight, lowAcosInsight]
+      .filter(Boolean)
+
+    reply.header('Cache-Control', 'private, max-age=120')
+    return {
+      windowDays,
+      generatedAt: new Date().toISOString(),
+      params: { minSpendEur, acosTarget, lowAcosTarget },
+      count: insights.length,
+      insights,
+    }
+  })
+
   // ── Phase 5a: v1 overview endpoint ────────────────────────────────────
   // Returns a comprehensive snapshot of every v1 substrate (Phase 2/4/6):
   //   - per-currency spend + sales in the last 30 days
