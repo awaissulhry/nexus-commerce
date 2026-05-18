@@ -6,16 +6,12 @@
 // campaigns scoped to their connected eBay accounts, supports
 // create / pause / resume / end / delete flows.
 //
-// Local persistence only for v1: campaigns sit in EbayCampaign with
-// status='DRAFT' until the operator manually flips them to 'RUNNING'
-// (acknowledging they've created the campaign on eBay's side via
-// Seller Hub). The Marketing API push lands behind
-// NEXUS_ENABLE_EBAY_PUBLISH in a follow-up commit. The banner at the
-// top of the page is honest about this gap so the operator doesn't
-// expect a Nexus-side create to surface on eBay automatically.
+// G.4 — table replaced with SharedVirtualizedGrid so column-resize,
+// keyboard nav, density, and all future GridLens features apply here
+// automatically.
 
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Play, Pause, Square, Trash2, AlertCircle } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Plus, Play, Pause, Square, Trash2, AlertCircle, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { Card } from '@/components/ui/Card'
@@ -26,10 +22,14 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
+import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
+
+// ── Constants ────────────────────────────────────────────────────────
 
 const EBAY_MARKET_CODES = ['IT', 'DE', 'ES', 'FR', 'GB']
 
-// Kept for the create modal dropdown
 const EBAY_MARKETPLACES = [
   { id: 'EBAY_IT', label: 'Italy (EBAY_IT)' },
   { id: 'EBAY_DE', label: 'Germany (EBAY_DE)' },
@@ -37,6 +37,27 @@ const EBAY_MARKETPLACES = [
   { id: 'EBAY_FR', label: 'France (EBAY_FR)' },
   { id: 'EBAY_GB', label: 'United Kingdom (EBAY_GB)' },
 ]
+
+const CAMPAIGN_COLUMNS: GridLensColumn[] = [
+  { key: 'name',    label: 'Campaign', subLabel: 'Name · ID',   width: 300 },
+  { key: 'market',  label: 'Market',   subLabel: 'Marketplace', width: 100 },
+  { key: 'funding', label: 'Funding',  subLabel: 'CPM / CPC',   width: 160 },
+  { key: 'status',  label: 'Status',   subLabel: 'State',       width: 110 },
+  { key: 'spend',   label: 'Spend',    subLabel: '€ total',     width: 90  },
+  { key: 'sales',   label: 'Sales',    subLabel: '€ total',     width: 90  },
+  { key: 'actions', label: '',                                   width: 130 },
+]
+
+const CAMPAIGN_SORT_KEYS: Record<string, string> = {
+  name: 'name', market: 'market', status: 'status', spend: 'spend', sales: 'sales',
+}
+
+const STORAGE_KEY = 'ebay-campaigns'
+const _EMPTY_SET = new Set<string>()
+const _EMPTY_MAP = {}
+const _NOOP = () => {}
+
+// ── Types ─────────────────────────────────────────────────────────────
 
 interface EbayCampaign {
   id: string
@@ -60,17 +81,26 @@ interface EbayCampaign {
   updatedAt: string
 }
 
+type CampaignRow = EbayCampaign & GridLensRow
+
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  DRAFT:   'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
   RUNNING: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-  PAUSED: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
-  ENDED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+  PAUSED:  'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+  ENDED:   'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
 }
+
+// ── Component ─────────────────────────────────────────────────────────
 
 export default function EbayCampaignsClient() {
   const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
-  const [statusFilter, setStatusFilter] = useState<string>('')
-  const [createOpen, setCreateOpen] = useState(false)
+  const [statusFilter, setStatusFilter]           = useState<string>('')
+  const [createOpen, setCreateOpen]               = useState(false)
+  const [selected, setSelected]                   = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy]                       = useState('name')
+  const [density, setDensity]                     = useState<Density>(() => {
+    try { return (localStorage.getItem(`${STORAGE_KEY}.density`) as Density) ?? 'comfortable' } catch { return 'comfortable' }
+  })
   const { toast } = useToast()
   const askConfirm = useConfirm()
 
@@ -80,51 +110,83 @@ export default function EbayCampaignsClient() {
     document.title = country ? `eBay Promoted Listings · ${country}` : 'eBay Promoted Listings · Campaigns'
   }, [marketplaceFilter])
 
+  useEffect(() => {
+    try { localStorage.setItem(`${STORAGE_KEY}.density`, density) } catch {}
+  }, [density])
+
   const url = useMemo(() => {
     const qs = new URLSearchParams()
     if (marketplaceFilter) qs.set('marketplace', marketplaceFilter)
-    if (statusFilter) qs.set('status', statusFilter)
+    if (statusFilter)      qs.set('status', statusFilter)
     return `/api/listings/ebay/campaigns?${qs.toString()}`
   }, [marketplaceFilter, statusFilter])
 
-  const { data, loading, error, refetch } = usePolledList<{
-    campaigns: EbayCampaign[]
-  }>({
+  const { data, loading, error, refetch } = usePolledList<{ campaigns: EbayCampaign[] }>({
     url,
     intervalMs: 30_000,
   })
 
   const campaigns = data?.campaigns ?? []
 
-  const transition = async (
-    id: string,
-    nextStatus: 'RUNNING' | 'PAUSED' | 'ENDED',
-  ) => {
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/listings/ebay/campaigns/${id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: nextStatus }),
-        },
-      )
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
+  // Client-side sort
+  const rows = useMemo((): CampaignRow[] => {
+    const base = campaigns.map(c => ({ ...c, isParent: false as const, childCount: 0, parentId: null }))
+    const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
+    return [...base].sort((a, b) => {
+      let av: any, bv: any
+      switch (key) {
+        case 'name':   av = a.name;      bv = b.name;      break
+        case 'market': av = a.marketplace; bv = b.marketplace; break
+        case 'status': av = a.status;    bv = b.status;    break
+        case 'spend':  av = a.spend;     bv = b.spend;     break
+        case 'sales':  av = a.sales;     bv = b.sales;     break
+        default: return 0
       }
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
+      return dir === 'asc' ? cmp : -cmp
+    })
+  }, [campaigns, sortBy])
+
+  const allSelected = rows.length > 0 && rows.every(r => selected.has(r.id))
+  const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
+
+  const toggleSelect = useCallback((id: string, _shiftKey: boolean) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected(allSelected ? new Set() : new Set(rows.map(r => r.id)))
+  }, [allSelected, rows])
+
+  const onSort = useCallback((key: string) => {
+    setSortBy(prev => {
+      const base = key.replace(/-asc$/, '')
+      if (prev === base) return `${base}-asc`
+      if (prev === `${base}-asc`) return base
+      return base
+    })
+  }, [])
+
+  const transition = async (id: string, nextStatus: 'RUNNING' | 'PAUSED' | 'ENDED') => {
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/listings/ebay/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       toast.success(`Campaign ${nextStatus.toLowerCase()}`)
       refetch()
-    } catch (e: any) {
-      toast.error(`Update failed: ${e?.message ?? String(e)}`)
-    }
+    } catch (e: any) { toast.error(`Update failed: ${e?.message ?? String(e)}`) }
   }
 
   const remove = async (campaign: EbayCampaign) => {
     if (campaign.status !== 'DRAFT') {
-      toast.error(
-        'Only DRAFT campaigns can be deleted. Use End to preserve metrics history.',
-      )
+      toast.error('Only DRAFT campaigns can be deleted. Use End to preserve metrics history.')
       return
     }
     const ok = await askConfirm({
@@ -135,20 +197,86 @@ export default function EbayCampaignsClient() {
     })
     if (!ok) return
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/listings/ebay/campaigns/${campaign.id}`,
-        { method: 'DELETE' },
-      )
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
-      }
+      const res = await fetch(`${getBackendUrl()}/api/listings/ebay/campaigns/${campaign.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       toast.success('Campaign deleted')
       refetch()
-    } catch (e: any) {
-      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
-    }
+    } catch (e: any) { toast.error(`Delete failed: ${e?.message ?? String(e)}`) }
   }
+
+  const renderCell = useCallback((row: CampaignRow, colKey: string) => {
+    switch (colKey) {
+      case 'name':
+        return (
+          <div>
+            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{row.name}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
+              {row.externalCampaignId.startsWith('local-') ? '(not yet pushed to eBay)' : row.externalCampaignId}
+            </div>
+          </div>
+        )
+      case 'market':
+        return <span className="text-sm font-mono text-slate-600 dark:text-slate-400">{row.marketplace.replace('EBAY_', '')}</span>
+      case 'funding':
+        return row.fundingStrategy === 'STANDARD' ? (
+          <span className="text-sm text-slate-700 dark:text-slate-300">
+            CPM <span className="font-semibold tabular-nums">{row.bidPercentage?.toFixed(2)}%</span>
+          </span>
+        ) : (
+          <span className="text-sm text-slate-700 dark:text-slate-300">
+            CPC <span className="font-semibold tabular-nums">{row.dailyBudget?.toFixed(2)} {row.budgetCurrency}/day</span>
+          </span>
+        )
+      case 'status':
+        return (
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${STATUS_TONE[row.status] ?? ''}`}>
+            {row.status}
+          </span>
+        )
+      case 'spend':
+        return <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">{row.spend > 0 ? row.spend.toFixed(2) : '—'}</span>
+      case 'sales':
+        return <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">{row.sales > 0 ? row.sales.toFixed(2) : '—'}</span>
+      case 'actions':
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            {(row.status === 'DRAFT' || row.status === 'PAUSED') && (
+              <button onClick={() => transition(row.id, 'RUNNING')} title="Start / resume" aria-label={`Start campaign "${row.name}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                <Play size={12} />
+              </button>
+            )}
+            {row.status === 'RUNNING' && (
+              <button onClick={() => transition(row.id, 'PAUSED')} title="Pause" aria-label={`Pause campaign "${row.name}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded focus:outline-none focus:ring-2 focus:ring-amber-300">
+                <Pause size={12} />
+              </button>
+            )}
+            {row.status !== 'ENDED' && (
+              <button onClick={() => transition(row.id, 'ENDED')} title="End campaign" aria-label={`End campaign "${row.name}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300">
+                <Square size={12} />
+              </button>
+            )}
+            {row.status === 'DRAFT' && (
+              <button onClick={() => remove(row)} title="Delete" aria-label={`Delete DRAFT campaign "${row.name}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded focus:outline-none focus:ring-2 focus:ring-rose-300">
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
+        )
+      default:
+        return null
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
+    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
+    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
+    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
+  ]
 
   return (
     <div className="space-y-4">
@@ -185,7 +313,7 @@ export default function EbayCampaignsClient() {
         ))}
       </div>
 
-      {/* Honest banner — no auto-push to eBay yet. */}
+      {/* Honest banner */}
       <Card>
         <div className="flex items-start gap-2 text-sm">
           <AlertCircle size={14} className="mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
@@ -194,17 +322,16 @@ export default function EbayCampaignsClient() {
             campaigns are stored in Nexus only for now. Create the matching campaign on
             eBay&apos;s Seller Hub side, then flip status to <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">RUNNING</code> here
             so metrics tracking lines up. Direct push to eBay&apos;s Marketing API
-            lands behind <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">NEXUS_ENABLE_EBAY_PUBLISH</code> in a
-            follow-up commit.
+            lands behind <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded text-xs">NEXUS_ENABLE_EBAY_PUBLISH</code> in a follow-up commit.
           </div>
         </div>
       </Card>
 
-      {/* Filters + Create */}
+      {/* Toolbar: status filter + density + count + create */}
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={e => setStatusFilter(e.target.value)}
           className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
           aria-label="Filter by status"
         >
@@ -214,8 +341,28 @@ export default function EbayCampaignsClient() {
           <option value="PAUSED">Paused</option>
           <option value="ENDED">Ended</option>
         </select>
-        <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">
-          {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}
+
+        {/* Density toggle */}
+        <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
+          {DENSITY_OPTIONS.map(({ d, icon, label }) => (
+            <button
+              key={d}
+              onClick={() => setDensity(d)}
+              title={label}
+              aria-pressed={density === d}
+              className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${
+                density === d
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {rows.length} campaign{rows.length === 1 ? '' : 's'}
         </span>
         <button
           onClick={() => setCreateOpen(true)}
@@ -225,138 +372,50 @@ export default function EbayCampaignsClient() {
         </button>
       </div>
 
-      {/* List */}
+      {/* Grid */}
       {loading && !data ? (
-        <Card>
-          <Skeleton variant="text" lines={4} />
-        </Card>
+        <Card><Skeleton variant="text" lines={4} /></Card>
       ) : error && !data ? (
-        <Card>
-          <div className="text-rose-600 dark:text-rose-400 text-sm">Failed to load: {error}</div>
-        </Card>
-      ) : campaigns.length === 0 ? (
+        <Card><div className="text-rose-600 dark:text-rose-400 text-sm">Failed to load: {error}</div></Card>
+      ) : rows.length === 0 ? (
         <Card>
           <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
             No campaigns yet.{' '}
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="text-blue-600 dark:text-blue-400 hover:underline"
-            >
+            <button onClick={() => setCreateOpen(true)} className="text-blue-600 dark:text-blue-400 hover:underline">
               Create your first campaign
-            </button>
-            .
+            </button>.
           </div>
         </Card>
       ) : (
-        <Card noPadding>
-          <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-              <tr>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Name</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Market</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Funding</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Spend</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Sales</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50">
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900 dark:text-slate-100">{c.name}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                      {c.externalCampaignId.startsWith('local-')
-                        ? '(not yet pushed to eBay)'
-                        : c.externalCampaignId}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    <span className="font-mono">{c.marketplace.replace('EBAY_', '')}</span>
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    {c.fundingStrategy === 'STANDARD' ? (
-                      <span>
-                        CPM <span className="font-semibold tabular-nums">{c.bidPercentage?.toFixed(2)}%</span>
-                      </span>
-                    ) : (
-                      <span>
-                        CPC <span className="font-semibold tabular-nums">
-                          {c.dailyBudget?.toFixed(2)} {c.budgetCurrency}/day
-                        </span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${STATUS_TONE[c.status] ?? ''}`}>
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-sm">
-                    {c.spend > 0 ? c.spend.toFixed(2) : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-sm">
-                    {c.sales > 0 ? c.sales.toFixed(2) : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      {(c.status === 'DRAFT' || c.status === 'PAUSED') && (
-                        <button
-                          onClick={() => transition(c.id, 'RUNNING')}
-                          title="Start / resume"
-                          aria-label={`Start campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                        >
-                          <Play size={12} />
-                        </button>
-                      )}
-                      {c.status === 'RUNNING' && (
-                        <button
-                          onClick={() => transition(c.id, 'PAUSED')}
-                          title="Pause"
-                          aria-label={`Pause campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded focus:outline-none focus:ring-2 focus:ring-amber-300"
-                        >
-                          <Pause size={12} />
-                        </button>
-                      )}
-                      {c.status !== 'ENDED' && (
-                        <button
-                          onClick={() => transition(c.id, 'ENDED')}
-                          title="End campaign"
-                          aria-label={`End campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        >
-                          <Square size={12} />
-                        </button>
-                      )}
-                      {c.status === 'DRAFT' && (
-                        <button
-                          onClick={() => remove(c)}
-                          title="Delete"
-                          aria-label={`Delete DRAFT campaign "${c.name}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <VirtualizedGrid
+          rows={rows}
+          visible={CAMPAIGN_COLUMNS}
+          density={density}
+          cellPad={cellPad}
+          selected={selected}
+          toggleSelect={toggleSelect}
+          toggleSelectAll={toggleSelectAll}
+          allSelected={allSelected}
+          sortBy={sortBy}
+          onSort={onSort}
+          sortKeys={CAMPAIGN_SORT_KEYS}
+          expandedParents={_EMPTY_SET}
+          childrenByParent={_EMPTY_MAP}
+          loadingChildren={_EMPTY_SET}
+          onToggleExpand={_NOOP}
+          focusedRowId={null}
+          searchTerm=""
+          riskFlaggedSkus={_EMPTY_SET}
+          storageKey={STORAGE_KEY}
+          showExpandColumn={false}
+          renderCell={renderCell}
+        />
       )}
 
       {createOpen && (
         <CreateCampaignModal
           onClose={() => setCreateOpen(false)}
-          onCreated={() => {
-            setCreateOpen(false)
-            refetch()
-          }}
+          onCreated={() => { setCreateOpen(false); refetch() }}
         />
       )}
     </div>
@@ -366,34 +425,22 @@ export default function EbayCampaignsClient() {
 // ────────────────────────────────────────────────────────────────────
 // CreateCampaignModal — name + marketplace + funding strategy + start
 // ────────────────────────────────────────────────────────────────────
-function CreateCampaignModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void
-  onCreated: () => void
-}) {
+function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { toast } = useToast()
-  const [name, setName] = useState('')
-  const [marketplace, setMarketplace] = useState('EBAY_IT')
-  const [fundingStrategy, setFundingStrategy] = useState<'STANDARD' | 'ADVANCED'>('STANDARD')
-  const [bidPercentage, setBidPercentage] = useState('5.00')
-  const [dailyBudget, setDailyBudget] = useState('20.00')
-  const [budgetCurrency, setBudgetCurrency] = useState('EUR')
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [endDate, setEndDate] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [name, setName]                         = useState('')
+  const [marketplace, setMarketplace]           = useState('EBAY_IT')
+  const [fundingStrategy, setFundingStrategy]   = useState<'STANDARD' | 'ADVANCED'>('STANDARD')
+  const [bidPercentage, setBidPercentage]       = useState('5.00')
+  const [dailyBudget, setDailyBudget]           = useState('20.00')
+  const [budgetCurrency, setBudgetCurrency]     = useState('EUR')
+  const [startDate, setStartDate]               = useState(() => new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate]                   = useState('')
+  const [busy, setBusy]                         = useState(false)
 
   const submit = async () => {
     setBusy(true)
     try {
-      const body: any = {
-        name: name.trim(),
-        marketplace,
-        fundingStrategy,
-        startDate,
-        endDate: endDate || null,
-      }
+      const body: any = { name: name.trim(), marketplace, fundingStrategy, startDate, endDate: endDate || null }
       if (fundingStrategy === 'STANDARD') {
         body.bidPercentage = Number(bidPercentage)
       } else {
@@ -405,10 +452,7 @@ function CreateCampaignModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
-      }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       toast.success('Campaign created (DRAFT). Flip to RUNNING when you push it on eBay.')
       onCreated()
     } catch (e: any) {
@@ -423,106 +467,45 @@ function CreateCampaignModal({
       <ModalBody>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Campaign name
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder='e.g. "Spring 2026 — Italy boost"'
-              autoFocus
-            />
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Campaign name</label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder='e.g. "Spring 2026 — Italy boost"' autoFocus />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Marketplace
-            </label>
-            <select
-              value={marketplace}
-              onChange={(e) => setMarketplace(e.target.value)}
-              className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
-            >
-              {EBAY_MARKETPLACES.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Marketplace</label>
+            <select value={marketplace} onChange={e => setMarketplace(e.target.value)}
+              className="w-full h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded">
+              {EBAY_MARKETPLACES.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Funding strategy
-            </label>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Funding strategy</label>
             <div className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
               <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="funding"
-                  value="STANDARD"
-                  checked={fundingStrategy === 'STANDARD'}
-                  onChange={() => setFundingStrategy('STANDARD')}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium">Standard (CPM)</span> — pay a percentage of
-                  the sale price when an item sells through the campaign.
-                </span>
+                <input type="radio" name="funding" value="STANDARD" checked={fundingStrategy === 'STANDARD'} onChange={() => setFundingStrategy('STANDARD')} className="mt-0.5" />
+                <span><span className="font-medium">Standard (CPM)</span> — pay a percentage of the sale price when an item sells through the campaign.</span>
               </label>
               <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="funding"
-                  value="ADVANCED"
-                  checked={fundingStrategy === 'ADVANCED'}
-                  onChange={() => setFundingStrategy('ADVANCED')}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium">Advanced (CPC)</span> — pay per click with
-                  a daily budget cap.
-                </span>
+                <input type="radio" name="funding" value="ADVANCED" checked={fundingStrategy === 'ADVANCED'} onChange={() => setFundingStrategy('ADVANCED')} className="mt-0.5" />
+                <span><span className="font-medium">Advanced (CPC)</span> — pay per click with a daily budget cap.</span>
               </label>
             </div>
           </div>
           {fundingStrategy === 'STANDARD' ? (
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Bid percentage
-              </label>
-              <Input
-                type="number"
-                step="0.10"
-                min="0.10"
-                max="100"
-                value={bidPercentage}
-                onChange={(e) => setBidPercentage(e.target.value)}
-                placeholder="e.g. 5.00"
-              />
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                eBay charges this % of the final sale price for items sold via the campaign.
-              </div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Bid percentage</label>
+              <Input type="number" step="0.10" min="0.10" max="100" value={bidPercentage} onChange={e => setBidPercentage(e.target.value)} placeholder="e.g. 5.00" />
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">eBay charges this % of the final sale price for items sold via the campaign.</div>
             </div>
           ) : (
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Daily budget
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={dailyBudget}
-                  onChange={(e) => setDailyBudget(e.target.value)}
-                />
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Daily budget</label>
+                <Input type="number" step="0.01" min="0.01" value={dailyBudget} onChange={e => setDailyBudget(e.target.value)} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Currency
-                </label>
-                <select
-                  value={budgetCurrency}
-                  onChange={(e) => setBudgetCurrency(e.target.value)}
-                  className="h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded"
-                >
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+                <select value={budgetCurrency} onChange={e => setBudgetCurrency(e.target.value)}
+                  className="h-9 px-2 text-md border border-slate-200 dark:border-slate-700 rounded">
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
                   <option value="USD">USD</option>
@@ -532,41 +515,23 @@ function CreateCampaignModal({
           )}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Start date
-              </label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Start date</label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
-              </label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span></label>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
           </div>
         </div>
       </ModalBody>
       <ModalFooter>
-        <button
-          onClick={onClose}
-          disabled={busy}
-          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
-        >
+        <button onClick={onClose} disabled={busy}
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
           Cancel
         </button>
-        <button
-          onClick={submit}
-          disabled={busy || !name.trim()}
-          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5 disabled:opacity-50"
-        >
+        <button onClick={submit} disabled={busy || !name.trim()}
+          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5 disabled:opacity-50">
           {busy ? 'Creating…' : 'Create campaign'}
         </button>
       </ModalFooter>

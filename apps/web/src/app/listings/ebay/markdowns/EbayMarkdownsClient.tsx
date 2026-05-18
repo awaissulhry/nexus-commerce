@@ -4,19 +4,14 @@
 //
 // CRUD UI on top of EbayMarkdown (C.14 schema). Mirror of the campaign
 // manager pattern (C.16): list, create modal, status transitions,
-// honest "eBay push pending" banner since promotion API push lands
-// behind NEXUS_ENABLE_EBAY_PUBLISH in a follow-up commit.
+// honest "eBay push pending" banner.
 //
-// Best Offer + auto-relist — the spec calls these out as part of
-// Wave 5, but they're per-listing settings on the eBay side rather
-// than discrete events. They need new ChannelListing columns
-// (bestOfferEnabled, autoRelistCount) before there's anything for
-// a UI to read or write. Surfaced as placeholders at the bottom of
-// this page so operators see the gap; real implementation defers
-// to a follow-up commit when the schema bump lands.
+// G.4 — table replaced with SharedVirtualizedGrid so column-resize,
+// keyboard nav, density, and all future GridLens features apply here
+// automatically.
 
-import { useState, useMemo, useEffect } from 'react'
-import { Plus, Square, Trash2, AlertCircle, Tag, Repeat, MessageCircle } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Plus, Square, Trash2, AlertCircle, Tag, Repeat, MessageCircle, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { Card } from '@/components/ui/Card'
@@ -27,6 +22,36 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { VirtualizedGrid } from '@/app/_shared/grid-lens'
+import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
+import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
+
+// ── Constants ────────────────────────────────────────────────────────
+
+const EBAY_MARKET_CODES = ['IT', 'DE', 'ES', 'FR', 'GB']
+
+const MARKDOWN_COLUMNS: GridLensColumn[] = [
+  { key: 'listing',  label: 'Listing',  subLabel: 'SKU · Name',    width: 280 },
+  { key: 'market',   label: 'Market',   subLabel: 'Marketplace',   width: 90  },
+  { key: 'discount', label: 'Discount', subLabel: 'Type · Value',  width: 130 },
+  { key: 'original', label: 'Original', subLabel: 'Price',         width: 90  },
+  { key: 'sale',     label: 'Sale',     subLabel: 'Markdown price',width: 110 },
+  { key: 'window',   label: 'Window',   subLabel: 'Start → End',   width: 190 },
+  { key: 'status',   label: 'Status',   subLabel: 'State',         width: 110 },
+  { key: 'actions',  label: '',                                     width: 90  },
+]
+
+const MARKDOWN_SORT_KEYS: Record<string, string> = {
+  listing: 'listing', market: 'market', status: 'status',
+  original: 'original', sale: 'sale',
+}
+
+const STORAGE_KEY = 'ebay-markdowns'
+const _EMPTY_SET = new Set<string>()
+const _EMPTY_MAP = {}
+const _NOOP = () => {}
+
+// ── Types ─────────────────────────────────────────────────────────────
 
 interface EbayMarkdown {
   id: string
@@ -62,21 +87,28 @@ interface ListingRow {
   price: number | null
 }
 
-const EBAY_MARKET_CODES = ['IT', 'DE', 'ES', 'FR', 'GB']
+type MarkdownRow = EbayMarkdown & GridLensRow
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+  DRAFT:     'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
   SCHEDULED: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900',
-  ACTIVE: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
-  ENDED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
+  ACTIVE:    'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  ENDED:     'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
   CANCELLED: 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700',
-  FAILED: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+  FAILED:    'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
 }
+
+// ── Component ─────────────────────────────────────────────────────────
 
 export default function EbayMarkdownsClient() {
   const [marketplaceFilter, setMarketplaceFilter] = useState<string>('')
-  const [statusFilter, setStatusFilter] = useState<string>('')
-  const [createOpen, setCreateOpen] = useState(false)
+  const [statusFilter, setStatusFilter]           = useState<string>('')
+  const [createOpen, setCreateOpen]               = useState(false)
+  const [selected, setSelected]                   = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy]                       = useState('listing')
+  const [density, setDensity]                     = useState<Density>(() => {
+    try { return (localStorage.getItem(`${STORAGE_KEY}.density`) as Density) ?? 'comfortable' } catch { return 'comfortable' }
+  })
   const { toast } = useToast()
   const askConfirm = useConfirm()
 
@@ -85,43 +117,76 @@ export default function EbayMarkdownsClient() {
     document.title = country ? `eBay Markdowns · ${country}` : 'eBay Markdowns · Sale Events'
   }, [marketplaceFilter])
 
+  useEffect(() => {
+    try { localStorage.setItem(`${STORAGE_KEY}.density`, density) } catch {}
+  }, [density])
+
   const url = useMemo(() => {
     const qs = new URLSearchParams()
     if (statusFilter) qs.set('status', statusFilter)
     return `/api/listings/ebay/markdowns?${qs.toString()}`
   }, [statusFilter])
 
-  const { data, loading, error, refetch } = usePolledList<{
-    markdowns: EbayMarkdown[]
-  }>({
+  const { data, loading, error, refetch } = usePolledList<{ markdowns: EbayMarkdown[] }>({
     url,
     intervalMs: 30_000,
   })
 
   const allMarkdowns = data?.markdowns ?? []
-  const markdowns = marketplaceFilter
-    ? allMarkdowns.filter(m => m.listing.marketplace === marketplaceFilter)
-    : allMarkdowns
+
+  // Client-side marketplace filter + sort
+  const rows = useMemo((): MarkdownRow[] => {
+    const filtered = marketplaceFilter
+      ? allMarkdowns.filter(m => m.listing.marketplace === marketplaceFilter)
+      : allMarkdowns
+    const base = filtered.map(m => ({ ...m, isParent: false as const, childCount: 0, parentId: null }))
+    const [key, dir] = sortBy.endsWith('-asc') ? [sortBy.slice(0, -4), 'asc'] : [sortBy, 'desc']
+    return [...base].sort((a, b) => {
+      let av: any, bv: any
+      switch (key) {
+        case 'listing':  av = a.listing.product.name; bv = b.listing.product.name; break
+        case 'market':   av = a.listing.marketplace;  bv = b.listing.marketplace;  break
+        case 'status':   av = a.status;               bv = b.status;               break
+        case 'original': av = a.originalPrice;        bv = b.originalPrice;        break
+        case 'sale':     av = a.markdownPrice;        bv = b.markdownPrice;        break
+        default: return 0
+      }
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : ((av ?? 0) - (bv ?? 0))
+      return dir === 'asc' ? cmp : -cmp
+    })
+  }, [allMarkdowns, marketplaceFilter, sortBy])
+
+  const allSelected = rows.length > 0 && rows.every(r => selected.has(r.id))
+  const cellPad = DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    setSelected(allSelected ? new Set() : new Set(rows.map(r => r.id)))
+  }, [allSelected, rows])
+
+  const onSort = useCallback((key: string) => {
+    setSortBy(prev => {
+      const base = key.replace(/-asc$/, '')
+      if (prev === base) return `${base}-asc`
+      if (prev === `${base}-asc`) return base
+      return base
+    })
+  }, [])
 
   const transition = async (id: string, nextStatus: 'CANCELLED' | 'ENDED') => {
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/listings/ebay/markdowns/${id}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: nextStatus }),
-        },
-      )
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
-      }
+      const res = await fetch(`${getBackendUrl()}/api/listings/ebay/markdowns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       toast.success(`Markdown ${nextStatus.toLowerCase()}`)
       refetch()
-    } catch (e: any) {
-      toast.error(`Update failed: ${e?.message ?? String(e)}`)
-    }
+    } catch (e: any) { toast.error(`Update failed: ${e?.message ?? String(e)}`) }
   }
 
   const remove = async (m: EbayMarkdown) => {
@@ -133,20 +198,82 @@ export default function EbayMarkdownsClient() {
     })
     if (!ok) return
     try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/listings/ebay/markdowns/${m.id}`,
-        { method: 'DELETE' },
-      )
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
-      }
+      const res = await fetch(`${getBackendUrl()}/api/listings/ebay/markdowns/${m.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       toast.success('Markdown deleted')
       refetch()
-    } catch (e: any) {
-      toast.error(`Delete failed: ${e?.message ?? String(e)}`)
-    }
+    } catch (e: any) { toast.error(`Delete failed: ${e?.message ?? String(e)}`) }
   }
+
+  const renderCell = useCallback((row: MarkdownRow, colKey: string) => {
+    switch (colKey) {
+      case 'listing':
+        return (
+          <div>
+            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{row.listing.product.name}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">{row.listing.product.sku}</div>
+          </div>
+        )
+      case 'market':
+        return <span className="text-sm font-mono text-slate-600 dark:text-slate-400">{row.listing.marketplace.replace('EBAY_', '')}</span>
+      case 'discount':
+        return row.discountType === 'PERCENTAGE' ? (
+          <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">−{row.discountValue}%</span>
+        ) : (
+          <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">{row.discountValue.toFixed(2)} {row.currency}</span>
+        )
+      case 'original':
+        return <span className="text-sm tabular-nums text-slate-500 dark:text-slate-400">{row.originalPrice.toFixed(2)}</span>
+      case 'sale':
+        return <span className="text-sm tabular-nums font-semibold text-slate-900 dark:text-slate-100">{row.markdownPrice.toFixed(2)} {row.currency}</span>
+      case 'window':
+        return (
+          <span className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
+            {new Date(row.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+            {' → '}
+            {row.endDate ? new Date(row.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'open'}
+          </span>
+        )
+      case 'status':
+        return (
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${STATUS_TONE[row.status] ?? ''}`}>
+            {row.status}
+          </span>
+        )
+      case 'actions':
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            {(row.status === 'DRAFT' || row.status === 'SCHEDULED') && (
+              <button onClick={() => transition(row.id, 'CANCELLED')} title="Cancel" aria-label={`Cancel markdown for "${row.listing.product.sku}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300">
+                <Square size={12} />
+              </button>
+            )}
+            {row.status === 'ACTIVE' && (
+              <button onClick={() => transition(row.id, 'ENDED')} title="End now" aria-label={`End markdown now for "${row.listing.product.sku}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300">
+                <Square size={12} />
+              </button>
+            )}
+            {row.status === 'DRAFT' && (
+              <button onClick={() => remove(row)} title="Delete" aria-label={`Delete DRAFT markdown for "${row.listing.product.sku}"`}
+                className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded focus:outline-none focus:ring-2 focus:ring-rose-300">
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
+        )
+      default:
+        return null
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
+    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
+    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
+    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
+  ]
 
   return (
     <div className="space-y-4">
@@ -183,6 +310,7 @@ export default function EbayMarkdownsClient() {
         ))}
       </div>
 
+      {/* Honest banner */}
       <Card>
         <div className="flex items-start gap-2 text-sm">
           <AlertCircle size={14} className="mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
@@ -196,10 +324,11 @@ export default function EbayMarkdownsClient() {
         </div>
       </Card>
 
+      {/* Toolbar: status filter + density + count + create */}
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={e => setStatusFilter(e.target.value)}
           className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
           aria-label="Filter by status"
         >
@@ -211,8 +340,28 @@ export default function EbayMarkdownsClient() {
           <option value="CANCELLED">Cancelled</option>
           <option value="FAILED">Failed</option>
         </select>
-        <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">
-          {markdowns.length} markdown{markdowns.length === 1 ? '' : 's'}
+
+        {/* Density toggle */}
+        <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
+          {DENSITY_OPTIONS.map(({ d, icon, label }) => (
+            <button
+              key={d}
+              onClick={() => setDensity(d)}
+              title={label}
+              aria-pressed={density === d}
+              className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${
+                density === d
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {rows.length} markdown{rows.length === 1 ? '' : 's'}
         </span>
         <button
           onClick={() => setCreateOpen(true)}
@@ -222,126 +371,49 @@ export default function EbayMarkdownsClient() {
         </button>
       </div>
 
+      {/* Grid */}
       {loading && !data ? (
-        <Card>
-          <Skeleton variant="text" lines={4} />
-        </Card>
+        <Card><Skeleton variant="text" lines={4} /></Card>
       ) : error && !data ? (
-        <Card>
-          <div className="text-rose-600 dark:text-rose-400 text-sm">Failed to load: {error}</div>
-        </Card>
-      ) : markdowns.length === 0 ? (
+        <Card><div className="text-rose-600 dark:text-rose-400 text-sm">Failed to load: {error}</div></Card>
+      ) : rows.length === 0 ? (
         <Card>
           <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
             No markdowns yet.{' '}
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="text-blue-600 dark:text-blue-400 hover:underline"
-            >
+            <button onClick={() => setCreateOpen(true)} className="text-blue-600 dark:text-blue-400 hover:underline">
               Schedule your first markdown
-            </button>
-            .
+            </button>.
           </div>
         </Card>
       ) : (
-        <Card noPadding>
-          <table className="w-full text-base">
-            <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-              <tr>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Listing</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Discount</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Original</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Markdown</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Window</th>
-                <th className="text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                <th className="text-right px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {markdowns.map((m) => (
-                <tr key={m.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50">
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">
-                      {m.listing.product.name}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                      {m.listing.product.sku} · {m.listing.marketplace}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-sm">
-                    {m.discountType === 'PERCENTAGE' ? (
-                      <span className="tabular-nums">−{m.discountValue}%</span>
-                    ) : (
-                      <span className="tabular-nums">
-                        {m.discountValue.toFixed(2)} {m.currency} fixed
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-sm text-slate-500 dark:text-slate-400">
-                    {m.originalPrice.toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-sm font-semibold">
-                    {m.markdownPrice.toFixed(2)} {m.currency}
-                  </td>
-                  <td className="px-3 py-2 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                    {new Date(m.startDate).toLocaleDateString()} →{' '}
-                    {m.endDate ? new Date(m.endDate).toLocaleDateString() : 'open'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${STATUS_TONE[m.status] ?? ''}`}>
-                      {m.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      {(m.status === 'DRAFT' || m.status === 'SCHEDULED') && (
-                        <button
-                          onClick={() => transition(m.id, 'CANCELLED')}
-                          title="Cancel"
-                          aria-label={`Cancel markdown for "${m.listing.product.sku}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        >
-                          <Square size={12} />
-                        </button>
-                      )}
-                      {m.status === 'ACTIVE' && (
-                        <button
-                          onClick={() => transition(m.id, 'ENDED')}
-                          title="End now"
-                          aria-label={`End markdown now for "${m.listing.product.sku}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        >
-                          <Square size={12} />
-                        </button>
-                      )}
-                      {m.status === 'DRAFT' && (
-                        <button
-                          onClick={() => remove(m)}
-                          title="Delete"
-                          aria-label={`Delete DRAFT markdown for "${m.listing.product.sku}"`}
-                          className="h-7 w-7 inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded focus:outline-none focus:ring-2 focus:ring-rose-300"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <VirtualizedGrid
+          rows={rows}
+          visible={MARKDOWN_COLUMNS}
+          density={density}
+          cellPad={cellPad}
+          selected={selected}
+          toggleSelect={toggleSelect}
+          toggleSelectAll={toggleSelectAll}
+          allSelected={allSelected}
+          sortBy={sortBy}
+          onSort={onSort}
+          sortKeys={MARKDOWN_SORT_KEYS}
+          expandedParents={_EMPTY_SET}
+          childrenByParent={_EMPTY_MAP}
+          loadingChildren={_EMPTY_SET}
+          onToggleExpand={_NOOP}
+          focusedRowId={null}
+          searchTerm=""
+          riskFlaggedSkus={_EMPTY_SET}
+          storageKey={STORAGE_KEY}
+          showExpandColumn={false}
+          renderCell={renderCell}
+        />
       )}
 
-      {/* C.17 — Best Offer + auto-relist placeholders. Both are
-          per-listing settings on the eBay side, but Nexus doesn't yet
-          have backing columns (ChannelListing.bestOfferEnabled,
-          autoRelistCount) so there's nothing for a UI to read/write.
-          Surfaced honestly so operators see the roadmap gap. */}
+      {/* C.17 — Best Offer + auto-relist placeholders */}
       <Card>
-        <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-          Coming soon
-        </div>
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Coming soon</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-400">
           <div className="flex items-start gap-2">
             <MessageCircle size={14} className="mt-0.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
@@ -367,10 +439,7 @@ export default function EbayMarkdownsClient() {
       {createOpen && (
         <CreateMarkdownModal
           onClose={() => setCreateOpen(false)}
-          onCreated={() => {
-            setCreateOpen(false)
-            refetch()
-          }}
+          onCreated={() => { setCreateOpen(false); refetch() }}
         />
       )}
     </div>
@@ -380,82 +449,46 @@ export default function EbayMarkdownsClient() {
 // ────────────────────────────────────────────────────────────────────
 // CreateMarkdownModal — listing search + discount + window
 // ────────────────────────────────────────────────────────────────────
-function CreateMarkdownModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void
-  onCreated: () => void
-}) {
+function CreateMarkdownModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { toast } = useToast()
-  const [search, setSearch] = useState('')
-  const [listings, setListings] = useState<ListingRow[]>([])
+  const [search, setSearch]                     = useState('')
+  const [listings, setListings]                 = useState<ListingRow[]>([])
   const [selectedListingId, setSelectedListingId] = useState<string>('')
-  const [discountType, setDiscountType] = useState<'PERCENTAGE' | 'FIXED_PRICE'>('PERCENTAGE')
-  const [discountValue, setDiscountValue] = useState('15')
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [endDate, setEndDate] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [discountType, setDiscountType]         = useState<'PERCENTAGE' | 'FIXED_PRICE'>('PERCENTAGE')
+  const [discountValue, setDiscountValue]       = useState('15')
+  const [startDate, setStartDate]               = useState(() => new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate]                   = useState('')
+  const [busy, setBusy]                         = useState(false)
 
-  // Search ACTIVE eBay listings to pick from. 250ms debounce so
-  // typing doesn't hammer the endpoint; the search endpoint already
-  // hits indexed columns (sku / name / externalListingId).
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
-        const qs = new URLSearchParams({
-          channel: 'EBAY',
-          listingStatus: 'ACTIVE',
-          pageSize: '20',
-        })
+        const qs = new URLSearchParams({ channel: 'EBAY', listingStatus: 'ACTIVE', pageSize: '20' })
         if (search.trim()) qs.set('search', search.trim())
-        const res = await fetch(
-          `${getBackendUrl()}/api/listings?${qs.toString()}`,
-          { cache: 'no-store' },
-        )
+        const res = await fetch(`${getBackendUrl()}/api/listings?${qs.toString()}`, { cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
         setListings(data.listings ?? [])
-      } catch {
-        /* swallow — empty list is informative enough */
-      }
+      } catch { /* empty list is informative enough */ }
     }, 250)
     return () => clearTimeout(t)
   }, [search])
 
-  const selectedListing = listings.find((l) => l.id === selectedListingId)
+  const selectedListing = listings.find(l => l.id === selectedListingId)
 
   const submit = async () => {
-    if (!selectedListingId) {
-      toast.error('Pick a listing first')
-      return
-    }
+    if (!selectedListingId) { toast.error('Pick a listing first'); return }
     const value = Number(discountValue)
-    if (!Number.isFinite(value) || value <= 0) {
-      toast.error('Discount value must be a positive number')
-      return
-    }
-    if (discountType === 'PERCENTAGE' && value > 100) {
-      toast.error('Percentage discount must be ≤ 100')
-      return
-    }
+    if (!Number.isFinite(value) || value <= 0) { toast.error('Discount value must be a positive number'); return }
+    if (discountType === 'PERCENTAGE' && value > 100) { toast.error('Percentage discount must be ≤ 100'); return }
     setBusy(true)
     try {
       const res = await fetch(`${getBackendUrl()}/api/listings/ebay/markdowns`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channelListingId: selectedListingId,
-          discountType,
-          discountValue: value,
-          startDate,
-          endDate: endDate || null,
-        }),
+        body: JSON.stringify({ channelListingId: selectedListingId, discountType, discountValue: value, startDate, endDate: endDate || null }),
       })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error ?? `HTTP ${res.status}`)
-      }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       toast.success('Markdown scheduled (DRAFT)')
       onCreated()
     } catch (e: any) {
@@ -469,10 +502,7 @@ function CreateMarkdownModal({
     if (!selectedListing?.price) return null
     const v = Number(discountValue)
     if (!Number.isFinite(v) || v <= 0) return null
-    if (discountType === 'PERCENTAGE') {
-      return Math.max(0, selectedListing.price * (1 - v / 100))
-    }
-    return Math.max(0, v)
+    return discountType === 'PERCENTAGE' ? Math.max(0, selectedListing.price * (1 - v / 100)) : Math.max(0, v)
   })()
 
   return (
@@ -480,137 +510,77 @@ function CreateMarkdownModal({
       <ModalBody>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              eBay listing
-            </label>
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search SKU, name, or eBay item ID…"
-              autoFocus
-            />
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">eBay listing</label>
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search SKU, name, or eBay item ID…" autoFocus />
             <div className="mt-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded">
               {listings.length === 0 ? (
-                <div className="text-sm text-slate-400 dark:text-slate-500 p-3 text-center">
-                  No matching ACTIVE eBay listings
-                </div>
+                <div className="text-sm text-slate-400 dark:text-slate-500 p-3 text-center">No matching ACTIVE eBay listings</div>
               ) : (
                 <ul>
-                  {listings.map((l) => (
-                    <li
-                      key={l.id}
-                      onClick={() => setSelectedListingId(l.id)}
+                  {listings.map(l => (
+                    <li key={l.id} onClick={() => setSelectedListingId(l.id)}
                       className={`px-3 py-2 cursor-pointer flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 ${
-                        selectedListingId === l.id
-                          ? 'bg-blue-50 dark:bg-blue-950/40'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-800'
-                      }`}
-                    >
+                        selectedListingId === l.id ? 'bg-blue-50 dark:bg-blue-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}>
                       <Tag size={11} className="text-slate-400 dark:text-slate-500" />
                       <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{l.product.sku}</span>
                       <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">{l.product.name}</span>
                       <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{l.marketplace}</span>
-                      {l.price != null && (
-                        <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                          {l.price.toFixed(2)}
-                        </span>
-                      )}
+                      {l.price != null && <span className="text-sm tabular-nums text-slate-700 dark:text-slate-300">{l.price.toFixed(2)}</span>}
                     </li>
                   ))}
                 </ul>
               )}
             </div>
           </div>
-
           <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Discount type
-            </label>
+            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Discount type</label>
             <div className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="discount"
-                  value="PERCENTAGE"
-                  checked={discountType === 'PERCENTAGE'}
-                  onChange={() => setDiscountType('PERCENTAGE')}
-                />
+                <input type="radio" name="discount" value="PERCENTAGE" checked={discountType === 'PERCENTAGE'} onChange={() => setDiscountType('PERCENTAGE')} />
                 Percentage off (e.g. 15% off current price)
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="discount"
-                  value="FIXED_PRICE"
-                  checked={discountType === 'FIXED_PRICE'}
-                  onChange={() => setDiscountType('FIXED_PRICE')}
-                />
+                <input type="radio" name="discount" value="FIXED_PRICE" checked={discountType === 'FIXED_PRICE'} onChange={() => setDiscountType('FIXED_PRICE')} />
                 Fixed sale price (absolute number)
               </label>
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
               {discountType === 'PERCENTAGE' ? 'Discount %' : 'Sale price'}
             </label>
-            <Input
-              type="number"
-              step={discountType === 'PERCENTAGE' ? '1' : '0.01'}
-              min="0.01"
+            <Input type="number" step={discountType === 'PERCENTAGE' ? '1' : '0.01'} min="0.01"
               max={discountType === 'PERCENTAGE' ? '100' : undefined}
-              value={discountValue}
-              onChange={(e) => setDiscountValue(e.target.value)}
-            />
+              value={discountValue} onChange={e => setDiscountValue(e.target.value)} />
             {previewPrice != null && (
               <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
-                Preview:{' '}
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  {previewPrice.toFixed(2)}
-                </span>{' '}
-                (vs current{' '}
-                {selectedListing?.price?.toFixed(2)})
+                Preview: <span className="font-semibold text-slate-700 dark:text-slate-300">{previewPrice.toFixed(2)}</span>{' '}
+                (vs current {selectedListing?.price?.toFixed(2)})
               </div>
             )}
           </div>
-
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Start date
-              </label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Start date</label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 End date <span className="text-slate-400 dark:text-slate-500 font-normal">(optional)</span>
               </label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
             </div>
           </div>
         </div>
       </ModalBody>
       <ModalFooter>
-        <button
-          onClick={onClose}
-          disabled={busy}
-          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800"
-        >
+        <button onClick={onClose} disabled={busy}
+          className="h-8 px-3 text-base text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
           Cancel
         </button>
-        <button
-          onClick={submit}
-          disabled={busy || !selectedListingId}
-          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5 disabled:opacity-50"
-        >
+        <button onClick={submit} disabled={busy || !selectedListingId}
+          className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5 disabled:opacity-50">
           {busy ? 'Creating…' : 'Schedule markdown'}
         </button>
       </ModalFooter>
