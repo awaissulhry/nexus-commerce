@@ -65,7 +65,7 @@ async function probeLwaToken(creds: ProbeCredentials): Promise<{
 interface ProbeVariant {
   id: string
   description: string
-  method: 'GET' | 'POST'
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   path: string
   body?: unknown
   acceptHeader?: string
@@ -297,6 +297,45 @@ const PROBE_VARIANTS: ProbeVariant[] = [
     acceptHeader: 'application/vnd.sbnegativekeywordresource.v4+json',
     contentTypeHeader: 'application/vnd.sbnegativekeywordresource.v4+json',
     body: { maxResults: 1 },
+  },
+
+  // ── Phase K.1: v1 unified WRITE discovery ─────────────────────────
+  // Phase J.1 found /negativeTargets gateway-blocked. We assumed all v1
+  // writes were blocked but never tested the main resource writes. PUT
+  // is the batch update path; empty body returns 400 (auth ok) or 403
+  // (gateway blocked) without writing anything.
+
+  {
+    id: 'v1_campaigns_put_probe',
+    description: 'PUT /campaigns batch (v1 update — auth check via empty body)',
+    method: 'PUT', path: '/campaigns',
+    acceptHeader: 'application/vnd.spCampaign.v3+json',
+    contentTypeHeader: 'application/vnd.spCampaign.v3+json',
+    body: { campaigns: [] },
+  },
+  {
+    id: 'v1_adgroups_put_probe',
+    description: 'PUT /adGroups batch (v1 update — auth check)',
+    method: 'PUT', path: '/adGroups',
+    acceptHeader: 'application/vnd.spAdGroup.v3+json',
+    contentTypeHeader: 'application/vnd.spAdGroup.v3+json',
+    body: { adGroups: [] },
+  },
+  {
+    id: 'v1_targets_put_probe',
+    description: 'PUT /targets batch (v1 update — auth check)',
+    method: 'PUT', path: '/targets',
+    acceptHeader: 'application/vnd.sptargetingclause.v3+json',
+    contentTypeHeader: 'application/vnd.sptargetingclause.v3+json',
+    body: { targetingClauses: [] },
+  },
+  {
+    id: 'v1_ads_put_probe',
+    description: 'PUT /ads batch (v1 update — auth check)',
+    method: 'PUT', path: '/ads',
+    acceptHeader: 'application/vnd.spProductAd.v3+json',
+    contentTypeHeader: 'application/vnd.spProductAd.v3+json',
+    body: { productAds: [] },
   },
 ]
 
