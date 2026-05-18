@@ -671,6 +671,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/stock/product/:productId', async (request, reply) => {
     try {
       const { productId } = request.params as { productId: string }
+      const q = request.query as any
+      // family=true → fetch children's stock for parent rows so the drawer
+      // shows a Variants breakdown instead of the (empty) parent's own stock.
+      const wantFamily = q.family === 'true'
 
       const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -683,6 +687,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           lowStockThreshold: true,
           basePrice: true,
           costPrice: true,
+          isParent: true,
           // S.20 — costing method + rolling WAC for the drawer header
           costingMethod: true,
           weightedAvgCostCents: true,
@@ -762,6 +767,75 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           : null
 
       const atp = atpMap.get(product.id)
+
+      // Family view: fetch all leaf-variant children with their stock levels.
+      // Returned when ?family=true and the product is a master parent.
+      let family: null | {
+        totalStock: number; totalReserved: number; totalAvailable: number
+        locations: Array<{ id: string; code: string; name: string; type: string }>
+        children: Array<{
+          id: string; sku: string; name: string
+          thumbnailUrl: string | null; abcClass: string | null
+          totalStock: number; totalReserved: number; totalAvailable: number
+          stockLevels: Array<{
+            locationId: string; locationCode: string; locationType: string
+            quantity: number; reserved: number; available: number
+            lastUpdatedAt: string
+          }>
+        }>
+      } = null
+
+      if (wantFamily && product.isParent) {
+        const [children, activeLocations] = await Promise.all([
+          prisma.product.findMany({
+            where: { parentId: productId, isParent: false },
+            select: {
+              id: true, sku: true, name: true, abcClass: true,
+              images: { select: { url: true }, take: 1 },
+              stockLevels: {
+                select: {
+                  quantity: true, reserved: true, available: true,
+                  lastUpdatedAt: true,
+                  location: { select: { id: true, code: true, name: true, type: true } },
+                },
+                orderBy: { quantity: 'desc' },
+              },
+            },
+            orderBy: { sku: 'asc' },
+          }),
+          prisma.stockLocation.findMany({
+            where: { isActive: true },
+            select: { id: true, code: true, name: true, type: true },
+            orderBy: [{ type: 'asc' }, { code: 'asc' }],
+          }),
+        ])
+
+        family = {
+          totalStock:     children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.quantity, 0), 0),
+          totalReserved:  children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.reserved, 0), 0),
+          totalAvailable: children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.available, 0), 0),
+          locations: activeLocations,
+          children: children.map((c) => ({
+            id: c.id,
+            sku: c.sku,
+            name: c.name,
+            thumbnailUrl: c.images?.[0]?.url ?? null,
+            abcClass: c.abcClass,
+            totalStock:     c.stockLevels.reduce((s, sl) => s + sl.quantity, 0),
+            totalReserved:  c.stockLevels.reduce((s, sl) => s + sl.reserved, 0),
+            totalAvailable: c.stockLevels.reduce((s, sl) => s + sl.available, 0),
+            stockLevels: c.stockLevels.map((sl) => ({
+              locationId:   sl.location.id,
+              locationCode: sl.location.code,
+              locationType: sl.location.type,
+              quantity:     sl.quantity,
+              reserved:     sl.reserved,
+              available:    sl.available,
+              lastUpdatedAt: sl.lastUpdatedAt.toISOString(),
+            })),
+          })),
+        }
+      }
 
       return {
         product: {
@@ -852,6 +926,8 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           where: { productId },
           _count: { _all: true },
         }).then((rows: Array<{ status: string; _count: { _all: number } }>) => Object.fromEntries(rows.map((r) => [r.status, r._count._all]))),
+        // F.3 — family view for parent rows. null for leaf/standalone products.
+        family,
       }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[stock/product/:id] failed')

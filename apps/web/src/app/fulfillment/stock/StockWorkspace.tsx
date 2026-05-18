@@ -537,6 +537,7 @@ export default function StockWorkspace() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [drawerProductId, setDrawerProductId] = useState<string | null>(null)
+  const [drawerIsParent, setDrawerIsParent] = useState(false)
   const [locations, setLocations] = useState<LocationSummary[]>([])
   const [kpis, setKpis] = useState<Kpis | null>(null)
   const [insights, setInsights] = useState<Insights | null>(null)
@@ -968,9 +969,6 @@ export default function StockWorkspace() {
 
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
     if (colKey === 'product') {
-      // For synthetic parent rows in a 3-level hierarchy, product.parentId
-      // is the grandparent ID. Surface it as a breadcrumb chip so operators
-      // can distinguish "FBA parent" from "FBM parent" at a glance.
       const grandparentSku = row.isParent && row.product.parentId
         ? items.find(it => it.product.parentProduct?.grandparentId && it.product.parentId === row.id)
             ?.product.parentProduct?.sku ?? null
@@ -978,7 +976,7 @@ export default function StockWorkspace() {
       return (
         <button
           type="button"
-          onClick={() => setDrawerProductId(row.product.id)}
+          onClick={() => { setDrawerProductId(row.product.id); setDrawerIsParent(row.isParent ?? false) }}
           className="min-w-0 overflow-hidden text-left w-full group"
         >
           <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
@@ -997,7 +995,7 @@ export default function StockWorkspace() {
       return (
         <button
           type="button"
-          onClick={() => setDrawerProductId(row.product.id)}
+          onClick={() => { setDrawerProductId(row.product.id); setDrawerIsParent(row.isParent ?? false) }}
           title="Open product"
           aria-label="Open product"
           className="h-7 w-7 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -1508,7 +1506,8 @@ export default function StockWorkspace() {
       {drawerProductId && (
         <StockDrawer
           productId={drawerProductId}
-          onClose={() => setDrawerProductId(null)}
+          isParentRow={drawerIsParent}
+          onClose={() => { setDrawerProductId(null); setDrawerIsParent(false) }}
           onChanged={() => { fetchStock(); fetchSidecar() }}
         />
       )}
@@ -2051,11 +2050,31 @@ type DrawerBundle = {
     lot: { id: string; lotNumber: string } | null
   }>
   serialCounts?: Record<string, number>
+  // F.3 — family view populated when isParent=true + ?family=true.
+  family?: {
+    totalStock: number; totalReserved: number; totalAvailable: number
+    locations: Array<{ id: string; code: string; name: string; type: string }>
+    children: Array<{
+      id: string; sku: string; name: string
+      thumbnailUrl: string | null; abcClass: 'A'|'B'|'C'|'D' | null
+      totalStock: number; totalReserved: number; totalAvailable: number
+      stockLevels: Array<{
+        locationId: string; locationCode: string; locationType: string
+        quantity: number; reserved: number; available: number
+        lastUpdatedAt: string
+      }>
+    }>
+  } | null
 }
 
 type ActionMode = null | { kind: 'adjust'; stockLevelId: string; locationCode: string } | { kind: 'transfer' } | { kind: 'reserve' }
 
-function StockDrawer({ productId, onClose, onChanged }: { productId: string; onClose: () => void; onChanged: () => void }) {
+function StockDrawer({ productId, isParentRow = false, onClose, onChanged }: {
+  productId: string
+  isParentRow?: boolean
+  onClose: () => void
+  onChanged: () => void
+}) {
   const { toast } = useToast()
   const askConfirm = useConfirm()
   const { t } = useTranslations()
@@ -2074,7 +2093,10 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${getBackendUrl()}/api/stock/product/${productId}`, { cache: 'no-store' })
+      const url = isParentRow
+        ? `${getBackendUrl()}/api/stock/product/${productId}?family=true`
+        : `${getBackendUrl()}/api/stock/product/${productId}`
+      const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error(`drawer load failed: ${res.status}`)
       setBundle(await res.json())
     } catch (e: any) {
@@ -2267,8 +2289,88 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                 />
               )}
 
-              {/* Multi-location breakdown */}
-              <Section title="Stock by location" icon={Warehouse}>
+              {/* F.3 — Variants family view (parent rows only) */}
+              {bundle.family && bundle.family.children.length > 0 && (
+                <Section title={`Variants (${bundle.family.children.length})`} icon={Layers}>
+                  <div className="overflow-x-auto -mx-1">
+                    <table className="w-full text-sm min-w-[400px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700">
+                          <th className="pb-1.5 text-left text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold pr-3">Variant</th>
+                          {bundle.family.locations
+                            .filter(loc => bundle.family!.children.some(c => c.stockLevels.some(sl => sl.locationId === loc.id)))
+                            .map(loc => (
+                              <th key={loc.id} className="pb-1.5 text-right text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-2">
+                                <span className={`inline-block px-1.5 py-0.5 border rounded ${LOCATION_TONE[loc.type] ?? 'bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700'}`}>
+                                  {loc.code}
+                                </span>
+                              </th>
+                            ))
+                          }
+                          <th className="pb-1.5 text-right text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold pl-2">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {bundle.family.children.map(child => {
+                          const activeLocations = bundle.family!.locations.filter(loc =>
+                            bundle.family!.children.some(c => c.stockLevels.some(sl => sl.locationId === loc.id))
+                          )
+                          return (
+                            <tr key={child.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                              <td className="py-2 pr-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {child.thumbnailUrl
+                                    ? <img src={child.thumbnailUrl} alt="" className="w-6 h-6 rounded object-cover bg-slate-100 flex-shrink-0" />
+                                    : <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0"><Package size={11} /></div>
+                                  }
+                                  <div className="min-w-0">
+                                    <div className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate max-w-[160px]" title={child.sku}>{child.sku}</div>
+                                  </div>
+                                  {child.abcClass && <AbcBadge cls={child.abcClass} size="sm" />}
+                                </div>
+                              </td>
+                              {activeLocations.map(loc => {
+                                const sl = child.stockLevels.find(s => s.locationId === loc.id)
+                                const qty = sl?.quantity ?? 0
+                                const tone = qty === 0 ? 'text-rose-600' : qty <= 5 ? 'text-orange-600' : 'text-slate-900 dark:text-slate-100'
+                                return (
+                                  <td key={loc.id} className="py-2 px-2 text-right">
+                                    {sl
+                                      ? <span className={`tabular-nums font-semibold ${tone}`}>{qty}</span>
+                                      : <span className="text-slate-300 dark:text-slate-600">—</span>
+                                    }
+                                  </td>
+                                )
+                              })}
+                              <td className="py-2 pl-2 text-right">
+                                <span className={`tabular-nums font-bold text-slate-900 dark:text-slate-100`}>{child.totalStock}</span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot className="border-t-2 border-slate-300 dark:border-slate-600">
+                        <tr>
+                          <td className="pt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">Total</td>
+                          {bundle.family.locations
+                            .filter(loc => bundle.family!.children.some(c => c.stockLevels.some(sl => sl.locationId === loc.id)))
+                            .map(loc => {
+                              const total = bundle.family!.children.reduce((s, c) => s + (c.stockLevels.find(sl => sl.locationId === loc.id)?.quantity ?? 0), 0)
+                              return (
+                                <td key={loc.id} className="pt-2 px-2 text-right tabular-nums font-bold text-slate-900 dark:text-slate-100">{total}</td>
+                              )
+                            })
+                          }
+                          <td className="pt-2 pl-2 text-right tabular-nums font-bold text-slate-900 dark:text-slate-100">{bundle.family.totalStock}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </Section>
+              )}
+
+              {/* Multi-location breakdown — only shown for leaf products; parent rows use the Variants section above */}
+              {!bundle.family && <Section title="Stock by location" icon={Warehouse}>
                 {bundle.stockLevels.length === 0 ? (
                   <div className="text-base text-slate-400 text-center py-3">No StockLevel rows yet.</div>
                 ) : (
@@ -2304,7 +2406,7 @@ function StockDrawer({ productId, onClose, onChanged }: { productId: string; onC
                     ))}
                   </ul>
                 )}
-              </Section>
+              </Section>}
 
               {/* Channel listing status */}
               {bundle.channelListings.length > 0 && (
