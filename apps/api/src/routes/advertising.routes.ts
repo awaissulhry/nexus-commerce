@@ -347,9 +347,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /api/advertising/reports/ingest-completed
   // Bulk: find every COMPLETED job not yet ingested and ingest each.
+  // Also skip jobs whose signed URL likely expired (completedAt >50min ago)
+  // to match the cron pattern and prevent endless retries.
   fastify.post('/advertising/reports/ingest-completed', async (_request, _reply) => {
+    const fiftyMinAgo = new Date(Date.now() - 50 * 60 * 1000)
     const jobs = await prisma.amazonAdsReportJob.findMany({
-      where: { status: 'COMPLETED', rowsIngested: 0 },
+      where: {
+        status: 'COMPLETED',
+        rowsIngested: 0,
+        completedAt: { gt: fiftyMinAgo },
+      },
       select: { id: true },
       take: 20,
     })
@@ -1180,6 +1187,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       take: limit,
     })
     return { items, count: items.length }
+  })
+
+  // POST /api/advertising/debug/mark-expired-reports-failed
+  //
+  // Reports whose signed URL has long since expired (completedAt > 60 min ago)
+  // but never ingested (rowsIngested = 0) are effectively dead. The cron
+  // filter now excludes them, but they sit as COMPLETED + stale errorMessage.
+  // This route flips them to FAILED so the dashboard counts reflect reality.
+  fastify.post('/advertising/debug/mark-expired-reports-failed', async (_request, _reply) => {
+    const sixtyMinAgo = new Date(Date.now() - 60 * 60 * 1000)
+    const r = await prisma.amazonAdsReportJob.updateMany({
+      where: {
+        status: 'COMPLETED',
+        rowsIngested: 0,
+        completedAt: { lt: sixtyMinAgo },
+      },
+      data: { status: 'EXPIRED', errorMessage: 'signed url expired before ingest could run' },
+    })
+    return { ok: true, marked: r.count }
   })
 
   // POST /api/advertising/debug/clear-stale-export-errors — H.2 follow-up

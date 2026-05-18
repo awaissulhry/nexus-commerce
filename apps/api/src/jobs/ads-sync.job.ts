@@ -285,8 +285,18 @@ export function startReportPollCron(): void {
 // Every 15 min at :07 — ingest COMPLETED jobs (download S3 + write rows)
 export async function runReportIngestCron(): Promise<void> {
   await recordCronRun('ads-report-ingest', async () => {
+    // Same filter pattern as v1 exports: skip already-ingested AND
+    // skip jobs whose signed URL has likely expired. Reports API has
+    // no urlExpiresAt column; use completedAt > now-50min as proxy
+    // (Amazon's S3 URLs have a 1-hour TTL — 50min gives safety margin).
+    const fiftyMinAgo = new Date(Date.now() - 50 * 60 * 1000)
     const jobs = await prisma.amazonAdsReportJob.findMany({
-      where: { status: 'COMPLETED', location: { not: null } },
+      where: {
+        status: 'COMPLETED',
+        location: { not: null },
+        rowsIngested: 0,
+        completedAt: { gt: fiftyMinAgo },
+      },
       select: { id: true },
       orderBy: { completedAt: 'asc' },
       take: 10,
