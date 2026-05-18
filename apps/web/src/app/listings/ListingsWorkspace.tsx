@@ -21,6 +21,7 @@ import {
   VirtualizedGrid as SharedVirtualizedGrid,
   SearchContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
+import { GridFooter } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   MultiSelectChips,
@@ -268,6 +269,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // URL-driven state: lens, page, search, filters, sort
   const lens = (searchParams.get('lens') as Lens) || 'grid'
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
+  const pageSize = parseInt(searchParams.get('pageSize') ?? '50', 10) || 50
   const search = searchParams.get('search') ?? ''
   const sortBy = searchParams.get('sortBy') ?? 'updatedAt'
   const sortDir = (searchParams.get('sortDir') as 'asc' | 'desc') ?? 'desc'
@@ -419,7 +421,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     if (lens !== 'grid') return null
     const qs = new URLSearchParams()
     qs.set('page', String(page))
-    qs.set('pageSize', '200')
+    qs.set('pageSize', String(pageSize))
     qs.set('sortBy', sortBy)
     qs.set('sortDir', sortDir)
     if (search) qs.set('search', search)
@@ -435,7 +437,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     if (lowStock) qs.set('lowStock', 'true')
     if (publishedOnly) qs.set('published', 'true')
     return `/api/listings?${qs.toString()}`
-  }, [lens, page, search, sortBy, sortDir, channelFilters, marketplaceFilters, statusFilters, syncStatusFilters, hasError, lowStock, publishedOnly])
+  }, [lens, page, pageSize, search, sortBy, sortDir, channelFilters, marketplaceFilters, statusFilters, syncStatusFilters, hasError, lowStock, publishedOnly])
 
   const {
     data: gridData,
@@ -984,6 +986,8 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           }}
           page={page}
           onPage={(p) => updateUrl({ page: p === 1 ? undefined : String(p) })}
+          pageSize={pageSize}
+          onPageSize={(n) => updateUrl({ pageSize: n === 50 ? undefined : String(n), page: undefined })}
           selected={selected}
           setSelected={setSelected}
           onOpenDrawer={(id) => setDrawerListingId(id)}
@@ -1663,6 +1667,8 @@ function GridLens(props: {
   onSort: (key: string) => void
   page: number
   onPage: (p: number) => void
+  pageSize: number
+  onPageSize: (n: number) => void
   selected: Set<string>
   setSelected: (s: Set<string>) => void
   onOpenDrawer: (id: string) => void
@@ -1689,7 +1695,7 @@ function GridLens(props: {
   expandedParents: Set<string>
   onToggleExpand: (id: string) => void
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, defaultVisible, parentRows, childrenByParent, expandedParents, onToggleExpand } = props
+  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, pageSize, onPageSize, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, defaultVisible, parentRows, childrenByParent, expandedParents, onToggleExpand } = props
 
   // grouping state (expandedParents, parentRows, childrenByParent, onToggleExpand)
   // is now owned by ListingsWorkspace so the keyboard handler has access.
@@ -1941,7 +1947,17 @@ function GridLens(props: {
         )}
       />
 
-      <Pagination page={page} totalPages={grid.totalPages} onPage={onPage} />
+      <GridFooter
+        count={parentRows.length}
+        label="listings"
+        total={grid.total}
+        page={page}
+        totalPages={grid.totalPages}
+        onPage={onPage}
+        pageSize={pageSize}
+        onPageSize={onPageSize}
+        pageSizeOptions={[25, 50, 100, 200]}
+      />
     </div>
   )
 }
@@ -2244,30 +2260,6 @@ function ColumnPickerMenu({ visible, setVisible, onClose, defaultVisible }: { vi
       <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
         <button onClick={() => setVisible(defaultVisible ?? DEFAULT_VISIBLE)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Reset</button>
         <button onClick={onClose} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Close</button>
-      </div>
-    </div>
-  )
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Pagination
-// ────────────────────────────────────────────────────────────────────
-function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
-  if (totalPages <= 1) return null
-  return (
-    <div className="flex items-center justify-between text-base text-slate-500 dark:text-slate-400">
-      <span>Page <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{page}</span> of <span className="tabular-nums">{totalPages}</span></span>
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => onPage(Math.max(1, page - 1))}
-          disabled={page === 1}
-          className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-        >Previous</button>
-        <button
-          onClick={() => onPage(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="h-7 px-3 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
-        >Next</button>
       </div>
     </div>
   )
