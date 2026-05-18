@@ -297,6 +297,110 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   })
 
+  // ── Phase 4: Reports API routes ──────────────────────────────────────
+  // Async report flow: create-cycle → poll → ingest. Each can be called
+  // manually for now; cron wiring lands in Phase 11 hardening.
+
+  // POST /api/advertising/reports/create-cycle
+  //   { startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", adProducts?: [...] }
+  // Creates a report job per (active profile × adProduct). Idempotent.
+  fastify.post('/advertising/reports/create-cycle', async (request, reply) => {
+    const body = request.body as {
+      startDate?: string
+      endDate?: string
+      adProducts?: Array<'SPONSORED_PRODUCTS' | 'SPONSORED_DISPLAY' | 'SPONSORED_BRANDS'>
+    }
+    if (!body.startDate || !body.endDate) {
+      return reply.code(400).send({ error: 'startDate and endDate (YYYY-MM-DD) required' })
+    }
+    const { runReportCreationCycle } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await runReportCreationCycle({
+      startDate: body.startDate,
+      endDate: body.endDate,
+      adProducts: body.adProducts,
+    })
+    return { ok: true, ...result }
+  })
+
+  // POST /api/advertising/reports/poll
+  //   ?limit=N (default 20) — advance PENDING/IN_PROGRESS jobs.
+  fastify.post('/advertising/reports/poll', async (request, _reply) => {
+    const query = request.query as { limit?: string }
+    const limit = query.limit ? Math.max(1, Math.min(50, Number(query.limit))) : 20
+    const { pollPendingJobs } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await pollPendingJobs(limit)
+    return { ok: true, ...result }
+  })
+
+  // POST /api/advertising/reports/:id/ingest
+  // Downloads a COMPLETED job's S3 file and upserts rows into
+  // AmazonAdsDailyPerformance.
+  fastify.post('/advertising/reports/:id/ingest', async (request, _reply) => {
+    const { id } = request.params as { id: string }
+    const { ingestCompletedJob } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await ingestCompletedJob(id)
+    return { ok: !result.error, ...result }
+  })
+
+  // POST /api/advertising/reports/ingest-completed
+  // Bulk: find every COMPLETED job not yet ingested and ingest each.
+  fastify.post('/advertising/reports/ingest-completed', async (_request, _reply) => {
+    const jobs = await prisma.amazonAdsReportJob.findMany({
+      where: { status: 'COMPLETED', rowsIngested: 0 },
+      select: { id: true },
+      take: 20,
+    })
+    const { ingestCompletedJob } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const results = []
+    for (const j of jobs) {
+      results.push(await ingestCompletedJob(j.id))
+    }
+    return { ok: true, ingested: results.length, results }
+  })
+
+  // GET /api/advertising/reports — list jobs (paginated, newest first)
+  fastify.get('/advertising/reports', async (request, _reply) => {
+    const query = request.query as {
+      status?: string
+      profileId?: string
+      adProduct?: string
+      limit?: string
+    }
+    const limit = query.limit ? Math.max(1, Math.min(200, Number(query.limit))) : 50
+    const items = await prisma.amazonAdsReportJob.findMany({
+      where: {
+        ...(query.status ? { status: query.status } : {}),
+        ...(query.profileId ? { profileId: query.profileId } : {}),
+        ...(query.adProduct ? { adProduct: query.adProduct } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true, profileId: true, adProduct: true, reportTypeId: true,
+        externalReportId: true, status: true, startDate: true, endDate: true,
+        location: true, fileSize: true, rowsIngested: true, errorMessage: true,
+        attempts: true, lastPolledAt: true, createdAt: true, completedAt: true,
+      },
+    })
+    return { items, count: items.length }
+  })
+
+  // GET /api/advertising/reports/:id — single job detail
+  fastify.get('/advertising/reports/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const job = await prisma.amazonAdsReportJob.findUnique({ where: { id } })
+    if (!job) return reply.code(404).send({ error: 'not_found' })
+    return job
+  })
+
   // ── Manual cron triggers (sandbox-safe) ─────────────────────────────
   // Mirror the /sync-logs/cron pattern so the cron status panel can
   // surface manual triggers in the audit feed.

@@ -143,6 +143,10 @@ interface LiveCallOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   path: string
   body?: unknown
+  // Optional Content-Type override. Reports API v3 requires
+  // 'application/vnd.createasyncreportrequest.v3+json'; per-resource v3
+  // endpoints want their own vnd.* type. Defaults to application/json.
+  contentType?: string
 }
 
 interface AdsCredentials {
@@ -201,7 +205,7 @@ async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
   return JSON.parse(decryptSecret(conn.credentialsEncrypted)) as AdsCredentials
 }
 
-async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
+export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   const creds = await resolveCredentials(opts.profileId)
   const token = await getLwaToken(opts.profileId, creds)
   const base = REGION_ENDPOINT[opts.region]
@@ -211,7 +215,7 @@ async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
   }
   // Only send Content-Type when there is a body (GET/DELETE have none).
   if (opts.body != null) {
-    headers['Content-Type'] = 'application/json'
+    headers['Content-Type'] = opts.contentType ?? 'application/json'
   }
   // Scope header is only required for profile-scoped endpoints.
   if (opts.profileId !== 'n/a') {
