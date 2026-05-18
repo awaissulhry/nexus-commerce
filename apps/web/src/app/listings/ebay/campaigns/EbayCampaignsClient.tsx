@@ -17,6 +17,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, Play, Pause, Square, Trash2, AlertCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
+import { COUNTRY_NAMES } from '@/lib/country-names'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
@@ -143,8 +144,12 @@ export default function EbayCampaignsClient() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Promoted Listings campaigns"
-        description="eBay Promoted Listings — Standard CPM (bid percentage) or Advanced CPC (daily budget). Manage campaigns + track performance."
+        title={(() => {
+          const mp = marketplaceFilter.replace('EBAY_', '')
+          const country = mp ? (COUNTRY_NAMES[mp] ?? mp) : null
+          return country ? `eBay Promoted Listings · ${country}` : 'eBay Promoted Listings'
+        })()}
+        description="Standard CPM (bid percentage) or Advanced CPC (daily budget). Manage campaigns and track performance across eBay marketplaces."
         breadcrumbs={[
           { label: 'Listings', href: '/listings' },
           { label: 'eBay', href: '/listings/ebay' },

@@ -2,6 +2,8 @@
 
 import { useState, useTransition, useCallback } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { COUNTRY_NAMES } from '@/lib/country-names'
+import PageHeader from '@/components/layout/PageHeader'
 import {
   PackagePlus,
   RefreshCw,
@@ -145,36 +147,40 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
     return acc
   }, {})
 
+  const marketLabel = COUNTRY_NAMES[marketplace] ?? marketplace
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">eBay Listing Gaps</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Phase 3 — products active in Nexus but missing from eBay</p>
-          </div>
+    <div className="space-y-4">
+      <PageHeader
+        title={`eBay Listing Gaps · ${marketLabel}`}
+        description={`Products active in Nexus with no eBay listing for ${marketLabel}. Select products and schedule bulk listing creation.`}
+        breadcrumbs={[
+          { label: 'Listings', href: '/listings' },
+          { label: 'eBay', href: '/listings/ebay' },
+          { label: `Gaps · ${marketLabel}` },
+        ]}
+        actions={
           <button
             onClick={() => startTransition(() => refreshData(marketplace))}
             disabled={isPending}
-            className="flex items-center gap-2 px-3 py-1.5 border rounded text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            className="h-8 px-3 text-sm inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${isPending ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isPending ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="px-6 py-4 max-w-screen-xl mx-auto">
+      <div className="space-y-4">
         {/* Marketplace selector */}
-        <div className="flex gap-2 mb-5">
+        <div className="flex gap-2">
           {MARKETPLACE_OPTIONS.map(mp => (
             <button
               key={mp}
               onClick={() => handleMarketplace(mp)}
-              className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+              className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
             >
-              {mp}
+              {COUNTRY_NAMES[mp] ?? mp}
             </button>
           ))}
         </div>

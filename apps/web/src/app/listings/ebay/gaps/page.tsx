@@ -9,11 +9,23 @@
  *   - View scheduling progress
  */
 
+import type { Metadata } from 'next'
 import { getBackendUrl } from '@/lib/backend-url'
+import { COUNTRY_NAMES } from '@/lib/country-names'
 import EbayGapsClient from './EbayGapsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Record<string, string>
+}): Promise<Metadata> {
+  const mp = (searchParams.marketplace ?? 'IT').toUpperCase()
+  const label = COUNTRY_NAMES[mp] ?? mp
+  return { title: `eBay Listing Gaps · ${label}` }
+}
 
 async function fetchGapData(marketplace: string) {
   const backend = getBackendUrl()

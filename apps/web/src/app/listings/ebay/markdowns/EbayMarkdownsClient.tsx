@@ -139,8 +139,8 @@ export default function EbayMarkdownsClient() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Markdowns + sale events"
-        description="Schedule discounts on individual eBay listings. PERCENTAGE discounts compute against the listing's current price; FIXED_PRICE sets an absolute sale price."
+        title="eBay Markdowns · Sale Events"
+        description="Schedule percentage or fixed-price discounts on eBay listings. PERCENTAGE computes against the listing's current price; FIXED_PRICE sets an absolute sale price."
         breadcrumbs={[
           { label: 'Listings', href: '/listings' },
           { label: 'eBay', href: '/listings/ebay' },
