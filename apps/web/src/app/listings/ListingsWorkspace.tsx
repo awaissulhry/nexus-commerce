@@ -4,7 +4,7 @@
 // Lens-driven (Grid · Health · Matrix · Drafts), URL state, channel/market
 // presets via props, bulk actions, column picker, detail drawer.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -19,6 +19,7 @@ import {
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import {
   VirtualizedGrid as SharedVirtualizedGrid,
+  SearchContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -441,6 +442,86 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   // bulk action complete) keeps calling `fetchGrid`.
   const fetchGrid = refetchGrid
 
+  // ── Parent/child hierarchy (workspace-level so keyboard handler can use it) ──
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+
+  const { parentRows, childrenByParent } = useMemo(() => {
+    const byProductId = new Map<string, Listing[]>()
+    for (const l of grid.listings) {
+      if (!byProductId.has(l.productId)) byProductId.set(l.productId, [])
+      byProductId.get(l.productId)!.push(l)
+    }
+    const parentMap = new Map<string, {
+      info: NonNullable<Listing['product']['parentProduct']>
+      variantIds: Set<string>
+    }>()
+    for (const l of grid.listings) {
+      const pp = l.product.parentProduct
+      if (!pp || !l.product.parentId) continue
+      if (!parentMap.has(pp.id)) parentMap.set(pp.id, { info: pp, variantIds: new Set() })
+      parentMap.get(pp.id)!.variantIds.add(l.productId)
+    }
+    const variantProductIds = new Set(
+      grid.listings.filter(l => l.product.parentId).map(l => l.productId)
+    )
+    const rows: ListingGridRow[] = []
+    const children: Record<string, ListingGridRow[]> = {}
+    const added = new Set<string>()
+
+    for (const [parentId, { info, variantIds }] of parentMap) {
+      if (added.has(parentId)) continue
+      added.add(parentId)
+      const parentListings = byProductId.get(parentId) ?? []
+      const firstVariantListings = byProductId.get([...variantIds][0]) ?? []
+      const rep = parentListings[0] ?? firstVariantListings[0]
+      if (!rep) continue
+      const allListings = [...parentListings, ...[...variantIds].flatMap(id => byProductId.get(id) ?? [])]
+      rows.push({
+        ...rep,
+        id: parentId,
+        productId: parentId,
+        product: {
+          id: info.id, sku: info.sku, name: info.name,
+          amazonAsin: null, basePrice: null, totalStock: 0,
+          isParent: true, parentId: null, thumbnailUrl: info.thumbnailUrl, parentProduct: null,
+        },
+        isParent: true,
+        childCount: variantIds.size,
+        parentId: null,
+        _channels: [...new Set(allListings.map(l => l.channel))],
+        _markets:  [...new Set(allListings.map(l => l.marketplace))],
+      })
+      children[parentId] = [...variantIds].flatMap(variantId => {
+        const vls = byProductId.get(variantId) ?? []
+        const first = vls[0]
+        if (!first) return []
+        return [{ ...first, isParent: false, childCount: 0, parentId,
+          _channels: [...new Set(vls.map(l => l.channel))],
+          _markets:  [...new Set(vls.map(l => l.marketplace))],
+        }]
+      })
+    }
+    for (const [productId, listings] of byProductId) {
+      if (added.has(productId) || variantProductIds.has(productId)) continue
+      added.add(productId)
+      const first = listings[0]
+      rows.push({ ...first, id: productId, isParent: false, childCount: 0, parentId: null,
+        _channels: [...new Set(listings.map(l => l.channel))],
+        _markets:  [...new Set(listings.map(l => l.marketplace))],
+      })
+    }
+    return { parentRows: rows, childrenByParent: children }
+  }, [grid.listings])
+
+  const onToggleExpand = useCallback((id: string) => {
+    setExpandedParents(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
   const [facets, setFacets] = useState<Facets | null>(null)
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([])
 
@@ -570,7 +651,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
       // navigate rows, which only the table renders.
       if (lens !== 'grid') return
 
-      const rows = grid.listings.length
+      const rows = parentRows.length
       if (e.key === 'j' || e.key === 'ArrowDown') {
         e.preventDefault()
         setActiveRowIndex((i) => Math.min(i + 1, rows - 1))
@@ -580,13 +661,20 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
       } else if (e.key === 'Enter') {
         if (activeRowIndex >= 0 && activeRowIndex < rows) {
           e.preventDefault()
-          setDrawerListingId(grid.listings[activeRowIndex].id)
+          const row = parentRows[activeRowIndex]
+          if (row?.isParent) {
+            // Enter on a parent row expands/collapses it
+            onToggleExpand(row.id)
+          } else if (row) {
+            // Enter on a standalone or child (won't happen at top level) opens drawer
+            setDrawerListingId(row.id)
+          }
         }
       } else if (e.key === ' ') {
         if (activeRowIndex >= 0 && activeRowIndex < rows) {
           e.preventDefault()
-          const id = grid.listings[activeRowIndex].id
-          setSelected((prev) => {
+          const id = parentRows[activeRowIndex]?.id
+          if (id) setSelected((prev) => {
             const next = new Set(prev)
             if (next.has(id)) next.delete(id)
             else next.add(id)
@@ -609,15 +697,13 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           window.removeEventListener('keydown', handleSecond, true)
         }, 800)
       } else if (e.key === 'G' && e.shiftKey === false) {
-        // Note: shift-g comes through as 'G' on most browsers — we
-        // accept either way to mean "jump to last row" (vim semantic).
         e.preventDefault()
         setActiveRowIndex(Math.max(0, rows - 1))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lens, grid.listings, activeRowIndex, drawerListingId, shortcutsOpen, searchInput, setSearchInput, setSelected])
+  }, [lens, parentRows, activeRowIndex, drawerListingId, shortcutsOpen, searchInput, setSearchInput, setSelected, onToggleExpand])
 
   // S.4 — open the SSE stream for the lifetime of this workspace. The
   // hook self-dispatches every event into the invalidation channel, so
@@ -906,6 +992,11 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           density={density}
           setDensity={setDensity}
           storageKey={storageKey}
+          defaultVisible={defaultVisible}
+          parentRows={parentRows}
+          childrenByParent={childrenByParent}
+          expandedParents={expandedParents}
+          onToggleExpand={onToggleExpand}
         />
       )}
 
@@ -1562,147 +1653,28 @@ function GridLens(props: {
   setDensity: (d: Density) => void
   // G.2 — storage key namespace for column widths (matches visibleColumns key).
   storageKey: string
+  defaultVisible: string[]
+  parentRows: ListingGridRow[]
+  childrenByParent: Record<string, ListingGridRow[]>
+  expandedParents: Set<string>
+  onToggleExpand: (id: string) => void
 }) {
-  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey } = props
+  const { grid, visible, visibleColumns, setVisibleColumns, columnPickerOpen, setColumnPickerOpen, sortBy, sortDir, onSort, page, onPage, selected, setSelected, onOpenDrawer, onResync, onListingChanged, activeRowIndex, density, setDensity, storageKey, defaultVisible, parentRows, childrenByParent, expandedParents, onToggleExpand } = props
 
-  // ── Parent/child hierarchy — mirrors /products parent → variant structure ──
-  // The API now returns product.parentProduct (actual parent name/sku/thumb)
-  // so parent rows are built from real data, not inferred from variant info.
-  // pageSize=200 means most product families load in one request.
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  // grouping state (expandedParents, parentRows, childrenByParent, onToggleExpand)
+  // is now owned by ListingsWorkspace so the keyboard handler has access.
 
-  const { parentRows, childrenByParent } = useMemo(() => {
-    // Index listings by productId for fast lookup
-    const byProductId = new Map<string, Listing[]>()
-    for (const l of grid.listings) {
-      if (!byProductId.has(l.productId)) byProductId.set(l.productId, [])
-      byProductId.get(l.productId)!.push(l)
-    }
-
-    // Collect all unique parentIds from variant listings
-    // parentId → { parentProduct info, [variantProductId, ...] }
-    const parentMap = new Map<string, {
-      info: NonNullable<Listing['product']['parentProduct']>
-      variantIds: Set<string>
-    }>()
-    for (const l of grid.listings) {
-      const pp = l.product.parentProduct
-      if (!pp || !l.product.parentId) continue
-      if (!parentMap.has(pp.id)) {
-        parentMap.set(pp.id, { info: pp, variantIds: new Set() })
-      }
-      parentMap.get(pp.id)!.variantIds.add(l.productId)
-    }
-
-    // Products that are variants (children) — skip from top-level
-    const variantProductIds = new Set<string>()
-    for (const l of grid.listings) {
-      if (l.product.parentId) variantProductIds.add(l.productId)
-    }
-
-    const rows: ListingGridRow[] = []
-    const children: Record<string, ListingGridRow[]> = {}
-    const added = new Set<string>()
-
-    // ── Step 1: parent product rows (real data from parentProduct field) ─
-    for (const [parentId, { info, variantIds }] of parentMap) {
-      if (added.has(parentId)) continue
-      added.add(parentId)
-
-      const allVariantListings = [...variantIds].flatMap(
-        id => byProductId.get(id) ?? [],
-      )
-      // Also include any direct listings for the parent itself
-      const parentOwnListings = byProductId.get(parentId) ?? []
-      const allListings = [...parentOwnListings, ...allVariantListings]
-
-      // Representative listing used for non-product fields (price, channel, etc.)
-      // on the collapsed parent row — use parent's own listing first, then first variant
-      const rep = parentOwnListings[0] ?? allVariantListings[0]
-      if (!rep) continue
-
-      rows.push({
-        ...rep,
-        id: parentId,
-        productId: parentId,
-        // Use REAL parent product info — correct name, sku, thumbnail
-        product: {
-          id: info.id,
-          sku: info.sku,
-          name: info.name,
-          amazonAsin: null,
-          basePrice: null,
-          totalStock: 0,
-          isParent: true,
-          parentId: null,
-          thumbnailUrl: info.thumbnailUrl,
-          parentProduct: null,
-        },
-        isParent: true,
-        childCount: variantIds.size,
-        parentId: null,
-        _channels: [...new Set(allListings.map(l => l.channel))],
-        _markets:  [...new Set(allListings.map(l => l.marketplace))],
-      })
-
-      // ── Children: one row per variant product ─────────────────────────
-      // id = first listing's id so inline-edit / drawer / resync work
-      children[parentId] = [...variantIds].flatMap(variantId => {
-        const vls = byProductId.get(variantId) ?? []
-        const first = vls[0]
-        if (!first) return []
-        return [{
-          ...first,
-          isParent: false,
-          childCount: 0,
-          parentId,
-          _channels: [...new Set(vls.map(l => l.channel))],
-          _markets:  [...new Set(vls.map(l => l.marketplace))],
-        }]
-      })
-    }
-
-    // ── Step 2: products with direct listings that are NOT variants ──────
-    for (const [productId, listings] of byProductId) {
-      if (added.has(productId)) continue
-      if (variantProductIds.has(productId)) continue
-      added.add(productId)
-
-      const first = listings[0]
-      rows.push({
-        ...first,
-        id: productId,
-        isParent: false,
-        childCount: 0,
-        parentId: null,
-        _channels: [...new Set(listings.map(l => l.channel))],
-        _markets:  [...new Set(listings.map(l => l.marketplace))],
-      })
-    }
-
-    return { parentRows: rows, childrenByParent: children }
-  }, [grid.listings])
-
-  const onToggleExpand = useCallback((id: string) => {
-    setExpandedParents(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-
+  // Selection operates on row IDs: productId for parent rows, listing id for others.
   const allSelected =
-    grid.listings.length > 0 && grid.listings.every(l => selected.has(l.id))
+    parentRows.length > 0 && parentRows.every(r => selected.has(r.id))
 
   const toggleSelectAll = () => {
     const next = new Set(selected)
-    if (allSelected) grid.listings.forEach(l => next.delete(l.id))
-    else grid.listings.forEach(l => next.add(l.id))
+    if (allSelected) parentRows.forEach(r => next.delete(r.id))
+    else parentRows.forEach(r => next.add(r.id))
     setSelected(next)
   }
 
-  // Simple id-based toggle; parent id toggling handled by bulk-action layer
   const toggleSelect = useCallback((id: string, _shiftKey?: boolean) => {
     const next = new Set(selected)
     if (next.has(id)) next.delete(id)
@@ -1849,7 +1821,7 @@ function GridLens(props: {
           title={
             grid.listings.length === 0
               ? 'Nothing to export'
-              : `Download ${grid.listings.length} row${grid.listings.length === 1 ? '' : 's'} as CSV (current filter + sort)`
+              : `Export ${grid.listings.length} listing${grid.listings.length === 1 ? '' : 's'} as flat CSV (all rows on this page)`
           }
           className="h-7 px-2 text-base border border-slate-200 dark:border-slate-700 rounded inline-flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
@@ -1891,6 +1863,7 @@ function GridLens(props: {
               visible={visibleColumns}
               setVisible={setVisibleColumns}
               onClose={() => setColumnPickerOpen(false)}
+              defaultVisible={defaultVisible}
             />
           )}
         </div>
@@ -1943,6 +1916,22 @@ function GridLens(props: {
   )
 }
 
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query || !text) return <>{text}</>
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(${escaped})`, 'ig')
+  const parts = text.split(re)
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1
+          ? <mark key={i} className="bg-yellow-100 text-slate-900 rounded-sm px-0.5">{part}</mark>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  )
+}
+
 function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResync, onListingChanged }: {
   col: string
   listing: ListingGridRow
@@ -1952,6 +1941,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
   onListingChanged: () => void
 }) {
   const l = listing
+  const searchQuery = useContext(SearchContext)
   switch (col) {
     case 'thumb':
       return l.product.thumbnailUrl ? (
@@ -1972,14 +1962,14 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
             }
             className="text-md font-medium text-slate-900 dark:text-slate-100 hover:text-blue-600 text-left truncate block max-w-full"
           >
-            {l.product.name}
+            <Highlight text={l.product.name} query={searchQuery} />
             {l.product.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
           </button>
           <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">
-            {l.product.sku}
-            {isParentRow && l.childCount > 1 && (
+            <Highlight text={l.product.sku} query={searchQuery} />
+            {isParentRow && l.childCount > 0 && (
               <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
-                {l.childCount} listings
+                {l.childCount} {l.childCount === 1 ? 'variant' : 'variants'}
               </span>
             )}
           </div>
@@ -2163,7 +2153,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
 // ────────────────────────────────────────────────────────────────────
 // ColumnPickerMenu
 // ────────────────────────────────────────────────────────────────────
-function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[]; setVisible: (v: string[]) => void; onClose: () => void }) {
+function ColumnPickerMenu({ visible, setVisible, onClose, defaultVisible }: { visible: string[]; setVisible: (v: string[]) => void; onClose: () => void; defaultVisible?: string[] }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -2190,7 +2180,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose }: { visible: string[];
         </label>
       ))}
       <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5 px-2 py-1 flex items-center justify-between">
-        <button onClick={() => setVisible(DEFAULT_VISIBLE)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Reset</button>
+        <button onClick={() => setVisible(defaultVisible ?? DEFAULT_VISIBLE)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Reset</button>
         <button onClick={onClose} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">Close</button>
       </div>
     </div>
