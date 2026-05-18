@@ -74,7 +74,16 @@ type StockRow = {
     /** S.16 — Pareto band materialized weekly. */
     abcClass: 'A' | 'B' | 'C' | 'D' | null
     parentId: string | null
-    parentProduct: { id: string; sku: string; name: string; thumbnailUrl: string | null } | null
+    parentProduct: {
+      id: string
+      sku: string
+      name: string
+      thumbnailUrl: string | null
+      /** grandparentId is non-null when this parent is itself a child
+       *  in a 3-level hierarchy (grandparent → FBA/FBM parent → variant).
+       *  The UI uses this to show a breadcrumb on the synthetic parent row. */
+      grandparentId: string | null
+    } | null
   }
   variation: { id: string; sku: string; variationAttributes: any } | null
 }
@@ -722,7 +731,8 @@ export default function StockWorkspace() {
   // Real-time cross-tab sync — fires whenever /products, /listings, or another
   // stock tab emits an invalidation event over the BroadcastChannel.
   useInvalidationChannel(
-    ['product.updated', 'product.created', 'product.deleted', 'stock.adjusted', 'stock.transferred', 'pim.changed'],
+    ['product.updated', 'product.created', 'product.deleted',
+     'stock.adjusted', 'stock.transferred', 'pim.changed', 'listing.updated'],
     useCallback(() => { fetchStock(); fetchSidecar() }, [fetchStock, fetchSidecar]),
   )
 
@@ -904,6 +914,14 @@ export default function StockWorkspace() {
       const totalReserved  = children.reduce((s, c) => s + c.reserved, 0)
       const totalAvailable = children.reduce((s, c) => s + c.available, 0)
       const locCount = new Set(children.map((c) => c.location.id)).size
+      const locTypes = new Set(children.map((c) => c.location.type))
+      // 3-level breadcrumb: when this parent is itself a child, surface
+      // the grandparent so operators can tell "FBA parent of GALE-JACKET"
+      // from "FBM parent of GALE-JACKET" at a glance.
+      const locSuffix = locCount > 1
+        ? `${locCount} loc`
+        : children[0]?.location.code ?? `${locCount} loc`
+      void locTypes // reserved for F.4 fulfillment-type filter
       return {
         id: pid,
         isParent: true as const,
@@ -917,7 +935,7 @@ export default function StockWorkspace() {
         syncStatus: 'IDLE',
         lastUpdatedAt: children[0]?.lastUpdatedAt ?? '',
         lastSyncedAt: null,
-        location: { id: '', code: `${locCount} loc`, name: '', type: '' },
+        location: { id: '', code: locSuffix, name: '', type: '' },
         product: {
           id: pid,
           sku: pp?.sku ?? '',
@@ -928,7 +946,7 @@ export default function StockWorkspace() {
           basePrice: null,
           thumbnailUrl: pp?.thumbnailUrl ?? null,
           abcClass: null,
-          parentId: null,
+          parentId: pp?.grandparentId ?? null,
           parentProduct: null,
         },
         variation: null,
@@ -950,6 +968,13 @@ export default function StockWorkspace() {
 
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
     if (colKey === 'product') {
+      // For synthetic parent rows in a 3-level hierarchy, product.parentId
+      // is the grandparent ID. Surface it as a breadcrumb chip so operators
+      // can distinguish "FBA parent" from "FBM parent" at a glance.
+      const grandparentSku = row.isParent && row.product.parentId
+        ? items.find(it => it.product.parentProduct?.grandparentId && it.product.parentId === row.id)
+            ?.product.parentProduct?.sku ?? null
+        : null
       return (
         <button
           type="button"
@@ -963,6 +988,7 @@ export default function StockWorkspace() {
             {row.product.sku}
             {row.variation && <span> · {row.variation.sku}</span>}
             {row.product.amazonAsin && <span> · {row.product.amazonAsin}</span>}
+            {grandparentSku && <span className="ml-1 text-slate-400">· under {grandparentSku}</span>}
           </div>
         </button>
       )

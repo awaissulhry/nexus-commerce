@@ -108,7 +108,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
       const skip = (page - 1) * pageSize
 
-      const where: any = {}
+      // Only show leaf products (isParent: false). Parent/intermediate
+      // products that somehow have their own StockLevel rows would appear
+      // as children under the wrong synthetic parent, creating a merged
+      // 3-level mess. isParent: false guarantees the stock table exactly
+      // mirrors the variant-level product structure shown in /products.
+      const where: any = { product: { isParent: false } }
 
       if (q.locationCode) {
         const loc = await prisma.stockLocation.findUnique({
@@ -148,10 +153,14 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
                 id: true, sku: true, name: true, amazonAsin: true,
                 lowStockThreshold: true, costPrice: true, basePrice: true,
                 abcClass: true,
+                isParent: true,
                 parentId: true,
                 parent: {
                   select: {
                     id: true, sku: true, name: true,
+                    // Expose the direct parent's own parentId so the UI
+                    // can detect 3-level hierarchies (grandparent exists).
+                    parentId: true,
                     images: { select: { url: true }, take: 1 },
                   },
                 },
@@ -194,6 +203,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
               sku: r.product.parent.sku,
               name: r.product.parent.name,
               thumbnailUrl: r.product.parent.images?.[0]?.url ?? null,
+              // grandparentId lets the UI know this parent is itself a child
+              // in a 3-level hierarchy (grandparent → FBA/FBM parent → variant).
+              grandparentId: r.product.parent.parentId ?? null,
             } : null,
           },
           variation: r.variation,
