@@ -169,45 +169,45 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (t1.token) {
-      // Baseline (known failing)
-      results.v3_GET_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
+      const h = {
+        Authorization: `Bearer ${t1.token}`,
+        'Amazon-Advertising-API-ClientId': creds.clientId,
+        'Amazon-Advertising-API-Scope': IT_PROFILE,
+      }
 
-      // POST /sp/campaigns/list — v3 list endpoint, different HTTP method,
-      // may use a different auth validator than GET /sp/campaigns
-      const postListRes = await fetch('https://advertising-api-eu.amazon.com/sp/campaigns/list', {
+      // ── v2 SP endpoints (legacy path, may use Atza| validator) ──────────
+      results.v2_sp_campaigns  = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/campaigns', t1.token, IT_PROFILE)
+      results.v2_sp_adGroups   = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/adGroups', t1.token, IT_PROFILE)
+      results.v2_sp_keywords   = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/keywords', t1.token, IT_PROFILE)
+      results.v2_sp_productAds = await tryUrl('https://advertising-api-eu.amazon.com/v2/sp/productAds', t1.token, IT_PROFILE)
+
+      // ── v3 Reports API (async report creation — different auth path?) ────
+      const reportRes = await fetch('https://advertising-api-eu.amazon.com/reporting/reports', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${t1.token}`,
-          'Amazon-Advertising-API-ClientId': creds.clientId,
-          'Amazon-Advertising-API-Scope': IT_PROFILE,
-          'Content-Type': 'application/vnd.spCampaign.v3+json',
+          ...h,
+          'Content-Type': 'application/vnd.createasyncreportrequest.v3+json',
         },
-        body: JSON.stringify({ stateFilter: { include: ['ENABLED', 'PAUSED', 'ARCHIVED'] } }),
+        body: JSON.stringify({
+          name: 'nexus-test',
+          startDate: '2026-05-01',
+          endDate: '2026-05-07',
+          configuration: {
+            adProduct: 'SPONSORED_PRODUCTS',
+            groupBy: ['campaign'],
+            columns: ['impressions', 'clicks', 'cost', 'campaignId', 'campaignName'],
+            reportTypeId: 'spCampaigns',
+            timeUnit: 'DAILY',
+            format: 'GZIP_JSON_LINES',
+          },
+        }),
       })
-      let postListBody: unknown
-      try { postListBody = await postListRes.json() } catch { postListBody = await postListRes.text() }
-      results.v3_POST_campaignsList = { status: postListRes.status, body: postListBody }
+      let reportBody: unknown
+      try { reportBody = await reportRes.json() } catch { reportBody = await reportRes.text() }
+      results.v3_reporting_POST = { status: reportRes.status, body: reportBody }
 
-      // Sponsored Brands (hsa) — different product, may use different validator
-      results.hsa_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/hsa/campaigns', t1.token, IT_PROFILE)
-
-      // Sponsored Display (sd) — another product type
-      results.sd_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/sd/campaigns', t1.token, IT_PROFILE)
-
-      // v2 reports — older reporting endpoint, likely uses legacy validator
-      const v2ReportRes = await fetch('https://advertising-api-eu.amazon.com/v2/reports', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${t1.token}`,
-          'Amazon-Advertising-API-ClientId': creds.clientId,
-          'Amazon-Advertising-API-Scope': IT_PROFILE,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ reportDate: '20260516', metrics: 'impressions,clicks,cost', recordType: 'campaigns' }),
-      })
-      let v2ReportBody: unknown
-      try { v2ReportBody = await v2ReportRes.json() } catch { v2ReportBody = await v2ReportRes.text() }
-      results.v2_reports_POST = { status: v2ReportRes.status, body: v2ReportBody }
+      // ── v3 baseline (known failing, for comparison) ──────────────────────
+      results.v3_sp_campaigns = await tryUrl('https://advertising-api-eu.amazon.com/sp/campaigns', t1.token, IT_PROFILE)
     }
 
     // Try client_credentials token with /sp/campaigns
