@@ -485,6 +485,153 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   //   NEGATIVE_KW     — search terms with high spend + zero orders
   //   HIGH_ACOS       — campaigns with ACOS > acosTarget (default 35%)
   //   LOW_ACOS        — campaigns with ACOS < lowTarget (default 8%) + spend ≥ floor
+  // GET /api/advertising/product-ads — Phase 10 cross-system ad intelligence
+  //
+  // Given a productId (and/or asin/sku), walks the join chain:
+  //   AdProductAd → AdGroup → Campaign → externalCampaignId
+  //   → AmazonAdsDailyPerformance (entityType=CAMPAIGN)
+  //   → AmazonAdsSearchTerm
+  //
+  // Returns a summary tile + per-campaign table + top search terms for
+  // embedding in the /products/[id]/edit "Ads" tab.
+  fastify.get('/advertising/product-ads', async (request, reply) => {
+    const query = request.query as {
+      productId?: string; asin?: string; sku?: string; windowDays?: string
+    }
+    const windowDays = Math.max(7, Math.min(90, Number(query.windowDays ?? 30)))
+    if (!query.productId && !query.asin && !query.sku) {
+      return reply.code(400).send({ error: 'productId, asin, or sku required' })
+    }
+
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - windowDays)
+    since.setUTCHours(0, 0, 0, 0)
+
+    // ── 1. Find all AdProductAd rows for this product ───────────────────
+    const productAds = await prisma.adProductAd.findMany({
+      where: {
+        OR: [
+          ...(query.productId ? [{ productId: query.productId }] : []),
+          ...(query.asin ? [{ asin: query.asin }] : []),
+          ...(query.sku  ? [{ sku:  query.sku  }] : []),
+        ],
+      },
+      select: { id: true, asin: true, sku: true, adGroupId: true },
+    })
+    if (productAds.length === 0) {
+      return { windowDays, productAds: 0, campaigns: [], searchTerms: [], summary: null }
+    }
+
+    // ── 2. Walk to campaigns ────────────────────────────────────────────
+    const adGroupIds = [...new Set(productAds.map((a) => a.adGroupId))]
+    const adGroups = await prisma.adGroup.findMany({
+      where: { id: { in: adGroupIds } },
+      select: { id: true, campaignId: true },
+    })
+    const campaignIds = [...new Set(adGroups.map((g) => g.campaignId))]
+    const campaigns = await prisma.campaign.findMany({
+      where: { id: { in: campaignIds } },
+      select: {
+        id: true, name: true, adProduct: true, marketplace: true,
+        status: true, externalCampaignId: true,
+      },
+    })
+
+    // ── 3. AmazonAdsDailyPerformance for these campaigns ───────────────
+    const extIds = campaigns
+      .map((c) => c.externalCampaignId)
+      .filter((x): x is string => x != null)
+
+    const perfRows = await prisma.amazonAdsDailyPerformance.groupBy({
+      by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
+      where: {
+        entityId: { in: extIds },
+        entityType: 'CAMPAIGN',
+        date: { gte: since },
+      },
+      _sum: {
+        impressions:   true,
+        clicks:        true,
+        costMicros:    true,
+        sales7dCents:  true,
+        sales14dCents: true,
+        orders7d:      true,
+      },
+    })
+
+    // Index perf by externalCampaignId
+    const perfByExtId = new Map(perfRows.map((r) => [r.entityId, r]))
+
+    const campaignData = campaigns.map((c) => {
+      const perf = c.externalCampaignId ? perfByExtId.get(c.externalCampaignId) : undefined
+      const spendMicros  = Number(perf?._sum.costMicros ?? 0n)
+      const adSalesCents = (perf?._sum.sales7dCents ?? 0) + (perf?._sum.sales14dCents ?? 0)
+      const spendCents   = Math.round(spendMicros / 10_000)
+      const acos = adSalesCents > 0 ? (spendCents / adSalesCents) * 100 : null
+      return {
+        id: c.id,
+        externalCampaignId: c.externalCampaignId,
+        name: c.name,
+        adProduct: c.adProduct ?? 'UNKNOWN',
+        marketplace: c.marketplace ?? '—',
+        status: c.status,
+        impressions:   perf?._sum.impressions ?? 0,
+        clicks:        perf?._sum.clicks ?? 0,
+        orders:        perf?._sum.orders7d ?? 0,
+        spendCents,
+        adSalesCents,
+        currencyCode:  perf?.currencyCode ?? 'EUR',
+        acos:          acos != null ? Math.round(acos * 10) / 10 : null,
+        hasV1Data:     perf != null,
+      }
+    })
+
+    // ── 4. Top search terms for these campaigns ─────────────────────────
+    const searchTermRows = await prisma.amazonAdsSearchTerm.groupBy({
+      by: ['query', 'matchType', 'adProduct', 'marketplace'],
+      where: {
+        campaignId: { in: extIds },
+        date: { gte: since },
+      },
+      _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
+      orderBy: { _sum: { costMicros: 'desc' } },
+      take: 10,
+    })
+
+    const searchTerms = searchTermRows.map((r) => {
+      const spendMicros  = Number(r._sum.costMicros ?? 0n)
+      const adSalesCents = r._sum.sales7dCents ?? 0
+      const spendCents   = Math.round(spendMicros / 10_000)
+      return {
+        query:       r.query,
+        matchType:   r.matchType,
+        adProduct:   r.adProduct,
+        marketplace: r.marketplace,
+        impressions: r._sum.impressions ?? 0,
+        clicks:      r._sum.clicks ?? 0,
+        orders:      r._sum.orders7d ?? 0,
+        spendCents,
+        adSalesCents,
+        acos: adSalesCents > 0 ? Math.round((spendCents / adSalesCents) * 1000) / 10 : null,
+      }
+    })
+
+    // ── 5. Summary ──────────────────────────────────────────────────────
+    const totalSpend = campaignData.reduce((s, c) => s + c.spendCents, 0)
+    const totalSales = campaignData.reduce((s, c) => s + c.adSalesCents, 0)
+    const summary = {
+      campaignCount: campaigns.length,
+      productAdCount: productAds.length,
+      totalSpendCents: totalSpend,
+      totalAdSalesCents: totalSales,
+      acos: totalSales > 0 ? Math.round((totalSpend / totalSales) * 1000) / 10 : null,
+      windowDays,
+    }
+
+    reply.header('Cache-Control', 'private, max-age=60')
+    return { windowDays, productAds: productAds.length, campaigns: campaignData, searchTerms, summary }
+  })
+
   //   STALE_CAMPAIGN  — ENABLED campaigns with 0 impressions in windowDays
   //
   // Each insight has a severity (critical | warning | info), a title,

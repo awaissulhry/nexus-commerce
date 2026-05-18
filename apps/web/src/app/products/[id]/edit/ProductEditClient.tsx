@@ -22,6 +22,7 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import ListOnChannelDropdown from './ListOnChannelDropdown'
 import MasterDataTab from './tabs/MasterDataTab'
 import { AnalyticsTab } from './tabs/AnalyticsTab'
+import { AdsTab } from './tabs/AdsTab'
 import { TimelineTab } from './tabs/TimelineTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
@@ -361,6 +362,7 @@ export default function ProductEditClient({
       'activity',
       'matrix',
       'analytics',
+      'ads',
     ]
     return [...base, ...orderedChannels]
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -698,6 +700,13 @@ export default function ProductEditClient({
             >
               Analytics
             </TopTabButton>
+            <TopTabButton
+              tabKey="ads"
+              active={topTab === 'ads'}
+              onClick={() => goToTab('ads')}
+            >
+              Ads
+            </TopTabButton>
             {orderedChannels.map((channel) => {
               const isActive = topTab === channel
               const channelListings = clientListings[channel] ?? []
@@ -873,6 +882,16 @@ export default function ProductEditClient({
         {topTab === 'analytics' && (
           <div role="tabpanel" id="panel-analytics" aria-labelledby="tab-analytics">
             <AnalyticsTab productId={product.id} />
+          </div>
+        )}
+
+        {topTab === 'ads' && (
+          <div role="tabpanel" id="panel-ads" aria-labelledby="tab-ads">
+            <AdsTab
+              productId={product.id}
+              asin={product.amazonAsin ?? null}
+              sku={product.sku}
+            />
           </div>
         )}
 
