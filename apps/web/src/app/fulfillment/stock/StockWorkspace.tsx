@@ -949,6 +949,24 @@ export default function StockWorkspace() {
   const allSelected = gridRows.length > 0 && gridRows.every((r) => selected.has(r.id))
 
   const renderCell = useCallback((row: StockGridRow, colKey: string) => {
+    if (colKey === 'product') {
+      return (
+        <button
+          type="button"
+          onClick={() => setDrawerProductId(row.product.id)}
+          className="min-w-0 overflow-hidden text-left w-full group"
+        >
+          <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            {row.product.name}
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
+            {row.product.sku}
+            {row.variation && <span> · {row.variation.sku}</span>}
+            {row.product.amazonAsin && <span> · {row.product.amazonAsin}</span>}
+          </div>
+        </button>
+      )
+    }
     if (colKey === 'open') {
       return (
         <button
@@ -3388,12 +3406,12 @@ const COLUMN_META: Record<ColumnKey, {
   product: {
     align: 'left',
     head: 'Product',
+    // Badge-free fallback — the renderCell intercept handles this column
+    // with click-to-open behaviour. This entry is kept for the column
+    // picker metadata (head label) but its cell() is never called.
     cell: ({ it }) => (
       <div className="min-w-0 overflow-hidden">
-        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate inline-flex items-center gap-1.5 max-w-full">
-          <span className="truncate">{it.product.name}</span>
-          {it.product.abcClass && <AbcBadge cls={it.product.abcClass} />}
-        </div>
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{it.product.name}</div>
         <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
           {it.product.sku}
           {it.variation && <span> · {it.variation.sku}</span>}
