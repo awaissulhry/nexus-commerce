@@ -1,36 +1,34 @@
 /**
- * AD.1 — Cron wrappers for the Trading Desk substrate jobs.
+ * Cron wrappers for the Trading Desk substrate jobs (post-H.2e).
  *
- *   ads-sync                 every 30 min — pulls campaign structure
- *   fba-storage-age-ingest   every 6 hours — refreshes aged-stock feed
+ *   fba-storage-age-ingest   every 6h — refreshes aged-stock feed
  *   true-profit-rollup       nightly 03:00 UTC — re-aggregates yesterday
- *   ads-metrics-ingest       hourly :22 — legacy metrics path
+ *   fba-fees-ingest          weekly Sun 02:00 UTC — SP-API fees feed
  *
- * Phase 11 — Reports API pipeline crons (all gated by same env flag):
+ * Reports API pipeline (performance data):
  *   ads-report-create        daily 01:15 UTC — creates yesterday's reports
  *   ads-report-create-st     daily 01:30 UTC — creates search-term reports
  *   ads-report-create-pl     daily 01:45 UTC — creates placement reports
  *   ads-report-poll          every 10 min — advances PENDING → COMPLETED
  *   ads-report-ingest        every 15 min :07 — downloads + writes rows
- *   ads-search-term-cleanup  weekly Sunday 04:00 UTC — prunes old rows
+ *   ads-search-term-cleanup  weekly Sun 04:00 UTC — prunes old rows
  *
- * H.2d — Amazon Ads API v1 unified export pipeline (parallel to ads-sync
- * until H.2e cuts that over):
- *   ads-v1-export-create     every 6h — exports 4 resources per profile
+ * Amazon Ads API v1 unified export pipeline (structure data):
+ *   ads-v1-export-create     every 6h — exports 4 resources × N profiles
  *   ads-v1-export-poll       every 5 min — advances PENDING → COMPLETED
  *   ads-v1-export-ingest     every 5 min :02,:07,... — downloads + upsert
  *
- * All jobs are gated by `NEXUS_ENABLE_AMAZON_ADS_CRON=1` and default
- * off in dev. Sandbox mode writes to DB but skips live Amazon calls.
+ * Retired in H.2e (2026-05-18): ads-sync (Phase B per-product structure
+ * sync, replaced by v1 export pipeline above). Retired earlier:
+ * ads-metrics-ingest (legacy synchronous reports, replaced by Phase 11
+ * async pipeline).
+ *
+ * All jobs gated by NEXUS_ENABLE_AMAZON_ADS_CRON=1; default off in dev.
  */
 
 import cron from 'node-cron'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import {
-  runAdsSyncOnce as runAdsSyncCore,
-  summarizeAdsSync,
-} from '../services/advertising/ads-sync.service.js'
 import {
   runFbaStorageAgeIngestOnce as runFbaStorageAgeIngestCore,
   summarizeFbaStorageAge,
@@ -63,7 +61,6 @@ import {
 } from '../services/advertising/ads-v1-sync.service.js'
 import prisma from '../db.js'
 
-let adsSyncTask: ReturnType<typeof cron.schedule> | null = null
 let fbaStorageAgeTask: ReturnType<typeof cron.schedule> | null = null
 let trueProfitRollupTask: ReturnType<typeof cron.schedule> | null = null
 let adsMetricsIngestTask: ReturnType<typeof cron.schedule> | null = null
@@ -77,39 +74,6 @@ let searchTermCleanupTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportCreateTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportPollTask: ReturnType<typeof cron.schedule> | null = null
 let v1ExportIngestTask: ReturnType<typeof cron.schedule> | null = null
-
-// ── ads-sync ──────────────────────────────────────────────────────────
-
-export async function runAdsSyncCron(): Promise<void> {
-  try {
-    await recordCronRun('ads-sync', async () => {
-      const s = await runAdsSyncCore()
-      const summary = summarizeAdsSync(s)
-      logger.info('ads-sync cron: completed', { summary })
-      return summary
-    })
-  } catch (err) {
-    logger.error('ads-sync cron: failure', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-}
-
-export function startAdsSyncCron(): void {
-  if (adsSyncTask) {
-    logger.warn('ads-sync cron already started')
-    return
-  }
-  const schedule = process.env.NEXUS_ADS_SYNC_SCHEDULE ?? '*/30 * * * *'
-  if (!cron.validate(schedule)) {
-    logger.error('ads-sync cron: invalid schedule', { schedule })
-    return
-  }
-  adsSyncTask = cron.schedule(schedule, () => {
-    void runAdsSyncCron()
-  })
-  logger.info('ads-sync cron: scheduled', { schedule })
-}
 
 // ── fba-storage-age-ingest ────────────────────────────────────────────
 
@@ -440,37 +404,31 @@ export function startV1ExportIngestCron(): void {
 // ── Bulk start (called from index.ts when NEXUS_ENABLE_AMAZON_ADS_CRON=1) ──
 
 export function startAllAdvertisingCrons(): void {
-  startAdsSyncCron()
+  // H.2e: ads-sync (Phase B per-product orchestrator) retired in favor
+  // of the v1 unified export pipeline below. The v1 crons populate the
+  // same Campaign/AdGroup/AdTarget/AdProductAd tables but cover all 3
+  // ad products in one unified flow with cleaner schema (deliveryStatus,
+  // creativeJson, first-class negatives).
+  // Also retired: legacy ads-metrics-ingest cron — replaced by the
+  // Phase 11 async Reports pipeline (ads-report-create/poll/ingest).
   startFbaStorageAgeIngestCron()
   startTrueProfitRollupCron()
-  // Phase B follow-up: legacy ads-metrics-ingest retired. It synchronously
-  // polled /reporting/reports for up to 10 min per profile and hard-coded
-  // adProduct=SPONSORED_PRODUCTS, generating one error per profile per
-  // hour. The async Phase 11 pipeline (ads-report-create + poll +
-  // ingest) below replaces it 100%, supports all ad products, and runs
-  // on the recommended async cadence. Service code retained for ad-hoc
-  // manual invocation; cron registration removed.
-  // startAdsMetricsIngestCron()  // ← retired
   // AD.4 Step 6: FBA fees
   startFbaFeesIngestCron()
-  // Phase 11: Reports API pipeline
+  // Phase 11: Reports API pipeline (performance data)
   startReportCreateCron()
   startReportCreateStCron()
   startReportCreatePlCron()
   startReportPollCron()
   startReportIngestCron()
   startSearchTermCleanupCron()
-  // H.2d: v1 unified export pipeline (parallel to ads-sync until H.2e)
+  // H.2: v1 unified export pipeline (structure data — campaigns/adGroups/targets/ads)
   startV1ExportCreateCron()
   startV1ExportPollCron()
   startV1ExportIngestCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
-  if (adsSyncTask) {
-    adsSyncTask.stop()
-    adsSyncTask = null
-  }
   if (fbaStorageAgeTask) {
     fbaStorageAgeTask.stop()
     fbaStorageAgeTask = null

@@ -24,10 +24,6 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { testConnection, adsMode } from '../services/advertising/ads-api-client.js'
 import {
-  runAdsSyncOnce,
-  summarizeAdsSync,
-} from '../services/advertising/ads-sync.service.js'
-import {
   runFbaStorageAgeIngestOnce,
   summarizeFbaStorageAge,
 } from '../services/advertising/fba-storage-age-ingest.service.js'
@@ -911,10 +907,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   //   - search-term cardinality + negative-keyword-candidate count
   // Designed for the Trading Desk landing page; one round-trip, no FK joins.
   fastify.get('/advertising/overview/v1', async (_request, reply) => {
-    const { ADAPTERS } = await import('../services/advertising/adapters/index.js')
     const { findNegativeKeywordCandidates } = await import(
       '../services/advertising/ads-reports.service.js'
     )
+    // H.2e: The per-product adapter registry is retired. The v1 unified
+    // export pipeline covers all 3 ad products from a single code path.
+    // This snapshot keeps the same response shape for back-compat with
+    // the Trading Desk landing page.
+    const ADAPTERS_SNAPSHOT = [
+      { adProduct: 'SPONSORED_PRODUCTS', live: true, blockerReason: null },
+      { adProduct: 'SPONSORED_BRANDS',   live: true, blockerReason: null },
+      { adProduct: 'SPONSORED_DISPLAY',  live: true, blockerReason: null },
+    ]
 
     const since30d = new Date()
     since30d.setUTCDate(since30d.getUTCDate() - 30)
@@ -1011,11 +1015,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           ? c.salesCents / (Number(c.costMicros) / 1_000_000) / 100
           : null,
       })),
-      adapters: ADAPTERS.map((a) => ({
-        adProduct: a.adProduct,
-        live: a.live,
-        blockerReason: a.liveBlockerReason ?? null,
-      })),
+      adapters: ADAPTERS_SNAPSHOT,
       campaigns: { byAdProduct },
       reports: reportJobs,
       searchTerms: {
@@ -1580,9 +1580,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Manual cron triggers (sandbox-safe) ─────────────────────────────
   // Mirror the /sync-logs/cron pattern so the cron status panel can
   // surface manual triggers in the audit feed.
+  // H.2e: ads-sync (Phase B) retired; this trigger now runs the v1
+  // unified export cycle. URL preserved for back-compat with existing
+  // monitoring + the /sync-logs/cron audit panel.
   fastify.post('/advertising/cron/ads-sync/trigger', async (_request, _reply) => {
-    const s = await runAdsSyncOnce()
-    return { ok: true, summary: summarizeAdsSync(s), detail: s }
+    const { runV1ExportCycle, summarizeCycle } = await import(
+      '../services/advertising/ads-v1-sync.service.js'
+    )
+    const result = await runV1ExportCycle({})
+    return { ok: true, summary: summarizeCycle(result), detail: result }
   })
 
   fastify.post(
