@@ -1064,6 +1064,30 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, ...result }
   })
 
+  // POST /api/advertising/debug/backfill-campaign-adproduct — Phase B follow-up
+  //
+  // One-time backfill: derives Campaign.adProduct from the legacy `type`
+  // column for existing rows where adProduct is null. Idempotent. The
+  // sync code itself was fixed to populate both columns going forward;
+  // this route just patches the rows that already exist.
+  fastify.post('/advertising/debug/backfill-campaign-adproduct', async (_request, _reply) => {
+    const mapping: Array<{ type: 'SP' | 'SB' | 'SD'; adProduct: string }> = [
+      { type: 'SP', adProduct: 'SPONSORED_PRODUCTS' },
+      { type: 'SB', adProduct: 'SPONSORED_BRANDS'  },
+      { type: 'SD', adProduct: 'SPONSORED_DISPLAY' },
+    ]
+    const results: Record<string, number> = {}
+    for (const { type, adProduct } of mapping) {
+      const r = await prisma.campaign.updateMany({
+        where: { type, adProduct: null },
+        data: { adProduct },
+      })
+      results[type] = r.count
+    }
+    const totalUpdated = Object.values(results).reduce((s, n) => s + n, 0)
+    return { ok: true, totalUpdated, byType: results }
+  })
+
   // POST /api/advertising/debug/probe-endpoints — Phase A diagnostic
   //
   // Fires 12+ probes against Amazon Ads endpoints (legacy v2, v3 list,

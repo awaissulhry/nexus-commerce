@@ -101,6 +101,12 @@ async function syncCampaignsForProfile(
         where: { externalCampaignId: c.campaignId, marketplace },
         select: { id: true },
       })
+      // v1 adProduct value matches AmazonAdsDailyPerformance.adProduct
+      // and AmazonAdsReportJob.adProduct so overview groupBys join cleanly.
+      const adProduct =
+        c.campaignType === 'sponsoredBrands'   ? 'SPONSORED_BRANDS'   :
+        c.campaignType === 'sponsoredDisplay'  ? 'SPONSORED_DISPLAY'  :
+        'SPONSORED_PRODUCTS'
       const data = {
         name: c.name,
         type: c.campaignType === 'sponsoredBrands'
@@ -108,6 +114,11 @@ async function syncCampaignsForProfile(
           : c.campaignType === 'sponsoredDisplay'
             ? ('SD' as const)
             : ('SP' as const),
+        // Phase B follow-up: schema comment is explicit that sync code must
+        // populate BOTH `type` (legacy enum) and `adProduct` (v1 string)
+        // until M3 cutover. Without this, the v1 overview byAdProduct
+        // groupBy returns empty for every connected profile.
+        adProduct,
         status: STATE_TO_PRISMA[c.state] ?? 'ENABLED',
         dailyBudget: c.dailyBudget,
         startDate: dateFromAmazonYmd(c.startDate) ?? new Date(),

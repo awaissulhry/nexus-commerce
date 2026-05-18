@@ -351,7 +351,14 @@ export function startAllAdvertisingCrons(): void {
   startAdsSyncCron()
   startFbaStorageAgeIngestCron()
   startTrueProfitRollupCron()
-  startAdsMetricsIngestCron()
+  // Phase B follow-up: legacy ads-metrics-ingest retired. It synchronously
+  // polled /reporting/reports for up to 10 min per profile and hard-coded
+  // adProduct=SPONSORED_PRODUCTS, generating one error per profile per
+  // hour. The async Phase 11 pipeline (ads-report-create + poll +
+  // ingest) below replaces it 100%, supports all ad products, and runs
+  // on the recommended async cadence. Service code retained for ad-hoc
+  // manual invocation; cron registration removed.
+  // startAdsMetricsIngestCron()  // ← retired
   // AD.4 Step 6: FBA fees
   startFbaFeesIngestCron()
   // Phase 11: Reports API pipeline
