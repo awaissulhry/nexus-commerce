@@ -1168,10 +1168,30 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // No DB writes. Manual-trigger only. Use with the exportIds harvested
   // from the H.1 probe results.
   fastify.get('/advertising/debug/export-status', async (request, reply) => {
-    const q = request.query as { profileId?: string; exportId?: string }
+    const q = request.query as {
+      profileId?: string
+      exportId?: string
+      // Phase H.1 finding: Amazon's /exports/{id} endpoint requires the
+      // SAME MIME type that was used to create the export (per resource
+      // type). The "available" types Amazon will accept here are:
+      //   application/vnd.campaignsexport.v1+json
+      //   application/vnd.adgroupsexport.v1+json
+      //   application/vnd.targetsexport.v1+json
+      //   application/vnd.adsexport.v1+json
+      // Default to campaigns since that's the most common.
+      resourceType?: 'campaigns' | 'adGroups' | 'targets' | 'ads'
+    }
     if (!q.profileId || !q.exportId) {
       return reply.code(400).send({ error: 'profileId and exportId both required' })
     }
+    const MIME_BY_RESOURCE: Record<string, string> = {
+      campaigns: 'application/vnd.campaignsexport.v1+json',
+      adGroups:  'application/vnd.adgroupsexport.v1+json',
+      targets:   'application/vnd.targetsexport.v1+json',
+      ads:       'application/vnd.adsexport.v1+json',
+    }
+    const acceptMime = MIME_BY_RESOURCE[q.resourceType ?? 'campaigns']
+      ?? MIME_BY_RESOURCE.campaigns
     const conn = await prisma.amazonAdsConnection.findUnique({
       where: { profileId: q.profileId },
       select: { region: true, credentialsEncrypted: true },
@@ -1188,7 +1208,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         region: region as 'EU' | 'NA' | 'FE',
         method: 'GET',
         path: `/exports/${q.exportId}`,
-        acceptHeader: 'application/vnd.export.v1+json',
+        acceptHeader: acceptMime,
       })
     } catch (err) {
       statusError = err instanceof Error ? err.message : String(err)
