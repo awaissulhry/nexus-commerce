@@ -234,8 +234,20 @@ const CHANNEL_TONE: Record<string, string> = {
 
 // ── Component ───────────────────────────────────────────────────────
 export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleOverride, breadcrumbs, storageKey: storageKeyProp, channelDefaultVisible }: Props) {
-  const storageKey = storageKeyProp ?? 'listings'
-  const defaultVisible = channelDefaultVisible ?? DEFAULT_VISIBLE
+  // Market-specific pages get their own storage namespace (amazon-it, ebay-de, …)
+  // so column layouts don't bleed across markets.
+  const storageKey = (storageKeyProp ?? 'listings') +
+    (lockMarketplace ? `-${lockMarketplace.toLowerCase()}` : '')
+
+  // Auto-exclude columns that are redundant for locked surfaces:
+  //   lockChannel=AMAZON  → 'channel' always shows "AMAZON" — pointless
+  //   lockMarketplace=IT  → 'marketplace' always shows "IT" — pointless
+  const defaultVisible = useMemo(() => {
+    let base = channelDefaultVisible ?? DEFAULT_VISIBLE
+    if (lockChannel) base = base.filter(k => k !== 'channel')
+    if (lockMarketplace) base = base.filter(k => k !== 'marketplace')
+    return base
+  }, [channelDefaultVisible, lockChannel, lockMarketplace])
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
