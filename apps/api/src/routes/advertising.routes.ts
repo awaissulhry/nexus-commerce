@@ -401,6 +401,87 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return job
   })
 
+  // ── Phase 6: search-term + placement cycles + cleanup + neg-kw query ──
+
+  // POST /api/advertising/reports/create-search-terms-cycle
+  fastify.post('/advertising/reports/create-search-terms-cycle', async (request, reply) => {
+    const body = request.body as {
+      startDate?: string
+      endDate?: string
+      adProducts?: Array<'SPONSORED_PRODUCTS' | 'SPONSORED_BRANDS'>
+    }
+    if (!body.startDate || !body.endDate) {
+      return reply.code(400).send({ error: 'startDate and endDate (YYYY-MM-DD) required' })
+    }
+    const { runSearchTermReportCycle } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await runSearchTermReportCycle({
+      startDate: body.startDate,
+      endDate: body.endDate,
+      adProducts: body.adProducts,
+    })
+    return { ok: true, ...result }
+  })
+
+  // POST /api/advertising/reports/create-placements-cycle (SP only)
+  fastify.post('/advertising/reports/create-placements-cycle', async (request, reply) => {
+    const body = request.body as { startDate?: string; endDate?: string }
+    if (!body.startDate || !body.endDate) {
+      return reply.code(400).send({ error: 'startDate and endDate (YYYY-MM-DD) required' })
+    }
+    const { runPlacementReportCycle } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await runPlacementReportCycle({
+      startDate: body.startDate,
+      endDate: body.endDate,
+    })
+    return { ok: true, ...result }
+  })
+
+  // POST /api/advertising/reports/cleanup-search-terms?daysToKeep=90
+  fastify.post('/advertising/reports/cleanup-search-terms', async (request, _reply) => {
+    const query = request.query as { daysToKeep?: string }
+    const daysToKeep = query.daysToKeep ? Math.max(7, Math.min(365, Number(query.daysToKeep))) : 90
+    const { cleanupOldSearchTerms } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const result = await cleanupOldSearchTerms(daysToKeep)
+    return { ok: true, ...result }
+  })
+
+  // GET /api/advertising/reports/negative-keyword-candidates
+  //    ?lookbackDays=30&minSpend=5&limit=100&profileId=&marketplace=
+  fastify.get('/advertising/reports/negative-keyword-candidates', async (request, _reply) => {
+    const query = request.query as {
+      lookbackDays?: string
+      minSpend?: string
+      limit?: string
+      profileId?: string
+      marketplace?: string
+    }
+    const { findNegativeKeywordCandidates } = await import(
+      '../services/advertising/ads-reports.service.js'
+    )
+    const candidates = await findNegativeKeywordCandidates({
+      lookbackDays: query.lookbackDays ? Math.max(1, Math.min(180, Number(query.lookbackDays))) : 30,
+      minSpend: query.minSpend ? Math.max(0, Number(query.minSpend)) : 5,
+      limit: query.limit ? Math.max(1, Math.min(500, Number(query.limit))) : 100,
+      profileId: query.profileId,
+      marketplace: query.marketplace,
+    })
+    // BigInt → string for JSON safety
+    return {
+      ok: true,
+      count: candidates.length,
+      candidates: candidates.map((c) => ({
+        ...c,
+        totalCostMicros: c.totalCostMicros.toString(),
+      })),
+    }
+  })
+
   // ── Manual cron triggers (sandbox-safe) ─────────────────────────────
   // Mirror the /sync-logs/cron pattern so the cron status panel can
   // surface manual triggers in the audit feed.

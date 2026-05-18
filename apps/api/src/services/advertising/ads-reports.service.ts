@@ -78,6 +78,40 @@ export const CAMPAIGN_REPORT_TYPE_ID: Record<AdProduct, string> = {
   SPONSORED_BRANDS: 'sbCampaigns',
 }
 
+// ── Phase 6: Search term + placement column factories ────────────────
+// SP and SB support search-term reports (what user queries triggered
+// our ads). SD has no equivalent (it's not search-driven). Placement
+// reports are SP-only.
+
+export const SEARCH_TERM_COLUMNS: Partial<Record<AdProduct, string[]>> = {
+  SPONSORED_PRODUCTS: [
+    'date', 'campaignId', 'adGroupId',
+    'keywordId', 'keyword', 'matchType', 'searchTerm',
+    'impressions', 'clicks', 'cost',
+    'sales7d', 'purchases7d',
+  ],
+  SPONSORED_BRANDS: [
+    'date', 'campaignId', 'adGroupId',
+    'keywordId', 'keyword', 'matchType', 'searchTerm',
+    'impressions', 'clicks', 'cost',
+    'attributedSales14d', 'attributedDetailPageViewsClicks14d',
+  ],
+}
+
+export const SEARCH_TERM_REPORT_TYPE_ID: Partial<Record<AdProduct, string>> = {
+  SPONSORED_PRODUCTS: 'spSearchTerm',
+  SPONSORED_BRANDS: 'sbSearchTerm',
+}
+
+export const PLACEMENT_COLUMNS: string[] = [
+  'date', 'campaignId',
+  'placementClassification', // top of search | rest of search | product pages
+  'impressions', 'clicks', 'cost',
+  'sales7d', 'purchases7d', 'unitsSoldClicks7d',
+]
+
+export const PLACEMENT_REPORT_TYPE_ID = 'spPlacement'
+
 // ── Stage 1: create a report job ─────────────────────────────────────
 
 export interface CreateReportJobResult {
@@ -275,6 +309,14 @@ interface ReportRow {
   campaignId?: string | number
   campaignName?: string
   campaignStatus?: string
+  // Search-term + placement rows add these:
+  adGroupId?: string | number
+  keywordId?: string | number
+  keyword?: string
+  matchType?: string
+  searchTerm?: string
+  placementClassification?: string
+  placement?: string
   impressions?: number
   clicks?: number
   cost?: number
@@ -290,6 +332,11 @@ interface ReportRow {
   attributedSales14d?: number
   attributedDetailPageViewsClicks14d?: number
   [key: string]: unknown
+}
+
+function toStrIdOrNull(v: string | number | undefined | null): string | null {
+  if (v == null) return null
+  return typeof v === 'string' ? v : String(v)
 }
 
 function toMicros(amount: number | undefined): bigint {
@@ -357,8 +404,39 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     return { jobId, rowsIngested: 0, error: `parse: ${msg}` }
   }
 
-  logger.info('[ads-reports] ingesting', { jobId, rowsToProcess: rows.length, adProduct: job.adProduct })
+  logger.info('[ads-reports] ingesting', {
+    jobId, rowsToProcess: rows.length,
+    adProduct: job.adProduct, reportTypeId: job.reportTypeId,
+  })
 
+  // Dispatch on reportTypeId — each variant writes to a different table.
+  let upserted = 0
+  if (job.reportTypeId === 'spCampaigns' || job.reportTypeId === 'sdCampaigns' || job.reportTypeId === 'sbCampaigns') {
+    upserted = await ingestCampaignRows(job, rows, marketplace, currencyCode)
+  } else if (job.reportTypeId === 'spSearchTerm' || job.reportTypeId === 'sbSearchTerm') {
+    upserted = await ingestSearchTermRows(job, rows, marketplace, currencyCode)
+  } else if (job.reportTypeId === PLACEMENT_REPORT_TYPE_ID) {
+    upserted = await ingestPlacementRows(job, rows, marketplace, currencyCode)
+  } else {
+    logger.warn('[ads-reports] unknown reportTypeId', { jobId, reportTypeId: job.reportTypeId })
+  }
+
+  await prisma.amazonAdsReportJob.update({
+    where: { id: jobId },
+    data: { rowsIngested: upserted },
+  })
+
+  return { jobId, rowsIngested: upserted }
+}
+
+// ── Per-report-type ingest helpers ───────────────────────────────────
+
+async function ingestCampaignRows(
+  job: { id: string; profileId: string; adProduct: string },
+  rows: ReportRow[],
+  marketplace: string,
+  currencyCode: string,
+): Promise<number> {
   let upserted = 0
   for (const r of rows) {
     if (!r.date || r.campaignId == null) continue
@@ -366,15 +444,12 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
     const date = new Date(r.date)
     if (Number.isNaN(date.getTime())) continue
 
-    // Resolve local Campaign.id if we have it (best-effort join).
     const local = await prisma.campaign.findFirst({
       where: { externalCampaignId: entityId, marketplace },
       select: { id: true },
     })
 
-    // Per-adProduct attribution mapping. SP uses sales7d; SD uses bare
-    // `sales` which we store in sales7dCents for cross-product comparability;
-    // SB uses attributedSales14d → sales14dCents.
+    // Per-adProduct attribution mapping (see Phase 4 commit message)
     const sales7dCents =
       job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
       : job.adProduct === 'SPONSORED_DISPLAY' ? toCents(r.sales)
@@ -400,54 +475,151 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
           },
         },
         create: {
-          profileId: job.profileId,
-          marketplace,
-          adProduct: job.adProduct,
-          date,
-          entityType: 'CAMPAIGN',
-          entityId,
+          profileId: job.profileId, marketplace, adProduct: job.adProduct,
+          date, entityType: 'CAMPAIGN', entityId,
           localEntityId: local?.id ?? null,
-          impressions: r.impressions ?? 0,
-          clicks: r.clicks ?? 0,
-          costMicros: toMicros(r.cost),
-          currencyCode,
-          sales7dCents,
-          sales14dCents,
-          orders7d,
-          units7d,
-          viewableImpressions,
-          reportRunId: jobId,
-          reportedAt: new Date(),
+          impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost), currencyCode,
+          sales7dCents, sales14dCents, orders7d, units7d, viewableImpressions,
+          reportRunId: job.id, reportedAt: new Date(),
         },
         update: {
-          marketplace,
-          localEntityId: local?.id ?? null,
-          impressions: r.impressions ?? 0,
-          clicks: r.clicks ?? 0,
-          costMicros: toMicros(r.cost),
-          currencyCode,
-          sales7dCents,
-          sales14dCents,
-          orders7d,
-          units7d,
-          viewableImpressions,
-          reportRunId: jobId,
-          reportedAt: new Date(),
+          marketplace, localEntityId: local?.id ?? null,
+          impressions: r.impressions ?? 0, clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost), currencyCode,
+          sales7dCents, sales14dCents, orders7d, units7d, viewableImpressions,
+          reportRunId: job.id, reportedAt: new Date(),
         },
       })
       upserted += 1
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      logger.warn('[ads-reports] row upsert failed', { jobId, entityId, error: msg.slice(0, 200) })
+      logger.warn('[ads-reports] campaign row upsert failed', { jobId: job.id, entityId, error: msg.slice(0, 200) })
     }
   }
+  return upserted
+}
 
-  await prisma.amazonAdsReportJob.update({
-    where: { id: jobId },
-    data: { rowsIngested: upserted },
-  })
+async function ingestSearchTermRows(
+  job: { id: string; profileId: string; adProduct: string },
+  rows: ReportRow[],
+  marketplace: string,
+  currencyCode: string,
+): Promise<number> {
+  // Search-term ingest: delete any rows previously written by this job
+  // (re-ingest idempotency), then bulk-insert fresh. Natural key is wide
+  // (profileId, date, campaignId, adGroupId, query, matchType) — clearing
+  // by reportRunId avoids needing a composite unique constraint.
+  if (rows.length > 0) {
+    await prisma.amazonAdsSearchTerm.deleteMany({ where: { reportRunId: job.id } })
+  }
 
-  return { jobId, rowsIngested: upserted }
+  const inserts: Array<Parameters<typeof prisma.amazonAdsSearchTerm.create>[0]['data']> = []
+  for (const r of rows) {
+    if (!r.date || r.campaignId == null || r.adGroupId == null) continue
+    const query = (r.searchTerm ?? '').toString().trim()
+    if (!query) continue
+    const date = new Date(r.date)
+    if (Number.isNaN(date.getTime())) continue
+
+    // Per-adProduct attribution mapping
+    const sales7dCents =
+      job.adProduct === 'SPONSORED_PRODUCTS' ? toCents(r.sales7d)
+      : job.adProduct === 'SPONSORED_BRANDS' ? toCents(r.attributedSales14d)
+      : 0
+    const orders7d =
+      job.adProduct === 'SPONSORED_PRODUCTS' ? (r.purchases7d ?? 0)
+      : 0
+
+    inserts.push({
+      profileId: job.profileId,
+      marketplace,
+      adProduct: job.adProduct,
+      date,
+      campaignId: toStrIdOrNull(r.campaignId) ?? '',
+      adGroupId: toStrIdOrNull(r.adGroupId) ?? '',
+      matchedKeywordId: toStrIdOrNull(r.keywordId),
+      matchType: r.matchType ?? null,
+      query,
+      impressions: r.impressions ?? 0,
+      clicks: r.clicks ?? 0,
+      costMicros: toMicros(r.cost),
+      currencyCode,
+      sales7dCents,
+      orders7d,
+      reportRunId: job.id,
+    })
+  }
+
+  if (inserts.length === 0) return 0
+  // createMany is faster than per-row create for high-cardinality
+  // search-term data (potentially 1K+ rows per profile per day).
+  const result = await prisma.amazonAdsSearchTerm.createMany({ data: inserts })
+  return result.count
+}
+
+async function ingestPlacementRows(
+  job: { id: string; profileId: string; adProduct: string },
+  rows: ReportRow[],
+  marketplace: string,
+  currencyCode: string,
+): Promise<number> {
+  let upserted = 0
+  for (const r of rows) {
+    if (!r.date || r.campaignId == null) continue
+    const placement = r.placementClassification ?? r.placement ?? null
+    if (!placement) continue
+    const campaignId = typeof r.campaignId === 'string' ? r.campaignId : String(r.campaignId)
+    const date = new Date(r.date)
+    if (Number.isNaN(date.getTime())) continue
+
+    const local = await prisma.campaign.findFirst({
+      where: { externalCampaignId: campaignId, marketplace },
+      select: { id: true },
+    })
+
+    const sales7dCents = toCents(r.sales7d)
+    const orders7d = r.purchases7d ?? 0
+
+    try {
+      await prisma.amazonAdsPlacementReport.upsert({
+        where: {
+          campaignId_date_placement: { campaignId, date, placement },
+        },
+        create: {
+          profileId: job.profileId,
+          marketplace,
+          adProduct: job.adProduct,
+          date,
+          campaignId,
+          localCampaignId: local?.id ?? null,
+          placement,
+          impressions: r.impressions ?? 0,
+          clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost),
+          currencyCode,
+          sales7dCents,
+          orders7d,
+          reportRunId: job.id,
+        },
+        update: {
+          localCampaignId: local?.id ?? null,
+          impressions: r.impressions ?? 0,
+          clicks: r.clicks ?? 0,
+          costMicros: toMicros(r.cost),
+          currencyCode,
+          sales7dCents,
+          orders7d,
+          reportRunId: job.id,
+        },
+      })
+      upserted += 1
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.warn('[ads-reports] placement row upsert failed', { jobId: job.id, campaignId, error: msg.slice(0, 200) })
+    }
+  }
+  return upserted
 }
 
 // ── Convenience: full creation cycle across all active profiles ────────
@@ -505,4 +677,201 @@ export async function runReportCreationCycle(
   }
 
   return result
+}
+
+// ── Phase 6: search term + placement creation cycles ─────────────────
+
+export async function runSearchTermReportCycle(
+  args: { startDate: string; endDate: string; adProducts?: AdProduct[] },
+): Promise<CreationCycleResult> {
+  const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
+  // SD has no search-term concept; default to SP + SB only.
+  const adProducts = (args.adProducts ?? ['SPONSORED_PRODUCTS', 'SPONSORED_BRANDS'])
+    .filter((p) => SEARCH_TERM_REPORT_TYPE_ID[p] != null)
+
+  const profiles = await prisma.amazonAdsConnection.findMany({
+    where: { isActive: true },
+    select: { profileId: true, region: true, marketplace: true },
+  })
+
+  for (const profile of profiles) {
+    const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
+      ? (profile.region as AdsRegion) : 'EU'
+    const meta = await prisma.amazonAdsProfile.findUnique({
+      where: { profileId: profile.profileId },
+      select: { currencyCode: true },
+    })
+    const currencyCode = meta?.currencyCode ?? 'EUR'
+
+    for (const adProduct of adProducts) {
+      const reportTypeId = SEARCH_TERM_REPORT_TYPE_ID[adProduct]
+      const columns = SEARCH_TERM_COLUMNS[adProduct]
+      if (!reportTypeId || !columns) continue
+
+      try {
+        const out = await createReportJob({
+          profileId: profile.profileId,
+          region,
+          marketplace: profile.marketplace,
+          currencyCode,
+          adProduct,
+          reportTypeId,
+          startDate: args.startDate,
+          endDate: args.endDate,
+          groupBy: ['searchTerm'],
+          columns,
+          timeUnit: 'DAILY',
+        })
+        if (out.alreadyExisted) result.jobsSkipped += 1
+        else result.jobsCreated += 1
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        result.errors.push(`${profile.profileId} ${adProduct} search-term: ${msg.slice(0, 200)}`)
+      }
+    }
+  }
+  return result
+}
+
+export async function runPlacementReportCycle(
+  args: { startDate: string; endDate: string },
+): Promise<CreationCycleResult> {
+  // Placement reports are SP-only.
+  const result: CreationCycleResult = { jobsCreated: 0, jobsSkipped: 0, errors: [] }
+  const profiles = await prisma.amazonAdsConnection.findMany({
+    where: { isActive: true },
+    select: { profileId: true, region: true, marketplace: true },
+  })
+
+  for (const profile of profiles) {
+    const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
+      ? (profile.region as AdsRegion) : 'EU'
+    const meta = await prisma.amazonAdsProfile.findUnique({
+      where: { profileId: profile.profileId },
+      select: { currencyCode: true },
+    })
+    const currencyCode = meta?.currencyCode ?? 'EUR'
+
+    try {
+      const out = await createReportJob({
+        profileId: profile.profileId,
+        region,
+        marketplace: profile.marketplace,
+        currencyCode,
+        adProduct: 'SPONSORED_PRODUCTS',
+        reportTypeId: PLACEMENT_REPORT_TYPE_ID,
+        startDate: args.startDate,
+        endDate: args.endDate,
+        groupBy: ['campaignPlacement'],
+        columns: PLACEMENT_COLUMNS,
+        timeUnit: 'DAILY',
+      })
+      if (out.alreadyExisted) result.jobsSkipped += 1
+      else result.jobsCreated += 1
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      result.errors.push(`${profile.profileId} placement: ${msg.slice(0, 200)}`)
+    }
+  }
+  return result
+}
+
+// ── Phase 6: 90-day rolling cleanup ──────────────────────────────────
+// Amazon's own retention for search-term data is ~60 days. We keep 90
+// days to give analytics enough trailing window for trends.
+
+export async function cleanupOldSearchTerms(
+  daysToKeep = 90,
+): Promise<{ deletedSearchTerms: number; cutoffDate: string }> {
+  const cutoff = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000)
+  cutoff.setUTCHours(0, 0, 0, 0)
+  const result = await prisma.amazonAdsSearchTerm.deleteMany({
+    where: { date: { lt: cutoff } },
+  })
+  return {
+    deletedSearchTerms: result.count,
+    cutoffDate: cutoff.toISOString().slice(0, 10),
+  }
+}
+
+// ── Phase 6: negative keyword candidates ─────────────────────────────
+// Queries that have spent $X+ in the last 30 days with zero attributed
+// orders are prime candidates for negative-keyword addition. Returns
+// the top N candidates sorted by wasted spend.
+
+export interface NegativeKeywordCandidate {
+  query: string
+  matchType: string | null
+  campaignId: string
+  adGroupId: string
+  marketplace: string
+  adProduct: string
+  // Aggregated over the lookback window
+  totalImpressions: number
+  totalClicks: number
+  totalCostMicros: bigint
+  totalCostUnits: number  // for display (cost in currency units)
+  currencyCode: string
+}
+
+export async function findNegativeKeywordCandidates(args: {
+  /** Lookback window in days (default 30) */
+  lookbackDays?: number
+  /** Minimum spend in currency units to qualify (default 5) */
+  minSpend?: number
+  /** Max rows returned (default 100) */
+  limit?: number
+  /** Optional profile filter */
+  profileId?: string
+  /** Optional marketplace filter */
+  marketplace?: string
+} = {}): Promise<NegativeKeywordCandidate[]> {
+  const lookbackDays = args.lookbackDays ?? 30
+  const minSpend = args.minSpend ?? 5
+  const limit = args.limit ?? 100
+  const minMicros = BigInt(Math.round(minSpend * 1_000_000))
+
+  const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000)
+  since.setUTCHours(0, 0, 0, 0)
+
+  // Aggregate per (query, campaignId, adGroupId, matchType). Rows with
+  // any orders/sales are filtered out — these are non-converting queries.
+  const rows = await prisma.amazonAdsSearchTerm.groupBy({
+    by: ['query', 'matchType', 'campaignId', 'adGroupId', 'marketplace', 'adProduct', 'currencyCode'],
+    where: {
+      date: { gte: since },
+      ...(args.profileId ? { profileId: args.profileId } : {}),
+      ...(args.marketplace ? { marketplace: args.marketplace } : {}),
+    },
+    _sum: {
+      impressions: true,
+      clicks: true,
+      costMicros: true,
+      orders7d: true,
+      sales7dCents: true,
+    },
+    having: {
+      costMicros: { _sum: { gte: minMicros } },
+      orders7d: { _sum: { equals: 0 } },
+    },
+    orderBy: { _sum: { costMicros: 'desc' } },
+    take: limit,
+  })
+
+  return rows.map((r) => {
+    const costMicros = r._sum.costMicros ?? 0n
+    return {
+      query: r.query,
+      matchType: r.matchType,
+      campaignId: r.campaignId,
+      adGroupId: r.adGroupId,
+      marketplace: r.marketplace,
+      adProduct: r.adProduct,
+      totalImpressions: r._sum.impressions ?? 0,
+      totalClicks: r._sum.clicks ?? 0,
+      totalCostMicros: costMicros,
+      totalCostUnits: Number(costMicros) / 1_000_000,
+      currencyCode: r.currencyCode,
+    }
+  })
 }
