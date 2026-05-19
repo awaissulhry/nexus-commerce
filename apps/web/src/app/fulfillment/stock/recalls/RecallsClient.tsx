@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ShieldAlert, RefreshCw, Plus, Check, AlertCircle,
+  ShieldAlert, Plus, Check, AlertCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import PageHeader from '@/components/layout/PageHeader'
@@ -27,6 +27,8 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
@@ -62,6 +64,8 @@ export default function RecallsClient() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('OPEN')
   const [closingId, setClosingId] = useState<string | null>(null)
   const [openModal, setOpenModal] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchRecalls = useCallback(async () => {
     setLoading(true)
@@ -74,6 +78,7 @@ export default function RecallsClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = await res.json()
       setRecalls(body.items)
+      setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -138,10 +143,16 @@ export default function RecallsClient() {
           ))}
         </div>
         <div className="inline-flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={fetchRecalls} disabled={loading}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
-            {t('stock.action.refresh')}
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchRecalls}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchRecalls}
+            loading={loading}
+          />
           <Button variant="primary" size="sm" onClick={() => setOpenModal(true)}>
             <Plus size={12} aria-hidden="true" /> {t('stock.recalls.openNew')}
           </Button>

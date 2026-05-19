@@ -14,15 +14,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, RefreshCw, X, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, X, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -104,6 +105,8 @@ export default function ChannelDriftClient() {
   const [ignoreModal, setIgnoreModal]   = useState<{ id: string; sku: string } | null>(null)
   const [ignoreReason, setIgnoreReason] = useState('')
   const [sortBy, setSortBy]             = useState('observed')
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const [density, setDensity]           = useState<Density>(() => {
     try { return (localStorage.getItem(`${STORAGE_KEY}.density`) as Density) ?? 'comfortable' } catch { return 'comfortable' }
   })
@@ -122,6 +125,7 @@ export default function ChannelDriftClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setEvents(data.items ?? [])
+      setLastFetchedAt(Date.now())
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('common.error'))
     } finally { setLoading(false) }
@@ -296,9 +300,18 @@ export default function ChannelDriftClient() {
           { label: t('channelDrift.pageTitle') },
         ]}
         actions={
-          <Button variant="secondary" size="sm" onClick={fetchEvents} disabled={loading}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchEvents}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchEvents}
+              loading={loading}
+            />
+          </div>
         }
       />
       <StockSubNav />

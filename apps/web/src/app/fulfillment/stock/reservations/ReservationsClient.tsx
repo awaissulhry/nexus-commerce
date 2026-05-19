@@ -10,21 +10,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  Lock as LockIcon, ArrowLeft, Package, RefreshCw, AlertCircle, X,
+  Lock as LockIcon, ArrowLeft, Package, AlertCircle, X,
   Clock, CheckCircle2, Ban, AlignJustify, Menu as MenuIcon, Equal,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
-import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -97,6 +97,8 @@ export default function ReservationsClient() {
   const [error, setError]               = useState<string | null>(null)
   const [filter, setFilter]             = useState<'all' | 'active' | 'consumed' | 'released'>('active')
   const [actingId, setActingId]         = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const [density, setDensity]           = useState<Density>(() => {
     try { return (localStorage.getItem(`${STORAGE_KEY}.density`) as Density) ?? 'comfortable' } catch { return 'comfortable' }
   })
@@ -113,6 +115,7 @@ export default function ReservationsClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setReservations(json.reservations ?? [])
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally { setLoading(false) }
@@ -244,10 +247,16 @@ export default function ReservationsClient() {
               className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
-            <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              {t('stock.action.refresh')}
-            </Button>
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchData}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchData}
+              loading={loading}
+            />
           </div>
         }
       />

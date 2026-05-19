@@ -8,7 +8,6 @@ import {
   ClipboardCheck,
   Loader2,
   Plus,
-  RefreshCw,
   Warehouse as WarehouseIcon,
   X,
   Zap,
@@ -18,6 +17,8 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
@@ -83,6 +84,8 @@ export default function CycleCountListClient() {
   const [newNotes, setNewNotes] = useState('')
   // S.17 — busy flag for the auto-schedule trigger.
   const [autoScheduling, setAutoScheduling] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchData = useCallback(async () => {
     try {
@@ -111,6 +114,7 @@ export default function CycleCountListClient() {
         )
       }
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -202,10 +206,16 @@ export default function CycleCountListClient() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-            {t('cycleCount.list.actionRefresh')}
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
           {/* S.17 — manual trigger for the ABC-driven scheduler.
               Daily cron runs at 02:30 UTC; this button lets the
               operator force a session immediately when desired. */}

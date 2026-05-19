@@ -16,16 +16,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Globe, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle,
+  Globe, ArrowLeft, AlertCircle, AlertTriangle,
   Package, Clock, ExternalLink,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { AbcBadge } from '@/components/inventory/AbcBadge'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -109,6 +110,8 @@ export default function FbaPanEuClient() {
   const [data, setData] = useState<SnapshotResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -117,6 +120,7 @@ export default function FbaPanEuClient() {
       const res = await fetch(`${getBackendUrl()}/api/stock/fba-pan-eu`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -151,10 +155,16 @@ export default function FbaPanEuClient() {
             >
               <ExternalLink size={12} /> {t('stock.fbaPanEu.inboundLink')}
             </Link>
-            <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              {t('stock.action.refresh')}
-            </Button>
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchData}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchData}
+              loading={loading}
+            />
           </div>
         }
       />

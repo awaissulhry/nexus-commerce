@@ -10,16 +10,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Package, RefreshCw, AlertCircle, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
+import { Package, AlertCircle, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -71,6 +71,8 @@ export default function LotsClient() {
   const [activeOnly, setActiveOnly] = useState(true)
   const [expiry, setExpiry]     = useState<ExpiryFilter>('all')
   const [sortBy, setSortBy]     = useState('expires-asc') // FEFO default
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const [density, setDensity]   = useState<Density>(() => {
     try { return (localStorage.getItem(`${STORAGE_KEY}.density`) as Density) ?? 'comfortable' } catch { return 'comfortable' }
   })
@@ -92,6 +94,7 @@ export default function LotsClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = await res.json()
       setLots(body.items)
+      setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally { setLoading(false) }
@@ -188,9 +191,18 @@ export default function LotsClient() {
           { label: t('stock.lots.pageTitle') },
         ]}
         actions={
-          <Button variant="secondary" size="sm" onClick={fetchLots} disabled={loading}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchLots}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchLots}
+              loading={loading}
+            />
+          </div>
         }
       />
       <StockSubNav />

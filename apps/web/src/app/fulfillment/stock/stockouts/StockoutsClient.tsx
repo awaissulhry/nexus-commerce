@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  AlertTriangle, ArrowLeft, RefreshCw, Search, X, AlertCircle,
+  AlertTriangle, ArrowLeft, Search, X, AlertCircle,
   Clock, Package, MapPin, AlignJustify, Menu as MenuIcon, Equal,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
@@ -21,10 +21,11 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -138,6 +139,8 @@ export default function StockoutsClient() {
   const [skuQuery, setSkuQuery]         = useState('')
   const [skuQueryDebounced, setSkuQueryDebounced] = useState('')
   const [sortBy, setSortBy]             = useState('started')
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const [density, setDensity]           = useState<Density>(() => {
     try { return (localStorage.getItem(`${STORAGE_KEY}.density`) as Density) ?? 'comfortable' } catch { return 'comfortable' }
   })
@@ -179,6 +182,7 @@ export default function StockoutsClient() {
         setLocations(arr.filter((l: any) => l?.id && l?.code).map((l: any) => ({ id: l.id, code: l.code, name: l.name ?? l.code })))
       }
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally { setLoading(false) }
@@ -318,10 +322,16 @@ export default function StockoutsClient() {
               className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
-            <Button variant="secondary" size="sm" onClick={fetchAll} disabled={loading}>
-              <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-              {t('stock.stockouts.refresh')}
-            </Button>
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchAll}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchAll}
+              loading={loading}
+            />
             <Button variant="secondary" size="sm" onClick={triggerSweep} disabled={loading}>
               <AlertTriangle className="w-3.5 h-3.5" />
               {t('stock.stockouts.sweep')}
