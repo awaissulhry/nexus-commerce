@@ -60,9 +60,10 @@ const STATUS_TONE: Record<string, string> = {
 export default async function ExecutionDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const log = await fetchLog(params.id)
+  const { id } = await params
+  const log = await fetchLog(id)
   if (!log) notFound()
 
   const startedAt = new Date(log.executionStartedAt)
@@ -82,7 +83,7 @@ export default async function ExecutionDetailPage({
       </div>
       <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
         <History className="h-5 w-5 text-slate-500" />
-        Execution {params.id.slice(0, 8)}
+        Execution {id.slice(0, 8)}
       </h1>
       <div className="text-xs text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2 flex-wrap">
         <span>
@@ -103,7 +104,7 @@ export default async function ExecutionDetailPage({
 
       {reversible.length > 0 && within24h && (
         <div className="mb-4">
-          <RollbackButton executionId={params.id} count={reversible.length} />
+          <RollbackButton executionId={id} count={reversible.length} />
         </div>
       )}
 

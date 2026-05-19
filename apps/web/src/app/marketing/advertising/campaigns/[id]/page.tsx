@@ -16,8 +16,9 @@ import { formatEurAmount, formatPct } from '../../_shared/formatters'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const res = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${params.id}`, { cache: 'no-store' }).catch(() => null)
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const res = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}`, { cache: 'no-store' }).catch(() => null)
   const data = res?.ok ? await res.json().catch(() => null) : null
   const name: string = data?.campaign?.name ?? 'Campaign'
   return { title: `${name} · Amazon Ads` }
@@ -106,10 +107,11 @@ async function fetchBidHistory(id: string): Promise<BidHistoryRow[]> {
   return json.items
 }
 
-export default async function CampaignDetailPage({ params }: { params: { id: string } }) {
+export default async function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const [detail, history] = await Promise.all([
-    fetchDetail(params.id),
-    fetchBidHistory(params.id),
+    fetchDetail(id),
+    fetchBidHistory(id),
   ])
   if (!detail?.campaign) notFound()
   const c = detail.campaign

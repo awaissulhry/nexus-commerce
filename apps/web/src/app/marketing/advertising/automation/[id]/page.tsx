@@ -18,8 +18,9 @@ import { GateStatusClient } from './GateStatusClient'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${params.id}`, { cache: 'no-store' }).catch(() => null)
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const res = await fetch(`${getBackendUrl()}/api/advertising/automation-rules/${id}`, { cache: 'no-store' }).catch(() => null)
   const data = res?.ok ? await res.json().catch(() => null) : null
   const name: string = data?.name ?? 'Automation Rule'
   return { title: `${name} · Amazon Ads` }
@@ -82,9 +83,10 @@ async function fetchRecentExecutions(ruleId: string): Promise<Execution[]> {
 export default async function AutomationRuleDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const rule = await fetchRule(params.id)
+  const { id } = await params
+  const rule = await fetchRule(id)
   if (!rule) notFound()
   const executions = await fetchRecentExecutions(rule.id)
 

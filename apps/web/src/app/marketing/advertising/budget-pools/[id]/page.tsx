@@ -16,8 +16,9 @@ import { PoolToggleClient } from './PoolToggleClient'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const res = await fetch(`${getBackendUrl()}/api/advertising/budget-pools/${params.id}`, { cache: 'no-store' }).catch(() => null)
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const res = await fetch(`${getBackendUrl()}/api/advertising/budget-pools/${id}`, { cache: 'no-store' }).catch(() => null)
   const data = res?.ok ? await res.json().catch(() => null) : null
   const name: string = data?.pool?.name ?? 'Budget Pool'
   return { title: `${name} · Amazon Ads` }
@@ -81,9 +82,10 @@ async function fetchPool(id: string): Promise<PoolResponse | null> {
 export default async function BudgetPoolDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const data = await fetchPool(params.id)
+  const { id } = await params
+  const data = await fetchPool(id)
   if (!data) notFound()
   const { pool, campaigns } = data
 
