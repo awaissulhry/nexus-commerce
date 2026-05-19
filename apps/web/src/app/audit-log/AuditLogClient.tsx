@@ -11,7 +11,6 @@ import {
   FileSpreadsheet,
   History as HistoryIcon,
   Loader2,
-  RefreshCw,
   Search,
   Settings2,
   User,
@@ -20,10 +19,11 @@ import {
   Zap,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -253,6 +253,8 @@ function EventFeed() {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchEvents = useCallback(async (cursor?: string) => {
     if (!cursor) setLoading(true); else setLoadingMore(true)
@@ -265,6 +267,7 @@ function EventFeed() {
       const json: { events: ProductEvent[]; nextCursor: string | null } = await res.json()
       if (!cursor) setEvents(json.events); else setEvents(prev => [...prev, ...json.events])
       setNextCursor(json.nextCursor)
+      if (!cursor) setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -279,18 +282,32 @@ function EventFeed() {
 
   return (
     <div className="space-y-3">
-      {/* Source filter chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {EVENT_SOURCE_FILTERS.map(f => (
-          <button key={f.value} onClick={() => setSourceFilter(f.value)}
-            className={cn('px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
-              sourceFilter === f.value
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
-            )}>
-            {f.label}
-          </button>
-        ))}
+      {/* Source filter chips + chrome */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-wrap gap-1.5">
+          {EVENT_SOURCE_FILTERS.map(f => (
+            <button key={f.value} onClick={() => setSourceFilter(f.value)}
+              className={cn('px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                sourceFilter === f.value
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+              )}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => fetchEvents()}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => fetchEvents()}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {loading && <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}
@@ -372,6 +389,8 @@ export default function AuditLogClient() {
   const [data, setData] = useState<SearchResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const debounceTimer = useRef<number | null>(null)
 
   // Debounce search → URL
@@ -424,6 +443,7 @@ export default function AuditLogClient() {
       const json = await res.json()
       setData(json)
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
@@ -491,15 +511,16 @@ export default function AuditLogClient() {
               </button>
             )}
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={fetchData}
-            disabled={loading}
-          >
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-            Refresh
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
         </div>
 
         {/* Time chips */}
