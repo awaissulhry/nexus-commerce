@@ -6126,15 +6126,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           fulfillmentChannel: true, basePrice: true, costPrice: true,
           serviceLevelPercent: true, orderingCostCents: true, carryingCostPctYear: true,
           productType: true,
+          amazonAsin: true,
           dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
           weightValue: true, weightUnit: true,
           // hierarchy — needed by the replenishment grid to group SKUs under parents
           parentId: true,
           parent: {
             select: {
-              id: true, sku: true, name: true, parentId: true,
+              id: true, sku: true, name: true, parentId: true, productType: true, amazonAsin: true,
               images: { select: { url: true }, take: 1 },
-              parent: { select: { id: true, sku: true, name: true, images: { select: { url: true }, take: 1 } } },
+              parent: { select: { id: true, sku: true, name: true, productType: true, amazonAsin: true, images: { select: { url: true }, take: 1 } } },
             },
           },
           images: { select: { url: true }, take: 1 },
@@ -6709,11 +6710,17 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           parentSku: (p as any).parent?.sku ?? null,
           parentName: (p as any).parent?.name ?? null,
           parentThumbnailUrl: (p as any).parent?.images?.[0]?.url ?? null,
+          parentProductType: (p as any).parent?.productType ?? null,
+          parentAmazonAsin: (p as any).parent?.amazonAsin ?? null,
           grandparentId: (p as any).parent?.parentId ?? null,
           grandparentSku: (p as any).parent?.parent?.sku ?? null,
           grandparentName: (p as any).parent?.parent?.name ?? null,
           grandparentThumbnailUrl: (p as any).parent?.parent?.images?.[0]?.url ?? null,
+          grandparentProductType: (p as any).parent?.parent?.productType ?? null,
+          grandparentAmazonAsin: (p as any).parent?.parent?.amazonAsin ?? null,
           thumbnailUrl: (p as any).images?.[0]?.url ?? null,
+          productType: (p as any).productType ?? null,
+          amazonAsin: (p as any).amazonAsin ?? null,
         }
       })
 

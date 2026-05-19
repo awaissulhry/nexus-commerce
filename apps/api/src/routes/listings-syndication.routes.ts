@@ -238,12 +238,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               select: {
                 id: true, sku: true, name: true, amazonAsin: true,
                 basePrice: true, totalStock: true, isParent: true, parentId: true,
+                productType: true,
                 images: { select: { url: true }, take: 1 },
                 // Include parent product data so the frontend can build the
                 // correct parent/child hierarchy without a second API call.
                 parent: {
                   select: {
-                    id: true, sku: true, name: true,
+                    id: true, sku: true, name: true, productType: true,
                     images: { select: { url: true }, take: 1 },
                   },
                 },
@@ -320,6 +321,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             totalStock: l.product.totalStock,
             isParent: l.product.isParent,
             parentId: l.product.parentId,
+            productType: l.product.productType,
             thumbnailUrl: l.product.images?.[0]?.url ?? null,
             // Actual parent product data — present when this product is a variant.
             // The frontend uses this to build correct parent row (real name/sku/thumb).
@@ -327,6 +329,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
               id: l.product.parent.id,
               sku: l.product.parent.sku,
               name: l.product.parent.name,
+              productType: l.product.parent.productType,
               thumbnailUrl: l.product.parent.images?.[0]?.url ?? null,
             } : null,
           },

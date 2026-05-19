@@ -120,12 +120,14 @@ type Listing = {
     totalStock: number
     isParent: boolean
     parentId: string | null
+    productType: string | null
     thumbnailUrl: string | null
     /** Populated by the API when this product is a variant (parentId != null). */
     parentProduct: {
       id: string
       sku: string
       name: string
+      productType: string | null
       thumbnailUrl: string | null
     } | null
   }
@@ -510,7 +512,9 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         product: {
           id: info.id, sku: info.sku, name: info.name,
           amazonAsin: null, basePrice: null, totalStock: 0,
-          isParent: true, parentId: null, thumbnailUrl: info.thumbnailUrl, parentProduct: null,
+          isParent: true, parentId: null,
+          productType: info.productType ?? null,
+          thumbnailUrl: info.thumbnailUrl, parentProduct: null,
         },
         isParent: true,
         childCount: variantIds.size,
@@ -1989,7 +1993,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
           name={l.product.name}
           sku={l.product.sku}
           amazonAsin={l.product.amazonAsin}
-          productType={(l.product as { productType?: string | null }).productType ?? null}
+          productType={l.product.productType}
           isParent={isParentRow}
           parentId={isParentRow ? null : l.product.parentId}
           childCount={l.childCount}

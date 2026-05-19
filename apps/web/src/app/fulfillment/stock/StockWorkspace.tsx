@@ -59,6 +59,7 @@ type StockRow = {
   amazonAsin: string | null
   isParent: boolean
   parentId: string | null
+  productType: string | null
   abcClass: 'A' | 'B' | 'C' | 'D' | null
   fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
   lowStockThreshold: number
@@ -3499,7 +3500,7 @@ const COLUMN_META: Record<ColumnKey, {
         name={it.name}
         sku={it.sku}
         amazonAsin={it.amazonAsin}
-        productType={(it as { productType?: string | null }).productType ?? null}
+        productType={it.productType}
         isParent={it.isParent}
         parentId={it.parentId}
         childCount={it.childCount}

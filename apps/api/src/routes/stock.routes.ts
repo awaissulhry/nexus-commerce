@@ -159,6 +159,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           select: {
             id: true, sku: true, name: true, amazonAsin: true,
             isParent: true, parentId: true,
+            productType: true,
             abcClass: true, lowStockThreshold: true, costPrice: true, basePrice: true,
             fulfillmentMethod: true, fulfillmentChannel: true,
             images: { select: { url: true }, take: 1 },
@@ -270,6 +271,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             amazonAsin: p.amazonAsin,
             isParent: p.isParent,
             parentId: p.parentId,
+            productType: p.productType,
             abcClass: p.abcClass,
             lowStockThreshold: p.lowStockThreshold,
             costPrice: p.costPrice == null ? null : Number(p.costPrice),

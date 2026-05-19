@@ -88,6 +88,8 @@ type RepRow = GridLensRow & {
   sku: string
   name: string
   thumbnailUrl: string | null
+  productType: string | null
+  amazonAsin: string | null
   urgency: Urgency | null
   needsReorder: boolean
   currentStock: number
@@ -328,6 +330,8 @@ export default function ReplenishmentWorkspace() {
       sku: s.sku,
       name: s.name,
       thumbnailUrl: s.thumbnailUrl ?? null,
+      productType: s.productType,
+      amazonAsin: s.amazonAsin,
       isParent: false,
       parentId: s.parentId,
       childCount: 0,
@@ -345,6 +349,7 @@ export default function ReplenishmentWorkspace() {
     const buildParent = (
       id: string, sku: string, name: string, thumbnailUrl: string | null,
       parentId: string | null, children: RepRow[],
+      productType: string | null = null, amazonAsin: string | null = null,
     ): RepRow => {
       const urgencies = children.map((c) => c.urgency).filter((u): u is Urgency => u !== null)
       const worstUrgency = urgencies.length > 0
@@ -355,6 +360,8 @@ export default function ReplenishmentWorkspace() {
         sku,
         name,
         thumbnailUrl,
+        productType,
+        amazonAsin,
         isParent: true,
         parentId,
         childCount: children.length,
@@ -415,6 +422,8 @@ export default function ReplenishmentWorkspace() {
           anySug.parentThumbnailUrl ?? null,
           gpId,
           leafRepRows,
+          anySug.parentProductType ?? null,
+          anySug.parentAmazonAsin ?? null,
         )
         midRows.push(midRow)
         childMap[midId] = leafRepRows
@@ -426,6 +435,8 @@ export default function ReplenishmentWorkspace() {
         anySug.grandparentThumbnailUrl ?? null,
         null,
         midRows,
+        anySug.grandparentProductType ?? null,
+        anySug.grandparentAmazonAsin ?? null,
       )
       topRows.push(gpRow)
       childMap[gpId] = midRows
@@ -442,6 +453,8 @@ export default function ReplenishmentWorkspace() {
         anySug.parentThumbnailUrl ?? null,
         null,
         leafRepRows,
+        anySug.parentProductType ?? null,
+        anySug.parentAmazonAsin ?? null,
       )
       topRows.push(parentRow)
       childMap[pid] = leafRepRows
@@ -626,8 +639,8 @@ export default function ReplenishmentWorkspace() {
             id={row.id}
             name={row.name}
             sku={row.sku}
-            amazonAsin={(row as { amazonAsin?: string | null }).amazonAsin ?? null}
-            productType={(row as { productType?: string | null }).productType ?? null}
+            amazonAsin={row.amazonAsin}
+            productType={row.productType}
             isParent={row.isParent ?? false}
             parentId={row.parentId}
             childCount={row.childCount}

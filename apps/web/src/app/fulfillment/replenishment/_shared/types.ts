@@ -51,11 +51,17 @@ export interface Suggestion {
   parentSku: string | null
   parentName: string | null
   parentThumbnailUrl: string | null
+  parentProductType: string | null
+  parentAmazonAsin: string | null
   grandparentId: string | null
   grandparentSku: string | null
   grandparentName: string | null
   grandparentThumbnailUrl: string | null
+  grandparentProductType: string | null
+  grandparentAmazonAsin: string | null
   thumbnailUrl: string | null
+  productType: string | null
+  amazonAsin: string | null
   preferredSupplierId: string | null
   fulfillmentChannel: string | null
   leadTimeDays: number
