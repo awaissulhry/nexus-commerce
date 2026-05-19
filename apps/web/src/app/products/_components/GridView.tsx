@@ -1159,17 +1159,17 @@ const ProductCell = memo(function ProductCell({
             >
               <Highlight text={p.name} query={searchQuery} />
             </Link>
-            {/* ASIN / SKU line */}
+            {/* ASIN / SKU line — parents and children both show their SKU */}
             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
               {p.amazonAsin ? (
                 <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                   {p.amazonAsin}
                 </span>
               ) : null}
-              {p.amazonAsin && !isParentRow ? (
+              {p.amazonAsin && p.sku ? (
                 <span className="text-xs text-slate-300 dark:text-slate-600">|</span>
               ) : null}
-              {!isParentRow && (
+              {p.sku && (
                 <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
                   <Highlight text={p.sku} query={searchQuery} />
                 </span>
