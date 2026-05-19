@@ -1521,10 +1521,15 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // F.1 — manual hard-delete from the recycle bin. Mirrors the cron
   // purge-soft-deleted-products.job cascade exactly, but operator-
   // initiated for rows that should be wiped sooner than the 30-day
-  // window. Two safety rails: (1) row must already have
-  // deletedAt != null (i.e. already in the bin) — protects against an
-  // accidental hard-delete bypassing the soft-delete step; (2) the
-  // same 200-id cap as the other bulk endpoints.
+  // window. Two safety rails: (1) row must already be in the bin —
+  // either Product.deletedAt is set, or it's a ghost cache row whose
+  // Product was already purged but the ProductReadCache entry leaked;
+  // (2) the same 200-id cap as the other bulk endpoints.
+  //
+  // ProductReadCache wipe is part of the cascade — the /products bin
+  // UI reads from the cache, and historic cache drift (a Product
+  // purged without its cache row) caused the original "still see them
+  // after delete" symptom.
   fastify.post('/products/bulk-hard-delete', async (request, reply) => {
     try {
       const body = request.body as { productIds?: string[] }
@@ -1540,13 +1545,31 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       const actor = userIdFor(request)
 
       const result = await prisma.$transaction(async (tx) => {
+        // Rows still present in Product, in the bin (deletedAt != null).
         const eligible = await tx.product.findMany({
           where: { id: { in: productIds }, deletedAt: { not: null } },
           select: { id: true, sku: true, name: true, deletedAt: true },
         })
-        if (eligible.length === 0) {
+        const eligibleSet = new Set(eligible.map((r) => r.id))
+
+        // Ghost cache rows: present in ProductReadCache (which is what
+        // the bin UI reads) but missing from Product or not in the
+        // bin scope. These accumulate from earlier purges that didn't
+        // sync the cache. Wipe them too so the operator's selection
+        // actually disappears from the UI.
+        const ghostCacheRows = await tx.productReadCache.findMany({
+          where: {
+            id: {
+              in: productIds.filter((id) => !eligibleSet.has(id)),
+            },
+          },
+          select: { id: true, sku: true, name: true },
+        })
+
+        if (eligible.length === 0 && ghostCacheRows.length === 0) {
           return {
             purged: 0,
+            ghostCacheRemoved: 0,
             skipped: productIds.length,
             dependents: {
               productImages: 0,
@@ -1554,57 +1577,90 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
               listings: 0,
               stockLogs: 0,
               fbaShipmentItems: 0,
+              cacheRows: 0,
             },
           }
         }
+
         const ids = eligible.map((r) => r.id)
         const productIdFilter = { productId: { in: ids } }
 
-        // One AuditLog row per product BEFORE the cascade so the trail
-        // survives the actual deletion (AuditLog has no FK to Product).
+        // One AuditLog row per affected row (both real + ghost) BEFORE
+        // the cascade so the trail survives the actual deletion
+        // (AuditLog has no FK to Product).
         await tx.auditLog.createMany({
-          data: eligible.map((r) => ({
-            userId: actor,
-            entityType: 'Product',
-            entityId: r.id,
-            action: 'hard-delete',
-            before: {
-              sku: r.sku,
-              name: r.name,
-              deletedAt: r.deletedAt?.toISOString() ?? null,
-            },
-            after: null,
-            metadata: { source: 'products-bulk-hard-delete' },
-          })),
+          data: [
+            ...eligible.map((r) => ({
+              userId: actor,
+              entityType: 'Product',
+              entityId: r.id,
+              action: 'hard-delete',
+              before: {
+                sku: r.sku,
+                name: r.name,
+                deletedAt: r.deletedAt?.toISOString() ?? null,
+              },
+              after: null,
+              metadata: { source: 'products-bulk-hard-delete' },
+            })),
+            ...ghostCacheRows.map((r) => ({
+              userId: actor,
+              entityType: 'Product',
+              entityId: r.id,
+              action: 'hard-delete-ghost-cache',
+              before: { sku: r.sku, name: r.name },
+              after: null,
+              metadata: {
+                source: 'products-bulk-hard-delete',
+                note: 'cache-only row; Product already absent',
+              },
+            })),
+          ],
         })
 
-        const productImages = await tx.productImage.deleteMany({
-          where: productIdFilter,
+        let productImages = 0
+        let marketplaceSyncs = 0
+        let listings = 0
+        let stockLogs = 0
+        let fbaShipmentItems = 0
+        if (ids.length > 0) {
+          productImages = (
+            await tx.productImage.deleteMany({ where: productIdFilter })
+          ).count
+          marketplaceSyncs = (
+            await tx.marketplaceSync.deleteMany({ where: productIdFilter })
+          ).count
+          listings = (await tx.listing.deleteMany({ where: productIdFilter }))
+            .count
+          stockLogs = (await tx.stockLog.deleteMany({ where: productIdFilter }))
+            .count
+          fbaShipmentItems = (
+            await tx.fBAShipmentItem.deleteMany({ where: productIdFilter })
+          ).count
+        }
+        const products =
+          ids.length > 0
+            ? await tx.product.deleteMany({ where: { id: { in: ids } } })
+            : { count: 0 }
+
+        // Wipe ALL targeted cache rows — both for purged Products and
+        // any ghost rows whose Product was already gone.
+        const cacheRows = await tx.productReadCache.deleteMany({
+          where: { id: { in: productIds } },
         })
-        const marketplaceSyncs = await tx.marketplaceSync.deleteMany({
-          where: productIdFilter,
-        })
-        const listings = await tx.listing.deleteMany({
-          where: productIdFilter,
-        })
-        const stockLogs = await tx.stockLog.deleteMany({
-          where: productIdFilter,
-        })
-        const fbaShipmentItems = await tx.fBAShipmentItem.deleteMany({
-          where: productIdFilter,
-        })
-        const products = await tx.product.deleteMany({
-          where: { id: { in: ids } },
-        })
+
         return {
           purged: products.count,
-          skipped: productIds.length - eligible.length,
+          ghostCacheRemoved: ghostCacheRows.length,
+          skipped:
+            productIds.length - eligible.length - ghostCacheRows.length,
           dependents: {
-            productImages: productImages.count,
-            marketplaceSyncs: marketplaceSyncs.count,
-            listings: listings.count,
-            stockLogs: stockLogs.count,
-            fbaShipmentItems: fbaShipmentItems.count,
+            productImages,
+            marketplaceSyncs,
+            listings,
+            stockLogs,
+            fbaShipmentItems,
+            cacheRows: cacheRows.count,
           },
         }
       })
