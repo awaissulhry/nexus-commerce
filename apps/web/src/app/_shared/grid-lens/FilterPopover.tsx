@@ -15,8 +15,25 @@
  * cleanly so the table area isn't cluttered with eight inline filters.
  */
 
-import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Filter as FilterIcon, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, Filter as FilterIcon, GripVertical, Search, X } from 'lucide-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 export interface FilterOption {
   value: string
@@ -60,6 +77,23 @@ export interface FilterPopoverProps {
   activeCount: number
   /** Override the button copy (default "Filter"). */
   buttonLabel?: string
+  /**
+   * Custom display order. Array of dimension keys; any key not in the
+   * array falls back to the source order at the tail. When omitted,
+   * the dimensions render in the order they were passed.
+   */
+  order?: ReadonlyArray<string>
+  /**
+   * Called when the operator drags a dimension card to a new position.
+   * Receives the new full key order. When omitted, drag handles are
+   * hidden and reordering is disabled.
+   */
+  onOrderChange?: (next: string[]) => void
+  /**
+   * When provided, the footer renders a "Reset order" button that
+   * fires this callback. Useful for clearing a persisted custom order.
+   */
+  onResetOrder?: () => void
 }
 
 function activeCountFor(d: FilterDimension): number {
@@ -70,10 +104,48 @@ function activeCountFor(d: FilterDimension): number {
   }
 }
 
-export function FilterPopover({ dimensions, onClearAll, activeCount, buttonLabel }: FilterPopoverProps) {
+export function FilterPopover({
+  dimensions, onClearAll, activeCount, buttonLabel, order, onOrderChange, onResetOrder,
+}: FilterPopoverProps) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
+
+  const draggable = !!onOrderChange
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  // Apply the persisted order: known keys first (in order), unknown keys
+  // appended at the tail in source order. Source order acts as a stable
+  // fallback when a new dimension is added that the persisted order
+  // doesn't know about yet.
+  const orderedDimensions = useMemo(() => {
+    if (!order || order.length === 0) return dimensions
+    const byKey = new Map(dimensions.map((d) => [d.key, d]))
+    const seen = new Set<string>()
+    const result: FilterDimension[] = []
+    for (const k of order) {
+      const d = byKey.get(k)
+      if (d) { result.push(d); seen.add(k) }
+    }
+    for (const d of dimensions) {
+      if (!seen.has(d.key)) result.push(d)
+    }
+    return result
+  }, [dimensions, order])
+
+  const onDragEnd = (e: DragEndEvent) => {
+    if (!onOrderChange) return
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const keys = orderedDimensions.map((d) => d.key)
+    const from = keys.indexOf(active.id as string)
+    const to = keys.indexOf(over.id as string)
+    if (from === -1 || to === -1) return
+    onOrderChange(arrayMove(keys, from, to))
+  }
 
   // Outside click + Escape close the popover.
   useEffect(() => {
@@ -148,25 +220,47 @@ export function FilterPopover({ dimensions, onClearAll, activeCount, buttonLabel
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            {dimensions.map((d) => (
-              <DimensionCard key={d.key} dimension={d} />
-            ))}
-            {dimensions.length === 0 && (
+            {orderedDimensions.length === 0 ? (
               <div className="text-sm text-slate-500 dark:text-slate-400 italic px-2 py-4 text-center">
                 No filters configured for this page.
               </div>
+            ) : draggable ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext items={orderedDimensions.map((d) => d.key)} strategy={verticalListSortingStrategy}>
+                  {orderedDimensions.map((d) => (
+                    <SortableDimensionCard key={d.key} dimension={d} />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            ) : (
+              orderedDimensions.map((d) => <DimensionCard key={d.key} dimension={d} />)
             )}
           </div>
 
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-200 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={onClearAll}
-              disabled={activeCount === 0}
-              className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Clear all
-            </button>
+            <div className="flex items-center gap-3 text-sm">
+              <button
+                type="button"
+                onClick={onClearAll}
+                disabled={activeCount === 0}
+                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Clear all
+              </button>
+              {onResetOrder && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                  <button
+                    type="button"
+                    onClick={onResetOrder}
+                    className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                    title="Restore the default filter order"
+                  >
+                    Reset order
+                  </button>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -181,30 +275,33 @@ export function FilterPopover({ dimensions, onClearAll, activeCount, buttonLabel
   )
 }
 
-function DimensionCard({ dimension }: { dimension: FilterDimension }) {
+function DimensionCard({ dimension, dragHandle }: { dimension: FilterDimension; dragHandle?: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const active = activeCountFor(dimension)
 
   return (
     <div className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center justify-between gap-2 px-2 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded text-left"
-      >
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-2">
-          {dimension.label}
-          {active > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 tabular-nums font-semibold">
-              {active}
-            </span>
-          )}
-        </span>
-        <ChevronDown
-          size={13}
-          className={`text-slate-400 dark:text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`}
-        />
-      </button>
+      <div className="w-full flex items-center gap-1 px-1 py-1 rounded group">
+        {dragHandle}
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex-1 flex items-center justify-between gap-2 px-1 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded text-left"
+        >
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200 inline-flex items-center gap-2">
+            {dimension.label}
+            {active > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 tabular-nums font-semibold">
+                {active}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            size={13}
+            className={`text-slate-400 dark:text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+          />
+        </button>
+      </div>
       {!collapsed && (
         <div className="px-2 pb-2">
           {dimension.type === 'multi-select' && <MultiSelectBody dimension={dimension} />}
@@ -212,6 +309,34 @@ function DimensionCard({ dimension }: { dimension: FilterDimension }) {
           {dimension.type === 'toggle' && <ToggleBody dimension={dimension} />}
         </div>
       )}
+    </div>
+  )
+}
+
+function SortableDimensionCard({ dimension }: { dimension: FilterDimension }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dimension.key })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+  return (
+    <div ref={setNodeRef} style={style}>
+      <DimensionCard
+        dimension={dimension}
+        dragHandle={
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${dimension.label}`}
+            className="h-6 w-5 inline-flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing rounded"
+            title="Drag to reorder"
+          >
+            <GripVertical size={11} aria-hidden="true" />
+          </button>
+        }
+      />
     </div>
   )
 }
