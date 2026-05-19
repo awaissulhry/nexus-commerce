@@ -19,6 +19,7 @@ import {
   GitBranch,
   Globe,
   Search, SlidersHorizontal, BarChart2,
+  CheckCircle2, FileText, PackageCheck, PackageX,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -33,7 +34,9 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  KpiStrip,
   type AutoRefreshInterval,
+  type KpiTileSpec,
 } from '@/app/_shared/grid-lens'
 import ProductDrawer from './_shared/ProductDrawer'
 import { parseFilters } from '@/lib/filters'
@@ -1136,6 +1139,55 @@ export default function ProductsWorkspace() {
           </div>
         }
       />
+
+      {/* KPI strip — clickable tiles filter the grid by status. Mirrors
+          the /fulfillment/stock + /fulfillment/replenishment pattern. */}
+      {lens === 'grid' && (
+        <KpiStrip
+          tiles={[
+            {
+              icon: Boxes,
+              label: 'Total',
+              value: stats.total.toLocaleString(),
+              detail: showDeleted ? 'in recycle bin' : 'across all statuses',
+              tone: 'slate',
+              onClick: () => updateUrl({ status: undefined, page: undefined }),
+              ariaLabel: `Show all products (${stats.total})`,
+            },
+            {
+              icon: CheckCircle2,
+              label: 'Active',
+              value: stats.active.toLocaleString(),
+              detail: 'live + publishable',
+              tone: 'emerald',
+              onClick: () => updateUrl({ status: 'ACTIVE', page: undefined }),
+              ariaLabel: `Filter to active products (${stats.active})`,
+            },
+            {
+              icon: FileText,
+              label: 'Draft',
+              value: stats.draft.toLocaleString(),
+              detail: 'not yet published',
+              tone: 'amber',
+              onClick: () => updateUrl({ status: 'DRAFT', page: undefined }),
+              ariaLabel: `Filter to draft products (${stats.draft})`,
+            },
+            {
+              icon: stats.outOfStock > 0 ? PackageX : PackageCheck,
+              label: 'Out of stock',
+              value: stats.outOfStock.toLocaleString(),
+              detail: stats.inStock > 0 ? `${stats.inStock.toLocaleString()} in stock` : 'no SKUs in stock',
+              tone: stats.outOfStock > 0 ? 'rose' : 'slate',
+              onClick: stats.outOfStock > 0
+                ? () => updateUrl({ stockLevel: 'out', page: undefined })
+                : undefined,
+              ariaLabel: stats.outOfStock > 0
+                ? `Filter to out-of-stock products (${stats.outOfStock})`
+                : undefined,
+            },
+          ] satisfies KpiTileSpec[]}
+        />
+      )}
 
       {/* ── Row 1: Command bar ─────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">

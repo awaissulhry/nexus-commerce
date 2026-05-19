@@ -26,7 +26,9 @@ import {
   StockSplit,
   DensityToggle as SharedDensityToggle,
   AutoRefreshSelect,
+  KpiStrip,
   type AutoRefreshInterval,
+  type KpiTileSpec,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -779,6 +781,64 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         description={description}
         breadcrumbs={breadcrumbs}
       />
+
+      {/* KPI strip — clickable tiles drive grid filters. Matches the
+          /products + /stock + /replenishment pattern. */}
+      {facets && lens === 'grid' && (
+        <KpiStrip
+          tiles={[
+            {
+              icon: Boxes,
+              label: t('listings.stats.total'),
+              value: facets.total.toLocaleString(),
+              detail: lockChannel ? `Locked to ${lockChannel}` : 'across all channels',
+              tone: 'slate',
+              onClick: () => updateUrl({
+                listingStatus: undefined,
+                hasError: undefined,
+                page: undefined,
+              }),
+            },
+            {
+              icon: CheckCircle2,
+              label: 'Live',
+              value: (facets.statuses.find((s) => s.value === 'ACTIVE')?.count ?? 0).toLocaleString(),
+              detail: 'published + selling',
+              tone: 'emerald',
+              onClick: () => updateUrl({
+                listingStatus: 'ACTIVE',
+                hasError: undefined,
+                page: undefined,
+              }),
+            },
+            {
+              icon: Edit3,
+              label: 'Drafts',
+              value: (facets.statuses.find((s) => s.value === 'DRAFT')?.count ?? 0).toLocaleString(),
+              detail: 'unpublished',
+              tone: 'amber',
+              onClick: () => updateUrl({
+                listingStatus: 'DRAFT',
+                hasError: undefined,
+                page: undefined,
+              }),
+            },
+            {
+              icon: AlertCircle,
+              label: t('listings.stats.errors'),
+              value: facets.errorCount.toLocaleString(),
+              detail: facets.errorCount > 0 ? 'failed sync — fix needed' : 'all clear',
+              tone: facets.errorCount > 0 ? 'rose' : 'slate',
+              onClick: facets.errorCount > 0
+                ? () => updateUrl({ hasError: 'true', page: undefined })
+                : undefined,
+              ariaLabel: facets.errorCount > 0
+                ? `Filter to listings with errors (${facets.errorCount})`
+                : undefined,
+            },
+          ] satisfies KpiTileSpec[]}
+        />
+      )}
 
       {/* U.67 — quick-filters strip. Channel + Market multi-select with
           [All] shortcut. Channel is hidden when this workspace is
