@@ -1288,11 +1288,14 @@ export class AmazonFlatFileService {
           result.created++
         }
 
-        // ── Product hierarchy + type ────────────────────────────────
+        // ── Product hierarchy + type + fulfillment method ──────────
+        const faCode = String(row['fulfillment_availability__fulfillment_channel_code'] ?? row['fulfillment_channel_code'] ?? 'DEFAULT').toUpperCase()
+        const derivedMethod = (faCode === 'AMAZON_NA' || faCode === 'AFN' || faCode === 'FBA') ? 'FBA' : 'FBM'
         const productUpdates: Record<string, any> = {}
         if (productType && product.productType !== productType) productUpdates.productType = productType
         if (isParentRow && !product.isParent)              productUpdates.isParent = true
         if (isChildRow && parentId && product.parentId !== parentId) productUpdates.parentId = parentId
+        productUpdates.fulfillmentMethod = derivedMethod
         if (Object.keys(productUpdates).length) {
           await this.prisma.product.update({ where: { id: product.id }, data: productUpdates })
         }

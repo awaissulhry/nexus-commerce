@@ -514,6 +514,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
     let saved = 0;
 
+    // Lookup primary warehouse once for StockLevel writes (same pattern as Amazon flat-file service)
+    const primaryLocation = await prisma.stockLocation.findFirst({
+      where: { type: 'WAREHOUSE', isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+
     try {
       for (const row of rows) {
         const sku = row.sku as string;
@@ -649,6 +656,98 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
               flatFileType: 'EBAY_FLAT_FILE',
             },
           })
+        }
+
+        // ── StockLevel update (once per product, FBM warehouse) ──────
+        // Use the first non-null qty across markets as the warehouse qty.
+        // eBay is always FBM — stock lives in the primary warehouse.
+        let stockQty: number | null = null;
+        for (const mp of MARKETS) {
+          const q = row[`${(mp as string).toLowerCase()}_qty`];
+          if (q != null && !isNaN(Number(q)) && Number(q) >= 0) {
+            stockQty = Number(q);
+            break;
+          }
+        }
+
+        if (primaryLocation && stockQty !== null) {
+          const existingStock = await prisma.stockLevel.findUnique({
+            where: {
+              locationId_productId_variationId: {
+                locationId: primaryLocation.id,
+                productId,
+                variationId: null as any,
+              },
+            },
+          });
+
+          if (existingStock) {
+            const delta = stockQty - existingStock.quantity;
+            if (delta !== 0) {
+              await prisma.$transaction([
+                prisma.stockLevel.update({
+                  where: { id: existingStock.id },
+                  data: {
+                    quantity: stockQty,
+                    available: Math.max(0, stockQty - existingStock.reserved),
+                  },
+                }),
+                prisma.stockMovement.create({
+                  data: {
+                    productId,
+                    locationId: primaryLocation.id,
+                    change: delta,
+                    balanceAfter: stockQty,
+                    quantityBefore: existingStock.quantity,
+                    reason: 'MANUAL_ADJUSTMENT',
+                    referenceType: 'FlatFileSync',
+                    notes: 'eBay flat-file sync',
+                    actor: 'system',
+                  },
+                }),
+                prisma.product.update({
+                  where: { id: productId },
+                  data: { totalStock: stockQty, fulfillmentMethod: 'FBM' },
+                }),
+              ]);
+            }
+          } else {
+            await prisma.$transaction([
+              prisma.stockLevel.create({
+                data: {
+                  locationId: primaryLocation.id,
+                  productId,
+                  variationId: null as any,
+                  quantity: stockQty,
+                  reserved: 0,
+                  available: stockQty,
+                },
+              }),
+              prisma.stockMovement.create({
+                data: {
+                  productId,
+                  locationId: primaryLocation.id,
+                  change: stockQty,
+                  balanceAfter: stockQty,
+                  quantityBefore: 0,
+                  reason: 'MANUAL_ADJUSTMENT',
+                  referenceType: 'FlatFileSync',
+                  notes: 'eBay flat-file sync (initial)',
+                  actor: 'system',
+                },
+              }),
+              prisma.product.update({
+                where: { id: productId },
+                data: { totalStock: stockQty, fulfillmentMethod: 'FBM' },
+              }),
+            ]);
+          }
+        } else if (primaryLocation) {
+          // No qty in this row — still mark fulfillmentMethod as FBM
+          await prisma.product.update({
+            where: { id: productId },
+            data: { fulfillmentMethod: 'FBM' },
+          });
         }
 
         saved++;

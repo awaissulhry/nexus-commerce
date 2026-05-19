@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
@@ -385,7 +386,12 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       body: JSON.stringify({ rows: dirty }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return res.json() as Promise<{ saved: number }>
+    const result = await res.json() as { saved: number }
+    if (result.saved > 0) {
+      emitInvalidation({ type: 'product.updated', meta: { source: 'ebay-flat-file' } })
+      emitInvalidation({ type: 'stock.adjusted', meta: { source: 'ebay-flat-file' } })
+    }
+    return result
   }, [BACKEND])
 
   // ── API: push to eBay ─────────────────────────────────────────────────

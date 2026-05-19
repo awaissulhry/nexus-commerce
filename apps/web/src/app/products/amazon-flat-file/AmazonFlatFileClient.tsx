@@ -1590,8 +1590,9 @@ export default function AmazonFlatFileClient({
       if (!res.ok) throw new Error(data.error ?? 'Sync failed')
       setSyncStatus('synced')
       setTimeout(() => setSyncStatus('idle'), 4000)
-      // Notify any open product edit page to re-fetch channel pricing/inventory
       emitInvalidation({ type: 'channel-pricing.updated', meta: { marketplace, productType } })
+      emitInvalidation({ type: 'stock.adjusted', meta: { source: 'amazon-flat-file', marketplace } })
+      emitInvalidation({ type: 'product.updated', meta: { source: 'amazon-flat-file', marketplace } })
     } catch {
       setSyncStatus('error')
       setTimeout(() => setSyncStatus('idle'), 6000)
