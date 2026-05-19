@@ -50,12 +50,14 @@ import {
   BulkActionShell,
   SortStack,
   KeyboardShortcutsModal,
+  FilterPopover,
   type Density,
   type AutoRefreshInterval,
   type ColumnSpec,
   type BulkAction,
   type SortFieldOption,
   type ShortcutGroup,
+  type FilterDimension,
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
@@ -207,6 +209,13 @@ export default function ReplenishmentWorkspace() {
     'NEEDS_REORDER') as 'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'NEEDS_REORDER'
   const channelFilter = searchParams.get('channel') ?? ''
   const marketplaceFilter = searchParams.get('marketplace') ?? ''
+  // FP.6 — client-side secondary filters in the FilterPopover.
+  // None of these require backend changes (the suggestion shape
+  // already carries the flags). Combined with the urgency tiles +
+  // channel/market inline chips for hot paths.
+  const needsReorderOnly = searchParams.get('needsReorderOnly') === 'true'
+  const manufacturedOnly = searchParams.get('manufacturedOnly') === 'true'
+  const forecastSourceFilter = searchParams.get('forecastSource') ?? ''
   const urlSearch = searchParams.get('search') ?? ''
   const sortBy = (searchParams.get('sortBy') ?? 'urgency') as SortKey
   const sortDir = (searchParams.get('sortDir') ?? 'desc') as 'asc' | 'desc'
@@ -258,6 +267,18 @@ export default function ReplenishmentWorkspace() {
   useEffect(() => {
     try { window.localStorage.setItem('nexus-replenishment-columns', JSON.stringify(visibleColumns)) } catch {}
   }, [visibleColumns])
+
+  // FP.6 — persisted FilterPopover dimension order.
+  const [replenishmentFilterOrder, setReplenishmentFilterOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem('replenishment.filterOrder')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('replenishment.filterOrder', JSON.stringify(replenishmentFilterOrder)) } catch {}
+  }, [replenishmentFilterOrder])
 
   // Pagination state — client-side. The backend caps suggestions at
   // 1000 in one request; we slice the filtered array into pages so the
@@ -428,6 +449,13 @@ export default function ReplenishmentWorkspace() {
         (r) => r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
       )
     }
+    // FP.6 — secondary filters from the FilterPopover (client-side
+    // since the suggestion shape already carries the flags).
+    if (needsReorderOnly) rows = rows.filter((s) => s.needsReorder)
+    if (manufacturedOnly) rows = rows.filter((s) => s.isManufactured)
+    if (forecastSourceFilter) {
+      rows = rows.filter((s) => s.forecastSource === forecastSourceFilter)
+    }
     const cmpForField = (field: string, dir: 1 | -1) =>
       (a: Suggestion, b: Suggestion): number => {
         switch (field) {
@@ -461,7 +489,7 @@ export default function ReplenishmentWorkspace() {
       }
     }
     return rows
-  }, [data, filter, urlSearch, sortBy, sortDir, sortStack])
+  }, [data, filter, urlSearch, sortBy, sortDir, sortStack, needsReorderOnly, manufacturedOnly, forecastSourceFilter])
 
   // Build hierarchy grid rows from the flat suggestion list.
   // All child data is pre-loaded — no lazy-fetch needed for Xavia's ~279 SKUs.
@@ -643,6 +671,43 @@ export default function ReplenishmentWorkspace() {
   // Slice the parent rows for the current page. Expanded children
   // travel under their parent regardless of the page boundary —
   // VirtualizedGrid resolves them via childrenByParent.
+  // FP.6 — FilterPopover dimensions. All three are client-side filters
+  // applied in the `filtered` useMemo above; the suggestion shape
+  // already carries every flag, so no backend changes were needed.
+  const replenishmentFilterDimensions: FilterDimension[] = [
+    {
+      key: 'needsReorderOnly',
+      label: 'Needs reorder only',
+      type: 'toggle',
+      value: needsReorderOnly,
+      onChange: (next) => updateUrl({ needsReorderOnly: next ? 'true' : undefined }),
+    },
+    {
+      key: 'manufacturedOnly',
+      label: 'In-house manufactured only',
+      type: 'toggle',
+      value: manufacturedOnly,
+      onChange: (next) => updateUrl({ manufacturedOnly: next ? 'true' : undefined }),
+    },
+    {
+      key: 'forecastSource',
+      label: 'Forecast source',
+      type: 'single-select',
+      options: [
+        { value: 'FORECAST', label: 'Forecast model' },
+        { value: 'TRAILING_VELOCITY', label: 'Trailing velocity (no forecast yet)' },
+      ],
+      value: forecastSourceFilter || null,
+      onChange: (next) => updateUrl({ forecastSource: next ?? undefined }),
+    },
+  ]
+
+  const clearReplenishmentSecondaryFilters = () => updateUrl({
+    needsReorderOnly: undefined,
+    manufacturedOnly: undefined,
+    forecastSource: undefined,
+  })
+
   const gridRowsPage = useMemo(() => {
     const start = (page - 1) * pageSize
     return gridRows.slice(start, start + pageSize)
@@ -658,7 +723,7 @@ export default function ReplenishmentWorkspace() {
 
   // Whenever filters/search/sort shift the underlying data, jump back
   // to page 1 so the operator isn't stuck on an empty tail page.
-  useEffect(() => { setPage(1) }, [filter, channelFilter, marketplaceFilter, urlSearch, sortBy, sortDir])
+  useEffect(() => { setPage(1) }, [filter, channelFilter, marketplaceFilter, urlSearch, sortBy, sortDir, needsReorderOnly, manufacturedOnly, forecastSourceFilter])
 
   // R.5 — auto-refresh now driven by AutoRefreshSelect's onTick prop.
 
@@ -1243,6 +1308,18 @@ export default function ReplenishmentWorkspace() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-44 sm:w-56"
+          />
+          <FilterPopover
+            dimensions={replenishmentFilterDimensions}
+            onClearAll={clearReplenishmentSecondaryFilters}
+            activeCount={
+              (needsReorderOnly ? 1 : 0) +
+              (manufacturedOnly ? 1 : 0) +
+              (forecastSourceFilter ? 1 : 0)
+            }
+            order={replenishmentFilterOrder}
+            onOrderChange={setReplenishmentFilterOrder}
+            onResetOrder={replenishmentFilterOrder.length > 0 ? () => setReplenishmentFilterOrder([]) : undefined}
           />
           <SortStack
             fields={REP_SORT_FIELDS}
