@@ -20,6 +20,7 @@ import { AIBulkModal } from './AIBulkModal'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { FFReplicateModal } from './FFReplicateModal'
 import { PullDiffModal, type PullDiffApplyResult } from './PullDiffModal'
+import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -502,6 +503,7 @@ export default function AmazonFlatFileClient({
     skusReturned: number
     jobId: string
   } | null>(null)
+  const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
   const [fetching, setFetching] = useState(false)
 
   // Tracks the anchor row when user drags on the # column to select rows
@@ -2388,6 +2390,14 @@ export default function AmazonFlatFileClient({
             )}
           </div>
 
+          {/* Pull history — recent applied pulls + one-click re-pull */}
+          <TbBtn
+            icon={<History className="w-3.5 h-3.5" />}
+            title={`Pull history — review past pulls and re-run with same scope`}
+            onClick={() => setPullHistoryOpen(true)}
+            active={pullHistoryOpen}
+          />
+
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
           {/* FF.38 Validation toggle */}
@@ -3287,6 +3297,57 @@ export default function AmazonFlatFileClient({
           />
         </div>
       )}
+
+      {/* Pull history drawer — Phase 4 */}
+      <PullHistoryDrawer
+        open={pullHistoryOpen}
+        channel="AMAZON"
+        marketplace={marketplace}
+        productType={productType}
+        onRePull={(rec) => {
+          setPullHistoryOpen(false)
+          const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
+          const cols = (isAllCols ? 'all' : rec.columnsApplied) as 'all' | PullGroupId[]
+          // Mirror handlePullFromAmazon but feed the rerun's SKU list
+          // straight in as a "selected" scope so we hit exactly the
+          // same rows the audit row covers.
+          const skus = rec.skusRequested
+          if (!skus.length) return
+          void (async () => {
+            setPulling(true)
+            setPullProgress({ progress: 0, total: skus.length })
+            setPullResult(null)
+            try {
+              const startRes = await fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/start`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ marketplace, productType, skus }),
+              })
+              const startData = await startRes.json()
+              if (!startRes.ok) throw new Error(startData.error ?? 'Pull failed to start')
+              const { jobId } = startData
+              let job: any = null
+              for (let i = 0; i < 1200; i++) {
+                await new Promise((r) => setTimeout(r, 1500))
+                const statusRes = await fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/status/${jobId}`)
+                if (!statusRes.ok) throw new Error('Pull status check failed')
+                job = await statusRes.json()
+                setPullProgress({ progress: job.progress, total: job.total })
+                if (job.status === 'done' || job.status === 'failed') break
+              }
+              if (!job || job.status !== 'done') throw new Error(job?.fatalError ?? 'Pull timed out')
+              const pulledRows: Row[] = Array.isArray(job.rows) ? job.rows : []
+              setPullDiffData({ pulledRows, selectedColumns: cols, skusRequested: skus, skusReturned: pulledRows.length, jobId })
+              setPullDiffOpen(true)
+            } catch (e: any) {
+              setLoadError(e?.message ?? 'Re-pull failed')
+            } finally {
+              setPulling(false)
+              setPullProgress(null)
+            }
+          })()
+        }}
+        onClose={() => setPullHistoryOpen(false)}
+      />
 
       {/* Pull diff preview — Phase 2 of in-editor pull */}
       {pullDiffData && (

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, Loader2, RefreshCw, Search, Send, X,
+  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, RefreshCw, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -21,6 +21,7 @@ import {
   type CategoryAspect, type EbayColumnGroup,
 } from './ebay-columns'
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
+import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -290,6 +291,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     skusReturned: number
     jobId: string
   } | null>(null)
+  const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
 
   // IN.2 — Cascade button toggle (default on, shared localStorage key with Amazon)
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
@@ -862,6 +864,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         )}
       </div>
 
+      {/* Pull history — recent applied pulls + one-click re-pull */}
+      <button
+        type="button"
+        onClick={() => setPullHistoryOpen(true)}
+        title="Pull history — review past pulls and re-run with same scope"
+        className={cn(
+          'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
+          pullHistoryOpen
+            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+        )}
+      >
+        <History className="w-3.5 h-3.5" />
+      </button>
+
       {/* Inline progress / result indicator */}
       {pullProgress && (
         <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
@@ -879,7 +896,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [fetching, fetchPanelOpen, pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob])
+  ), [fetching, fetchPanelOpen, pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1079,6 +1096,21 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   return (
     <>
+      {/* Pull history drawer — Phase 4 */}
+      <PullHistoryDrawer
+        open={pullHistoryOpen}
+        channel="EBAY"
+        marketplace={marketplace}
+        onRePull={(rec) => {
+          setPullHistoryOpen(false)
+          const isAllCols = rec.columnsApplied.includes('all') || rec.columnsApplied.length === 0
+          const cols = (isAllCols ? 'all' : rec.columnsApplied) as 'all' | PullGroupId[]
+          if (!rec.skusRequested.length) return
+          void startPullJob({ skus: rec.skusRequested, columns: cols })
+        }}
+        onClose={() => setPullHistoryOpen(false)}
+      />
+
       {cascadeRow && cascadeRow._productId && (
         <CascadeModal
           sourceProductId={String(cascadeRow._productId)}
