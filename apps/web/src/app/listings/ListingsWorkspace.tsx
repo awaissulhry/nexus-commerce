@@ -29,10 +29,12 @@ import {
   KpiStrip,
   BulkActionShell,
   KeyboardShortcutsModal,
+  SharedLensTabs,
   type AutoRefreshInterval,
   type KpiTileSpec,
   type BulkAction,
   type ShortcutGroup,
+  type LensTab,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -1199,29 +1201,14 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
 // ────────────────────────────────────────────────────────────────────
 function LensTabs({ current, onChange }: { current: Lens; onChange: (l: Lens) => void }) {
   const { t } = useTranslations()
-  const tabs: Array<{ key: Lens; labelKey: string; icon: any }> = [
-    { key: 'grid', labelKey: 'listings.lens.grid', icon: Boxes },
-    { key: 'health', labelKey: 'listings.lens.health', icon: AlertTriangle },
-    { key: 'matrix', labelKey: 'listings.lens.matrix', icon: LayoutGrid },
-    { key: 'drafts', labelKey: 'listings.lens.drafts', icon: Sparkles },
-    { key: 'performance', labelKey: 'listings.lens.performance', icon: Activity },
+  const tabs: ReadonlyArray<LensTab<Lens>> = [
+    { key: 'grid',        label: t('listings.lens.grid'),        icon: Boxes },
+    { key: 'health',      label: t('listings.lens.health'),      icon: AlertTriangle },
+    { key: 'matrix',      label: t('listings.lens.matrix'),      icon: LayoutGrid },
+    { key: 'drafts',      label: t('listings.lens.drafts'),      icon: Sparkles },
+    { key: 'performance', label: t('listings.lens.performance'), icon: Activity },
   ]
-  return (
-    <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          onClick={() => onChange(tab.key)}
-          className={`h-7 px-3 text-base font-medium inline-flex items-center gap-1.5 rounded transition-colors ${
-            current === tab.key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-          }`}
-        >
-          <tab.icon size={12} />
-          {t(tab.labelKey)}
-        </button>
-      ))}
-    </div>
-  )
+  return <SharedLensTabs<Lens> tabs={tabs} current={current} onChange={onChange} />
 }
 
 // ────────────────────────────────────────────────────────────────────
