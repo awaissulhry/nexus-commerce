@@ -16,7 +16,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Megaphone } from 'lucide-react'
+import { Megaphone, ExternalLink } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tabs } from '@/components/ui/Tabs'
@@ -105,7 +105,25 @@ export default function EbayListingsClient({
     <div className="space-y-4">
       {/* Marketplace tab strip — only when route is /listings/ebay
           (not /listings/ebay/[market]); locked routes already encode
-          the choice in the URL. */}
+          the choice in the URL. The Gap analysis button sits on the
+          right of the strip — opens in a new tab so the operator can
+          cross-reference gaps while keeping the live listings page
+          open. Was a sidebar entry; moved here so the secondary tool
+          travels with the page it belongs to. */}
+      {!lockMarketplace && (
+        <div className="flex items-end justify-between gap-3">
+          <a
+            href="/listings/ebay/gaps"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            title="Open eBay gap analysis (in a new tab)"
+          >
+            Gap analysis
+            <ExternalLink size={13} className="text-slate-400" />
+          </a>
+        </div>
+      )}
       {!lockMarketplace && (
         <Tabs
           tabs={tabs}
