@@ -3,10 +3,22 @@
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 import { createHash } from 'crypto'
+import { writeSettingsAudit } from '@/lib/settings-audit'
 
 // Simple hash for demo — in production use bcrypt
 function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex')
+}
+
+const PROFILE_SNAPSHOT_FIELDS = ['displayName', 'email', 'avatarUrl'] as const
+
+function profileSnapshot(
+  row: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!row) return null
+  const out: Record<string, unknown> = {}
+  for (const k of PROFILE_SNAPSHOT_FIELDS) out[k] = row[k] ?? null
+  return out
 }
 
 export async function saveProfile(formData: FormData) {
@@ -20,9 +32,21 @@ export async function saveProfile(formData: FormData) {
       where: { id: existing.id },
       data: { displayName, avatarUrl },
     })
+    await writeSettingsAudit({
+      key: 'profile',
+      action: 'update',
+      before: profileSnapshot(existing),
+      after: profileSnapshot({ ...existing, displayName, avatarUrl }),
+    })
   } else {
     await (prisma as any).userProfile.create({
       data: { displayName, avatarUrl, email: '' },
+    })
+    await writeSettingsAudit({
+      key: 'profile',
+      action: 'create',
+      before: null,
+      after: { displayName, avatarUrl, email: '' },
     })
   }
 
@@ -64,6 +88,17 @@ export async function changePassword(formData: FormData) {
       data: { displayName: '', email: '', passwordHash: newHash },
     })
   }
+
+  // Never log the hash itself. The audit row records the event,
+  // not the credential — operators can see "you changed your
+  // password at 14:03" without exposing the value.
+  await writeSettingsAudit({
+    key: 'profile.password',
+    action: 'update',
+    before: { passwordSet: !!existing?.passwordHash },
+    after: { passwordSet: true },
+    metadata: { event: 'password_changed' },
+  })
 
   revalidatePath('/settings/profile')
   return { success: true }

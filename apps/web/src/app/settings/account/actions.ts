@@ -2,6 +2,33 @@
 
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
+import { writeSettingsAudit } from '@/lib/settings-audit'
+
+/**
+ * Snapshot fields we want represented in the audit diff. Anything
+ * here that changes will appear in the /settings/audit viewer.
+ */
+const SNAPSHOT_FIELDS = [
+  'businessName',
+  'addressLine1',
+  'addressLine2',
+  'city',
+  'state',
+  'postalCode',
+  'country',
+  'timezone',
+  'currency',
+  'primaryMarketplace',
+] as const
+
+function snapshot(
+  row: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!row) return null
+  const out: Record<string, unknown> = {}
+  for (const k of SNAPSHOT_FIELDS) out[k] = row[k] ?? null
+  return out
+}
 
 export async function saveAccountSettings(formData: FormData) {
   // PSM.1 — primaryMarketplace: nullable. Empty string from the form
@@ -21,7 +48,8 @@ export async function saveAccountSettings(formData: FormData) {
     primaryMarketplace: rawPrimary.trim().toUpperCase() || null,
   }
 
-  // Upsert: find the first record or create one
+  // Phase B — read the existing row BEFORE the write so the audit
+  // diff has a real before/after pair.
   const existing = await (prisma as any).accountSettings.findFirst()
 
   if (existing) {
@@ -29,8 +57,20 @@ export async function saveAccountSettings(formData: FormData) {
       where: { id: existing.id },
       data,
     })
+    await writeSettingsAudit({
+      key: 'account',
+      action: 'update',
+      before: snapshot(existing),
+      after: data,
+    })
   } else {
     await (prisma as any).accountSettings.create({ data })
+    await writeSettingsAudit({
+      key: 'account',
+      action: 'create',
+      before: null,
+      after: data,
+    })
   }
 
   revalidatePath('/settings/account')

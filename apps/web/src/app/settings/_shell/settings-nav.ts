@@ -284,7 +284,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         description:
           'Who changed which setting, when, with before/after diff.',
         keywords: ['audit', 'history', 'changelog', 'who changed'],
-        status: 'soon',
+        status: 'live',
       },
       {
         href: '/settings/privacy',

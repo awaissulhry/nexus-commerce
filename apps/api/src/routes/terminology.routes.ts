@@ -13,6 +13,25 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { writeSettingsAudit } from '../utils/settings-audit.js'
+
+const TERM_SNAPSHOT_FIELDS = [
+  'brand',
+  'marketplace',
+  'language',
+  'preferred',
+  'avoid',
+  'context',
+] as const
+
+function termSnapshot(
+  row: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!row) return null
+  const out: Record<string, unknown> = { id: row.id }
+  for (const k of TERM_SNAPSHOT_FIELDS) out[k] = row[k] ?? null
+  return out
+}
 
 interface CreateBody {
   brand?: string | null
@@ -83,6 +102,13 @@ const terminologyRoutes: FastifyPluginAsync = async (fastify) => {
         context: body.context?.trim() || null,
       },
     })
+    await writeSettingsAudit({
+      key: 'terminology',
+      action: 'create',
+      before: null,
+      after: termSnapshot(created as any),
+      metadata: { event: 'term_created' },
+    })
     return { item: created }
   })
 
@@ -110,9 +136,19 @@ const terminologyRoutes: FastifyPluginAsync = async (fastify) => {
         data.context = body.context?.trim() || null
       }
       try {
+        const before = await prisma.terminologyPreference.findUnique({
+          where: { id: request.params.id },
+        })
         const updated = await prisma.terminologyPreference.update({
           where: { id: request.params.id },
           data,
+        })
+        await writeSettingsAudit({
+          key: 'terminology',
+          action: 'update',
+          before: termSnapshot(before as any),
+          after: termSnapshot(updated as any),
+          metadata: { event: 'term_updated' },
         })
         return { item: updated }
       } catch (err: any) {
@@ -128,9 +164,21 @@ const terminologyRoutes: FastifyPluginAsync = async (fastify) => {
     '/terminology/:id',
     async (request, reply) => {
       try {
+        const before = await prisma.terminologyPreference.findUnique({
+          where: { id: request.params.id },
+        })
         await prisma.terminologyPreference.delete({
           where: { id: request.params.id },
         })
+        if (before) {
+          await writeSettingsAudit({
+            key: 'terminology',
+            action: 'delete',
+            before: termSnapshot(before as any),
+            after: null,
+            metadata: { event: 'term_deleted' },
+          })
+        }
         return { ok: true }
       } catch (err: any) {
         if (err?.code === 'P2025') {

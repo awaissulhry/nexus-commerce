@@ -13,6 +13,29 @@ import {
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
+import { writeSettingsAudit } from '../utils/settings-audit.js'
+
+const BRAND_SNAPSHOT_FIELDS = [
+  'companyName',
+  'addressLines',
+  'taxId',
+  'contactEmail',
+  'contactPhone',
+  'websiteUrl',
+  'logoUrl',
+  'signatureBlockText',
+  'defaultPoNotes',
+  'factoryEmailFrom',
+] as const
+
+function brandSnapshot(
+  row: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!row) return null
+  const out: Record<string, unknown> = {}
+  for (const k of BRAND_SNAPSHOT_FIELDS) out[k] = row[k] ?? null
+  return out
+}
 
 const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/settings/brand', async (_request, reply) => {
@@ -79,6 +102,7 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Persist on the (single) BrandSettings row.
       let row = await prisma.brandSettings.findFirst()
+      const before = row
       if (!row) {
         row = await prisma.brandSettings.create({
           data: { logoUrl: uploaded.url },
@@ -89,6 +113,22 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
           data: { logoUrl: uploaded.url },
         })
       }
+
+      // Logo upload is technically a single-field change on the
+      // company row, so we audit-log it under the same 'company' key
+      // — operators will see "logoUrl changed" in the history.
+      await writeSettingsAudit({
+        key: 'company',
+        action: before ? 'update' : 'create',
+        before: brandSnapshot(before as any),
+        after: brandSnapshot(row as any),
+        metadata: {
+          event: 'logo_uploaded',
+          width: uploaded.width,
+          height: uploaded.height,
+          bytes: uploaded.bytes,
+        },
+      })
 
       return {
         ok: true,
@@ -145,6 +185,7 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Single-row upsert: read-then-update keeps the contract simple.
       let row = await prisma.brandSettings.findFirst()
+      const before = row
       if (!row) {
         row = await prisma.brandSettings.create({ data: update })
       } else {
@@ -153,6 +194,14 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
           data: update,
         })
       }
+      // Phase B — settings change history. Use the canonical helper so
+      // /settings/audit surfaces these alongside web-action saves.
+      await writeSettingsAudit({
+        key: 'company',
+        action: before ? 'update' : 'create',
+        before: brandSnapshot(before as any),
+        after: brandSnapshot(row as any),
+      })
       return row
     } catch (error: any) {
       fastify.log.error({ err: error }, '[settings/brand PATCH] failed')
