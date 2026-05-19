@@ -15,13 +15,13 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   Loader2,
-  RefreshCw,
   Trophy,
   Users,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Button } from '@/components/ui/Button'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -60,6 +60,8 @@ export default function BuyBoxClient() {
   const [data, setData] = useState<BuyBoxStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -71,6 +73,7 @@ export default function BuyBoxClient() {
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
+      setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -141,15 +144,17 @@ export default function BuyBoxClient() {
             {w.label}
           </button>
         ))}
-        <div className="ml-auto">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={fetchData}
-            icon={<RefreshCw size={12} />}
-          >
-            {t('pricing.action.refresh')}
-          </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
         </div>
       </div>
 

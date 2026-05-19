@@ -25,6 +25,8 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type RiskRow = {
@@ -51,6 +53,8 @@ export default function RiskQueueClient() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [filter, setFilter] = useState<'PENDING' | 'ALL'>('PENDING')
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -62,6 +66,7 @@ export default function RiskQueueClient() {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       setRows(data.customers ?? [])
+      setLastFetchedAt(Date.now())
     } catch (e: any) {
       toast.error(e.message)
     } finally {
@@ -138,12 +143,18 @@ export default function RiskQueueClient() {
           { label: 'Risk Queue' },
         ]}
         actions={
-          <button
-            onClick={refresh}
-            className="h-8 px-3 inline-flex items-center gap-1.5 text-sm border border-slate-200 rounded hover:bg-slate-50"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={refresh}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={refresh}
+              loading={loading}
+            />
+          </div>
         }
       />
 

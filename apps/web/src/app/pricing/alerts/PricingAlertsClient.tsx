@@ -10,12 +10,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
-  RefreshCw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Button } from '@/components/ui/Button'
 import { Tabs, type Tab } from '@/components/ui/Tabs'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -82,6 +82,8 @@ export default function PricingAlertsClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<AlertTab>('all')
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -92,6 +94,7 @@ export default function PricingAlertsClient() {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
+      setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -209,14 +212,18 @@ export default function PricingAlertsClient() {
         activeTab={activeTab}
         onChange={(id) => setActiveTab(id as AlertTab)}
         trailing={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={fetchData}
-            icon={<RefreshCw size={12} />}
-          >
-            {t('pricing.action.refresh')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchData}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchData}
+              loading={loading}
+            />
+          </div>
         }
       />
 
