@@ -2103,22 +2103,9 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
       if (isParentRow) {
         return <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
       }
-      const q = l.quantity
-      const tone = q === 0 ? 'text-rose-600 dark:text-rose-400' : q != null && q <= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
       return (
-        <div className="space-y-0.5 text-right">
-          <InlineNumberCell
-            value={q ?? null}
-            listingId={l.id}
-            version={l.version}
-            field="quantity"
-            align="right"
-            integer
-            format={(n) => String(Math.round(n))}
-            tone={tone}
-            onSaved={onListingChanged}
-          />
-          <StockSplit fba={l.product.fbaStock} fbm={l.product.fbmStock} inline muted />
+        <div className="text-right">
+          <StockSplit fba={l.product.fbaStock} fbm={l.product.fbmStock} inline />
         </div>
       )
     }
