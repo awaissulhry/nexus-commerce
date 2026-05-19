@@ -184,22 +184,22 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         byType: Record<string, number>
         lastUpdatedAt: Date | null
       }>()
+      // Unique locations per parent — for location badge display in the table.
+      const parentLocations = new Map<string, Map<string, { id: string; code: string; name: string; type: string }>>()
 
       if (parentProductIds.length > 0) {
         const descendantLevels = await prisma.stockLevel.findMany({
           where: {
             product: {
               OR: [
-                // Direct children (2-level)
                 { parentId: { in: parentProductIds }, isParent: false },
-                // Grandchildren (3-level): product whose parent's parentId is in our list
                 { isParent: false, parent: { parentId: { in: parentProductIds } } },
               ],
             },
           },
           select: {
             quantity: true, reserved: true, available: true, lastUpdatedAt: true,
-            location: { select: { type: true } },
+            location: { select: { id: true, code: true, name: true, type: true } },
             product: {
               select: {
                 parentId: true,
@@ -210,7 +210,6 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         })
 
         for (const sl of descendantLevels) {
-          // Resolve which top-level parent this stock belongs to
           const topId =
             parentProductIds.includes(sl.product.parentId ?? '')
               ? sl.product.parentId!
@@ -225,6 +224,9 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             cur.lastUpdatedAt = sl.lastUpdatedAt
           }
           parentAgg.set(topId, cur)
+          // Collect unique locations for badge rendering
+          if (!parentLocations.has(topId)) parentLocations.set(topId, new Map())
+          parentLocations.get(topId)!.set(sl.location.id, sl.location)
         }
       }
 
@@ -236,23 +238,26 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           const ownAvailable = p.stockLevels.reduce((s, sl) => s + sl.available, 0)
           const lastUpdated  = agg?.lastUpdatedAt
             ?? (p.stockLevels[0]?.lastUpdatedAt ?? null)
+          const totalQty = agg?.qty ?? ownQty
           const fbaQty = agg?.byType['AMAZON_FBA']
             ?? p.stockLevels.filter((sl) => sl.location.type === 'AMAZON_FBA').reduce((s, sl) => s + sl.quantity, 0)
+          const nonFbaQty = totalQty - fbaQty  // covers WAREHOUSE + SHOPIFY_LOCATION + CHANNEL_RESERVED
           const ownWHQty = agg?.byType['WAREHOUSE']
             ?? p.stockLevels.filter((sl) => sl.location.type === 'WAREHOUSE').reduce((s, sl) => s + sl.quantity, 0)
 
           // Derive fulfillment method: explicit field wins; fall back to stock location signals.
+          // Use nonFbaQty (not just WAREHOUSE) so eBay/Shopify products are correctly marked FBM.
           const explicitMethod = (p.fulfillmentMethod ?? p.fulfillmentChannel) as string | null
           let fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
           if (explicitMethod === 'FBA') {
             fulfillmentMethod = 'FBA'
           } else if (explicitMethod === 'FBM') {
             fulfillmentMethod = 'FBM'
-          } else if (fbaQty > 0 && ownWHQty > 0) {
+          } else if (fbaQty > 0 && nonFbaQty > 0) {
             fulfillmentMethod = 'BOTH'
           } else if (fbaQty > 0) {
             fulfillmentMethod = 'FBA'
-          } else if (ownWHQty > 0) {
+          } else if (nonFbaQty > 0) {
             fulfillmentMethod = 'FBM'
           } else {
             fulfillmentMethod = null
@@ -278,8 +283,17 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             fbaStock: fbaQty,
             ownStock: ownWHQty,
             lastUpdatedAt: lastUpdated ? lastUpdated.toISOString() : null,
-            // Full StockLevel rows for leaf products — used by the drawer.
-            stockLevels: p.isParent ? [] : p.stockLevels.map((sl) => ({
+            // Parent rows carry location stubs for badge rendering (no qty detail).
+            // Leaf rows carry full StockLevel data for drawer + bulk ops.
+            stockLevels: p.isParent
+              ? Array.from(parentLocations.get(p.id)?.values() ?? []).map((loc) => ({
+                  id: loc.id,
+                  location: loc,
+                  quantity: 0, reserved: 0, available: 0,
+                  reorderThreshold: null, reorderQuantity: null,
+                  syncStatus: 'SYNCED', lastUpdatedAt: new Date().toISOString(), lastSyncedAt: null,
+                }))
+              : p.stockLevels.map((sl) => ({
               id: sl.id,
               location: sl.location,
               quantity: sl.quantity,

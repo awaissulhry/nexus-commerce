@@ -501,22 +501,6 @@ async function bootstrapLegacyLocalViewsIfNeeded(): Promise<void> {
 // across StockWorkspace, AnalyticsClient, and FbaPanEuClient with
 // dark-mode parity.
 
-function FulfillmentBadge({ method }: { method: 'FBA' | 'FBM' | 'BOTH' | null }) {
-  if (!method) return null
-  if (method === 'BOTH') {
-    return (
-      <>
-        <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-orange-50 text-orange-700 border border-orange-200">FBA</span>
-        <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-slate-100 text-slate-600 border border-slate-200">FBM</span>
-      </>
-    )
-  }
-  if (method === 'FBA') {
-    return <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-orange-50 text-orange-700 border border-orange-200">FBA</span>
-  }
-  return <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-1 py-px rounded bg-slate-100 text-slate-600 border border-slate-200">FBM</span>
-}
-
 // S.10 — labels resolved via t() per render so they live-update when
 // the operator flips locale. The keys + tones stay declarative.
 const STATUS_OPTIONS = [
@@ -3512,11 +3496,8 @@ const COLUMN_META: Record<ColumnKey, {
     cell: ({ it }) => (
       <div className="min-w-0 overflow-hidden">
         <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{it.name}</div>
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-            {it.sku}{it.amazonAsin && <span> · {it.amazonAsin}</span>}
-          </span>
-          <FulfillmentBadge method={it.fulfillmentMethod} />
+        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
+          {it.sku}{it.amazonAsin && <span> · {it.amazonAsin}</span>}
         </div>
       </div>
     ),
