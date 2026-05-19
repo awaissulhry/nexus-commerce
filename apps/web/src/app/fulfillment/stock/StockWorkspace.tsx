@@ -1243,53 +1243,14 @@ export default function StockWorkspace() {
         breadcrumbs={[{ label: t('nav.fulfillment'), href: '/fulfillment' }, { label: t('stock.title') }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* S.32 — sub-route wayfinding moved to <StockSubNav>
-                below the header. Header now scopes only to controls
-                that mutate this page's state. */}
+            {/* Page-level only: sync health + top-level view switch.
+                Grid-scoped chrome (density, columns, freshness,
+                auto-refresh, refresh, shortcuts, saved views) sits
+                in the toolbar above the table — matches /listings +
+                /replenishment so the controls are right next to the
+                thing they affect. */}
             {syncStatus && <SyncIndicator status={syncStatus} />}
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={() => { fetchStock(); fetchSidecar() }}
-              loading={loading}
-              error={!!error}
-            />
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={() => { fetchStock(); fetchSidecar() }}
-            />
             <ViewToggle view={view} onChange={(v) => updateUrl({ view: v === 'table' ? undefined : v, page: undefined })} />
-            {view === 'table' && (
-              <>
-                <SharedDensityToggle density={density} onChange={setDensity} />
-                <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
-              </>
-            )}
-            <SavedViewsButton
-              savedViews={savedViews}
-              open={savedViewsOpen}
-              onToggle={() => setSavedViewsOpen((o) => !o)}
-              onApply={applySavedView}
-              onDelete={deleteSavedView}
-              onToggleDefault={toggleDefaultView}
-              onOpenSaveModal={() => { setSavedViewsOpen(false); setSaveViewModalOpen(true) }}
-              t={t}
-            />
-            <button
-              onClick={() => { fetchStock(); fetchSidecar() }}
-              className="h-11 sm:h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-              aria-label={t('stock.action.refresh')}
-            >
-              <RefreshCw size={12} aria-hidden="true" /> {t('stock.action.refresh')}
-            </button>
-            <button
-              onClick={() => setShortcutsOpen(true)}
-              className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
-              title="Keyboard shortcuts (?)"
-              aria-label="Keyboard shortcuts"
-            >
-              <Keyboard size={12} aria-hidden="true" />
-            </button>
           </div>
         }
       />
@@ -1308,6 +1269,55 @@ export default function StockWorkspace() {
           onOpenProduct={setDrawerProductId}
         />
       )}
+
+      {/* Grid toolbar — density, columns, freshness, auto-refresh,
+          saved views, refresh, shortcuts. Sits just above the filter
+          card so the controls are adjacent to the table they govern
+          (matches /listings + /replenishment layout). */}
+      <div className="flex items-center gap-2 flex-wrap justify-end">
+        <FreshnessIndicator
+          lastFetchedAt={lastFetchedAt}
+          onRefresh={() => { fetchStock(); fetchSidecar() }}
+          loading={loading}
+          error={!!error}
+        />
+        <AutoRefreshSelect
+          value={autoRefreshMin}
+          onChange={setAutoRefreshMin}
+          onTick={() => { fetchStock(); fetchSidecar() }}
+        />
+        {view === 'table' && (
+          <>
+            <SharedDensityToggle density={density} onChange={setDensity} />
+            <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
+          </>
+        )}
+        <SavedViewsButton
+          savedViews={savedViews}
+          open={savedViewsOpen}
+          onToggle={() => setSavedViewsOpen((o) => !o)}
+          onApply={applySavedView}
+          onDelete={deleteSavedView}
+          onToggleDefault={toggleDefaultView}
+          onOpenSaveModal={() => { setSavedViewsOpen(false); setSaveViewModalOpen(true) }}
+          t={t}
+        />
+        <button
+          onClick={() => { fetchStock(); fetchSidecar() }}
+          className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
+          aria-label={t('stock.action.refresh')}
+        >
+          <RefreshCw size={12} aria-hidden="true" /> {t('stock.action.refresh')}
+        </button>
+        <button
+          onClick={() => setShortcutsOpen(true)}
+          className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+        >
+          <Keyboard size={12} aria-hidden="true" />
+        </button>
+      </div>
 
       {/* Filter bar */}
       <Card>
