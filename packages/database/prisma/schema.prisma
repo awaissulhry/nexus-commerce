@@ -3015,6 +3015,27 @@ model ApiKey {
   revokedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  // Phase G — finer-grained authorization.
+  //
+  // scopes: canonical strings from CANONICAL_SCOPES in
+  //   apps/api/src/lib/api-key-auth.ts. Empty array means "full access"
+  //   for backwards-compat with the original keys; new keys default to
+  //   a narrow scope set chosen at create time.
+  scopes       String[]   @default([])
+  // ipAllowlist: optional IPv4/IPv6 CIDR or plain-IP list. Empty array
+  //   means "any IP". Non-empty restricts the key to those addresses
+  //   (24/64-bit prefix; CIDR notation accepted).
+  ipAllowlist  String[]   @default([])
+  // Optional hard expiry. Null = never expires (legacy default).
+  expiresAt    DateTime?
+  // Rotation pair: when a key is rotated we issue a new ApiKey row
+  // and stamp the old one with rotatedAt + rotatedToId. The old key
+  // keeps validating until rotationGraceUntil, after which the
+  // verifier rejects it with a clear "rotated; use new key" error.
+  rotatedAt          DateTime?
+  rotatedToId        String?
+  rotationGraceUntil DateTime?
 }
 
 model UserProfile {
