@@ -28,9 +28,11 @@ import {
   AutoRefreshSelect,
   KpiStrip,
   BulkActionShell,
+  KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type KpiTileSpec,
   type BulkAction,
+  type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -226,6 +228,31 @@ const ALL_COLUMNS = [
 ] as const
 
 const DEFAULT_VISIBLE = ['product', 'channel', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'lastSync', 'actions']
+
+const LISTINGS_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['j', '↓'], label: 'Move to next row' },
+      { keys: ['k', '↑'], label: 'Move to previous row' },
+      { keys: ['g', 'g'], label: 'Jump to first row' },
+      { keys: ['G'], label: 'Jump to last row' },
+    ],
+  },
+  {
+    title: 'On focused row',
+    rows: [
+      { keys: ['Enter'], label: 'Open detail drawer' },
+      { keys: ['Space'], label: 'Toggle selection' },
+      { keys: ['Esc'], label: 'Close drawer · clear search · drop active row' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 // G.1 — module-level stable refs passed to SharedVirtualizedGrid when a
 // feature (expand, drag, risk) is not used on this surface.
@@ -1158,7 +1185,10 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
 
       {/* U.1 — keyboard shortcuts help modal (`?` toggles). */}
       {shortcutsOpen && (
-        <KeyboardShortcutsHelp onClose={() => setShortcutsOpen(false)} />
+        <KeyboardShortcutsModal
+          groups={LISTINGS_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
       )}
     </div>
   )
@@ -6442,68 +6472,7 @@ function Detail({ label, value }: { label: string; value: any }) {
   )
 }
 
-// ────────────────────────────────────────────────────────────────────
-// KeyboardShortcutsHelp — U.1 modal (opens via `?`).
-// Lists every shortcut wired into the workspace's keydown handler so
-// operators discover the productivity layer without trial and error.
-// ────────────────────────────────────────────────────────────────────
-function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
-  const shortcuts: Array<{ keys: string[]; description: string; section: string }> = [
-    { section: 'Navigation', keys: ['/'], description: 'Focus search' },
-    { section: 'Navigation', keys: ['j', '↓'], description: 'Move to next row' },
-    { section: 'Navigation', keys: ['k', '↑'], description: 'Move to previous row' },
-    { section: 'Navigation', keys: ['g', 'g'], description: 'Jump to first row' },
-    { section: 'Navigation', keys: ['G'], description: 'Jump to last row' },
-    { section: 'Actions', keys: ['Enter'], description: 'Open detail drawer for active row' },
-    { section: 'Actions', keys: ['Space'], description: 'Toggle selection on active row' },
-    { section: 'Actions', keys: ['Esc'], description: 'Close drawer / clear search / drop active row' },
-    { section: 'Actions', keys: ['?'], description: 'Show this shortcut list' },
-    { section: 'Tip', keys: [], description: 'Click a price or stock cell to edit it inline; Enter saves, Esc cancels.' },
-  ]
-  const sections = Array.from(new Set(shortcuts.map((s) => s.section)))
-  return (
-    <Modal open onClose={onClose} title="Keyboard shortcuts" size="md">
-      <ModalBody>
-        <div className="space-y-4">
-          {sections.map((section) => (
-            <div key={section}>
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                {section}
-              </div>
-              <ul className="space-y-1.5">
-                {shortcuts
-                  .filter((s) => s.section === section)
-                  .map((s, i) => (
-                    <li
-                      key={`${section}-${i}`}
-                      className="flex items-center justify-between gap-3 text-sm"
-                    >
-                      <span className="text-slate-700 dark:text-slate-300 flex-1">{s.description}</span>
-                      <span className="inline-flex items-center gap-1">
-                        {s.keys.map((k, j) => (
-                          <kbd
-                            key={j}
-                            className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded shadow-sm"
-                          >
-                            {k}
-                          </kbd>
-                        ))}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </ModalBody>
-      <ModalFooter>
-        <button
-          onClick={onClose}
-          className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800"
-        >
-          Got it
-        </button>
-      </ModalFooter>
-    </Modal>
-  )
-}
+// KeyboardShortcutsHelp was extracted to the shared
+// _shared/grid-lens/KeyboardShortcutsModal so all four grid
+// workspaces render the same modal chrome. See LISTINGS_SHORTCUTS
+// at the top of this file for the page's shortcut catalog.

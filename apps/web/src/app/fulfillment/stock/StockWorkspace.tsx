@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, type AutoRefreshInterval, type BulkAction } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, type AutoRefreshInterval, type BulkAction, type ShortcutGroup } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -1539,7 +1539,12 @@ export default function StockWorkspace() {
         />
       )}
 
-      {shortcutsOpen && <ShortcutsHelp onClose={() => setShortcutsOpen(false)} />}
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={STOCK_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
 
       {/* S.18 — save-current-view modal. Captures the existing
           configuration (view, location, status, search, density,
@@ -3295,33 +3300,34 @@ function SortableColumnRow({
   )
 }
 
-function ShortcutsHelp({ onClose }: { onClose: () => void }) {
-  const rows: Array<[string, string]> = [
-    ['/', 'Focus search'],
-    ['1', 'Switch to Table view'],
-    ['2', 'Switch to Matrix view'],
-    ['3', 'Switch to Cards view'],
-    ['r', 'Refresh data'],
-    ['?', 'Show this help'],
-    ['Esc', 'Close drawer / cancel action / clear selection'],
-    ['Shift + Click', 'Range-select rows in table'],
-  ]
-  return (
-    <Modal title="Keyboard shortcuts" onClose={onClose}>
-      <div className="space-y-1">
-        {rows.map(([key, desc]) => (
-          <div key={key} className="flex items-center justify-between gap-3 py-1 border-b border-slate-100 dark:border-slate-800 last:border-0">
-            <span className="text-base text-slate-700 dark:text-slate-300">{desc}</span>
-            <kbd className="px-2 py-0.5 text-sm font-mono bg-slate-100 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300">{key}</kbd>
-          </div>
-        ))}
-      </div>
-      <div className="text-sm text-slate-400 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-        Shortcuts skipped when focus is in an input — type freely without hijacking.
-      </div>
-    </Modal>
-  )
-}
+const STOCK_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['r'], label: 'Refresh data' },
+      { keys: ['Esc'], label: 'Close drawer · cancel action · clear selection' },
+    ],
+  },
+  {
+    title: 'View',
+    rows: [
+      { keys: ['1'], label: 'Table view' },
+      { keys: ['2'], label: 'Matrix view' },
+      { keys: ['3'], label: 'Cards view' },
+    ],
+  },
+  {
+    title: 'Selection',
+    rows: [
+      { keys: ['Shift', 'Click'], label: 'Range-select rows in table' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 // ─────────────────────────────────────────────────────────────────────
 // Sync engine status indicator (H.8)

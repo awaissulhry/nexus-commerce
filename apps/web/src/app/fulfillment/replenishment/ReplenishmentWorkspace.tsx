@@ -49,11 +49,13 @@ import {
   SharedColumnPicker,
   BulkActionShell,
   SortStack,
+  KeyboardShortcutsModal,
   type Density,
   type AutoRefreshInterval,
   type ColumnSpec,
   type BulkAction,
   type SortFieldOption,
+  type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
@@ -69,7 +71,6 @@ import { MobileSuggestionCard } from './_shared/MobileSuggestionCard'
 import { BulkPoModal } from './_shared/BulkPoModal'
 import { SavedViewsButton } from './_shared/SavedViewsButton'
 import type { ContainerFillEntry } from './_shared/ContainerFillCard'
-import { KeyboardHelpOverlay } from './_shared/KeyboardHelpOverlay'
 import { ForecastDetailDrawer } from './_shared/ForecastDetailDrawer'
 
 // W9.6l — ContainerFillCard + ContainerFillEntry moved to _shared/.
@@ -155,6 +156,43 @@ const REP_SORT_FIELDS: ReadonlyArray<SortFieldOption> = [
   { value: 'daysOfCover', label: 'Days left' },
   { value: 'velocity',    label: 'Vel/day' },
   { value: 'qty',         label: 'Suggest qty' },
+]
+
+const REPLENISHMENT_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['j', '↓'], label: 'Move focus down' },
+      { keys: ['k', '↑'], label: 'Move focus up' },
+      { keys: ['g'], label: 'Jump to top' },
+      { keys: ['G'], label: 'Jump to bottom' },
+      { keys: ['Esc'], label: 'Close drawer · clear selection · clear focus' },
+    ],
+  },
+  {
+    title: 'On focused row',
+    rows: [
+      { keys: ['Enter'], label: 'Open detail drawer' },
+      { keys: ['x', 'Space'], label: 'Toggle selection' },
+      { keys: ['p'], label: 'Draft single PO' },
+      { keys: ['d'], label: 'Dismiss recommendation' },
+    ],
+  },
+  {
+    title: 'Filter / search',
+    rows: [
+      { keys: ['1'], label: 'Filter: Critical' },
+      { keys: ['2'], label: 'Filter: High' },
+      { keys: ['3'], label: 'Filter: Medium' },
+      { keys: ['0'], label: 'Filter: All' },
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['r'], label: 'Refresh data' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
 ]
 
 export default function ReplenishmentWorkspace() {
@@ -1370,7 +1408,12 @@ export default function ReplenishmentWorkspace() {
       )}
 
       {/* Keyboard shortcuts overlay (?) */}
-      {helpOpen && <KeyboardHelpOverlay onClose={() => setHelpOpen(false)} />}
+      {helpOpen && (
+        <KeyboardShortcutsModal
+          groups={REPLENISHMENT_SHORTCUTS}
+          onClose={() => setHelpOpen(false)}
+        />
+      )}
 
       {/* Bulk-PO modal */}
       {bulkOpen && (

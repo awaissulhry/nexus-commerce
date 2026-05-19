@@ -19,7 +19,7 @@ import {
   GitBranch,
   Globe,
   Search, SlidersHorizontal, BarChart2,
-  CheckCircle2, FileText, PackageCheck, PackageX,
+  CheckCircle2, FileText, PackageCheck, PackageX, Keyboard,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -35,8 +35,10 @@ import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
   KpiStrip,
+  KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type KpiTileSpec,
+  type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
 import ProductDrawer from './_shared/ProductDrawer'
 import { parseFilters } from '@/lib/filters'
@@ -98,6 +100,38 @@ export type Lens = 'grid' | 'hierarchy' | 'coverage' | 'health' | 'drafts' | 'pr
 // ProductRow + Tag types moved to ./_types.ts (P.1f) so GridView and
 // the workspace share a canonical shape.
 import type { ProductRow, Tag } from './_types'
+
+const PRODUCTS_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['j', '↓'], label: 'Move to next row' },
+      { keys: ['k', '↑'], label: 'Move to previous row' },
+      { keys: ['Enter'], label: 'Open product drawer' },
+    ],
+  },
+  {
+    title: 'Selection',
+    rows: [
+      { keys: ['Space'], label: 'Toggle selection on focused row' },
+      { keys: ['⌘', 'A'], label: 'Select all visible' },
+      { keys: ['Esc'], label: 'Clear selection · drop focused row' },
+      { keys: ['Shift', 'Click'], label: 'Range-select rows' },
+    ],
+  },
+  {
+    title: 'Filter',
+    rows: [
+      { keys: ['F'], label: 'Open filter menu' },
+      { keys: ['r'], label: 'Refresh data' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 type Stats = { total: number; active: number; draft: number; inStock: number; outOfStock: number }
 // Tag now imported from ./_types alongside ProductRow.
@@ -341,6 +375,8 @@ export default function ProductsWorkspace() {
   useEffect(() => {
     try { window.localStorage.setItem('products.autoRefreshMin', String(autoRefreshMin)) } catch {}
   }, [autoRefreshMin])
+
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   // User-configurable optional lens tab order. Grid + Health are always
   // shown; the other 7 lenses start hidden and are added via the picker.
@@ -1118,6 +1154,15 @@ export default function ProductsWorkspace() {
                   onChange={setAutoRefreshMin}
                   onTick={() => fetchProducts()}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShortcutsOpen(true)}
+                  className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+                  title="Keyboard shortcuts (?)"
+                  aria-label="Keyboard shortcuts"
+                >
+                  <Keyboard size={12} />
+                </button>
               </>
             )}
             {lens === 'grid' ? (
@@ -1645,6 +1690,13 @@ export default function ProductsWorkspace() {
         onClose={onCloseDrawer}
         onChanged={fetchProducts}
       />
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={PRODUCTS_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
