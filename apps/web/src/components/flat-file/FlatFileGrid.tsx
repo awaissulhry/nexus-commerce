@@ -7,7 +7,7 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Image as ImageIcon, Loader2, Pin, Plus,
+  Image as ImageIcon, Keyboard, Loader2, Pin, Plus,
   Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,6 +31,8 @@ import {
   FlatFileIconToolbar,
   type RowImageSize as SharedRowImageSize,
 } from '@/app/products/_shared/FlatFileIconToolbar'
+import { KeyboardShortcutsModal } from '@/app/_shared/grid-lens/KeyboardShortcutsModal'
+import { FLAT_FILE_SHORTCUTS } from '@/app/products/_shared/flat-file-shortcuts'
 
 // ── Internal types ─────────────────────────────────────────────────────────
 
@@ -645,6 +647,7 @@ export default function FlatFileGrid({
     try { return JSON.parse(localStorage.getItem(`${storageKey}-sort`) ?? '[]') } catch { return [] }
   })
   const [sortPanelOpen, setSortPanelOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   useEffect(() => { try { localStorage.setItem(`${storageKey}-sort`, JSON.stringify(sortConfig)) } catch {} }, [sortConfig, storageKey])
 
   useEffect(() => {
@@ -1038,6 +1041,15 @@ export default function FlatFileGrid({
       if (mod && e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return }
       if (mod && e.key === 'y')                { e.preventDefault(); redo(); return }
       if (mod && e.key === 'f') { e.preventDefault(); setShowFindReplace(true); return }
+      // PE: '?' opens the shortcuts modal (no modifier — skip when typing in an input)
+      if (e.key === '?' && !mod && !isEditingRef.current) {
+        const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
+        if (tag !== 'input' && tag !== 'textarea') {
+          e.preventDefault()
+          setShortcutsOpen(true)
+          return
+        }
+      }
 
       if (isEditingRef.current) {
         if (e.key === 'Escape') { e.preventDefault(); setIsEditing(false); setEditInitialChar(null) }
@@ -1293,6 +1305,16 @@ export default function FlatFileGrid({
             {saving ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />Saving…</> : saveFlash ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1" />Saved</> : 'Save'}
           </Button>
           {renderPushExtras?.({ rows, selectedRows, dirtyCount, loading, saving })}
+          {/* PE: keyboard shortcuts modal trigger */}
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200 flex-shrink-0"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard className="w-3 h-3" />
+          </button>
         </div>
 
         {/* Bar 2: icon toolbar — shared with Amazon via FlatFileIconToolbar */}
@@ -1417,6 +1439,14 @@ export default function FlatFileGrid({
       </header>
 
       {renderFeedBanner?.()}
+
+      {/* PE: keyboard shortcuts modal */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={FLAT_FILE_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
 
       {/* Replicate modal */}
       {onReplicate && (

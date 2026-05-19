@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Keyboard, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
   Undo2, Redo2, GripVertical,
 } from 'lucide-react'
@@ -22,6 +22,8 @@ import { FFReplicateModal } from './FFReplicateModal'
 import { PullDiffModal, type PullDiffApplyResult } from './PullDiffModal'
 import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
+import { KeyboardShortcutsModal } from '../../_shared/grid-lens/KeyboardShortcutsModal'
+import { FLAT_FILE_SHORTCUTS } from '../_shared/flat-file-shortcuts'
 import {
   FlatFileIconToolbar,
   TbBtn as SharedTbBtn,
@@ -509,6 +511,7 @@ export default function AmazonFlatFileClient({
     jobId: string
   } | null>(null)
   const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [pendingPullReview, setPendingPullReview] = useState<{
     jobId: string
     rows: Row[]
@@ -1166,6 +1169,15 @@ export default function AmazonFlatFileClient({
       if (mod && e.key === 'y')                 { e.preventDefault(); redo(); return }
       // BF.1 — Find & Replace
       if (mod && e.key === 'f') { e.preventDefault(); setFindReplaceOpen(true); return }
+      // PE: '?' opens the shortcuts modal (no modifier — ignore when typing in an input)
+      if (e.key === '?' && !mod && !isEditingRef.current) {
+        const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
+        if (tag !== 'input' && tag !== 'textarea') {
+          e.preventDefault()
+          setShortcutsOpen(true)
+          return
+        }
+      }
 
       // In edit mode: only handle Escape (let input handle everything else)
       if (isEditingRef.current) {
@@ -2296,6 +2308,16 @@ export default function AmazonFlatFileClient({
               <span>{submissionHistory.length}</span>
             </button>
           )}
+          {/* PE: keyboard shortcuts modal trigger */}
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-6 w-6 inline-flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-200 flex-shrink-0"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard className="w-3 h-3" />
+          </button>
         </div>
 
         {/* ── Icon toolbar — shared with eBay via FlatFileIconToolbar ─ */}
@@ -3157,6 +3179,14 @@ export default function AmazonFlatFileClient({
             visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
           />
         </div>
+      )}
+
+      {/* PE: keyboard shortcuts modal */}
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={FLAT_FILE_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
       )}
 
       {/* P5: completed-while-away banner */}
