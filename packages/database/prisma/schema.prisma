@@ -2942,15 +2942,68 @@ model AccountSettings {
 
 model NotificationPreference {
   id        String  @id @default(cuid())
+  // Phase E — per-user prefs. Nullable for backwards-compat with the
+  // existing workspace-global rows; new rows created from the
+  // /settings/notifications UI populate this. Once Phase I (auth)
+  // lands and every preference has a user, the column flips NOT NULL.
+  userId    String?
+  user      UserProfile? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   eventType String // NEW_ORDER, LOW_STOCK, RETURN_REQUEST, SYNC_FAILURE, AI_COMPLETE
   email     Boolean @default(true)
   sms       Boolean @default(false)
   inApp     Boolean @default(true)
 
+  // Phase E — per-channel muting. Empty array = deliver for every
+  // channel/marketplace combo (default). When populated with values
+  // like ['AMAZON_IT', 'EBAY_DE'], delivery fires ONLY for those keys.
+  channelFilter String[] @default([])
+
+  // Phase E — cadence per event-type. "instant" delivers immediately
+  // (current behaviour); "hourly"/"daily" defer + batch into a digest;
+  // "off" silences this event entirely (overrides email/sms/inApp).
+  digestCadence String @default("instant")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([eventType])
+  // Phase E — scope the unique key to (userId, eventType). Existing
+  // pre-Phase-E rows have userId IS NULL; the partial unique below
+  // is rebuilt as a composite in the migration.
+  @@unique([userId, eventType])
+  @@index([userId])
+}
+
+// Phase E — outbound webhook subscriptions. The operator points us
+// at a URL; we sign payloads with HMAC-SHA256 and POST them when an
+// event fires. Subscription rows are read by the eventual webhook-
+// dispatch worker (out of scope for Phase E itself — schema +
+// subscription CRUD + test-payload land here, real event-triggered
+// delivery is wired when the emitters get touched).
+model NotificationWebhook {
+  id          String       @id @default(cuid())
+  userId      String?
+  user        UserProfile? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String       // operator-supplied
+  url         String
+  // HMAC secret. Generated server-side at create time; we show the
+  // plaintext exactly once and store the bcrypt hash for verification.
+  secretHash  String
+  secretPrefix String      // first 8 chars of the raw secret for UI display
+  // Which event-types this subscription covers. Empty = ALL events.
+  events      String[]     @default([])
+  isActive    Boolean      @default(true)
+  // Last-fire telemetry; populated by the dispatch worker. Surfaced
+  // on the subscription row so operators can spot stale endpoints.
+  lastFiredAt    DateTime?
+  lastStatus     Int?
+  lastError      String?
+  consecutiveFails Int     @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
 }
 
 model ApiKey {
@@ -2983,6 +3036,13 @@ model UserProfile {
   weekStart           Int?                 // 0 = Sunday, 1 = Monday
   workingHoursStart   String?              // "09:00"
   workingHoursEnd     String?              // "18:00"
+  // Phase E — quiet hours. Distinct from working hours: a notification
+  // suppressed during quiet hours is held (and rolled into the next
+  // digest, if applicable) rather than dropped. Null = no quiet hours.
+  // Stored as "HH:MM" strings; the user's timezone above resolves them.
+  // If start > end (e.g. "22:00" → "07:00"), the window wraps midnight.
+  quietHoursStart     String?
+  quietHoursEnd       String?
   // Phase C — 2FA (TOTP). Secret is base32; null when 2FA is off.
   // enabledAt is set when the user verifies the first 6-digit code;
   // a pending-but-not-confirmed enrollment leaves enabledAt null.
@@ -2996,6 +3056,9 @@ model UserProfile {
   recoveryCodes       TwoFactorRecoveryCode[]
   sessions            UserSession[]
   loginEvents         LoginEvent[]
+  // Phase E — per-user notification prefs + webhook subscriptions.
+  notificationPrefs   NotificationPreference[]
+  notificationWebhooks NotificationWebhook[]
 }
 
 // ── Phase C — TOTP recovery codes ──────────────────────────────────

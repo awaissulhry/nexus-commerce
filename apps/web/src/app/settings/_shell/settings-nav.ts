@@ -266,9 +266,9 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: 'Webhooks',
         icon: Webhook,
         description:
-          'Outbound webhook subscriptions — delivery log, retry, secret.',
-        keywords: ['webhook', 'callback', 'event', 'http post'],
-        status: 'soon',
+          'Outbound webhook subscriptions — delivery log, retry, HMAC secret.',
+        keywords: ['webhook', 'callback', 'event', 'http post', 'hmac', 'signature'],
+        status: 'live',
       },
     ],
   },

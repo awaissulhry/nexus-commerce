@@ -1,167 +1,523 @@
-"use client";
+'use client'
 
-import { useState, useTransition } from "react";
-import { saveNotificationPreferences } from "./actions";
-import type { NotificationPref } from "./page";
+/**
+ * Settings rebuild — Phase E.2
+ *
+ * /settings/notifications. Two cards:
+ *
+ *   1. Quiet hours — single time-range that suppresses delivery
+ *      across all event-types (digest-able events still queue;
+ *      instant ones drop, mirroring how mobile DND works).
+ *
+ *   2. Event preferences table — one row per known event-type.
+ *      Columns:
+ *        • event-type label + description
+ *        • In-app / Email / SMS toggles
+ *        • Cadence: instant | hourly | daily | off
+ *        • Channels: chip multi-select scoping delivery to specific
+ *          marketplaces; empty = every channel
+ *
+ * SaveBar wired via useSettingsForm — Save / Discard / ⌘S all work.
+ */
 
-const EVENT_LABELS: Record<string, { label: string; description: string; icon: string }> = {
-  NEW_ORDER: {
-    label: "New Order",
-    description: "When a new order is placed on any channel",
-    icon: "🛒",
-  },
-  LOW_STOCK: {
-    label: "Low Stock Alert",
-    description: "When inventory drops below threshold",
-    icon: "📦",
-  },
-  RETURN_REQUEST: {
-    label: "Return Request",
-    description: "When a customer initiates a return",
-    icon: "↩️",
-  },
-  SYNC_FAILURE: {
-    label: "Sync Failure",
-    description: "When a marketplace sync job fails",
-    icon: "⚠️",
-  },
-  AI_COMPLETE: {
-    label: "AI Generation Complete",
-    description: "When AI listing generation finishes",
-    icon: "🤖",
-  },
-};
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  Bell,
+  Mail,
+  MessageSquare,
+  MonitorSmartphone,
+  Moon,
+  Check,
+  X,
+} from 'lucide-react'
+import { useSettingsForm } from '../_shell/SettingsSaveBar'
+import { saveNotificationPreferences, EVENT_TYPES } from './actions'
+import { cn } from '@/lib/utils'
 
-interface Props {
-  preferences: NotificationPref[];
+export interface LoadedPref {
+  eventType: string
+  email: boolean
+  sms: boolean
+  inApp: boolean
+  channelFilter: string[]
+  digestCadence: string
 }
 
-export default function NotificationsClient({ preferences }: Props) {
-  const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [prefs, setPrefs] = useState<NotificationPref[]>(preferences);
+const CADENCES = [
+  { value: 'instant', label: 'Instant' },
+  { value: 'hourly', label: 'Hourly digest' },
+  { value: 'daily', label: 'Daily digest' },
+  { value: 'off', label: 'Off' },
+] as const
 
-  const togglePref = (eventType: string, channel: "email" | "sms" | "inApp") => {
-    setPrefs((prev) =>
-      prev.map((p) =>
-        p.eventType === eventType ? { ...p, [channel]: !p[channel] } : p
-      )
-    );
-  };
+// Channels the operator can scope delivery to. Mirrors the project's
+// "active channel scope" memory — Amazon + eBay + Shopify only.
+const CHANNEL_OPTIONS = [
+  { value: 'AMAZON_IT', label: 'Amazon IT' },
+  { value: 'AMAZON_DE', label: 'Amazon DE' },
+  { value: 'AMAZON_FR', label: 'Amazon FR' },
+  { value: 'AMAZON_ES', label: 'Amazon ES' },
+  { value: 'AMAZON_UK', label: 'Amazon UK' },
+  { value: 'EBAY_IT', label: 'eBay IT' },
+  { value: 'EBAY_DE', label: 'eBay DE' },
+  { value: 'EBAY_FR', label: 'eBay FR' },
+  { value: 'EBAY_ES', label: 'eBay ES' },
+  { value: 'EBAY_UK', label: 'eBay UK' },
+  { value: 'SHOPIFY', label: 'Shopify' },
+] as const
 
-  const handleSubmit = (formData: FormData) => {
-    setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await saveNotificationPreferences(formData);
-        if (result.success) {
-          setMessage({ type: "success", text: "Notification preferences saved!" });
-        }
-      } catch {
-        setMessage({ type: "error", text: "Failed to save preferences" });
-      }
-    });
-  };
+interface Props {
+  initialPrefs: LoadedPref[]
+  quietHoursStart: string
+  quietHoursEnd: string
+  timezone: string | null
+}
+
+function prefsEqual(a: LoadedPref[], b: LoadedPref[]): boolean {
+  if (a.length !== b.length) return false
+  const byKey = new Map(b.map((p) => [p.eventType, p]))
+  for (const ap of a) {
+    const bp = byKey.get(ap.eventType)
+    if (!bp) return false
+    if (
+      ap.email !== bp.email ||
+      ap.sms !== bp.sms ||
+      ap.inApp !== bp.inApp ||
+      ap.digestCadence !== bp.digestCadence ||
+      ap.channelFilter.length !== bp.channelFilter.length ||
+      !ap.channelFilter.every((c) => bp.channelFilter.includes(c))
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+export default function NotificationsClient({
+  initialPrefs,
+  quietHoursStart,
+  quietHoursEnd,
+  timezone,
+}: Props) {
+  const router = useRouter()
+  const [prefs, setPrefs] = useState<LoadedPref[]>(initialPrefs)
+  const [qhStart, setQhStart] = useState(quietHoursStart)
+  const [qhEnd, setQhEnd] = useState(quietHoursEnd)
+  useEffect(() => setPrefs(initialPrefs), [initialPrefs])
+  useEffect(() => setQhStart(quietHoursStart), [quietHoursStart])
+  useEffect(() => setQhEnd(quietHoursEnd), [quietHoursEnd])
+
+  const isDirty = useMemo(
+    () =>
+      !prefsEqual(prefs, initialPrefs) ||
+      qhStart !== quietHoursStart ||
+      qhEnd !== quietHoursEnd,
+    [prefs, initialPrefs, qhStart, qhEnd, quietHoursStart, quietHoursEnd],
+  )
+
+  const onSave = useCallback(async () => {
+    const res = await saveNotificationPreferences({
+      prefs: prefs.map((p) => ({
+        eventType: p.eventType,
+        email: p.email,
+        sms: p.sms,
+        inApp: p.inApp,
+        channelFilter: p.channelFilter,
+        digestCadence: p.digestCadence,
+      })),
+      quietHours: {
+        quietHoursStart: qhStart.trim() || null,
+        quietHoursEnd: qhEnd.trim() || null,
+      },
+    })
+    if (!res.success) {
+      const detail = res.errors
+        ? res.errors.map((e) => `${e.eventType}: ${e.reason}`).join(' · ')
+        : 'Validation failed'
+      throw new Error(detail)
+    }
+    router.refresh()
+  }, [prefs, qhStart, qhEnd, router])
+
+  const onDiscard = useCallback(() => {
+    setPrefs(initialPrefs)
+    setQhStart(quietHoursStart)
+    setQhEnd(quietHoursEnd)
+  }, [initialPrefs, quietHoursStart, quietHoursEnd])
+
+  useSettingsForm({
+    id: 'settings/notifications',
+    isDirty,
+    onSave,
+    onDiscard,
+  })
 
   return (
-    <form action={handleSubmit} className="max-w-3xl">
-      {message && (
-        <div
-          className={`mb-6 px-4 py-3 rounded-lg text-sm ${
-            message.type === "success"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : "bg-red-50 text-red-800 border border-red-200"
-          }`}
-        >
-          {message.type === "success" ? "✅" : "❌"} {message.text}
+    <div className="max-w-4xl space-y-6">
+      <QuietHoursCard
+        start={qhStart}
+        end={qhEnd}
+        timezone={timezone}
+        onChange={(s, e) => {
+          setQhStart(s)
+          setQhEnd(e)
+        }}
+      />
+      <PrefsTable prefs={prefs} onChange={setPrefs} />
+    </div>
+  )
+}
+
+// ─── Quiet hours card ────────────────────────────────────────────
+
+function QuietHoursCard({
+  start,
+  end,
+  timezone,
+  onChange,
+}: {
+  start: string
+  end: string
+  timezone: string | null
+  onChange: (start: string, end: string) => void
+}) {
+  const enabled = start.length > 0 || end.length > 0
+  const wraps = enabled && start.length > 0 && end.length > 0 && start > end
+  return (
+    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5">
+      <div className="flex items-start gap-3 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
+          <Moon size={14} />
         </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="grid grid-cols-12 gap-4 items-center">
-            <div className="col-span-6">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Event</span>
-            </div>
-            <div className="col-span-2 text-center">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">📧 Email</span>
-            </div>
-            <div className="col-span-2 text-center">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">📱 SMS</span>
-            </div>
-            <div className="col-span-2 text-center">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">🔔 In-App</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Rows */}
-        <div className="divide-y divide-gray-100">
-          {prefs.map((pref) => {
-            const meta = EVENT_LABELS[pref.eventType] || {
-              label: pref.eventType,
-              description: "",
-              icon: "📌",
-            };
-
-            return (
-              <div key={pref.eventType} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                <div className="grid grid-cols-12 gap-4 items-center">
-                  <div className="col-span-6">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">{meta.icon}</span>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{meta.label}</p>
-                        <p className="text-xs text-gray-500">{meta.description}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {(["email", "sms", "inApp"] as const).map((channel) => (
-                    <div key={channel} className="col-span-2 flex justify-center">
-                      <input
-                        type="hidden"
-                        name={`${pref.eventType}_${channel}`}
-                        value="off"
-                      />
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name={`${pref.eventType}_${channel}`}
-                          checked={pref[channel]}
-                          onChange={() => togglePref(pref.eventType, channel)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Quiet hours
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Suppress notifications during this window
+            {timezone && (
+              <>
+                {' '}
+                · timezone{' '}
+                <span className="font-mono text-slate-700 dark:text-slate-300">
+                  {timezone}
+                </span>
+              </>
+            )}
+            . Digest-able events still queue; instant ones drop.
+          </p>
         </div>
       </div>
 
-      {/* Info */}
-      <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-xs text-blue-700">
-          💡 <strong>SMS notifications</strong> require a verified phone number. Configure your phone
-          number in the Profile settings. Email notifications are sent to your account email.
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+        <div>
+          <label
+            htmlFor="qh-start"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+          >
+            From
+          </label>
+          <input
+            id="qh-start"
+            type="time"
+            value={start}
+            onChange={(e) => onChange(e.target.value, end)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="qh-end"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+          >
+            To
+          </label>
+          <input
+            id="qh-end"
+            type="time"
+            value={end}
+            onChange={(e) => onChange(start, e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        {enabled && (
+          <button
+            type="button"
+            onClick={() => onChange('', '')}
+            className="h-9 px-3 rounded-md text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {wraps && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+          Range wraps midnight — applies from {start} until {end} the next day.
         </p>
+      )}
+    </section>
+  )
+}
+
+// ─── Per-event preferences table ─────────────────────────────────
+
+function PrefsTable({
+  prefs,
+  onChange,
+}: {
+  prefs: LoadedPref[]
+  onChange: (p: LoadedPref[]) => void
+}) {
+  const update = (eventType: string, patch: Partial<LoadedPref>) => {
+    onChange(
+      prefs.map((p) => (p.eventType === eventType ? { ...p, ...patch } : p)),
+    )
+  }
+  return (
+    <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
+      <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="shrink-0 w-8 h-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
+          <Bell size={14} />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Event preferences
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Pick channels + cadence + which marketplaces apply, per event type.
+          </p>
+        </div>
       </div>
 
-      {/* Submit */}
-      <div className="flex justify-end mt-6">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="px-6 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isPending ? "Saving…" : "Save Preferences"}
-        </button>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-950/50 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            <tr>
+              <th className="text-left px-4 py-2 font-medium">Event</th>
+              <th className="text-center px-2 py-2 font-medium">
+                <span className="inline-flex items-center gap-1">
+                  <MonitorSmartphone size={12} /> In-app
+                </span>
+              </th>
+              <th className="text-center px-2 py-2 font-medium">
+                <span className="inline-flex items-center gap-1">
+                  <Mail size={12} /> Email
+                </span>
+              </th>
+              <th className="text-center px-2 py-2 font-medium">
+                <span className="inline-flex items-center gap-1">
+                  <MessageSquare size={12} /> SMS
+                </span>
+              </th>
+              <th className="text-left px-2 py-2 font-medium">Cadence</th>
+              <th className="text-left px-4 py-2 font-medium">Marketplaces</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {EVENT_TYPES.map((ev) => {
+              const pref =
+                prefs.find((p) => p.eventType === ev.key) ?? {
+                  eventType: ev.key,
+                  ...ev.defaults,
+                  channelFilter: [],
+                }
+              const off = pref.digestCadence === 'off'
+              return (
+                <tr
+                  key={ev.key}
+                  className={cn(
+                    'align-top hover:bg-slate-50/60 dark:hover:bg-slate-950/40',
+                    off && 'opacity-50',
+                  )}
+                >
+                  <td className="px-4 py-3 max-w-xs">
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {ev.label}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {ev.description}
+                    </div>
+                  </td>
+                  <td className="text-center px-2 py-3">
+                    <Toggle
+                      checked={pref.inApp}
+                      disabled={off}
+                      onChange={(v) => update(ev.key, { inApp: v })}
+                      label={`In-app for ${ev.label}`}
+                    />
+                  </td>
+                  <td className="text-center px-2 py-3">
+                    <Toggle
+                      checked={pref.email}
+                      disabled={off}
+                      onChange={(v) => update(ev.key, { email: v })}
+                      label={`Email for ${ev.label}`}
+                    />
+                  </td>
+                  <td className="text-center px-2 py-3">
+                    <Toggle
+                      checked={pref.sms}
+                      disabled={off}
+                      onChange={(v) => update(ev.key, { sms: v })}
+                      label={`SMS for ${ev.label}`}
+                    />
+                  </td>
+                  <td className="px-2 py-3">
+                    <select
+                      value={pref.digestCadence}
+                      onChange={(e) =>
+                        update(ev.key, { digestCadence: e.target.value })
+                      }
+                      className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+                    >
+                      {CADENCES.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 max-w-md">
+                    <ChannelMultiSelect
+                      value={pref.channelFilter}
+                      onChange={(v) => update(ev.key, { channelFilter: v })}
+                      disabled={off}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
-    </form>
-  );
+    </section>
+  )
+}
+
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={cn(
+        'relative inline-flex h-5 w-9 rounded-full transition-colors',
+        disabled
+          ? 'bg-slate-200 dark:bg-slate-800 cursor-not-allowed'
+          : checked
+            ? 'bg-blue-600'
+            : 'bg-slate-300 dark:bg-slate-700',
+      )}
+    >
+      <span
+        className={cn(
+          'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0.5',
+        )}
+      />
+    </button>
+  )
+}
+
+function ChannelMultiSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string[]
+  onChange: (next: string[]) => void
+  disabled?: boolean
+}) {
+  const allOn = value.length === 0
+  const toggle = (chan: string) => {
+    if (value.includes(chan)) {
+      onChange(value.filter((c) => c !== chan))
+    } else {
+      onChange([...value, chan])
+    }
+  }
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <button
+        type="button"
+        onClick={() => onChange([])}
+        disabled={disabled}
+        className={cn(
+          'inline-flex items-center h-6 px-2 rounded-full text-xs border transition-colors',
+          allOn
+            ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-700 dark:border-slate-700'
+            : 'bg-white text-slate-600 border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 hover:border-slate-400',
+          disabled && 'opacity-50 cursor-not-allowed',
+        )}
+      >
+        {allOn && <Check size={10} className="mr-1" />}
+        All channels
+      </button>
+      {!allOn && (
+        <>
+          {value.map((chan) => {
+            const opt = CHANNEL_OPTIONS.find((o) => o.value === chan)
+            return (
+              <button
+                key={chan}
+                type="button"
+                onClick={() => toggle(chan)}
+                disabled={disabled}
+                className={cn(
+                  'inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full text-xs border bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
+                  disabled && 'opacity-50 cursor-not-allowed',
+                )}
+              >
+                {opt?.label ?? chan}
+                <X size={10} />
+              </button>
+            )
+          })}
+          <details className="relative">
+            <summary
+              className={cn(
+                'inline-flex items-center h-6 px-2 rounded-full text-xs border cursor-pointer list-none bg-white text-slate-600 border-dashed border-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 hover:border-slate-400',
+                disabled && 'opacity-50 cursor-not-allowed',
+              )}
+            >
+              + Add
+            </summary>
+            <div className="absolute z-10 mt-1 w-48 max-h-64 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:bg-slate-900 dark:border-slate-700 p-1">
+              {CHANNEL_OPTIONS.filter((o) => !value.includes(o.value)).map(
+                (o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => toggle(o.value)}
+                    className="w-full text-left px-2 py-1 text-sm rounded text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    {o.label}
+                  </button>
+                ),
+              )}
+              {value.length === CHANNEL_OPTIONS.length && (
+                <p className="px-2 py-1 text-xs text-slate-500 dark:text-slate-400">
+                  All channels added.
+                </p>
+              )}
+            </div>
+          </details>
+        </>
+      )}
+    </div>
+  )
 }

@@ -4,67 +4,188 @@ import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 import { writeSettingsAudit } from '@/lib/settings-audit'
 
-const EVENT_TYPES = [
-  'NEW_ORDER',
-  'LOW_STOCK',
-  'RETURN_REQUEST',
-  'SYNC_FAILURE',
-  'AI_COMPLETE',
-]
-
 /**
- * Flatten the array of NotificationPreference rows into a single
- * before/after object that diffs cleanly. Key format:
- * "<EVENT_TYPE>.<channel>" — e.g. "NEW_ORDER.email". This lets the
- * audit viewer show "NEW_ORDER.sms: false → true" in one line per
- * actual change instead of dumping whole rows.
+ * Phase E — the canonical event-type registry. Add a new event-type
+ * here and the /settings/notifications UI picks it up automatically.
+ * Label/description drive the table copy; defaults seed new rows.
  */
-function flattenPrefs(
-  rows: Array<{ eventType: string; email: boolean; sms: boolean; inApp: boolean }>,
-): Record<string, boolean> {
-  const out: Record<string, boolean> = {}
-  for (const r of rows) {
-    out[`${r.eventType}.email`] = r.email
-    out[`${r.eventType}.sms`] = r.sms
-    out[`${r.eventType}.inApp`] = r.inApp
-  }
-  return out
+export const EVENT_TYPES = [
+  {
+    key: 'NEW_ORDER',
+    label: 'New order',
+    description: 'A buyer places an order on any channel.',
+    defaults: { email: true, sms: false, inApp: true, digestCadence: 'instant' },
+  },
+  {
+    key: 'LOW_STOCK',
+    label: 'Low stock',
+    description: 'A SKU drops below its low-stock threshold.',
+    defaults: { email: true, sms: false, inApp: true, digestCadence: 'hourly' },
+  },
+  {
+    key: 'RETURN_REQUEST',
+    label: 'Return request',
+    description: 'A buyer files a return / RMA on any channel.',
+    defaults: { email: true, sms: false, inApp: true, digestCadence: 'instant' },
+  },
+  {
+    key: 'SYNC_FAILURE',
+    label: 'Sync failure',
+    description: 'An outbound channel sync errors past its retry window.',
+    defaults: { email: true, sms: false, inApp: true, digestCadence: 'instant' },
+  },
+  {
+    key: 'AI_COMPLETE',
+    label: 'AI job complete',
+    description: 'A bulk AI listing-generate / translation job finishes.',
+    defaults: { email: false, sms: false, inApp: true, digestCadence: 'instant' },
+  },
+] as const
+
+export type EventTypeKey = (typeof EVENT_TYPES)[number]['key']
+const ALLOWED_KEYS = new Set<string>(EVENT_TYPES.map((e) => e.key))
+const ALLOWED_CADENCE = new Set(['instant', 'hourly', 'daily', 'off'])
+
+export interface NotificationPrefInput {
+  eventType: string
+  email: boolean
+  sms: boolean
+  inApp: boolean
+  channelFilter: string[]
+  digestCadence: string
 }
 
-export async function saveNotificationPreferences(formData: FormData) {
-  // Snapshot before — so the audit diff can highlight specific
-  // toggle changes ("NEW_ORDER.sms: off → on") rather than dumping
-  // every row.
-  const before = await (prisma as any).notificationPreference.findMany({
-    where: { eventType: { in: EVENT_TYPES } },
-  })
+/**
+ * Quiet hours sit on UserProfile (already has timezone). We update
+ * them in the same save so the user thinks of "notification settings"
+ * as one form. Pass null to clear.
+ */
+export interface QuietHoursInput {
+  quietHoursStart: string | null
+  quietHoursEnd: string | null
+}
 
-  const after: Array<{
+function flattenPrefs(
+  rows: Array<{
     eventType: string
     email: boolean
     sms: boolean
     inApp: boolean
-  }> = []
-  for (const eventType of EVENT_TYPES) {
-    const email = formData.get(`${eventType}_email`) === 'on'
-    const sms = formData.get(`${eventType}_sms`) === 'on'
-    const inApp = formData.get(`${eventType}_inApp`) === 'on'
+    channelFilter: string[]
+    digestCadence: string
+  }>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const r of rows) {
+    out[`${r.eventType}.email`] = r.email
+    out[`${r.eventType}.sms`] = r.sms
+    out[`${r.eventType}.inApp`] = r.inApp
+    out[`${r.eventType}.cadence`] = r.digestCadence
+    out[`${r.eventType}.channelFilter`] = [...r.channelFilter].sort().join(',')
+  }
+  return out
+}
 
-    await (prisma as any).notificationPreference.upsert({
-      where: { eventType },
-      update: { email, sms, inApp },
-      create: { eventType, email, sms, inApp },
-    })
-    after.push({ eventType, email, sms, inApp })
+export async function saveNotificationPreferences(input: {
+  prefs: NotificationPrefInput[]
+  quietHours: QuietHoursInput
+}) {
+  // Phase E — find the single workspace user. When auth lands this
+  // becomes session.userId; until then we attach prefs to the
+  // singleton UserProfile if one exists, otherwise fall back to
+  // userId=null (workspace-global, existing behaviour).
+  const user = await (prisma as any).userProfile.findFirst()
+  const userId: string | null = user?.id ?? null
+
+  // Snapshot before-state for the audit diff.
+  const beforeRows = await (prisma as any).notificationPreference.findMany({
+    where: { userId: userId ?? undefined },
+  })
+
+  // Validate + persist each pref. Per-row failures don't abort the
+  // batch; bad rows surface in the response but the rest still saves.
+  const afterRows: typeof input.prefs = []
+  const errors: Array<{ eventType: string; reason: string }> = []
+  for (const p of input.prefs) {
+    if (!ALLOWED_KEYS.has(p.eventType)) {
+      errors.push({ eventType: p.eventType, reason: 'Unknown event type' })
+      continue
+    }
+    if (!ALLOWED_CADENCE.has(p.digestCadence)) {
+      errors.push({
+        eventType: p.eventType,
+        reason: 'Cadence must be instant | hourly | daily | off',
+      })
+      continue
+    }
+    const data = {
+      email: !!p.email,
+      sms: !!p.sms,
+      inApp: !!p.inApp,
+      channelFilter: Array.isArray(p.channelFilter)
+        ? Array.from(new Set(p.channelFilter.filter((s) => typeof s === 'string')))
+        : [],
+      digestCadence: p.digestCadence,
+    }
+    if (userId) {
+      // Composite unique on (userId, eventType) — upsert works
+      // cleanly because we now have a non-null user.
+      await (prisma as any).notificationPreference.upsert({
+        where: { userId_eventType: { userId, eventType: p.eventType } },
+        update: data,
+        create: { userId, eventType: p.eventType, ...data },
+      })
+    } else {
+      // Pre-auth fallback: workspace-global row keyed on eventType
+      // alone. Find-or-create by hand since Prisma can't upsert on
+      // a partial-unique-with-NULL.
+      const existing = await (prisma as any).notificationPreference.findFirst({
+        where: { userId: null, eventType: p.eventType },
+      })
+      if (existing) {
+        await (prisma as any).notificationPreference.update({
+          where: { id: existing.id },
+          data,
+        })
+      } else {
+        await (prisma as any).notificationPreference.create({
+          data: { userId: null, eventType: p.eventType, ...data },
+        })
+      }
+    }
+    afterRows.push({ eventType: p.eventType, ...data })
   }
 
+  // Quiet hours on UserProfile.
+  if (user) {
+    await (prisma as any).userProfile.update({
+      where: { id: user.id },
+      data: {
+        quietHoursStart: input.quietHours.quietHoursStart || null,
+        quietHoursEnd: input.quietHours.quietHoursEnd || null,
+      },
+    })
+  }
+
+  // Audit row — flatten so the diff highlights per-toggle changes.
   await writeSettingsAudit({
     key: 'notifications',
     action: 'update',
-    before: flattenPrefs(before),
-    after: flattenPrefs(after),
+    before: {
+      ...flattenPrefs(beforeRows),
+      quietHoursStart: user?.quietHoursStart ?? null,
+      quietHoursEnd: user?.quietHoursEnd ?? null,
+    },
+    after: {
+      ...flattenPrefs(afterRows),
+      quietHoursStart: input.quietHours.quietHoursStart ?? null,
+      quietHoursEnd: input.quietHours.quietHoursEnd ?? null,
+    },
   })
 
   revalidatePath('/settings/notifications')
-  return { success: true }
+  return {
+    success: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+  } as const
 }
