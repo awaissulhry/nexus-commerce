@@ -19,6 +19,7 @@ import { FFFilterPanel, FF_FILTER_DEFAULT, type FFFilterState } from '../_shared
 import { AIBulkModal } from './AIBulkModal'
 import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { FFReplicateModal } from './FFReplicateModal'
+import { PullDiffModal, type PullDiffApplyResult } from './PullDiffModal'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -491,6 +492,16 @@ export default function AmazonFlatFileClient({
   const [pulling, setPulling] = useState(false)
   const [pullProgress, setPullProgress] = useState<{ progress: number; total: number } | null>(null)
   const [pullResult, setPullResult] = useState<{ pulled: number; skipped: number; failed: number } | null>(null)
+  // Diff modal state — populated when a pull job completes and the
+  // operator hasn't reviewed the results yet.
+  const [pullDiffOpen, setPullDiffOpen] = useState(false)
+  const [pullDiffData, setPullDiffData] = useState<{
+    pulledRows: Row[]
+    selectedColumns: 'all' | PullGroupId[]
+    skusRequested: string[]
+    skusReturned: number
+    jobId: string
+  } | null>(null)
   const [fetching, setFetching] = useState(false)
 
   // Tracks the anchor row when user drags on the # column to select rows
@@ -701,6 +712,17 @@ export default function AmazonFlatFileClient({
     () => (manifest?.groups ?? []).flatMap((g) => g.columns),
     [manifest],
   )
+
+  // Field ID → label map. Powers the PullDiffModal so the diff table
+  // shows "Title" instead of "item_name". Falls back to the field id
+  // for any pulled attribute not represented in the manifest.
+  const columnLabelMap = useMemo<Map<string, string>>(() => {
+    const m = new Map<string, string>()
+    for (const c of manifestColumns) {
+      m.set(c.id, c.labelLocal || c.labelEn || c.id)
+    }
+    return m
+  }, [manifestColumns])
 
   const cellErrors = useMemo<Map<string, ValidationIssue>>(() => {
     const m = new Map<string, ValidationIssue>()
@@ -1937,40 +1959,17 @@ export default function AmazonFlatFileClient({
       }
 
       const pulledRows: Row[] = Array.isArray(job.rows) ? job.rows : []
-      const bySku = new Map<string, Row>(
-        pulledRows.map((r) => [String(r.item_sku ?? ''), r]),
-      )
 
-      const isAllColumns = opts.columns === 'all'
-      const selectedGroups = new Set(isAllColumns ? [] : (opts.columns as PullGroupId[]))
-
-      pushSnapshot()
-      setRows((prev) => prev.map((row) => {
-        const sku = String(row.item_sku ?? '')
-        if (!sku) return row
-        const pulled = bySku.get(sku)
-        if (!pulled) return row
-
-        const merged: Row = { ...row }
-        let changed = false
-        for (const [k, v] of Object.entries(pulled)) {
-          if (k.startsWith('_')) continue
-          if (!isAllColumns && !selectedGroups.has(pullFieldGroup(k))) continue
-          merged[k] = v
-          changed = true
-        }
-        // Always refresh ASIN + listing status when pulling
-        const pulledAsin = (pulled as any)._asin
-        const pulledStatus = (pulled as any)._listingStatus
-        if (pulledAsin) merged._asin = pulledAsin
-        if (pulledStatus) merged._listingStatus = pulledStatus
-
-        if (changed) merged._dirty = true
-        return changed ? merged : row
-      }))
-
-      setPullResult({ pulled: job.pulled, skipped: job.skipped, failed: job.failed })
-      setTimeout(() => setPullResult(null), 10000)
+      // Hand off to the diff-preview modal. The merge into editor state
+      // happens in handlePullDiffApply when the operator confirms.
+      setPullDiffData({
+        pulledRows,
+        selectedColumns: opts.columns,
+        skusRequested: targetSkus,
+        skusReturned: pulledRows.length,
+        jobId,
+      })
+      setPullDiffOpen(true)
     } catch (e: any) {
       setLoadError(e?.message ?? 'Pull from Amazon failed')
     } finally {
@@ -1978,6 +1977,71 @@ export default function AmazonFlatFileClient({
       setPullProgress(null)
     }
   }, [marketplace, productType, selectedRows, rows, pushSnapshot])
+
+  // Called by PullDiffModal on Apply. Merges the chosen rows/columns
+  // into editor state (wrapped in pushSnapshot so ⌘Z reverts the
+  // whole pull as one step) and writes an audit-log row.
+  const handlePullDiffApply = useCallback(async (result: PullDiffApplyResult) => {
+    if (!pullDiffData) return
+
+    const { pulledRows, selectedColumns, skusRequested, skusReturned, jobId } = pullDiffData
+    const bySku = new Map<string, Row>(
+      pulledRows.map((r) => [String(r.item_sku ?? ''), r]),
+    )
+    const selectedSet = new Set(result.selectedRowIds)
+    const isAllColumns = selectedColumns === 'all'
+    const groupFilter = new Set(isAllColumns ? [] : (selectedColumns as PullGroupId[]))
+
+    pushSnapshot()
+    setRows((prev) => prev.map((row) => {
+      if (!selectedSet.has(String(row._rowId))) return row
+      const sku = String(row.item_sku ?? '')
+      const pulled = bySku.get(sku)
+      if (!pulled) return row
+
+      const merged: Row = { ...row }
+      let changed = false
+      for (const [k, v] of Object.entries(pulled)) {
+        if (k.startsWith('_')) continue
+        if (!isAllColumns && !groupFilter.has(pullFieldGroup(k))) continue
+        if (merged[k] === v) continue
+        merged[k] = v
+        changed = true
+      }
+      const pulledAsin = (pulled as any)._asin
+      const pulledStatus = (pulled as any)._listingStatus
+      if (pulledAsin) merged._asin = pulledAsin
+      if (pulledStatus) merged._listingStatus = pulledStatus
+      if (changed) merged._dirty = true
+      return changed ? merged : row
+    }))
+
+    setPullResult({
+      pulled: result.selectedRowIds.length,
+      skipped: skusReturned - result.selectedRowIds.length,
+      failed: 0,
+    })
+    setTimeout(() => setPullResult(null), 10000)
+    setPullDiffOpen(false)
+    setPullDiffData(null)
+
+    // Write audit log. Fire-and-forget — a failed audit row shouldn't
+    // block the operator's edits from landing.
+    void fetch(`${getBackendUrl()}/api/amazon/flat-file/pull-preview/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        marketplace,
+        productType,
+        skusRequested,
+        skusReturned,
+        columnsApplied: isAllColumns ? ['all'] : result.groupsApplied,
+        rowsApplied: result.selectedRowIds.length,
+        fieldsApplied: result.fieldsApplied,
+      }),
+    }).catch(() => { /* best-effort */ })
+  }, [pullDiffData, pushSnapshot, marketplace, productType])
 
   const exportTsv = useCallback(async () => {
     if (!manifest) return
@@ -3222,6 +3286,21 @@ export default function AmazonFlatFileClient({
             visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
           />
         </div>
+      )}
+
+      {/* Pull diff preview — Phase 2 of in-editor pull */}
+      {pullDiffData && (
+        <PullDiffModal
+          open={pullDiffOpen}
+          pulledRows={pullDiffData.pulledRows as Row[]}
+          currentRows={rows}
+          marketplace={marketplace}
+          productType={productType}
+          selectedColumns={pullDiffData.selectedColumns}
+          columnLabels={columnLabelMap}
+          onApply={handlePullDiffApply}
+          onClose={() => { setPullDiffOpen(false); setPullDiffData(null) }}
+        />
       )}
 
       {/* BM.2 — Replicate to multiple markets */}

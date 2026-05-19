@@ -10076,6 +10076,49 @@ model ListingReconciliation {
   @@index([matchedProductId])
 }
 
+// ── Flat-File Pull Audit (PF series) ─────────────────────────────────
+// One row per "Pull from Amazon/eBay" applied inside the flat-file
+// editor. Records what was pulled and how much of it the operator
+// chose to apply via the diff-preview modal. Lets us answer "who
+// pulled what, when, and what did they keep?" — and back the
+// pull-history drawer planned for Phase 5.
+//
+// No FK to Product: a pull is editor-scoped (productType + sku list),
+// not product-scoped. SKUs are stored as a string[] so we can reconcile
+// later without joining a deleted product row.
+
+model FlatFilePullRecord {
+  id             String   @id @default(cuid())
+  channel        String   // 'AMAZON' (Phase 2). 'EBAY' added in Phase 3.
+  marketplace    String   // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  productType    String
+
+  // Source job (in-memory only) so support can correlate logs.
+  jobId          String?
+
+  // Scope summary — what the user asked the pull to cover.
+  skusRequested  String[] @default([])
+  skusReturned   Int      @default(0)
+
+  // Result summary — what they ultimately applied via the diff modal.
+  // columnsApplied stores pull-group ids: 'content' | 'pricing' |
+  // 'stock' | 'images' | 'variations' | 'other' | 'all'.
+  columnsApplied String[] @default([])
+  rowsApplied    Int      @default(0)
+  fieldsApplied  Int      @default(0)
+
+  // null = operator cancelled the diff modal without applying.
+  appliedAt      DateTime?
+
+  // Free-form operator note (Phase 5 surfaces this in the history drawer).
+  operatorNote   String?
+
+  pulledAt       DateTime @default(now())
+
+  @@index([channel, marketplace, pulledAt])
+  @@index([productType, pulledAt])
+}
+
 // ── Catalog Organize (CO series) ─────────────────────────────────────
 // Session-based publish + undo for /catalog/organize drag-and-drop.
 // CatalogOrganizeSession groups N changes into one undoable batch.

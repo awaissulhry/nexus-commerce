@@ -727,4 +727,62 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.send(job)
     },
   )
+
+  // ── POST /api/amazon/flat-file/pull-preview/apply ───────────────────
+  // Audit-log endpoint. Called by the editor's diff-preview modal after
+  // the operator confirms what to merge. Records the result of the pull
+  // — does NOT itself touch product or listing data; those writes go
+  // through the editor's normal Save flow.
+  fastify.post<{
+    Body: {
+      jobId?: string
+      marketplace?: string
+      productType?: string
+      skusRequested?: string[]
+      skusReturned?: number
+      columnsApplied?: string[]
+      rowsApplied?: number
+      fieldsApplied?: number
+      operatorNote?: string
+    }
+  }>('/amazon/flat-file/pull-preview/apply', async (request, reply) => {
+    const {
+      jobId,
+      marketplace = 'IT',
+      productType = '',
+      skusRequested = [],
+      skusReturned = 0,
+      columnsApplied = [],
+      rowsApplied = 0,
+      fieldsApplied = 0,
+      operatorNote,
+    } = request.body ?? {}
+
+    if (!productType.trim()) {
+      return reply.code(400).send({ error: 'productType is required' })
+    }
+
+    try {
+      const record = await prisma.flatFilePullRecord.create({
+        data: {
+          channel: 'AMAZON',
+          marketplace: marketplace.toUpperCase(),
+          productType: productType.toUpperCase(),
+          jobId: jobId ?? null,
+          skusRequested,
+          skusReturned,
+          columnsApplied,
+          rowsApplied,
+          fieldsApplied,
+          appliedAt: new Date(),
+          operatorNote: operatorNote ?? null,
+        },
+        select: { id: true, pulledAt: true, appliedAt: true },
+      })
+      return reply.send({ ok: true, id: record.id })
+    } catch (err: any) {
+      request.log.error(err, '[amazon/flat-file/pull-preview/apply] failed')
+      return reply.code(500).send({ error: err?.message ?? 'Audit write failed' })
+    }
+  })
 }
