@@ -101,6 +101,15 @@ export interface FilterPopoverProps {
    * state out of the popover.
    */
   openEventName?: string
+  /**
+   * Optional "Save as view" callback. When supplied, the footer
+   * renders a button that fires this — pages hook it to their own
+   * saved-views modal so the current filter state (URL params, order,
+   * etc.) gets captured.
+   */
+  onSaveView?: () => void
+  /** Override the Save-as-view button label (default "Save as view"). */
+  saveViewLabel?: string
 }
 
 function activeCountFor(d: FilterDimension): number {
@@ -113,9 +122,21 @@ function activeCountFor(d: FilterDimension): number {
 
 export function FilterPopover({
   dimensions, onClearAll, activeCount, buttonLabel, order, onOrderChange, onResetOrder,
-  openEventName,
+  openEventName, onSaveView, saveViewLabel,
 }: FilterPopoverProps) {
   const [open, setOpen] = useState(false)
+  // Mobile sm-and-down: render as a bottom-sheet overlay so the
+  // popover doesn't squeeze against the viewport edge. Initialised
+  // false for SSR safety; a single matchMedia listener swaps as
+  // the viewport crosses the 640px (sm) breakpoint.
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 639px)')
+    const onChange = () => setIsMobile(mql.matches)
+    onChange()
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
 
   // Optional: subscribe to a window-level custom event so workspaces
   // can open the popover from a keyboard shortcut handler (bare-F on
@@ -211,85 +232,160 @@ export function FilterPopover({
         )}
       </button>
 
-      {open && (
+      {open && isMobile && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm flex items-end sm:hidden"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
+        >
+          <div
+            ref={popRef}
+            className="w-full bg-white dark:bg-slate-900 rounded-t-xl shadow-2xl max-h-[88vh] flex flex-col"
+            role="dialog"
+            aria-label="Filters"
+          >
+            <FilterPopoverContents
+              orderedDimensions={orderedDimensions}
+              activeCount={activeCount}
+              draggable={draggable}
+              sensors={sensors}
+              onDragEnd={onDragEnd}
+              onClearAll={onClearAll}
+              onResetOrder={onResetOrder}
+              onSaveView={onSaveView}
+              saveViewLabel={saveViewLabel}
+              onClose={() => setOpen(false)}
+              bodyMaxHeight="max-h-[calc(88vh-7rem)]"
+            />
+          </div>
+        </div>
+      )}
+      {open && !isMobile && (
         <div
           ref={popRef}
           className="absolute right-0 top-full mt-1 z-40 w-[480px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl"
           role="dialog"
           aria-label="Filters"
         >
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800">
-            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-2">
-              Filters
-              {activeCount > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 tabular-nums">
-                  {activeCount} active
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded"
-              aria-label="Close filters"
-            >
-              <X size={12} />
-            </button>
-          </div>
-
-          <div className="max-h-[60vh] overflow-y-auto p-2">
-            {orderedDimensions.length === 0 ? (
-              <div className="text-sm text-slate-500 dark:text-slate-400 italic px-2 py-4 text-center">
-                No filters configured for this page.
-              </div>
-            ) : draggable ? (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                <SortableContext items={orderedDimensions.map((d) => d.key)} strategy={verticalListSortingStrategy}>
-                  {orderedDimensions.map((d) => (
-                    <SortableDimensionCard key={d.key} dimension={d} />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            ) : (
-              orderedDimensions.map((d) => <DimensionCard key={d.key} dimension={d} />)
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-3 text-sm">
-              <button
-                type="button"
-                onClick={onClearAll}
-                disabled={activeCount === 0}
-                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Clear all
-              </button>
-              {onResetOrder && (
-                <>
-                  <span className="text-slate-300 dark:text-slate-600">·</span>
-                  <button
-                    type="button"
-                    onClick={onResetOrder}
-                    className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-                    title="Restore the default filter order"
-                  >
-                    Reset order
-                  </button>
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="h-7 px-3 text-sm bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-800 dark:hover:bg-slate-200"
-            >
-              Done
-            </button>
-          </div>
+          <FilterPopoverContents
+            orderedDimensions={orderedDimensions}
+            activeCount={activeCount}
+            draggable={draggable}
+            sensors={sensors}
+            onDragEnd={onDragEnd}
+            onClearAll={onClearAll}
+            onResetOrder={onResetOrder}
+            onSaveView={onSaveView}
+            saveViewLabel={saveViewLabel}
+            onClose={() => setOpen(false)}
+            bodyMaxHeight="max-h-[60vh]"
+          />
         </div>
       )}
     </div>
+  )
+}
+
+function FilterPopoverContents({
+  orderedDimensions, activeCount, draggable, sensors, onDragEnd,
+  onClearAll, onResetOrder, onSaveView, saveViewLabel, onClose, bodyMaxHeight,
+}: {
+  orderedDimensions: ReadonlyArray<FilterDimension>
+  activeCount: number
+  draggable: boolean
+  sensors: ReturnType<typeof useSensors>
+  onDragEnd: (e: DragEndEvent) => void
+  onClearAll: () => void
+  onResetOrder?: () => void
+  onSaveView?: () => void
+  saveViewLabel?: string
+  onClose: () => void
+  bodyMaxHeight: string
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800">
+        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-2">
+          Filters
+          {activeCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 tabular-nums">
+              {activeCount} active
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-6 w-6 inline-flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded"
+          aria-label="Close filters"
+        >
+          <X size={12} />
+        </button>
+      </div>
+
+      <div className={`overflow-y-auto p-2 ${bodyMaxHeight}`}>
+        {orderedDimensions.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-400 italic px-2 py-4 text-center">
+            No filters configured for this page.
+          </div>
+        ) : draggable ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={orderedDimensions.map((d) => d.key)} strategy={verticalListSortingStrategy}>
+              {orderedDimensions.map((d) => (
+                <SortableDimensionCard key={d.key} dimension={d} />
+              ))}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          orderedDimensions.map((d) => <DimensionCard key={d.key} dimension={d} />)
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-200 dark:border-slate-800 flex-wrap">
+        <div className="flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={activeCount === 0}
+            className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Clear all
+          </button>
+          {onResetOrder && (
+            <>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              <button
+                type="button"
+                onClick={onResetOrder}
+                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                title="Restore the default filter order"
+              >
+                Reset order
+              </button>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {onSaveView && (
+            <button
+              type="button"
+              onClick={() => { onSaveView(); onClose() }}
+              disabled={activeCount === 0}
+              className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Save the current filter state as a reusable view"
+            >
+              {saveViewLabel ?? 'Save as view'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 px-3 text-sm bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded hover:bg-slate-800 dark:hover:bg-slate-200"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </>
   )
 }
 
