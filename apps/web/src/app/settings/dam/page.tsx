@@ -1,12 +1,9 @@
 import { getBackendUrl } from '@/lib/backend-url'
-import PageHeader from '@/components/layout/PageHeader'
-import { getServerT } from '@/lib/i18n/server'
 import DamClient, { type AssetRow } from './DamClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DamSettingsPage() {
-  const t = await getServerT()
   const backend = getBackendUrl()
   let initial: AssetRow[] = []
   let nextCursor: string | null = null
@@ -30,20 +27,10 @@ export default async function DamSettingsPage() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title={t('pim.dam.title')}
-        subtitle={t('pim.dam.subtitle')}
-        breadcrumbs={[
-          { label: 'Settings', href: '/settings/account' },
-          { label: 'DAM' },
-        ]}
-      />
-      <DamClient
-        initial={initial}
-        initialCursor={nextCursor}
-        initialError={loadError}
-      />
-    </div>
+    <DamClient
+      initial={initial}
+      initialCursor={nextCursor}
+      initialError={loadError}
+    />
   )
 }

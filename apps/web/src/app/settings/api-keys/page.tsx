@@ -1,5 +1,4 @@
 import { prisma } from '@nexus/database'
-import PageHeader from '@/components/layout/PageHeader'
 import ApiKeysClient from './ApiKeysClient'
 
 export const dynamic = 'force-dynamic'
@@ -34,18 +33,5 @@ export default async function ApiKeysPage() {
     revokedAt: k.revokedAt?.toISOString() ?? null,
   }))
 
-  return (
-    <div>
-      <PageHeader
-        title="API Keys"
-        subtitle="Manage API keys for external integrations"
-        breadcrumbs={[
-          { label: 'Settings', href: '/settings/account' },
-          { label: 'API Keys' },
-        ]}
-      />
-
-      <ApiKeysClient apiKeys={apiKeys} />
-    </div>
-  )
+  return <ApiKeysClient apiKeys={apiKeys} />
 }

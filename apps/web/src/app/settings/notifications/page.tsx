@@ -1,5 +1,4 @@
 import { prisma } from '@nexus/database'
-import PageHeader from '@/components/layout/PageHeader'
 import NotificationsClient from './NotificationsClient'
 
 export const dynamic = 'force-dynamic'
@@ -36,18 +35,5 @@ export default async function NotificationsPage() {
       : def
   })
 
-  return (
-    <div>
-      <PageHeader
-        title="Notification Preferences"
-        subtitle="Choose how you want to be notified about important events"
-        breadcrumbs={[
-          { label: 'Settings', href: '/settings/account' },
-          { label: 'Notifications' },
-        ]}
-      />
-
-      <NotificationsClient preferences={prefs} />
-    </div>
-  )
+  return <NotificationsClient preferences={prefs} />
 }

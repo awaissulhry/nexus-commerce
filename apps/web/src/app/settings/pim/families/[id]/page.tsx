@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
-import PageHeader from '@/components/layout/PageHeader'
 import FamilyEditorClient, {
   type FamilyDetail,
   type AttributeRow,
@@ -62,21 +61,20 @@ export default async function FamilyEditorPage({
 
   if (!family) notFound()
 
+  // The shell header above shows "Product families" (parent nav).
+  // Per-row identity (the family's own label + description) goes
+  // here so a parent + child page still feels distinct.
   return (
-    <div>
-      <PageHeader
-        title={family.label}
-        subtitle={
-          family.description ??
-          `Akeneo-style family. Attach attributes here; ${family.parentFamily ? 'inherits ' + (effective.length - family.familyAttributes.length) + ' more from ancestors. ' : ''}Children of this family inherit ALL of these (additive, parent-wins on conflict).`
-        }
-        breadcrumbs={[
-          { label: 'Settings', href: '/settings/account' },
-          { label: 'PIM', href: '/settings/pim/families' },
-          { label: 'Families', href: '/settings/pim/families' },
-          { label: family.label },
-        ]}
-      />
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          {family.label}
+        </h2>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+          {family.description ??
+            `Akeneo-style family. Attach attributes here; ${family.parentFamily ? 'inherits ' + (effective.length - family.familyAttributes.length) + ' more from ancestors. ' : ''}Children of this family inherit ALL of these (additive, parent-wins on conflict).`}
+        </p>
+      </div>
       <FamilyEditorClient
         family={family}
         attributePool={attributes}

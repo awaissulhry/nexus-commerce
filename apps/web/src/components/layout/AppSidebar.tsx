@@ -719,7 +719,7 @@ export default function AppSidebar() {
             active={pathname.startsWith('/settings/channels')}
           />
           <NavItem
-            href="/settings/account"
+            href="/settings"
             icon={Settings}
             label="Settings"
             active={

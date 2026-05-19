@@ -1,40 +1,52 @@
-import Link from 'next/link'
+/**
+ * Settings rebuild — Phase A.2
+ *
+ * Two-pane shell for all /settings/* routes.
+ *
+ *   ┌─────────┬──────────────────────────────────────┐
+ *   │  Rail   │  Sticky shell header (breadcrumb, ⌘K)│
+ *   │ (left)  ├──────────────────────────────────────┤
+ *   │ grouped │  Page content (preserved from old    │
+ *   │   nav   │  per-page client components)         │
+ *   └─────────┴──────────────────────────────────────┘
+ *
+ * Phase A is non-destructive: every existing sub-page is rendered
+ * untouched as `{children}`. Sub-pages that still render their own
+ * <PageHeader> show duplicated chrome until they migrate; that's
+ * intentional during the phased rebuild — the visual duplication
+ * signals which pages still need work.
+ *
+ * The palette + save-bar providers are mounted here so any page can
+ * call useSettingsPalette() or useSettingsForm() without remounting.
+ */
 
-const SETTINGS_TABS = [
-  { label: 'Account', href: '/settings/account', icon: '🏢' },
-  { label: 'Notifications', href: '/settings/notifications', icon: '🔔' },
-  { label: 'API Keys', href: '/settings/api-keys', icon: '🔑' },
-  { label: 'AI', href: '/settings/ai', icon: '✨' },
-  { label: 'Profile', href: '/settings/profile', icon: '👤' },
-  { label: 'Terminology', href: '/settings/terminology', icon: '🌐' },
-  // W2.9 — PIM admin (Akeneo cornerstone). Today this points to
-  // /families; /attributes lands in W2.10.
-  { label: 'PIM', href: '/settings/pim/families', icon: '📚' },
-  // W4.11 — DAM (Plytix cornerstone). Asset library + per-asset
-  // detail panel + usage list.
-  { label: 'DAM', href: '/settings/dam', icon: '🖼️' },
-  { label: 'Advertising', href: '/settings/advertising', icon: '📡' },
-]
+import { SettingsPaletteProvider } from './_shell/SettingsPaletteContext'
+import { SettingsRail } from './_shell/SettingsRail'
+import { SettingsSaveBarProvider } from './_shell/SettingsSaveBar'
+import { SettingsShellHeader } from './_shell/SettingsShellHeader'
 
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+export default function SettingsLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <div>
-      {/* Settings sub-navigation */}
-      <div className="bg-white border-b border-gray-200 mb-6 -mx-6 -mt-6 px-6">
-        <nav className="flex gap-1 overflow-x-auto">
-          {SETTINGS_TABS.map((tab) => (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors whitespace-nowrap border-b-2 border-transparent hover:border-gray-300"
-            >
-              <span>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </Link>
-          ))}
-        </nav>
-      </div>
-      {children}
-    </div>
+    <SettingsPaletteProvider>
+      <SettingsSaveBarProvider>
+        {/* Structural layer:
+              Rail (left column on lg+, off-canvas drawer on mobile)
+              + right column (header on top, content underneath).
+            The negative margins cancel the global page-shell padding
+            (RootLayout wraps {children} in p-3 md:p-6) so the rail
+            spans the full viewport edge-to-edge. */}
+        <div className="-m-3 md:-m-6 min-h-[calc(100vh-3.5rem)] flex bg-slate-50/40 dark:bg-slate-950/40">
+          <SettingsRail />
+          <div className="flex-1 min-w-0 flex flex-col">
+            <SettingsShellHeader />
+            <main className="flex-1 px-4 sm:px-6 py-6">{children}</main>
+          </div>
+        </div>
+      </SettingsSaveBarProvider>
+    </SettingsPaletteProvider>
   )
 }
