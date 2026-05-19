@@ -1136,6 +1136,7 @@ const ProductCell = memo(function ProductCell({
           imageUrl={p.imageUrl}
           searchQuery={searchQuery}
           showThumb
+          fulfillmentMethod={p.fulfillmentMethod}
         />
       )
 

@@ -19,6 +19,8 @@ export type ProductIdentityCellProps = {
   variantDetailHref?: string
   variantDetailLabel?: string
   showThumb?: boolean
+  /** Derived FBA/FBM/BOTH chip — render only when set */
+  fulfillmentMethod?: 'FBA' | 'FBM' | 'BOTH' | string | null
 }
 
 function Highlight({ text, query }: { text: string; query?: string }) {
@@ -44,6 +46,12 @@ function Highlight({ text, query }: { text: string; query?: string }) {
   )
 }
 
+const FULFILLMENT_CHIP_CLASS: Record<string, string> = {
+  FBA:  'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+  FBM:  'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800',
+  BOTH: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
+}
+
 export function ProductIdentityCell(props: ProductIdentityCellProps) {
   const {
     id, name, sku, amazonAsin, productType,
@@ -51,6 +59,7 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
     imageUrl, searchQuery,
     onThumbClick, productHref, variantDetailHref, variantDetailLabel,
     showThumb = false,
+    fulfillmentMethod,
   } = props
 
   const isParentRow = isParent && !parentId
@@ -142,6 +151,18 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
             >
               {variantDetailLabel ?? 'Variation details'}
             </Link>
+          )}
+          {fulfillmentMethod && (
+            <span
+              className={`ml-1 inline-block font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded text-[10px] leading-none ${FULFILLMENT_CHIP_CLASS[fulfillmentMethod] ?? 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'}`}
+              title={
+                fulfillmentMethod === 'BOTH'
+                  ? 'Has FBA and FBM offers'
+                  : `${fulfillmentMethod} fulfillment`
+              }
+            >
+              {fulfillmentMethod}
+            </span>
           )}
         </div>
       </div>

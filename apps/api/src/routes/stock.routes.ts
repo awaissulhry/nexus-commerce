@@ -11,6 +11,7 @@ import { resolveAtp } from '../services/atp.service.js'
 import { resolveAtpAcrossChannels } from '../services/atp-channel.service.js'
 import { getReservationSweepStatus } from '../jobs/reservation-sweep.job.js'
 import * as abcService from '../services/abc-classification.service.js'
+import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import { listLayers, recomputeWac } from '../services/cost-layers.service.js'
 import {
   computeYearEndValuation,
@@ -177,6 +178,30 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ])
 
+      // Pull active offers for every product on the page (parents + leaves)
+      // so the derived fulfillment method matches /products. Single query;
+      // grouped client-side into FBA / FBM presence sets per productId.
+      const pageProductIds = products.map((p) => p.id)
+      const offerMethodsByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
+      if (pageProductIds.length > 0) {
+        const offerRows = await prisma.offer.findMany({
+          where: {
+            isActive: true,
+            channelListing: { productId: { in: pageProductIds } },
+          },
+          select: {
+            fulfillmentMethod: true,
+            channelListing: { select: { productId: true } },
+          },
+        })
+        for (const o of offerRows) {
+          const pid = o.channelListing.productId
+          const s = offerMethodsByProduct.get(pid) ?? new Set<'FBA' | 'FBM'>()
+          s.add(o.fulfillmentMethod as 'FBA' | 'FBM')
+          offerMethodsByProduct.set(pid, s)
+        }
+      }
+
       // Aggregate stock for parent products from all leaf descendants.
       // Handles up to 3-level hierarchy (grandparent → intermediate → leaf).
       const parentProductIds = products.filter((p) => p.isParent).map((p) => p.id)
@@ -246,23 +271,16 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           const ownWHQty = agg?.byType['WAREHOUSE']
             ?? p.stockLevels.filter((sl) => sl.location.type === 'WAREHOUSE').reduce((s, sl) => s + sl.quantity, 0)
 
-          // Derive fulfillment method: explicit field wins; fall back to stock location signals.
-          // Use nonFbaQty (not just WAREHOUSE) so eBay/Shopify products are correctly marked FBM.
-          const explicitMethod = (p.fulfillmentMethod ?? p.fulfillmentChannel) as string | null
-          let fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
-          if (explicitMethod === 'FBA') {
-            fulfillmentMethod = 'FBA'
-          } else if (explicitMethod === 'FBM') {
-            fulfillmentMethod = 'FBM'
-          } else if (fbaQty > 0 && nonFbaQty > 0) {
-            fulfillmentMethod = 'BOTH'
-          } else if (fbaQty > 0) {
-            fulfillmentMethod = 'FBA'
-          } else if (nonFbaQty > 0) {
-            fulfillmentMethod = 'FBM'
-          } else {
-            fulfillmentMethod = null
-          }
+          // Derive fulfillment method: offers > stock locations > raw field.
+          // Matches /products and /api/products. nonFbaQty covers WAREHOUSE +
+          // SHOPIFY_LOCATION + CHANNEL_RESERVED so eBay/Shopify products
+          // surface as FBM.
+          const explicitMethod = (p.fulfillmentMethod ?? p.fulfillmentChannel) as 'FBA' | 'FBM' | null
+          const fulfillmentMethod = deriveFulfillmentMethod({
+            offerMethods: offerMethodsByProduct.get(p.id),
+            stock: { fba: fbaQty, non: nonFbaQty },
+            fallback: explicitMethod,
+          })
 
           return {
             id: p.id,

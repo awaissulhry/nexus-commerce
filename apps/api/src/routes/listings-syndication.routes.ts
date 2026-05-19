@@ -9,6 +9,7 @@ import {
   KNOWN_BULK_ACTION_TYPES,
   type BulkActionType,
 } from '../services/bulk-action.service.js'
+import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -268,6 +269,54 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         ])
       )
 
+      // Derive fulfillment method per product (offers > stock > raw field).
+      // Matches /products + /api/stock so all four grids agree.
+      const pageProductIds = [...new Set(listings.map((l) => l.productId))]
+      const offerMethodsByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
+      const stockByProduct = new Map<string, { fba: number; non: number }>()
+      const fallbackByProduct = new Map<string, 'FBA' | 'FBM' | null>()
+      if (pageProductIds.length > 0) {
+        const [offerRows, stockRows, productRows] = await Promise.all([
+          prisma.offer.findMany({
+            where: {
+              isActive: true,
+              channelListing: { productId: { in: pageProductIds } },
+            },
+            select: {
+              fulfillmentMethod: true,
+              channelListing: { select: { productId: true } },
+            },
+          }),
+          prisma.stockLevel.findMany({
+            where: { productId: { in: pageProductIds } },
+            select: {
+              productId: true,
+              quantity: true,
+              location: { select: { type: true } },
+            },
+          }),
+          prisma.product.findMany({
+            where: { id: { in: pageProductIds } },
+            select: { id: true, fulfillmentMethod: true },
+          }),
+        ])
+        for (const o of offerRows) {
+          const pid = o.channelListing.productId
+          const s = offerMethodsByProduct.get(pid) ?? new Set<'FBA' | 'FBM'>()
+          s.add(o.fulfillmentMethod as 'FBA' | 'FBM')
+          offerMethodsByProduct.set(pid, s)
+        }
+        for (const s of stockRows) {
+          const cur = stockByProduct.get(s.productId) ?? { fba: 0, non: 0 }
+          if (s.location.type === 'AMAZON_FBA') cur.fba += s.quantity
+          else cur.non += s.quantity
+          stockByProduct.set(s.productId, cur)
+        }
+        for (const p of productRows) {
+          fallbackByProduct.set(p.id, (p.fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null)
+        }
+      }
+
       const enriched = listings.map((l) => {
         const m = meta.get(mpKey(l.channel, l.marketplace))
         return {
@@ -322,6 +371,11 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
             isParent: l.product.isParent,
             parentId: l.product.parentId,
             productType: l.product.productType,
+            fulfillmentMethod: deriveFulfillmentMethod({
+              offerMethods: offerMethodsByProduct.get(l.productId),
+              stock: stockByProduct.get(l.productId),
+              fallback: fallbackByProduct.get(l.productId) ?? null,
+            }),
             thumbnailUrl: l.product.images?.[0]?.url ?? null,
             // Actual parent product data — present when this product is a variant.
             // The frontend uses this to build correct parent row (real name/sku/thumb).

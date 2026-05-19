@@ -121,6 +121,7 @@ type Listing = {
     isParent: boolean
     parentId: string | null
     productType: string | null
+    fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
     thumbnailUrl: string | null
     /** Populated by the API when this product is a variant (parentId != null). */
     parentProduct: {
@@ -513,6 +514,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           amazonAsin: null, basePrice: null, totalStock: 0,
           isParent: true, parentId: null,
           productType: info.productType ?? null,
+          fulfillmentMethod: null,
           thumbnailUrl: info.thumbnailUrl, parentProduct: null,
         },
         isParent: true,
@@ -2000,6 +2002,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
           searchQuery={searchQuery}
           showThumb
           onThumbClick={() => onOpenDrawer(l.id)}
+          fulfillmentMethod={l.product.fulfillmentMethod}
         />
       )
     case 'channel':

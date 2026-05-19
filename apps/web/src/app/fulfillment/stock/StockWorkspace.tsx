@@ -3504,6 +3504,7 @@ const COLUMN_META: Record<ColumnKey, {
         childCount={it.childCount}
         imageUrl={it.thumbnailUrl}
         showThumb
+        fulfillmentMethod={it.fulfillmentMethod}
       />
     ),
   },

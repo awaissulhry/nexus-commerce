@@ -90,6 +90,7 @@ type RepRow = GridLensRow & {
   thumbnailUrl: string | null
   productType: string | null
   amazonAsin: string | null
+  fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
   urgency: Urgency | null
   needsReorder: boolean
   currentStock: number
@@ -331,6 +332,7 @@ export default function ReplenishmentWorkspace() {
       thumbnailUrl: s.thumbnailUrl ?? null,
       productType: s.productType,
       amazonAsin: s.amazonAsin,
+      fulfillmentMethod: s.fulfillmentMethod,
       isParent: false,
       parentId: s.parentId,
       childCount: 0,
@@ -354,6 +356,17 @@ export default function ReplenishmentWorkspace() {
       const worstUrgency = urgencies.length > 0
         ? urgencies.sort((a, b) => URGENCY_ORDER[a] - URGENCY_ORDER[b])[0]
         : null
+      // Aggregate fulfillment from leaves: FBA + FBM present → BOTH;
+      // single value → that value; all null → null.
+      const childMethods = new Set(
+        children.map((c) => c.fulfillmentMethod).filter((m): m is 'FBA' | 'FBM' | 'BOTH' => m !== null),
+      )
+      const aggregatedFulfillment: 'FBA' | 'FBM' | 'BOTH' | null =
+        childMethods.has('BOTH') || (childMethods.has('FBA') && childMethods.has('FBM'))
+          ? 'BOTH'
+          : childMethods.has('FBA') ? 'FBA'
+          : childMethods.has('FBM') ? 'FBM'
+          : null
       return {
         id,
         sku,
@@ -361,6 +374,7 @@ export default function ReplenishmentWorkspace() {
         thumbnailUrl,
         productType,
         amazonAsin,
+        fulfillmentMethod: aggregatedFulfillment,
         isParent: true,
         parentId,
         childCount: children.length,
@@ -645,6 +659,7 @@ export default function ReplenishmentWorkspace() {
             childCount={row.childCount}
             imageUrl={row.thumbnailUrl}
             showThumb
+            fulfillmentMethod={row.fulfillmentMethod}
           />
         )
       case 'urgency':

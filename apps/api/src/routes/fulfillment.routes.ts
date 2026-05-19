@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 import {
   resolveWarehouseForOrder,
   previewRouting,
@@ -6123,7 +6124,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { isParent: false, status: { not: 'INACTIVE' }, deletedAt: null },
         select: {
           id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
-          fulfillmentChannel: true, basePrice: true, costPrice: true,
+          fulfillmentChannel: true, fulfillmentMethod: true,
+          basePrice: true, costPrice: true,
           serviceLevelPercent: true, orderingCostCents: true, carryingCostPctYear: true,
           productType: true,
           amazonAsin: true,
@@ -6191,6 +6193,46 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       // (not productId), so the join key here is sku — matches the data layer
       // and lets per-marketplace rows aggregate naturally.
       const skus = products.map((p) => p.sku)
+      // Derive fulfillment method per product (offers > stock > raw field).
+      // Used to surface FBA/FBM/BOTH chips on the replenishment grid.
+      const pageProductIds = products.map((p) => p.id)
+      const offerMethodsByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
+      const stockByProduct = new Map<string, { fba: number; non: number }>()
+      if (pageProductIds.length > 0) {
+        const [offerRows, stockRows] = await Promise.all([
+          prisma.offer.findMany({
+            where: {
+              isActive: true,
+              channelListing: { productId: { in: pageProductIds } },
+            },
+            select: {
+              fulfillmentMethod: true,
+              channelListing: { select: { productId: true } },
+            },
+          }),
+          prisma.stockLevel.findMany({
+            where: { productId: { in: pageProductIds } },
+            select: {
+              productId: true,
+              quantity: true,
+              location: { select: { type: true } },
+            },
+          }),
+        ])
+        for (const o of offerRows) {
+          const pid = o.channelListing.productId
+          const s = offerMethodsByProduct.get(pid) ?? new Set<'FBA' | 'FBM'>()
+          s.add(o.fulfillmentMethod as 'FBA' | 'FBM')
+          offerMethodsByProduct.set(pid, s)
+        }
+        for (const s of stockRows) {
+          const cur = stockByProduct.get(s.productId) ?? { fba: 0, non: 0 }
+          if (s.location.type === 'AMAZON_FBA') cur.fba += s.quantity
+          else cur.non += s.quantity
+          stockByProduct.set(s.productId, cur)
+        }
+      }
+
       const sold = await prisma.dailySalesAggregate.groupBy({
         by: ['sku'],
         where: {
@@ -6721,6 +6763,11 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           thumbnailUrl: (p as any).images?.[0]?.url ?? null,
           productType: (p as any).productType ?? null,
           amazonAsin: (p as any).amazonAsin ?? null,
+          fulfillmentMethod: deriveFulfillmentMethod({
+            offerMethods: offerMethodsByProduct.get(p.id),
+            stock: stockByProduct.get(p.id),
+            fallback: ((p as any).fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null,
+          }),
         }
       })
 
