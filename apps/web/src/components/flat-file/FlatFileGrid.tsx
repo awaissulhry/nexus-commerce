@@ -7,8 +7,8 @@ import {
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ArrowRightLeft, BrainCircuit, ClipboardPaste, Copy, Image as ImageIcon, Loader2, Pin, Plus,
-  Search, Trash2, Undo2, Redo2, Replace, SlidersHorizontal, Sparkles, X,
+  Image as ImageIcon, Loader2, Pin, Plus,
+  Search, Trash2, Undo2, Redo2, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
@@ -27,6 +27,10 @@ import type {
   ValidationIssue, RenderCellContent, ModalsCtx, ToolbarFetchCtx, ToolbarImportCtx, ReplicateCtx,
 } from './FlatFileGrid.types'
 import { SortPanel, applySortLevels, type SortLevel, type SortGroup } from './SortPanel'
+import {
+  FlatFileIconToolbar,
+  type RowImageSize as SharedRowImageSize,
+} from '@/app/products/_shared/FlatFileIconToolbar'
 
 // ── Internal types ─────────────────────────────────────────────────────────
 
@@ -64,29 +68,9 @@ function padToMin(rows: BaseRow[], make: () => BaseRow, min: number): BaseRow[] 
   return [...rows, ...Array.from({ length: min - rows.length }, make)]
 }
 
-// ── TbBtn ──────────────────────────────────────────────────────────────────
-
-function TbBtn({ icon, title, onClick, disabled, active, badge }: {
-  icon: React.ReactNode; title: string; onClick?: () => void
-  disabled?: boolean; active?: boolean; badge?: number
-}) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} title={title}
-      className={cn(
-        'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-        active ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
-        'disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent dark:disabled:hover:bg-transparent',
-      )}>
-      {icon}
-      {badge != null && badge > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold bg-blue-500 text-white rounded-full flex items-center justify-center leading-none pointer-events-none">
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
-    </button>
-  )
-}
+// TbBtn moved to apps/web/src/app/products/_shared/FlatFileIconToolbar.tsx
+// in Phase B. Toolbar buttons are rendered by FlatFileIconToolbar; this
+// file no longer needs a local primitive.
 
 // ── MenuDropdown ───────────────────────────────────────────────────────────
 
@@ -1311,48 +1295,39 @@ export default function FlatFileGrid({
           {renderPushExtras?.({ rows, selectedRows, dirtyCount, loading, saving })}
         </div>
 
-        {/* Bar 2: icon toolbar */}
-        <div className="px-3 h-8 flex items-center gap-0.5 border-b border-slate-100 dark:border-slate-800/60">
-          <TbBtn icon={<Undo2 className="w-3.5 h-3.5" />} title="Undo (⌘Z)" onClick={undo} disabled={!history.length} />
-          <TbBtn icon={<Redo2 className="w-3.5 h-3.5" />} title="Redo (⌘⇧Z)" onClick={redo} disabled={!future.length} />
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-          <TbBtn icon={<Copy className="w-3.5 h-3.5" />} title="Copy rows to another market" onClick={() => setReplicateOpen(true)} disabled={!rows.length} />
-          {onReplicate && <TbBtn icon={<ArrowRightLeft className="w-3.5 h-3.5" />} title="Replicate to multiple markets" onClick={() => setReplicateOpen(true)} disabled={!rows.length} active={replicateOpen} />}
-          {renderToolbarFetch?.(toolbarFetchCtx)}
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-          <TbBtn icon={<AlertTriangle className="w-3.5 h-3.5" />}
-            title={errorCount + warnCount > 0 ? `Validation: ${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warnCount} warning${warnCount !== 1 ? 's' : ''}` : 'Validation — no issues'}
-            onClick={() => setShowValidation((o) => !o)} active={showValidation} badge={(errorCount + warnCount) || undefined} />
-          <TbBtn icon={<ClipboardPaste className="w-3.5 h-3.5" />}
-            title={smartPasteEnabled ? 'Smart paste ON — click to turn off' : 'Smart paste OFF — click to turn on'}
-            onClick={() => setSmartPasteEnabled((o) => !o)} active={smartPasteEnabled} />
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-          {renderToolbarImport?.(toolbarImportCtx)}
-          <TbBtn icon={<ImageIcon className="w-3.5 h-3.5" />}
-            title={showRowImages ? 'Hide product images' : 'Show product images in rows'}
-            onClick={() => setShowRowImages((o) => !o)} disabled={!rows.length} active={showRowImages} />
-          {showRowImages && (
-            <>
-              {([24, 32, 48, 64, 96] as const).map((size) => (
-                <button key={size} type="button" onClick={() => setImageSize(size)}
-                  className={cn('h-6 px-1.5 rounded text-[10px] font-medium transition-colors',
-                    imageSize === size ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
-                                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
-                  {size === 24 ? 'XS' : size === 32 ? 'S' : size === 48 ? 'M' : size === 64 ? 'L' : 'XL'}
-                </button>
-              ))}
-            </>
-          )}
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-          <div className="relative">
-            <TbBtn
-              icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
-              title={sortConfig.length > 0 ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active` : 'Sort rows'}
-              onClick={() => setSortPanelOpen((o) => !o)}
-              active={sortPanelOpen || sortConfig.length > 0}
-              badge={sortConfig.length || undefined}
-            />
-            {sortPanelOpen && (
+        {/* Bar 2: icon toolbar — shared with Amazon via FlatFileIconToolbar */}
+        <FlatFileIconToolbar
+          canUndo={history.length > 0}
+          canRedo={future.length > 0}
+          onUndo={undo}
+          onRedo={redo}
+
+          onCopy={() => setReplicateOpen(true)}
+          copyDisabled={!rows.length}
+
+          onReplicate={onReplicate ? () => setReplicateOpen(true) : undefined}
+          replicateDisabled={!rows.length}
+          replicateActive={replicateOpen}
+
+          validationErrorCount={errorCount}
+          validationWarnCount={warnCount}
+          validationActive={showValidation}
+          onValidationClick={() => setShowValidation((o) => !o)}
+
+          smartPasteEnabled={smartPasteEnabled}
+          onSmartPasteToggle={() => setSmartPasteEnabled((o) => !o)}
+
+          showRowImages={showRowImages}
+          rowImageSize={imageSize as SharedRowImageSize}
+          rowImagesDisabled={!rows.length}
+          onRowImagesToggle={() => setShowRowImages((o) => !o)}
+          onRowImageSizeChange={(s) => setImageSize(s)}
+
+          sortLevelCount={sortConfig.length}
+          sortPanelOpen={sortPanelOpen}
+          onSortClick={() => setSortPanelOpen((o) => !o)}
+          sortPanel={
+            sortPanelOpen ? (
               <SortPanel
                 rows={rows as Array<Record<string, unknown>>}
                 groups={orderedGroups.map((g): SortGroup => ({
@@ -1364,29 +1339,25 @@ export default function FlatFileGrid({
                 onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
                 onClose={() => setSortPanelOpen(false)}
               />
-            )}
-          </div>
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-          <TbBtn icon={<Replace className="w-3.5 h-3.5" />} title="Find & Replace (⌘F)" onClick={() => setShowFindReplace((o) => !o)} active={showFindReplace} />
-          <TbBtn icon={<Sparkles className="w-3.5 h-3.5" />}
-            title={cfRules.length > 0 ? `Conditional formatting (${cfRules.filter((r) => r.enabled).length} active)` : 'Conditional formatting'}
-            onClick={() => setShowConditional((o) => !o)} active={showConditional}
-            badge={cfRules.filter((r) => r.enabled).length || undefined} />
-          <TbBtn icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
-            title={selectedRows.size > 0 ? `AI bulk actions (${selectedRows.size} selected)` : 'AI bulk actions — select rows first'}
-            onClick={() => setAiModalOpen(true)} disabled={selectedRows.size === 0} badge={selectedRows.size || undefined} />
-          {renderAiPanel && (
-            <>
-              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-              <TbBtn
-                icon={<BrainCircuit className="w-3.5 h-3.5 text-violet-500" />}
-                title={aiPanelOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
-                onClick={() => setAiPanelOpen((o) => !o)}
-                active={aiPanelOpen}
-              />
-            </>
-          )}
-        </div>
+            ) : null
+          }
+
+          findReplaceOpen={showFindReplace}
+          onFindReplaceClick={() => setShowFindReplace((o) => !o)}
+
+          conditionalEnabledCount={cfRules.filter((r) => r.enabled).length}
+          conditionalOpen={showConditional}
+          onConditionalClick={() => setShowConditional((o) => !o)}
+
+          aiBulkSelectedCount={selectedRows.size}
+          onAiBulkClick={() => setAiModalOpen(true)}
+
+          aiAssistantOpen={aiPanelOpen}
+          onAiAssistantClick={renderAiPanel ? () => setAiPanelOpen((o) => !o) : undefined}
+
+          slotAfterReplicate={renderToolbarFetch?.(toolbarFetchCtx)}
+          slotAfterSmartPaste={renderToolbarImport?.(toolbarImportCtx)}
+        />
 
         {/* Bar 3: search + filter + saved views + column pills */}
         <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">

@@ -6,10 +6,10 @@ import {
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  AlertCircle, AlertTriangle, BrainCircuit, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw, RotateCcw,
   Search, Send, Trash2, Upload, X, ArrowRightLeft,
-  Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
+  Undo2, Redo2, GripVertical,
 } from 'lucide-react'
 import { FindReplaceBar } from '@/app/_shared/bulk-edit/components/FindReplaceBar'
 import { ConditionalFormatBar } from '@/app/_shared/bulk-edit/components/ConditionalFormatBar'
@@ -22,6 +22,11 @@ import { FFReplicateModal } from './FFReplicateModal'
 import { PullDiffModal, type PullDiffApplyResult } from './PullDiffModal'
 import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
+import {
+  FlatFileIconToolbar,
+  TbBtn as SharedTbBtn,
+  type RowImageSize as SharedRowImageSize,
+} from '../_shared/FlatFileIconToolbar'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -2293,278 +2298,191 @@ export default function AmazonFlatFileClient({
           )}
         </div>
 
-        {/* ── Icon toolbar ─────────────────────────────────── */}
-        <div className="px-3 h-8 flex items-center gap-0.5 border-b border-slate-100 dark:border-slate-800/60">
+        {/* ── Icon toolbar — shared with eBay via FlatFileIconToolbar ─ */}
+        <FlatFileIconToolbar
+          canUndo={history.length > 0}
+          canRedo={future.length > 0}
+          onUndo={undo}
+          onRedo={redo}
 
-          {/* Undo / Redo */}
-          <TbBtn icon={<Undo2 className="w-3.5 h-3.5" />} title="Undo (⌘Z)" onClick={undo} disabled={!history.length} />
-          <TbBtn icon={<Redo2 className="w-3.5 h-3.5" />} title="Redo (⌘⇧Z)" onClick={redo} disabled={!future.length} />
+          onCopy={() => setPushPanel((p) => p?.tab === 'copy' ? null : { tab: 'copy' })}
+          copyActive={pushPanel?.tab === 'copy'}
+          copyDisabled={!manifest || !rows.length}
 
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+          onReplicate={() => setReplicateOpen(true)}
+          replicateDisabled={!manifest || !rows.length}
+          replicateActive={replicateOpen}
 
-          {/* Push to markets — Copy tab */}
-          <TbBtn
-            icon={<Copy className="w-3.5 h-3.5" />}
-            title="Copy rows to another market"
-            onClick={() => setPushPanel((p) => p?.tab === 'copy' ? null : { tab: 'copy' })}
-            disabled={!manifest || !rows.length}
-            active={pushPanel?.tab === 'copy'}
-          />
+          validationErrorCount={validErrorCount}
+          validationWarnCount={validWarnCount}
+          validationActive={showValidPanel}
+          onValidationClick={() => setShowValidPanel((o) => !o)}
+          validationDisabled={!manifest}
 
-          {/* BM.2 — Replicate to multiple markets */}
-          <TbBtn
-            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
-            title="Replicate to multiple markets"
-            onClick={() => setReplicateOpen(true)}
-            disabled={!manifest || !rows.length}
-            active={replicateOpen}
-          />
+          smartPasteEnabled={smartPasteEnabled}
+          onSmartPasteToggle={() => setSmartPasteEnabled((o) => !o)}
 
-          {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
-          <div className="relative">
-            <TbBtn
-              icon={<Download className="w-3.5 h-3.5" />}
-              title={`Pull from Amazon ${marketplace} — full attribute pull, undoable with ⌘Z. Does not touch the database until you click Save.`}
-              onClick={() => setPullPanelOpen((o) => !o)}
-              disabled={!manifest || pulling || !rows.length}
-              active={pullPanelOpen}
-            />
-            {pullPanelOpen && (
-              <PullFromAmazonPanel
-                selectedCount={selectedRows.size}
-                visibleCount={displayRows.length}
-                totalCount={rows.length}
-                currentMarket={marketplace}
-                pulling={pulling}
-                onPull={handlePullFromAmazon}
-                onClose={() => setPullPanelOpen(false)}
-              />
-            )}
-          </div>
+          showRowImages={showRowImages}
+          rowImageSize={imageSize as SharedRowImageSize}
+          rowImagesDisabled={!manifest}
+          onRowImagesToggle={() => setShowRowImages((o) => !o)}
+          onRowImageSizeChange={(s) => setImageSize(s)}
 
-          {/* Pull history — recent applied pulls + one-click re-pull */}
-          <TbBtn
-            icon={<History className="w-3.5 h-3.5" />}
-            title={`Pull history — review past pulls and re-run with same scope`}
-            onClick={() => setPullHistoryOpen(true)}
-            active={pullHistoryOpen}
-          />
-
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-
-          {/* FF.38 Validation toggle */}
-          <TbBtn
-            icon={<AlertTriangle className="w-3.5 h-3.5" />}
-            title={validErrorCount + validWarnCount > 0
-              ? `Validation: ${validErrorCount} error${validErrorCount !== 1 ? 's' : ''}, ${validWarnCount} warning${validWarnCount !== 1 ? 's' : ''}`
-              : 'Validation — no issues'}
-            onClick={() => setShowValidPanel((o) => !o)}
-            disabled={!manifest}
-            active={showValidPanel}
-            badge={(validErrorCount + validWarnCount) || undefined}
-          />
-
-          {/* FF.42 Smart paste toggle */}
-          <TbBtn
-            icon={<ClipboardPaste className="w-3.5 h-3.5" />}
-            title={smartPasteEnabled
-              ? 'Smart paste ON — first row treated as column headers when ≥2 columns match. Click to turn off.'
-              : 'Smart paste OFF — positional paste (default). Click to turn on header-mapping mode.'}
-            onClick={() => setSmartPasteEnabled((o) => !o)}
-            active={smartPasteEnabled}
-          />
-
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-
-          {/* IN.1 — Override badges toggle */}
-          <TbBtn
-            icon={<GitBranch className="w-3.5 h-3.5" />}
-            title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
-            onClick={() => setShowOverrideBadges((o) => !o)}
-            active={showOverrideBadges}
-          />
-
-          {/* IN.2 — Cascade buttons toggle */}
-          <TbBtn
-            icon={<GitFork className="w-3.5 h-3.5" />}
-            title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
-            onClick={() => setShowCascadeButtons((o) => !o)}
-            active={showCascadeButtons}
-          />
-
-          {/* IN.2 — Cascade: reset all visible rows back to master */}
-          <TbBtn
-            icon={<RotateCcw className="w-3.5 h-3.5" />}
-            title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
-            onClick={async () => {
-              const overrideRows = rows.filter(
-                (r) => {
-                  const fs = r._fieldStates as any
-                  return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
-                },
-              )
-              if (!overrideRows.length) return
-              const ids = overrideRows.map((r) => r._listingId as string).filter(Boolean)
-              await Promise.all(
-                ids.map((id) =>
-                  fetch(`${getBackendUrl()}/api/listings/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      followMasterPrice: true, followMasterTitle: true,
-                      followMasterDescription: true, followMasterQuantity: true,
-                      followMasterBulletPoints: true,
-                    }),
-                  }),
-                ),
-              )
-              void loadData(marketplace, productType, false, true)
-            }}
-            disabled={!rows.length}
-          />
-
-          {/* Row images toggle */}
-          <TbBtn
-            icon={<ImageIcon className="w-3.5 h-3.5" />}
-            title={showRowImages ? 'Hide product images' : 'Show product images in rows (fetches from Amazon by ASIN)'}
-            onClick={() => setShowRowImages((o) => !o)}
-            disabled={!manifest}
-            active={showRowImages}
-          />
-          {showRowImages && (
+          sortLevelCount={sortConfig.length}
+          sortPanelOpen={sortPanelOpen}
+          sortDisabled={!manifest || !rows.length}
+          onSortClick={() => setSortPanelOpen((o) => !o)}
+          sortPanel={
             <>
-              {([24, 32, 48, 64, 96] as const).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => setImageSize(size)}
-                  className={cn(
-                    'h-6 px-1.5 rounded text-[10px] font-medium transition-colors',
-                    imageSize === size
-                      ? 'bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900'
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
-                  )}
-                >
-                  {size === 24 ? 'XS' : size === 32 ? 'S' : size === 48 ? 'M' : size === 64 ? 'L' : 'XL'}
-                </button>
-              ))}
+              {sortPanelOpen && (
+                <SortPanel
+                  rows={rows} groups={orderedGroups} initial={sortConfig}
+                  onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
+                  onClose={() => setSortPanelOpen(false)}
+                  footerExtra={
+                    <div className="px-4 py-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                          Auto-sync to other markets
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleMarketSync(mp)}
+                          title={marketSync[mp]
+                            ? `ON — changes on ${mp} propagate automatically. Click to make ${mp} independent.`
+                            : `OFF — click to re-enable auto-propagation`}
+                          className={cn(
+                            'text-[10px] px-2 py-0.5 rounded font-medium transition-colors border',
+                            marketSync[mp]
+                              ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
+                              : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
+                          )}
+                        >
+                          {marketSync[mp] ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => { setSortPanelOpen(false); setApplyPanelOpen(true) }}
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium"
+                        >
+                          Apply to specific markets…
+                        </button>
+                      </div>
+                    </div>
+                  }
+                />
+              )}
+              {applyPanelOpen && (
+                <ApplyToPanel
+                  currentMarket={mp}
+                  allMarkets={ALL_MARKETS}
+                  marketSync={marketSync}
+                  onToggleSync={toggleMarketSync}
+                  onApplyNow={applyOrderToMarkets}
+                  onClose={() => setApplyPanelOpen(false)}
+                />
+              )}
             </>
-          )}
+          }
 
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+          findReplaceOpen={findReplaceOpen}
+          onFindReplaceClick={() => setFindReplaceOpen((o) => !o)}
+          findReplaceDisabled={!manifest}
 
-          {/* Sort */}
-          <div className="relative">
-            <TbBtn
-              icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
-              title={sortConfig.length > 0
-                ? `Sort — ${sortConfig.length} level${sortConfig.length !== 1 ? 's' : ''} active`
-                : 'Sort rows'}
-              onClick={() => setSortPanelOpen((o) => !o)}
-              disabled={!manifest || !rows.length}
-              active={sortPanelOpen || sortConfig.length > 0}
-              badge={sortConfig.length || undefined}
-            />
-            {sortPanelOpen && (
-              <SortPanel
-                rows={rows} groups={orderedGroups} initial={sortConfig}
-                onApply={(levels) => { setSortConfig(levels); setSortPanelOpen(false) }}
-                onClose={() => setSortPanelOpen(false)}
-                footerExtra={
-                  <div className="px-4 py-3 space-y-2">
-                    {/* Sync toggle for current market */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                        Auto-sync to other markets
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleMarketSync(mp)}
-                        title={marketSync[mp]
-                          ? `ON — changes on ${mp} propagate automatically. Click to make ${mp} independent.`
-                          : `OFF — click to re-enable auto-propagation`}
-                        className={cn(
-                          'text-[10px] px-2 py-0.5 rounded font-medium transition-colors border',
-                          marketSync[mp]
-                            ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
-                            : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700',
-                        )}
-                      >
-                        {marketSync[mp] ? 'ON' : 'OFF'}
-                      </button>
-                    </div>
-                    {/* Apply-to section */}
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => { setSortPanelOpen(false); setApplyPanelOpen(true) }}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium"
-                      >
-                        Apply to specific markets…
-                      </button>
-                    </div>
-                  </div>
-                }
-              />
-            )}
-          </div>
-          {/* Apply-to panel (opened from inside sort panel) */}
-          {applyPanelOpen && (
-            <div className="relative">
-              <ApplyToPanel
-                currentMarket={mp}
-                allMarkets={ALL_MARKETS}
-                marketSync={marketSync}
-                onToggleSync={toggleMarketSync}
-                onApplyNow={applyOrderToMarkets}
-                onClose={() => setApplyPanelOpen(false)}
-              />
-            </div>
-          )}
+          conditionalEnabledCount={cfRules.filter((r) => r.enabled).length}
+          conditionalOpen={cfOpen}
+          onConditionalClick={() => setCfOpen((o) => !o)}
+          conditionalDisabled={!manifest}
 
-          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
+          aiBulkSelectedCount={selectedRows.size}
+          aiBulkDisabled={!manifest}
+          onAiBulkClick={() => setAiModalOpen(true)}
 
-          {/* BF.1 — Find & Replace */}
-          <TbBtn
-            icon={<Replace className="w-3.5 h-3.5" />}
-            title="Find & Replace (⌘F)"
-            onClick={() => setFindReplaceOpen((o) => !o)}
-            disabled={!manifest}
-            active={findReplaceOpen}
-          />
+          aiAssistantOpen={aiPanelOpen}
+          onAiAssistantClick={manifest ? () => setAiPanelOpen((o) => !o) : undefined}
 
-          {/* BF.2 — Conditional formatting */}
-          <TbBtn
-            icon={<Sparkles className="w-3.5 h-3.5" />}
-            title={cfRules.length > 0 ? `Conditional formatting (${cfRules.filter(r => r.enabled).length} active)` : 'Conditional formatting'}
-            onClick={() => setCfOpen((o) => !o)}
-            disabled={!manifest}
-            active={cfOpen}
-            badge={cfRules.filter(r => r.enabled).length || undefined}
-          />
-
-          {/* BF.4 — AI bulk actions */}
-          <TbBtn
-            icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />}
-            title={selectedRows.size > 0 ? `AI bulk actions (${selectedRows.size} selected)` : 'AI bulk actions — select rows first'}
-            onClick={() => setAiModalOpen(true)}
-            disabled={selectedRows.size === 0 || !manifest}
-            badge={selectedRows.size || undefined}
-          />
-
-          {/* A4.1 — AI assistant panel */}
-          {manifest && (
+          slotAfterReplicate={
             <>
-              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
-              <TbBtn
-                icon={<BrainCircuit className="w-3.5 h-3.5 text-violet-500" />}
-                title={aiPanelOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
-                onClick={() => setAiPanelOpen((o) => !o)}
-                active={aiPanelOpen}
+              {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
+              <div className="relative">
+                <SharedTbBtn
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  title={`Pull from Amazon ${marketplace} — full attribute pull, undoable with ⌘Z. Does not touch the database until you click Save.`}
+                  onClick={() => setPullPanelOpen((o) => !o)}
+                  disabled={!manifest || pulling || !rows.length}
+                  active={pullPanelOpen}
+                />
+                {pullPanelOpen && (
+                  <PullFromAmazonPanel
+                    selectedCount={selectedRows.size}
+                    visibleCount={displayRows.length}
+                    totalCount={rows.length}
+                    currentMarket={marketplace}
+                    pulling={pulling}
+                    onPull={handlePullFromAmazon}
+                    onClose={() => setPullPanelOpen(false)}
+                  />
+                )}
+              </div>
+              {/* Pull history — recent applied pulls + one-click re-pull */}
+              <SharedTbBtn
+                icon={<History className="w-3.5 h-3.5" />}
+                title="Pull history — review past pulls and re-run with same scope"
+                onClick={() => setPullHistoryOpen(true)}
+                active={pullHistoryOpen}
               />
             </>
-          )}
-        </div>
+          }
+
+          slotAfterSmartPaste={
+            <>
+              {/* IN.1 — Override badges toggle */}
+              <SharedTbBtn
+                icon={<GitBranch className="w-3.5 h-3.5" />}
+                title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
+                onClick={() => setShowOverrideBadges((o) => !o)}
+                active={showOverrideBadges}
+              />
+              {/* IN.2 — Cascade buttons toggle */}
+              <SharedTbBtn
+                icon={<GitFork className="w-3.5 h-3.5" />}
+                title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
+                onClick={() => setShowCascadeButtons((o) => !o)}
+                active={showCascadeButtons}
+              />
+              {/* IN.2 — Cascade: reset all visible rows back to master */}
+              <SharedTbBtn
+                icon={<RotateCcw className="w-3.5 h-3.5" />}
+                title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
+                onClick={async () => {
+                  const overrideRows = rows.filter((r) => {
+                    const fs = r._fieldStates as any
+                    return fs && Object.values(fs).some((v) => v === 'OVERRIDE')
+                  })
+                  if (!overrideRows.length) return
+                  const ids = overrideRows.map((r) => r._listingId as string).filter(Boolean)
+                  await Promise.all(
+                    ids.map((id) =>
+                      fetch(`${getBackendUrl()}/api/listings/${id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          followMasterPrice: true, followMasterTitle: true,
+                          followMasterDescription: true, followMasterQuantity: true,
+                          followMasterBulletPoints: true,
+                        }),
+                      }),
+                    ),
+                  )
+                  void loadData(marketplace, productType, false, true)
+                }}
+                disabled={!rows.length}
+              />
+            </>
+          }
+        />
 
         {/* ── Bar 3: Marketplace · Product type · Search ────── */}
         <div className="px-3 py-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-wrap">
@@ -5320,43 +5238,10 @@ function DraggableValueList({
   )
 }
 
-// ── TbBtn ──────────────────────────────────────────────────────────────
-// Compact icon button for the icon toolbar. Shows a badge count when
-// badge > 0. Tooltip via the native title attribute.
-
-interface TbBtnProps {
-  icon: React.ReactNode
-  title: string
-  onClick?: () => void
-  disabled?: boolean
-  active?: boolean
-  badge?: number
-}
-
-function TbBtn({ icon, title, onClick, disabled, active, badge }: TbBtnProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={cn(
-        'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-        active
-          ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
-        'disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent dark:disabled:hover:bg-transparent disabled:hover:text-slate-600',
-      )}
-    >
-      {icon}
-      {badge != null && badge > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold bg-blue-500 text-white rounded-full flex items-center justify-center leading-none pointer-events-none">
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
-    </button>
-  )
-}
+// TbBtn moved to ../_shared/FlatFileIconToolbar.tsx in Phase B. The
+// toolbar block in this file now consumes FlatFileIconToolbar and the
+// shared SharedTbBtn primitive for any Amazon-specific buttons it
+// renders inside its slot props.
 
 // ── TranslateTabContent ────────────────────────────────────────────────
 
