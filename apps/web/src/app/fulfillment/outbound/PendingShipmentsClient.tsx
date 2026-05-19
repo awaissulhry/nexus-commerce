@@ -9,10 +9,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Truck, Search, RefreshCw, Crown, AlertTriangle, Clock, Package, X, Plus,
+  Truck, Search, Crown, AlertTriangle, Clock, Package, X, Plus,
   Bookmark, BookmarkPlus, ChevronDown, Trash2, Star, ArrowRight, Sparkles,
-  Bell, BellOff, Download,
+  Bell, BellOff, Download, Keyboard,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -134,6 +143,20 @@ export default function PendingShipmentsClient() {
   const sort = (params.get('sort') as 'ship-by-asc' | 'value-desc' | 'age-desc' | null) ?? 'ship-by-asc'
 
   const [data, setData] = useState<Response | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('outbound-pending.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('outbound-pending.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('outbound-pending.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('outbound-pending.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -474,6 +497,7 @@ export default function PendingShipmentsClient() {
         const items: Array<{ isActive: boolean }> = carriersData.items ?? []
         setCarrierConnected(items.some((c) => c.isActive))
       }
+      setLastFetchedAt(Date.now())
     } catch (e) {
       toast.error(t('outbound.pending.toast.loadFailed'))
     } finally {
@@ -878,11 +902,25 @@ export default function PendingShipmentsClient() {
               </div>
             )
           })()}
+          <SharedDensityToggle density={density} onChange={setDensity} />
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
           <button
-            onClick={fetchData}
-            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
           >
-            <RefreshCw size={12} /> {t('common.refresh')}
+            <Keyboard size={12} />
           </button>
         </div>
       </div>
@@ -1275,9 +1313,40 @@ export default function PendingShipmentsClient() {
           t={t}
         />
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={PENDING_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const PENDING_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['r'], label: 'Refresh data' },
+      { keys: ['Esc'], label: 'Clear search · drop selection' },
+    ],
+  },
+  {
+    title: 'Urgency filter',
+    rows: [
+      { keys: ['1'], label: 'Overdue' },
+      { keys: ['2'], label: 'Today' },
+      { keys: ['3'], label: 'Tomorrow' },
+      { keys: ['0'], label: 'All' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 // O.69: bulk-create preflight modal. Renders the per-order
 // readiness report; ready orders show as a compact green pill,

@@ -11,10 +11,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Truck, Search, RefreshCw, Printer, ExternalLink, X, CheckCircle2,
+  Truck, Search, Printer, ExternalLink, X, CheckCircle2,
   AlertTriangle, Send, Download, RotateCcw, Trash, Pause, Play,
-  Copy,
+  Copy, Keyboard,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -100,6 +109,20 @@ export default function ShipmentsClient() {
   // subsequent edits flow through the input → state path.
   const [search, setSearch] = useState(() => params.get('search') ?? '')
   const [items, setItems] = useState<Shipment[]>([])
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('outbound-shipments.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('outbound-shipments.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('outbound-shipments.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('outbound-shipments.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [carriers, setCarriers] = useState<Array<{ code: string; isActive: boolean }>>([])
@@ -114,6 +137,7 @@ export default function ShipmentsClient() {
       if (res.ok) {
         const data = await res.json()
         setItems(data.items ?? [])
+        setLastFetchedAt(Date.now())
       }
     } finally { setLoading(false) }
   }, [statusFilter, search])
@@ -505,8 +529,25 @@ export default function ShipmentsClient() {
               className="pl-7 w-56"
             />
           </div>
-          <button onClick={fetchShipments} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-            <RefreshCw size={12} /> {t('common.refresh')}
+          <SharedDensityToggle density={density} onChange={setDensity} />
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchShipments}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchShipments}
+            loading={loading}
+          />
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
           </button>
         </div>
       </div>
@@ -701,6 +742,28 @@ export default function ShipmentsClient() {
           </div>
         </Card>
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={SHIPMENTS_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const SHIPMENTS_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['r'], label: 'Refresh data' },
+      { keys: ['Esc'], label: 'Clear selection' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
