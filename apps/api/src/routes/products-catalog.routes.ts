@@ -7,6 +7,30 @@ import { enqueueContentSyncForProduct } from '../services/content-auto-publish.s
 import { listEtag, matches } from '../utils/list-etag.js'
 import { computeLocaleCompleteness } from '../services/translation-completeness.service.js'
 import { deriveSyncStatus, ACTIVE_CHANNELS } from '../services/sync-status.service.js'
+import { productReadCacheService } from '../services/product-read-cache.service.js'
+import { logger } from '../utils/logger.js'
+
+// ProductReadCache (ES.3) mirrors Product into a flat row used by the
+// /products grid. Every mutation here must refresh the affected rows
+// or the grid renders stale data — the symptom that surfaced as
+// "Duplicate doesn't work" (new Product was created, cache had no
+// matching row, grid never showed it). Fire-and-forget with one
+// upsert per id; failure logs but doesn't fail the operator action,
+// because the DB write already succeeded.
+async function refreshCacheRows(productIds: readonly string[]): Promise<void> {
+  if (productIds.length === 0) return
+  const unique = Array.from(new Set(productIds))
+  await Promise.all(
+    unique.map((id) =>
+      productReadCacheService.refresh(id).catch((err) => {
+        logger.warn('[products-catalog] cache refresh failed', {
+          productId: id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }),
+    ),
+  )
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // PRODUCTS REBUILD C.2 — catalog browse extensions
@@ -970,6 +994,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // and pushes to channels. We don't fire BullMQ here because (a)
       // it'd be a separate detached await per queueId and (b) the cron
       // is the source of truth for retries anyway.
+      // Cache mirror — refresh every id we touched (errors[] is small).
+      await refreshCacheRows(
+        productIds.filter((id) => !errors.some((e) => e.id === id)),
+      )
       return {
         ok: errors.length === 0,
         updated,
@@ -1011,6 +1039,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           }),
         )
       }
+      // F.1 — keep ProductReadCache in sync so the new rows appear
+      // on /products immediately. Without this the create commits but
+      // the grid (which reads from cache) keeps showing the old list.
+      await refreshCacheRows(cloned.map((c) => c.id))
       return { ok: true, created: cloned.length, products: cloned.map((c) => ({ id: c.id, sku: c.sku })) }
     } catch (err: any) {
       fastify.log.error({ err }, '[bulk-duplicate] failed')
@@ -1241,6 +1273,8 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         void enqueueContentSyncForProduct(id)
       }
 
+      await refreshCacheRows([id])
+
       return {
         ...updated,
         basePrice: Number(updated.basePrice),
@@ -1407,6 +1441,9 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      await refreshCacheRows(
+        productIds.filter((id) => !errors.some((e) => e.id === id)),
+      )
       return {
         ok: errors.length === 0,
         updated: Math.max(stockUpdated, thresholdUpdated),
@@ -1500,6 +1537,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       // The helper sends its own 400 on validation; if we got here with
       // an undefined return, the reply is already mailed.
       if (r === undefined) return
+      await refreshCacheRows(productIds)
       return { ok: true, ...r }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -1512,6 +1550,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
       const r = await flipDeletedAt(productIds, null, request, reply)
       if (r === undefined) return
+      await refreshCacheRows(productIds)
       return { ok: true, ...r }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -1958,6 +1997,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         return { changed: updated.count, snapshotted: rows.length }
       })
 
+      await refreshCacheRows(productIds)
       return { ok: true, ...result }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })

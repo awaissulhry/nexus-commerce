@@ -995,6 +995,18 @@ function BulkAvailabilityModal({
       }
       const { upserted } = await res.json()
       toast({ tone: 'success', title: `${upserted} listing${upserted !== 1 ? 's' : ''} ${offerActive ? 'activated' : 'paused'}` })
+      // Surface the listing flip on /products + every other open page.
+      // Without the invalidation the modal would close but the grid's
+      // channelCount / coverage badges would stay stale until the next
+      // 30s poll.
+      emitInvalidation({
+        type: 'listing.updated',
+        meta: { productIds, source: 'bulk-offer-availability', upserted, offerActive },
+      })
+      emitInvalidation({
+        type: 'product.updated',
+        meta: { productIds, source: 'bulk-offer-availability' },
+      })
       onComplete()
     } catch (e: any) {
       toast({ tone: 'error', title: 'Failed', description: e?.message ?? String(e) })

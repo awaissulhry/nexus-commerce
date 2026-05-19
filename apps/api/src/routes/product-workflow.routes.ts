@@ -49,6 +49,7 @@ import {
   slaState,
 } from '../services/workflow.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
+import { productReadCacheService } from '../services/product-read-cache.service.js'
 
 const productWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
   // ── attach / detach ─────────────────────────────────────────
@@ -319,6 +320,19 @@ const productWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
           error: err?.message ?? String(err),
         })
       }
+    }
+
+    // ProductReadCache mirrors workflowStageId; refresh changed rows
+    // so the /products grid reflects the new stage immediately.
+    const changedIds = results
+      .filter((r) => r.changed)
+      .map((r) => r.productId)
+    if (changedIds.length > 0) {
+      await Promise.all(
+        changedIds.map((id) =>
+          productReadCacheService.refresh(id).catch(() => undefined),
+        ),
+      )
     }
 
     return {

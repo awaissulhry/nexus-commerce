@@ -28,6 +28,7 @@ import { familyHierarchyService } from '../services/family-hierarchy.service.js'
 import { familyCompletenessService } from '../services/family-completeness.service.js'
 import { channelReadinessService } from '../services/channel-readiness.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
+import { productReadCacheService } from '../services/product-read-cache.service.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const MAX_DEPTH = 8
@@ -628,6 +629,14 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
     if (auditRows.length > 0) {
       void auditLogService.writeMany(auditRows)
     }
+
+    // ProductReadCache mirrors familyId; refresh so the /products grid
+    // reflects the new family pill without waiting for the polled list.
+    await Promise.all(
+      products.map((p) =>
+        productReadCacheService.refresh(p.id).catch(() => undefined),
+      ),
+    )
 
     const skipped = body.productIds.length - products.length
     const noOpCount = products.length - auditRows.length
