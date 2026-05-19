@@ -1662,6 +1662,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         let listings = 0
         let stockLogs = 0
         let fbaShipmentItems = 0
+        let listingWizards = 0
         if (ids.length > 0) {
           productImages = (
             await tx.productImage.deleteMany({ where: productIdFilter })
@@ -1675,6 +1676,17 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             .count
           fbaShipmentItems = (
             await tx.fBAShipmentItem.deleteMany({ where: productIdFilter })
+          ).count
+          // ListingWizard has onDelete:Cascade in the Prisma schema, but
+          // an inconsistency in production showed orphan wizard rows
+          // after Product hard-deletes (cause: DB FK ON DELETE NO ACTION
+          // due to migration drift, or a SQL path that bypassed the
+          // FK). Explicit deleteMany here is belt-and-braces — if the
+          // cascade fires it's a no-op; if not, we kill the wizard
+          // rows before /products/drafts trips on a required-relation
+          // include returning null.
+          listingWizards = (
+            await tx.listingWizard.deleteMany({ where: productIdFilter })
           ).count
         }
         const products =
@@ -1699,6 +1711,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             listings,
             stockLogs,
             fbaShipmentItems,
+            listingWizards,
             cacheRows: cacheRows.count,
           },
         }

@@ -2794,6 +2794,31 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // F.1 — POST /api/admin/cleanup-product-orphans
+  // One-shot cleanup of FK-orphan rows that point to deleted Products.
+  // The bulk-hard-delete cascade now handles these forward, but rows
+  // that leaked from earlier purges (when the cascade missed
+  // ListingWizard, or when a SQL path bypassed the FK) still trip up
+  // any endpoint that uses a required-relation include — most visibly
+  // /products/drafts, which 500'd with "Field product is required to
+  // return data, got null instead". Safe to re-run; deletes zero rows
+  // after the first successful call.
+  fastify.post(
+    '/admin/cleanup-product-orphans',
+    { config: { rateLimit: { max: 2, timeWindow: '1 minute' } } },
+    async (_request, reply) => {
+      try {
+        const wizards = await prisma.$executeRaw`
+          DELETE FROM "ListingWizard"
+          WHERE "productId" NOT IN (SELECT id FROM "Product")
+        `
+        return { ok: true, listingWizardsDeleted: wizards }
+      } catch (err: any) {
+        return reply.code(500).send({ error: err?.message ?? String(err) })
+      }
+    },
+  )
+
   // ── D.4: CSV / XLSX bulk upload ────────────────────────────────
   // PP — Single-product create wizard endpoint.
   //

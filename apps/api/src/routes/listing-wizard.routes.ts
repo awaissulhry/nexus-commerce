@@ -390,24 +390,12 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           orderBy: { createdAt: 'asc' },
           select: { createdAt: true },
         }),
+        // Avoid Prisma's nested include on `product` — required relation
+        // can have orphans after a hard-delete that bypassed the FK
+        // cascade. Same two-step join pattern as the drafts list.
         prisma.listingWizard.findMany({
           where: { status: 'DRAFT', currentStep: 9 },
-          select: {
-            productId: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-                basePrice: true,
-                brand: true,
-                productType: true,
-                description: true,
-                gtin: true,
-                upc: true,
-                ean: true,
-              },
-            },
-          },
+          select: { productId: true },
         }),
       ])
 
@@ -416,20 +404,36 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // /drafts list endpoint; kept inline to stay independent.
       let ready = 0
       if (readyCandidates.length > 0) {
-        const ids = readyCandidates
-          .map((w) => w.product?.id)
-          .filter((x): x is string => !!x)
+        // Two-step product fetch + image counts, both keyed on
+        // productId. Orphan wizards drop out at the map lookup.
+        const candidateIds = readyCandidates.map((w) => w.productId)
+        const [products, imageGroups] = await Promise.all([
+          prisma.product.findMany({
+            where: { id: { in: candidateIds } },
+            select: {
+              id: true,
+              name: true,
+              basePrice: true,
+              brand: true,
+              productType: true,
+              description: true,
+              gtin: true,
+              upc: true,
+              ean: true,
+            },
+          }),
+          prisma.productImage.groupBy({
+            by: ['productId'],
+            where: { productId: { in: candidateIds } },
+            _count: { _all: true },
+          }),
+        ])
+        const productById = new Map(products.map((p) => [p.id, p] as const))
         const imageCounts = new Map(
-          (
-            await prisma.productImage.groupBy({
-              by: ['productId'],
-              where: { productId: { in: ids } },
-              _count: { _all: true },
-            })
-          ).map((r) => [r.productId, r._count._all] as const),
+          imageGroups.map((r) => [r.productId, r._count._all] as const),
         )
         for (const w of readyCandidates) {
-          const p = w.product
+          const p = productById.get(w.productId)
           if (!p) continue
           const passes = [
             !!p.name &&
@@ -534,8 +538,17 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Wizard rows.
-      const wizardRows = includeWizards
+      // Wizard rows. We deliberately DO NOT use Prisma's nested
+      // include for `product` here: ListingWizard.product is a
+      // required relation in the schema (`Product` not `Product?`),
+      // so when a wizard's Product was hard-deleted without the
+      // cascade firing (or via a SQL path that bypassed the FK), the
+      // include path panics with "Field product is required to
+      // return data, got null instead" — the literal 500 the
+      // operator saw on /products/drafts. Two-step join is bulletproof
+      // against that drift: orphan wizards simply drop out at the
+      // merge step.
+      const rawWizardRows = includeWizards
         ? await prisma.listingWizard.findMany({
             where: wizardWhere,
             orderBy: { updatedAt: 'desc' },
@@ -552,27 +565,38 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               channels: true,
               createdAt: true,
               updatedAt: true,
-              // DR-S.2 — Product fields needed for completeness scoring,
-              // pulled inline so we don't need a second round-trip per
-              // wizard row.
-              product: {
-                select: {
-                  id: true,
-                  sku: true,
-                  name: true,
-                  isParent: true,
-                  basePrice: true,
-                  brand: true,
-                  productType: true,
-                  description: true,
-                  gtin: true,
-                  upc: true,
-                  ean: true,
-                },
-              },
             },
           })
         : []
+      const wizardProductMap =
+        rawWizardRows.length > 0
+          ? new Map(
+              (
+                await prisma.product.findMany({
+                  where: { id: { in: rawWizardRows.map((w) => w.productId) } },
+                  select: {
+                    id: true,
+                    sku: true,
+                    name: true,
+                    isParent: true,
+                    basePrice: true,
+                    brand: true,
+                    productType: true,
+                    description: true,
+                    gtin: true,
+                    upc: true,
+                    ean: true,
+                  },
+                })
+              ).map((p) => [p.id, p] as const),
+            )
+          : new Map()
+      // Orphan wizards (productId points to a deleted/missing Product)
+      // drop out here. Logged at debug level so we have visibility if
+      // drift accumulates again.
+      const wizardRows = rawWizardRows
+        .filter((w) => wizardProductMap.has(w.productId))
+        .map((w) => ({ ...w, product: wizardProductMap.get(w.productId)! }))
 
       type DraftRow = {
         kind: 'wizard' | 'product'
