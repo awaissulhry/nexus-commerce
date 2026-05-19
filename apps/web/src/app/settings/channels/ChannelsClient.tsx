@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ShoppingBag, Plug, AlertCircle, CheckCircle2 } from 'lucide-react'
+import Link from 'next/link'
+import { ShoppingBag, Plug, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -349,27 +350,43 @@ export function ChannelsClient() {
                     </p>
                   </div>
                 </div>
-                {isConnected && connection?.isManagedBy === 'env' ? (
-                  <Badge variant="info" size="md">
-                    Env-managed
-                  </Badge>
-                ) : isConnected ? (
-                  <Badge variant="success" size="md">
-                    Connected
-                  </Badge>
-                ) : connection?.isManagedBy === 'pending' ? (
-                  <Badge variant="default" size="md">
-                    Coming soon
-                  </Badge>
-                ) : connection?.isManagedBy === 'env' ? (
-                  <Badge variant="danger" size="md">
-                    Misconfigured
-                  </Badge>
-                ) : (
-                  <Badge variant="default" size="md">
-                    Not connected
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {isConnected && connection?.isManagedBy === 'env' ? (
+                    <Badge variant="info" size="md">
+                      Env-managed
+                    </Badge>
+                  ) : isConnected ? (
+                    <Badge variant="success" size="md">
+                      Connected
+                    </Badge>
+                  ) : connection?.isManagedBy === 'pending' ? (
+                    <Badge variant="default" size="md">
+                      Coming soon
+                    </Badge>
+                  ) : connection?.isManagedBy === 'env' ? (
+                    <Badge variant="danger" size="md">
+                      Misconfigured
+                    </Badge>
+                  ) : (
+                    <Badge variant="default" size="md">
+                      Not connected
+                    </Badge>
+                  )}
+                  {/* Phase F.4 — deep-view entry point. Only shown when
+                      the connector is real (oauth or env). Pending
+                      channels skip the link since the detail page would
+                      only repeat "not connected yet". */}
+                  {connection?.isManagedBy !== 'pending' && (
+                    <Link
+                      href={`/settings/channels/${channel.type.toLowerCase()}`}
+                      className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:underline"
+                      aria-label={`Open ${channel.name} details`}
+                    >
+                      Details
+                      <ArrowRight size={11} />
+                    </Link>
+                  )}
+                </div>
               </div>
 
               {isConnected && connection && (
