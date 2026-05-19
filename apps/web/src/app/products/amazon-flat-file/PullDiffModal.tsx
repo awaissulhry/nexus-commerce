@@ -22,41 +22,17 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
-
-type PullGroupId = 'content' | 'pricing' | 'stock' | 'images' | 'variations' | 'other'
+import {
+  GROUP_BADGE_CLASS,
+  GROUP_LABEL,
+  pullFieldGroup,
+  type PullGroupId,
+} from '../_shared/pull-field-groups'
 
 interface Row {
   _rowId: string
   _dirty?: boolean
   [key: string]: unknown
-}
-
-function pullFieldGroup(field: string): PullGroupId {
-  if (field === 'item_name' || field === 'product_description' || field === 'generic_keyword' || field === 'brand' || field === 'color') return 'content'
-  if (/^bullet_point(_\d+)?$/.test(field)) return 'content'
-  if (field.startsWith('purchasable_offer')) return 'pricing'
-  if (field.startsWith('fulfillment_availability')) return 'stock'
-  if (field === 'main_product_image_locator' || /image_locator(_\d+)?$/.test(field)) return 'images'
-  if (field === 'parentage_level' || field === 'parent_sku' || field === 'variation_theme') return 'variations'
-  return 'other'
-}
-
-const GROUP_LABEL: Record<PullGroupId, string> = {
-  content:    'Content',
-  pricing:    'Pricing',
-  stock:      'Stock',
-  images:     'Images',
-  variations: 'Variations',
-  other:      'Other',
-}
-
-const GROUP_BADGE_CLASS: Record<PullGroupId, string> = {
-  content:    'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-  pricing:    'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-  stock:      'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-  images:     'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300',
-  variations: 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300',
-  other:      'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 }
 
 interface FieldChange {

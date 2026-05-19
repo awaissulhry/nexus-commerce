@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, ExternalLink, GitBranch, GitFork, Loader2, Search, Send, X,
+  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, Loader2, RefreshCw, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -20,6 +20,8 @@ import {
   EBAY_FIXED_GROUPS, MARKET_COLUMN_GROUPS, buildCategoryColumns,
   type CategoryAspect, type EbayColumnGroup,
 } from './ebay-columns'
+import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
+import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -275,6 +277,20 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [fetching, setFetching]               = useState(false)
   const [fetchPanelOpen, setFetchPanelOpen]   = useState(false)
 
+  // ── Phase 3: Pull from eBay (full pull → diff preview → apply) ──────
+  const [pullPanelOpen, setPullPanelOpen]     = useState(false)
+  const [pulling, setPulling]                 = useState(false)
+  const [pullProgress, setPullProgress]       = useState<{ progress: number; total: number } | null>(null)
+  const [pullResult, setPullResult]           = useState<{ pulled: number; skipped: number; failed: number } | null>(null)
+  const [pullDiffOpen, setPullDiffOpen]       = useState(false)
+  const [pullDiffData, setPullDiffData]       = useState<{
+    pulledRows: BaseRow[]
+    selectedColumns: 'all' | PullGroupId[]
+    skusRequested: string[]
+    skusReturned: number
+    jobId: string
+  } | null>(null)
+
   // IN.2 — Cascade button toggle (default on, shared localStorage key with Amazon)
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
     try { return localStorage.getItem('ff-show-cascade') !== '0' } catch { return true }
@@ -457,6 +473,130 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       setFetchPanelOpen(false)
     }
   }
+
+  // ── Pull from eBay (Phase 3) ──────────────────────────────────────────
+  // Async pull job. Receives the SKU list + column-group filter from
+  // the PullFromEbayPanel, polls the backend until done, then stashes
+  // results in pullDiffData so renderModals can show PullDiffModal.
+  const startPullJob = useCallback(async (opts: {
+    skus: string[]
+    columns: 'all' | PullGroupId[]
+  }) => {
+    if (!opts.skus.length) {
+      toast.error('No SKUs to pull')
+      return
+    }
+
+    setPullPanelOpen(false)
+    setPulling(true)
+    setPullProgress({ progress: 0, total: opts.skus.length })
+    setPullResult(null)
+
+    try {
+      const startRes = await fetch(`${BACKEND}/api/ebay/flat-file/pull-preview/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplace, skus: opts.skus }),
+      })
+      const startData = await startRes.json()
+      if (!startRes.ok) throw new Error(startData.error ?? 'Pull failed to start')
+      const { jobId } = startData
+
+      let job: any = null
+      for (let i = 0; i < 1200; i++) {
+        await new Promise((r) => setTimeout(r, 1500))
+        const statusRes = await fetch(`${BACKEND}/api/ebay/flat-file/pull-preview/status/${jobId}`)
+        if (!statusRes.ok) throw new Error('Pull status check failed')
+        job = await statusRes.json()
+        setPullProgress({ progress: job.progress, total: job.total })
+        if (job.status === 'done' || job.status === 'failed') break
+      }
+
+      if (!job || job.status !== 'done') {
+        throw new Error(job?.fatalError ?? 'Pull timed out')
+      }
+
+      const pulledRows: BaseRow[] = Array.isArray(job.rows) ? job.rows : []
+      setPullDiffData({
+        pulledRows,
+        selectedColumns: opts.columns,
+        skusRequested: opts.skus,
+        skusReturned: pulledRows.length,
+        jobId,
+      })
+      setPullDiffOpen(true)
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Pull from eBay failed')
+    } finally {
+      setPulling(false)
+      setPullProgress(null)
+    }
+  }, [BACKEND, marketplace, toast])
+
+  // Apply selection from PullDiffModal — runs inside the renderModals
+  // slot so it can use slot-provided rows/setRows/pushHistory. The
+  // callback factory below is invoked from there.
+  const makePullDiffApplyHandler = useCallback((
+    rows: BaseRow[],
+    setRows: React.Dispatch<React.SetStateAction<BaseRow[]>>,
+    pushHistory: (r: BaseRow[]) => void,
+  ) => async (result: PullDiffApplyResult) => {
+    if (!pullDiffData) return
+
+    const { pulledRows, selectedColumns, skusRequested, skusReturned, jobId } = pullDiffData
+    const bySku = new Map<string, BaseRow>()
+    for (const r of pulledRows) bySku.set(String((r as any).item_sku ?? (r as any).sku ?? ''), r)
+
+    const selectedSet = new Set(result.selectedRowIds)
+    const isAllColumns = selectedColumns === 'all'
+    const groupFilter = new Set(isAllColumns ? [] : (selectedColumns as PullGroupId[]))
+
+    const next: BaseRow[] = rows.map((row) => {
+      if (!selectedSet.has(String(row._rowId))) return row
+      const sku = String((row as any).sku ?? '')
+      const pulled = bySku.get(sku)
+      if (!pulled) return row
+
+      const merged: BaseRow = { ...row }
+      let changed = false
+      for (const [k, v] of Object.entries(pulled)) {
+        if (k.startsWith('_')) continue
+        if (k === 'item_sku') continue  // eBay uses 'sku', not 'item_sku'
+        if (!isAllColumns && !groupFilter.has(pullFieldGroup(k))) continue
+        if ((merged as any)[k] === v) continue
+        ;(merged as any)[k] = v
+        changed = true
+      }
+      if (changed) merged._dirty = true
+      return changed ? merged : row
+    })
+
+    pushHistory(next)
+    setRows(next)
+
+    setPullResult({
+      pulled: result.selectedRowIds.length,
+      skipped: skusReturned - result.selectedRowIds.length,
+      failed: 0,
+    })
+    setTimeout(() => setPullResult(null), 10000)
+    setPullDiffOpen(false)
+    setPullDiffData(null)
+
+    void fetch(`${BACKEND}/api/ebay/flat-file/pull-preview/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        marketplace,
+        skusRequested,
+        skusReturned,
+        columnsApplied: isAllColumns ? ['all'] : result.groupsApplied,
+        rowsApplied: result.selectedRowIds.length,
+        fieldsApplied: result.fieldsApplied,
+      }),
+    }).catch(() => { /* best-effort */ })
+  }, [pullDiffData, marketplace, BACKEND])
 
   // ── API: import from Amazon ────────────────────────────────────────────
 
@@ -647,42 +787,99 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
   const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setFetchPanelOpen((o) => !o)}
-        disabled={selectedRows.size === 0 || fetching}
-        title={selectedRows.size > 0 ? `Fetch from eBay (${selectedRows.size} SKU${selectedRows.size !== 1 ? 's' : ''})` : 'Fetch from eBay — select rows first'}
-        className={cn(
-          'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-          fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
-          'disabled:opacity-40 disabled:cursor-default',
-        )}
-      >
-        {fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
-      </button>
-      {fetchPanelOpen && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 space-y-2">
-          <p className="text-xs text-slate-600 dark:text-slate-400">
-            Fetch live listing data from eBay for {selectedRows.size} selected SKU{selectedRows.size !== 1 ? 's' : ''}. Overwrites title, condition, images, and aspects.
-          </p>
-          <div className="flex gap-2">
-            <button type="button"
-              onClick={() => void handleFetchFromEbay(rows, selectedRows, setRows, pushHistory)}
-              className="flex-1 h-7 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700">
-              Fetch now
-            </button>
-            <button type="button" onClick={() => setFetchPanelOpen(false)}
-              className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
-              Cancel
-            </button>
+    <>
+      {/* Existing lightweight Fetch (legacy, calls /api/ebay/flat-file/fetch) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setFetchPanelOpen((o) => !o)}
+          disabled={selectedRows.size === 0 || fetching}
+          title={selectedRows.size > 0 ? `Fetch from eBay (${selectedRows.size} SKU${selectedRows.size !== 1 ? 's' : ''})` : 'Fetch from eBay — select rows first'}
+          className={cn(
+            'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
+            fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+            'disabled:opacity-40 disabled:cursor-default',
+          )}
+        >
+          {fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
+        </button>
+        {fetchPanelOpen && (
+          <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 space-y-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Fetch live listing data from eBay for {selectedRows.size} selected SKU{selectedRows.size !== 1 ? 's' : ''}. Overwrites title, condition, images, and aspects.
+            </p>
+            <div className="flex gap-2">
+              <button type="button"
+                onClick={() => void handleFetchFromEbay(rows, selectedRows, setRows, pushHistory)}
+                className="flex-1 h-7 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700">
+                Fetch now
+              </button>
+              <button type="button" onClick={() => setFetchPanelOpen(false)}
+                className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setPullPanelOpen((o) => !o)}
+          disabled={!rows.length || pulling}
+          title={`Pull from eBay ${marketplace} — full listing data with diff preview, undoable with ⌘Z. Does not touch the database until you click Save.`}
+          className={cn(
+            'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
+            pullPanelOpen ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
+            'disabled:opacity-40 disabled:cursor-default',
+          )}
+        >
+          {pulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+        </button>
+        {pullPanelOpen && (
+          <PullFromEbayPanel
+            selectedCount={selectedRows.size}
+            totalCount={rows.length}
+            currentMarket={marketplace}
+            pulling={pulling}
+            onPull={(opts) => {
+              let skus: string[]
+              if (opts.scope === 'selected') {
+                skus = [...selectedRows]
+                  .map((id) => String(rows.find((r) => r._rowId === id)?.sku ?? ''))
+                  .filter(Boolean)
+              } else {
+                skus = rows.map((r) => String(r.sku ?? '')).filter(Boolean)
+              }
+              return startPullJob({ skus, columns: opts.columns })
+            }}
+            onClose={() => setPullPanelOpen(false)}
+          />
+        )}
+      </div>
+
+      {/* Inline progress / result indicator */}
+      {pullProgress && (
+        <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400 ml-1">
+          <RefreshCw className="w-3 h-3 animate-spin" />
+          Pulling {pullProgress.progress}/{pullProgress.total || '?'} from {marketplace}…
+        </span>
       )}
-    </div>
+      {pullResult && !pullProgress && (
+        <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-emerald-600 dark:text-emerald-400 ml-1">
+          <CheckCircle2 className="w-3 h-3" />
+          Pulled {pullResult.pulled}
+          {pullResult.skipped > 0 && ` · ${pullResult.skipped} not on ${marketplace}`}
+          {' · ⌘Z to undo'}
+        </span>
+      )}
+    </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [fetching, fetchPanelOpen])
+  ), [fetching, fetchPanelOpen, pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -802,10 +999,30 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
             onClose={() => { setCategorySearchOpen(false); setCategorySearchRowId(null) }}
           />
         )}
+        {/* Phase 3 — Pull diff preview */}
+        {pullDiffData && pullDiffOpen && (
+          <PullDiffModal
+            open={pullDiffOpen}
+            pulledRows={pullDiffData.pulledRows.map((r) => {
+              // PullDiffModal matches rows by item_sku. The eBay editor
+              // uses `sku` instead — copy it across so the modal can
+              // index correctly. The merge in makePullDiffApplyHandler
+              // also looks both keys up.
+              const sku = String((r as any).sku ?? (r as any).item_sku ?? '')
+              return { ...(r as any), item_sku: sku, _rowId: String(r._rowId ?? sku), _dirty: false } as any
+            })}
+            currentRows={rows.map((r) => ({ ...r, item_sku: String(r.sku ?? '') } as any))}
+            marketplace={marketplace}
+            productType="eBay"
+            selectedColumns={pullDiffData.selectedColumns}
+            onApply={makePullDiffApplyHandler(rows, setRows, pushHistory)}
+            onClose={() => { setPullDiffOpen(false); setPullDiffData(null) }}
+          />
+        )}
       </>
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema])
+  }, [descModal, categorySearchOpen, categorySearchRowId, marketplace, loadCategorySchema, pullDiffData, pullDiffOpen, makePullDiffApplyHandler])
 
   // ── Group key for eBay variations ──────────────────────────────────────
 
@@ -929,5 +1146,154 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     />
     </>
+  )
+}
+
+// ── PullFromEbayPanel ──────────────────────────────────────────────────
+// Phase 3 sibling of PullFromAmazonPanel. Full-listing pull from eBay
+// for the current market. Scope: selected rows or all rows in sheet.
+// Column-group filter narrows which fields the diff modal will show /
+// apply.
+
+interface PullPanelProps {
+  selectedCount: number
+  totalCount: number
+  currentMarket: string
+  pulling: boolean
+  onPull: (opts: { scope: 'selected' | 'all'; columns: 'all' | PullGroupId[] }) => void
+  onClose: () => void
+}
+
+function PullFromEbayPanel({
+  selectedCount, totalCount, currentMarket, pulling, onPull, onClose,
+}: PullPanelProps) {
+  const [scope, setScope] = useState<'selected' | 'all'>(
+    selectedCount > 0 ? 'selected' : 'all',
+  )
+  const [allColumns, setAllColumns] = useState(true)
+  const [selectedGroups, setSelectedGroups] = useState<Set<PullGroupId>>(
+    new Set(['content', 'pricing', 'stock']),
+  )
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  function toggleGroup(g: PullGroupId) {
+    setSelectedGroups((prev) => {
+      const n = new Set(prev)
+      if (n.has(g)) n.delete(g); else n.add(g)
+      return n
+    })
+  }
+
+  const scopeCount = scope === 'selected' ? selectedCount : totalCount
+  const canPull = scopeCount > 0 && (allColumns || selectedGroups.size > 0)
+
+  return (
+    <div
+      ref={panelRef}
+      className="absolute left-0 top-full mt-1 z-[60] w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Pull from eBay {currentMarket}
+          </div>
+          <div className="text-xs text-slate-400">
+            Review every change before it lands. ⌘Z to undo.
+          </div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Scope */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="text-xs font-medium text-slate-500 mb-2">Scope</div>
+        {([
+          ['selected', `Selected rows (${selectedCount})`, selectedCount > 0],
+          ['all',      `All rows in sheet (${totalCount})`, totalCount > 0],
+        ] as const).map(([id, label, enabled]) => (
+          <label
+            key={id}
+            className={cn('flex items-center gap-2 py-1',
+              enabled ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed')}
+          >
+            <input
+              type="radio"
+              name="ebay-pull-scope"
+              checked={scope === id}
+              disabled={!enabled}
+              onChange={() => setScope(id)}
+              className="w-3.5 h-3.5 accent-blue-600"
+            />
+            <span className="text-xs text-slate-700 dark:text-slate-300">{label}</span>
+          </label>
+        ))}
+      </div>
+
+      {/* Columns */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <label className="flex items-center gap-2 cursor-pointer mb-2">
+          <input
+            type="checkbox"
+            checked={allColumns}
+            onChange={(e) => setAllColumns(e.target.checked)}
+            className="w-3.5 h-3.5 accent-blue-600"
+          />
+          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+            All columns
+          </span>
+          <span className="text-[10px] text-slate-400">(every field eBay returns)</span>
+        </label>
+
+        {!allColumns && (
+          <div className="space-y-0.5 pl-1 mt-1">
+            {PULL_GROUPS.map((g) => (
+              <label key={g.id} className="flex items-start gap-2 py-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedGroups.has(g.id)}
+                  onChange={() => toggleGroup(g.id)}
+                  className="w-3.5 h-3.5 mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <div className="text-xs text-slate-700 dark:text-slate-300">{g.label}</div>
+                  <div className="text-[10px] text-slate-400">{g.description}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3">
+        <Button
+          size="sm"
+          className="w-full justify-center"
+          onClick={() => onPull({
+            scope,
+            columns: allColumns ? 'all' : [...selectedGroups],
+          })}
+          disabled={!canPull || pulling}
+          loading={pulling}
+        >
+          <Download className="w-3.5 h-3.5 mr-1.5" />
+          Pull {scopeCount} SKU{scopeCount !== 1 ? 's' : ''} from {currentMarket}
+        </Button>
+        <p className="mt-2 text-[10px] text-slate-400 leading-relaxed">
+          Fetches inventory + offer data from eBay. Sell API is rate-limited; large pulls take 2–5 min.
+        </p>
+      </div>
+    </div>
   )
 }

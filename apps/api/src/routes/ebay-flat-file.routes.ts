@@ -29,6 +29,10 @@ import {
   getTaskStatus,
   type EbayFlatRow,
 } from '../services/ebay-feed.service.js';
+import {
+  startEbayPullPreviewJob,
+  getEbayPullPreviewJobStatus,
+} from '../services/ebay-flat-file-pull-preview.service.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -1479,4 +1483,87 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: err?.message ?? 'AI assistant failed' })
     }
   })
+
+  // ── POST /api/ebay/flat-file/pull-preview/start ─────────────────────
+  // In-editor pull from eBay. Fetches live inventory items + offers per
+  // SKU for the requested marketplace, builds expanded EbayRow shapes
+  // in memory, and returns them through the status endpoint. Does NOT
+  // touch the database — the editor merges the rows into its local
+  // state via PullDiffModal where the operator can review, undo
+  // (Cmd+Z), and Save on their own terms.
+  fastify.post<{
+    Body: { marketplace?: string; skus?: string[] }
+  }>('/ebay/flat-file/pull-preview/start', async (request, reply) => {
+    const { marketplace = 'IT', skus } = request.body ?? {};
+    const jobId = startEbayPullPreviewJob({
+      marketplace,
+      skus: Array.isArray(skus) && skus.length > 0 ? skus : undefined,
+    });
+    return reply.send({ jobId });
+  });
+
+  // ── GET /api/ebay/flat-file/pull-preview/status/:jobId ──────────────
+  fastify.get<{ Params: { jobId: string } }>(
+    '/ebay/flat-file/pull-preview/status/:jobId',
+    async (request, reply) => {
+      const job = getEbayPullPreviewJobStatus(request.params.jobId);
+      if (!job) return reply.code(404).send({ error: 'Job not found or expired' });
+      return reply.send(job);
+    },
+  );
+
+  // ── POST /api/ebay/flat-file/pull-preview/apply ─────────────────────
+  // Audit-log endpoint. Called after the operator confirms what to
+  // merge in PullDiffModal. Writes one FlatFilePullRecord row with
+  // channel='EBAY'. Does NOT touch product or listing data; those
+  // writes flow through the editor's normal Save path.
+  fastify.post<{
+    Body: {
+      jobId?: string
+      marketplace?: string
+      skusRequested?: string[]
+      skusReturned?: number
+      columnsApplied?: string[]
+      rowsApplied?: number
+      fieldsApplied?: number
+      operatorNote?: string
+    }
+  }>('/ebay/flat-file/pull-preview/apply', async (request, reply) => {
+    const {
+      jobId,
+      marketplace = 'IT',
+      skusRequested = [],
+      skusReturned = 0,
+      columnsApplied = [],
+      rowsApplied = 0,
+      fieldsApplied = 0,
+      operatorNote,
+    } = request.body ?? {};
+
+    try {
+      const record = await prisma.flatFilePullRecord.create({
+        data: {
+          channel: 'EBAY',
+          marketplace: marketplace.toUpperCase(),
+          // eBay editor isn't scoped by productType — store a marker so
+          // the (channel, marketplace, pulledAt) index still discriminates
+          // eBay rows from Amazon's pre-existing entries.
+          productType: 'EBAY_ANY',
+          jobId: jobId ?? null,
+          skusRequested,
+          skusReturned,
+          columnsApplied,
+          rowsApplied,
+          fieldsApplied,
+          appliedAt: new Date(),
+          operatorNote: operatorNote ?? null,
+        },
+        select: { id: true, pulledAt: true, appliedAt: true },
+      });
+      return reply.send({ ok: true, id: record.id });
+    } catch (err: any) {
+      request.log.error(err, '[ebay/flat-file/pull-preview/apply] failed');
+      return reply.code(500).send({ error: err?.message ?? 'Audit write failed' });
+    }
+  });
 }

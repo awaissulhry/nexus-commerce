@@ -793,4 +793,198 @@ export class EbayService {
       throw error;
     }
   }
+
+  /**
+   * Fetch live listing data from eBay for one SKU + one marketplace —
+   * sized for the in-editor "Pull from eBay" feature (Phase 3 sibling
+   * of AmazonService.fetchListingForFlatFile).
+   *
+   * Hits two endpoints in sequence:
+   *   GET /sell/inventory/v1/inventory_item/{sku}    — title, condition, aspects, images
+   *   GET /sell/inventory/v1/offer?sku={sku}         — price, quantity, category, policies, listing status
+   * Filters offers to the requested marketplaceId so we don't return a
+   * UK price for an IT pull.
+   *
+   * Returns null when the SKU isn't on eBay at all OR doesn't have an
+   * offer in the requested marketplace.
+   */
+  async fetchListingForFlatFile(
+    sku: string,
+    marketplaceId: string,
+    productId?: string,
+  ): Promise<{
+    title: string | null;
+    description: string | null;
+    condition: string | null;
+    categoryId: string | null;
+    price: number | null;
+    quantity: number | null;
+    bestOfferEnabled: boolean | null;
+    bestOfferFloor: number | null;
+    bestOfferCeiling: number | null;
+    handlingTime: number | null;
+    imageUrls: string[];
+    aspects: Record<string, string>;
+    fulfillmentPolicyId: string | null;
+    paymentPolicyId: string | null;
+    returnPolicyId: string | null;
+    marketplace: string;
+    itemId: string | null;
+    offerId: string | null;
+    listingStatus: string | null;
+    ean: string | null;
+    mpn: string | null;
+    brand: string | null;
+  } | null> {
+    const token = await this.getAccessToken();
+
+    // ── 1. Inventory item ──────────────────────────────────────────
+    let inventory: Record<string, any> | null = null;
+    try {
+      inventory = await recordApiCall<Record<string, any>>(
+        {
+          channel: 'EBAY',
+          operation: 'getInventoryItem',
+          endpoint: '/sell/inventory/v1/inventory_item',
+          method: 'GET',
+          marketplace: marketplaceId,
+          triggeredBy: 'api',
+          productId,
+        },
+        async () => {
+          const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (res.status === 404) return null as any;
+          if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            const err = new Error(
+              `eBay inventory item fetch failed for "${sku}" (${res.status}): ${body.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = res.status;
+            err.body = body;
+            throw err;
+          }
+          return (await res.json()) as Record<string, any>;
+        },
+      );
+    } catch {
+      // Treat all errors as "not on eBay" — pull is best-effort, the
+      // diff modal will simply skip this SKU.
+      return null;
+    }
+
+    if (!inventory) return null;
+
+    // ── 2. Offers (filter to requested marketplace) ────────────────
+    let offers: any[] = [];
+    try {
+      const offersData = await recordApiCall<{ offers?: any[] }>(
+        {
+          channel: 'EBAY',
+          operation: 'getOffers',
+          endpoint: '/sell/inventory/v1/offer',
+          method: 'GET',
+          marketplace: marketplaceId,
+          triggeredBy: 'api',
+          productId,
+        },
+        async () => {
+          const url = `${EBAY_API_BASE}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`;
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (res.status === 404) return { offers: [] };
+          if (!res.ok) {
+            const body = await res.text().catch(() => '');
+            const err = new Error(
+              `eBay offers fetch failed for "${sku}" (${res.status}): ${body.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string };
+            err.statusCode = res.status;
+            err.body = body;
+            throw err;
+          }
+          return (await res.json()) as { offers?: any[] };
+        },
+      );
+      offers = Array.isArray(offersData.offers) ? offersData.offers : [];
+    } catch {
+      offers = [];
+    }
+
+    const offer = offers.find((o) => o?.marketplaceId === marketplaceId) ?? null;
+
+    // Inventory item shape:
+    //   { sku, condition, availability: { shipToLocationAvailability: { quantity } },
+    //     product: { title, description, brand, mpn, ean, imageUrls, aspects } }
+    const product = (inventory.product ?? {}) as Record<string, any>;
+    const aspectsRaw = (product.aspects ?? {}) as Record<string, string[]>;
+    const aspects: Record<string, string> = {};
+    for (const [k, v] of Object.entries(aspectsRaw)) {
+      aspects[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '');
+    }
+
+    const invQty =
+      inventory.availability?.shipToLocationAvailability?.quantity;
+
+    // Offer shape (when present):
+    //   { offerId, marketplaceId, listingDescription, availableQuantity,
+    //     categoryId, pricingSummary: { price: { value, currency } },
+    //     listingPolicies: { fulfillmentPolicyId, paymentPolicyId, returnPolicyId },
+    //     listing: { listingId, listingStatus },
+    //     bestOfferTerms: { bestOfferEnabled, autoAcceptPrice, autoDeclinePrice },
+    //     listingDuration, listingStartDate }
+    const priceStr = offer?.pricingSummary?.price?.value;
+    const offerQty = offer?.availableQuantity;
+    const policies = offer?.listingPolicies ?? {};
+    const bestOffer = offer?.bestOfferTerms ?? {};
+
+    return {
+      title: product.title ?? null,
+      description: offer?.listingDescription ?? product.description ?? null,
+      condition: inventory.condition ?? null,
+      categoryId: offer?.categoryId ?? null,
+      price: priceStr != null ? parseFloat(String(priceStr)) : null,
+      quantity:
+        offerQty != null
+          ? parseInt(String(offerQty), 10)
+          : invQty != null
+          ? parseInt(String(invQty), 10)
+          : null,
+      bestOfferEnabled:
+        typeof bestOffer.bestOfferEnabled === 'boolean'
+          ? bestOffer.bestOfferEnabled
+          : null,
+      bestOfferFloor:
+        bestOffer.autoDeclinePrice?.value != null
+          ? parseFloat(String(bestOffer.autoDeclinePrice.value))
+          : null,
+      bestOfferCeiling:
+        bestOffer.autoAcceptPrice?.value != null
+          ? parseFloat(String(bestOffer.autoAcceptPrice.value))
+          : null,
+      handlingTime: null, // not in offer payload by default; left blank for v1
+      imageUrls: Array.isArray(product.imageUrls) ? (product.imageUrls as string[]) : [],
+      aspects,
+      fulfillmentPolicyId: policies.fulfillmentPolicyId ?? null,
+      paymentPolicyId: policies.paymentPolicyId ?? null,
+      returnPolicyId: policies.returnPolicyId ?? null,
+      marketplace: marketplaceId,
+      itemId: offer?.listing?.listingId ?? null,
+      offerId: offer?.offerId ?? null,
+      listingStatus: offer?.listing?.listingStatus ?? offer?.status ?? null,
+      ean: Array.isArray(product.ean) ? product.ean[0] ?? null : product.ean ?? null,
+      mpn: product.mpn ?? null,
+      brand: product.brand ?? null,
+    };
+  }
 }
