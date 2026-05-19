@@ -18,8 +18,8 @@ import {
   Box,
   ChevronRight,
   Clock,
+  Keyboard,
   Loader2,
-  RefreshCw,
   Search,
   Send,
   Tag,
@@ -28,6 +28,15 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -110,6 +119,20 @@ export default function PricingMatrixClient() {
   const [kpis, setKpis] = useState<KpiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('pricing.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('pricing.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('pricing.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('pricing.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState('')
   const [marketplace, setMarketplace] = useState('')
@@ -143,6 +166,7 @@ export default function PricingMatrixClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = (await res.json()) as MatrixResponse
       setData(json)
+      setLastFetchedAt(Date.now())
       // Clear selection on page change / filter change
       setSelected(new Set())
     } catch (e) {
@@ -331,15 +355,27 @@ export default function PricingMatrixClient() {
             {t('pricing.filter.clampedOnly')}
           </label>
           <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={fetchData}
-              disabled={loading}
-              icon={<RefreshCw size={12} />}
+            <SharedDensityToggle density={density} onChange={setDensity} />
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={() => { fetchData(); fetchKpis() }}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchData}
+              loading={loading}
+              error={!!error}
+            />
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
             >
-              {t('pricing.action.refresh')}
-            </Button>
+              <Keyboard size={12} />
+            </button>
             <Button
               variant="primary"
               size="md"
@@ -612,9 +648,31 @@ export default function PricingMatrixClient() {
           onPushed={() => fetchData()}
         />
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={PRICING_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const PRICING_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['r'], label: 'Refresh data' },
+      { keys: ['Esc'], label: 'Close drawer · clear selection' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 function PricingDetailDrawer({
   row,
