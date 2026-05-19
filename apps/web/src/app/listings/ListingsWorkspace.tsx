@@ -11,7 +11,7 @@ import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
   ExternalLink, Filter, Settings2, X, ChevronDown,
   Eye, EyeOff, CheckCircle2, Tag, Link2,
-  ArrowUpRight, Layers, Package, Plus, Pause, Play,
+  ArrowUpRight, Package, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
   Download, FilterX, AlertCircle, Activity, TrendingUp,
   AlignJustify, Menu as MenuIcon, Equal,
@@ -21,7 +21,7 @@ import {
   VirtualizedGrid as SharedVirtualizedGrid,
   SearchContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
-import { GridFooter } from '@/app/_shared/grid-lens'
+import { GridFooter, ProductIdentityCell } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   MultiSelectChips,
@@ -1962,22 +1962,6 @@ function GridLens(props: {
   )
 }
 
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query || !text) return <>{text}</>
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`(${escaped})`, 'ig')
-  const parts = text.split(re)
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 === 1
-          ? <mark key={i} className="bg-yellow-100 text-slate-900 rounded-sm px-0.5">{part}</mark>
-          : <span key={i}>{part}</span>
-      )}
-    </>
-  )
-}
-
 function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResync, onListingChanged }: {
   col: string
   listing: ListingGridRow
@@ -2000,26 +1984,18 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
       )
     case 'product':
       return (
-        <div className="min-w-0">
-          <button
-            onClick={() => isParentRow
-              ? (window.location.href = `/products/${l.product.id}/edit`)
-              : onOpenDrawer(l.id)
-            }
-            className="text-md font-medium text-slate-900 dark:text-slate-100 hover:text-blue-600 text-left truncate block max-w-full"
-          >
-            <Highlight text={l.product.name} query={searchQuery} />
-            {l.product.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
-          </button>
-          <div className="text-sm text-slate-500 dark:text-slate-400 font-mono truncate">
-            <Highlight text={l.product.sku} query={searchQuery} />
-            {isParentRow && l.childCount > 0 && (
-              <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
-                {l.childCount} {l.childCount === 1 ? 'variant' : 'variants'}
-              </span>
-            )}
-          </div>
-        </div>
+        <ProductIdentityCell
+          id={l.product.id}
+          name={l.product.name}
+          sku={l.product.sku}
+          amazonAsin={l.product.amazonAsin}
+          productType={(l.product as { productType?: string | null }).productType ?? null}
+          isParent={isParentRow}
+          parentId={isParentRow ? null : l.product.parentId}
+          childCount={l.childCount}
+          searchQuery={searchQuery}
+          onThumbClick={() => onOpenDrawer(l.id)}
+        />
       )
     case 'channel':
       if (isParentRow && l._channels) {

@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
@@ -3494,20 +3494,16 @@ const COLUMN_META: Record<ColumnKey, {
     align: 'left',
     head: 'Product',
     cell: ({ it }) => (
-      <div className="min-w-0 overflow-hidden">
-        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-          {it.name}
-          {it.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
-        </div>
-        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-          {it.sku}{it.amazonAsin && <span> · {it.amazonAsin}</span>}
-          {it.isParent && it.childCount > 0 && (
-            <span className="ml-2 text-slate-400 dark:text-slate-500">
-              {it.childCount} {it.childCount === 1 ? 'variant' : 'variants'}
-            </span>
-          )}
-        </div>
-      </div>
+      <ProductIdentityCell
+        id={it.id}
+        name={it.name}
+        sku={it.sku}
+        amazonAsin={it.amazonAsin}
+        productType={(it as { productType?: string | null }).productType ?? null}
+        isParent={it.isParent}
+        parentId={it.parentId}
+        childCount={it.childCount}
+      />
     ),
   },
   location: {

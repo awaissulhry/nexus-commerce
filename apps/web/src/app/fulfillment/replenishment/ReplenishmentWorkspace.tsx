@@ -18,7 +18,6 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Download,
   Keyboard,
-  Layers,
   Loader2,
   Package,
   RefreshCw,
@@ -41,7 +40,7 @@ import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -623,20 +622,16 @@ export default function ReplenishmentWorkspace() {
         )
       case 'product':
         return (
-          <div className="min-w-0 overflow-hidden">
-            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-              {row.name}
-              {row.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
-            </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-              {row.sku}
-              {row.isParent && (row.childCount ?? 0) > 0 && (
-                <span className="ml-2 text-slate-400 dark:text-slate-500">
-                  {row.childCount} {row.childCount === 1 ? 'variant' : 'variants'}
-                </span>
-              )}
-            </div>
-          </div>
+          <ProductIdentityCell
+            id={row.id}
+            name={row.name}
+            sku={row.sku}
+            amazonAsin={(row as { amazonAsin?: string | null }).amazonAsin ?? null}
+            productType={(row as { productType?: string | null }).productType ?? null}
+            isParent={row.isParent ?? false}
+            parentId={row.parentId}
+            childCount={row.childCount}
+          />
         )
       case 'urgency':
         if (!row.urgency) return <span className="text-slate-300 dark:text-slate-600">—</span>
