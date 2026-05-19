@@ -1,6 +1,6 @@
 import { prisma } from '@nexus/database'
 import NotificationsClient, { type LoadedPref } from './NotificationsClient'
-import { EVENT_TYPES } from './actions'
+import { EVENT_TYPES } from './event-types'
 
 export const dynamic = 'force-dynamic'
 

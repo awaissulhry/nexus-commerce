@@ -3,46 +3,10 @@
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 import { writeSettingsAudit } from '@/lib/settings-audit'
+// 'use server' modules can only export async functions, so the
+// registry lives in its own module (./event-types.ts).
+import { EVENT_TYPES } from './event-types'
 
-/**
- * Phase E — the canonical event-type registry. Add a new event-type
- * here and the /settings/notifications UI picks it up automatically.
- * Label/description drive the table copy; defaults seed new rows.
- */
-export const EVENT_TYPES = [
-  {
-    key: 'NEW_ORDER',
-    label: 'New order',
-    description: 'A buyer places an order on any channel.',
-    defaults: { email: true, sms: false, inApp: true, digestCadence: 'instant' },
-  },
-  {
-    key: 'LOW_STOCK',
-    label: 'Low stock',
-    description: 'A SKU drops below its low-stock threshold.',
-    defaults: { email: true, sms: false, inApp: true, digestCadence: 'hourly' },
-  },
-  {
-    key: 'RETURN_REQUEST',
-    label: 'Return request',
-    description: 'A buyer files a return / RMA on any channel.',
-    defaults: { email: true, sms: false, inApp: true, digestCadence: 'instant' },
-  },
-  {
-    key: 'SYNC_FAILURE',
-    label: 'Sync failure',
-    description: 'An outbound channel sync errors past its retry window.',
-    defaults: { email: true, sms: false, inApp: true, digestCadence: 'instant' },
-  },
-  {
-    key: 'AI_COMPLETE',
-    label: 'AI job complete',
-    description: 'A bulk AI listing-generate / translation job finishes.',
-    defaults: { email: false, sms: false, inApp: true, digestCadence: 'instant' },
-  },
-] as const
-
-export type EventTypeKey = (typeof EVENT_TYPES)[number]['key']
 const ALLOWED_KEYS = new Set<string>(EVENT_TYPES.map((e) => e.key))
 const ALLOWED_CADENCE = new Set(['instant', 'hourly', 'daily', 'off'])
 

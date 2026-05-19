@@ -32,7 +32,8 @@ import {
   X,
 } from 'lucide-react'
 import { useSettingsForm } from '../_shell/SettingsSaveBar'
-import { saveNotificationPreferences, EVENT_TYPES } from './actions'
+import { saveNotificationPreferences } from './actions'
+import { EVENT_TYPES } from './event-types'
 import { cn } from '@/lib/utils'
 
 export interface LoadedPref {
