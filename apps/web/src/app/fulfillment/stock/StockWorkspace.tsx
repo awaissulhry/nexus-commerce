@@ -630,6 +630,11 @@ export default function StockWorkspace() {
     return () => clearTimeout(t)
   }, [searchInput])
 
+  // Mirror expandedParents in a ref so fetchStock can read the current
+  // set on poll-refresh without re-creating itself on every expand.
+  // (The state itself is declared further below.)
+  const expandedParentsRef = useRef<Set<string>>(new Set())
+
   const fetchStock = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -649,8 +654,29 @@ export default function StockWorkspace() {
       if (view === 'table') {
         setItems(data.items ?? [])
         setProductBundles([])
-        // Clear child cache so expanding reflects fresh data.
-        setChildrenByParentState({})
+        // Refresh the children cache without orphaning expanded parents.
+        // Wiping it outright (the old behavior) left expandedParents
+        // pointing at empty arrays, which surfaced as
+        // "fetch failed — try collapsing and re-opening" on the next render.
+        // Now we re-fetch every currently-expanded parent in parallel.
+        const expanded = Array.from(expandedParentsRef.current)
+        if (expanded.length > 0) {
+          const fresh = await Promise.all(
+            expanded.map(async (pid) => {
+              try {
+                const r = await fetch(`${getBackendUrl()}/api/stock/products?parentId=${pid}`, { cache: 'no-store' })
+                if (!r.ok) return [pid, [] as StockRow[]] as const
+                const d = await r.json()
+                return [pid, (d.items ?? []) as StockRow[]] as const
+              } catch {
+                return [pid, [] as StockRow[]] as const
+              }
+            }),
+          )
+          setChildrenByParentState(Object.fromEntries(fresh))
+        } else {
+          setChildrenByParentState({})
+        }
       } else {
         setProductBundles(data.products ?? [])
         setItems([])
@@ -859,6 +885,7 @@ export default function StockWorkspace() {
   )
   // Hierarchy — mirrors /products lazy-load pattern exactly.
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  useEffect(() => { expandedParentsRef.current = expandedParents }, [expandedParents])
   const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
   const [childrenByParentState, setChildrenByParentState] = useState<Record<string, StockRow[]>>({})
 

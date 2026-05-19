@@ -544,11 +544,9 @@ export function VirtualizedGrid<T extends GridLensRow>({
                           className="bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2 text-base text-slate-500 dark:text-slate-400 italic flex-1"
                           role="cell"
                         >
-                          No variants found
                           {row.childCount > 0
-                            ? ' (fetch failed — try collapsing and re-opening)'
-                            : ''}
-                          .
+                            ? 'Reloading variants…'
+                            : 'No variants found.'}
                         </div>
                       )}
                     </div>
