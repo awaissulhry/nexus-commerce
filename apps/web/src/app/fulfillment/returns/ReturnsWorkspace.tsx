@@ -6,12 +6,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Undo2, Plus, RefreshCw, X, CheckCircle2, Package, Search, Download,
+  Undo2, Plus, X, CheckCircle2, Package, Search, Download,
   ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
   ArrowDownToLine, Copy, Mail, Tag, Trash2, Truck, ArrowUp, ArrowDown,
   Bookmark, Star, Ban, AlertTriangle, RotateCw, Activity,
-  Camera, Image as ImageIcon, Save,
+  Camera, Image as ImageIcon, Save, Keyboard, TrendingUp, Calendar,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  KpiStrip,
+  type AutoRefreshInterval,
+  type Density,
+  type KpiTileSpec,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   MultiSelectChips,
@@ -257,6 +268,20 @@ export default function ReturnsWorkspace() {
   const [items, setItems] = useState<ReturnRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('returns.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('returns.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('returns.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('returns.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [savedViews, setSavedViews] = useState<SavedView[]>([])
@@ -320,6 +345,7 @@ export default function ReturnsWorkspace() {
         const data = await res.json()
         setItems(data.items ?? [])
         setTotal(data.total ?? 0)
+        setLastFetchedAt(Date.now())
       }
     } finally { setLoading(false) }
   }, [tab, statusFilter, channelFilter, search, sortBy, sortDir, page, pageSize])
@@ -571,68 +597,53 @@ export default function ReturnsWorkspace() {
       />
 
       {/* O.76: KPI strip. Last-30-day count + trend, FBA vs warehouse
-          split, top reasons, top channel. Stays visible across the
-          tab/status filters because it's a summary of the whole
-          surface, not the filtered slice. */}
+          split, top channel, top reason. Now uses the shared KpiStrip
+          for visual parity with the other grid workspaces. Stays
+          visible across the tab/status filters because it's a summary
+          of the whole surface, not the filtered slice. */}
       {analytics && analytics.totalCount > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Card>
-            <div className="space-y-0.5">
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Last 30 days</div>
-              <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{analytics.last30}</div>
-              {analytics.trendPct != null && (
-                <div className={`text-xs tabular-nums ${
-                  analytics.trendPct > 5 ? 'text-rose-600 dark:text-rose-400' : analytics.trendPct < -5 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
-                }`}>
-                  {analytics.trendPct > 0 ? '+' : ''}{analytics.trendPct.toFixed(0)}% vs prior 30d
-                </div>
-              )}
-            </div>
-          </Card>
-          <Card>
-            <div className="space-y-0.5">
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Total returns</div>
-              <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{analytics.totalCount}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                {analytics.warehouseCount} warehouse · {analytics.fbaCount} FBA
-              </div>
-            </div>
-          </Card>
-          <Card>
-            <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Top channel (30d)</div>
-              {analytics.byChannel.length > 0 ? (
-                <>
-                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                    {analytics.byChannel[0].channel}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                    {analytics.byChannel[0].count} of {analytics.last30}
-                  </div>
-                </>
-              ) : (
-                <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
-              )}
-            </div>
-          </Card>
-          <Card>
-            <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Top reason (30d)</div>
-              {analytics.topReasons.length > 0 ? (
-                <>
-                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate" title={analytics.topReasons[0].reason}>
-                    {analytics.topReasons[0].reason}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-                    {analytics.topReasons[0].count} return{analytics.topReasons[0].count === 1 ? '' : 's'}
-                  </div>
-                </>
-              ) : (
-                <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
-              )}
-            </div>
-          </Card>
-        </div>
+        <KpiStrip
+          tiles={[
+            {
+              icon: Calendar,
+              label: 'Last 30 days',
+              value: analytics.last30.toLocaleString(),
+              detail: analytics.trendPct != null
+                ? `${analytics.trendPct > 0 ? '+' : ''}${analytics.trendPct.toFixed(0)}% vs prior 30d`
+                : undefined,
+              tone: analytics.trendPct != null && analytics.trendPct > 5
+                ? 'rose'
+                : analytics.trendPct != null && analytics.trendPct < -5
+                ? 'emerald'
+                : 'slate',
+            },
+            {
+              icon: Package,
+              label: 'Total returns',
+              value: analytics.totalCount.toLocaleString(),
+              detail: `${analytics.warehouseCount} warehouse · ${analytics.fbaCount} FBA`,
+              tone: 'slate',
+            },
+            {
+              icon: TrendingUp,
+              label: 'Top channel (30d)',
+              value: analytics.byChannel[0]?.channel ?? '—',
+              detail: analytics.byChannel[0]
+                ? `${analytics.byChannel[0].count} of ${analytics.last30}`
+                : undefined,
+              tone: 'blue',
+            },
+            {
+              icon: AlertTriangle,
+              label: 'Top reason (30d)',
+              value: analytics.topReasons[0]?.reason ?? '—',
+              detail: analytics.topReasons[0]
+                ? `${analytics.topReasons[0].count} return${analytics.topReasons[0].count === 1 ? '' : 's'}`
+                : undefined,
+              tone: 'amber',
+            },
+          ] satisfies KpiTileSpec[]}
+        />
       )}
 
       <div className="space-y-2">
@@ -726,8 +737,25 @@ export default function ReturnsWorkspace() {
             <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> New return
             </button>
-            <button onClick={fetchReturns} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> Refresh
+            <SharedDensityToggle density={density} onChange={setDensity} />
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchReturns}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchReturns}
+              loading={loading}
+            />
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
+            >
+              <Keyboard size={12} />
             </button>
           </div>
         </div>
@@ -960,9 +988,41 @@ export default function ReturnsWorkspace() {
           onCreated={() => { closeCreate(); fetchReturns() }}
         />
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={RETURNS_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const RETURNS_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['j', '↓'], label: 'Move to next row' },
+      { keys: ['k', '↑'], label: 'Move to previous row' },
+      { keys: ['Enter'], label: 'Open RMA detail' },
+      { keys: ['Esc'], label: 'Close drawer · drop focused row' },
+    ],
+  },
+  {
+    title: 'Tabs',
+    rows: [
+      { keys: ['1'], label: 'All returns' },
+      { keys: ['2'], label: 'Warehouse only' },
+      { keys: ['3'], label: 'FBA (read-only)' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 // R1.1 — sortable column header.
 function SortHeader({
