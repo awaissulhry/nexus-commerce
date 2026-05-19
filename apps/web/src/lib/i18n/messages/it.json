@@ -95,6 +95,8 @@
   "drafts.detail.linksHeader": "Collegamenti",
   "drafts.detail.openWizard": "Apri wizard",
   "drafts.detail.openProductEdit": "Apri modifica prodotto",
+  "drafts.detail.openAmazonFlatFile": "Apri nel flat file Amazon",
+  "drafts.detail.openEbayFlatFile": "Apri nel flat file eBay",
   "drafts.detail.noWizardYet": "Nessun wizard avviato — Configura per scegliere i canali",
   "drafts.detail.noChannelsYet": "Nessun canale selezionato (Passaggio 1)",
   "drafts.detail.created": "Creato",

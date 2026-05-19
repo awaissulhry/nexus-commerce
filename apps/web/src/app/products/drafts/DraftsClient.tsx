@@ -682,6 +682,33 @@ function DraftExpandedDetail({
                 </Link>
               </li>
             )}
+            {/* Flat-file deep-links. Scoped to this product via
+                ?familyId=<productId>, which both flat-file pages
+                interpret as a row filter. target=_blank so the
+                operator can fix master data in the flat file while
+                keeping the drafts list open in this tab. */}
+            <li>
+              <a
+                href={`/products/amazon-flat-file?familyId=${d.productId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-700 dark:text-blue-400 hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {t('drafts.detail.openAmazonFlatFile')}
+              </a>
+            </li>
+            <li>
+              <a
+                href={`/products/ebay-flat-file?familyId=${d.productId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-700 dark:text-blue-400 hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {t('drafts.detail.openEbayFlatFile')}
+              </a>
+            </li>
             <li className="text-xs text-slate-500 dark:text-slate-400 mt-2">
               {t('drafts.detail.created')}: {new Date(d.createdAt).toLocaleString()}
             </li>
