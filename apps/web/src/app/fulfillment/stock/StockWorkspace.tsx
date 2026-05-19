@@ -3495,9 +3495,17 @@ const COLUMN_META: Record<ColumnKey, {
     head: 'Product',
     cell: ({ it }) => (
       <div className="min-w-0 overflow-hidden">
-        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{it.name}</div>
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+          {it.name}
+          {it.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
+        </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
           {it.sku}{it.amazonAsin && <span> · {it.amazonAsin}</span>}
+          {it.isParent && it.childCount > 0 && (
+            <span className="ml-2 text-slate-400 dark:text-slate-500">
+              {it.childCount} {it.childCount === 1 ? 'variant' : 'variants'}
+            </span>
+          )}
         </div>
       </div>
     ),
