@@ -15,7 +15,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { Search, Users, RefreshCw, Download, BarChart2, Filter } from 'lucide-react'
+import { Search, Users, Download, BarChart2, Filter, Keyboard } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
@@ -75,6 +84,20 @@ export default function CustomersWorkspace() {
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('customers.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('customers.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('customers.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('customers.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
 
   const updateUrl = useCallback(
     (patch: Record<string, string | undefined>) => {
@@ -115,6 +138,7 @@ export default function CustomersWorkspace() {
       setCustomers(data.customers ?? [])
       setTotal(data.total ?? 0)
       setTotalPages(data.totalPages ?? 0)
+      setLastFetchedAt(Date.now())
     } finally {
       setLoading(false)
     }
@@ -197,11 +221,25 @@ export default function CustomersWorkspace() {
             >
               <Download size={12} /> {t('customers.action.exportCsv')}
             </a>
+            <SharedDensityToggle density={density} onChange={setDensity} />
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchCustomers}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchCustomers}
+              loading={loading}
+            />
             <button
-              onClick={() => fetchCustomers()}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
             >
-              <RefreshCw size={12} /> {t('common.refresh')}
+              <Keyboard size={12} />
             </button>
           </div>
         }
@@ -483,6 +521,28 @@ export default function CustomersWorkspace() {
           </div>
         </div>
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={CUSTOMERS_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const CUSTOMERS_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['r'], label: 'Refresh data' },
+      { keys: ['Esc'], label: 'Clear search' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]

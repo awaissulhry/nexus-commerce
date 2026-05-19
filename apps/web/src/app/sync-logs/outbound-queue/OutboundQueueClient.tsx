@@ -17,13 +17,22 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Keyboard,
   Loader2,
-  RefreshCw,
   RotateCcw,
   Skull,
   X,
   Zap,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -145,6 +154,20 @@ export default function OutboundQueueClient() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('outbound-queue.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('outbound-queue.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('outbound-queue.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('outbound-queue.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -193,6 +216,7 @@ export default function OutboundQueueClient() {
       }
       setNextCursor(data.nextCursor)
       if (reset && data.stats) setStats(data.stats)
+      if (reset) setLastFetchedAt(Date.now())
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load')
     } finally {
@@ -476,9 +500,26 @@ export default function OutboundQueueClient() {
               Re-enqueue all dead
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => void load(true)} disabled={loading}>
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          </Button>
+          <SharedDensityToggle density={density} onChange={setDensity} />
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void load(true)}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void load(true)}
+            loading={loading}
+          />
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -668,9 +709,30 @@ export default function OutboundQueueClient() {
           actionLoading={actionLoading === detail.id}
         />
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={OUTBOUND_QUEUE_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const OUTBOUND_QUEUE_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['r'], label: 'Refresh queue' },
+      { keys: ['Esc'], label: 'Close detail · clear selection' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 // ── Detail slide-over ──────────────────────────────────────────────────────
 
