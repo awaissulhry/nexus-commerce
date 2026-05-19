@@ -14,8 +14,17 @@ import {
   Boxes, AlertTriangle, CalendarClock,
   FileText, ChevronUp, ChevronDown,
   Upload, Link2, Trash2, Camera, Unlock, History, Check,
-  Smartphone, Tag,
+  Smartphone, Tag, Keyboard,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import Link from 'next/link'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -153,6 +162,20 @@ export default function InboundWorkspace() {
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('inbound.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('inbound.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('inbound.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('inbound.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
   const [error, setError] = useState<string | null>(null)
   const [kpis, setKpis] = useState<Kpis | null>(null)
   const [drawerId, setDrawerId] = useState<string | null>(null)
@@ -199,6 +222,7 @@ export default function InboundWorkspace() {
       setItems(data.items ?? [])
       setTotal(data.total ?? 0)
       setTotalPages(data.totalPages ?? 0)
+      setLastFetchedAt(Date.now())
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load inbound')
     } finally {
@@ -296,8 +320,26 @@ export default function InboundWorkspace() {
             <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('inbound.newInbound')}
             </button>
-            <button onClick={() => { fetchAll(); fetchKpis() }} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
-              <RefreshCw size={12} /> {t('common.refresh')}
+            <SharedDensityToggle density={density} onChange={setDensity} />
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={() => { fetchAll(); fetchKpis() }}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={() => { fetchAll(); fetchKpis() }}
+              loading={loading}
+              error={!!error}
+            />
+            <button
+              type="button"
+              onClick={() => setShortcutsOpen(true)}
+              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+              title="Keyboard shortcuts (?)"
+              aria-label="Keyboard shortcuts"
+            >
+              <Keyboard size={12} />
             </button>
           </div>
         }
@@ -577,9 +619,43 @@ export default function InboundWorkspace() {
           onChanged={() => { fetchAll(); fetchKpis() }}
         />
       )}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={INBOUND_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
+
+const INBOUND_SHORTCUTS: ShortcutGroup[] = [
+  {
+    title: 'Navigation',
+    rows: [
+      { keys: ['/'], label: 'Focus search' },
+      { keys: ['j', '↓'], label: 'Move to next row' },
+      { keys: ['k', '↑'], label: 'Move to previous row' },
+      { keys: ['Enter'], label: 'Open inbound detail' },
+      { keys: ['Esc'], label: 'Close drawer · drop focused row' },
+    ],
+  },
+  {
+    title: 'Type filter',
+    rows: [
+      { keys: ['1'], label: 'All' },
+      { keys: ['2'], label: 'Supplier' },
+      { keys: ['3'], label: 'Manufacturing' },
+      { keys: ['4'], label: 'Transfer' },
+      { keys: ['5'], label: 'FBA' },
+    ],
+  },
+  {
+    title: 'Help',
+    rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+  },
+]
 
 // ─────────────────────────────────────────────────────────────────────
 // KPI strip
