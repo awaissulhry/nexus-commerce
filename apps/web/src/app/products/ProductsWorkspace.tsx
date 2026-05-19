@@ -436,6 +436,8 @@ export default function ProductsWorkspace() {
       'wizard.submitted',
       'pim.changed',
       'bulk-job.completed',
+      'stock.adjusted',
+      'stock.transferred',
     ],
   })
 
@@ -865,6 +867,8 @@ export default function ProductsWorkspace() {
       'wizard.submitted',
       'pim.changed',
       'bulk-job.completed',
+      'stock.adjusted',
+      'stock.transferred',
     ],
     () => {
       fetchTags()

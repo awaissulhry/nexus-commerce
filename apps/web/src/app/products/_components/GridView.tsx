@@ -1197,6 +1197,20 @@ const ProductCell = memo(function ProductCell({
             fba={p.fbaStock}
             fbm={p.fbmStock}
             fbmLowThreshold={p.lowStockThreshold ?? 10}
+            onAdjustFbm={async (value) => {
+              const res = await fetch(`${getBackendUrl()}/api/products/${p.id}/fbm-stock`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value }),
+              })
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: `${res.status}` }))
+                throw new Error(err?.error ?? `${res.status}`)
+              }
+              const data = await res.json()
+              emitInvalidation({ type: 'stock.adjusted', meta: { productId: p.id, source: 'products-grid-fbm-inline' } })
+              return { fbaStock: data.fbaStock, fbmStock: data.fbmStock }
+            }}
           />
           <Link
             href={`/products/${p.id}/edit?tab=matrix`}

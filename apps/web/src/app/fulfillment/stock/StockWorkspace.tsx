@@ -3542,6 +3542,20 @@ const COLUMN_META: Record<ColumnKey, {
         fba={it.fbaStock}
         fbm={it.fbmStock}
         fbmLowThreshold={threshold}
+        onAdjustFbm={async (value) => {
+          const res = await fetch(`${getBackendUrl()}/api/products/${it.id}/fbm-stock`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value }),
+          })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `${res.status}` }))
+            throw new Error(err?.error ?? `${res.status}`)
+          }
+          const data = await res.json()
+          emitInvalidation({ type: 'stock.adjusted', meta: { productId: it.id } })
+          return { fbaStock: data.fbaStock, fbmStock: data.fbmStock }
+        }}
       />
     ),
   },
