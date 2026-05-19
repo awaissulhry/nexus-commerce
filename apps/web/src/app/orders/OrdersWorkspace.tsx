@@ -9,10 +9,24 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   ShoppingCart, RefreshCw, Star, User, DollarSign, Undo2, Download,
+  CheckCircle2, Truck, Package, Keyboard,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  KpiStrip,
+  FilterPopover,
+  KeyboardShortcutsModal,
+  type AutoRefreshInterval,
+  type Density,
+  type KpiTileSpec,
+  type FilterDimension,
+  type ShortcutGroup,
+} from '@/app/_shared/grid-lens'
 import { CustomerLens } from './_lenses/CustomerLens'
 import { FinancialsLens } from './_lenses/FinancialsLens'
 import { ReturnsLens } from './_lenses/ReturnsLens'
@@ -109,9 +123,33 @@ export default function OrdersWorkspace() {
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('orders.density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => { try { window.localStorage.setItem('orders.density', density) } catch {} }, [density])
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('orders.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => { try { window.localStorage.setItem('orders.autoRefreshMin', String(autoRefreshMin)) } catch {} }, [autoRefreshMin])
+  const [filterOrder, setFilterOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem('orders.filterOrder')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('orders.filterOrder', JSON.stringify(filterOrder)) } catch {}
+  }, [filterOrder])
   // O.14 — keyboard row navigation. -1 = no row focused; J/ArrowDown
   // sets to 0 on first press. Reset whenever the orders list itself
   // changes underneath (page/search/filter shift).
@@ -209,6 +247,7 @@ export default function OrdersWorkspace() {
       setOrders(data.orders ?? [])
       setTotal(data.total ?? 0)
       setTotalPages(data.totalPages ?? 0)
+      setLastFetchedAt(Date.now())
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load')
       setOrders([])
@@ -348,6 +387,87 @@ export default function OrdersWorkspace() {
     channelFilters.length + marketplaceFilters.length + statusFilters.length +
     fulfillmentFilters.length + reviewStatusFilters.length +
     (hasReturn ? 1 : 0) + (hasRefund ? 1 : 0) + (reviewEligible ? 1 : 0) + (customerEmail ? 1 : 0)
+  // Secondary filter count — the dimensions hosted in the popover.
+  // Channel + marketplace stay inline as preset chips for hot paths.
+  const secondaryFilterCount =
+    statusFilters.length + fulfillmentFilters.length + reviewStatusFilters.length +
+    (hasReturn ? 1 : 0) + (hasRefund ? 1 : 0) + (reviewEligible ? 1 : 0) + (customerEmail ? 1 : 0)
+
+  const orderFilterDimensions: FilterDimension[] = [
+    {
+      key: 'status',
+      label: 'Order status',
+      type: 'multi-select',
+      options: ['PENDING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((v) => ({ value: v, label: v })),
+      values: statusFilters,
+      onChange: (next) => updateUrl({ status: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    },
+    {
+      key: 'fulfillment',
+      label: 'Fulfillment',
+      type: 'multi-select',
+      options: ['FBA', 'FBM'].map((v) => ({ value: v, label: v })),
+      values: fulfillmentFilters,
+      onChange: (next) => updateUrl({ fulfillment: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    },
+    {
+      key: 'reviewStatus',
+      label: 'Review status',
+      type: 'multi-select',
+      options: ['ELIGIBLE', 'SCHEDULED', 'SENT', 'SUPPRESSED', 'FAILED', 'SKIPPED'].map((v) => ({ value: v, label: v })),
+      values: reviewStatusFilters,
+      onChange: (next) => updateUrl({ reviewStatus: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    },
+    {
+      key: 'hasReturn',
+      label: 'Has return',
+      type: 'toggle',
+      value: hasReturn === 'true',
+      onChange: (next) => updateUrl({ hasReturn: next ? 'true' : undefined, page: undefined }),
+    },
+    {
+      key: 'hasRefund',
+      label: 'Has refund',
+      type: 'toggle',
+      value: hasRefund === 'true',
+      onChange: (next) => updateUrl({ hasRefund: next ? 'true' : undefined, page: undefined }),
+    },
+    {
+      key: 'reviewEligible',
+      label: 'Review-eligible only',
+      type: 'toggle',
+      value: reviewEligible,
+      onChange: (next) => updateUrl({ reviewEligible: next ? 'true' : undefined, page: undefined }),
+    },
+  ]
+
+  const clearSecondaryFilters = () => updateUrl({
+    status: undefined,
+    fulfillment: undefined,
+    reviewStatus: undefined,
+    hasReturn: undefined,
+    hasRefund: undefined,
+    reviewEligible: undefined,
+    customerEmail: undefined,
+    page: undefined,
+  })
+
+  const ORDERS_SHORTCUTS: ShortcutGroup[] = [
+    {
+      title: 'Navigation',
+      rows: [
+        { keys: ['/'], label: 'Focus search' },
+        { keys: ['j', '↓'], label: 'Move to next row' },
+        { keys: ['k', '↑'], label: 'Move to previous row' },
+        { keys: ['Enter'], label: 'Open order detail' },
+        { keys: ['Esc'], label: 'Clear selection · drop focused row' },
+      ],
+    },
+    {
+      title: 'Help',
+      rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
+    },
+  ]
 
   return (
     <div className="space-y-5">
@@ -437,7 +557,86 @@ export default function OrdersWorkspace() {
         <LensTabs current={lens} onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })} />
       </div>
 
-      {/* Filter bar */}
+      {/* R.1 — KPI strip; clickable tiles filter the grid by status. */}
+      {lens === 'grid' && stats && (
+        <KpiStrip
+          tiles={[
+            {
+              icon: ShoppingCart,
+              label: 'Total',
+              value: stats.total.toLocaleString(),
+              detail: 'across all statuses',
+              tone: 'slate',
+              onClick: () => updateUrl({ status: undefined, page: undefined }),
+            },
+            {
+              icon: Package,
+              label: 'Pending',
+              value: stats.pending.toLocaleString(),
+              detail: 'awaiting fulfillment',
+              tone: stats.pending > 0 ? 'amber' : 'slate',
+              onClick: () => updateUrl({ status: 'PENDING', page: undefined }),
+            },
+            {
+              icon: Truck,
+              label: 'Shipped',
+              value: stats.shipped.toLocaleString(),
+              detail: 'in transit',
+              tone: 'blue',
+              onClick: () => updateUrl({ status: 'SHIPPED', page: undefined }),
+            },
+            {
+              icon: CheckCircle2,
+              label: 'Delivered',
+              value: stats.delivered.toLocaleString(),
+              detail: 'completed',
+              tone: 'emerald',
+              onClick: () => updateUrl({ status: 'DELIVERED', page: undefined }),
+            },
+          ] satisfies KpiTileSpec[]}
+        />
+      )}
+
+      {/* R.1 — Grid toolbar: density, auto-refresh, filter popover,
+          freshness, shortcuts. Sits just above the inline filter bar. */}
+      {lens === 'grid' && (
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <FilterPopover
+            dimensions={orderFilterDimensions}
+            onClearAll={clearSecondaryFilters}
+            activeCount={secondaryFilterCount}
+            order={filterOrder}
+            onOrderChange={setFilterOrder}
+            onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
+            onSaveView={() => setSavedViewMenuOpen(true)}
+          />
+          <SharedDensityToggle density={density} onChange={setDensity} />
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => { fetchOrders(); fetchStats(); fetchFacets() }}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => fetchOrders()}
+            loading={loading}
+            error={!!error}
+          />
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Filter bar — search input + inline channel/market chips.
+          Secondary dimensions (status, fulfillment, review, has-return,
+          has-refund, review-eligible) now live in the FilterPopover above. */}
       {lens === 'grid' && (
         <FilterBar
           searchInput={searchInput}
@@ -499,6 +698,13 @@ export default function OrdersWorkspace() {
       {lens === 'financials' && <FinancialsLens orders={orders} />}
       {lens === 'returns' && <ReturnsLens />}
       {lens === 'reviews' && <ReviewsLens />}
+
+      {shortcutsOpen && (
+        <KeyboardShortcutsModal
+          groups={ORDERS_SHORTCUTS}
+          onClose={() => setShortcutsOpen(false)}
+        />
+      )}
     </div>
   )
 }
