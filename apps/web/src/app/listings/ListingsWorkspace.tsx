@@ -14,7 +14,6 @@ import {
   ArrowUpRight, Package, Plus, Pause, Play,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
   Download, FilterX, AlertCircle, Activity, TrendingUp,
-  AlignJustify, Menu as MenuIcon, Equal,
 } from 'lucide-react'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import {
@@ -343,6 +342,15 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
   useEffect(() => {
     try { window.localStorage.setItem(`${storageKey}.density`, density) } catch {}
   }, [density, storageKey])
+
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem(`${storageKey}.autoRefreshMin`))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem(`${storageKey}.autoRefreshMin`, String(autoRefreshMin)) } catch {}
+  }, [autoRefreshMin, storageKey])
 
   // C.11 — saved views. Re-uses the existing /api/saved-views CRUD
   // shipped for /products (P.3); the SavedView model has a `surface`

@@ -22,7 +22,7 @@ import {
   Lock as LockIcon, Table as TableIcon, Grid, LayoutGrid,
   Check, Download, Sliders, Undo2, CheckCircle2,
   Lightbulb, Zap, AlertCircle,
-  Columns, Maximize2, Minimize2, Keyboard,
+  Columns, Keyboard,
   ClipboardCheck, Bookmark, BookmarkPlus, Trash2, Star,
   ShieldAlert, GripVertical,
 } from 'lucide-react'

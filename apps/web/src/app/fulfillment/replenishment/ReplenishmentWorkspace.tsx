@@ -20,7 +20,6 @@ import {
   Keyboard,
   Loader2,
   Package,
-  RefreshCw,
   ShoppingCart,
   Sparkles,
   X,
@@ -40,7 +39,17 @@ import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
+import {
+  VirtualizedGrid,
+  GridFooter,
+  ProductIdentityCell,
+  StockSplit,
+  DensityToggle,
+  AutoRefreshSelect,
+  type Density,
+  type AutoRefreshInterval,
+} from '@/app/_shared/grid-lens'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -145,6 +154,16 @@ export default function ReplenishmentWorkspace() {
   const [data, setData] = useState<ReplenishmentResponse | null>(null)
   const [events, setEvents] = useState<UpcomingEvent[] | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [fetchError, setFetchError] = useState<boolean>(false)
+  const [density, setDensity] = useState<Density>(() => {
+    if (typeof window === 'undefined') return 'comfortable'
+    const v = window.localStorage.getItem('nexus-replenishment-density') as Density | null
+    return v === 'compact' || v === 'comfortable' || v === 'spacious' ? v : 'comfortable'
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('nexus-replenishment-density', density) } catch {}
+  }, [density])
   // W2.2 — replaces window.prompt for dismiss-with-reason. Holds the
   // pending request; cleared on confirm/cancel. `onConfirm` receives
   // the trimmed reason or null when the operator left it blank.
@@ -157,7 +176,7 @@ export default function ReplenishmentWorkspace() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkOpen, setBulkOpen] = useState(false)
   // R.5 — auto-refresh interval persisted per-device via localStorage.
-  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(0)
   // Keyboard shortcuts. focusedIndex is -1 when no row has keyboard
   // focus; helpOpen toggles the "?" overlay.
   const [focusedIndex, setFocusedIndex] = useState(-1)
@@ -207,7 +226,7 @@ export default function ReplenishmentWorkspace() {
   useEffect(() => {
     const stored = window.localStorage.getItem('nexus-replenishment-autorefresh')
     const n = Number(stored)
-    if (n === 5 || n === 15) setAutoRefreshMin(n)
+    if (n === 5 || n === 15) setAutoRefreshMin(n as AutoRefreshInterval)
   }, [])
   useEffect(() => {
     window.localStorage.setItem('nexus-replenishment-autorefresh', String(autoRefreshMin))
@@ -234,6 +253,10 @@ export default function ReplenishmentWorkspace() {
         const ev = await r2.json()
         setEvents(ev.events ?? [])
       }
+      setFetchError(!r1.ok)
+      setLastFetchedAt(Date.now())
+    } catch {
+      setFetchError(true)
     } finally {
       setLoading(false)
     }
@@ -492,16 +515,7 @@ export default function ReplenishmentWorkspace() {
     return { gridRows: topRows, childrenByParent: childMap }
   }, [data, filtered])
 
-  // R.5 — auto-refresh. Pause when document is hidden so a backgrounded
-  // tab doesn't burn requests.
-  useEffect(() => {
-    if (autoRefreshMin === 0) return
-    const ms = autoRefreshMin * 60_000
-    const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void fetchData()
-    }, ms)
-    return () => window.clearInterval(id)
-  }, [autoRefreshMin, fetchData])
+  // R.5 — auto-refresh now driven by AutoRefreshSelect's onTick prop.
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -1085,25 +1099,18 @@ export default function ReplenishmentWorkspace() {
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-44 sm:w-56"
           />
-          {/* R.5 — auto-refresh dropdown. Pauses when tab is hidden. */}
-          <select
+          <DensityToggle density={density} onChange={setDensity} />
+          <AutoRefreshSelect
             value={autoRefreshMin}
-            onChange={(e) => setAutoRefreshMin(Number(e.target.value) as 0 | 5 | 15)}
-            className="h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            title="Auto-refresh interval (paused when tab hidden)"
-          >
-            <option value={0}>Auto-refresh: Off</option>
-            <option value={5}>Auto-refresh: 5 min</option>
-            <option value={15}>Auto-refresh: 15 min</option>
-          </select>
-          <Button
-            onClick={fetchData}
-            variant="secondary"
-            size="md"
-            icon={<RefreshCw size={12} aria-hidden="true" />}
-          >
-            Refresh
-          </Button>
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+            error={fetchError}
+          />
           {/* R.5 — CSV export of currently filtered + sorted suggestions */}
           <Button
             onClick={() => exportSuggestionsCsv(filtered)}
@@ -1212,8 +1219,8 @@ export default function ReplenishmentWorkspace() {
             <VirtualizedGrid<RepRow>
               rows={gridRows}
               visible={REP_COLUMNS}
-              density="comfortable"
-              cellPad={DENSITY_CELL_CLASS.comfortable}
+              density={density}
+              cellPad={DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable}
               childrenByParent={childrenByParent}
               loadingChildren={_REP_EMPTY_SET}
               expandedParents={expandedParents}
