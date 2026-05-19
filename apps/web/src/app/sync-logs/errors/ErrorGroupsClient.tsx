@@ -27,7 +27,6 @@ import {
   CheckCircle2,
   EyeOff,
   Loader2,
-  RefreshCw,
   RotateCcw,
   VolumeX,
 } from 'lucide-react'
@@ -36,6 +35,8 @@ import { Button } from '@/components/ui/Button'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -102,6 +103,8 @@ export default function ErrorGroupsClient() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const updateUrl = useCallback(
     (patch: Record<string, string>) => {
@@ -137,6 +140,7 @@ export default function ErrorGroupsClient() {
         if (resetCursor) {
           setItems(json.items)
           setTotals(json.totals)
+          setLastFetchedAt(Date.now())
         } else {
           setItems((prev) => [...prev, ...json.items])
         }
@@ -252,19 +256,16 @@ export default function ErrorGroupsClient() {
           onApply={(filters) => updateUrl({ status: '', channel: '', ...filters })}
         />
 
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void fetchList(true)}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="w-3.5 h-3.5" />
-          )}
-          {t('syncLogs.errors.refresh')}
-        </Button>
+        <AutoRefreshSelect
+          value={autoRefreshMin}
+          onChange={setAutoRefreshMin}
+          onTick={() => void fetchList(true)}
+        />
+        <FreshnessIndicator
+          lastFetchedAt={lastFetchedAt}
+          onRefresh={() => void fetchList(true)}
+          loading={loading}
+        />
       </div>
 
       {error && (

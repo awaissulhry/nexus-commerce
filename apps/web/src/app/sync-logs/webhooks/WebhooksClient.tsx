@@ -17,7 +17,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  RefreshCw,
   RotateCw,
   Webhook,
   X,
@@ -28,6 +27,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -85,6 +86,8 @@ export default function WebhooksClient() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<WebhookDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const updateUrl = useCallback(
     (patch: Record<string, string>) => {
@@ -121,6 +124,7 @@ export default function WebhooksClient() {
         if (resetCursor) {
           setItems(json.items)
           setTotals(json.totals)
+          setLastFetchedAt(Date.now())
         } else {
           setItems((prev) => [...prev, ...json.items])
         }
@@ -278,19 +282,16 @@ export default function WebhooksClient() {
           }
         />
 
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void fetchList(true)}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="w-3.5 h-3.5" />
-          )}
-          {t('syncLogs.webhooks.refresh')}
-        </Button>
+        <AutoRefreshSelect
+          value={autoRefreshMin}
+          onChange={setAutoRefreshMin}
+          onTick={() => void fetchList(true)}
+        />
+        <FreshnessIndicator
+          lastFetchedAt={lastFetchedAt}
+          onRefresh={() => void fetchList(true)}
+          loading={loading}
+        />
       </div>
 
       {error && (

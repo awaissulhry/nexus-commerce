@@ -23,7 +23,6 @@ import {
   Loader2,
   Pause,
   Play,
-  RefreshCw,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -31,6 +30,8 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import TimeSeriesChart from './TimeSeriesChart'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -131,6 +132,8 @@ export default function ApiCallsClient() {
   const [liveStatus, setLiveStatus] = useState<
     'connecting' | 'open' | 'error' | 'closed'
   >('closed')
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const inFlightRef = useRef<AbortController | null>(null)
 
   const sinceMs = useMemo(() => {
@@ -207,6 +210,7 @@ export default function ApiCallsClient() {
           if (rollupRes && rollupRes.ok) {
             setRollup((await rollupRes.json()) as RollupResponse)
           }
+          setLastFetchedAt(Date.now())
         } else {
           setRecent((prev) => [...prev, ...recentJson.items])
           setNextCursor(recentJson.nextCursor)
@@ -606,19 +610,16 @@ export default function ApiCallsClient() {
             <Download className="w-3.5 h-3.5" />
             {t('syncLogs.apiCalls.csv')}
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void fetchAll(true)}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3.5 h-3.5" />
-            )}
-            {t('syncLogs.apiCalls.refresh')}
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void fetchAll(true)}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void fetchAll(true)}
+            loading={loading}
+          />
         </div>
       </div>
 

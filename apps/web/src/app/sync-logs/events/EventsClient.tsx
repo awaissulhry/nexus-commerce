@@ -19,11 +19,11 @@ import {
   FileSpreadsheet,
   Loader2,
   Radio,
-  RefreshCw,
   XCircle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -95,6 +95,8 @@ export default function EventsClient() {
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchEvents = useCallback(async (cursor?: string) => {
     if (!cursor) setLoading(true); else setLoadingMore(true)
@@ -112,6 +114,7 @@ export default function EventsClient() {
 
       if (!cursor) setEvents(json.events); else setEvents(prev => [...prev, ...json.events])
       setNextCursor(json.nextCursor)
+      if (!cursor) setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -140,10 +143,18 @@ export default function EventsClient() {
             </button>
           ))}
         </div>
-        <Button variant="ghost" size="sm" onClick={() => fetchEvents()} disabled={loading}>
-          <RefreshCw className={cn('h-4 w-4 mr-1.5', loading && 'animate-spin')} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => fetchEvents()}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => fetchEvents()}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {loading && (

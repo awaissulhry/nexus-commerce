@@ -20,13 +20,14 @@ import {
   CheckCircle2,
   Loader2,
   Plus,
-  RefreshCw,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -107,6 +108,8 @@ export default function AlertsClient() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   // Create-rule form state
   const [newName, setNewName] = useState('')
@@ -135,6 +138,7 @@ export default function AlertsClient() {
       const eventsJson = await eventsRes.json()
       setRules(rulesJson.items)
       setEvents(eventsJson.items)
+      setLastFetchedAt(Date.now())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -275,20 +279,17 @@ export default function AlertsClient() {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void fetchAll()}
-          disabled={loading}
-        >
-          {loading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="w-3.5 h-3.5" />
-          )}
-          {t('syncLogs.alerts.refresh')}
-        </Button>
+      <div className="flex justify-end items-center gap-2">
+        <AutoRefreshSelect
+          value={autoRefreshMin}
+          onChange={setAutoRefreshMin}
+          onTick={() => void fetchAll()}
+        />
+        <FreshnessIndicator
+          lastFetchedAt={lastFetchedAt}
+          onRefresh={() => void fetchAll()}
+          loading={loading}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
