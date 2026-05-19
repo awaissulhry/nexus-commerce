@@ -3932,11 +3932,32 @@ model BrandSettings {
   // ["Via Aurelia 123", "00165 Roma RM", "Italia"] for Xavia.
   addressLines String[] @default([])
   // VAT / partita IVA / tax ID — varies by jurisdiction; free-form.
+  // Legacy free-text field kept for backwards-compat with anything
+  // that already pulls from it. New Italian-specific fields below
+  // are the canonical source for fiscal docs.
   taxId        String?
   // Public-facing contact info on the PO header.
   contactEmail String?
   contactPhone String?
   websiteUrl   String?
+
+  // ── Phase D — Italian fiscal fields (B2B e-invoicing). ──────────
+  // All nullable so non-IT operators don't need to populate them;
+  // strict checksum validation lives in the API. P.IVA = 11 digits,
+  // mod-11 Luhn-style. Codice Fiscale = 16 alphanumerics with a
+  // checksum letter at position 16. SDI = 7 alphanumerics (no
+  // checksum); pecEmail = certified email (PEC) used as the
+  // alternative when no SDI code is provisioned. One of (sdiCode |
+  // pecEmail) must be present for valid Italian B2B invoicing.
+  piva           String?
+  codiceFiscale  String?
+  sdiCode        String?
+  pecEmail       String?
+  // VAT regime selector. Drives downstream invoice math and the
+  // /fulfillment/stock rimanenze valuation. Free-text would be
+  // fragile here — we constrain to a known set.
+  // Values: 'ORDINARIO' | 'FORFETTARIO' | 'OSS' | 'IOSS' | 'ESENTE'.
+  vatScheme      String?
 
   // ── Letterhead assets ───────────────────────────────────────────
   // Cloudinary or other hosted URL — pdfkit downloads + embeds at

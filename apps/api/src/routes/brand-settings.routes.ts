@@ -14,6 +14,14 @@ import {
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
 import { writeSettingsAudit } from '../utils/settings-audit.js'
+import {
+  validatePiva,
+  validateCodiceFiscale,
+  validateSdi,
+  validatePec,
+  validateInvoicingRouting,
+  isVatScheme,
+} from '../lib/italian-fiscal.js'
 
 const BRAND_SNAPSHOT_FIELDS = [
   'companyName',
@@ -26,6 +34,11 @@ const BRAND_SNAPSHOT_FIELDS = [
   'signatureBlockText',
   'defaultPoNotes',
   'factoryEmailFrom',
+  'piva',
+  'codiceFiscale',
+  'sdiCode',
+  'pecEmail',
+  'vatScheme',
 ] as const
 
 function brandSnapshot(
@@ -156,6 +169,12 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
         signatureBlockText?: string | null
         defaultPoNotes?: string | null
         factoryEmailFrom?: string | null
+        // Phase D — Italian fiscal fields.
+        piva?: string | null
+        codiceFiscale?: string | null
+        sdiCode?: string | null
+        pecEmail?: string | null
+        vatScheme?: string | null
       }
 
       // Sanitize: trim strings, drop unknown keys, coerce addressLines.
@@ -170,6 +189,13 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
         'signatureBlockText',
         'defaultPoNotes',
         'factoryEmailFrom',
+        // Phase D additions — same trim/normalize treatment as other
+        // string columns; specific validation happens below.
+        'piva',
+        'codiceFiscale',
+        'sdiCode',
+        'pecEmail',
+        'vatScheme',
       ] as const
       for (const k of stringKeys) {
         if (k in body) {
@@ -183,8 +209,73 @@ const brandSettingsRoutes: FastifyPluginAsync = async (fastify) => {
           .filter((s) => s.length > 0)
       }
 
+      // Phase D — strict fiscal validation. Per the operator's
+      // explicit choice (AskUserQuestion in the rebuild plan), bad
+      // checksums reject the save outright. Per-field errors so the
+      // UI can highlight exactly what's wrong instead of a
+      // generic "save failed" toast.
+      const fieldErrors: Record<string, string> = {}
+      // Tiny helper: discriminated-union narrowing on `r.valid` via
+      // !r.valid was flaky under TS 5's inference here, so we
+      // narrow via `if (r.valid === false)` which always works.
+      const check = (
+        field: string,
+        r: { valid: true } | { valid: false; reason: string },
+      ) => {
+        if (r.valid === false) fieldErrors[field] = r.reason
+      }
+      if (typeof update.piva === 'string' && update.piva) {
+        check('piva', validatePiva(update.piva))
+      }
+      if (typeof update.codiceFiscale === 'string' && update.codiceFiscale) {
+        check('codiceFiscale', validateCodiceFiscale(update.codiceFiscale))
+      }
+      if (typeof update.sdiCode === 'string' && update.sdiCode) {
+        check('sdiCode', validateSdi(update.sdiCode))
+      }
+      if (typeof update.pecEmail === 'string' && update.pecEmail) {
+        check('pecEmail', validatePec(update.pecEmail))
+      }
+      if (update.vatScheme != null && !isVatScheme(update.vatScheme)) {
+        fieldErrors.vatScheme =
+          'VAT scheme must be one of: ORDINARIO, FORFETTARIO, OSS, IOSS, ESENTE.'
+      }
+      // SDI-OR-PEC routing check: only fires when the operator
+      // provides a P.IVA (or when one already exists on the row and
+      // they're updating other fiscal data).
+      const existing = await prisma.brandSettings.findFirst()
+      const effectivePiva =
+        (typeof update.piva === 'string' ? update.piva : existing?.piva) ?? ''
+      const effectiveSdi =
+        (typeof update.sdiCode === 'string' ? update.sdiCode : existing?.sdiCode) ?? ''
+      const effectivePec =
+        (typeof update.pecEmail === 'string' ? update.pecEmail : existing?.pecEmail) ?? ''
+      if (effectivePiva && (typeof update.piva === 'string' || typeof update.sdiCode === 'string' || typeof update.pecEmail === 'string')) {
+        check('routing', validateInvoicingRouting({
+          piva: effectivePiva,
+          sdiCode: effectiveSdi,
+          pecEmail: effectivePec,
+        }))
+      }
+      // Uppercase normalisation for two fields where the spec is
+      // case-insensitive but downstream parsers expect uppercase.
+      if (typeof update.sdiCode === 'string' && update.sdiCode) {
+        update.sdiCode = update.sdiCode.toUpperCase()
+      }
+      if (typeof update.codiceFiscale === 'string' && update.codiceFiscale) {
+        update.codiceFiscale = update.codiceFiscale.toUpperCase()
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        return reply.code(400).send({
+          error: 'Validation failed',
+          fieldErrors,
+        })
+      }
+
       // Single-row upsert: read-then-update keeps the contract simple.
-      let row = await prisma.brandSettings.findFirst()
+      // We already fetched `existing` above for the routing check;
+      // reuse it instead of doing a second read.
+      let row = existing
       const before = row
       if (!row) {
         row = await prisma.brandSettings.create({ data: update })
