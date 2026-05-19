@@ -179,6 +179,7 @@ import { startYearEndSnapshotCron } from "./jobs/year-end-snapshot.job.js";
 import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
+import { startRetentionSweepCron } from "./jobs/data-retention-sweep.job.js";
 import { startAmazonMCFStatusCron } from "./jobs/amazon-mcf-status.job.js";
 import { startFbaPanEuSyncCron } from "./jobs/fba-pan-eu-sync.job.js";
 import { startFbaRestockCron } from "./jobs/fba-restock-ingestion.job.js";
@@ -1089,6 +1090,17 @@ async function start() {
     // NEXUS_ENABLE_SOFT_DELETE_PURGE=0.
     if (process.env.NEXUS_ENABLE_SOFT_DELETE_PURGE !== '0') {
       startPurgeSoftDeletedCron();
+    }
+
+    // Phase H follow-up — retention sweep. Reads
+    // DataRetentionPolicy.policies and deletes rows past their
+    // configured windows (audit log, login events, webhook events,
+    // stock logs, old export requests). Orders deliberately
+    // excluded — 7-year fiscal floor + cascade impact makes
+    // auto-sweep risky. Default-on; opt out via
+    // NEXUS_ENABLE_RETENTION_SWEEP=0.
+    if (process.env.NEXUS_ENABLE_RETENTION_SWEEP !== '0') {
+      startRetentionSweepCron();
     }
 
     // S.24 — Amazon MCF status sync. Every 15 min, walk active

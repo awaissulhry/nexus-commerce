@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { allowApiKeyScope } from '../lib/api-key-hook.js'
 import {
   getAvailableFields,
   getFieldDefinition,
@@ -192,7 +193,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // operator clicks the bin icon in the page header.
       deleted?: string
     }
-  }>('/products', async (request, reply) => {
+  }>('/products', {
+    // Soft gate: web UI calls this without a Bearer header today
+    // and falls through unauth'd. Once a real Bearer is sent, the
+    // verifier enforces the 'products:read' scope. When session
+    // auth lands in Phase I, swap to requireApiKeyScope() (or a
+    // session-or-key composite).
+    preHandler: allowApiKeyScope('products:read'),
+  }, async (request, reply) => {
     try {
       const q = request.query
       const page = Math.max(parseInt(q.page ?? '1', 10) || 1, 1)

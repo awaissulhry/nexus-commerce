@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { allowApiKeyScope } from '../lib/api-key-hook.js'
 import { computeHealth, aggregateIssuesByCategory } from '../services/listings/health.service.js'
 import { publishListingEvent, subscribeListingEvents } from '../services/listing-events.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
@@ -2956,7 +2957,9 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   //   - "set-pricing-rule" → pricingRule = payload.pricingRule
   // Returns 202 with jobId — poll GET /api/listings/bulk-action/:jobId
   // ─────────────────────────────────────────────────────────────────
-  fastify.post('/listings/bulk-action', async (request, reply) => {
+  fastify.post('/listings/bulk-action', {
+    preHandler: allowApiKeyScope('listings:write'),
+  }, async (request, reply) => {
     try {
       const body = (request.body ?? {}) as {
         action?: string

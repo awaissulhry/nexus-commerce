@@ -9,6 +9,7 @@ import { computeLocaleCompleteness } from '../services/translation-completeness.
 import { deriveSyncStatus, ACTIVE_CHANNELS } from '../services/sync-status.service.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import { logger } from '../utils/logger.js'
+import { allowApiKeyScope } from '../lib/api-key-hook.js'
 
 // ProductReadCache (ES.3) mirrors Product into a flat row used by the
 // /products grid. Every mutation here must refresh the affected rows
@@ -1529,7 +1530,9 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     return result
   }
 
-  fastify.post('/products/bulk-soft-delete', async (request, reply) => {
+  fastify.post('/products/bulk-soft-delete', {
+    preHandler: allowApiKeyScope('products:write'),
+  }, async (request, reply) => {
     try {
       const body = request.body as { productIds?: string[] }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
