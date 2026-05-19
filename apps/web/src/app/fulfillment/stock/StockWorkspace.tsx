@@ -1348,6 +1348,7 @@ export default function StockWorkspace() {
           order={stockFilterOrder}
           onOrderChange={setStockFilterOrder}
           onResetOrder={stockFilterOrder.length > 0 ? () => setStockFilterOrder([]) : undefined}
+          onSaveView={() => setSaveViewModalOpen(true)}
         />
         <FreshnessIndicator
           lastFetchedAt={lastFetchedAt}
