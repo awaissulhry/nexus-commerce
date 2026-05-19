@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import {
-  AlertCircle, ArrowDownToLine, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, RefreshCw, Search, Send, X,
+  AlertCircle, ArrowRightLeft, CheckCircle2, Download, ExternalLink, GitBranch, GitFork, History, Loader2, RefreshCw, RotateCcw, Search, Send, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -276,9 +276,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   const [descModal, setDescModal]             = useState<{ rowId: string } | null>(null)
   const [categorySearchOpen, setCategorySearchOpen]   = useState(false)
   const [categorySearchRowId, setCategorySearchRowId] = useState<string | null>(null)
-  const [fetching, setFetching]               = useState(false)
-  const [fetchPanelOpen, setFetchPanelOpen]   = useState(false)
-
   // ── Phase 3: Pull from eBay (full pull → diff preview → apply) ──────
   const [pullPanelOpen, setPullPanelOpen]     = useState(false)
   const [pulling, setPulling]                 = useState(false)
@@ -478,38 +475,6 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     } finally {
       setPushing(false)
       setPublishPanelOpen(false)
-    }
-  }
-
-  // ── API: fetch live data from eBay ────────────────────────────────────
-
-  async function handleFetchFromEbay(rows: BaseRow[], selectedRows: Set<string>, setRows: React.Dispatch<React.SetStateAction<BaseRow[]>>, pushHistory: (r: BaseRow[]) => void) {
-    const skus = [...selectedRows].map((id) => {
-      const row = rows.find((r) => r._rowId === id)
-      return row ? String(row.sku ?? '') : ''
-    }).filter(Boolean)
-    if (!skus.length) return
-    setFetching(true)
-    try {
-      const res = await fetch(`${BACKEND}/api/ebay/flat-file/fetch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus, marketplace }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json() as { rows: Record<string, Partial<EbayRow>> }
-      const next = rows.map((r) => {
-        const live = json.rows[String(r.sku ?? '')]
-        return live ? { ...r, ...live, _dirty: true } : r
-      })
-      pushHistory(next)
-      setRows(next)
-      toast.success(`Fetched data for ${skus.length} SKU${skus.length !== 1 ? 's' : ''}`)
-    } catch (err) {
-      toast.error('Fetch failed: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setFetching(false)
-      setFetchPanelOpen(false)
     }
   }
 
@@ -825,44 +790,8 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
-  const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
+  const renderToolbarFetch = useCallback(({ rows, selectedRows }: ToolbarFetchCtx) => (
     <>
-      {/* Existing lightweight Fetch (legacy, calls /api/ebay/flat-file/fetch) */}
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setFetchPanelOpen((o) => !o)}
-          disabled={selectedRows.size === 0 || fetching}
-          title={selectedRows.size > 0 ? `Fetch from eBay (${selectedRows.size} SKU${selectedRows.size !== 1 ? 's' : ''})` : 'Fetch from eBay — select rows first'}
-          className={cn(
-            'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-            fetchPanelOpen ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
-            'disabled:opacity-40 disabled:cursor-default',
-          )}
-        >
-          {fetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
-        </button>
-        {fetchPanelOpen && (
-          <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-3 space-y-2">
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Fetch live listing data from eBay for {selectedRows.size} selected SKU{selectedRows.size !== 1 ? 's' : ''}. Overwrites title, condition, images, and aspects.
-            </p>
-            <div className="flex gap-2">
-              <button type="button"
-                onClick={() => void handleFetchFromEbay(rows, selectedRows, setRows, pushHistory)}
-                className="flex-1 h-7 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700">
-                Fetch now
-              </button>
-              <button type="button" onClick={() => setFetchPanelOpen(false)}
-                className="h-7 px-2 text-xs border border-slate-200 dark:border-slate-700 rounded text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
       <div className="relative">
         <button
@@ -933,7 +862,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       )}
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [fetching, fetchPanelOpen, pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen])
+  ), [pullPanelOpen, pulling, pullProgress, pullResult, marketplace, startPullJob, pullHistoryOpen])
 
   // ── Slot: import button ────────────────────────────────────────────────
 
@@ -1008,7 +937,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         disabled={!ctx.rows.length}
         className="h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-40"
       >
-        <GitFork className="w-3.5 h-3.5 rotate-180" />
+        <RotateCcw className="w-3.5 h-3.5" />
       </button>
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps

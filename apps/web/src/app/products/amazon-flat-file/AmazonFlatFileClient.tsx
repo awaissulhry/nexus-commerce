@@ -7,8 +7,8 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, BrainCircuit, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw,
-  Search, Send, Trash2, Upload, X, ArrowDownToLine, ArrowRightLeft,
+  ClipboardPaste, Clock, Copy, Download, FileSpreadsheet, GitBranch, GitFork, History, Image as ImageIcon, Loader2, Pin, Plus, RefreshCw, RotateCcw,
+  Search, Send, Trash2, Upload, X, ArrowRightLeft,
   Undo2, Redo2, GripVertical, SlidersHorizontal, Replace, Sparkles,
 } from 'lucide-react'
 import { FindReplaceBar } from '@/app/_shared/bulk-edit/components/FindReplaceBar'
@@ -489,7 +489,6 @@ export default function AmazonFlatFileClient({
     type: 'col' | 'row'; colId?: string
     startX: number; startY: number; startVal: number
   } | null>(null)
-  const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
   const [pullPanelOpen, setPullPanelOpen] = useState(false)
   const [pulling, setPulling] = useState(false)
   const [pullProgress, setPullProgress] = useState<{ progress: number; total: number } | null>(null)
@@ -512,8 +511,6 @@ export default function AmazonFlatFileClient({
     skusReturned: number
     doneAt: string | null
   } | null>(null)
-  const [fetching, setFetching] = useState(false)
-
   // Tracks the anchor row when user drags on the # column to select rows
   const rowDragRef = useRef<number | null>(null)
 
@@ -1859,85 +1856,6 @@ export default function AmazonFlatFileClient({
     }
   }, [manifest, rows, productType])
 
-  // ── Fetch from Amazon ───────────────────────────────────────────────
-  const handleFetchFromAmazon = useCallback(async (targetMarkets: string[]) => {
-    const selectedSkus = [...selectedRows]
-      .map((id) => rows.find((r) => r._rowId === id)?.item_sku as string | undefined)
-      .filter((s): s is string => !!s)
-    if (!selectedSkus.length) return
-
-    setFetching(true)
-    setFetchPanelOpen(false)
-    try {
-      const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/fetch-listings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus: selectedSkus, marketplaces: targetMarkets }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Fetch failed')
-
-      const results: Record<string, Record<string, { asin?: string; status?: string }>> =
-        data.results ?? {}
-
-      // 1. Update current market rows in state
-      const currentResults = results[marketplace] ?? {}
-      setRows((prev) =>
-        prev.map((row) => {
-          const fetched = currentResults[row.item_sku as string]
-          if (!fetched) return row
-          return {
-            ...row,
-            ...(fetched.asin ? { _asin: fetched.asin } : {}),
-            ...(fetched.status ? { _listingStatus: fetched.status } : {}),
-          }
-        }),
-      )
-
-      // Persist ASIN data so it survives row reloads
-      const cacheEntries: Record<string, { asin?: string; status?: string }> = {}
-      for (const [sku, data] of Object.entries(currentResults)) {
-        if (data.asin || data.status) {
-          cacheEntries[sku] = { asin: data.asin, status: data.status }
-        }
-      }
-      if (Object.keys(cacheEntries).length) writeAsinCache(marketplace, cacheEntries)
-
-      // 2. Merge into other markets' localStorage drafts
-      for (const [mp, mpResults] of Object.entries(results)) {
-        if (mp === marketplace) continue
-        const key = rowStorageKey(mp, productType)
-        try {
-          const existingRaw = localStorage.getItem(key)
-          const existing: Row[] = existingRaw ? JSON.parse(existingRaw) : []
-          if (!existing.length) continue
-          const updated = existing.map((row) => {
-            const fetched = mpResults[row.item_sku as string]
-            if (!fetched) return row
-            return {
-              ...row,
-              ...(fetched.asin ? { _asin: fetched.asin } : {}),
-              ...(fetched.status ? { _listingStatus: fetched.status } : {}),
-            }
-          })
-          localStorage.setItem(key, JSON.stringify(updated))
-        } catch { /* quota exceeded — skip */ }
-        // Persist ASIN data for other markets too
-        const mpCacheEntries: Record<string, { asin?: string; status?: string }> = {}
-        for (const [sku, data] of Object.entries(mpResults)) {
-          if (data.asin || data.status) {
-            mpCacheEntries[sku] = { asin: data.asin, status: data.status }
-          }
-        }
-        if (Object.keys(mpCacheEntries).length) writeAsinCache(mp, mpCacheEntries)
-      }
-    } catch (e: any) {
-      setLoadError(e.message ?? 'Fetch from Amazon failed')
-    } finally {
-      setFetching(false)
-    }
-  }, [selectedRows, rows, marketplace, productType])
-
   // ── Pull from Amazon (full attributes, in-editor, undoable) ─────────
   // Calls /api/amazon/flat-file/pull-preview which fetches live SP-API data
   // per SKU and returns expanded flat-file rows WITHOUT touching the DB.
@@ -2039,6 +1957,10 @@ export default function AmazonFlatFileClient({
     const groupFilter = new Set(isAllColumns ? [] : (selectedColumns as PullGroupId[]))
 
     pushSnapshot()
+    // Per-SKU ASIN + status entries to persist to the local cache so they
+    // survive row reloads (the legacy Fetch-from-Amazon button used to do
+    // this; we keep the same behaviour now that Pull is the only path).
+    const asinCacheEntries: Record<string, { asin?: string; status?: string }> = {}
     setRows((prev) => prev.map((row) => {
       if (!selectedSet.has(String(row._rowId))) return row
       const sku = String(row.item_sku ?? '')
@@ -2058,9 +1980,13 @@ export default function AmazonFlatFileClient({
       const pulledStatus = (pulled as any)._listingStatus
       if (pulledAsin) merged._asin = pulledAsin
       if (pulledStatus) merged._listingStatus = pulledStatus
+      if (sku && (pulledAsin || pulledStatus)) {
+        asinCacheEntries[sku] = { asin: pulledAsin || undefined, status: pulledStatus || undefined }
+      }
       if (changed) merged._dirty = true
       return changed ? merged : row
     }))
+    if (Object.keys(asinCacheEntries).length) writeAsinCache(marketplace, asinCacheEntries)
 
     setPullResult({
       pulled: result.selectedRowIds.length,
@@ -2394,24 +2320,6 @@ export default function AmazonFlatFileClient({
             active={replicateOpen}
           />
 
-          {/* Fetch from Amazon — always visible, disabled when no rows selected */}
-          <div className="relative">
-            <TbBtn
-              icon={<ArrowDownToLine className="w-3.5 h-3.5" />}
-              title={selectedRows.size > 0
-                ? `Fetch from Amazon (${selectedRows.size} SKU${selectedRows.size !== 1 ? 's' : ''})`
-                : 'Fetch from Amazon — select rows first'}
-              onClick={() => setFetchPanelOpen((o) => !o)}
-              disabled={selectedRows.size === 0 || fetching}
-              active={fetchPanelOpen}
-              badge={selectedRows.size || undefined}
-            />
-            {fetchPanelOpen && (
-              <FetchFromAmazonPanel selectedCount={selectedRows.size} currentMarket={marketplace}
-                onFetch={handleFetchFromAmazon} onClose={() => setFetchPanelOpen(false)} />
-            )}
-          </div>
-
           {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
           <div className="relative">
             <TbBtn
@@ -2468,15 +2376,6 @@ export default function AmazonFlatFileClient({
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 flex-shrink-0" />
 
-          {/* Push to markets — Translate tab */}
-          <TbBtn
-            icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
-            title="Translate enum values to other markets"
-            onClick={() => setPushPanel((p) => p?.tab === 'translate' ? null : { tab: 'translate' })}
-            disabled={!manifest || !rows.length}
-            active={pushPanel?.tab === 'translate'}
-          />
-
           {/* IN.1 — Override badges toggle */}
           <TbBtn
             icon={<GitBranch className="w-3.5 h-3.5" />}
@@ -2495,7 +2394,7 @@ export default function AmazonFlatFileClient({
 
           {/* IN.2 — Cascade: reset all visible rows back to master */}
           <TbBtn
-            icon={<GitFork className="w-3.5 h-3.5" />}
+            icon={<RotateCcw className="w-3.5 h-3.5" />}
             title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
             onClick={async () => {
               const overrideRows = rows.filter(
@@ -4739,118 +4638,13 @@ function CopyTabContent({ manifest, rows, sourceMarket, onCopy, onClose }: CopyT
   )
 }
 
-// ── FetchFromAmazonPanel ───────────────────────────────────────────────
-// Lets the user pull selected fields from Amazon for the selected rows.
-// Current market is pre-selected; other markets can be ticked to save time.
+// Module-level constants shared by SubmitToAmazonPanel + per-row renderers.
+// Used to live alongside the now-removed FetchFromAmazonPanel.
 
 const ALL_MARKETS = ['IT', 'DE', 'FR', 'ES', 'UK']
 const AMAZON_DOMAIN: Record<string, string> = {
   IT: 'amazon.it', DE: 'amazon.de', FR: 'amazon.fr',
   ES: 'amazon.es', UK: 'amazon.co.uk',
-}
-
-interface FetchPanelProps {
-  selectedCount: number
-  currentMarket: string
-  onFetch: (markets: string[]) => void
-  onClose: () => void
-}
-
-function FetchFromAmazonPanel({ selectedCount, currentMarket, onFetch, onClose }: FetchPanelProps) {
-  const [markets, setMarkets] = useState<Set<string>>(() => new Set([currentMarket]))
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (!panelRef.current?.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handle, true)
-    return () => document.removeEventListener('mousedown', handle, true)
-  }, [onClose])
-
-  function toggleMarket(mp: string) {
-    setMarkets((prev) => {
-      const n = new Set(prev)
-      n.has(mp) ? n.delete(mp) : n.add(mp)
-      return n
-    })
-  }
-
-  return (
-    <div
-      ref={panelRef}
-      className="absolute right-0 top-full mt-1 z-50 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
-    >
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <div>
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Fetch from Amazon
-          </div>
-          <div className="text-xs text-slate-400">
-            {selectedCount} SKU{selectedCount !== 1 ? 's' : ''} selected
-          </div>
-        </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* What to fetch */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-        <div className="text-xs font-medium text-slate-500 mb-2">What to fetch</div>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked readOnly className="w-3.5 h-3.5 accent-blue-600" />
-          <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">ASIN</span>
-          <span className="text-xs text-slate-400">Amazon's assigned identifier</span>
-        </label>
-        <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-          ASINs are assigned by Amazon after publishing. The ASIN will appear
-          as a clickable link on each row, opening the Amazon listing directly.
-        </p>
-      </div>
-
-      {/* Markets */}
-      <div className="px-4 py-3">
-        <div className="text-xs font-medium text-slate-500 mb-2">Markets</div>
-        <div className="flex flex-wrap gap-1.5">
-          {ALL_MARKETS.map((mp) => {
-            const isCurrent = mp === currentMarket
-            const checked = markets.has(mp)
-            return (
-              <button
-                key={mp}
-                type="button"
-                onClick={() => toggleMarket(mp)}
-                className={cn(
-                  'text-xs font-medium px-2.5 py-1 rounded border transition-colors',
-                  checked
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-400',
-                )}
-              >
-                {mp}{isCurrent && <span className="ml-1 opacity-70 text-[10px]">current</span>}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-        <Button
-          size="sm"
-          className="w-full justify-center"
-          onClick={() => onFetch([...markets])}
-          disabled={markets.size === 0}
-        >
-          <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />
-          Fetch {selectedCount} SKU{selectedCount !== 1 ? 's' : ''}
-          {markets.size > 1 ? ` × ${markets.size} markets` : ` (${[...markets][0]})`}
-        </Button>
-      </div>
-    </div>
-  )
 }
 
 // ── PullFromAmazonPanel ────────────────────────────────────────────────
