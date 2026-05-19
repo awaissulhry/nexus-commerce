@@ -30,11 +30,13 @@ import {
   BulkActionShell,
   KeyboardShortcutsModal,
   SharedLensTabs,
+  FilterPopover,
   type AutoRefreshInterval,
   type KpiTileSpec,
   type BulkAction,
   type ShortcutGroup,
   type LensTab,
+  type FilterDimension,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -353,7 +355,6 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
     } catch { return defaultVisible }
   })
   const [columnPickerOpen, setColumnPickerOpen] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [drawerListingId, setDrawerListingId] = useState<string | null>(null)
 
@@ -1076,8 +1077,6 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           marketplaces={marketplaces}
           facets={facets}
           updateUrl={updateUrl}
-          filtersOpen={filtersOpen}
-          setFiltersOpen={setFiltersOpen}
         />
       )}
 
@@ -1562,15 +1561,24 @@ function FilterBar(props: {
   marketplaces: Marketplace[]
   facets: Facets | null
   updateUrl: (p: Record<string, string | undefined>) => void
-  filtersOpen: boolean
-  setFiltersOpen: (b: boolean) => void
 }) {
   const {
     lockChannel, lockMarketplace, searchInput, setSearchInput,
     channelFilters, marketplaceFilters, statusFilters, syncStatusFilters,
     hasError, lowStock, publishedOnly, marketplaces, facets, updateUrl,
-    filtersOpen, setFiltersOpen,
   } = props
+
+  // FP.3 — per-user dimension order, persisted in localStorage.
+  const [filterOrder, setFilterOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem('listings.filterOrder')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('listings.filterOrder', JSON.stringify(filterOrder)) } catch {}
+  }, [filterOrder])
 
   const activeFilterCount =
     (channelFilters.length && !lockChannel ? 1 : 0) +
@@ -1584,6 +1592,18 @@ function FilterBar(props: {
   const channelOptions = facets?.channels.map((c) => c.value) ?? ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
   const statusOptions = facets?.statuses.map((s) => s.value) ?? ['ACTIVE', 'DRAFT', 'PENDING', 'SUPPRESSED', 'ENDED', 'ERROR']
   const syncOptions = facets?.syncStatuses.map((s) => s.value) ?? ['IDLE', 'PENDING', 'SYNCING', 'IN_SYNC', 'FAILED']
+  const channelCounts = useMemo(
+    () => facets?.channels.reduce((m, c) => { m[c.value] = c.count; return m }, {} as Record<string, number>) ?? {},
+    [facets],
+  )
+  const statusCounts = useMemo(
+    () => facets?.statuses.reduce((m, s) => { m[s.value] = s.count; return m }, {} as Record<string, number>) ?? {},
+    [facets],
+  )
+  const syncCounts = useMemo(
+    () => facets?.syncStatuses.reduce((m, s) => { m[s.value] = s.count; return m }, {} as Record<string, number>) ?? {},
+    [facets],
+  )
 
   const marketplaceOptions = useMemo(() => {
     const filtered = lockChannel
@@ -1592,174 +1612,128 @@ function FilterBar(props: {
     return filtered.map((m) => m.code)
   }, [marketplaces, lockChannel, channelFilters])
 
-  const toggleArr = (current: string[], val: string) =>
-    current.includes(val) ? current.filter((v) => v !== val) : [...current, val]
+  const dimensions: FilterDimension[] = []
+  if (!lockChannel) {
+    dimensions.push({
+      key: 'channel',
+      label: 'Channel',
+      type: 'multi-select',
+      options: channelOptions.map((v) => ({ value: v, label: v, count: channelCounts[v] })),
+      values: channelFilters,
+      onChange: (next) => updateUrl({
+        channel: next.length > 0 ? next.join(',') : undefined,
+        marketplace: undefined,
+        page: undefined,
+      }),
+    })
+  }
+  if (!lockMarketplace && marketplaceOptions.length > 0) {
+    dimensions.push({
+      key: 'marketplace',
+      label: 'Marketplace',
+      type: 'multi-select',
+      options: marketplaceOptions.map((code) => ({
+        value: code,
+        label: `${code}${COUNTRY_NAMES[code] ? ` · ${COUNTRY_NAMES[code]}` : ''}`,
+      })),
+      values: marketplaceFilters,
+      onChange: (next) => updateUrl({
+        marketplace: next.length > 0 ? next.join(',') : undefined,
+        page: undefined,
+      }),
+    })
+  }
+  dimensions.push({
+    key: 'listingStatus',
+    label: 'Status',
+    type: 'multi-select',
+    options: statusOptions.map((v) => ({ value: v, label: v, count: statusCounts[v] })),
+    values: statusFilters,
+    onChange: (next) => updateUrl({
+      listingStatus: next.length > 0 ? next.join(',') : undefined,
+      page: undefined,
+    }),
+  })
+  dimensions.push({
+    key: 'syncStatus',
+    label: 'Sync',
+    type: 'multi-select',
+    options: syncOptions.map((v) => ({ value: v, label: v, count: syncCounts[v] })),
+    values: syncStatusFilters,
+    onChange: (next) => updateUrl({
+      syncStatus: next.length > 0 ? next.join(',') : undefined,
+      page: undefined,
+    }),
+  })
+  dimensions.push({
+    key: 'hasError',
+    label: 'Has error',
+    type: 'toggle',
+    value: hasError,
+    onChange: (next) => updateUrl({ hasError: next ? 'true' : undefined, page: undefined }),
+  })
+  dimensions.push({
+    key: 'lowStock',
+    label: 'Low stock',
+    type: 'toggle',
+    value: lowStock,
+    onChange: (next) => updateUrl({ lowStock: next ? 'true' : undefined, page: undefined }),
+  })
+  dimensions.push({
+    key: 'published',
+    label: 'Published only',
+    type: 'toggle',
+    value: publishedOnly,
+    onChange: (next) => updateUrl({ published: next ? 'true' : undefined, page: undefined }),
+  })
+
+  const clearAll = () => updateUrl({
+    channel: lockChannel ? undefined : '',
+    marketplace: lockMarketplace ? undefined : '',
+    listingStatus: '',
+    syncStatus: '',
+    hasError: undefined,
+    lowStock: undefined,
+    published: undefined,
+    page: undefined,
+  })
 
   return (
     <Card>
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex-1 min-w-[240px] max-w-md relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <Input
-              id="listings-search"
-              placeholder="Search SKU, product name, external ID, or title — press / to focus"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-7"
-            />
-          </div>
-          <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 ${
-              filtersOpen || activeFilterCount > 0
-                ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Filter size={12} />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded-full font-semibold">{activeFilterCount}</span>
-            )}
-            <ChevronDown size={12} className={filtersOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-          </button>
-          {activeFilterCount > 0 && (
-            <button
-              onClick={() => updateUrl({
-                channel: lockChannel ? undefined : '',
-                marketplace: lockMarketplace ? undefined : '',
-                listingStatus: '',
-                syncStatus: '',
-                hasError: undefined,
-                lowStock: undefined,
-                published: undefined,
-                page: undefined,
-              })}
-              className="h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
-            >
-              <X size={12} /> Clear
-            </button>
-          )}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-[240px] max-w-md relative">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <Input
+            id="listings-search"
+            placeholder="Search SKU, product name, external ID, or title — press / to focus"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-7"
+          />
         </div>
-
-        {filtersOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-            {!lockChannel && (
-              <FilterGroup
-                label="Channel"
-                options={channelOptions}
-                selected={channelFilters}
-                facetCounts={facets?.channels.reduce((m, c) => { m[c.value] = c.count; return m }, {} as Record<string, number>)}
-                onToggle={(val) => updateUrl({ channel: toggleArr(channelFilters, val).join(',') || undefined, marketplace: undefined, page: undefined })}
-              />
-            )}
-            {!lockMarketplace && marketplaceOptions.length > 0 && (
-              <FilterGroup
-                label="Marketplace"
-                options={marketplaceOptions}
-                selected={marketplaceFilters}
-                renderLabel={(code) => `${code} · ${COUNTRY_NAMES[code] ?? ''}`.trim()}
-                onToggle={(val) => updateUrl({ marketplace: toggleArr(marketplaceFilters, val).join(',') || undefined, page: undefined })}
-              />
-            )}
-            <FilterGroup
-              label="Status"
-              options={statusOptions}
-              selected={statusFilters}
-              facetCounts={facets?.statuses.reduce((m, c) => { m[c.value] = c.count; return m }, {} as Record<string, number>)}
-              onToggle={(val) => updateUrl({ listingStatus: toggleArr(statusFilters, val).join(',') || undefined, page: undefined })}
-            />
-            <FilterGroup
-              label="Sync"
-              options={syncOptions}
-              selected={syncStatusFilters}
-              facetCounts={facets?.syncStatuses.reduce((m, c) => { m[c.value] = c.count; return m }, {} as Record<string, number>)}
-              onToggle={(val) => updateUrl({ syncStatus: toggleArr(syncStatusFilters, val).join(',') || undefined, page: undefined })}
-            />
-
-            <div className="md:col-span-2 lg:col-span-4 flex items-center gap-3 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
-              <ToggleChip
-                active={hasError}
-                label="Has error"
-                tone="danger"
-                onClick={() => updateUrl({ hasError: hasError ? undefined : 'true', page: undefined })}
-              />
-              <ToggleChip
-                active={lowStock}
-                label="Low stock"
-                tone="warning"
-                onClick={() => updateUrl({ lowStock: lowStock ? undefined : 'true', page: undefined })}
-              />
-              <ToggleChip
-                active={publishedOnly}
-                label="Published only"
-                tone="success"
-                onClick={() => updateUrl({ published: publishedOnly ? undefined : 'true', page: undefined })}
-              />
-            </div>
-          </div>
+        <FilterPopover
+          dimensions={dimensions}
+          onClearAll={clearAll}
+          activeCount={activeFilterCount}
+          order={filterOrder}
+          onOrderChange={setFilterOrder}
+          onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
+        />
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearAll}
+            className="h-8 px-2 text-base text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1"
+          >
+            <X size={12} /> Clear
+          </button>
         )}
       </div>
     </Card>
   )
 }
 
-function FilterGroup({
-  label, options, selected, onToggle, facetCounts, renderLabel,
-}: {
-  label: string
-  options: string[]
-  selected: string[]
-  onToggle: (val: string) => void
-  facetCounts?: Record<string, number>
-  renderLabel?: (val: string) => string
-}) {
-  if (options.length === 0) return null
-  return (
-    <div>
-      <div className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">{label}</div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {options.map((opt) => {
-          const active = selected.includes(opt)
-          const count = facetCounts?.[opt]
-          return (
-            <button
-              key={opt}
-              onClick={() => onToggle(opt)}
-              className={`h-7 px-2 text-sm border rounded inline-flex items-center gap-1.5 transition-colors ${
-                active ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              }`}
-            >
-              {renderLabel ? renderLabel(opt) : opt}
-              {count != null && (
-                <span className={`tabular-nums ${active ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>{count}</span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function ToggleChip({ active, label, onClick, tone }: { active: boolean; label: string; onClick: () => void; tone: 'danger' | 'warning' | 'success' }) {
-  const activeClasses = {
-    danger: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300',
-    warning: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300',
-    success: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300',
-  }[tone]
-  return (
-    <button
-      onClick={onClick}
-      className={`h-7 px-3 text-sm border rounded-full font-medium transition-colors ${
-        active ? activeClasses : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-      }`}
-    >
-      {label}
-    </button>
-  )
-}
+// FilterGroup + ToggleChip removed in FP.3 — all secondary-filter
+// rendering now flows through the shared FilterPopover.
 
 // ────────────────────────────────────────────────────────────────────
 // GridLens
