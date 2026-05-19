@@ -1518,6 +1518,103 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // F.1 — manual hard-delete from the recycle bin. Mirrors the cron
+  // purge-soft-deleted-products.job cascade exactly, but operator-
+  // initiated for rows that should be wiped sooner than the 30-day
+  // window. Two safety rails: (1) row must already have
+  // deletedAt != null (i.e. already in the bin) — protects against an
+  // accidental hard-delete bypassing the soft-delete step; (2) the
+  // same 200-id cap as the other bulk endpoints.
+  fastify.post('/products/bulk-hard-delete', async (request, reply) => {
+    try {
+      const body = request.body as { productIds?: string[] }
+      const productIds = Array.isArray(body.productIds) ? body.productIds : []
+      if (productIds.length === 0) {
+        return reply.code(400).send({ error: 'productIds[] required' })
+      }
+      if (productIds.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 products per call (got ${productIds.length})`,
+        })
+      }
+      const actor = userIdFor(request)
+
+      const result = await prisma.$transaction(async (tx) => {
+        const eligible = await tx.product.findMany({
+          where: { id: { in: productIds }, deletedAt: { not: null } },
+          select: { id: true, sku: true, name: true, deletedAt: true },
+        })
+        if (eligible.length === 0) {
+          return {
+            purged: 0,
+            skipped: productIds.length,
+            dependents: {
+              productImages: 0,
+              marketplaceSyncs: 0,
+              listings: 0,
+              stockLogs: 0,
+              fbaShipmentItems: 0,
+            },
+          }
+        }
+        const ids = eligible.map((r) => r.id)
+        const productIdFilter = { productId: { in: ids } }
+
+        // One AuditLog row per product BEFORE the cascade so the trail
+        // survives the actual deletion (AuditLog has no FK to Product).
+        await tx.auditLog.createMany({
+          data: eligible.map((r) => ({
+            userId: actor,
+            entityType: 'Product',
+            entityId: r.id,
+            action: 'hard-delete',
+            before: {
+              sku: r.sku,
+              name: r.name,
+              deletedAt: r.deletedAt?.toISOString() ?? null,
+            },
+            after: null,
+            metadata: { source: 'products-bulk-hard-delete' },
+          })),
+        })
+
+        const productImages = await tx.productImage.deleteMany({
+          where: productIdFilter,
+        })
+        const marketplaceSyncs = await tx.marketplaceSync.deleteMany({
+          where: productIdFilter,
+        })
+        const listings = await tx.listing.deleteMany({
+          where: productIdFilter,
+        })
+        const stockLogs = await tx.stockLog.deleteMany({
+          where: productIdFilter,
+        })
+        const fbaShipmentItems = await tx.fBAShipmentItem.deleteMany({
+          where: productIdFilter,
+        })
+        const products = await tx.product.deleteMany({
+          where: { id: { in: ids } },
+        })
+        return {
+          purged: products.count,
+          skipped: productIds.length - eligible.length,
+          dependents: {
+            productImages: productImages.count,
+            marketplaceSyncs: marketplaceSyncs.count,
+            listings: listings.count,
+            stockLogs: stockLogs.count,
+            fbaShipmentItems: fbaShipmentItems.count,
+          },
+        }
+      })
+
+      return { ok: true, ...result }
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   // ═══════════════════════════════════════════════════════════════════
   // F.3 — SCHEDULED PRODUCT CHANGES
   //

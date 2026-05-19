@@ -430,7 +430,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       reply.header('Cache-Control', 'private, max-age=30')
       const q = request.query as any
       const limit = Math.min(safeNum(q.limit, 500) ?? 500, 1000)
-      const where: any = { parentId: null }
+      // F.1 — exclude soft-deleted (recycle-bin) rows.
+      const where: any = { parentId: null, deletedAt: null }
       if (q.fulfillment === 'FBA' || q.fulfillment === 'FBM') where.fulfillmentChannel = q.fulfillment
       if (q.lowStock === '1' || q.lowStock === 'true') where.totalStock = { lte: 5 }
       if (q.q?.trim()) {
@@ -463,7 +464,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize, 50) ?? 50)))
       const skip = (page - 1) * pageSize
 
-      const where: any = { isParent: false }
+      // F.1 — exclude soft-deleted (recycle-bin) rows.
+      const where: any = { isParent: false, deletedAt: null }
       if (q.fulfillment === 'FBA' || q.fulfillment === 'FBM') where.fulfillmentChannel = q.fulfillment
       if (q.lowStock === 'true') where.totalStock = { gt: 0, lte: 5 }
       if (q.outOfStock === 'true') where.totalStock = 0
@@ -6115,8 +6117,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Pull all non-parent products. R.4 adds the per-product
       // economics overrides (servicLevel / orderingCost / carryingCost).
+      // F.1 — exclude soft-deleted (recycle-bin) rows so trashed
+      // products don't pull velocity / stock / ordering math.
       const products = await prisma.product.findMany({
-        where: { isParent: false, status: { not: 'INACTIVE' } },
+        where: { isParent: false, status: { not: 'INACTIVE' }, deletedAt: null },
         select: {
           id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
           fulfillmentChannel: true, basePrice: true, costPrice: true,

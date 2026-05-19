@@ -130,7 +130,9 @@ const listingImagesRoutes: FastifyPluginAsync = async (fastify) => {
         // this variant" rows. Returns empty for non-parent products.
         product.isParent
           ? prisma.product.findMany({
-              where: { parentId: productId },
+              // F.1 — exclude soft-deleted child variants from the
+              // per-variant image override editor.
+              where: { parentId: productId, deletedAt: null },
               orderBy: { sku: 'asc' },
               select: {
                 id: true,

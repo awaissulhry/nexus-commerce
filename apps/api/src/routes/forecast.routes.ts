@@ -83,7 +83,9 @@ const forecastRoutes: FastifyPluginAsync = async (fastify) => {
       // SKUs at Xavia today this is one DB read for products + one for
       // all in-horizon forecasts; cheap enough for a 30s-cached page.
       const products = await prisma.product.findMany({
-        where: { isParent: false, status: { not: 'INACTIVE' } },
+        // F.1 — exclude soft-deleted (recycle-bin) rows from the
+        // stockout projection so trashed SKUs don't trigger alerts.
+        where: { isParent: false, status: { not: 'INACTIVE' }, deletedAt: null },
         select: { id: true },
         take: 5000,
       })

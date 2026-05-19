@@ -142,6 +142,9 @@ export function BulkActionBar({
   // U.28 — bulk-set-field modal state. Active scope only.
   const [setFieldModalOpen, setSetFieldModalOpen] = useState(false)
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false)
+  // F.1 — hard-delete confirm. Two-step so a stray click in the
+  // recycle bin can't wipe rows.
+  const [hardDeleteConfirmOpen, setHardDeleteConfirmOpen] = useState(false)
   const compareEligible = selectedIds.length >= 2 && selectedIds.length <= 4
   const compareSubjects = useMemo(() => {
     if (!compareEligible) return []
@@ -258,6 +261,27 @@ export function BulkActionBar({
       emitInvalidation({
         type: 'product.updated',
         meta: { productIds: selectedIds, source: 'bulk-restore' },
+      })
+    })
+
+  // F.1 — permanent hard-delete from the recycle bin. API enforces
+  // deletedAt != null, so this only fires once rows are already
+  // soft-deleted. Emits product.deleted so other open pages (PDP,
+  // related pickers, replenishment) drop the rows without a refetch.
+  const hardDeleteBulk = async () =>
+    run('Permanently deleting…', async () => {
+      const res = await fetch(
+        `${getBackendUrl()}/api/products/bulk-hard-delete`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productIds: selectedIds }),
+        },
+      )
+      if (!res.ok) throw new Error((await res.json()).error)
+      emitInvalidation({
+        type: 'product.deleted',
+        meta: { productIds: selectedIds, source: 'bulk-hard-delete' },
       })
     })
 
@@ -384,20 +408,32 @@ export function BulkActionBar({
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           {showDeleted ? (
-            // F.1 — recycle-bin view. Restore is the only mutation;
-            // Compare stays so operators can verify which row to
-            // restore. Soft-delete + status flips + tag + publish +
-            // AI fill are hidden because they don't make sense for
-            // already-deleted rows.
-            <Button
-              size="sm"
-              onClick={restoreBulk}
-              disabled={busy || !hasSelection}
-              className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
-              icon={<RotateCcw size={12} />}
-            >
-              Restore
-            </Button>
+            // F.1 — recycle-bin view. Restore + permanent delete are
+            // the only mutations; Compare stays so operators can
+            // verify which row to act on. Status flips + tag +
+            // publish + AI fill are hidden because they don't make
+            // sense for already-deleted rows.
+            <>
+              <Button
+                size="sm"
+                onClick={restoreBulk}
+                disabled={busy || !hasSelection}
+                className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-900/40"
+                icon={<RotateCcw size={12} />}
+              >
+                Restore
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setHardDeleteConfirmOpen(true)}
+                disabled={busy || !hasSelection}
+                className="bg-rose-600 text-white border-rose-600 hover:bg-rose-700 dark:bg-rose-700 dark:border-rose-700 dark:hover:bg-rose-800"
+                icon={<Trash2 size={12} />}
+                title="Permanently delete selected products and all dependent data — cannot be undone"
+              >
+                Delete permanently
+              </Button>
+            </>
           ) : (
             <>
               <Button
@@ -786,6 +822,126 @@ export function BulkActionBar({
           onComplete={() => { setAvailabilityModalOpen(false); onComplete() }}
         />
       )}
+      {hardDeleteConfirmOpen && (
+        <HardDeleteConfirmModal
+          count={selectedIds.length}
+          productLookup={productLookup.filter((p) => selectedIds.includes(p.id))}
+          busy={busy}
+          onCancel={() => setHardDeleteConfirmOpen(false)}
+          onConfirm={async () => {
+            setHardDeleteConfirmOpen(false)
+            await hardDeleteBulk()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// F.1 — hard-delete confirm. Lists up to ~8 SKUs (full count in the
+// header) and requires typing DELETE before the action is enabled.
+// The cascade (productImages + marketplaceSyncs + listings + stockLogs
+// + fbaShipmentItems) is irreversible, so this is the second checkpoint
+// after the row already being in the recycle bin.
+function HardDeleteConfirmModal({
+  count,
+  productLookup,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  count: number
+  productLookup: BulkActionProduct[]
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const [typed, setTyped] = useState('')
+  const armed = typed.trim().toUpperCase() === 'DELETE'
+  const preview = productLookup.slice(0, 8)
+  const overflow = Math.max(0, count - preview.length)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={busy ? undefined : onCancel}
+        aria-hidden
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="hard-delete-title"
+        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-rose-200 dark:border-rose-900 w-full max-w-md"
+      >
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2
+            id="hard-delete-title"
+            className="text-lg font-semibold text-rose-700 dark:text-rose-300 inline-flex items-center gap-2"
+          >
+            <Trash2 size={16} />
+            Permanently delete {count} product{count !== 1 ? 's' : ''}?
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            This wipes the products and every dependent record — channel
+            listings, sync history, stock log, image metadata, FBA
+            shipment lines. It cannot be undone.
+          </p>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Affected SKUs
+          </div>
+          <div className="max-h-40 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+            {preview.map((p) => (
+              <div
+                key={p.id}
+                className="px-3 py-1.5 text-sm flex items-center justify-between gap-2"
+              >
+                <span className="font-mono text-slate-700 dark:text-slate-300 shrink-0">
+                  {p.sku}
+                </span>
+                <span className="text-slate-500 dark:text-slate-400 truncate">
+                  {p.name}
+                </span>
+              </div>
+            ))}
+            {overflow > 0 && (
+              <div className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400">
+                …and {overflow} more
+              </div>
+            )}
+          </div>
+          <label className="block text-sm text-slate-700 dark:text-slate-300">
+            Type <span className="font-mono font-semibold">DELETE</span> to
+            confirm:
+            <input
+              type="text"
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              disabled={busy}
+              className="mt-1 w-full px-3 py-1.5 border border-slate-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+              placeholder="DELETE"
+            />
+          </label>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={onConfirm}
+            disabled={!armed || busy}
+            loading={busy}
+            className="bg-rose-600 hover:bg-rose-700 border-rose-600 text-white disabled:bg-rose-300 disabled:border-rose-300"
+            icon={<Trash2 size={12} />}
+          >
+            Permanently delete
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

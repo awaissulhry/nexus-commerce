@@ -663,6 +663,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const siblingProducts = (siblingAsins.size > 0 || siblingSkus.size > 0)
       ? await prisma.product.findMany({
           where: {
+            // F.1 — exclude soft-deleted (recycle-bin) rows so the
+            // sibling-ad-keyword inference doesn't suggest trashed SKUs.
+            deletedAt: null,
             OR: [
               ...(siblingAsins.size > 0 ? [{ amazonAsin: { in: [...siblingAsins] } }] : []),
               ...(siblingSkus.size  > 0 ? [{ sku:        { in: [...siblingSkus]  } }] : []),

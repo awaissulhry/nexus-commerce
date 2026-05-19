@@ -246,7 +246,9 @@ const marketingAutomationRoutes: FastifyPluginAsync = async (fastify) => {
       ? ((config.targetLocale as string) ?? 'DE').toUpperCase()
       : marketplace
 
-    let productWhere: Record<string, unknown> = {}
+    // F.1 — exclude soft-deleted (recycle-bin) rows so AI bulk actions
+    // never re-process trashed products.
+    let productWhere: Record<string, unknown> = { deletedAt: null }
     if (onlyMissing) {
       // Only products where at least one of the requested fields is empty
       const orClauses: Record<string, unknown>[] = []
