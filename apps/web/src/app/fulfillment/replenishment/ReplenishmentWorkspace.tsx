@@ -18,6 +18,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Download,
   Keyboard,
+  Layers,
   Loader2,
   Package,
   RefreshCw,
@@ -623,8 +624,18 @@ export default function ReplenishmentWorkspace() {
       case 'product':
         return (
           <div className="min-w-0 overflow-hidden">
-            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{row.name}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{row.sku}</div>
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+              {row.name}
+              {row.isParent && <Layers size={11} className="inline ml-1 text-slate-400 dark:text-slate-500" />}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
+              {row.sku}
+              {row.isParent && (row.childCount ?? 0) > 0 && (
+                <span className="ml-2 text-slate-400 dark:text-slate-500">
+                  {row.childCount} {row.childCount === 1 ? 'variant' : 'variants'}
+                </span>
+              )}
+            </div>
           </div>
         )
       case 'urgency':
