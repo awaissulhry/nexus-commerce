@@ -112,8 +112,7 @@ const URGENCY_TONE: Record<Urgency, string> = {
 }
 
 const REP_COLUMNS: GridLensColumn[] = [
-  { key: 'thumb',      label: '',            width: 44,  locked: true },
-  { key: 'product',    label: 'Product',     width: 280, locked: true },
+  { key: 'product',    label: 'Product',     width: 340, locked: true },
   { key: 'urgency',    label: 'Urgency',     width: 100 },
   { key: 'stock',      label: 'On hand',     width: 90 },
   { key: 'daysLeft',   label: 'Days left',   width: 90 },
@@ -644,6 +643,8 @@ export default function ReplenishmentWorkspace() {
             isParent={row.isParent ?? false}
             parentId={row.parentId}
             childCount={row.childCount}
+            imageUrl={row.thumbnailUrl}
+            showThumb
           />
         )
       case 'urgency':

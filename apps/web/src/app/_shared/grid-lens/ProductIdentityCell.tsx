@@ -101,42 +101,49 @@ export function ProductIdentityCell(props: ProductIdentityCellProps) {
         >
           <Highlight text={name} query={searchQuery} />
         </Link>
-        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-          {amazonAsin ? (
-            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
-              {amazonAsin}
-            </span>
-          ) : null}
-          {amazonAsin && sku ? (
-            <span className="text-xs text-slate-300 dark:text-slate-600">|</span>
-          ) : null}
+        <div className="flex items-center gap-1 mt-0.5 flex-wrap text-xs">
+          {amazonAsin && (
+            <span className="font-mono text-slate-500 dark:text-slate-400">{amazonAsin}</span>
+          )}
+          {amazonAsin && sku && (
+            <span className="text-slate-300 dark:text-slate-600">|</span>
+          )}
           {sku && (
-            <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+            <span className="font-mono text-slate-400 dark:text-slate-500">
               <Highlight text={sku} query={searchQuery} />
             </span>
           )}
+          {isParentRow && productType && (amazonAsin || sku) && (
+            <span className="text-slate-300 dark:text-slate-600">·</span>
+          )}
+          {isParentRow && productType && (
+            <Link
+              href={editHref}
+              className="text-blue-500 dark:text-blue-400 hover:underline"
+            >
+              {productType.toLowerCase().replace(/_/g, '-')}
+            </Link>
+          )}
+          {isParentRow && count > 0 && (amazonAsin || sku || productType) && (
+            <span className="text-slate-300 dark:text-slate-600">·</span>
+          )}
+          {isParentRow && count > 0 && (
+            <span className="text-slate-400 dark:text-slate-500">
+              {count} variation{count !== 1 ? 's' : ''}
+            </span>
+          )}
+          {isChildRow && (amazonAsin || sku) && (
+            <span className="text-slate-300 dark:text-slate-600">·</span>
+          )}
+          {isChildRow && (
+            <Link
+              href={childDetailHref}
+              className="text-blue-500 dark:text-blue-400 hover:underline"
+            >
+              {variantDetailLabel ?? 'Variation details'}
+            </Link>
+          )}
         </div>
-        {isParentRow && productType && (
-          <Link
-            href={editHref}
-            className="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-0.5 block"
-          >
-            {productType.toLowerCase().replace(/_/g, '-')}
-          </Link>
-        )}
-        {isParentRow && count > 0 && (
-          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-            {count} variation{count !== 1 ? 's' : ''}
-          </div>
-        )}
-        {isChildRow && (
-          <Link
-            href={childDetailHref}
-            className="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-0.5 block"
-          >
-            {variantDetailLabel ?? 'Variation details'}
-          </Link>
-        )}
       </div>
     </div>
   )

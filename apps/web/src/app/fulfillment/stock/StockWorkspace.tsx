@@ -102,7 +102,6 @@ type Density = 'compact' | 'comfortable' | 'spacious'
 // S.5 — abcClass + value added as standalone sortable columns.
 type ColumnKey = 'thumb' | 'product' | 'location' | 'onHand' | 'reserved' | 'available' | 'threshold' | 'cost' | 'updated' | 'abcClass' | 'value'
 const ALL_COLUMNS: Array<{ key: ColumnKey; label: string; alwaysOn?: boolean }> = [
-  { key: 'thumb',     label: 'Thumb',     alwaysOn: true },
   { key: 'product',   label: 'Product',   alwaysOn: true },
   { key: 'location',  label: 'Location' },
   { key: 'onHand',    label: 'On hand' },
@@ -114,12 +113,11 @@ const ALL_COLUMNS: Array<{ key: ColumnKey; label: string; alwaysOn?: boolean }> 
   { key: 'abcClass',  label: 'ABC' },
   { key: 'updated',   label: 'Updated' },
 ]
-const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['thumb', 'product', 'location', 'onHand', 'reserved', 'available', 'threshold', 'cost', 'updated']
+const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['product', 'location', 'onHand', 'reserved', 'available', 'threshold', 'cost', 'updated']
 
 // S.4/S.5 — GridLens column definitions for the table view.
 const STOCK_COLUMNS: GridLensColumn[] = [
-  { key: 'thumb',     label: '',           width: 60,  locked: true },
-  { key: 'product',   label: 'Product',    subLabel: 'SKU · ASIN',    width: 300, locked: true },
+  { key: 'product',   label: 'Product',    subLabel: 'SKU · ASIN',    width: 360, locked: true },
   { key: 'location',  label: 'Location',   subLabel: 'Code',          width: 110 },
   { key: 'onHand',    label: 'On Hand',    subLabel: 'Quantity',      width: 90  },
   { key: 'reserved',  label: 'Reserved',   subLabel: 'Held',          width: 90  },
@@ -3504,6 +3502,8 @@ const COLUMN_META: Record<ColumnKey, {
         isParent={it.isParent}
         parentId={it.parentId}
         childCount={it.childCount}
+        imageUrl={it.thumbnailUrl}
+        showThumb
       />
     ),
   },

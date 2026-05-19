@@ -193,8 +193,7 @@ interface Props {
 }
 
 const ALL_COLUMNS = [
-  { key: 'thumb',       label: '',            width: 64 },
-  { key: 'product',     label: 'Product',     subLabel: 'Name | SKU',       width: 360 },
+  { key: 'product',     label: 'Product',     subLabel: 'Name | SKU',       width: 420 },
   { key: 'channel',     label: 'Channel',     subLabel: 'Platform',         width: 110 },
   { key: 'marketplace', label: 'Market',      subLabel: 'Code',             width: 80  },
   { key: 'status',      label: 'Status',      subLabel: 'Listing state',    width: 130 },
@@ -213,7 +212,7 @@ const ALL_COLUMNS = [
   { key: 'actions',     label: '',                                           width: 140 },
 ] as const
 
-const DEFAULT_VISIBLE = ['thumb', 'product', 'channel', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'lastSync', 'actions']
+const DEFAULT_VISIBLE = ['product', 'channel', 'marketplace', 'status', 'syncStatus', 'price', 'quantity', 'lastSync', 'actions']
 
 // G.1 — module-level stable refs passed to SharedVirtualizedGrid when a
 // feature (expand, drag, risk) is not used on this surface.
@@ -1997,7 +1996,9 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
           isParent={isParentRow}
           parentId={isParentRow ? null : l.product.parentId}
           childCount={l.childCount}
+          imageUrl={l.product.thumbnailUrl}
           searchQuery={searchQuery}
+          showThumb
           onThumbClick={() => onOpenDrawer(l.id)}
         />
       )
@@ -2220,7 +2221,7 @@ function ColumnPickerMenu({ visible, setVisible, onClose, defaultVisible }: { vi
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [onClose])
-  const togglable = ALL_COLUMNS.filter((c) => c.key !== 'thumb')
+  const togglable = ALL_COLUMNS
   return (
     <div ref={ref} className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg z-10 p-1.5">
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">Visible columns</div>
