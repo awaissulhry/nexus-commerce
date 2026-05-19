@@ -160,6 +160,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             id: true, sku: true, name: true, amazonAsin: true,
             isParent: true, parentId: true,
             abcClass: true, lowStockThreshold: true, costPrice: true, basePrice: true,
+            fulfillmentMethod: true, fulfillmentChannel: true,
             images: { select: { url: true }, take: 1 },
             _count: { select: { children: true } },
             stockLevels: {
@@ -235,6 +236,28 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
           const ownAvailable = p.stockLevels.reduce((s, sl) => s + sl.available, 0)
           const lastUpdated  = agg?.lastUpdatedAt
             ?? (p.stockLevels[0]?.lastUpdatedAt ?? null)
+          const fbaQty = agg?.byType['AMAZON_FBA']
+            ?? p.stockLevels.filter((sl) => sl.location.type === 'AMAZON_FBA').reduce((s, sl) => s + sl.quantity, 0)
+          const ownWHQty = agg?.byType['WAREHOUSE']
+            ?? p.stockLevels.filter((sl) => sl.location.type === 'WAREHOUSE').reduce((s, sl) => s + sl.quantity, 0)
+
+          // Derive fulfillment method: explicit field wins; fall back to stock location signals.
+          const explicitMethod = (p.fulfillmentMethod ?? p.fulfillmentChannel) as string | null
+          let fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
+          if (explicitMethod === 'FBA') {
+            fulfillmentMethod = 'FBA'
+          } else if (explicitMethod === 'FBM') {
+            fulfillmentMethod = 'FBM'
+          } else if (fbaQty > 0 && ownWHQty > 0) {
+            fulfillmentMethod = 'BOTH'
+          } else if (fbaQty > 0) {
+            fulfillmentMethod = 'FBA'
+          } else if (ownWHQty > 0) {
+            fulfillmentMethod = 'FBM'
+          } else {
+            fulfillmentMethod = null
+          }
+
           return {
             id: p.id,
             sku: p.sku,
@@ -248,13 +271,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             basePrice: p.basePrice == null ? null : Number(p.basePrice),
             thumbnailUrl: p.images?.[0]?.url ?? null,
             childCount: p._count.children,
+            fulfillmentMethod,
             totalStock:     agg?.qty      ?? ownQty,
             totalReserved:  agg?.reserved ?? ownReserved,
             totalAvailable: agg?.available ?? ownAvailable,
-            fbaStock: agg?.byType['AMAZON_FBA']
-              ?? p.stockLevels.filter((sl) => sl.location.type === 'AMAZON_FBA').reduce((s, sl) => s + sl.quantity, 0),
-            ownStock: agg?.byType['WAREHOUSE']
-              ?? p.stockLevels.filter((sl) => sl.location.type === 'WAREHOUSE').reduce((s, sl) => s + sl.quantity, 0),
+            fbaStock: fbaQty,
+            ownStock: ownWHQty,
             lastUpdatedAt: lastUpdated ? lastUpdated.toISOString() : null,
             // Full StockLevel rows for leaf products — used by the drawer.
             stockLevels: p.isParent ? [] : p.stockLevels.map((sl) => ({
