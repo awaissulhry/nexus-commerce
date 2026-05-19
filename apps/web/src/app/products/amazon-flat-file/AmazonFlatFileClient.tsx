@@ -117,6 +117,39 @@ interface SubmissionRecord {
   dryRun?: boolean
 }
 
+// ── Pull from Amazon ───────────────────────────────────────────────────
+// Groups used by the in-editor Pull panel to let users restrict which
+// columns get overwritten. Field IDs map to a single group via
+// pullFieldGroup(); the merge logic in handlePullFromAmazon skips any
+// field whose group is not selected.
+
+type PullGroupId = 'content' | 'pricing' | 'stock' | 'images' | 'variations' | 'other'
+
+interface PullGroup {
+  id: PullGroupId
+  label: string
+  description: string
+}
+
+const PULL_GROUPS: PullGroup[] = [
+  { id: 'content',    label: 'Title & content',     description: 'Title, description, bullets, keywords, color' },
+  { id: 'pricing',    label: 'Pricing',             description: 'Price, sale price, currency, condition' },
+  { id: 'stock',      label: 'Stock & fulfillment', description: 'Quantity, fulfillment channel, lead time' },
+  { id: 'images',     label: 'Images',              description: 'Main image + additional image locators' },
+  { id: 'variations', label: 'Variations',          description: 'Parentage level, parent SKU, variation theme' },
+  { id: 'other',      label: 'All other attributes', description: 'Everything else returned by Amazon' },
+]
+
+function pullFieldGroup(field: string): PullGroupId {
+  if (field === 'item_name' || field === 'product_description' || field === 'generic_keyword' || field === 'brand' || field === 'color') return 'content'
+  if (/^bullet_point(_\d+)?$/.test(field)) return 'content'
+  if (field.startsWith('purchasable_offer')) return 'pricing'
+  if (field.startsWith('fulfillment_availability')) return 'stock'
+  if (field === 'main_product_image_locator' || /image_locator(_\d+)?$/.test(field)) return 'images'
+  if (field === 'parentage_level' || field === 'parent_sku' || field === 'variation_theme') return 'variations'
+  return 'other'
+}
+
 interface VersionRecord {
   id: string
   label: string         // e.g. "Manual save", "Before submit · IT"
@@ -454,6 +487,10 @@ export default function AmazonFlatFileClient({
     startX: number; startY: number; startVal: number
   } | null>(null)
   const [fetchPanelOpen, setFetchPanelOpen] = useState(false)
+  const [pullPanelOpen, setPullPanelOpen] = useState(false)
+  const [pulling, setPulling] = useState(false)
+  const [pullProgress, setPullProgress] = useState<{ progress: number; total: number } | null>(null)
+  const [pullResult, setPullResult] = useState<{ pulled: number; skipped: number; failed: number } | null>(null)
   const [fetching, setFetching] = useState(false)
 
   // Tracks the anchor row when user drags on the # column to select rows
@@ -1833,6 +1870,115 @@ export default function AmazonFlatFileClient({
     }
   }, [selectedRows, rows, marketplace, productType])
 
+  // ── Pull from Amazon (full attributes, in-editor, undoable) ─────────
+  // Calls /api/amazon/flat-file/pull-preview which fetches live SP-API data
+  // per SKU and returns expanded flat-file rows WITHOUT touching the DB.
+  // We merge the returned columns into editor state via pushSnapshot() so
+  // Cmd+Z reverts the entire pull as one step.
+  const handlePullFromAmazon = useCallback(async (opts: {
+    scope: 'selected' | 'visible' | 'all'
+    columns: 'all' | PullGroupId[]
+  }) => {
+    if (!productType) return
+
+    let targetSkus: string[]
+    if (opts.scope === 'selected') {
+      targetSkus = [...selectedRows]
+        .map((id) => rows.find((r) => r._rowId === id)?.item_sku as string | undefined)
+        .filter((s): s is string => !!s)
+    } else if (opts.scope === 'visible') {
+      targetSkus = displayRowsRef.current
+        .map((r) => r.item_sku as string | undefined)
+        .filter((s): s is string => !!s)
+    } else {
+      targetSkus = rows
+        .map((r) => r.item_sku as string | undefined)
+        .filter((s): s is string => !!s)
+    }
+
+    if (!targetSkus.length) {
+      setLoadError('No SKUs to pull')
+      return
+    }
+
+    setPullPanelOpen(false)
+    setPulling(true)
+    setPullProgress({ progress: 0, total: targetSkus.length })
+    setPullResult(null)
+
+    try {
+      const startRes = await fetch(
+        `${getBackendUrl()}/api/amazon/flat-file/pull-preview/start`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ marketplace, productType, skus: targetSkus }),
+        },
+      )
+      const startData = await startRes.json()
+      if (!startRes.ok) throw new Error(startData.error ?? 'Pull failed to start')
+      const { jobId } = startData
+
+      let job: any = null
+      // Poll every 1.5s. SP-API per-SKU is rate-limited, ~280 SKUs ≈ 2-5 min.
+      for (let i = 0; i < 1200; i++) {
+        await new Promise((r) => setTimeout(r, 1500))
+        const statusRes = await fetch(
+          `${getBackendUrl()}/api/amazon/flat-file/pull-preview/status/${jobId}`,
+        )
+        if (!statusRes.ok) throw new Error('Pull status check failed')
+        job = await statusRes.json()
+        setPullProgress({ progress: job.progress, total: job.total })
+        if (job.status === 'done' || job.status === 'failed') break
+      }
+
+      if (!job || job.status !== 'done') {
+        throw new Error(job?.fatalError ?? 'Pull timed out')
+      }
+
+      const pulledRows: Row[] = Array.isArray(job.rows) ? job.rows : []
+      const bySku = new Map<string, Row>(
+        pulledRows.map((r) => [String(r.item_sku ?? ''), r]),
+      )
+
+      const isAllColumns = opts.columns === 'all'
+      const selectedGroups = new Set(isAllColumns ? [] : (opts.columns as PullGroupId[]))
+
+      pushSnapshot()
+      setRows((prev) => prev.map((row) => {
+        const sku = String(row.item_sku ?? '')
+        if (!sku) return row
+        const pulled = bySku.get(sku)
+        if (!pulled) return row
+
+        const merged: Row = { ...row }
+        let changed = false
+        for (const [k, v] of Object.entries(pulled)) {
+          if (k.startsWith('_')) continue
+          if (!isAllColumns && !selectedGroups.has(pullFieldGroup(k))) continue
+          merged[k] = v
+          changed = true
+        }
+        // Always refresh ASIN + listing status when pulling
+        const pulledAsin = (pulled as any)._asin
+        const pulledStatus = (pulled as any)._listingStatus
+        if (pulledAsin) merged._asin = pulledAsin
+        if (pulledStatus) merged._listingStatus = pulledStatus
+
+        if (changed) merged._dirty = true
+        return changed ? merged : row
+      }))
+
+      setPullResult({ pulled: job.pulled, skipped: job.skipped, failed: job.failed })
+      setTimeout(() => setPullResult(null), 10000)
+    } catch (e: any) {
+      setLoadError(e?.message ?? 'Pull from Amazon failed')
+    } finally {
+      setPulling(false)
+      setPullProgress(null)
+    }
+  }, [marketplace, productType, selectedRows, rows, pushSnapshot])
+
   const exportTsv = useCallback(async () => {
     if (!manifest) return
     const res = await fetch(`${getBackendUrl()}/api/amazon/flat-file/export-tsv`, {
@@ -2064,6 +2210,21 @@ export default function AmazonFlatFileClient({
               {syncStatus === 'error'   && <>⚠ Sync failed</>}
             </span>
           )}
+          {pullProgress && (
+            <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-blue-600 dark:text-blue-400">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Pulling {pullProgress.progress}/{pullProgress.total || '?'} from {marketplace}…
+            </span>
+          )}
+          {pullResult && !pullProgress && (
+            <span className="text-[11px] flex items-center gap-1 flex-shrink-0 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-3 h-3" />
+              Pulled {pullResult.pulled}
+              {pullResult.skipped > 0 && ` · ${pullResult.skipped} not on ${marketplace}`}
+              {pullResult.failed > 0 && ` · ${pullResult.failed} failed`}
+              {' · ⌘Z to undo'}
+            </span>
+          )}
 
           {/* Submit to Amazon */}
           <div className="relative">
@@ -2138,6 +2299,28 @@ export default function AmazonFlatFileClient({
             {fetchPanelOpen && (
               <FetchFromAmazonPanel selectedCount={selectedRows.size} currentMarket={marketplace}
                 onFetch={handleFetchFromAmazon} onClose={() => setFetchPanelOpen(false)} />
+            )}
+          </div>
+
+          {/* Pull from Amazon — full attribute pull (in-memory, undoable via ⌘Z) */}
+          <div className="relative">
+            <TbBtn
+              icon={<Download className="w-3.5 h-3.5" />}
+              title={`Pull from Amazon ${marketplace} — full attribute pull, undoable with ⌘Z. Does not touch the database until you click Save.`}
+              onClick={() => setPullPanelOpen((o) => !o)}
+              disabled={!manifest || pulling || !rows.length}
+              active={pullPanelOpen}
+            />
+            {pullPanelOpen && (
+              <PullFromAmazonPanel
+                selectedCount={selectedRows.size}
+                visibleCount={displayRows.length}
+                totalCount={rows.length}
+                currentMarket={marketplace}
+                pulling={pulling}
+                onPull={handlePullFromAmazon}
+                onClose={() => setPullPanelOpen(false)}
+              />
             )}
           </div>
 
@@ -4459,6 +4642,160 @@ function FetchFromAmazonPanel({ selectedCount, currentMarket, onFetch, onClose }
           Fetch {selectedCount} SKU{selectedCount !== 1 ? 's' : ''}
           {markets.size > 1 ? ` × ${markets.size} markets` : ` (${[...markets][0]})`}
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// ── PullFromAmazonPanel ────────────────────────────────────────────────
+// Full attribute pull from Amazon for the current market. Lets the user
+// pick scope (selected / visible / all rows) and which column groups to
+// overwrite. Pulled data is merged into editor state via pushSnapshot()
+// in the parent — Cmd+Z reverts the entire pull as one step. No DB
+// writes happen until the user clicks Save.
+
+interface PullPanelProps {
+  selectedCount: number
+  visibleCount: number
+  totalCount: number
+  currentMarket: string
+  pulling: boolean
+  onPull: (opts: { scope: 'selected' | 'visible' | 'all'; columns: 'all' | PullGroupId[] }) => void
+  onClose: () => void
+}
+
+function PullFromAmazonPanel({
+  selectedCount, visibleCount, totalCount, currentMarket, pulling, onPull, onClose,
+}: PullPanelProps) {
+  const [scope, setScope] = useState<'selected' | 'visible' | 'all'>(
+    selectedCount > 0 ? 'selected' : 'visible',
+  )
+  const [allColumns, setAllColumns] = useState(true)
+  const [selectedGroups, setSelectedGroups] = useState<Set<PullGroupId>>(
+    new Set(['content', 'pricing', 'stock']),
+  )
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handle, true)
+    return () => document.removeEventListener('mousedown', handle, true)
+  }, [onClose])
+
+  function toggleGroup(g: PullGroupId) {
+    setSelectedGroups((prev) => {
+      const n = new Set(prev)
+      if (n.has(g)) n.delete(g); else n.add(g)
+      return n
+    })
+  }
+
+  const scopeCount = scope === 'selected' ? selectedCount
+                    : scope === 'visible'  ? visibleCount
+                    : totalCount
+  const canPull = scopeCount > 0 && (allColumns || selectedGroups.size > 0)
+
+  return (
+    <div
+      ref={panelRef}
+      className="absolute left-0 top-full mt-1 z-[60] w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Pull from Amazon {currentMarket}
+          </div>
+          <div className="text-xs text-slate-400">
+            Overwrites editor cells. ⌘Z to undo.
+          </div>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Scope */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="text-xs font-medium text-slate-500 mb-2">Scope</div>
+        {([
+          ['selected', `Selected rows (${selectedCount})`, selectedCount > 0],
+          ['visible',  `Visible rows (${visibleCount})`,   visibleCount > 0],
+          ['all',      `All rows in sheet (${totalCount})`, totalCount > 0],
+        ] as const).map(([id, label, enabled]) => (
+          <label
+            key={id}
+            className={cn('flex items-center gap-2 py-1',
+              enabled ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed')}
+          >
+            <input
+              type="radio"
+              name="ff-pull-scope"
+              checked={scope === id}
+              disabled={!enabled}
+              onChange={() => setScope(id)}
+              className="w-3.5 h-3.5 accent-blue-600"
+            />
+            <span className="text-xs text-slate-700 dark:text-slate-300">{label}</span>
+          </label>
+        ))}
+      </div>
+
+      {/* Columns */}
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <label className="flex items-center gap-2 cursor-pointer mb-2">
+          <input
+            type="checkbox"
+            checked={allColumns}
+            onChange={(e) => setAllColumns(e.target.checked)}
+            className="w-3.5 h-3.5 accent-blue-600"
+          />
+          <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+            All columns
+          </span>
+          <span className="text-[10px] text-slate-400">(every attribute Amazon returns)</span>
+        </label>
+
+        {!allColumns && (
+          <div className="space-y-0.5 pl-1 mt-1">
+            {PULL_GROUPS.map((g) => (
+              <label key={g.id} className="flex items-start gap-2 py-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedGroups.has(g.id)}
+                  onChange={() => toggleGroup(g.id)}
+                  className="w-3.5 h-3.5 mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <div className="text-xs text-slate-700 dark:text-slate-300">{g.label}</div>
+                  <div className="text-[10px] text-slate-400">{g.description}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3">
+        <Button
+          size="sm"
+          className="w-full justify-center"
+          onClick={() => onPull({
+            scope,
+            columns: allColumns ? 'all' : [...selectedGroups],
+          })}
+          disabled={!canPull || pulling}
+          loading={pulling}
+        >
+          <Download className="w-3.5 h-3.5 mr-1.5" />
+          Pull {scopeCount} SKU{scopeCount !== 1 ? 's' : ''} from {currentMarket}
+        </Button>
+        <p className="mt-2 text-[10px] text-slate-400 leading-relaxed">
+          Fetches full live data from Amazon. SP-API is rate-limited; large pulls take 2–5 min.
+        </p>
       </div>
     </div>
   )

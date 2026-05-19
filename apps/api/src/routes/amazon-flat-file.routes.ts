@@ -24,6 +24,10 @@ import { translateEnumValues } from '../services/amazon/value-translate.service.
 import { enqueueContentSyncIfEnabled } from '../services/content-auto-publish.service.js'
 import { productEventService } from '../services/product-event.service.js'
 import { runFlatFileAiInstruction } from '../services/flat-file-ai.service.js'
+import {
+  startPullPreviewJob,
+  getPullPreviewJobStatus,
+} from '../services/amazon/flat-file-pull-preview.service.js'
 
 const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
@@ -692,4 +696,35 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: err?.message ?? 'AI assistant failed' })
     }
   })
+
+  // ── POST /api/amazon/flat-file/pull-preview/start ───────────────────
+  // In-editor variant of the reconciliation pull. Calls SP-API
+  // getListingsItem per SKU, builds expanded flat-file rows in memory,
+  // and returns them via the job status endpoint. Does NOT write to the
+  // database — the editor merges the rows into its local state where the
+  // user can review, undo (Cmd+Z), and save on their own terms.
+  fastify.post<{
+    Body: { marketplace?: string; productType?: string; skus?: string[] }
+  }>('/amazon/flat-file/pull-preview/start', async (request, reply) => {
+    const { marketplace = 'IT', productType = '', skus } = request.body ?? {}
+    if (!productType?.trim()) {
+      return reply.code(400).send({ error: 'productType is required' })
+    }
+    const jobId = startPullPreviewJob({
+      marketplace,
+      productType,
+      skus: Array.isArray(skus) && skus.length > 0 ? skus : undefined,
+    })
+    return reply.send({ jobId })
+  })
+
+  // ── GET /api/amazon/flat-file/pull-preview/status/:jobId ────────────
+  fastify.get<{ Params: { jobId: string } }>(
+    '/amazon/flat-file/pull-preview/status/:jobId',
+    async (request, reply) => {
+      const job = getPullPreviewJobStatus(request.params.jobId)
+      if (!job) return reply.code(404).send({ error: 'Job not found or expired' })
+      return reply.send(job)
+    },
+  )
 }
