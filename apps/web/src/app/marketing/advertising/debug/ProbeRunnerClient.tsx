@@ -13,6 +13,7 @@ import {
   Play, CheckCircle2, XCircle, ChevronDown, ChevronRight, Loader2,
   AlertTriangle, Copy, Check,
 } from 'lucide-react'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 
 interface ProfileRow {
   profileId: string
@@ -293,7 +294,7 @@ export function ProbeRunnerClient({
             >
               {profiles.map((p) => (
                 <option key={p.profileId} value={p.profileId}>
-                  {p.marketplace} · {p.accountLabel ?? p.profileId} · {p.region} · {p.mode}
+                  {marketplaceCode(p.marketplace)} ({marketplaceCountryName(p.marketplace)}) · {p.accountLabel ?? p.profileId} · {p.region} · {p.mode}
                 </option>
               ))}
             </select>
@@ -332,7 +333,7 @@ export function ProbeRunnerClient({
           {/* Header bar */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 px-1">
             <span>Profile: <code className="font-mono">{report.profileId}</code></span>
-            <span>Marketplace: <code className="font-mono">{report.marketplace}</code></span>
+            <span>Marketplace: <code className="font-mono" title={marketplaceCountryName(report.marketplace)}>{marketplaceCode(report.marketplace)}</code></span>
             <span>Region: <code className="font-mono">{report.region}</code></span>
             <span>Base: <code className="font-mono">{report.baseUrl}</code></span>
             <span>Token: {report.token.acquired

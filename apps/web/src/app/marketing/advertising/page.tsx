@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import type { Metadata } from 'next'
 import { getBackendUrl } from '@/lib/backend-url'
+import { marketplaceCode } from '@/lib/marketplace-code'
 import { AdvertisingNav } from './_shared/AdvertisingNav'
 
 export const metadata: Metadata = { title: 'Amazon Ads · Trading Desk' }
@@ -199,7 +200,7 @@ export default async function AdvertisingLandingPage() {
                   {criticalAged.count} critical (≤14 days):{' '}
                   {criticalAged.items
                     .slice(0, 3)
-                    .map((r) => `${r.sku} (${r.marketplace})`)
+                    .map((r) => `${r.sku} (${marketplaceCode(r.marketplace)})`)
                     .join(', ')}
                   {criticalAged.count > 3 && ` + ${criticalAged.count - 3} more`}
                 </div>

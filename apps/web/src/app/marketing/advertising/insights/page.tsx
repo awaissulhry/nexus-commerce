@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { getBackendUrl } from '@/lib/backend-url'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 
 export const metadata: Metadata = { title: 'Amazon Ads · Insights' }
 export const dynamic = 'force-dynamic'
@@ -129,7 +130,7 @@ function NegKwTable({ items }: { items: NegKwItem[] }) {
             <td className="py-1 pr-3 font-mono text-slate-700 dark:text-slate-300 max-w-[180px] truncate">{it.query}</td>
             <td className="py-1 pr-3 text-slate-500">{it.matchType ?? '—'}</td>
             <td className="py-1 pr-3 text-slate-500">{it.adProduct}</td>
-            <td className="py-1 pr-3 text-slate-500">{it.marketplace}</td>
+            <td className="py-1 pr-3 text-slate-500"><span title={marketplaceCountryName(it.marketplace)}>{marketplaceCode(it.marketplace)}</span></td>
             <td className="py-1 pr-3 tabular-nums text-slate-600 dark:text-slate-400">{it.clicks}</td>
             <td className="py-1 tabular-nums text-red-600 dark:text-red-400 font-medium">{fmtEurDec(it.costEur)}</td>
           </tr>
@@ -154,7 +155,7 @@ function CampTable({ items, showAcos }: { items: CampItem[]; showAcos: boolean }
           <tr key={i}>
             <td className="py-1 pr-3 text-slate-700 dark:text-slate-300 max-w-[220px] truncate">{it.name}</td>
             <td className="py-1 pr-3 text-slate-500">{it.adProduct}</td>
-            <td className="py-1 pr-3 text-slate-500">{it.marketplace}</td>
+            <td className="py-1 pr-3 text-slate-500"><span title={marketplaceCountryName(it.marketplace)}>{marketplaceCode(it.marketplace)}</span></td>
             <td className={`py-1 pr-3 tabular-nums font-medium ${
               showAcos
                 ? (it.acos > 35 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400')
@@ -183,7 +184,7 @@ function StaleTable({ items }: { items: StaleItem[] }) {
           <tr key={i}>
             <td className="py-1 pr-3 text-slate-700 dark:text-slate-300">{it.name}</td>
             <td className="py-1 pr-3 text-slate-500">{it.adProduct}</td>
-            <td className="py-1 text-slate-500">{it.marketplace}</td>
+            <td className="py-1 text-slate-500"><span title={marketplaceCountryName(it.marketplace)}>{marketplaceCode(it.marketplace)}</span></td>
           </tr>
         ))}
       </tbody>

@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Loader2, Pause, Play, Save, RotateCcw, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { formatEurAmount, formatNumber, formatPct } from '../_shared/formatters'
 
 interface Campaign {
@@ -251,7 +252,7 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
           <option value="">All marketplaces</option>
           {marketplaces.map((m) => (
             <option key={m} value={m}>
-              {m}
+              {marketplaceCode(m)} — {marketplaceCountryName(m)}
             </option>
           ))}
         </select>
@@ -314,7 +315,9 @@ export function CampaignsListClient({ initial }: { initial: { items: Campaign[];
                         <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-xs font-mono">{c.marketplace ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs" title={marketplaceCountryName(c.marketplace)}>
+                      {marketplaceCode(c.marketplace)}
+                    </td>
                     <td className="px-3 py-2 text-xs uppercase">{c.type}</td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1">

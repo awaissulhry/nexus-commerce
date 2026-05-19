@@ -18,6 +18,7 @@ import {
   Activity, AlertCircle, BarChart2, Layers, Star,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 
 interface CampaignRow {
   id: string
@@ -289,7 +290,9 @@ export function AdsTab({
                   <td className="px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300 max-w-[180px] truncate font-medium">
                     {c.name}
                   </td>
-                  <td className="px-2 py-1.5 text-xs font-mono text-slate-500">{c.marketplace}</td>
+                  <td className="px-2 py-1.5 text-xs text-slate-500" title={marketplaceCountryName(c.marketplace)}>
+                    {marketplaceCode(c.marketplace)}
+                  </td>
                   <td className="px-2 py-1.5"><StatusBadge status={c.status} /></td>
                   <td className="px-2 py-1.5 text-xs tabular-nums text-slate-500">
                     {c.hasV1Data ? c.impressions.toLocaleString() : <span className="text-slate-300 dark:text-slate-600">—</span>}
@@ -423,7 +426,11 @@ export function AdsTab({
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                       {cr.adGroupName ?? '(no ad-group name)'}{' '}
-                      {cr.marketplace && <span className="text-slate-400">· {cr.marketplace}</span>}
+                      {cr.marketplace && (
+                        <span className="text-slate-400" title={marketplaceCountryName(cr.marketplace)}>
+                          · {marketplaceCode(cr.marketplace)}
+                        </span>
+                      )}
                     </p>
                   </div>
                   {cr.productCount > 1 && (

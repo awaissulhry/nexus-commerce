@@ -12,6 +12,7 @@ import { TrendingUp } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { formatEur, formatPct, MARGIN_BAND_CLASS, marginBand } from '../_shared/formatters'
 import { getBackendUrl } from '@/lib/backend-url'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 
 export const metadata: Metadata = { title: 'Amazon Ads · Profit & Margin' }
 export const dynamic = 'force-dynamic'
@@ -146,7 +147,9 @@ export default async function ProfitPage() {
                         <span className="font-mono text-slate-500">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-xs font-mono">{r.marketplace}</td>
+                    <td className="px-3 py-2 text-xs" title={marketplaceCountryName(r.marketplace)}>
+                      {marketplaceCode(r.marketplace)}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.unitsSold}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {formatEur(r.grossRevenueCents)}

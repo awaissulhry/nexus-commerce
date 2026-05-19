@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { Wallet, ChevronRight } from 'lucide-react'
 import { AdvertisingNav } from '../_shared/AdvertisingNav'
 import { WriteModeBanner } from '../_shared/WriteModeBanner'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 import { getBackendUrl } from '@/lib/backend-url'
 import { formatEur } from '../_shared/formatters'
 import { CreatePoolButton } from './CreatePoolButton'
@@ -132,9 +133,10 @@ export default async function BudgetPoolsPage() {
                           {marketplaces.map((m) => (
                             <span
                               key={m}
-                              className="text-[10px] font-mono px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                              title={marketplaceCountryName(m)}
+                              className="text-[10px] px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                             >
-                              {m}
+                              {marketplaceCode(m)}
                             </span>
                           ))}
                         </div>

@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatEur, formatNumber } from '../_shared/formatters'
+import { marketplaceCode, marketplaceCountryName } from '@/lib/marketplace-code'
 
 interface StorageAgeRow {
   id: string
@@ -137,8 +138,8 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
           <tbody>
             {marketplaces.map((mp) => (
               <tr key={mp}>
-                <td className="px-3 py-2 text-xs font-mono text-slate-700 dark:text-slate-300">
-                  {mp}
+                <td className="px-3 py-2 text-xs text-slate-700 dark:text-slate-300" title={marketplaceCountryName(mp)}>
+                  {marketplaceCode(mp)}
                 </td>
                 {BUCKETS.map((b) => {
                   const cell = grid.get(`${mp}::${b.key}`)
@@ -183,7 +184,7 @@ export function StorageAgeHeatmap({ rows }: { rows: StorageAgeRow[] }) {
         <div className="mt-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900 rounded-md">
           <div className="px-3 py-2 border-b border-blue-200 dark:border-blue-900 flex items-center gap-2">
             <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              {selected.marketplace} · {BUCKETS.find((b) => b.key === selected.bucket)?.label}
+              <span title={marketplaceCountryName(selected.marketplace)}>{marketplaceCode(selected.marketplace)}</span> · {BUCKETS.find((b) => b.key === selected.bucket)?.label}
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
               {selectedRows.length} SKU
