@@ -300,9 +300,9 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: 'Security',
         icon: ShieldCheck,
         description:
-          '2FA, recovery codes, sessions, login history, IP allowlist.',
+          '2FA, recovery codes, sessions, login history.',
         keywords: ['2fa', 'totp', 'mfa', 'security', 'sessions', 'password', 'login'],
-        status: 'soon',
+        status: 'live',
       },
     ],
   },

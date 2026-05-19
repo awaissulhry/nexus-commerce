@@ -2969,12 +2969,104 @@ model UserProfile {
   displayName         String               @default("")
   email               String               @default("")
   avatarUrl           String               @default("")
-  // Password stored as bcrypt hash
+  // Password hash. Phase C migrates from sha256 (legacy) to bcrypt;
+  // the verifier auto-detects format and re-hashes on next successful
+  // login. Empty string = no password set yet.
   passwordHash        String               @default("")
+  // Phase C — locale / scheduling fields surfaced on /settings/profile.
+  // All nullable so the existing seeded row keeps working without a
+  // backfill; defaults applied at the UI layer.
+  phone               String?
+  timezone            String?              // IANA, e.g. "Europe/Rome"
+  language            String?              // BCP-47, e.g. "it-IT"
+  dateFormat          String?              // "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"
+  weekStart           Int?                 // 0 = Sunday, 1 = Monday
+  workingHoursStart   String?              // "09:00"
+  workingHoursEnd     String?              // "18:00"
+  // Phase C — 2FA (TOTP). Secret is base32; null when 2FA is off.
+  // enabledAt is set when the user verifies the first 6-digit code;
+  // a pending-but-not-confirmed enrollment leaves enabledAt null.
+  twoFactorSecret     String?
+  twoFactorEnabledAt  DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   // W9.x — workflow assignments this user appears in
   workflowAssignments WorkflowAssignment[]
+  // Phase C — security tables.
+  recoveryCodes       TwoFactorRecoveryCode[]
+  sessions            UserSession[]
+  loginEvents         LoginEvent[]
+}
+
+// ── Phase C — TOTP recovery codes ──────────────────────────────────
+// Generated 10 at a time when 2FA is enrolled (and re-generated on
+// demand from the security page). Stored as bcrypt hashes; the raw
+// codes are shown to the operator exactly once at generation time.
+// usedAt is set when a code is consumed for login; consumed codes
+// are kept for audit (never re-usable) until the next regeneration
+// clears them.
+model TwoFactorRecoveryCode {
+  id        String      @id @default(cuid())
+  userId    String
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String      // bcrypt of the raw code
+  usedAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([userId, usedAt])
+}
+
+// ── Phase C — active sessions ──────────────────────────────────────
+// One row per browser/device that has authenticated. Refresh-token
+// rotation updates lastSeenAt; revoke sets revokedAt; an explicit
+// "log out everywhere" sets revokedAt on every non-current row.
+//
+// Until full auth middleware lands (Phase I), this table is read-
+// mostly — the UI renders rows so the schema is plumbed end-to-end,
+// even if the only writer for now is the eventual auth handshake.
+model UserSession {
+  id            String      @id @default(cuid())
+  userId        String
+  user          UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Stable per-device identifier; safe to display in the UI.
+  tokenPrefix   String      // first 8 chars of the hashed refresh token
+  userAgent     String?     // "Chrome 126 on macOS"
+  ipAddress     String?     // truncated IPv4 /24 or IPv6 /64 for privacy
+  ipCity        String?     // GeoIP lookup result, best-effort
+  ipCountry     String?     // ISO 3166-1 alpha-2
+  createdAt     DateTime    @default(now())
+  lastSeenAt    DateTime    @default(now())
+  revokedAt     DateTime?
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+}
+
+// ── Phase C — login history ────────────────────────────────────────
+// Append-only login event log. One row per attempt (success or
+// failure) so the user can review "did I really log in from Berlin?"
+// or "someone tried to brute-force my account at 03:14 from this IP".
+// Outcome is enum-like; we keep it as a string column to avoid Prisma
+// enum migrations as new outcomes appear (e.g. "totp_failed",
+// "recovery_code_used").
+model LoginEvent {
+  id         String      @id @default(cuid())
+  userId     String?
+  user       UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Even on failed logins we capture the email tried so the user
+  // can spot stuffing attempts against their address.
+  emailTried String?
+  outcome    String      // "success" | "bad_password" | "totp_failed" | "recovery_code_used" | "locked"
+  userAgent  String?
+  ipAddress  String?
+  ipCity     String?
+  ipCountry  String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // ── Webhook Event Tracking ─────────────────────────────────────────
