@@ -19,6 +19,7 @@ import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { productEventService } from '../services/product-event.service.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
+import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
 
 // ES.3 — module-level cache-ready flag (re-checked every 60s).
 // Avoids a DB round-trip on every single request; a stale "false"
@@ -741,10 +742,57 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      // Fulfillment derivation (offers > stock locations > Product.fulfillmentMethod).
+      // Two cheap side queries on the page's product ids; overlay live signal
+      // on top of whatever raw value the cache or direct path returned.
+      const pageProductIds = sortedRawProducts.map((p) => p.id)
+      const offersByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
+      const stockByProduct = new Map<string, { fba: number; non: number }>()
+      if (pageProductIds.length > 0) {
+        const [offerRows, stockRows] = await Promise.all([
+          prisma.offer.findMany({
+            where: {
+              isActive: true,
+              channelListing: { productId: { in: pageProductIds } },
+            },
+            select: {
+              fulfillmentMethod: true,
+              channelListing: { select: { productId: true } },
+            },
+          }),
+          prisma.stockLevel.findMany({
+            where: { productId: { in: pageProductIds } },
+            select: {
+              productId: true,
+              quantity: true,
+              location: { select: { type: true } },
+            },
+          }),
+        ])
+        for (const o of offerRows) {
+          const pid = o.channelListing.productId
+          const s = offersByProduct.get(pid) ?? new Set<'FBA' | 'FBM'>()
+          s.add(o.fulfillmentMethod as 'FBA' | 'FBM')
+          offersByProduct.set(pid, s)
+        }
+        for (const s of stockRows) {
+          const cur = stockByProduct.get(s.productId) ?? { fba: 0, non: 0 }
+          if (s.location.type === 'AMAZON_FBA') cur.fba += s.quantity
+          else cur.non += s.quantity
+          stockByProduct.set(s.productId, cur)
+        }
+      }
+
       // ES.3 — transform either a ProductReadCache row or a full Prisma
       // Product row into the canonical ProductRow shape.
       const products = sortedRawProducts.map((p: any) => {
         let coverage: Record<string, { live: number; draft: number; error: number; total: number }> | null = null
+
+        const derivedFulfillment = deriveFulfillmentMethod({
+          offerMethods: offersByProduct.get(p.id),
+          stock: stockByProduct.get(p.id),
+          fallback: (p.fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null,
+        })
 
         if (useCache) {
           // Cache path: counts + family + workflowStage are pre-built columns/JSON.
@@ -766,7 +814,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             isParent: p.isParent,
             parentId: p.parentId,
             productType: p.productType,
-            fulfillmentMethod: p.fulfillmentMethod,
+            fulfillmentMethod: derivedFulfillment,
             family: (p.familyJson as any) ?? null,
             workflowStage: (p.workflowStageJson as any) ?? null,
             version: p.version,
@@ -809,7 +857,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           isParent: p.isParent,
           parentId: p.parentId,
           productType: p.productType,
-          fulfillmentMethod: p.fulfillmentMethod,
+          fulfillmentMethod: derivedFulfillment,
           family: p.family ?? null,
           workflowStage: p.workflowStage ?? null,
           version: p.version,

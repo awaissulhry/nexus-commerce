@@ -10,6 +10,7 @@
 
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
+import { deriveFulfillmentMethod } from './fulfillment-derivation.service.js'
 
 export class ProductReadCacheService {
   async refresh(productId: string): Promise<void> {
@@ -91,6 +92,36 @@ export class ProductReadCacheService {
       },
     })
 
+    // Derive the effective fulfillment method (offers > stock > raw field).
+    const [offerRows, stockRows] = await Promise.all([
+      prisma.offer.findMany({
+        where: { isActive: true, channelListing: { productId } },
+        select: { fulfillmentMethod: true },
+      }),
+      prisma.stockLevel.findMany({
+        where: { productId },
+        select: {
+          quantity: true,
+          location: { select: { type: true } },
+        },
+      }),
+    ])
+    const offerMethods = new Set<'FBA' | 'FBM'>()
+    for (const o of offerRows) offerMethods.add(o.fulfillmentMethod as 'FBA' | 'FBM')
+    const stockBuckets = stockRows.reduce(
+      (acc, s) => {
+        if (s.location.type === 'AMAZON_FBA') acc.fba += s.quantity
+        else acc.non += s.quantity
+        return acc
+      },
+      { fba: 0, non: 0 },
+    )
+    const derivedFulfillment = deriveFulfillmentMethod({
+      offerMethods,
+      stock: stockBuckets,
+      fallback: (product.fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null,
+    })
+
     const channelKeys: string[] = []
     const coverageMap: Record<string, { live: number; draft: number; error: number; total: number }> = {}
     let driftCount = 0
@@ -135,7 +166,7 @@ export class ProductReadCacheService {
       status: product.status,
       syncChannels: product.syncChannels,
       productType: product.productType ?? null,
-      fulfillmentMethod: product.fulfillmentMethod ?? null,
+      fulfillmentMethod: derivedFulfillment,
       isParent: product.isParent ?? false,
       parentId: product.parentId ?? null,
       version: product.version ?? 0,

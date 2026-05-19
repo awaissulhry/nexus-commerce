@@ -1184,12 +1184,15 @@ const ProductCell = memo(function ProductCell({
       if (p.isParent && !p.parentId) return null
       return <span className="text-sm text-slate-600 dark:text-slate-300">—</span>
 
-    // AM.1 — Inventory (Available units).
-    // Parent rows: blank. Children: count (FBM) + template + Edit prices link.
+    // AM.1 — Inventory (Available units). Method is derived server-side
+    // from offers > stock locations > Product.fulfillmentMethod. 'BOTH'
+    // means the SKU has both FBA and FBM offers (or stock in both buckets).
+    // null = genuinely unknown — surface a "Set FBA/FBM" prompt instead
+    // of guessing.
     case 'inventory': {
       if (p.isParent && !p.parentId) return null
       const stock = p.totalStock ?? 0
-      const method = p.fulfillmentMethod ?? 'FBM'
+      const method = p.fulfillmentMethod as 'FBA' | 'FBM' | 'BOTH' | null
       const tone = stock === 0
         ? 'text-rose-600 dark:text-rose-400'
         : stock <= (p.lowStockThreshold ?? 10)
@@ -1198,11 +1201,25 @@ const ProductCell = memo(function ProductCell({
       return (
         <div className="space-y-0.5">
           <div className={`text-sm font-medium tabular-nums ${tone}`}>
-            {stock.toLocaleString()} ({method})
+            {stock.toLocaleString()}
+            {method ? ` (${method})` : ''}
           </div>
-          <div className="text-xs text-slate-400 dark:text-slate-500">
-            Xavia {method} Shipping Template
-          </div>
+          {method === 'BOTH' ? (
+            <div className="text-xs text-slate-400 dark:text-slate-500">
+              FBA + FBM offers live
+            </div>
+          ) : method ? (
+            <div className="text-xs text-slate-400 dark:text-slate-500">
+              Xavia {method} Shipping Template
+            </div>
+          ) : (
+            <Link
+              href={`/products/${p.id}/edit`}
+              className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
+            >
+              Set FBA/FBM
+            </Link>
+          )}
           <Link
             href={`/products/${p.id}/edit?tab=matrix`}
             className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
