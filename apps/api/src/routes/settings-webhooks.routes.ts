@@ -11,11 +11,15 @@
  *   POST   /api/settings/webhooks/:id/test     fire a test payload
  *                                              against the configured URL
  *
- * Secret handling mirrors the API key flow:
+ * Secret handling:
  *   • Generated server-side as 32 random bytes, hex-encoded
  *   • Plaintext returned exactly once at create time
- *   • Stored as bcrypt hash; secretPrefix (first 8 chars) shown
- *     in the UI for identification
+ *   • Stored AS-IS so the dispatcher can sign outbound payloads
+ *     (bcrypt would be one-way; the receiver verifies HMAC with
+ *     the same plaintext they got on create). secretPrefix is
+ *     the first 8 chars, shown in the UI for identification.
+ *   • TODO: AES-GCM at rest, keyed off an env var, when we feel
+ *     the audit case. For now Postgres + Neon TLS protect the wire.
  *
  * The dispatch worker that actually fires real events isn't wired
  * here — Phase E lands the schema + CRUD + test-payload. Real
@@ -25,7 +29,6 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { randomBytes, createHmac } from 'crypto'
-import bcrypt from 'bcryptjs'
 import prisma from '../db.js'
 import { writeSettingsAudit } from '../utils/settings-audit.js'
 
@@ -132,15 +135,18 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
 
       const user = await getSoloUser()
       const rawSecret = generateSecret()
-      const secretHash = await bcrypt.hash(rawSecret, 10)
       const secretPrefix = rawSecret.slice(0, 8)
 
+      // Phase H follow-up — store plaintext so the dispatcher can
+      // HMAC-sign payloads. The column is still named `secretHash`
+      // for back-compat with Phase E migrations; we just don't
+      // hash anymore. See header comment.
       const row = await (prisma as any).notificationWebhook.create({
         data: {
           userId: user?.id ?? null,
           label,
           url,
-          secretHash,
+          secretHash: rawSecret,
           secretPrefix,
           events,
           isActive: true,
@@ -311,13 +317,21 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
         if (!row) {
           return reply.code(404).send({ error: 'Webhook not found' })
         }
-        // We can't sign with the bcrypted secret (it's one-way).
-        // The test payload uses a fresh ephemeral signing key + we
-        // tell the receiver in the header that this is a test, so
-        // they know to skip signature verification or expect it
-        // signed with a marker. Production payloads use the real
-        // secret (which the receiver also has).
-        const fakeSecret = 'test-secret-not-used-for-production'
+        // Sign with the row's stored secret — same key the
+        // receiver verifies with. Rows created before the
+        // bcrypt→plaintext flip (Phase H follow-up) have a
+        // one-way hash here; the dispatcher can't sign with them.
+        // Surface a clear hint instead of firing a payload the
+        // receiver can never verify.
+        const looksLikeBcrypt =
+          typeof row.secretHash === 'string' &&
+          row.secretHash.startsWith('$2')
+        if (looksLikeBcrypt) {
+          return reply.code(409).send({
+            error:
+              'This subscription was created before the secret-format upgrade and cannot be signed. Recreate the webhook to generate a fresh signing key.',
+          })
+        }
         const payload = JSON.stringify({
           event: 'TEST',
           deliveryId: randomBytes(8).toString('hex'),
@@ -325,7 +339,7 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
           webhookId: row.id,
           data: { hello: 'world' },
         })
-        const signature = signPayload(fakeSecret, payload)
+        const signature = signPayload(row.secretHash, payload)
 
         const started = Date.now()
         let status = 0
@@ -338,6 +352,7 @@ const settingsWebhooksRoutes: FastifyPluginAsync = async (fastify) => {
             headers: {
               'Content-Type': 'application/json',
               'X-Nexus-Event': 'TEST',
+              // sha256=<hex> — same convention GitHub + Stripe use.
               'X-Nexus-Signature': `sha256=${signature}`,
               'X-Nexus-Test': '1',
             },

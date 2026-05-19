@@ -7,6 +7,7 @@
 
 import { prisma } from '@nexus/database'
 import { sendEmail } from '../email/transport.js'
+import { emitWebhookEvent } from '../webhook-dispatch.service.js'
 
 export enum AlertSeverity {
   INFO = 'INFO',
@@ -31,6 +32,16 @@ export interface AlertConfig {
   threshold: number // Number of issues before alerting
   enabled: boolean
   channels: AlertChannel[]
+}
+
+/**
+ * Phase E follow-up — bridge from this service's internal AlertType
+ * to the canonical webhook event-types in
+ * apps/web/src/app/settings/notifications/event-types.ts.
+ * Unmapped types stay in-app only.
+ */
+const ALERT_TYPE_TO_WEBHOOK_EVENT: Partial<Record<AlertType, string>> = {
+  [AlertType.SYNC_FAILURE]: 'SYNC_FAILURE',
 }
 
 export interface AlertChannel {
@@ -163,6 +174,30 @@ export class AlertService {
 
     // Send to configured channels
     await this.sendAlert(alert, config.channels)
+
+    // Phase E follow-up — fan out to subscriber-configured webhooks
+    // via /settings/webhooks. Fire-and-forget so a slow receiver
+    // can't delay the alert path. Only AlertTypes that map to one
+    // of the canonical event-types (NEW_ORDER, LOW_STOCK,
+    // RETURN_REQUEST, SYNC_FAILURE, AI_COMPLETE) get bridged; the
+    // other internal AlertTypes (INCONSISTENT_THEMES, etc.) stay
+    // in the in-app channel only.
+    const webhookEvent = ALERT_TYPE_TO_WEBHOOK_EVENT[type]
+    if (webhookEvent) {
+      void emitWebhookEvent({
+        event: webhookEvent,
+        deliveryId: alert.id,
+        data: {
+          alertType: type,
+          severity: config.severity,
+          title,
+          message,
+          affectedCount,
+          affectedIds: affectedIds?.slice(0, 50) ?? null,
+          createdAt: alert.createdAt.toISOString(),
+        },
+      })
+    }
 
     // Log alert history
     await this.logAlertHistory(alert.id, 'CREATED', {
