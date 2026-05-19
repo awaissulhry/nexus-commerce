@@ -23,6 +23,7 @@ import {
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
 import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
 import { PendingPullBanner } from '../_shared/PendingPullBanner'
+import { TbBtn as SharedTbBtn } from '../_shared/FlatFileIconToolbar'
 import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -603,9 +604,13 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
   }, [pullDiffData, marketplace, BACKEND])
 
   // ── API: import from Amazon ────────────────────────────────────────────
+  // Slot-agnostic — both ToolbarFetchCtx and ToolbarImportCtx expose
+  // setRows + pushHistory, which is all this needs.
 
-  async function importFromAmazon(ctx: ToolbarImportCtx) {
-    ctx // just to avoid lint warning — used inside
+  async function importFromAmazon(ctx: {
+    setRows: React.Dispatch<React.SetStateAction<BaseRow[]>>
+    pushHistory: (rows: BaseRow[]) => void
+  }) {
     try {
       const res = await fetch(`${BACKEND}/api/ebay/flat-file/import-amazon?marketplace=${marketplace}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -790,24 +795,17 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: fetch button ─────────────────────────────────────────────────
 
-  const renderToolbarFetch = useCallback(({ rows, selectedRows }: ToolbarFetchCtx) => (
+  const renderToolbarFetch = useCallback(({ rows, selectedRows, setRows, pushHistory }: ToolbarFetchCtx) => (
     <>
       {/* Phase 3 — Pull from eBay (full data, undoable, diff preview) */}
       <div className="relative">
-        <button
-          type="button"
+        <SharedTbBtn
+          icon={pulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          title={`Pull from eBay ${marketplace} — full listing data with diff preview, undoable with ⌘Z. Does not touch the database until you click Save.`}
           onClick={() => setPullPanelOpen((o) => !o)}
           disabled={!rows.length || pulling}
-          title={`Pull from eBay ${marketplace} — full listing data with diff preview, undoable with ⌘Z. Does not touch the database until you click Save.`}
-          className={cn(
-            'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-            pullPanelOpen ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
-            'disabled:opacity-40 disabled:cursor-default',
-          )}
-        >
-          {pulling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-        </button>
+          active={pullPanelOpen}
+        />
         {pullPanelOpen && (
           <PullFromEbayPanel
             selectedCount={selectedRows.size}
@@ -831,19 +829,19 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
       </div>
 
       {/* Pull history — recent applied pulls + one-click re-pull */}
-      <button
-        type="button"
-        onClick={() => setPullHistoryOpen(true)}
+      <SharedTbBtn
+        icon={<History className="w-3.5 h-3.5" />}
         title="Pull history — review past pulls and re-run with same scope"
-        className={cn(
-          'relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-          pullHistoryOpen
-            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800',
-        )}
-      >
-        <History className="w-3.5 h-3.5" />
-      </button>
+        onClick={() => setPullHistoryOpen(true)}
+        active={pullHistoryOpen}
+      />
+
+      {/* Import from Amazon — pre-fill eBay fields from matching Amazon listings (PC: moved here from renderToolbarImport so all data-fetch actions sit together) */}
+      <SharedTbBtn
+        icon={<ArrowRightLeft className="w-3.5 h-3.5" />}
+        title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
+        onClick={() => void importFromAmazon({ setRows, pushHistory })}
+      />
 
       {/* Inline progress / result indicator */}
       {pullProgress && (
@@ -866,51 +864,30 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
 
   // ── Slot: import button ────────────────────────────────────────────────
 
+  // View-toggle slot (Override / Cascade / Reset). Import-from-Amazon
+  // moved to renderToolbarFetch in Phase C so all data-fetch actions
+  // sit together.
   const renderToolbarImport = useCallback((ctx: ToolbarImportCtx) => (
     <>
-      {/* Import from Amazon */}
-      <button type="button"
-        onClick={() => void importFromAmazon(ctx)}
-        disabled={ctx.loading}
-        title="Import from Amazon — pre-fill eBay fields from matching Amazon listings"
-        className="relative h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
-      >
-        <ArrowRightLeft className="w-3.5 h-3.5" />
-      </button>
-
       {/* IN.1 — Override badges toggle */}
-      <button
-        type="button"
-        onClick={() => setShowOverrideBadges((o) => !o)}
+      <SharedTbBtn
+        icon={<GitBranch className="w-3.5 h-3.5" />}
         title={showOverrideBadges ? 'Hide field-override indicators' : 'Show field-override indicators (amber ⎇ badge on rows with channel overrides)'}
-        className={cn(
-          'h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-          showOverrideBadges
-            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300',
-        )}
-      >
-        <GitBranch className="w-3.5 h-3.5" />
-      </button>
+        onClick={() => setShowOverrideBadges((o) => !o)}
+        active={showOverrideBadges}
+      />
 
       {/* IN.2 — Cascade buttons toggle */}
-      <button
-        type="button"
-        onClick={() => setShowCascadeButtons((o) => !o)}
+      <SharedTbBtn
+        icon={<GitFork className="w-3.5 h-3.5" />}
         title={showCascadeButtons ? 'Hide cascade-to-siblings buttons' : 'Show cascade-to-siblings buttons (⎇↓ on each row)'}
-        className={cn(
-          'h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0',
-          showCascadeButtons
-            ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-            : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300',
-        )}
-      >
-        <GitFork className="w-3.5 h-3.5" />
-      </button>
+        onClick={() => setShowCascadeButtons((o) => !o)}
+        active={showCascadeButtons}
+      />
 
       {/* IN.2 — Reset all visible overrides back to master */}
-      <button
-        type="button"
+      <SharedTbBtn
+        icon={<RotateCcw className="w-3.5 h-3.5" />}
         title="Reset all channel overrides to master values (sets followMaster=true on all visible rows)"
         onClick={async () => {
           const overrideRows = ctx.rows.filter((r) => {
@@ -935,10 +912,7 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
           void ctx.onReload()
         }}
         disabled={!ctx.rows.length}
-        className="h-7 w-7 flex items-center justify-center rounded transition-colors flex-shrink-0 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 disabled:opacity-40"
-      >
-        <RotateCcw className="w-3.5 h-3.5" />
-      </button>
+      />
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ), [showOverrideBadges, showCascadeButtons])
