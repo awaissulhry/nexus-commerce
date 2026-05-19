@@ -3080,6 +3080,85 @@ model UserProfile {
   // Phase E — per-user notification prefs + webhook subscriptions.
   notificationPrefs   NotificationPreference[]
   notificationWebhooks NotificationWebhook[]
+  // Phase H — privacy + consent + export requests.
+  consents          ConsentRecord[]
+  exportRequests    DataExportRequest[]
+}
+
+// Phase H — consent log (GDPR Art. 7). Append-only; each row pins a
+// version (e.g. dpa-v2026-05) + a timestamp so we can prove what the
+// operator accepted, when. Marketing-comms opt-in/out flips create
+// new rows rather than mutating the previous one.
+model ConsentRecord {
+  id        String      @id @default(cuid())
+  userId    String?
+  user      UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // 'DPA' | 'COOKIE_ANALYTICS' | 'COOKIE_MARKETING' | 'TOS' |
+  // 'PRIVACY_POLICY' | 'MARKETING_EMAIL' | 'MARKETING_SMS'
+  kind      String
+  version   String      // semver-ish: 'v2026-05' or '1.4.0'
+  accepted  Boolean     // true on accept, false on opt-out
+  // Free-form context: which page surfaced the consent, IP, UA.
+  // GDPR requires we can prove the consent was given freely +
+  // informed; this metadata helps.
+  ip        String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([userId, kind])
+  @@index([createdAt])
+}
+
+// Phase H — data retention policy. Single row per workspace.
+// `policies` is a JSON map keyed by data-type ("orders", "audit",
+// "loginEvents", etc.) → number of days. The retention cron reads
+// this row + sweeps rows older than the configured window. IT
+// fiscal law mandates 7y minimum for invoiced orders, so the UI
+// pins the orders slider at 2555+ days.
+model DataRetentionPolicy {
+  id        String   @id @default(cuid())
+  // Single-row pattern — no userId. Workspace-global.
+  policies  Json     @default("{}")
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// Phase H — async export jobs. The MVP runs synchronously (assembles
+// JSON in the request) so downloadUrl is filled immediately and
+// status jumps from QUEUED → COMPLETED in the same tick. Schema
+// shape supports a real out-of-process worker later without UI
+// changes.
+model DataExportRequest {
+  id          String      @id @default(cuid())
+  userId      String?
+  user        UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  status      String      @default("QUEUED")
+  // Format the operator picked. 'json' for the MVP; 'zip' lands when
+  // we add a worker that builds a real archive.
+  format      String      @default("json")
+  // What's in the export. Free-form array of data-type keys for
+  // future-proofing ('all' covers everything).
+  scope       String[]    @default([])
+  // Where to fetch the result. For synchronous JSON dumps this is a
+  // route handle the UI calls; for async ZIPs it'd be an S3/CDN URL.
+  downloadUrl String?
+  // Hard-expiry on the download for privacy reasons — past this
+  // timestamp the route refuses to serve. Defaults to 7 days.
+  expiresAt   DateTime?
+  // Size of the rendered payload, set once COMPLETED. Used in the
+  // history list so operators see what they're about to download.
+  bytes       Int?
+  // Free-form error context on FAILED.
+  error       String?
+  createdAt   DateTime    @default(now())
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([createdAt])
 }
 
 // ── Phase C — TOTP recovery codes ──────────────────────────────────

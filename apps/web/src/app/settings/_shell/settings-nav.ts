@@ -291,9 +291,20 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         label: 'Data & privacy',
         icon: Database,
         description:
-          'GDPR export, data retention, consent tracking, delete account.',
-        keywords: ['gdpr', 'export', 'privacy', 'data', 'retention', 'consent'],
-        status: 'soon',
+          'GDPR export, data retention, consent tracking, delete-account preview.',
+        keywords: [
+          'gdpr',
+          'export',
+          'privacy',
+          'data',
+          'retention',
+          'consent',
+          'cookie',
+          'dpa',
+          'delete account',
+          'portability',
+        ],
+        status: 'live',
       },
       {
         href: '/settings/security',
