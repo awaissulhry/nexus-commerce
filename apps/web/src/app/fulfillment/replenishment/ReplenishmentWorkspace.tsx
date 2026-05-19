@@ -48,10 +48,12 @@ import {
   AutoRefreshSelect,
   SharedColumnPicker,
   BulkActionShell,
+  SortStack,
   type Density,
   type AutoRefreshInterval,
   type ColumnSpec,
   type BulkAction,
+  type SortFieldOption,
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
@@ -146,6 +148,15 @@ const REP_COLUMN_PICKER_OPTIONS: ReadonlyArray<ColumnSpec<RepColumnKey>> = REP_C
   .filter((c) => c.label.length > 0)
   .map((c) => ({ key: c.key as RepColumnKey, label: c.label, alwaysOn: c.alwaysOn }))
 
+const REP_SORT_FIELDS: ReadonlyArray<SortFieldOption> = [
+  { value: 'sku',         label: 'SKU' },
+  { value: 'name',        label: 'Name' },
+  { value: 'stock',       label: 'On hand' },
+  { value: 'daysOfCover', label: 'Days left' },
+  { value: 'velocity',    label: 'Vel/day' },
+  { value: 'qty',         label: 'Suggest qty' },
+]
+
 export default function ReplenishmentWorkspace() {
   // R.5 — URL-driven state. Filters / search / sort are bookmarkable
   // and shareable. Selection + bulk modal stay local (ephemeral).
@@ -161,6 +172,13 @@ export default function ReplenishmentWorkspace() {
   const urlSearch = searchParams.get('search') ?? ''
   const sortBy = (searchParams.get('sortBy') ?? 'urgency') as SortKey
   const sortDir = (searchParams.get('sortDir') ?? 'desc') as 'asc' | 'desc'
+  // Phase C — multi-column sort overlay. When `sorts` is set in the
+  // URL (CSV of "field:dir" pairs) it takes precedence over the
+  // single-column sortBy/sortDir below. Empty array → fall back to
+  // single sort so existing column-header click behavior keeps working.
+  const sortStack = useMemo(() => {
+    return (searchParams.get('sorts') ?? '').split(',').filter(Boolean)
+  }, [searchParams])
   const drawerProductId = searchParams.get('drawer')
 
   const [data, setData] = useState<ReplenishmentResponse | null>(null)
@@ -372,10 +390,9 @@ export default function ReplenishmentWorkspace() {
         (r) => r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
       )
     }
-    const dir = sortDir === 'asc' ? 1 : -1
-    if (sortBy !== 'urgency') {
-      rows = [...rows].sort((a, b) => {
-        switch (sortBy) {
+    const cmpForField = (field: string, dir: 1 | -1) =>
+      (a: Suggestion, b: Suggestion): number => {
+        switch (field) {
           case 'daysOfCover': return ((a.daysOfStockLeft ?? 999) - (b.daysOfStockLeft ?? 999)) * dir
           case 'velocity':    return ((a.velocity ?? 0) - (b.velocity ?? 0)) * dir
           case 'qty':         return ((a.reorderQuantity ?? 0) - (b.reorderQuantity ?? 0)) * dir
@@ -384,10 +401,29 @@ export default function ReplenishmentWorkspace() {
           case 'name':        return a.name.localeCompare(b.name) * dir
           default:            return 0
         }
+      }
+
+    if (sortStack.length > 0) {
+      // Multi-column sort overlay — applied in precedence order.
+      const comparators = sortStack.map((pair) => {
+        const [field, d] = pair.split(':')
+        return cmpForField(field, d === 'asc' ? 1 : -1)
       })
+      rows = [...rows].sort((a, b) => {
+        for (const cmp of comparators) {
+          const r = cmp(a, b)
+          if (r !== 0) return r
+        }
+        return 0
+      })
+    } else {
+      const dir = sortDir === 'asc' ? 1 : -1
+      if (sortBy !== 'urgency') {
+        rows = [...rows].sort(cmpForField(sortBy, dir))
+      }
     }
     return rows
-  }, [data, filter, urlSearch, sortBy, sortDir])
+  }, [data, filter, urlSearch, sortBy, sortDir, sortStack])
 
   // Build hierarchy grid rows from the flat suggestion list.
   // All child data is pre-loaded — no lazy-fetch needed for Xavia's ~279 SKUs.
@@ -1169,6 +1205,11 @@ export default function ReplenishmentWorkspace() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-44 sm:w-56"
+          />
+          <SortStack
+            fields={REP_SORT_FIELDS}
+            stack={sortStack}
+            onChange={(next) => updateUrl({ sorts: next.length > 0 ? next.join(',') : undefined })}
           />
           <DensityToggle density={density} onChange={setDensity} />
           <SharedColumnPicker<RepColumnKey>
