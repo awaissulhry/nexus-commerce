@@ -6121,11 +6121,19 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           id: true, sku: true, name: true, totalStock: true, lowStockThreshold: true,
           fulfillmentChannel: true, basePrice: true, costPrice: true,
           serviceLevelPercent: true, orderingCostCents: true, carryingCostPctYear: true,
-          // R.13 — productType drives event-prep applicability
           productType: true,
-          // R.19 — physical attrs for container/freight optimization
           dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
           weightValue: true, weightUnit: true,
+          // hierarchy — needed by the replenishment grid to group SKUs under parents
+          parentId: true,
+          parent: {
+            select: {
+              id: true, sku: true, name: true, parentId: true,
+              images: { select: { url: true }, take: 1 },
+              parent: { select: { id: true, sku: true, name: true, images: { select: { url: true }, take: 1 } } },
+            },
+          },
+          images: { select: { url: true }, take: 1 },
         },
         take: 1000,
       })
@@ -6692,6 +6700,16 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           isManufactured: !!rule?.isManufactured,
           preferredSupplierId: rule?.preferredSupplierId ?? null,
           fulfillmentChannel: p.fulfillmentChannel,
+          // Hierarchy — used by the replenishment grid to group SKUs under parents
+          parentId: (p as any).parentId ?? null,
+          parentSku: (p as any).parent?.sku ?? null,
+          parentName: (p as any).parent?.name ?? null,
+          parentThumbnailUrl: (p as any).parent?.images?.[0]?.url ?? null,
+          grandparentId: (p as any).parent?.parentId ?? null,
+          grandparentSku: (p as any).parent?.parent?.sku ?? null,
+          grandparentName: (p as any).parent?.parent?.name ?? null,
+          grandparentThumbnailUrl: (p as any).parent?.parent?.images?.[0]?.url ?? null,
+          thumbnailUrl: (p as any).images?.[0]?.url ?? null,
         }
       })
 

@@ -13,12 +13,13 @@
 //   - multi-select → bulk-draft-PO flow (one POST creates one PO per
 //     supplier, grouped automatically)
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Download,
   Keyboard,
   Loader2,
+  Package,
   RefreshCw,
   ShoppingCart,
   Sparkles,
@@ -39,6 +40,10 @@ import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
+import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import { AutomationRulesCard } from './_shared/AutomationRulesCard'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
 import { ScenariosCard } from './_shared/ScenariosCard'
@@ -52,7 +57,6 @@ import { CannibalizationCard } from './_shared/CannibalizationCard'
 // _shared/types.ts so the extracted shared cards pull the same shape.
 import type { Suggestion } from './_shared/types'
 import { MobileSuggestionCard } from './_shared/MobileSuggestionCard'
-import { SuggestionRow } from './_shared/SuggestionRow'
 import { ForecastModelsCard } from './_shared/ForecastModelsCard'
 import { StockoutImpactCard } from './_shared/StockoutImpactCard'
 import { CashFlowCard } from './_shared/CashFlowCard'
@@ -89,17 +93,47 @@ interface ReplenishmentResponse {
 import type { UpcomingEvent } from './_shared/UrgencyTiles'
 import { UrgencyTile, UpcomingEventsBanner } from './_shared/UrgencyTiles'
 
-// W9.6 — URGENCY_TONE source-of-truth lives in _shared/UrgencyTiles.
-// Re-imported wherever the workspace's drawer header / cells still
-// reference it directly.
-
-// R.5 — sort keys for the table column headers. 'urgency' falls
-// through to backend ordering (CRITICAL → HIGH → MEDIUM → LOW with
-// daysOfStockLeft asc as tiebreaker); other keys re-sort the
-// already-fetched array in JS.
-// W9.6b — SortKey + SortableTh moved to _shared/SortableTh.tsx
 import type { SortKey } from './_shared/SortableTh'
-import { SortableTh } from './_shared/SortableTh'
+import type { Urgency } from './_shared/types'
+
+
+// One grid row — either a real leaf suggestion or a synthetic parent aggregate.
+type RepRow = GridLensRow & {
+  sku: string
+  name: string
+  thumbnailUrl: string | null
+  urgency: Urgency | null
+  needsReorder: boolean
+  currentStock: number
+  reorderQty: number
+  velocity: number
+  daysOfStockLeft: number | null
+  leadTimeDays: number
+  // Full suggestion data present only for leaf rows
+  suggestion: Suggestion | null
+}
+
+const URGENCY_ORDER: Record<Urgency, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
+const _REP_EMPTY_SET = new Set<string>()
+
+const URGENCY_TONE: Record<Urgency, string> = {
+  CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900',
+  HIGH:     'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-900',
+  MEDIUM:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-900',
+  LOW:      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+}
+
+const REP_COLUMNS: GridLensColumn[] = [
+  { key: 'thumb',      label: '',            width: 44,  locked: true },
+  { key: 'product',    label: 'Product',     width: 280, locked: true },
+  { key: 'urgency',    label: 'Urgency',     width: 100 },
+  { key: 'stock',      label: 'On hand',     width: 90 },
+  { key: 'daysLeft',   label: 'Days left',   width: 90 },
+  { key: 'velocity',   label: 'Vel/day',     width: 80 },
+  { key: 'demand',     label: 'Demand (LT)', width: 100 },
+  { key: 'reorderQty', label: 'Suggest qty', width: 100 },
+  { key: 'actions',    label: '',            width: 120 },
+]
 
 export default function ReplenishmentWorkspace() {
   // R.5 — URL-driven state. Filters / search / sort are bookmarkable
@@ -165,12 +199,10 @@ export default function ReplenishmentWorkspace() {
   const setMarketplaceFilter = (m: string) => updateUrl({ marketplace: m || undefined })
   const setDrawerProductId = (id: string | null) => updateUrl({ drawer: id ?? undefined })
   const setSort = (key: SortKey) => {
-    if (key === sortBy) {
-      updateUrl({ sortDir: sortDir === 'asc' ? 'desc' : 'asc' })
-    } else {
-      updateUrl({ sortBy: key === 'urgency' ? undefined : key, sortDir: undefined })
-    }
+    if (key === sortBy) updateUrl({ sortDir: sortDir === 'asc' ? 'desc' : 'asc' })
+    else updateUrl({ sortBy: key === 'urgency' ? undefined : key, sortDir: undefined })
   }
+  void setSort // used by mobile cards sort interaction via URL params
 
   // Debounced search input → URL
   useEffect(() => {
@@ -220,6 +252,22 @@ export default function ReplenishmentWorkspace() {
     fetchData()
   }, [fetchData])
 
+  // Real-time sync — refresh when stock or product data changes elsewhere
+  useInvalidationChannel(
+    ['stock.adjusted', 'stock.transferred', 'product.updated', 'product.created', 'pim.changed'],
+    useCallback(() => { fetchData() }, [fetchData]),
+  )
+
+  // Grid expand/collapse state
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const onToggleExpand = useCallback((pid: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      if (next.has(pid)) next.delete(pid); else next.add(pid)
+      return next
+    })
+  }, [])
+
   // F.5.1 — Facets for the marketplace dropdown. Sourced from
   // /fulfillment/facets (distinct ACTIVE ChannelListing.marketplace
   // values), with a hardcoded fallback during initial load + on
@@ -244,6 +292,7 @@ export default function ReplenishmentWorkspace() {
     }
   }, [])
 
+  // Keep flat filtered list for existing bulk actions / drawer lookup
   const filtered = useMemo(() => {
     if (!data) return []
     let rows = data.suggestions
@@ -255,33 +304,174 @@ export default function ReplenishmentWorkspace() {
     if (urlSearch.trim()) {
       const q = urlSearch.trim().toLowerCase()
       rows = rows.filter(
-        (r) =>
-          r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
+        (r) => r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
       )
     }
-    // R.5 — client-side sort. urgency mode = backend ordering; other
-    // keys re-sort the already-fetched array.
     const dir = sortDir === 'asc' ? 1 : -1
     if (sortBy !== 'urgency') {
       rows = [...rows].sort((a, b) => {
-        let av: number | string
-        let bv: number | string
         switch (sortBy) {
-          case 'daysOfCover':
-            av = a.daysOfStockLeft ?? Number.MAX_SAFE_INTEGER
-            bv = b.daysOfStockLeft ?? Number.MAX_SAFE_INTEGER
-            return (av - (bv as number)) * dir
-          case 'velocity': return ((a.velocity ?? 0) - (b.velocity ?? 0)) * dir
-          case 'qty':      return ((a.reorderQuantity ?? 0) - (b.reorderQuantity ?? 0)) * dir
-          case 'stock':    return ((a.effectiveStock ?? 0) - (b.effectiveStock ?? 0)) * dir
-          case 'sku':      return a.sku.localeCompare(b.sku) * dir
-          case 'name':     return a.name.localeCompare(b.name) * dir
-          default:         return 0
+          case 'daysOfCover': return ((a.daysOfStockLeft ?? 999) - (b.daysOfStockLeft ?? 999)) * dir
+          case 'velocity':    return ((a.velocity ?? 0) - (b.velocity ?? 0)) * dir
+          case 'qty':         return ((a.reorderQuantity ?? 0) - (b.reorderQuantity ?? 0)) * dir
+          case 'stock':       return ((a.effectiveStock ?? 0) - (b.effectiveStock ?? 0)) * dir
+          case 'sku':         return a.sku.localeCompare(b.sku) * dir
+          case 'name':        return a.name.localeCompare(b.name) * dir
+          default:            return 0
         }
       })
     }
     return rows
   }, [data, filter, urlSearch, sortBy, sortDir])
+
+  // Build hierarchy grid rows from the flat suggestion list.
+  // All child data is pre-loaded — no lazy-fetch needed for Xavia's ~279 SKUs.
+  const { gridRows, childrenByParent } = useMemo((): {
+    gridRows: RepRow[]
+    childrenByParent: Record<string, RepRow[]>
+  } => {
+    if (!data) return { gridRows: [], childrenByParent: {} }
+
+    // Apply filter/search to leaf suggestions
+    const leafRows = filtered
+
+    // Helper: build a RepRow from a leaf suggestion
+    const leafToRow = (s: Suggestion): RepRow => ({
+      id: s.productId,
+      sku: s.sku,
+      name: s.name,
+      thumbnailUrl: s.thumbnailUrl ?? null,
+      isParent: false,
+      parentId: s.parentId,
+      childCount: 0,
+      urgency: s.urgency,
+      needsReorder: s.needsReorder,
+      currentStock: s.currentStock,
+      reorderQty: s.reorderQuantity,
+      velocity: s.velocity,
+      daysOfStockLeft: s.daysOfStockLeft,
+      leadTimeDays: s.leadTimeDays,
+      suggestion: s,
+    })
+
+    // Helper: build a synthetic parent row aggregating an array of RepRows
+    const buildParent = (
+      id: string, sku: string, name: string, thumbnailUrl: string | null,
+      parentId: string | null, children: RepRow[],
+    ): RepRow => {
+      const urgencies = children.map((c) => c.urgency).filter((u): u is Urgency => u !== null)
+      const worstUrgency = urgencies.length > 0
+        ? urgencies.sort((a, b) => URGENCY_ORDER[a] - URGENCY_ORDER[b])[0]
+        : null
+      return {
+        id,
+        sku,
+        name,
+        thumbnailUrl,
+        isParent: true,
+        parentId,
+        childCount: children.length,
+        urgency: worstUrgency,
+        needsReorder: children.some((c) => c.needsReorder),
+        currentStock: children.reduce((s, c) => s + c.currentStock, 0),
+        reorderQty: children.filter((c) => c.needsReorder).reduce((s, c) => s + c.reorderQty, 0),
+        velocity: children.length > 0 ? children.reduce((s, c) => s + c.velocity, 0) / children.length : 0,
+        daysOfStockLeft: children.reduce((min, c) => {
+          if (c.daysOfStockLeft === null) return min
+          return min === null ? c.daysOfStockLeft : Math.min(min, c.daysOfStockLeft)
+        }, null as number | null),
+        leadTimeDays: children.length > 0 ? Math.max(...children.map((c) => c.leadTimeDays)) : 0,
+        suggestion: null,
+      }
+    }
+
+    // Collect all unique parent/grandparent IDs so we can build hierarchy rows
+    // for parents even if they have no suggestions themselves (0 stock products).
+    // We group by: grandparentId → parentId → leaf
+    const byGrandparent = new Map<string, Map<string, Suggestion[]>>()  // grandparentId → parentId → suggestions
+    const byParent      = new Map<string, Suggestion[]>()                // parentId → suggestions (2-level)
+    const standalone    = new Map<string, Suggestion>()                  // productId → suggestion
+
+    for (const s of leafRows) {
+      if (s.grandparentId && s.parentId) {
+        // 3-level: grandparent → parent → leaf
+        if (!byGrandparent.has(s.grandparentId)) byGrandparent.set(s.grandparentId, new Map())
+        const midMap = byGrandparent.get(s.grandparentId)!
+        if (!midMap.has(s.parentId)) midMap.set(s.parentId, [])
+        midMap.get(s.parentId)!.push(s)
+      } else if (s.parentId) {
+        // 2-level: parent → leaf
+        if (!byParent.has(s.parentId)) byParent.set(s.parentId, [])
+        byParent.get(s.parentId)!.push(s)
+      } else {
+        // standalone
+        standalone.set(s.productId, s)
+      }
+    }
+
+    const topRows: RepRow[] = []
+    const childMap: Record<string, RepRow[]> = {}
+
+    // 3-level: grandparent rows at top level
+    for (const [gpId, midMap] of byGrandparent) {
+      // Find a suggestion to get grandparent name/sku (all children know their grandparent)
+      const anySug = [...midMap.values()][0]?.[0]
+      if (!anySug) continue
+      // Build intermediate (parent) rows
+      const midRows: RepRow[] = []
+      for (const [midId, leaves] of midMap) {
+        const leafRepRows = leaves.map(leafToRow)
+        const midRow = buildParent(
+          midId,
+          anySug.parentSku ?? midId,
+          anySug.parentName ?? midId,
+          anySug.parentThumbnailUrl ?? null,
+          gpId,
+          leafRepRows,
+        )
+        midRows.push(midRow)
+        childMap[midId] = leafRepRows
+      }
+      const gpRow = buildParent(
+        gpId,
+        anySug.grandparentSku ?? gpId,
+        anySug.grandparentName ?? gpId,
+        anySug.grandparentThumbnailUrl ?? null,
+        null,
+        midRows,
+      )
+      topRows.push(gpRow)
+      childMap[gpId] = midRows
+    }
+
+    // 2-level: parent rows at top level
+    for (const [pid, leaves] of byParent) {
+      const anySug = leaves[0]
+      const leafRepRows = leaves.map(leafToRow)
+      const parentRow = buildParent(
+        pid,
+        anySug.parentSku ?? pid,
+        anySug.parentName ?? pid,
+        anySug.parentThumbnailUrl ?? null,
+        null,
+        leafRepRows,
+      )
+      topRows.push(parentRow)
+      childMap[pid] = leafRepRows
+    }
+
+    // Standalone leaf rows (no parent)
+    for (const s of standalone.values()) topRows.push(leafToRow(s))
+
+    // Sort top-level rows: parents-with-CRITICAL first, then urgency order, then by name
+    topRows.sort((a, b) => {
+      const ao = a.urgency ? URGENCY_ORDER[a.urgency] : 99
+      const bo = b.urgency ? URGENCY_ORDER[b.urgency] : 99
+      return ao !== bo ? ao - bo : a.name.localeCompare(b.name)
+    })
+
+    return { gridRows: topRows, childrenByParent: childMap }
+  }, [data, filtered])
 
   // R.5 — auto-refresh. Pause when document is hidden so a backgrounded
   // tab doesn't burn requests.
@@ -301,13 +491,6 @@ export default function ReplenishmentWorkspace() {
       else next.add(id)
       return next
     })
-  }
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filtered.map((r) => r.productId)))
-    }
   }
   const clearSelection = () => setSelectedIds(new Set())
 
@@ -438,6 +621,108 @@ export default function ReplenishmentWorkspace() {
     () => filtered.find((s) => s.productId === drawerProductId) ?? null,
     [filtered, drawerProductId],
   )
+
+  // Grid renderCell
+  const renderCell = useCallback((row: RepRow, colKey: string): React.ReactNode => {
+    switch (colKey) {
+      case 'thumb':
+        return row.thumbnailUrl ? (
+          <img src={row.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover bg-slate-100 flex-shrink-0" />
+        ) : (
+          <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
+            <Package size={14} />
+          </div>
+        )
+      case 'product':
+        return (
+          <div className="min-w-0 overflow-hidden">
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{row.name}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{row.sku}</div>
+          </div>
+        )
+      case 'urgency':
+        if (!row.urgency) return <span className="text-slate-300 dark:text-slate-600">—</span>
+        return (
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${URGENCY_TONE[row.urgency]}`}>
+            {row.urgency}
+          </span>
+        )
+      case 'stock':
+        return <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">{row.currentStock}</span>
+      case 'daysLeft': {
+        const d = row.daysOfStockLeft
+        if (d === null) return <span className="text-slate-300 dark:text-slate-600">—</span>
+        const tone = d <= 7 ? 'text-rose-600 font-semibold' : d <= 14 ? 'text-orange-600 font-semibold' : d <= 30 ? 'text-amber-600' : 'text-slate-600 dark:text-slate-400'
+        return <span className={`tabular-nums ${tone}`}>{Math.round(d)}d</span>
+      }
+      case 'velocity':
+        return <span className="tabular-nums text-slate-600 dark:text-slate-400">{row.velocity.toFixed(1)}</span>
+      case 'demand': {
+        const s = row.suggestion
+        if (!s) {
+          // parent row — show total reorder demand
+          const total = row.reorderQty
+          return total > 0 ? <span className="tabular-nums text-slate-600 dark:text-slate-400">{total}</span> : <span className="text-slate-300">—</span>
+        }
+        const demand = s.forecastedDemandLeadTime ?? (s.velocity * s.leadTimeDays)
+        return <span className="tabular-nums text-slate-600 dark:text-slate-400">{Math.round(demand)}</span>
+      }
+      case 'reorderQty':
+        if (row.reorderQty === 0) return <span className="text-slate-300 dark:text-slate-600">—</span>
+        return (
+          <span className={`tabular-nums font-semibold ${row.needsReorder ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+            {row.reorderQty}
+          </span>
+        )
+      case 'actions': {
+        if (row.isParent) return null
+        const s = row.suggestion!
+        return (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); void draftSinglePo(s) }}
+              disabled={!s.needsReorder}
+              className="h-6 px-2 text-xs bg-slate-900 dark:bg-slate-700 text-white rounded hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-1"
+              title={s.isManufactured ? 'Create work order' : 'Draft PO'}
+            >
+              <ShoppingCart size={10} />
+              {s.isManufactured ? 'WO' : 'PO'}
+            </button>
+            {s.recommendationId && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  askDismissReason(
+                    t('replenishment.dismiss.titleSku', { sku: s.sku }),
+                    (reason) => { void dismissRow(s, reason) },
+                  )
+                }}
+                className="h-6 px-1.5 text-xs text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                title="Dismiss recommendation"
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        )
+      }
+      default:
+        return null
+    }
+  }, [draftSinglePo, dismissRow, askDismissReason, t])
+
+  // Grid row selection — maps to leaf productId
+  const gridRowsRef = useRef<RepRow[]>([])
+  gridRowsRef.current = gridRows
+  const allGridSelected = gridRows.length > 0 && gridRows.every((r) => !r.isParent && selectedIds.has(r.id))
+
+  const toggleGridSelectAll = useCallback(() => {
+    const leafIds = gridRowsRef.current.filter((r) => !r.isParent).map((r) => r.id)
+    if (allGridSelected) setSelectedIds(new Set())
+    else setSelectedIds(new Set(leafIds))
+  }, [allGridSelected])
 
   // Reset focused index when filtered list changes and current focus
   // is out of bounds (e.g. user changed filter and the focused row
@@ -940,7 +1225,7 @@ export default function ReplenishmentWorkspace() {
         </div>
       )}
 
-      {/* Table */}
+      {/* Grid */}
       {loading && !data ? (
         <Card>
           <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
@@ -948,7 +1233,7 @@ export default function ReplenishmentWorkspace() {
             Reading forecast layer…
           </div>
         </Card>
-      ) : filtered.length === 0 ? (
+      ) : gridRows.length === 0 ? (
         <EmptyState
           icon={Sparkles}
           title="Nothing to reorder"
@@ -956,87 +1241,51 @@ export default function ReplenishmentWorkspace() {
         />
       ) : (
         <>
-        {/* R.5 — mobile: render each suggestion as a card. Desktop
-            (lg+) keeps the dense table. The 13-column layout was an
-            unusable horizontal scroll below ~1100px. */}
-        <div className="lg:hidden space-y-2">
-          {filtered.map((s, idx) => (
-            <MobileSuggestionCard
-              key={s.productId}
-              s={s}
-              selected={selectedIds.has(s.productId)}
-              focused={idx === focusedIndex}
-              onToggleSelect={() => toggleSelected(s.productId)}
-              onOpenDrawer={() => setDrawerProductId(s.productId)}
-              onDraftPo={() => draftSinglePo(s)}
-              onDismiss={() =>
-                askDismissReason(
-                  t('replenishment.dismiss.titleSku', { sku: s.sku }),
-                  (reason) => {
-                    void dismissRow(s, reason)
-                  },
-                )
-              }
-            />
-          ))}
-        </div>
-        <Card noPadding className="hidden lg:block">
-          <div className="overflow-x-auto">
-            <table
-              className="w-full text-md"
-              aria-label="Replenishment recommendations"
-            >
-              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                <tr>
-                  <th className="px-3 py-2 text-left w-9">
-                    <input
-                      type="checkbox"
-                      checked={
-                        filtered.length > 0 &&
-                        selectedIds.size === filtered.length
-                      }
-                      onChange={toggleSelectAll}
-                      aria-label="Select all"
-                    />
-                  </th>
-                  <SortableTh sortKey="name" current={sortBy} dir={sortDir} onSort={setSort} className={th()}>Product</SortableTh>
-                  <SortableTh sortKey="urgency" current={sortBy} dir={sortDir} onSort={setSort} className={th()}>Urgency</SortableTh>
-                  <SortableTh sortKey="stock" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>On-hand</SortableTh>
-                  <th className={thRight()}>Inbound (LT)</th>
-                  <th className={thRight()}>ATP</th>
-                  <SortableTh sortKey="velocity" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>Velocity</SortableTh>
-                  <SortableTh sortKey="daysOfCover" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>Days left</SortableTh>
-                  <th className={thRight()}>Lead time</th>
-                  <th className={thRight()}>Forecast (LT)</th>
-                  <SortableTh sortKey="qty" current={sortBy} dir={sortDir} onSort={setSort} className={thRight()}>Suggested qty</SortableTh>
-                  <th className={thRight()}></th>
-                  <th className={th()}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s, idx) => (
-                  <SuggestionRow
-                    key={s.productId}
-                    suggestion={s}
-                    selected={selectedIds.has(s.productId)}
-                    focused={idx === focusedIndex}
-                    onToggle={() => toggleSelected(s.productId)}
-                    onOpenDrawer={() => setDrawerProductId(s.productId)}
-                    onDraftPo={() => draftSinglePo(s)}
-                    onDismiss={() =>
-                askDismissReason(
-                  t('replenishment.dismiss.titleSku', { sku: s.sku }),
-                  (reason) => {
-                    void dismissRow(s, reason)
-                  },
-                )
-              }
-                  />
-                ))}
-              </tbody>
-            </table>
+          {/* Mobile cards */}
+          <div className="lg:hidden space-y-2">
+            {filtered.map((s, idx) => (
+              <MobileSuggestionCard
+                key={s.productId}
+                s={s}
+                selected={selectedIds.has(s.productId)}
+                focused={idx === focusedIndex}
+                onToggleSelect={() => toggleSelected(s.productId)}
+                onOpenDrawer={() => setDrawerProductId(s.productId)}
+                onDraftPo={() => draftSinglePo(s)}
+                onDismiss={() =>
+                  askDismissReason(
+                    t('replenishment.dismiss.titleSku', { sku: s.sku }),
+                    (reason) => { void dismissRow(s, reason) },
+                  )
+                }
+              />
+            ))}
           </div>
-        </Card>
+          {/* Desktop — VirtualizedGrid matches /products UX exactly */}
+          <div className="hidden lg:block">
+            <VirtualizedGrid<RepRow>
+              rows={gridRows}
+              visible={REP_COLUMNS}
+              density="comfortable"
+              cellPad={DENSITY_CELL_CLASS.comfortable}
+              childrenByParent={childrenByParent}
+              loadingChildren={_REP_EMPTY_SET}
+              expandedParents={expandedParents}
+              onToggleExpand={onToggleExpand}
+              selected={selectedIds}
+              toggleSelect={(id: string) => toggleSelected(id)}
+              toggleSelectAll={toggleGridSelectAll}
+              allSelected={allGridSelected}
+              sortBy=""
+              onSort={() => undefined}
+              focusedRowId={null}
+              searchTerm={urlSearch}
+              riskFlaggedSkus={_REP_EMPTY_SET}
+              renderCell={renderCell}
+              storageKey="replenishment-grid"
+            />
+            <GridFooter count={gridRows.length} label="products" />
+          </div>
         </>
       )}
 
@@ -1073,17 +1322,8 @@ export default function ReplenishmentWorkspace() {
   )
 }
 
-function th() {
-  return 'px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300'
-}
-function thRight() {
-  return 'px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300'
-}
-
-// W9.6 — UrgencyTile + UpcomingEventsBanner moved to
-// _shared/UrgencyTiles.tsx (imported at the top of this file).
-
-// W9.6b — SortableTh moved to _shared/SortableTh.tsx (imported above).
+// W9.6 — UrgencyTile + UpcomingEventsBanner moved to _shared/UrgencyTiles.tsx
+// W9.6b — SortableTh moved to _shared/SortableTh.tsx
 
 // W9.6c — MobileSuggestionCard moved to _shared/MobileSuggestionCard.tsx
 // (imported alongside Suggestion at the top of this file).

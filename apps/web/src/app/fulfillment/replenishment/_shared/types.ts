@@ -46,6 +46,16 @@ export interface Suggestion {
   urgency: Urgency
   needsReorder: boolean
   isManufactured: boolean
+  // Hierarchy fields — used by the replenishment grid
+  parentId: string | null
+  parentSku: string | null
+  parentName: string | null
+  parentThumbnailUrl: string | null
+  grandparentId: string | null
+  grandparentSku: string | null
+  grandparentName: string | null
+  grandparentThumbnailUrl: string | null
+  thumbnailUrl: string | null
   preferredSupplierId: string | null
   fulfillmentChannel: string | null
   leadTimeDays: number
