@@ -44,31 +44,17 @@ import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
-import { AutomationRulesCard } from './_shared/AutomationRulesCard'
 import { CommandCenterKpis } from './_shared/CommandCenterKpis'
-import { ScenariosCard } from './_shared/ScenariosCard'
-import { SlowMoversCard } from './_shared/SlowMoversCard'
-import { PanEuDistributionCard } from './_shared/PanEuDistributionCard'
-import { SupplierSpendCard } from './_shared/SupplierSpendCard'
-import { ForecastBiasCard } from './_shared/ForecastBiasCard'
-import { CannibalizationCard } from './_shared/CannibalizationCard'
+import { ReplenishmentWidgets, WidgetLauncher, useWidgetStore } from './_shared/FloatingWidgetSystem'
 
 // W9.6c — Suggestion + Urgency + OpenShipmentRef moved to
 // _shared/types.ts so the extracted shared cards pull the same shape.
 import type { Suggestion } from './_shared/types'
 import { MobileSuggestionCard } from './_shared/MobileSuggestionCard'
-import { ForecastModelsCard } from './_shared/ForecastModelsCard'
-import { StockoutImpactCard } from './_shared/StockoutImpactCard'
-import { CashFlowCard } from './_shared/CashFlowCard'
 import { BulkPoModal } from './_shared/BulkPoModal'
 import { SavedViewsButton } from './_shared/SavedViewsButton'
-import { FbaRestockHealthCard } from './_shared/FbaRestockPanels'
-import {
-  ContainerFillCard,
-  type ContainerFillEntry,
-} from './_shared/ContainerFillCard'
+import type { ContainerFillEntry } from './_shared/ContainerFillCard'
 import { KeyboardHelpOverlay } from './_shared/KeyboardHelpOverlay'
-import { ForecastHealthCard } from './_shared/ForecastDiagnosticsCards'
 import { ForecastDetailDrawer } from './_shared/ForecastDetailDrawer'
 
 // W9.6l — ContainerFillCard + ContainerFillEntry moved to _shared/.
@@ -177,6 +163,7 @@ export default function ReplenishmentWorkspace() {
   // call signature so existing call-sites keep working unchanged;
   // tone 'ok' maps to 'success', 'error' stays.
   const { toast } = useToast()
+  const { store: widgetStore, toggle: toggleWidget, close: closeWidget, move: moveWidget, focus: focusWidget } = useWidgetStore()
   const pushToast = useCallback(
     (tone: 'ok' | 'error', msg: string) => {
       if (tone === 'ok') toast.success(msg)
@@ -941,60 +928,6 @@ export default function ReplenishmentWorkspace() {
         }}
       />
 
-      {/* W1.5 — pipeline health strip. Surfaces foundation-table row
-          counts + cron status + a "Run pipeline now" button so silent
-          failures of the forecast layer become visible at a glance. */}
-      <PipelineHealthStrip onRefreshPageData={fetchData} />
-
-      {/* W4.5 — automation rules card. Empty by default; once seeded
-          shows the 8 templates with enable/disable toggles + dry-run
-          badges + per-rule counters. */}
-      <div id="automation" className="scroll-mt-4">
-        <AutomationRulesCard />
-      </div>
-
-      {/* W5.4 — scenarios card. Empty by default; once an operator
-          creates a what-if scenario it lists with last-run summary
-          and a Run button. Pure analysis — never modifies real recs. */}
-      <div id="scenarios" className="scroll-mt-4">
-        <ScenariosCard />
-      </div>
-
-      {/* W6.1 — slow-mover / dead-stock dashboard. Hides itself when
-          no DORMANT inventory exists; otherwise lists top 50 by
-          capital tied up with bucket switcher. */}
-      <div id="slow-movers" className="scroll-mt-4">
-        <SlowMoversCard />
-      </div>
-
-      {/* W7.2 — Pan-EU FBA distribution recommender. Hides itself
-          when inventory is balanced; otherwise lists surplus →
-          shortage transfer suggestions across IT/DE/FR/ES/NL. */}
-      <div id="pan-eu" className="scroll-mt-4">
-        <PanEuDistributionCard />
-      </div>
-
-      {/* W9.3 — supplier spend dashboard. Hides itself when no PO
-          history exists; otherwise lists per-supplier 30/90/365d
-          spend + open commitment, sorted by 90d spend desc. */}
-      <div id="supplier-spend" className="scroll-mt-4">
-        <SupplierSpendCard />
-      </div>
-
-      {/* W8.4b — forecast bias card. Hides itself when there's no
-          ForecastAccuracy data or every SKU is calibrated; otherwise
-          surfaces top 20 most-miscalibrated SKUs by bias direction. */}
-      <div id="forecast-bias" className="scroll-mt-4">
-        <ForecastBiasCard />
-      </div>
-
-      {/* W8.3b — cannibalization card. Hides itself when no recently
-          launched SKU has cannibalized siblings. Each finding expands
-          to show pre/post velocity for affected SKUs. */}
-      <div id="cannibalization" className="scroll-mt-4">
-        <CannibalizationCard />
-      </div>
-
       {/* W3.2 — command-center KPI strip. Five tiles answering
           "what should I do today?" — open POs / awaiting review /
           stockout risk / working capital / forecast accuracy.
@@ -1036,36 +969,6 @@ export default function ReplenishmentWorkspace() {
           />
         </div>
       )}
-
-      {/* R.1 — forecast health (aggregate MAPE + per-regime + trend).
-          Renders only when accuracy data exists (post-cron / post-
-          backfill); silent before the first run so the page doesn't
-          show a noisy empty card. */}
-      <ForecastHealthCard />
-
-      {/* R.12 — stockout impact (events count + lost margin/revenue).
-          Renders only when there are stockouts to report; silent
-          pre-launch. */}
-      <StockoutImpactCard />
-
-      {/* R.16 — model A/B card. Silent unless a challenger is rolled
-          out via the rollout endpoint. */}
-      <ForecastModelsCard />
-
-      {/* R.19 — supplier-level container fill summary. Silent unless
-          at least one supplier has a SupplierShippingProfile. */}
-      {data?.containerFill && data.containerFill.length > 0 && (
-        <ContainerFillCard entries={data.containerFill} />
-      )}
-
-      {/* R.20 — 13-week cash flow projection. Always renders; prompts
-          the operator to set cashOnHandCents when null. */}
-      <CashFlowCard />
-
-      {/* R.8 — Amazon FBA Restock health. Silent until at least one
-          marketplace has a fresh ingestion. */}
-      <FbaRestockHealthCard />
-
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -1170,6 +1073,7 @@ export default function ReplenishmentWorkspace() {
           >
             Export CSV
           </Button>
+          <WidgetLauncher store={widgetStore} onToggle={toggleWidget} />
           <button
             onClick={() => setHelpOpen(true)}
             className="h-8 w-8 grid place-items-center text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
@@ -1318,6 +1222,17 @@ export default function ReplenishmentWorkspace() {
           }}
         />
       )}
+
+      {/* Floating widgets — rendered outside the scroll container so they
+          can be dragged freely across the viewport */}
+      <ReplenishmentWidgets
+        store={widgetStore}
+        onClose={closeWidget}
+        onMove={moveWidget}
+        onFocus={focusWidget}
+        onRefreshPageData={fetchData}
+        containerFill={data?.containerFill}
+      />
     </div>
   )
 }
@@ -1445,252 +1360,6 @@ function DismissReasonModal({
 //   amber  — rows > 0 AND last cron stale (>48h) OR no recent run
 //   red    — rows = 0 (foundation table empty)
 //   slate  — disabled via env flag (informational, not a failure)
-interface PipelineHealth {
-  tables: {
-    dailySalesAggregate: { rows: number; oldest: string | null; newest: string | null; updatedAt: string | null }
-    replenishmentForecast: { rows: number; latestHorizon: string | null; lastGeneratedAt: string | null }
-    forecastAccuracy: { rows: number; latestDay: string | null; avgPercentError: number | null; withinBandCount: number }
-  }
-  crons: Record<
-    'forecast' | 'forecast-accuracy' | 'abc-classification',
-    {
-      lastRun: { startedAt: string; finishedAt: string | null; status: string; outputSummary: string | null; triggeredBy: string } | null
-      enabledFlag: boolean
-    }
-  >
-}
-
-function PipelineHealthStrip({ onRefreshPageData }: { onRefreshPageData: () => void }) {
-  const { toast } = useToast()
-  const { t } = useTranslations()
-  const [health, setHealth] = useState<PipelineHealth | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
-
-  const fetchHealth = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/replenishment/pipeline/health`,
-        { cache: 'no-store' },
-      )
-      if (res.ok) setHealth(await res.json())
-    } catch {
-      /* swallow — strip degrades to "—" */
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchHealth()
-  }, [fetchHealth])
-
-  const runPipeline = useCallback(async () => {
-    setRunning(true)
-    try {
-      const res = await fetch(
-        `${getBackendUrl()}/api/fulfillment/replenishment/pipeline/run`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ days: 365 }),
-          cache: 'no-store',
-        },
-      )
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.ok) {
-        const failed = (json.steps ?? []).filter((s: { ok: boolean }) => !s.ok)
-        toast.error(
-          failed.length
-            ? t('replenishment.pipeline.toast.failedSteps', {
-                n: failed.length,
-                steps: failed.map((s: { step: string }) => s.step).join(', '),
-              })
-            : t('replenishment.pipeline.toast.failed'),
-        )
-      } else {
-        const seconds = Math.round((json.totalDurationMs ?? 0) / 100) / 10
-        toast.success(
-          t('replenishment.pipeline.toast.success', {
-            seconds,
-            n: json.steps.length,
-          }),
-        )
-      }
-      await fetchHealth()
-      onRefreshPageData()
-    } catch (err) {
-      toast.error(
-        t('replenishment.pipeline.toast.error', {
-          message: err instanceof Error ? err.message : String(err),
-        }),
-      )
-    } finally {
-      setRunning(false)
-    }
-  }, [fetchHealth, onRefreshPageData, toast, t])
-
-  function ageBadge(iso: string | null): { text: string; tone: 'green' | 'amber' | 'red' | 'slate' } {
-    if (!iso) return { text: '—', tone: 'slate' }
-    const ageMs = Date.now() - new Date(iso).getTime()
-    const hours = ageMs / 3_600_000
-    if (hours < 48) return { text: `${Math.max(1, Math.round(hours))}h ago`, tone: 'green' }
-    const days = Math.round(hours / 24)
-    return { text: `${days}d ago`, tone: hours < 168 ? 'amber' : 'red' }
-  }
-
-  function tableTone(rows: number, freshIso: string | null): 'green' | 'amber' | 'red' {
-    if (rows === 0) return 'red'
-    if (!freshIso) return 'amber'
-    const ageH = (Date.now() - new Date(freshIso).getTime()) / 3_600_000
-    return ageH < 48 ? 'green' : 'amber'
-  }
-
-  const TONE_CLASSES: Record<'green' | 'amber' | 'red' | 'slate', string> = {
-    green: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900',
-    amber: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900',
-    red: 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900',
-    slate: 'bg-slate-50 text-slate-600 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-800',
-  }
-
-  if (loading && !health) {
-    return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2 text-xs text-slate-500">
-        {t('replenishment.pipeline.loading')}
-      </div>
-    )
-  }
-  if (!health) {
-    return (
-      <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-md px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
-        {t('replenishment.pipeline.unavailable')}
-      </div>
-    )
-  }
-
-  const dsa = health.tables.dailySalesAggregate
-  const fc = health.tables.replenishmentForecast
-  const fa = health.tables.forecastAccuracy
-  const dsaTone = tableTone(dsa.rows, dsa.updatedAt)
-  const fcTone = tableTone(fc.rows, fc.lastGeneratedAt)
-  const faTone = tableTone(fa.rows, fa.latestDay)
-  const dsaAge = ageBadge(dsa.updatedAt)
-  const fcAge = ageBadge(fc.lastGeneratedAt)
-
-  const cronChips: Array<{ key: keyof PipelineHealth['crons']; labelKey: string }> = [
-    { key: 'forecast', labelKey: 'replenishment.pipeline.cron.forecast' },
-    { key: 'forecast-accuracy', labelKey: 'replenishment.pipeline.cron.accuracy' },
-    { key: 'abc-classification', labelKey: 'replenishment.pipeline.cron.abc' },
-  ]
-
-  return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md px-3 py-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">
-          {t('replenishment.pipeline.label')}
-        </span>
-
-        <span
-          className={cn(
-            'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
-            TONE_CLASSES[dsaTone],
-          )}
-          title={t('replenishment.pipeline.tooltip.salesAgg', {
-            rows: dsa.rows,
-            oldest: dsa.oldest ?? '—',
-            newest: dsa.newest ?? '—',
-          })}
-        >
-          {t('replenishment.pipeline.salesAgg')}: {dsa.rows.toLocaleString()}{' '}
-          <span className="opacity-70">· {dsaAge.text}</span>
-        </span>
-
-        <span
-          className={cn(
-            'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
-            TONE_CLASSES[fcTone],
-          )}
-          title={t('replenishment.pipeline.tooltip.forecast', {
-            rows: fc.rows,
-            latest: fc.latestHorizon ?? '—',
-          })}
-        >
-          {t('replenishment.pipeline.forecast')}: {fc.rows.toLocaleString()}{' '}
-          <span className="opacity-70">· {fcAge.text}</span>
-        </span>
-
-        <span
-          className={cn(
-            'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
-            TONE_CLASSES[faTone],
-          )}
-          title={t('replenishment.pipeline.tooltip.mape', {
-            rows: fa.rows,
-            pct: fa.avgPercentError != null ? fa.avgPercentError.toFixed(1) + '%' : '—',
-            band: fa.withinBandCount,
-          })}
-        >
-          {t('replenishment.pipeline.mape')}:{' '}
-          {fa.rows > 0 && fa.avgPercentError != null ? `${fa.avgPercentError.toFixed(1)}%` : '—'}{' '}
-          <span className="opacity-70">· {fa.rows.toLocaleString()} obs</span>
-        </span>
-
-        <span className="mx-1 text-slate-300 dark:text-slate-700">|</span>
-
-        {cronChips.map(({ key, labelKey }) => {
-          const c = health.crons[key]
-          const tone: 'green' | 'amber' | 'red' | 'slate' = !c.enabledFlag
-            ? 'slate'
-            : c.lastRun?.status === 'SUCCESS'
-              ? 'green'
-              : c.lastRun?.status === 'FAILED'
-                ? 'red'
-                : 'amber'
-          const detail = c.lastRun
-            ? `${c.lastRun.status} · ${ageBadge(c.lastRun.startedAt).text}${c.lastRun.outputSummary ? ' · ' + c.lastRun.outputSummary : ''}`
-            : c.enabledFlag
-              ? t('replenishment.pipeline.noRuns')
-              : t('replenishment.pipeline.disabled')
-          return (
-            <span
-              key={key}
-              className={cn(
-                'text-xs px-2 py-0.5 rounded-full ring-1 ring-inset font-medium',
-                TONE_CLASSES[tone],
-              )}
-              title={t('replenishment.pipeline.tooltip.cron', { name: key, detail })}
-            >
-              {t(labelKey)}: {!c.enabledFlag ? t('replenishment.pipeline.cronOff') : c.lastRun?.status ?? '—'}
-            </span>
-          )
-        })}
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void runPipeline()}
-            disabled={running}
-            className="text-xs px-2 py-1 rounded ring-1 ring-inset bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-            title={t('replenishment.pipeline.runTooltip')}
-            aria-label={t('replenishment.pipeline.runAriaLabel')}
-          >
-            {running ? (
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-            ) : (
-              <RefreshCw className="h-3 w-3" aria-hidden="true" />
-            )}
-            {running ? t('replenishment.pipeline.runningButton') : t('replenishment.pipeline.runButton')}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
-
-
 // W9.6e — ReorderMathPanel (R.4) moved to _shared/ReorderMathPanel.tsx
 // (imported at the top of this file).
 
