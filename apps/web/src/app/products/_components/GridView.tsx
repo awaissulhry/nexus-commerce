@@ -70,6 +70,7 @@ import {
   SearchContext,
   RiskFlaggedContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
+import { ProductIdentityCell } from '@/app/_shared/grid-lens'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -1121,86 +1122,22 @@ const ProductCell = memo(function ProductCell({
     // Parent: thumbnail + name + ASIN (grey) + product-type link.
     // Child:  thumbnail + name + ASIN | SKU (grey) + "Variation details" link.
     // Standalone: thumbnail + name + SKU (grey).
-    case 'product': {
-      const childCount = p.childCount ?? 0
-      const isParentRow = p.isParent && !p.parentId
-      const isChildRow  = !!p.parentId
+    case 'product':
       return (
-        <div className="flex items-start gap-2.5 min-w-0 py-0.5">
-          {/* Thumbnail — clicking opens the product drawer */}
-          <button
-            type="button"
-            className="flex-shrink-0 mt-0.5 cursor-pointer rounded focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
-            title="Open product drawer"
-            aria-label={`Open drawer for ${p.name}`}
-            onClick={() =>
-              window.dispatchEvent(
-                new CustomEvent('nexus:open-product-drawer', {
-                  detail: { productId: p.id },
-                }),
-              )
-            }
-          >
-            {p.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.imageUrl} alt="" className="w-10 h-10 rounded object-cover bg-slate-100 dark:bg-slate-800" />
-            ) : (
-              <div className="w-10 h-10 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0">
-                <ImageIcon size={14} />
-              </div>
-            )}
-          </button>
-          {/* Name + identifiers */}
-          <div className="min-w-0 flex-1">
-            <Link
-              href={`/products/${p.id}/edit`}
-              className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline leading-snug"
-              title={p.name}
-            >
-              <Highlight text={p.name} query={searchQuery} />
-            </Link>
-            {/* ASIN / SKU line — parents and children both show their SKU */}
-            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-              {p.amazonAsin ? (
-                <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                  {p.amazonAsin}
-                </span>
-              ) : null}
-              {p.amazonAsin && p.sku ? (
-                <span className="text-xs text-slate-300 dark:text-slate-600">|</span>
-              ) : null}
-              {p.sku && (
-                <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
-                  <Highlight text={p.sku} query={searchQuery} />
-                </span>
-              )}
-            </div>
-            {/* Third line: product-type link (parent) or Variation details (child) */}
-            {isParentRow && p.productType && (
-              <Link
-                href={`/products/${p.id}/edit`}
-                className="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-0.5 block"
-              >
-                {p.productType.toLowerCase().replace(/_/g, '-')}
-              </Link>
-            )}
-            {isParentRow && childCount > 0 && (
-              <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                {childCount} variation{childCount !== 1 ? 's' : ''}
-              </div>
-            )}
-            {isChildRow && (
-              <Link
-                href={`/products/${p.id}/edit`}
-                className="text-xs text-blue-500 dark:text-blue-400 hover:underline mt-0.5 block"
-              >
-                Variation details
-              </Link>
-            )}
-          </div>
-        </div>
+        <ProductIdentityCell
+          id={p.id}
+          name={p.name}
+          sku={p.sku}
+          amazonAsin={p.amazonAsin}
+          productType={p.productType}
+          isParent={p.isParent}
+          parentId={p.parentId}
+          childCount={p.childCount}
+          imageUrl={p.imageUrl}
+          searchQuery={searchQuery}
+          showThumb
+        />
       )
-    }
 
     // AM.1 — Listing status.
     // Parent: "Variations (N)" blue outlined pill only — no other content.
