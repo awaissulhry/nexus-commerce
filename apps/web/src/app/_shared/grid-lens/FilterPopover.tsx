@@ -94,6 +94,13 @@ export interface FilterPopoverProps {
    * fires this callback. Useful for clearing a persisted custom order.
    */
   onResetOrder?: () => void
+  /**
+   * When set, the popover subscribes to that custom event on window
+   * and opens itself when fired. Lets workspaces preserve "press F to
+   * open the filter menu" style shortcuts without lifting the open
+   * state out of the popover.
+   */
+  openEventName?: string
 }
 
 function activeCountFor(d: FilterDimension): number {
@@ -106,8 +113,19 @@ function activeCountFor(d: FilterDimension): number {
 
 export function FilterPopover({
   dimensions, onClearAll, activeCount, buttonLabel, order, onOrderChange, onResetOrder,
+  openEventName,
 }: FilterPopoverProps) {
   const [open, setOpen] = useState(false)
+
+  // Optional: subscribe to a window-level custom event so workspaces
+  // can open the popover from a keyboard shortcut handler (bare-F on
+  // /products, etc.).
+  useEffect(() => {
+    if (!openEventName) return
+    const handler = () => setOpen(true)
+    window.addEventListener(openEventName, handler)
+    return () => window.removeEventListener(openEventName, handler)
+  }, [openEventName])
   const btnRef = useRef<HTMLButtonElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
 

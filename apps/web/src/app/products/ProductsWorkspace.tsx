@@ -18,7 +18,7 @@ import {
   Trash2,
   GitBranch,
   Globe,
-  Search, SlidersHorizontal, BarChart2,
+  Search, BarChart2,
   CheckCircle2, FileText, PackageCheck, PackageX, Keyboard,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
@@ -36,9 +36,11 @@ import {
   DensityToggle as SharedDensityToggle,
   KpiStrip,
   KeyboardShortcutsModal,
+  FilterPopover,
   type AutoRefreshInterval,
   type KpiTileSpec,
   type ShortcutGroup,
+  type FilterDimension,
 } from '@/app/_shared/grid-lens'
 import ProductDrawer from './_shared/ProductDrawer'
 import { parseFilters } from '@/lib/filters'
@@ -58,7 +60,10 @@ import { WorkflowLens } from './_lenses/WorkflowLens'
 import { ReadinessLens } from './_lenses/ReadinessLens'
 import { TranslationsLens } from './_lenses/TranslationsLens'
 import { BulkActionBar } from './_components/BulkActionBar'
-import { FiltersPopover } from './_components/FiltersPopover'
+// FP.4 — local FiltersPopover replaced by the shared FilterPopover.
+// The file at ./_components/FiltersPopover.tsx is now unused; left in
+// place for one cycle so any hot-reloading dev environment doesn't
+// chase a missing file. Safe to delete in a follow-up commit.
 import { SavedViewsButton } from './_components/SavedViewsButton'
 import { Pagination } from './_components/Pagination'
 import { MobileProductList } from './_components/MobileProductList'
@@ -708,14 +713,10 @@ export default function ProductsWorkspace() {
     return () => window.removeEventListener('nexus:focus-search', onFocusSearch)
   }, [])
 
-  // nexus:open-filter-menu — fired by bare-F shortcut.
-  useEffect(() => {
-    const onOpenFilter = () => {
-      setFilterBtnAnchor(filterBtnRef.current?.getBoundingClientRect() ?? null)
-    }
-    window.addEventListener('nexus:open-filter-menu', onOpenFilter)
-    return () => window.removeEventListener('nexus:open-filter-menu', onOpenFilter)
-  }, [])
+  // FP.4 — nexus:open-filter-menu is dispatched from the bare-F
+  // shortcut handler (line ~986). The shared FilterPopover below
+  // subscribes via openEventName, so this workspace no longer needs
+  // to listen + reach into a button ref to anchor a popover.
 
   // U.33 — these were inline arrows in JSX (recreated every render),
   // which busted child memo on GridLens + ProductDrawer. The
@@ -1031,6 +1032,125 @@ export default function ProductsWorkspace() {
     (hasPhotos ? 1 : 0) + (hasDescription ? 1 : 0) + (hasBrand ? 1 : 0) +
     (hasGtin ? 1 : 0) + (driftOnly ? 1 : 0)
 
+  // FP.4 — build the dimension list for the shared FilterPopover.
+  // Italian renderLabel for productType is preserved by pre-rendering
+  // the label here (the shared popover doesn't take a renderLabel fn).
+  const IT_TERMS: Record<string, string> = {
+    OUTERWEAR: 'Giacca', PANTS: 'Pantaloni', HELMET: 'Casco',
+    BOOTS: 'Stivali', PROTECTIVE: 'Protezioni', GLOVES: 'Guanti', BAG: 'Borsa',
+  }
+  const ACTIVE_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY']
+
+  const secondaryFilterDimensions: FilterDimension[] = []
+  secondaryFilterDimensions.push({
+    key: 'fulfillment',
+    label: 'Fulfillment',
+    type: 'multi-select',
+    options: ['FBA', 'FBM'].map((v) => ({
+      value: v, label: v,
+      count: facets?.fulfillment?.find((f) => f.value === v)?.count,
+    })),
+    values: fulfillmentFilters,
+    onChange: (next) => updateUrl({ fulfillment: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+  })
+  if (facets && facets.productTypes.length > 0) {
+    secondaryFilterDimensions.push({
+      key: 'productType',
+      label: 'Product type',
+      type: 'multi-select',
+      searchable: true,
+      options: facets.productTypes.slice(0, 24).map((p) => ({
+        value: p.value,
+        label: IT_TERMS[p.value] ? `${IT_TERMS[p.value]} (${p.value})` : p.value,
+        count: p.count,
+      })),
+      values: productTypeFilters,
+      onChange: (next) => updateUrl({ productTypes: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    })
+  }
+  if (facets && facets.brands.length > 0) {
+    secondaryFilterDimensions.push({
+      key: 'brand',
+      label: 'Brand',
+      type: 'multi-select',
+      searchable: true,
+      options: facets.brands.slice(0, 24).map((p) => ({ value: p.value, label: p.value, count: p.count })),
+      values: brandFilters,
+      onChange: (next) => updateUrl({ brands: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    })
+  }
+  if (tags.length > 0) {
+    secondaryFilterDimensions.push({
+      key: 'tags',
+      label: 'Tags',
+      type: 'multi-select',
+      searchable: true,
+      options: tags.map((tag) => ({ value: tag.id, label: tag.name })),
+      values: tagFilters,
+      onChange: (next) => updateUrl({ tags: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    })
+  }
+  if (facets?.families && facets.families.length > 0) {
+    secondaryFilterDimensions.push({
+      key: 'family',
+      label: 'Family',
+      type: 'multi-select',
+      searchable: true,
+      options: facets.families.map((f) => ({ value: f.value, label: f.label, count: f.count })),
+      values: familyFilters,
+      onChange: (next) => updateUrl({ families: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    })
+  }
+  if (facets?.workflowStages && facets.workflowStages.length > 0) {
+    secondaryFilterDimensions.push({
+      key: 'workflowStage',
+      label: 'Workflow stage',
+      type: 'multi-select',
+      searchable: true,
+      options: facets.workflowStages.map((s) => ({ value: s.value, label: s.label, count: s.count })),
+      values: workflowStageFilters,
+      onChange: (next) => updateUrl({ workflowStages: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    })
+  }
+  if (facets?.marketplaces && facets.marketplaces.length > 0) {
+    secondaryFilterDimensions.push({
+      key: 'marketplace',
+      label: 'Marketplace',
+      type: 'multi-select',
+      options: facets.marketplaces.map((m) => ({ value: m.value, label: m.label, count: m.count })),
+      values: marketplaceFilters,
+      onChange: (next) => updateUrl({ marketplaces: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+    })
+  }
+  secondaryFilterDimensions.push({
+    key: 'missingChannels',
+    label: 'Missing on channel',
+    type: 'multi-select',
+    options: ACTIVE_CHANNELS.map((c) => ({ value: c, label: c })),
+    values: missingChannelFilters,
+    onChange: (next) => updateUrl({ missingChannels: next.length > 0 ? next.join(',') : undefined, page: undefined }),
+  })
+  secondaryFilterDimensions.push({
+    key: 'channelDrift',
+    label: 'Channel drift (has overrides)',
+    type: 'toggle',
+    value: driftOnly === 'true',
+    onChange: (next) => updateUrl({ driftOnly: next ? 'true' : undefined, page: undefined }),
+  })
+
+  const clearSecondaryFilters = () => updateUrl({
+    fulfillment: undefined,
+    productTypes: undefined,
+    brands: undefined,
+    tags: undefined,
+    families: undefined,
+    workflowStages: undefined,
+    marketplaces: undefined,
+    missingChannels: undefined,
+    driftOnly: undefined,
+    page: undefined,
+  })
+
   // Active pills shown in Row 2 right-side (only secondary/popover filters).
   const activePills: Array<{ key: string; label: string; value: string; clear: () => void }> = []
   if (missingChannelFilters.length > 0) activePills.push({ key: 'missing', label: 'Missing on', value: missingChannelFilters.join(', '), clear: () => updateUrl({ missingChannels: undefined, page: undefined }) })
@@ -1049,8 +1169,17 @@ export default function ProductsWorkspace() {
 
   // Refs for search focus + filter popover anchor.
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const filterBtnRef = useRef<HTMLButtonElement | null>(null)
-  const [filterBtnAnchor, setFilterBtnAnchor] = useState<DOMRect | null>(null)
+  // FP.4 — persisted dimension order for the shared FilterPopover.
+  const [filterOrder, setFilterOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem('products.filterOrder')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('products.filterOrder', JSON.stringify(filterOrder)) } catch {}
+  }, [filterOrder])
 
   return (
     // P.1f — SearchContext + RiskFlaggedContext moved into VirtualizedGrid
@@ -1249,45 +1378,16 @@ export default function ProductsWorkspace() {
           />
         </div>
 
-        {/* Filter button + popover */}
-        <button
-          ref={filterBtnRef}
-          type="button"
-          onClick={() => setFilterBtnAnchor(filterBtnAnchor ? null : filterBtnRef.current?.getBoundingClientRect() ?? null)}
-          className={`h-8 px-3 text-sm border rounded-md inline-flex items-center gap-1.5 transition-colors ${
-            filterBtnAnchor
-              ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-              : secondaryFilterCount > 0
-              ? 'border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-              : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-          }`}
-        >
-          <SlidersHorizontal size={13} />
-          Filter
-          {secondaryFilterCount > 0 && (
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${filterBtnAnchor ? 'bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100' : 'bg-slate-700 text-white dark:bg-slate-300 dark:text-slate-900'}`}>
-              {secondaryFilterCount}
-            </span>
-          )}
-        </button>
-        {filterBtnAnchor && (
-          <FiltersPopover
-            anchorRect={filterBtnAnchor}
-            marketplaceFilters={marketplaceFilters}
-            fulfillmentFilters={fulfillmentFilters}
-            productTypeFilters={productTypeFilters}
-            brandFilters={brandFilters}
-            familyFilters={familyFilters}
-            workflowStageFilters={workflowStageFilters}
-            tagFilters={tagFilters}
-            missingChannelFilters={missingChannelFilters}
-            driftOnly={driftOnly}
-            facets={facets}
-            tags={tags}
-            updateUrl={updateUrl}
-            onClose={() => setFilterBtnAnchor(null)}
-          />
-        )}
+        {/* FP.4 — shared FilterPopover hosts all secondary dimensions. */}
+        <FilterPopover
+          dimensions={secondaryFilterDimensions}
+          onClearAll={clearSecondaryFilters}
+          activeCount={secondaryFilterCount}
+          order={filterOrder}
+          onOrderChange={setFilterOrder}
+          onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
+          openEventName="nexus:open-filter-menu"
+        />
 
         {/* Sort */}
         <AddSortButton
