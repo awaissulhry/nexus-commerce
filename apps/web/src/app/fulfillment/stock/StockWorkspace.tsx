@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, type AutoRefreshInterval, type BulkAction, type ShortcutGroup } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, FilterPopover, type AutoRefreshInterval, type BulkAction, type ShortcutGroup, type FilterDimension } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -521,6 +521,26 @@ export default function StockWorkspace() {
   const locationCode = searchParams.get('location') ?? ''
   const status = searchParams.get('status') ?? ''
   const search = searchParams.get('search') ?? ''
+  const abcClassFilters = useMemo(() => {
+    const v = searchParams.get('abcClass')
+    return v ? v.split(',').filter(Boolean) : []
+  }, [searchParams])
+  const fulfillmentMethodFilters = useMemo(() => {
+    const v = searchParams.get('fulfillmentMethod')
+    return v ? v.split(',').filter(Boolean) : []
+  }, [searchParams])
+
+  // FP.5 — persisted dimension order for the FilterPopover.
+  const [stockFilterOrder, setStockFilterOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem('stock.filterOrder')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('stock.filterOrder', JSON.stringify(stockFilterOrder)) } catch {}
+  }, [stockFilterOrder])
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
   // Page size is fixed at 200 StockLevel rows per fetch. A user-facing
   // selector doesn't make sense here because StockLevel rows collapse
@@ -657,6 +677,8 @@ export default function StockWorkspace() {
       if (status) qs.set('status', status)
       if (search) qs.set('search', search)
       if (view === 'table' && locationCode) qs.set('locationCode', locationCode)
+      if (abcClassFilters.length > 0) qs.set('abcClass', abcClassFilters.join(','))
+      if (fulfillmentMethodFilters.length > 0) qs.set('fulfillmentMethod', fulfillmentMethodFilters.join(','))
       // Table view uses the product-hierarchy endpoint (mirrors /products).
       // Matrix + Cards still use the per-product flat view.
       const endpoint = view === 'table' ? '/api/stock/products' : '/api/stock/by-product'
@@ -701,7 +723,7 @@ export default function StockWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [view, locationCode, status, search, page])
+  }, [view, locationCode, status, search, page, abcClassFilters, fulfillmentMethodFilters])
 
   const fetchSidecar = useCallback(async () => {
     try {
@@ -770,6 +792,50 @@ export default function StockWorkspace() {
      'stock.adjusted', 'stock.transferred', 'pim.changed', 'listing.updated'],
     useCallback(() => { fetchStock(); fetchSidecar() }, [fetchStock, fetchSidecar]),
   )
+
+  // FP.5 — FilterPopover dimensions. Status stays inline (hot path
+  // with colored tones); ABC class + fulfillment method live here as
+  // secondary filters. More dimensions can land in the popover later
+  // without touching the inline strip layout.
+  const stockFilterDimensions: FilterDimension[] = [
+    {
+      key: 'abcClass',
+      label: 'ABC class',
+      type: 'multi-select',
+      options: [
+        { value: 'A', label: 'A · top movers' },
+        { value: 'B', label: 'B · mid movers' },
+        { value: 'C', label: 'C · slow movers' },
+        { value: 'D', label: 'D · dead stock' },
+      ],
+      values: abcClassFilters,
+      onChange: (next) => updateUrl({
+        abcClass: next.length > 0 ? next.join(',') : undefined,
+        page: undefined,
+      }),
+    },
+    {
+      key: 'fulfillmentMethod',
+      label: 'Fulfillment method',
+      type: 'multi-select',
+      options: [
+        { value: 'FBA', label: 'FBA · Amazon-fulfilled' },
+        { value: 'FBM', label: 'FBM · merchant-fulfilled' },
+        { value: 'BOTH', label: 'BOTH · split' },
+      ],
+      values: fulfillmentMethodFilters,
+      onChange: (next) => updateUrl({
+        fulfillmentMethod: next.length > 0 ? next.join(',') : undefined,
+        page: undefined,
+      }),
+    },
+  ]
+
+  const clearStockSecondaryFilters = () => updateUrl({
+    abcClass: undefined,
+    fulfillmentMethod: undefined,
+    page: undefined,
+  })
 
   const filterCount = useMemo(
     () => [locationCode, status, search].filter(Boolean).length,
@@ -1271,10 +1337,18 @@ export default function StockWorkspace() {
       )}
 
       {/* Grid toolbar — density, columns, freshness, auto-refresh,
-          saved views, refresh, shortcuts. Sits just above the filter
-          card so the controls are adjacent to the table they govern
-          (matches /listings + /replenishment layout). */}
+          saved views, refresh, shortcuts, filter popover. Sits just
+          above the filter card so the controls are adjacent to the
+          table they govern (matches /listings + /replenishment). */}
       <div className="flex items-center gap-2 flex-wrap justify-end">
+        <FilterPopover
+          dimensions={stockFilterDimensions}
+          onClearAll={clearStockSecondaryFilters}
+          activeCount={abcClassFilters.length + fulfillmentMethodFilters.length}
+          order={stockFilterOrder}
+          onOrderChange={setStockFilterOrder}
+          onResetOrder={stockFilterOrder.length > 0 ? () => setStockFilterOrder([]) : undefined}
+        />
         <FreshnessIndicator
           lastFetchedAt={lastFetchedAt}
           onRefresh={() => { fetchStock(); fetchSidecar() }}

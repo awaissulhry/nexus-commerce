@@ -153,6 +153,28 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         ]
       }
 
+      // FP.5 — ABC class + fulfillment-method filters surface in the
+      // shared FilterPopover. Parents pass through (operator still
+      // needs to see them to drill into children).
+      if (q.abcClass) {
+        const classes = q.abcClass.split(',').filter(Boolean)
+        if (classes.length > 0) {
+          where.AND = [
+            ...(where.AND ?? []),
+            { OR: [{ isParent: true }, { abcClass: { in: classes } }] },
+          ]
+        }
+      }
+      if (q.fulfillmentMethod) {
+        const methods = q.fulfillmentMethod.split(',').filter(Boolean)
+        if (methods.length > 0) {
+          where.AND = [
+            ...(where.AND ?? []),
+            { OR: [{ isParent: true }, { fulfillmentMethod: { in: methods } }] },
+          ]
+        }
+      }
+
       const [total, products] = await Promise.all([
         prisma.product.count({ where }),
         prisma.product.findMany({
