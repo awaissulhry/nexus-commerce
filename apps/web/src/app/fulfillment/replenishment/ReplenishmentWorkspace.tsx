@@ -46,8 +46,10 @@ import {
   StockSplit,
   DensityToggle,
   AutoRefreshSelect,
+  SharedColumnPicker,
   type Density,
   type AutoRefreshInterval,
+  type ColumnSpec,
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
@@ -123,16 +125,24 @@ const URGENCY_TONE: Record<Urgency, string> = {
   LOW:      'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
 }
 
-const REP_COLUMNS: GridLensColumn[] = [
-  { key: 'product',    label: 'Product',     width: 340, locked: true },
+type RepColumnKey = 'product' | 'urgency' | 'stock' | 'daysLeft' | 'velocity' | 'demand' | 'reorderQty' | 'actions'
+
+const REP_COLUMNS_CATALOG: ReadonlyArray<GridLensColumn & { alwaysOn?: boolean }> = [
+  { key: 'product',    label: 'Product',     width: 340, locked: true, alwaysOn: true },
   { key: 'urgency',    label: 'Urgency',     width: 100 },
   { key: 'stock',      label: 'On hand',     width: 160 },
   { key: 'daysLeft',   label: 'Days left',   width: 90 },
   { key: 'velocity',   label: 'Vel/day',     width: 80 },
   { key: 'demand',     label: 'Demand (LT)', width: 100 },
   { key: 'reorderQty', label: 'Suggest qty', width: 100 },
-  { key: 'actions',    label: '',            width: 120 },
+  { key: 'actions',    label: '',            width: 120, alwaysOn: true },
 ]
+const REP_DEFAULT_VISIBLE: ReadonlyArray<RepColumnKey> = [
+  'product', 'urgency', 'stock', 'daysLeft', 'velocity', 'demand', 'reorderQty', 'actions',
+]
+const REP_COLUMN_PICKER_OPTIONS: ReadonlyArray<ColumnSpec<RepColumnKey>> = REP_COLUMNS_CATALOG
+  .filter((c) => c.label.length > 0)
+  .map((c) => ({ key: c.key as RepColumnKey, label: c.label, alwaysOn: c.alwaysOn }))
 
 export default function ReplenishmentWorkspace() {
   // R.5 — URL-driven state. Filters / search / sort are bookmarkable
@@ -164,6 +174,45 @@ export default function ReplenishmentWorkspace() {
   useEffect(() => {
     try { window.localStorage.setItem('nexus-replenishment-density', density) } catch {}
   }, [density])
+
+  // Visible columns — persist per-user in localStorage. Hidden columns
+  // stay in the picker as toggleable; reset restores the default order.
+  const [visibleColumns, setVisibleColumns] = useState<RepColumnKey[]>(() => {
+    if (typeof window === 'undefined') return [...REP_DEFAULT_VISIBLE]
+    try {
+      const raw = window.localStorage.getItem('nexus-replenishment-columns')
+      if (!raw) return [...REP_DEFAULT_VISIBLE]
+      const parsed = JSON.parse(raw) as string[]
+      const valid = parsed.filter((k): k is RepColumnKey =>
+        REP_COLUMNS_CATALOG.some((c) => c.key === k),
+      )
+      // Always include alwaysOn columns even if the saved list dropped them.
+      for (const c of REP_COLUMNS_CATALOG) {
+        if (c.alwaysOn && !valid.includes(c.key as RepColumnKey)) {
+          valid.push(c.key as RepColumnKey)
+        }
+      }
+      return valid.length > 0 ? valid : [...REP_DEFAULT_VISIBLE]
+    } catch {
+      return [...REP_DEFAULT_VISIBLE]
+    }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('nexus-replenishment-columns', JSON.stringify(visibleColumns)) } catch {}
+  }, [visibleColumns])
+
+  // Pagination state — client-side. The backend caps suggestions at
+  // 1000 in one request; we slice the filtered array into pages so the
+  // virtualised grid stays snappy and operators can step through.
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(() => {
+    if (typeof window === 'undefined') return 50
+    const n = Number(window.localStorage.getItem('nexus-replenishment-pageSize'))
+    return n > 0 ? n : 50
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('nexus-replenishment-pageSize', String(pageSize)) } catch {}
+  }, [pageSize])
   // W2.2 — replaces window.prompt for dismiss-with-reason. Holds the
   // pending request; cleared on confirm/cancel. `onConfirm` receives
   // the trimmed reason or null when the operator left it blank.
@@ -514,6 +563,26 @@ export default function ReplenishmentWorkspace() {
 
     return { gridRows: topRows, childrenByParent: childMap }
   }, [data, filtered])
+
+  // Slice the parent rows for the current page. Expanded children
+  // travel under their parent regardless of the page boundary —
+  // VirtualizedGrid resolves them via childrenByParent.
+  const gridRowsPage = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return gridRows.slice(start, start + pageSize)
+  }, [gridRows, page, pageSize])
+
+  // Build the visible columns array from the picker selection,
+  // preserving widths / locked / alwaysOn from the catalog.
+  const visibleGridColumns = useMemo<GridLensColumn[]>(() => {
+    return visibleColumns
+      .map((key) => REP_COLUMNS_CATALOG.find((c) => c.key === key))
+      .filter((c): c is GridLensColumn & { alwaysOn?: boolean } => !!c)
+  }, [visibleColumns])
+
+  // Whenever filters/search/sort shift the underlying data, jump back
+  // to page 1 so the operator isn't stuck on an empty tail page.
+  useEffect(() => { setPage(1) }, [filter, channelFilter, marketplaceFilter, urlSearch, sortBy, sortDir])
 
   // R.5 — auto-refresh now driven by AutoRefreshSelect's onTick prop.
 
@@ -1100,6 +1169,13 @@ export default function ReplenishmentWorkspace() {
             className="w-44 sm:w-56"
           />
           <DensityToggle density={density} onChange={setDensity} />
+          <SharedColumnPicker<RepColumnKey>
+            allColumns={REP_COLUMN_PICKER_OPTIONS}
+            visible={visibleColumns}
+            onChange={setVisibleColumns}
+            defaultVisible={REP_DEFAULT_VISIBLE}
+            buttonLabel={`Columns (${visibleColumns.length})`}
+          />
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
@@ -1217,8 +1293,8 @@ export default function ReplenishmentWorkspace() {
           {/* Desktop — VirtualizedGrid matches /products UX exactly */}
           <div className="hidden lg:block">
             <VirtualizedGrid<RepRow>
-              rows={gridRows}
-              visible={REP_COLUMNS}
+              rows={gridRowsPage}
+              visible={visibleGridColumns}
               density={density}
               cellPad={DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable}
               childrenByParent={childrenByParent}
@@ -1237,7 +1313,16 @@ export default function ReplenishmentWorkspace() {
               renderCell={renderCell}
               storageKey="replenishment-grid"
             />
-            <GridFooter count={gridRows.length} label="products" />
+            <GridFooter
+              count={gridRowsPage.length}
+              label="products"
+              total={gridRows.length}
+              page={page}
+              totalPages={Math.max(1, Math.ceil(gridRows.length / pageSize))}
+              onPage={setPage}
+              pageSize={pageSize}
+              onPageSize={(n) => { setPageSize(n); setPage(1) }}
+            />
           </div>
         </>
       )}
