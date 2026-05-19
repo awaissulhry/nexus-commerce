@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useSearchParams } from 'next/navigation'
 import { CalendarClock, Download, History as HistoryIcon, Layers, Upload, Wand2 } from 'lucide-react'
 import Link from 'next/link'
@@ -162,7 +163,12 @@ export default function UnifiedFlatFileClient({
     })
     const json = await res.json()
     if (!res.ok) throw new Error(json.error ?? `Save failed: HTTP ${res.status}`)
-    return { saved: json.saved ?? dirty.length }
+    const saved = json.saved ?? dirty.length
+    if (saved > 0) {
+      emitInvalidation({ type: 'product.updated', meta: { source: 'unified-flat-file' } })
+      emitInvalidation({ type: 'stock.adjusted', meta: { source: 'unified-flat-file' } })
+    }
+    return { saved }
   }, [])
 
   // ── Saved views apply ─────────────────────────────────────────────

@@ -35,6 +35,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
 
 type Stage = 'idle' | 'uploading' | 'review' | 'applying' | 'done'
@@ -246,6 +247,8 @@ export default function ImportsClient() {
       )
       setStage('done')
       fetchJobs()
+      emitInvalidation({ type: 'product.updated', meta: { source: 'import-wizard' } })
+      emitInvalidation({ type: 'stock.adjusted', meta: { source: 'import-wizard' } })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setStage('review')
