@@ -19,6 +19,10 @@ import {
   CURRENCY_MAP,
   type FlatFileRow,
 } from './flat-file.service.js'
+import {
+  persistPullJobInitial,
+  persistPullJobFinal,
+} from '../flat-file-pull-job-store.js'
 
 export interface PullPreviewJob {
   jobId: string
@@ -71,10 +75,26 @@ export function startPullPreviewJob(opts: {
     startedAt: new Date().toISOString(),
   }
   jobs.set(jobId, job)
+  void persistPullJobInitial('AMAZON', {
+    jobId: job.jobId,
+    marketplace: job.marketplace,
+    productType: job.productType,
+    skus: job.skus,
+    startedAt: job.startedAt,
+  })
   void runPreviewJob(job).catch((err) => {
     job.status = 'failed'
     job.fatalError = err instanceof Error ? err.message : String(err)
     job.doneAt = new Date().toISOString()
+    void persistPullJobFinal('AMAZON', {
+      jobId: job.jobId,
+      status: 'failed',
+      progress: job.progress, total: job.total,
+      pulled: job.pulled, skipped: job.skipped, failed: job.failed,
+      errors: job.errors, rows: [],
+      doneAt: job.doneAt,
+      fatalError: job.fatalError,
+    })
   })
   return jobId
 }
@@ -110,6 +130,14 @@ async function runPreviewJob(job: PullPreviewJob): Promise<void> {
   if (!products.length) {
     job.status = 'done'
     job.doneAt = new Date().toISOString()
+    void persistPullJobFinal('AMAZON', {
+      jobId: job.jobId,
+      status: 'done',
+      progress: job.progress, total: job.total,
+      pulled: job.pulled, skipped: job.skipped, failed: job.failed,
+      errors: job.errors, rows: job.rows,
+      doneAt: job.doneAt,
+    })
     return
   }
 
@@ -279,4 +307,12 @@ async function runPreviewJob(job: PullPreviewJob): Promise<void> {
 
   job.status = 'done'
   job.doneAt = new Date().toISOString()
+  void persistPullJobFinal('AMAZON', {
+    jobId: job.jobId,
+    status: 'done',
+    progress: job.progress, total: job.total,
+    pulled: job.pulled, skipped: job.skipped, failed: job.failed,
+    errors: job.errors, rows: job.rows,
+    doneAt: job.doneAt,
+  })
 }

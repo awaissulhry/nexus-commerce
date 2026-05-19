@@ -9,6 +9,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { findActivePullJob } from '../services/flat-file-pull-job-store.js'
 
 export default async function flatFilePullHistoryRoutes(fastify: FastifyInstance) {
   // ── GET /api/flat-file/pull-history ────────────────────────────────
@@ -62,5 +63,73 @@ export default async function flatFilePullHistoryRoutes(fastify: FastifyInstance
     })
 
     return reply.send({ records })
+  })
+
+  // ── GET /api/flat-file/pull-job/active ─────────────────────────────
+  // Editor-mount probe. Returns the most-recent pull job within the
+  // last 60 minutes for (channel, marketplace [, productType]) along
+  // with two flags:
+  //
+  //   alive    — the in-memory job is still being processed (resume
+  //              polling and show live progress)
+  //   reviewed — an audit-log row already exists for this job (the
+  //              operator already applied or cancelled; nothing to
+  //              surface)
+  //
+  // Returns { job: null } when nothing matches, so the front-end can
+  // treat absent-job and 200-with-null identically.
+  fastify.get<{
+    Querystring: {
+      channel?: string
+      marketplace?: string
+      productType?: string
+    }
+  }>('/flat-file/pull-job/active', async (request, reply) => {
+    const channel = (request.query.channel ?? '').toUpperCase()
+    if (channel !== 'AMAZON' && channel !== 'EBAY') {
+      return reply.code(400).send({ error: 'channel must be AMAZON or EBAY' })
+    }
+    if (!request.query.marketplace) {
+      return reply.code(400).send({ error: 'marketplace is required' })
+    }
+
+    const result = await findActivePullJob({
+      channel: channel as 'AMAZON' | 'EBAY',
+      marketplace: request.query.marketplace,
+      productType: request.query.productType ?? null,
+    })
+
+    if (!result) return reply.send({ job: null })
+
+    // Strip large `rows` payload from running jobs — only the final
+    // completion needs the rows shipped to the client.
+    const job = result.job
+    const safeRows =
+      job.status === 'done'
+        ? job.rows
+        : []
+
+    return reply.send({
+      job: {
+        id: job.id,
+        channel: job.channel,
+        marketplace: job.marketplace,
+        productType: job.productType,
+        skus: job.skus,
+        status: job.status,
+        progress: job.progress,
+        total: job.total,
+        pulled: job.pulled,
+        skipped: job.skipped,
+        failed: job.failed,
+        errors: job.errors,
+        rows: safeRows,
+        startedAt: job.startedAt,
+        doneAt: job.doneAt,
+        fatalError: job.fatalError,
+      },
+      alive: result.alive,
+      reviewed: result.reviewed,
+    })
   })
 }

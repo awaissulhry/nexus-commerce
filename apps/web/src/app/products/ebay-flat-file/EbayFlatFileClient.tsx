@@ -22,6 +22,7 @@ import {
 } from './ebay-columns'
 import { PullDiffModal, type PullDiffApplyResult } from '../amazon-flat-file/PullDiffModal'
 import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
+import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { PULL_GROUPS, pullFieldGroup, type PullGroupId } from '../_shared/pull-field-groups'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -292,6 +293,42 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
     jobId: string
   } | null>(null)
   const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
+  const [pendingPullReview, setPendingPullReview] = useState<{
+    jobId: string
+    rows: BaseRow[]
+    skusRequested: string[]
+    skusReturned: number
+    doneAt: string | null
+  } | null>(null)
+
+  // P5: On mount, surface a "completed while away" banner if there's
+  // a recent unreviewed pull for this marketplace.
+  useEffect(() => {
+    if (!marketplace) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const params = new URLSearchParams({ channel: 'EBAY', marketplace })
+        const res = await fetch(`${BACKEND}/api/flat-file/pull-job/active?${params}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        const job = data?.job
+        if (!job || cancelled) return
+        if (job.status === 'done' && !data.reviewed && Array.isArray(job.rows) && job.rows.length > 0) {
+          setPendingPullReview({
+            jobId: job.id,
+            rows: job.rows as BaseRow[],
+            skusRequested: Array.isArray(job.skus) ? job.skus : [],
+            skusReturned: typeof job.pulled === 'number' ? job.pulled : (job.rows.length ?? 0),
+            doneAt: job.doneAt ?? null,
+          })
+        }
+      } catch {
+        // best-effort
+      }
+    })()
+    return () => { cancelled = true }
+  }, [marketplace, BACKEND])
 
   // IN.2 — Cascade button toggle (default on, shared localStorage key with Amazon)
   const [showCascadeButtons, setShowCascadeButtons] = useState<boolean>(() => {
@@ -1110,6 +1147,28 @@ export default function EbayFlatFileClient({ initialRows, initialMarketplace, fa
         }}
         onClose={() => setPullHistoryOpen(false)}
       />
+
+      {/* P5: completed-while-away banner */}
+      {pendingPullReview && (
+        <PendingPullBanner
+          channelLabel="eBay"
+          marketplace={marketplace}
+          rowCount={pendingPullReview.skusReturned}
+          doneAt={pendingPullReview.doneAt}
+          onReview={() => {
+            setPullDiffData({
+              pulledRows: pendingPullReview.rows,
+              selectedColumns: 'all',
+              skusRequested: pendingPullReview.skusRequested,
+              skusReturned: pendingPullReview.skusReturned,
+              jobId: pendingPullReview.jobId,
+            })
+            setPullDiffOpen(true)
+            setPendingPullReview(null)
+          }}
+          onDismiss={() => setPendingPullReview(null)}
+        />
+      )}
 
       {cascadeRow && cascadeRow._productId && (
         <CascadeModal

@@ -21,6 +21,7 @@ import { FFSavedViews, type FFViewState } from '../_shared/FFSavedViews'
 import { FFReplicateModal } from './FFReplicateModal'
 import { PullDiffModal, type PullDiffApplyResult } from './PullDiffModal'
 import { PullHistoryDrawer } from '../_shared/PullHistoryDrawer'
+import { PendingPullBanner } from '../_shared/PendingPullBanner'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
@@ -504,6 +505,13 @@ export default function AmazonFlatFileClient({
     jobId: string
   } | null>(null)
   const [pullHistoryOpen, setPullHistoryOpen] = useState(false)
+  const [pendingPullReview, setPendingPullReview] = useState<{
+    jobId: string
+    rows: Row[]
+    skusRequested: string[]
+    skusReturned: number
+    doneAt: string | null
+  } | null>(null)
   const [fetching, setFetching] = useState(false)
 
   // Tracks the anchor row when user drags on the # column to select rows
@@ -527,6 +535,42 @@ export default function AmazonFlatFileClient({
         setDraftBanner(saved)
       }
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // P5: On mount, ask the API if a recent pull job is waiting for
+  // review (operator pulled then closed the tab / refreshed before
+  // applying). If so, surface a banner with the cached rows so they
+  // can resume without re-hitting SP-API.
+  useEffect(() => {
+    if (!initialProductType || !initialMarketplace) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const params = new URLSearchParams({
+          channel: 'AMAZON',
+          marketplace: initialMarketplace,
+          productType: initialProductType,
+        })
+        const res = await fetch(`${getBackendUrl()}/api/flat-file/pull-job/active?${params}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        const job = data?.job
+        if (!job || cancelled) return
+        if (job.status === 'done' && !data.reviewed && Array.isArray(job.rows) && job.rows.length > 0) {
+          setPendingPullReview({
+            jobId: job.id,
+            rows: job.rows as Row[],
+            skusRequested: Array.isArray(job.skus) ? job.skus : [],
+            skusReturned: typeof job.pulled === 'number' ? job.pulled : (job.rows.length ?? 0),
+            doneAt: job.doneAt ?? null,
+          })
+        }
+      } catch {
+        // best-effort — banner just won't appear
+      }
+    })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const displayRowsRef = useRef<Row[]>([])
@@ -3296,6 +3340,28 @@ export default function AmazonFlatFileClient({
             visibleColumns={allColumnsRef.current.map((c) => ({ id: c.id, label: c.labelEn }))}
           />
         </div>
+      )}
+
+      {/* P5: completed-while-away banner */}
+      {pendingPullReview && (
+        <PendingPullBanner
+          channelLabel="Amazon"
+          marketplace={marketplace}
+          rowCount={pendingPullReview.skusReturned}
+          doneAt={pendingPullReview.doneAt}
+          onReview={() => {
+            setPullDiffData({
+              pulledRows: pendingPullReview.rows,
+              selectedColumns: 'all',
+              skusRequested: pendingPullReview.skusRequested,
+              skusReturned: pendingPullReview.skusReturned,
+              jobId: pendingPullReview.jobId,
+            })
+            setPullDiffOpen(true)
+            setPendingPullReview(null)
+          }}
+          onDismiss={() => setPendingPullReview(null)}
+        />
       )}
 
       {/* Pull history drawer — Phase 4 */}

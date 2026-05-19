@@ -10119,6 +10119,43 @@ model FlatFilePullRecord {
   @@index([productType, pulledAt])
 }
 
+// ── Flat-File Pull Jobs (P5 persistence) ─────────────────────────────
+// Mirrors the in-memory job queues in
+// apps/api/src/services/amazon/flat-file-pull-preview.service.ts and
+// ebay-flat-file-pull-preview.service.ts. Dual-written: the in-memory
+// map stays authoritative while the job is alive, the DB row is a
+// recovery surface so a browser refresh (or a server restart) doesn't
+// lose a long-running pull.
+//
+// `rows` holds the expanded flat-file rows at completion so the diff
+// modal can be re-opened from the history drawer without re-hitting
+// SP-API / Sell API.
+//
+// Retention is implicit (no FK cascades from anywhere); a cron in a
+// later phase can prune rows older than 30 days.
+
+model FlatFilePullJob {
+  id           String   @id          // jobId, e.g. 'ffpreview-…' or 'ebpreview-…'
+  channel      String                // 'AMAZON' | 'EBAY'
+  marketplace  String                // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  productType  String?               // null on eBay (editor isn't scoped by type)
+  skus         String[] @default([]) // requested SKU list
+  status       String   @default("running") // 'running' | 'done' | 'failed'
+  progress     Int      @default(0)
+  total        Int      @default(0)
+  pulled       Int      @default(0)
+  skipped      Int      @default(0)
+  failed       Int      @default(0)
+  errors       Json     @default("[]")     // Array<{ sku, error }>
+  rows         Json     @default("[]")     // FlatFileRow[] at completion (empty while running)
+  startedAt    DateTime @default(now())
+  doneAt       DateTime?
+  fatalError   String?
+
+  @@index([channel, marketplace, status])
+  @@index([startedAt])
+}
+
 // ── Catalog Organize (CO series) ─────────────────────────────────────
 // Session-based publish + undo for /catalog/organize drag-and-drop.
 // CatalogOrganizeSession groups N changes into one undoable batch.

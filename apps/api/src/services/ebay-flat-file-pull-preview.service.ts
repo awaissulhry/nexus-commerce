@@ -12,6 +12,10 @@
 
 import prisma from '../db.js'
 import { EbayService } from './marketplaces/ebay.service.js'
+import {
+  persistPullJobInitial,
+  persistPullJobFinal,
+} from './flat-file-pull-job-store.js'
 
 // eBay site IDs the rest of the app uses. Mirrors the constant in
 // apps/web/src/app/products/ebay-flat-file/ebay-columns.ts so a
@@ -109,10 +113,26 @@ export function startEbayPullPreviewJob(opts: {
     startedAt: new Date().toISOString(),
   }
   jobs.set(jobId, job)
+  void persistPullJobInitial('EBAY', {
+    jobId: job.jobId,
+    marketplace: job.marketplace,
+    productType: null,
+    skus: job.skus,
+    startedAt: job.startedAt,
+  })
   void runEbayPreviewJob(job).catch((err) => {
     job.status = 'failed'
     job.fatalError = err instanceof Error ? err.message : String(err)
     job.doneAt = new Date().toISOString()
+    void persistPullJobFinal('EBAY', {
+      jobId: job.jobId,
+      status: 'failed',
+      progress: job.progress, total: job.total,
+      pulled: job.pulled, skipped: job.skipped, failed: job.failed,
+      errors: job.errors, rows: [],
+      doneAt: job.doneAt,
+      fatalError: job.fatalError,
+    })
   })
   return jobId
 }
@@ -147,6 +167,14 @@ async function runEbayPreviewJob(job: EbayPullPreviewJob): Promise<void> {
   if (!products.length) {
     job.status = 'done'
     job.doneAt = new Date().toISOString()
+    void persistPullJobFinal('EBAY', {
+      jobId: job.jobId,
+      status: 'done',
+      progress: job.progress, total: job.total,
+      pulled: job.pulled, skipped: job.skipped, failed: job.failed,
+      errors: job.errors, rows: job.rows,
+      doneAt: job.doneAt,
+    })
     return
   }
 
@@ -225,4 +253,12 @@ async function runEbayPreviewJob(job: EbayPullPreviewJob): Promise<void> {
 
   job.status = 'done'
   job.doneAt = new Date().toISOString()
+  void persistPullJobFinal('EBAY', {
+    jobId: job.jobId,
+    status: 'done',
+    progress: job.progress, total: job.total,
+    pulled: job.pulled, skipped: job.skipped, failed: job.failed,
+    errors: job.errors, rows: job.rows,
+    doneAt: job.doneAt,
+  })
 }
