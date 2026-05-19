@@ -27,8 +27,10 @@ import {
   DensityToggle as SharedDensityToggle,
   AutoRefreshSelect,
   KpiStrip,
+  BulkActionShell,
   type AutoRefreshInterval,
   type KpiTileSpec,
+  type BulkAction,
 } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
@@ -2501,30 +2503,25 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
     }
   }
 
+  const bulkActions: BulkAction[] = [
+    { id: 'publish',      label: t('listings.bulk.publish'),       icon: Eye,    tone: 'primary', onClick: () => runAction('publish') },
+    { id: 'unpublish',    label: t('listings.bulk.unpublish'),     icon: EyeOff, tone: 'danger',  onClick: () => runAction('unpublish') },
+    { id: 'resync',       label: t('listings.bulk.resync'),        icon: RefreshCw,               onClick: () => runAction('resync') },
+    { id: 'set-price',    label: t('listings.bulk.setPrice'),      icon: Tag,                     onClick: () => setSetPriceOpen(true) },
+    { id: 'follow',       label: t('listings.bulk.followMaster'),  icon: Link2,                   onClick: () => runAction('follow-master') },
+    { id: 'unfollow',     label: t('listings.bulk.unfollowMaster'),                               onClick: () => runAction('unfollow-master') },
+  ]
+
   return (
-    <div className="sticky top-2 z-20">
-      <Card>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-base font-semibold text-slate-700 dark:text-slate-300">
-            {selectedIds.length} selected
-          </span>
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-          <button onClick={() => runAction('publish')} disabled={busy} className="h-7 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"><Eye size={12} /> {t('listings.bulk.publish')}</button>
-          <button onClick={() => runAction('unpublish')} disabled={busy} className="h-7 px-3 text-base bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 inline-flex items-center gap-1.5"><EyeOff size={12} /> {t('listings.bulk.unpublish')}</button>
-          <button onClick={() => runAction('resync')} disabled={busy} className="h-7 px-3 text-base bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"><RefreshCw size={12} /> {t('listings.bulk.resync')}</button>
-          <button
-            onClick={() => setSetPriceOpen(true)}
-            disabled={busy}
-            className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
-          ><Tag size={12} /> {t('listings.bulk.setPrice')}</button>
-          <button onClick={() => runAction('follow-master')} disabled={busy} className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"><Link2 size={12} /> {t('listings.bulk.followMaster')}</button>
-          <button onClick={() => runAction('unfollow-master')} disabled={busy} className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5">{t('listings.bulk.unfollowMaster')}</button>
-          {jobStatus && <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">{jobStatus}</span>}
-          <button onClick={onClear} disabled={busy} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded disabled:opacity-50">
-            <X size={14} />
-          </button>
-        </div>
-      </Card>
+    <>
+      <BulkActionShell
+        selectedCount={selectedIds.length}
+        noun="listing"
+        onClear={onClear}
+        busy={busy}
+        status={jobStatus}
+        actions={bulkActions}
+      />
       <SetPriceModal
         open={setPriceOpen}
         count={selectedIds.length}
@@ -2534,7 +2531,7 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
           runAction('set-price', { price })
         }}
       />
-    </div>
+    </>
   )
 }
 

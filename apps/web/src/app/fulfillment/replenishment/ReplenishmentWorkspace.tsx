@@ -47,9 +47,11 @@ import {
   DensityToggle,
   AutoRefreshSelect,
   SharedColumnPicker,
+  BulkActionShell,
   type Density,
   type AutoRefreshInterval,
   type ColumnSpec,
+  type BulkAction,
 } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
@@ -1210,49 +1212,34 @@ export default function ReplenishmentWorkspace() {
         </div>
       </div>
 
-      {/* Bulk action bar — visible only when rows are selected */}
-      {selectedIds.size > 0 && (
-        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md px-3 py-2 flex items-center justify-between gap-3">
-          <div className="text-md text-slate-700 dark:text-slate-300">
-            <span className="font-semibold">{selectedIds.size}</span>{' '}
-            selected
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={clearSelection}
-              variant="secondary"
-              size="sm"
-            >
-              Clear
-            </Button>
-            <button
-              type="button"
-              onClick={() => {
-                askDismissReason(
-                  t('replenishment.dismiss.titleBulk', { count: selectedIds.size }),
-                  (reason) => {
-                    void bulkDismissSelected(reason)
-                  },
-                )
-              }}
-              className="h-7 px-3 text-base bg-white dark:bg-slate-900 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900 rounded hover:bg-red-50 dark:hover:bg-red-950/40 inline-flex items-center gap-1.5"
-              title={t('replenishment.dismiss.bulkTooltip')}
-            >
-              <X size={12} /> {t('replenishment.dismiss.bulkButton')}
-            </button>
-            <Button
-              type="button"
-              onClick={() => setBulkOpen(true)}
-              variant="primary"
-              size="sm"
-              icon={<ShoppingCart size={12} aria-hidden="true" />}
-            >
-              Bulk-create POs
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* Bulk action bar — shared shell across all 4 grids */}
+      <BulkActionShell
+        selectedCount={selectedIds.size}
+        noun="suggestion"
+        onClear={clearSelection}
+        actions={[
+          {
+            id: 'dismiss',
+            label: t('replenishment.dismiss.bulkButton'),
+            icon: X,
+            tone: 'danger',
+            title: t('replenishment.dismiss.bulkTooltip'),
+            onClick: () => {
+              askDismissReason(
+                t('replenishment.dismiss.titleBulk', { count: selectedIds.size }),
+                (reason) => { void bulkDismissSelected(reason) },
+              )
+            },
+          },
+          {
+            id: 'bulk-po',
+            label: 'Bulk-create POs',
+            icon: ShoppingCart,
+            tone: 'primary',
+            onClick: () => setBulkOpen(true),
+          },
+        ] satisfies BulkAction[]}
+      />
 
       {/* Grid */}
       {loading && !data ? (

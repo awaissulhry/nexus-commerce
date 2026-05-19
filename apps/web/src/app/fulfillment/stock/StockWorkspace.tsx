@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, type AutoRefreshInterval } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, type AutoRefreshInterval, type BulkAction } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -1447,22 +1447,39 @@ export default function StockWorkspace() {
         )
       })()}
 
-      {/* Bulk action bar — appears when selection is non-empty in table view */}
-      {view === 'table' && selected.size > 0 && !bulkProgress && (
-        <BulkActionBar
-          count={selected.size}
+      {/* Bulk action bar — shared shell across all 4 grids. Hidden on
+          non-table views and while a sequential bulk run is in flight. */}
+      {view === 'table' && !bulkProgress && (
+        <BulkActionShell
+          selectedCount={selected.size}
+          noun="row"
           onClear={() => setSelected(new Set())}
-          onAdjust={() => setBulkAction('adjust')}
-          onThreshold={() => setBulkAction('threshold')}
-          onExport={exportSelectedCsv}
-          onTransfer={() => setBulkAction('transfer')}
-          labels={{
-            adjust: t('stock.bulk.adjust'),
-            threshold: t('stock.bulk.threshold'),
-            exportCsv: t('stock.bulk.exportCsv'),
-            transfer: t('stock.bulk.transfer'),
-            selected: t('stock.bulk.selected'),
-          }}
+          actions={[
+            {
+              id: 'adjust',
+              label: t('stock.bulk.adjust'),
+              icon: Sliders,
+              onClick: () => setBulkAction('adjust'),
+            },
+            {
+              id: 'threshold',
+              label: t('stock.bulk.threshold'),
+              icon: Bookmark,
+              onClick: () => setBulkAction('threshold'),
+            },
+            {
+              id: 'transfer',
+              label: t('stock.bulk.transfer'),
+              icon: ArrowRightLeft,
+              onClick: () => setBulkAction('transfer'),
+            },
+            {
+              id: 'export',
+              label: t('stock.bulk.exportCsv'),
+              icon: Download,
+              onClick: exportSelectedCsv,
+            },
+          ] satisfies BulkAction[]}
         />
       )}
 
@@ -3836,61 +3853,9 @@ function CardsView({
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Bulk operations — action bar, progress, undo, modals
+// Bulk operations — progress + undo + modals (action bar is now the
+// shared <BulkActionShell/> mounted in the workspace render tree)
 // ─────────────────────────────────────────────────────────────────────
-function BulkActionBar({
-  count, onClear, onAdjust, onThreshold, onExport, onTransfer, labels,
-}: {
-  count: number
-  onClear: () => void
-  onAdjust: () => void
-  onThreshold: () => void
-  onExport: () => void
-  onTransfer: () => void
-  labels: { adjust: string; threshold: string; exportCsv: string; transfer: string; selected: string }
-}) {
-  return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 bg-slate-900 text-white rounded-lg shadow-2xl px-4 py-2 flex items-center gap-3 text-md">
-      <span className="font-semibold tabular-nums">
-        {count} <span className="text-slate-300 font-normal">{labels.selected}</span>
-      </span>
-      <div className="w-px h-5 bg-slate-700" />
-      <button
-        onClick={onAdjust}
-        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
-      >
-        <Plus size={12} /> {labels.adjust}
-      </button>
-      <button
-        onClick={onThreshold}
-        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
-      >
-        <Sliders size={12} /> {labels.threshold}
-      </button>
-      <button
-        onClick={onTransfer}
-        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
-      >
-        <ArrowRightLeft size={12} /> {labels.transfer}
-      </button>
-      <button
-        onClick={onExport}
-        className="h-11 sm:h-7 px-2.5 inline-flex items-center gap-1.5 rounded hover:bg-slate-800 transition-colors"
-      >
-        <Download size={12} /> {labels.exportCsv}
-      </button>
-      <div className="w-px h-5 bg-slate-700" />
-      <button
-        onClick={onClear}
-        className="h-11 w-11 sm:h-7 sm:w-7 inline-flex items-center justify-center rounded hover:bg-slate-800"
-        aria-label="Clear selection"
-      >
-        <X size={14} />
-      </button>
-    </div>
-  )
-}
-
 function BulkProgressToast({ progress }: { progress: { total: number; done: number; failed: number } }) {
   const pct = progress.total === 0 ? 0 : Math.round(((progress.done + progress.failed) / progress.total) * 100)
   return (
