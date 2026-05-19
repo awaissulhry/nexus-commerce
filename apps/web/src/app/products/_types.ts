@@ -22,6 +22,8 @@ export type ProductRow = {
   parentId: string | null
   productType: string | null
   fulfillmentMethod: string | null
+  fbaStock?: number
+  fbmStock?: number
   /**
    * W2.12 — ProductFamily attached via Product.familyId. Null when
    * the row hasn't been categorised yet (the legacy categoryAttributes

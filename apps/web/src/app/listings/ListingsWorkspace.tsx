@@ -21,7 +21,7 @@ import {
   VirtualizedGrid as SharedVirtualizedGrid,
   SearchContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
-import { GridFooter, ProductIdentityCell } from '@/app/_shared/grid-lens'
+import { GridFooter, ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   MultiSelectChips,
@@ -122,6 +122,8 @@ type Listing = {
     parentId: string | null
     productType: string | null
     fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
+    fbaStock: number
+    fbmStock: number
     thumbnailUrl: string | null
     /** Populated by the API when this product is a variant (parentId != null). */
     parentProduct: {
@@ -515,6 +517,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
           isParent: true, parentId: null,
           productType: info.productType ?? null,
           fulfillmentMethod: null,
+          fbaStock: 0, fbmStock: 0,
           thumbnailUrl: info.thumbnailUrl, parentProduct: null,
         },
         isParent: true,
@@ -2103,17 +2106,20 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
       const q = l.quantity
       const tone = q === 0 ? 'text-rose-600 dark:text-rose-400' : q != null && q <= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
       return (
-        <InlineNumberCell
-          value={q ?? null}
-          listingId={l.id}
-          version={l.version}
-          field="quantity"
-          align="right"
-          integer
-          format={(n) => String(Math.round(n))}
-          tone={tone}
-          onSaved={onListingChanged}
-        />
+        <div className="space-y-0.5 text-right">
+          <InlineNumberCell
+            value={q ?? null}
+            listingId={l.id}
+            version={l.version}
+            field="quantity"
+            align="right"
+            integer
+            format={(n) => String(Math.round(n))}
+            tone={tone}
+            onSaved={onListingChanged}
+          />
+          <StockSplit fba={l.product.fbaStock} fbm={l.product.fbmStock} inline muted />
+        </div>
       )
     }
     case 'follow':

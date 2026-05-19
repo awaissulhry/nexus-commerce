@@ -6768,6 +6768,8 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             stock: stockByProduct.get(p.id),
             fallback: ((p as any).fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null,
           }),
+          fbaStock: stockByProduct.get(p.id)?.fba ?? 0,
+          fbmStock: stockByProduct.get(p.id)?.non ?? 0,
         }
       })
 

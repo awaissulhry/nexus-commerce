@@ -63,6 +63,8 @@ export interface Suggestion {
   productType: string | null
   amazonAsin: string | null
   fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
+  fbaStock: number
+  fbmStock: number
   preferredSupplierId: string | null
   fulfillmentChannel: string | null
   leadTimeDays: number

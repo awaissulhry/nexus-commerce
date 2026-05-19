@@ -301,6 +301,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
             totalReserved:  agg?.reserved ?? ownReserved,
             totalAvailable: agg?.available ?? ownAvailable,
             fbaStock: fbaQty,
+            fbmStock: nonFbaQty,
             ownStock: ownWHQty,
             lastUpdatedAt: lastUpdated ? lastUpdated.toISOString() : null,
             // Parent rows carry location stubs for badge rendering (no qty detail).

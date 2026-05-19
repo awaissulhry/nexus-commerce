@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
@@ -71,6 +71,7 @@ type StockRow = {
   totalReserved: number
   totalAvailable: number
   fbaStock: number
+  fbmStock: number
   ownStock: number
   lastUpdatedAt: string | null
   stockLevels: Array<{
@@ -3536,8 +3537,12 @@ const COLUMN_META: Record<ColumnKey, {
   onHand: {
     align: 'right',
     head: 'On hand',
-    cell: ({ it, stockTone }) => (
-      <span className={`tabular-nums font-semibold ${stockTone}`}>{it.totalStock}</span>
+    cell: ({ it, threshold }) => (
+      <StockSplit
+        fba={it.fbaStock}
+        fbm={it.fbmStock}
+        fbmLowThreshold={threshold}
+      />
     ),
   },
   reserved: {

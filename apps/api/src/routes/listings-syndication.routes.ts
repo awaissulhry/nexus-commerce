@@ -361,32 +361,37 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           browseNodeId: (l.platformAttributes as any)?.browseNodeId ?? null,
           ebayCategoryId: (l.platformAttributes as any)?.categoryId ?? null,
           localeTitle: l.channel === 'AMAZON' ? extractLocaleTitle(l.platformAttributes, l.marketplace) : null,
-          product: {
-            id: l.product.id,
-            sku: l.product.sku,
-            name: l.product.name,
-            amazonAsin: l.product.amazonAsin,
-            basePrice: l.product.basePrice == null ? null : Number(l.product.basePrice),
-            totalStock: l.product.totalStock,
-            isParent: l.product.isParent,
-            parentId: l.product.parentId,
-            productType: l.product.productType,
-            fulfillmentMethod: deriveFulfillmentMethod({
-              offerMethods: offerMethodsByProduct.get(l.productId),
-              stock: stockByProduct.get(l.productId),
-              fallback: fallbackByProduct.get(l.productId) ?? null,
-            }),
-            thumbnailUrl: l.product.images?.[0]?.url ?? null,
-            // Actual parent product data — present when this product is a variant.
-            // The frontend uses this to build correct parent row (real name/sku/thumb).
-            parentProduct: l.product.parent ? {
-              id: l.product.parent.id,
-              sku: l.product.parent.sku,
-              name: l.product.parent.name,
-              productType: l.product.parent.productType,
-              thumbnailUrl: l.product.parent.images?.[0]?.url ?? null,
-            } : null,
-          },
+          product: (() => {
+            const buckets = stockByProduct.get(l.productId) ?? { fba: 0, non: 0 }
+            return {
+              id: l.product.id,
+              sku: l.product.sku,
+              name: l.product.name,
+              amazonAsin: l.product.amazonAsin,
+              basePrice: l.product.basePrice == null ? null : Number(l.product.basePrice),
+              totalStock: l.product.totalStock,
+              isParent: l.product.isParent,
+              parentId: l.product.parentId,
+              productType: l.product.productType,
+              fulfillmentMethod: deriveFulfillmentMethod({
+                offerMethods: offerMethodsByProduct.get(l.productId),
+                stock: buckets,
+                fallback: fallbackByProduct.get(l.productId) ?? null,
+              }),
+              fbaStock: buckets.fba,
+              fbmStock: buckets.non,
+              thumbnailUrl: l.product.images?.[0]?.url ?? null,
+              // Actual parent product data — present when this product is a variant.
+              // The frontend uses this to build correct parent row (real name/sku/thumb).
+              parentProduct: l.product.parent ? {
+                id: l.product.parent.id,
+                sku: l.product.parent.sku,
+                name: l.product.parent.name,
+                productType: l.product.parent.productType,
+                thumbnailUrl: l.product.parent.images?.[0]?.url ?? null,
+              } : null,
+            }
+          })(),
         }
       })
 

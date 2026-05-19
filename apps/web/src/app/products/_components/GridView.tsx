@@ -70,7 +70,7 @@ import {
   SearchContext,
   RiskFlaggedContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
-import { ProductIdentityCell } from '@/app/_shared/grid-lens'
+import { ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
 
 // Italian terminology lookup — falls back to English when not in the
 // glossary. Mirrored from packages/database seed data for the brand
@@ -1185,42 +1185,19 @@ const ProductCell = memo(function ProductCell({
       if (p.isParent && !p.parentId) return null
       return <span className="text-sm text-slate-600 dark:text-slate-300">—</span>
 
-    // AM.1 — Inventory (Available units). Method is derived server-side
-    // from offers > stock locations > Product.fulfillmentMethod. 'BOTH'
-    // means the SKU has both FBA and FBM offers (or stock in both buckets).
-    // null = genuinely unknown — surface a "Set FBA/FBM" prompt instead
-    // of guessing.
+    // AM.1 — Inventory (Available units). Splits FBA + FBM as two
+    // stacked lines so the operator sees method-specific stock at a
+    // glance. FBA is read-only (Amazon owns it); the lock icon
+    // surfaces that intent. M.3 will add inline editing on the FBM row.
     case 'inventory': {
       if (p.isParent && !p.parentId) return null
-      const stock = p.totalStock ?? 0
-      const method = p.fulfillmentMethod as 'FBA' | 'FBM' | 'BOTH' | null
-      const tone = stock === 0
-        ? 'text-rose-600 dark:text-rose-400'
-        : stock <= (p.lowStockThreshold ?? 10)
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-slate-800 dark:text-slate-100'
       return (
         <div className="space-y-0.5">
-          <div className={`text-sm font-medium tabular-nums ${tone}`}>
-            {stock.toLocaleString()}
-            {method ? ` (${method})` : ''}
-          </div>
-          {method === 'BOTH' ? (
-            <div className="text-xs text-slate-400 dark:text-slate-500">
-              FBA + FBM offers live
-            </div>
-          ) : method ? (
-            <div className="text-xs text-slate-400 dark:text-slate-500">
-              Xavia {method} Shipping Template
-            </div>
-          ) : (
-            <Link
-              href={`/products/${p.id}/edit`}
-              className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
-            >
-              Set FBA/FBM
-            </Link>
-          )}
+          <StockSplit
+            fba={p.fbaStock}
+            fbm={p.fbmStock}
+            fbmLowThreshold={p.lowStockThreshold ?? 10}
+          />
           <Link
             href={`/products/${p.id}/edit?tab=matrix`}
             className="text-xs text-blue-600 dark:text-blue-400 hover:underline"

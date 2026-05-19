@@ -40,7 +40,7 @@ import { Modal, ModalFooter } from '@/components/ui/Modal'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens/types'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -91,6 +91,8 @@ type RepRow = GridLensRow & {
   productType: string | null
   amazonAsin: string | null
   fulfillmentMethod: 'FBA' | 'FBM' | 'BOTH' | null
+  fbaStock: number
+  fbmStock: number
   urgency: Urgency | null
   needsReorder: boolean
   currentStock: number
@@ -115,7 +117,7 @@ const URGENCY_TONE: Record<Urgency, string> = {
 const REP_COLUMNS: GridLensColumn[] = [
   { key: 'product',    label: 'Product',     width: 340, locked: true },
   { key: 'urgency',    label: 'Urgency',     width: 100 },
-  { key: 'stock',      label: 'On hand',     width: 90 },
+  { key: 'stock',      label: 'On hand',     width: 160 },
   { key: 'daysLeft',   label: 'Days left',   width: 90 },
   { key: 'velocity',   label: 'Vel/day',     width: 80 },
   { key: 'demand',     label: 'Demand (LT)', width: 100 },
@@ -333,6 +335,8 @@ export default function ReplenishmentWorkspace() {
       productType: s.productType,
       amazonAsin: s.amazonAsin,
       fulfillmentMethod: s.fulfillmentMethod,
+      fbaStock: s.fbaStock,
+      fbmStock: s.fbmStock,
       isParent: false,
       parentId: s.parentId,
       childCount: 0,
@@ -375,6 +379,8 @@ export default function ReplenishmentWorkspace() {
         productType,
         amazonAsin,
         fulfillmentMethod: aggregatedFulfillment,
+        fbaStock: children.reduce((sum, c) => sum + c.fbaStock, 0),
+        fbmStock: children.reduce((sum, c) => sum + c.fbmStock, 0),
         isParent: true,
         parentId,
         childCount: children.length,
@@ -670,7 +676,8 @@ export default function ReplenishmentWorkspace() {
           </span>
         )
       case 'stock':
-        return <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">{row.currentStock}</span>
+        return <StockSplit fba={row.fbaStock} fbm={row.fbmStock} inline />
+
       case 'daysLeft': {
         const d = row.daysOfStockLeft
         if (d === null) return <span className="text-slate-300 dark:text-slate-600">—</span>

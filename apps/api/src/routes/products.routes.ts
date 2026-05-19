@@ -788,9 +788,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       const products = sortedRawProducts.map((p: any) => {
         let coverage: Record<string, { live: number; draft: number; error: number; total: number }> | null = null
 
+        const stockBuckets = stockByProduct.get(p.id) ?? { fba: 0, non: 0 }
         const derivedFulfillment = deriveFulfillmentMethod({
           offerMethods: offersByProduct.get(p.id),
-          stock: stockByProduct.get(p.id),
+          stock: stockBuckets,
           fallback: (p.fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null,
         })
 
@@ -815,6 +816,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             parentId: p.parentId,
             productType: p.productType,
             fulfillmentMethod: derivedFulfillment,
+            fbaStock: stockBuckets.fba,
+            fbmStock: stockBuckets.non,
             family: (p.familyJson as any) ?? null,
             workflowStage: (p.workflowStageJson as any) ?? null,
             version: p.version,
@@ -858,6 +861,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           parentId: p.parentId,
           productType: p.productType,
           fulfillmentMethod: derivedFulfillment,
+          fbaStock: stockBuckets.fba,
+          fbmStock: stockBuckets.non,
           family: p.family ?? null,
           workflowStage: p.workflowStage ?? null,
           version: p.version,
