@@ -30,6 +30,11 @@ import {
   useInvalidationChannel,
 } from '@/lib/sync/invalidation-channel'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import {
+  AutoRefreshSelect,
+  DensityToggle as SharedDensityToggle,
+  type AutoRefreshInterval,
+} from '@/app/_shared/grid-lens'
 import ProductDrawer from './_shared/ProductDrawer'
 import { parseFilters } from '@/lib/filters'
 import {
@@ -322,6 +327,17 @@ export default function ProductsWorkspace() {
       window.localStorage.setItem('products.density', density)
     } catch {}
   }, [density])
+
+  // Auto-refresh — opt-in interval polling on top of the 30s usePolledList
+  // baseline. Persists per-device so a user who set "5 min" keeps it.
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const n = Number(window.localStorage.getItem('products.autoRefreshMin'))
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('products.autoRefreshMin', String(autoRefreshMin)) } catch {}
+  }, [autoRefreshMin])
 
   // User-configurable optional lens tab order. Grid + Health are always
   // shown; the other 7 lenses start hidden and are added via the picker.
@@ -1091,6 +1107,16 @@ export default function ProductsWorkspace() {
             >
               <Plus size={12} /> New product
             </Link>
+            {lens === 'grid' && (
+              <>
+                <SharedDensityToggle density={density} onChange={setDensity} />
+                <AutoRefreshSelect
+                  value={autoRefreshMin}
+                  onChange={setAutoRefreshMin}
+                  onTick={() => fetchProducts()}
+                />
+              </>
+            )}
             {lens === 'grid' ? (
               <FreshnessIndicator
                 lastFetchedAt={productsFetchedAt}

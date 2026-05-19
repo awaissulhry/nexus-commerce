@@ -9,7 +9,8 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, type AutoRefreshInterval } from '@/app/_shared/grid-lens'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 import Link from 'next/link'
@@ -534,6 +535,17 @@ export default function StockWorkspace() {
   const [totalPages, setTotalPages] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<AutoRefreshInterval>(() => {
+    if (typeof window === 'undefined') return 0
+    const raw = window.localStorage.getItem('nexus-stock-autorefresh')
+    const n = Number(raw)
+    return (n === 5 || n === 15) ? n : 0
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('nexus-stock-autorefresh', String(autoRefreshMin))
+  }, [autoRefreshMin])
   const [drawerProductId, setDrawerProductId] = useState<string | null>(null)
   const [drawerIsParent, setDrawerIsParent] = useState(false)
   const [locations, setLocations] = useState<LocationSummary[]>([])
@@ -683,6 +695,7 @@ export default function StockWorkspace() {
       }
       setTotal(data.total ?? 0)
       setTotalPages(data.totalPages ?? 0)
+      setLastFetchedAt(Date.now())
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load stock')
     } finally {
@@ -1234,10 +1247,21 @@ export default function StockWorkspace() {
                 below the header. Header now scopes only to controls
                 that mutate this page's state. */}
             {syncStatus && <SyncIndicator status={syncStatus} />}
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={() => { fetchStock(); fetchSidecar() }}
+              loading={loading}
+              error={!!error}
+            />
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={() => { fetchStock(); fetchSidecar() }}
+            />
             <ViewToggle view={view} onChange={(v) => updateUrl({ view: v === 'table' ? undefined : v, page: undefined })} />
             {view === 'table' && (
               <>
-                <DensityToggle density={density} onChange={setDensity} />
+                <SharedDensityToggle density={density} onChange={setDensity} />
                 <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
               </>
             )}
@@ -2997,23 +3021,6 @@ function ReservePanel({
 // ─────────────────────────────────────────────────────────────────────
 // Polish (H.9) — density toggle, column picker, shortcuts help
 // ─────────────────────────────────────────────────────────────────────
-function DensityToggle({ density, onChange }: { density: Density; onChange: (d: Density) => void }) {
-  const order: Density[] = ['compact', 'comfortable', 'spacious']
-  const next = () => onChange(order[(order.indexOf(density) + 1) % order.length])
-  const icon = density === 'compact' ? Minimize2 : density === 'spacious' ? Maximize2 : Sliders
-  const Icon = icon
-  return (
-    <button
-      onClick={next}
-      className="h-11 w-11 sm:h-8 sm:w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
-      title={`Density: ${density}`}
-      aria-label={`Density: ${density}`}
-    >
-      <Icon size={12} />
-    </button>
-  )
-}
-
 // S.18 — header dropdown showing saved views. Operator clicks the
 // bookmark to open; clicking a row applies that view; the trash icon
 // deletes; "Save current view" triggers the save modal.

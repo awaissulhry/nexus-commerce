@@ -21,7 +21,14 @@ import {
   VirtualizedGrid as SharedVirtualizedGrid,
   SearchContext,
 } from '@/app/_shared/grid-lens/VirtualizedGrid'
-import { GridFooter, ProductIdentityCell, StockSplit } from '@/app/_shared/grid-lens'
+import {
+  GridFooter,
+  ProductIdentityCell,
+  StockSplit,
+  DensityToggle as SharedDensityToggle,
+  AutoRefreshSelect,
+  type AutoRefreshInterval,
+} from '@/app/_shared/grid-lens'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   MultiSelectChips,
@@ -910,12 +917,19 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
             </div>
           )}
           {lens === 'grid' && (
-            <FreshnessIndicator
-              lastFetchedAt={gridFetchedAt}
-              onRefresh={() => { fetchGrid(); fetchFacets() }}
-              loading={gridLoading}
-              error={!!gridError}
-            />
+            <>
+              <AutoRefreshSelect
+                value={autoRefreshMin}
+                onChange={setAutoRefreshMin}
+                onTick={() => { fetchGrid(); fetchFacets() }}
+              />
+              <FreshnessIndicator
+                lastFetchedAt={gridFetchedAt}
+                onRefresh={() => { fetchGrid(); fetchFacets() }}
+                loading={gridLoading}
+                error={!!gridError}
+              />
+            </>
           )}
           {lens !== 'grid' && (
             <button
@@ -1872,29 +1886,7 @@ function GridLens(props: {
           <Download size={12} /> Export CSV
         </button>
         {/* Density toggle — same three-segment control as /products */}
-        <div className="inline-flex items-center border border-slate-200 dark:border-slate-700 rounded overflow-hidden h-7 text-sm">
-          {(['compact', 'comfortable', 'spacious'] as const).map((d) => {
-            const Icon = d === 'compact' ? AlignJustify : d === 'comfortable' ? MenuIcon : Equal
-            const labelTitle = `${d.charAt(0).toUpperCase()}${d.slice(1)} row density`
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDensity(d)}
-                title={labelTitle}
-                aria-label={labelTitle}
-                aria-pressed={density === d}
-                className={`px-2 h-full inline-flex items-center justify-center ${
-                  density === d
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                    : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            )
-          })}
-        </div>
+        <SharedDensityToggle density={density} onChange={setDensity} />
         <div className="relative">
           <button
             onClick={() => setColumnPickerOpen(!columnPickerOpen)}
