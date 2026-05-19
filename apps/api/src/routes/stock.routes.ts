@@ -2675,11 +2675,18 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       const sl = await prisma.stockLevel.findUnique({
         where: { id },
-        select: { productId: true, variationId: true, locationId: true },
+        select: {
+          productId: true,
+          variationId: true,
+          locationId: true,
+          location: { select: { type: true } },
+        },
       })
       if (!sl) return reply.code(404).send({ error: 'StockLevel not found' })
 
       // Threshold-only update — no audit row, simple field write.
+      // Allowed on FBA locations: the reorder threshold is a local
+      // signal (when to reship), not a write to Amazon's inventory.
       if (body.reorderThreshold !== undefined) {
         const t = body.reorderThreshold
         if (t !== null && (!Number.isFinite(Number(t)) || Number(t) < 0)) {
@@ -2697,6 +2704,17 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const change = Number(body.change)
       if (!Number.isFinite(change) || change === 0) {
         return reply.code(400).send({ error: 'change must be a non-zero number, or pass reorderThreshold' })
+      }
+
+      // FBA stock is owned by Amazon: their warehouse is the source of
+      // truth. We can't write quantity directly — the operator would
+      // need a removal order via SP-API, or wait for an inbound shipment
+      // to land. Block the write here so optimistic UI never lies.
+      if (sl.location?.type === 'AMAZON_FBA') {
+        return reply.code(400).send({
+          error: 'FBA stock cannot be edited directly — Amazon is the source of truth. Use an inbound shipment or removal order instead.',
+          code: 'FBA_READ_ONLY',
+        })
       }
 
       const movement = await applyStockMovement({
@@ -2736,6 +2754,21 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       if (!body.toLocationId || !Array.isArray(body.items) || body.items.length === 0) {
         return reply.code(400).send({ error: 'toLocationId and items[] required' })
       }
+
+      // Look up source-location types in one go so we can refuse
+      // outbound transfers FROM an FBA location (Amazon owns that
+      // stock). Transferring INTO an FBA location stays allowed —
+      // that's the canonical "ship to FBA" flow.
+      const fromLocationIds = [...new Set(body.items.map((it) => it.fromLocationId).filter(Boolean))]
+      const fromLocationTypes = new Map<string, string>()
+      if (fromLocationIds.length > 0) {
+        const rows = await prisma.stockLocation.findMany({
+          where: { id: { in: fromLocationIds } },
+          select: { id: true, type: true },
+        })
+        for (const r of rows) fromLocationTypes.set(r.id, r.type)
+      }
+
       let succeeded = 0
       let failed = 0
       const errors: Array<{ productId: string; fromLocationId: string; error: string }> = []
@@ -2749,6 +2782,15 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         if (it.fromLocationId === body.toLocationId) {
           failed++
           errors.push({ productId: it.productId, fromLocationId: it.fromLocationId, error: 'from === to' })
+          continue
+        }
+        if (fromLocationTypes.get(it.fromLocationId) === 'AMAZON_FBA') {
+          failed++
+          errors.push({
+            productId: it.productId,
+            fromLocationId: it.fromLocationId,
+            error: 'FBA stock cannot be transferred out — use an Amazon removal order',
+          })
           continue
         }
         try {
@@ -2807,9 +2849,15 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       const location = await prisma.stockLocation.findUnique({
         where: { code: locationCode },
-        select: { id: true, code: true },
+        select: { id: true, code: true, type: true },
       })
       if (!location) return reply.code(404).send({ error: `Location ${locationCode} not found` })
+      if (location.type === 'AMAZON_FBA') {
+        return reply.code(400).send({
+          error: 'FBA stock cannot be edited via bulk import — Amazon is the source of truth.',
+          code: 'FBA_READ_ONLY',
+        })
+      }
 
       // Resolve every SKU in one batched query.
       const skus = Array.from(new Set(items.map((it) => it.sku)))
