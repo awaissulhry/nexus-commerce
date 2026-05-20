@@ -5,12 +5,13 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Eye, Loader2 } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
+import ChannelPreview from '../ChannelPreview'
 import {
   useAmazonImages,
   AMAZON_MARKETPLACES,
@@ -52,6 +53,7 @@ const MKT_LABELS: Record<string, string> = {
 
 export default function AmazonPanel({
   productId,
+  product,
   masterImages,
   listingImages,
   variants,
@@ -75,6 +77,7 @@ export default function AmazonPanel({
   const noAxisData = variants.length > 0 && availableAxes.length === 0
   const [slotUploading, setSlotUploading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const amazon = useAmazonImages({
     productId,
     variants,
@@ -281,6 +284,33 @@ export default function AmazonPanel({
         onCopyToShopifyAssignments={onCopyToShopifyAssignments}
         onToast={onToast}
       />
+
+      {/* IR.5.3 — Buyer preview */}
+      <div className="border-t border-slate-100 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setPreviewOpen((p) => !p)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+          aria-expanded={previewOpen}
+        >
+          <Eye className="w-3.5 h-3.5 text-slate-400" />
+          <span className="font-medium">Buyer preview</span>
+          <span className="text-slate-400 ml-1">— Amazon detail page as a customer would see it</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', previewOpen && 'rotate-180')} />
+        </button>
+        {previewOpen && (
+          <div className="px-4 pb-4">
+            <ChannelPreview
+              platform="AMAZON"
+              product={product}
+              masterImages={masterImages}
+              listingImages={listingImages}
+              variants={variants}
+              marketplace={amazon.activeMarketplace === 'ALL' ? undefined : amazon.activeMarketplace}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Image picker modal */}
       {amazon.imagePicker && (
