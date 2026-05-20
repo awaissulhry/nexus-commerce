@@ -48,6 +48,15 @@ import {
   GitCompare,
   Inbox,
   Trash2,
+  AlertTriangle,
+  Bookmark,
+  Calculator,
+  Download,
+  MonitorPlay,
+  Receipt,
+  Sparkles,
+  TableProperties,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -643,12 +652,128 @@ export default function AppSidebar() {
             label="Pricing"
             active={pathname.startsWith('/pricing')}
           />
-          <NavItem
+          <NavParentItem
+            storageKey="insights"
             href="/insights"
             icon={BarChart3}
             label="Insights"
-            active={pathname.startsWith('/insights')}
-          />
+            active={pathname === '/insights'}
+            childRoutes={[
+              '/insights/sales',
+              '/insights/profit',
+              '/insights/advertising',
+              '/insights/products',
+              '/insights/customers',
+              '/insights/inventory',
+              '/insights/fiscal',
+              '/insights/brief',
+              '/insights/anomalies',
+              '/insights/scenarios',
+              '/insights/builder',
+              '/insights/exports',
+              '/insights/live',
+              '/insights/notebook',
+            ]}
+          >
+            <NavItem
+              href="/insights/sales"
+              icon={ShoppingCart}
+              label="Sales"
+              nested
+              active={pathname === '/insights/sales'}
+            />
+            <NavItem
+              href="/insights/profit"
+              icon={Receipt}
+              label="Profit & cost"
+              nested
+              active={pathname === '/insights/profit'}
+            />
+            <NavItem
+              href="/insights/advertising"
+              icon={Megaphone}
+              label="Advertising"
+              nested
+              active={pathname === '/insights/advertising'}
+            />
+            <NavItem
+              href="/insights/products"
+              icon={Package}
+              label="Products"
+              nested
+              active={pathname === '/insights/products'}
+            />
+            <NavItem
+              href="/insights/customers"
+              icon={Users}
+              label="Customers"
+              nested
+              active={pathname === '/insights/customers'}
+            />
+            <NavItem
+              href="/insights/inventory"
+              icon={Truck}
+              label="Inventory"
+              nested
+              active={pathname === '/insights/inventory'}
+            />
+            <NavItem
+              href="/insights/fiscal"
+              icon={Receipt}
+              label="Italian fiscal"
+              nested
+              active={pathname === '/insights/fiscal'}
+            />
+            <NavItem
+              href="/insights/brief"
+              icon={Sparkles}
+              label="AI brief"
+              nested
+              active={pathname === '/insights/brief'}
+            />
+            <NavItem
+              href="/insights/anomalies"
+              icon={AlertTriangle}
+              label="Anomalies"
+              nested
+              active={pathname === '/insights/anomalies'}
+            />
+            <NavItem
+              href="/insights/scenarios"
+              icon={Calculator}
+              label="Scenarios"
+              nested
+              active={pathname === '/insights/scenarios'}
+            />
+            <NavItem
+              href="/insights/builder"
+              icon={TableProperties}
+              label="Report builder"
+              nested
+              active={pathname === '/insights/builder'}
+            />
+            <NavItem
+              href="/insights/exports"
+              icon={Download}
+              label="Export hub"
+              nested
+              active={pathname === '/insights/exports'}
+            />
+            <NavItem
+              href="/insights/live"
+              icon={MonitorPlay}
+              label="Live monitor"
+              nested
+              active={pathname === '/insights/live'}
+            />
+            <NavItem
+              href="/insights/notebook"
+              icon={Bookmark}
+              label="Notebook"
+              nested
+              active={pathname === '/insights/notebook'}
+            />
+          </NavParentItem>
           <NavItem
             href="/dashboard/overview"
             icon={BarChart3}
