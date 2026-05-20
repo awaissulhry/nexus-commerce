@@ -58,7 +58,10 @@ const PLATFORM_RULES: Record<string, PlatformRules> = {
   },
   EBAY: {
     minImages: 0, // technically optional but conversion suffers
-    maxImages: 12,
+    // 24 = eBay PictureDetails gallery max for fixed-price listings (since 2017).
+    // Per-variation sets (VariationSpecificPictureSet) are limited to 12 each but
+    // that's a separate axis not enforced by this rule.
+    maxImages: 24,
     minDimensionPx: 500,
     warnings: [
       'eBay strongly recommends at least 3 images for buyer trust.',
