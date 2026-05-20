@@ -11,7 +11,6 @@
 // apply SET_FIXED / SET_PERCENT_DISCOUNT / CLEAR, snapshots refresh.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import {
   AlertCircle,
   AlertTriangle,
@@ -32,25 +31,24 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  FilterPopover,
+  GridToolbar,
   KeyboardShortcutsModal,
+  KpiStrip as SharedKpiStrip,
   ProductIdentityCell,
   VirtualizedGrid,
   type AutoRefreshInterval,
   type Density,
+  type FilterDimension,
   type GridLensColumn,
   type GridLensRow,
+  type KpiTileSpec,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
 import { Card } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody } from '@/components/ui/Modal'
-import {
-  MultiSelectChips,
-  ACTIVE_CHANNELS_OPTIONS,
-  ACTIVE_MARKETPLACES_OPTIONS,
-} from '@/components/ui/MultiSelectChips'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import RepricerStatusBanner from './_components/RepricerStatusBanner'
@@ -510,6 +508,164 @@ export default function PricingMatrixClient() {
     setDrawerRow(snap)
   }, [])
 
+  // P.E — shared FilterPopover dimensions. Matches /products by
+  // converting the bespoke MultiSelectChips + native <select> +
+  // checkbox into a single Filter chip with reorderable cards.
+  const ACTIVE_CHANNELS = [
+    { value: 'AMAZON',  label: 'Amazon' },
+    { value: 'EBAY',    label: 'eBay' },
+    { value: 'SHOPIFY', label: 'Shopify' },
+  ]
+  const ACTIVE_MARKETPLACES = [
+    { value: 'AMAZON_IT', label: 'Amazon IT' },
+    { value: 'AMAZON_DE', label: 'Amazon DE' },
+    { value: 'AMAZON_FR', label: 'Amazon FR' },
+    { value: 'AMAZON_ES', label: 'Amazon ES' },
+    { value: 'AMAZON_UK', label: 'Amazon UK' },
+    { value: 'EBAY_IT',   label: 'eBay IT' },
+    { value: 'EBAY_DE',   label: 'eBay DE' },
+  ]
+  const SOURCE_OPTIONS = [
+    { value: 'SCHEDULED_SALE',   label: 'Sale' },
+    { value: 'OFFER_OVERRIDE',   label: 'Offer' },
+    { value: 'CHANNEL_OVERRIDE', label: 'Channel override' },
+    { value: 'CHANNEL_RULE',     label: 'Channel rule' },
+    { value: 'PRICING_RULE',     label: 'Rule' },
+    { value: 'MASTER_INHERIT',   label: 'Master' },
+    { value: 'FALLBACK',         label: 'Fallback' },
+  ]
+
+  const filterDimensions: FilterDimension[] = [
+    {
+      key: 'channel',
+      label: 'Channel',
+      type: 'single-select',
+      options: ACTIVE_CHANNELS,
+      value: channel || null,
+      onChange: (next) => { setChannel(next ?? ''); setPage(0) },
+    },
+    {
+      key: 'marketplace',
+      label: 'Marketplace',
+      type: 'single-select',
+      options: ACTIVE_MARKETPLACES,
+      value: marketplace || null,
+      onChange: (next) => { setMarketplace(next ?? ''); setPage(0) },
+    },
+    {
+      key: 'source',
+      label: 'Source',
+      type: 'single-select',
+      options: SOURCE_OPTIONS,
+      value: sourceFilter || null,
+      onChange: (next) => { setSourceFilter(next ?? ''); setPage(0) },
+    },
+    {
+      key: 'clamped',
+      label: 'Clamped only',
+      type: 'toggle',
+      value: clampedOnly,
+      onChange: (next) => { setClampedOnly(next); setPage(0) },
+    },
+  ]
+
+  const activeFilterCount =
+    (channel ? 1 : 0) + (marketplace ? 1 : 0) +
+    (sourceFilter ? 1 : 0) + (clampedOnly ? 1 : 0)
+
+  const clearAllFilters = () => {
+    setChannel('')
+    setMarketplace('')
+    setSourceFilter('')
+    setClampedOnly(false)
+    setPage(0)
+  }
+
+  // Persisted dimension order — mirrors /products' filterOrder.
+  const [filterOrder, setFilterOrder] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = window.localStorage.getItem('pricing.filterOrder')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch { return [] }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem('pricing.filterOrder', JSON.stringify(filterOrder)) } catch {}
+  }, [filterOrder])
+
+  // P.E — KPI tile spec built from the existing KpiResponse shape.
+  // Drift + Alerts deep-link to /pricing/alerts; On Sale → /pricing/promotions.
+  // Snapshot-age + Buy Box are read-only.
+  const kpiTiles = useMemo((): KpiTileSpec[] => {
+    const stale = kpis?.snapshots.oldestAgeHours
+    const staleTone: KpiTileSpec['tone'] =
+      stale == null ? 'slate' :
+      stale <= 1   ? 'emerald' :
+      stale <= 4   ? 'amber'   : 'rose'
+    const staleLabel = stale == null ? '—' : stale < 1 ? '<1h' : `${Math.round(stale)}h`
+
+    const wr = kpis?.buyBox.winRatePct
+    const buyBoxTone: KpiTileSpec['tone'] =
+      wr == null ? 'slate' :
+      wr <  50   ? 'rose'  :
+      wr <  80   ? 'amber' : 'emerald'
+    const buyBoxLabel = wr == null ? '—' : `${wr.toFixed(1)}%`
+    const buyBoxDetail = kpis && kpis.buyBox.observations > 0
+      ? t('pricing.kpi.buyBoxHint', { wins: kpis.buyBox.ourWins, obs: kpis.buyBox.observations })
+      : t('pricing.kpi.buyBoxHintEmpty')
+
+    return [
+      {
+        icon: TrendingDown,
+        label: t('pricing.kpi.drift'),
+        value: String(kpis?.drift ?? '—'),
+        detail: t('pricing.kpi.driftHint'),
+        tone: kpis && kpis.drift > 0 ? 'rose' : 'slate',
+        onClick: () => { window.location.href = '/pricing/alerts' },
+      },
+      {
+        icon: AlertTriangle,
+        label: t('pricing.kpi.alerts'),
+        value: String(kpis?.alerts ?? '—'),
+        detail: t('pricing.kpi.alertsHint'),
+        tone: kpis && kpis.alerts > 0 ? 'amber' : 'slate',
+        onClick: () => { window.location.href = '/pricing/alerts' },
+      },
+      {
+        icon: Tag,
+        label: t('pricing.kpi.onSale'),
+        value: String(kpis?.salesActive ?? '—'),
+        detail: t('pricing.kpi.onSaleHint'),
+        tone: kpis && kpis.salesActive > 0 ? 'violet' : 'slate',
+        onClick: () => { window.location.href = '/pricing/promotions' },
+      },
+      {
+        icon: Clock,
+        label: t('pricing.kpi.snapshotAge'),
+        value: staleLabel,
+        detail: t('pricing.kpi.snapshotAgeHint'),
+        tone: staleTone,
+      },
+      {
+        icon: AlertCircle,
+        label: t('pricing.kpi.noCost'),
+        value: String(kpis?.marginAtRisk ?? '—'),
+        detail: t('pricing.kpi.noCostHint'),
+        tone: kpis && kpis.marginAtRisk > 0 ? 'amber' : 'slate',
+      },
+      {
+        icon: Trophy,
+        label: t('pricing.kpi.buyBox'),
+        value: buyBoxLabel,
+        detail: buyBoxDetail,
+        tone: buyBoxTone,
+      },
+    ]
+  }, [kpis, t])
+
+  // Search input ref for the `/` keyboard shortcut.
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
   const applyBulkOverride = async () => {
     if (selected.size === 0) return
     setBulkApplying(true)
@@ -544,119 +700,90 @@ export default function PricingMatrixClient() {
 
   return (
     <div className="space-y-4">
-      {/* B.1 — KPI strip */}
-      <KpiStrip kpis={kpis} />
+      {/* P.E — Shared KpiStrip. Six tiles match the existing semantics
+          (drift, alerts, on-sale, snapshot age, no-cost, buy-box) but
+          render with the same tone palette + responsive grid as
+          /products + /fulfillment/stock. */}
+      <SharedKpiStrip tiles={kpiTiles} className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" />
 
       {/* UI.7 — Repricer status banner */}
       <RepricerStatusBanner />
 
-      {/* Filter bar */}
-      <Card>
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* P.E — Canonical GridToolbar (matches /products). Search +
+          FilterPopover + density/auto-refresh/freshness in one row. */}
+      <GridToolbar
+        searchSlot={
           <div className="relative flex-1 min-w-[240px] max-w-sm">
             <Search
-              size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none"
             />
-            <Input
+            <input
+              ref={searchInputRef}
+              type="text"
               placeholder={t('pricing.search.placeholder')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
                 setPage(0)
               }}
-              className="pl-7"
+              className="w-full h-8 pl-8 pr-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
             />
           </div>
-          {/* U.67 — channel + marketplace filters migrated from native
-              <select> to the shared MultiSelectChips primitive. Single
-              mode because the pricing matrix backend filters on a
-              single (channel, marketplace) pair per request. */}
-          <MultiSelectChips
-            label="Channel"
-            mode="single"
-            options={ACTIVE_CHANNELS_OPTIONS}
-            value={channel ? [channel] : []}
-            onChange={(next) => {
-              setChannel(next[0] ?? '')
-              setPage(0)
-            }}
+        }
+        filter={
+          <FilterPopover
+            dimensions={filterDimensions}
+            onClearAll={clearAllFilters}
+            activeCount={activeFilterCount}
+            order={filterOrder}
+            onOrderChange={setFilterOrder}
+            onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
+            openEventName="nexus:pricing-open-filter-menu"
           />
-          <MultiSelectChips
-            label="Market"
-            mode="single"
-            options={ACTIVE_MARKETPLACES_OPTIONS}
-            value={marketplace ? [marketplace] : []}
-            onChange={(next) => {
-              setMarketplace(next[0] ?? '')
-              setPage(0)
-            }}
+        }
+        density={<SharedDensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => { fetchData(); fetchKpis() }}
           />
-          <select
-            value={sourceFilter}
-            onChange={(e) => {
-              setSourceFilter(e.target.value)
-              setPage(0)
-            }}
-            className="h-8 px-2 border border-slate-200 dark:border-slate-800 rounded-md text-base bg-white dark:bg-slate-900"
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+            error={!!error}
+          />
+        }
+        shortcuts={
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
           >
-            <option value="">{t('pricing.filter.allSources')}</option>
-            <option value="SCHEDULED_SALE">{t('pricing.source.SCHEDULED_SALE')}</option>
-            <option value="OFFER_OVERRIDE">{t('pricing.source.OFFER_OVERRIDE')}</option>
-            <option value="CHANNEL_OVERRIDE">{t('pricing.source.CHANNEL_OVERRIDE')}</option>
-            <option value="CHANNEL_RULE">{t('pricing.source.CHANNEL_RULE')}</option>
-            <option value="PRICING_RULE">{t('pricing.source.PRICING_RULE')}</option>
-            <option value="MASTER_INHERIT">{t('pricing.source.MASTER_INHERIT')}</option>
-            <option value="FALLBACK">{t('pricing.source.FALLBACK')}</option>
-          </select>
-          <label className="inline-flex items-center gap-1.5 text-base text-slate-700 dark:text-slate-300 ml-2">
-            <input
-              type="checkbox"
-              checked={clampedOnly}
-              onChange={(e) => {
-                setClampedOnly(e.target.checked)
-                setPage(0)
-              }}
-            />
-            {t('pricing.filter.clampedOnly')}
-          </label>
-          <div className="ml-auto flex items-center gap-2">
-            <SharedDensityToggle density={density} onChange={setDensity} />
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={() => { fetchData(); fetchKpis() }}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchData}
-              loading={loading}
-              error={!!error}
-            />
-            <button
-              type="button"
-              onClick={() => setShortcutsOpen(true)}
-              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-              title="Keyboard shortcuts (?)"
-              aria-label="Keyboard shortcuts"
-            >
-              <Keyboard size={12} />
-            </button>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={refreshAll}
-              loading={refreshing}
-              disabled={refreshing}
-              icon={refreshing ? null : <Zap size={12} />}
-            >
-              {refreshing
-                ? t('pricing.action.recomputing')
-                : t('pricing.action.recomputeAll')}
-            </Button>
-          </div>
-        </div>
-      </Card>
+            <Keyboard size={12} />
+          </button>
+        }
+        trailingSlot={
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={refreshAll}
+            loading={refreshing}
+            disabled={refreshing}
+            icon={refreshing ? null : <Zap size={12} />}
+          >
+            {refreshing
+              ? t('pricing.action.recomputing')
+              : t('pricing.action.recomputeAll')}
+          </Button>
+        }
+      />
 
       {/* Bulk action bar — Toast handles success/error feedback so the bar
           stays minimal: count + mode + value + Apply + Deselect. */}
@@ -1367,143 +1494,5 @@ function Item({
   )
 }
 
-// B.1 + F.1.b + H.1 — KPI strip. Six tiles, dense Salesforce/Airtable style
-// (per the visibility-over-minimalism feedback memory). Each tile shows the
-// count + a one-word label + a hint sentence. Drift + Alerts deep-link to
-// /pricing/alerts; On sale → /pricing/promotions; the rest are read-only.
-// Labels + hints are i18n'd; numerals stay locale-agnostic.
-function KpiStrip({ kpis }: { kpis: KpiResponse | null }) {
-  const { t } = useTranslations()
-  // Snapshot age: green ≤1h (cron just ran), amber ≤4h, rose >4h.
-  const stale = kpis?.snapshots.oldestAgeHours
-  const staleTone =
-    stale == null
-      ? 'slate'
-      : stale <= 1
-      ? 'emerald'
-      : stale <= 4
-      ? 'amber'
-      : 'rose'
-  const staleLabel =
-    stale == null ? '—' : stale < 1 ? '<1h' : `${Math.round(stale)}h`
-
-  // Buy Box: rose <50%, amber <80%, emerald ≥80%. Slate when no observations
-  // yet (sp-api creds missing OR cron hasn't run since F.1 deploy).
-  const wr = kpis?.buyBox.winRatePct
-  const buyBoxTone =
-    wr == null
-      ? 'slate'
-      : wr < 50
-      ? 'rose'
-      : wr < 80
-      ? 'amber'
-      : 'emerald'
-  const buyBoxLabel =
-    wr == null
-      ? '—'
-      : `${wr.toFixed(1)}%`
-  const buyBoxHint =
-    kpis && kpis.buyBox.observations > 0
-      ? t('pricing.kpi.buyBoxHint', {
-          wins: kpis.buyBox.ourWins,
-          obs: kpis.buyBox.observations,
-        })
-      : t('pricing.kpi.buyBoxHintEmpty')
-
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-      <KpiTile
-        href="/pricing/alerts"
-        icon={TrendingDown}
-        value={kpis?.drift ?? '—'}
-        label={t('pricing.kpi.drift')}
-        tone={kpis && kpis.drift > 0 ? 'rose' : 'slate'}
-        hint={t('pricing.kpi.driftHint')}
-      />
-      <KpiTile
-        href="/pricing/alerts"
-        icon={AlertTriangle}
-        value={kpis?.alerts ?? '—'}
-        label={t('pricing.kpi.alerts')}
-        tone={kpis && kpis.alerts > 0 ? 'amber' : 'slate'}
-        hint={t('pricing.kpi.alertsHint')}
-      />
-      <KpiTile
-        href="/pricing/promotions"
-        icon={Tag}
-        value={kpis?.salesActive ?? '—'}
-        label={t('pricing.kpi.onSale')}
-        tone={kpis && kpis.salesActive > 0 ? 'pink' : 'slate'}
-        hint={t('pricing.kpi.onSaleHint')}
-      />
-      <KpiTile
-        icon={Clock}
-        value={staleLabel}
-        label={t('pricing.kpi.snapshotAge')}
-        tone={staleTone}
-        hint={t('pricing.kpi.snapshotAgeHint')}
-      />
-      <KpiTile
-        icon={AlertCircle}
-        value={kpis?.marginAtRisk ?? '—'}
-        label={t('pricing.kpi.noCost')}
-        tone={kpis && kpis.marginAtRisk > 0 ? 'amber' : 'slate'}
-        hint={t('pricing.kpi.noCostHint')}
-      />
-      <KpiTile
-        icon={Trophy}
-        value={buyBoxLabel}
-        label={t('pricing.kpi.buyBox')}
-        tone={buyBoxTone}
-        hint={buyBoxHint}
-      />
-    </div>
-  )
-}
-
-function KpiTile({
-  href,
-  icon: Icon,
-  value,
-  label,
-  tone,
-  hint,
-}: {
-  href?: string
-  icon: typeof TrendingDown
-  value: number | string
-  label: string
-  tone: 'rose' | 'amber' | 'pink' | 'emerald' | 'slate'
-  hint: string
-}) {
-  const toneClasses: Record<typeof tone, string> = {
-    rose: 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300',
-    amber: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
-    pink: 'border-pink-200 dark:border-pink-900 bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300',
-    emerald: 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
-    slate: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400',
-  }
-  const inner = (
-    <div
-      className={cn(
-        'border rounded-md px-3 py-2 flex items-start gap-2',
-        toneClasses[tone],
-        href && 'hover:shadow-sm transition-shadow cursor-pointer',
-      )}
-    >
-      <Icon size={14} className="mt-0.5 flex-shrink-0" />
-      <div className="min-w-0">
-        <div className="text-[20px] leading-tight font-semibold tabular-nums">
-          {value}
-        </div>
-        <div className="text-base font-medium text-slate-700 dark:text-slate-300 leading-tight">
-          {label}
-        </div>
-        <div className="text-sm text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate">
-          {hint}
-        </div>
-      </div>
-    </div>
-  )
-  return href ? <Link href={href}>{inner}</Link> : inner
-}
+// Old local KpiStrip + KpiTile removed in P.E — replaced by the shared
+// grid-lens KpiStrip with the kpiTiles spec built in the component body.
