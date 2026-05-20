@@ -46,6 +46,7 @@ import {
   computeFiscalReport,
   fiscalReportToCsv,
 } from '../services/insights/insights-fiscal.service.js'
+import { computeAnomalies } from '../services/insights/insights-anomalies.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -298,6 +299,21 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  fastify.get('/insights/anomalies', async (request, reply) => {
+    reply.header(
+      'Cache-Control',
+      'private, max-age=30, stale-while-revalidate=60',
+    )
+    const filters = parseInsightsFilters(request)
+    try {
+      return await computeAnomalies(filters)
+    } catch (err) {
+      request.log.error({ err }, 'insights.anomalies failed')
+      reply.code(500)
+      return { error: 'insights_anomalies_failed' }
+    }
+  })
 
   fastify.get('/insights/what-changed', async (request, reply) => {
     reply.header(
