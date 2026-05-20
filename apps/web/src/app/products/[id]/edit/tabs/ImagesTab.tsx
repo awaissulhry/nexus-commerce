@@ -23,8 +23,10 @@ import AmazonPanel from './images/amazon/AmazonPanel'
 import EbayPanel from './images/ebay/EbayPanel'
 import ShopifyPanel from './images/shopify/ShopifyPanel'
 import LightboxModal from './images/LightboxModal'
+import ImageEditorModal from './images/ImageEditorModal'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
+import type { ProductImage } from './images/types'
 import type { ChannelTab } from './images/types'
 
 interface Props {
@@ -43,6 +45,7 @@ const CHANNEL_TABS: { key: ChannelTab; label: string }[] = [
 export default function ImagesTab({ product, discardSignal, onDirtyChange }: Props) {
   const [activeChannel, setActiveChannel] = useState<ChannelTab>('master')
   const [toast, setToast] = useState<string | null>(null)
+  const [editorImage, setEditorImage] = useState<ProductImage | null>(null)
   const lightbox = useLightbox()
 
   const workspace = useImagesWorkspace(product.id, discardSignal, onDirtyChange)
@@ -412,8 +415,24 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           listingImages={listing}
           productId={product.id}
           onMasterImageUpdated={() => { void workspace.reload() }}
+          onEditMaster={(img) => setEditorImage(img)}
           onClose={lightbox.close}
           onNavigate={lightbox.navigate}
+        />
+      )}
+
+      {/* ── Image editor modal (IR.4) ────────────────────────────────── */}
+      {editorImage && (
+        <ImageEditorModal
+          productId={product.id}
+          image={editorImage}
+          onClose={() => setEditorImage(null)}
+          onSaved={() => {
+            setEditorImage(null)
+            lightbox.close()
+            showToast('Derivative saved')
+            void workspace.reload()
+          }}
         />
       )}
     </div>

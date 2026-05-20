@@ -14,7 +14,7 @@
 //   - inline alt + type edit (IR.3.5 — master only)
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2, Pencil, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Crop as CropIcon, Loader2, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
@@ -37,6 +37,8 @@ interface Props {
   /** Called after a successful alt/type save so the parent can update
    *  its local images list without a full workspace reload. */
   onMasterImageUpdated?: (updated: ProductImage) => void
+  /** IR.4.4 — open the in-app image editor for a master ProductImage. */
+  onEditMaster?: (img: ProductImage) => void
   onClose: () => void
   onNavigate: (dir: 'prev' | 'next') => void
 }
@@ -59,6 +61,7 @@ export default function LightboxModal({
   listingImages,
   productId,
   onMasterImageUpdated,
+  onEditMaster,
   onClose,
   onNavigate,
 }: Props) {
@@ -242,13 +245,28 @@ export default function LightboxModal({
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Master attributes</h4>
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  <Pencil className="w-3 h-3" /> Edit
-                </button>
+                <div className="flex items-center gap-2">
+                  {onEditMaster && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const full = masterImages.find((m) => m.id === image.id)
+                        if (full) onEditMaster(full)
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                      title="Crop, rotate, or flip — saves as a new derivative"
+                    >
+                      <CropIcon className="w-3 h-3" /> Crop &amp; rotate
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                </div>
               </div>
               <dl className="text-xs grid grid-cols-[60px_1fr] gap-y-0.5 text-slate-700 dark:text-slate-200">
                 <dt className="text-slate-500 dark:text-slate-400">Type</dt>
