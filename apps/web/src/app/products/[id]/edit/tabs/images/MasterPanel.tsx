@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CheckSquare,
   Image as ImageIcon,
+  Library,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -346,6 +347,19 @@ export default function MasterPanel({
               {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
               Upload
             </Button>
+            {onOpenDamPicker && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={onOpenDamPicker}
+                disabled={uploading}
+                title="Pull an asset from /marketing/content's library"
+              >
+                <Library className="w-3.5 h-3.5" />
+                From library
+              </Button>
+            )}
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={handleFileInput} />
           </div>
         </div>
