@@ -1,22 +1,28 @@
 'use client'
 
-// IR.3.1 — Lightbox modal.
+// IR.3.1–IR.3.5 — Lightbox modal.
 //
 // Full-screen image preview with a 320-px right-side detail drawer.
 // Keyboard: Esc closes, ← / → walk the siblings list the opener
-// passed in, F (later) will toggle pure-fullscreen.
+// passed in.
 //
-// The drawer content is intentionally minimal in this commit — just
-// the asset metadata and any "used in" cross-channel back-references
-// derivable from the workspace payload the parent already holds.
-// Inline alt/type edit + delete + per-channel validation land in
-// IR.3.4 / IR.3.5.
+// Drawer surfaces:
+//   - asset metadata (dim/format/size)
+//   - alt text (master) or channel placement (listing) + publish status
+//   - "used in N channels" back-references (master)
+//   - "derived from master" forward-reference (listing)
+//   - inline alt + type edit (IR.3.5 — master only)
 
-import { useEffect } from 'react'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Loader2, Pencil, X } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
+import { beFetch } from './api'
 import type { LightboxState } from './useLightbox'
 import type { ListingImage, ProductImage } from './types'
+
+const MASTER_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
+type MasterType = typeof MASTER_TYPES[number]
 
 interface Props {
   state: LightboxState
@@ -25,6 +31,12 @@ interface Props {
   // sourceProductImageId === current master image id).
   masterImages: ProductImage[]
   listingImages: ListingImage[]
+  // IR.3.5 — required for inline alt/type edit on master images.
+  // Identifies which product the PATCH endpoint should target.
+  productId: string
+  /** Called after a successful alt/type save so the parent can update
+   *  its local images list without a full workspace reload. */
+  onMasterImageUpdated?: (updated: ProductImage) => void
   onClose: () => void
   onNavigate: (dir: 'prev' | 'next') => void
 }
@@ -45,21 +57,68 @@ export default function LightboxModal({
   state,
   masterImages,
   listingImages,
+  productId,
+  onMasterImageUpdated,
   onClose,
   onNavigate,
 }: Props) {
   const { image, siblings } = state
 
-  // Esc + ← / → keyboard handling.
+  // IR.3.5 — inline edit state for alt + type on master images.
+  // Reset whenever the focused image changes.
+  const [editing, setEditing] = useState(false)
+  const [editAlt, setEditAlt] = useState('')
+  const [editType, setEditType] = useState<MasterType>('ALT')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setEditing(false)
+    setEditError(null)
+    setEditAlt(image.alt ?? '')
+    setEditType((image.type as MasterType) ?? 'ALT')
+  }, [image.id, image.alt, image.type])
+
+  async function saveEdit() {
+    if (image.kind !== 'master') return
+    setSavingEdit(true)
+    setEditError(null)
+    try {
+      const res = await beFetch(`/api/products/${productId}/images/${image.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alt: editAlt || null, type: editType }),
+      })
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`)
+      const updated: ProductImage = await res.json()
+      onMasterImageUpdated?.(updated)
+      setEditing(false)
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  // Esc + ← / → keyboard handling. Esc cancels edit mode if open; only
+  // closes the modal when not editing so the operator doesn't lose
+  // pending alt text by mistake.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (editing) setEditing(false)
+        else onClose()
+        return
+      }
+      // Don't navigate siblings mid-edit.
+      if (editing) return
       if (e.key === 'ArrowLeft')  { e.preventDefault(); onNavigate('prev'); return }
       if (e.key === 'ArrowRight') { e.preventDefault(); onNavigate('next'); return }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, onNavigate])
+  }, [onClose, onNavigate, editing])
 
   // Listing rows that came from the current master image (or vice versa).
   const usedIn = image.kind === 'master'
@@ -179,10 +238,65 @@ export default function LightboxModal({
             </div>
           )}
 
-          {image.kind === 'master' && image.alt && (
-            <div>
-              <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Alt text</h4>
-              <p className="text-xs text-slate-700 dark:text-slate-200">{image.alt}</p>
+          {image.kind === 'master' && !editing && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Master attributes</h4>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+              </div>
+              <dl className="text-xs grid grid-cols-[60px_1fr] gap-y-0.5 text-slate-700 dark:text-slate-200">
+                <dt className="text-slate-500 dark:text-slate-400">Type</dt>
+                <dd>{image.type ?? '—'}</dd>
+                <dt className="text-slate-500 dark:text-slate-400">Alt</dt>
+                <dd className="break-words">{image.alt || <span className="text-slate-400 italic">not set</span>}</dd>
+              </dl>
+            </div>
+          )}
+
+          {image.kind === 'master' && editing && (
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Master attributes</h4>
+              <label className="block">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Type</span>
+                <select
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value as MasterType)}
+                  disabled={savingEdit}
+                  className="mt-1 w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                >
+                  {MASTER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Alt text</span>
+                <textarea
+                  value={editAlt}
+                  onChange={(e) => setEditAlt(e.target.value)}
+                  disabled={savingEdit}
+                  rows={3}
+                  placeholder="Describe the image for screen readers + SEO…"
+                  className="mt-1 w-full text-xs border border-slate-200 dark:border-slate-700 rounded px-2 py-1 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit() }}
+                />
+              </label>
+              {editError && (
+                <p className="text-[11px] text-red-600 dark:text-red-400">{editError}</p>
+              )}
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveEdit} disabled={savingEdit} className="text-xs h-7 gap-1">
+                  {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={savingEdit} className="text-xs h-7">
+                  Cancel
+                </Button>
+              </div>
             </div>
           )}
 

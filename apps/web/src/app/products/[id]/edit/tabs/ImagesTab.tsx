@@ -410,6 +410,8 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           state={lightbox.state}
           masterImages={master}
           listingImages={listing}
+          productId={product.id}
+          onMasterImageUpdated={() => { void workspace.reload() }}
           onClose={lightbox.close}
           onNavigate={lightbox.navigate}
         />
