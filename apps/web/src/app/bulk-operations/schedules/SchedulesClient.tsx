@@ -19,12 +19,13 @@ import {
   Pause,
   Play,
   PlayCircle,
-  RefreshCw,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -90,6 +91,8 @@ export default function SchedulesClient() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [tickRunning, setTickRunning] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchSchedules = useCallback(async () => {
     try {
@@ -104,6 +107,7 @@ export default function SchedulesClient() {
       const data = await res.json()
       setSchedules(Array.isArray(data.schedules) ? data.schedules : [])
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -217,10 +221,16 @@ export default function SchedulesClient() {
               `${grouped.paused.length} paused · ${grouped.exhausted.length} exhausted`}
         </div>
         <div className="ml-auto flex items-center gap-1.5">
-          <Button variant="secondary" size="sm" onClick={fetchSchedules} disabled={loading}>
-            <RefreshCw className="w-3 h-3 mr-1" />
-            Reload
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchSchedules}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchSchedules}
+            loading={loading}
+          />
           <Button
             variant="primary"
             size="sm"

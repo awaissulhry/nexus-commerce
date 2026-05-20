@@ -18,12 +18,13 @@ import {
   Ban,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { Skeleton } from '@/components/ui/Skeleton'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -750,6 +751,8 @@ export default function HistoryClient() {
   const [jobs, setJobs] = useState<JobRow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -765,6 +768,7 @@ export default function HistoryClient() {
       }
       const data = await res.json()
       setJobs(data.jobs ?? [])
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -797,10 +801,18 @@ export default function HistoryClient() {
             </button>
           ))}
         </div>
-        <Button variant="secondary" size="sm" onClick={fetchJobs} disabled={loading}>
-          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchJobs}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchJobs}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {/* Error */}

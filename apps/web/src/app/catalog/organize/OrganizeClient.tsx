@@ -35,7 +35,6 @@ import {
   Package,
   PackagePlus,
   Plus,
-  RefreshCw,
   Search,
   Sparkles,
   Table2,
@@ -55,6 +54,8 @@ import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import PageHeader from '@/components/layout/PageHeader'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -272,7 +273,7 @@ function GroupsTab({
   // visibility refresh + invalidation listening. Listens for
   // pim.changed so a successful attach/promote on another tab
   // (or the Parents/Standalones sub-tabs here) triggers a refresh.
-  const { data, loading, error, refetch } = usePolledList<{
+  const { data, loading, error, lastFetchedAt, refetch } = usePolledList<{
     groups: DetectedGroup[]
   }>({
     url: '/api/amazon/pim/detect-groups',
@@ -281,6 +282,12 @@ function GroupsTab({
   })
   const groups = data?.groups ?? []
   const fetchDetection = refetch
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  useEffect(() => {
+    if (!autoRefreshMin) return
+    const id = setInterval(() => void refetch(), autoRefreshMin * 60_000)
+    return () => clearInterval(id)
+  }, [autoRefreshMin, refetch])
   useEffect(() => {
     if (error) {
       onStatus({ kind: 'error', text: `Detection failed: ${error}` })
@@ -390,19 +397,16 @@ function GroupsTab({
             />
             <span className="w-8 text-right tabular-nums">{minConfidence}%</span>
           </label>
-          <button
-            type="button"
-            onClick={() => void fetchDetection()}
-            disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3 h-3" />
-            )}
-            Refresh
-          </button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void fetchDetection()}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void fetchDetection()}
+            loading={loading}
+          />
           <Button
             variant="secondary"
             size="sm"
@@ -703,7 +707,7 @@ export function StandaloneTab({
     params.set('limit', '50')
     return `/api/pim/standalones?${params.toString()}`
   }, [debouncedSearch, coverage])
-  const { data, loading, error, refetch } = usePolledList<{
+  const { data, loading, error, lastFetchedAt, refetch } = usePolledList<{
     items: StandaloneItem[]
     total: number
   }>({
@@ -713,6 +717,12 @@ export function StandaloneTab({
   })
   const items = data?.items ?? []
   const total = data?.total ?? 0
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  useEffect(() => {
+    if (!autoRefreshMin) return
+    const id = setInterval(() => void refetch(), autoRefreshMin * 60_000)
+    return () => clearInterval(id)
+  }, [autoRefreshMin, refetch])
   useEffect(() => {
     if (error) {
       onStatus({
@@ -748,19 +758,16 @@ export function StandaloneTab({
             <option value="partial">Partial coverage</option>
             <option value="complete">Fully listed</option>
           </select>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3 h-3" />
-            )}
-            Refresh
-          </button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void refetch()}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void refetch()}
+            loading={loading}
+          />
           {selected.size > 0 && (
             <>
               <Button
@@ -1843,7 +1850,7 @@ export function ParentsTab({
     params.set('limit', '50')
     return `/api/pim/parents-overview?${params.toString()}`
   }, [debouncedSearch, incompleteOnly])
-  const { data, loading, error, refetch } = usePolledList<{
+  const { data, loading, error, lastFetchedAt, refetch } = usePolledList<{
     items: ParentRow[]
     total: number
   }>({
@@ -1853,6 +1860,12 @@ export function ParentsTab({
   })
   const items = data?.items ?? []
   const total = data?.total ?? 0
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  useEffect(() => {
+    if (!autoRefreshMin) return
+    const id = setInterval(() => void refetch(), autoRefreshMin * 60_000)
+    return () => clearInterval(id)
+  }, [autoRefreshMin, refetch])
   useEffect(() => {
     if (error) {
       onStatus({ kind: 'error', text: `Couldn't load parents: ${error}` })
@@ -2067,19 +2080,16 @@ export function ParentsTab({
             />
             Incomplete only
           </label>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={loading}
-            className="inline-flex items-center gap-1 h-7 px-2 text-sm font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3 h-3" />
-            )}
-            Refresh
-          </button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void refetch()}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void refetch()}
+            loading={loading}
+          />
         </div>
         <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}

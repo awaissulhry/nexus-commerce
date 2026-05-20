@@ -34,6 +34,8 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
@@ -128,6 +130,8 @@ export default function ImportsClient() {
 
   const [jobs, setJobs] = useState<ImportJob[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const [drillJob, setDrillJob] = useState<ImportJob | null>(null)
   const [drillRows, setDrillRows] = useState<ImportRow[]>([])
   const [drillLoading, setDrillLoading] = useState(false)
@@ -142,6 +146,7 @@ export default function ImportsClient() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const j = await res.json()
       setJobs(Array.isArray(j.jobs) ? j.jobs : [])
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -526,15 +531,18 @@ export default function ImportsClient() {
             <HistoryIcon className="w-3.5 h-3.5" />
             Recent imports
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={fetchJobs}
-            disabled={historyLoading}
-          >
-            <RefreshCw className="w-3 h-3 mr-1" />
-            Reload
-          </Button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchJobs}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchJobs}
+              loading={historyLoading}
+            />
+          </div>
         </div>
         {jobs.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500">

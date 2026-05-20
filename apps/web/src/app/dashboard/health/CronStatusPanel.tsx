@@ -6,10 +6,11 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
-  RefreshCw,
   XCircle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -97,6 +98,8 @@ export default function CronStatusPanel() {
   const [data, setData] = useState<CronRunsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchData = useCallback(async () => {
     try {
@@ -111,6 +114,7 @@ export default function CronStatusPanel() {
       const json = await res.json()
       setData(json)
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -133,15 +137,18 @@ export default function CronStatusPanel() {
             Latest run per scheduled job · stale RUNNING flags + recent failures
           </p>
         </div>
-        <button
-          type="button"
-          onClick={fetchData}
-          disabled={loading}
-          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 disabled:opacity-50"
-        >
-          <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {error && (

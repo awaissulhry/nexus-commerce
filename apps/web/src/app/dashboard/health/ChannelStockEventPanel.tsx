@@ -15,7 +15,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, CheckCircle2, Cable, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Cable, Loader2 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
@@ -51,6 +53,8 @@ export default function ChannelStockEventPanel() {
   const [events, setEvents] = useState<ChannelStockEvent[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchEvents = useCallback(async () => {
     setLoading(true)
@@ -63,6 +67,7 @@ export default function ChannelStockEventPanel() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setEvents(data.items ?? [])
+      setLastFetchedAt(Date.now())
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setError(msg)
@@ -113,14 +118,16 @@ export default function ChannelStockEventPanel() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchEvents}
-            disabled={loading}
-            className="h-7 w-7 inline-flex items-center justify-center rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
-            aria-label={t('common.refresh')}
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
-          </button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchEvents}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchEvents}
+            loading={loading}
+          />
           <Link
             href="/fulfillment/stock/channel-drift"
             className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-0.5"

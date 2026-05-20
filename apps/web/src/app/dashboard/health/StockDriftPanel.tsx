@@ -5,13 +5,14 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  RefreshCw,
   RotateCw,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -86,6 +87,8 @@ export default function StockDriftPanel() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<'quantity' | 'price'>('quantity')
   const [resyncing, setResyncing] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
@@ -101,6 +104,7 @@ export default function StockDriftPanel() {
       const json = await res.json()
       setData(json)
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -178,15 +182,18 @@ export default function StockDriftPanel() {
             manual override applied without flipping followMaster off).
           </p>
         </div>
-        <button
-          type="button"
-          onClick={fetchData}
-          disabled={loading}
-          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 inline-flex items-center gap-1 disabled:opacity-50"
-        >
-          <RefreshCw className={cn('w-3 h-3', loading && 'animate-spin')} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {error && (

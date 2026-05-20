@@ -16,12 +16,13 @@ import {
   FileSpreadsheet,
   History as HistoryIcon,
   Play,
-  RefreshCw,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -101,6 +102,8 @@ export default function ExportsClient() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [brandFilter, setBrandFilter] = useState<string>('')
   const [running, setRunning] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -112,6 +115,7 @@ export default function ExportsClient() {
       const j = await res.json()
       setJobs(Array.isArray(j.jobs) ? j.jobs : [])
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -311,10 +315,18 @@ export default function ExportsClient() {
             <HistoryIcon className="w-3.5 h-3.5" />
             Recent exports
           </div>
-          <Button variant="secondary" size="sm" onClick={fetchJobs} disabled={loading}>
-            <RefreshCw className="w-3 h-3 mr-1" />
-            Reload
-          </Button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchJobs}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchJobs}
+              loading={loading}
+            />
+          </div>
         </div>
         {jobs.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
