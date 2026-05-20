@@ -1,0 +1,104 @@
+# Deploy the API to Railway from GitHub Actions.
+#
+# Railway's native GitHub integration is unreliable on this project
+# (it stops auto-deploying after rebases or after the worker crashes
+# on a Redis hiccup). This workflow takes over: every push to main
+# runs prisma migrate deploy against Neon directly, then ships the
+# new container via Railway CLI.
+#
+# Required secrets (set under repo Settings → Secrets and variables
+# → Actions):
+#   RAILWAY_TOKEN  — Project-scoped token from railway.app/account/
+#                    tokens. Scope to the Nexus project so this
+#                    workflow can't push to other Railway projects.
+#   DATABASE_URL   — Direct (non-pooler) Neon URL for migrations.
+#                    Pooler URLs don't work with `prisma migrate
+#                    deploy` because the pooler can't hold the
+#                    advisory lock Prisma needs.
+#
+# Optional secret:
+#   RAILWAY_SERVICE — Railway service ID for the API. Omit if the
+#                     project has exactly one service.
+
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/database/prisma/migrations/**'
+      - 'packages/database/prisma/schema.prisma'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'railway.toml'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migrate + ship to Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root + workspaces
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: packages/database
+        run: npx prisma generate
+
+      - name: Apply pending migrations against Neon
+        # Run from packages/database so prisma resolves schema +
+        # migrations dir without flags. DATABASE_URL must be the
+        # direct (non-pooler) URL — pooler can't hold advisory
+        # locks Prisma migrate uses (reference_neon_migrations).
+        working-directory: packages/database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Trigger Railway deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -n "${{ secrets.RAILWAY_SERVICE }}" ]; then
+            railway up --service "${{ secrets.RAILWAY_SERVICE }}" --detach
+          else
+            railway up --detach
+          fi
+
+      - name: Smoke-test the new container
+        # Wait up to 3 minutes for Railway to pick up the new image
+        # and start serving. Looks for one of the IH endpoints I'd
+        # expect to be in the latest commit — adjust the grep target
+        # as the API surface grows.
+        run: |
+          set -e
+          for i in $(seq 1 36); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://nexusapi-production-b7bb.up.railway.app/api/insights/ping")
+            if [ "$code" = "200" ]; then
+              echo "✓ Railway is serving"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "✗ Railway did not respond within 3 minutes"
+          exit 1
