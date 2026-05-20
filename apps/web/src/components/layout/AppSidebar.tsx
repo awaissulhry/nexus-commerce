@@ -783,12 +783,6 @@ export default function AppSidebar() {
               active={pathname === '/insights/notebook'}
             />
           </NavParentItem>
-          <NavItem
-            href="/dashboard/overview"
-            icon={BarChart3}
-            label="Command Center"
-            active={pathname === '/dashboard/overview'}
-          />
         </NavGroup>
 
         <NavGroup label="Monitoring">
