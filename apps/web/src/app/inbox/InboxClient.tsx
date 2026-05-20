@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle, AlertTriangle, Bell, CheckCircle2, ExternalLink,
-  Inbox, Info, Loader2, RefreshCw, RotateCcw, X, Zap,
+  Inbox, Info, Loader2, RotateCcw, X, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -83,6 +85,8 @@ export default function InboxClient() {
   const [tab, setTab] = useState<SourceTab>('all')
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set())
   const [busyBulk, setBusyBulk] = useState<string | null>(null)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchData = useCallback(async () => {
     try {
@@ -93,6 +97,7 @@ export default function InboxClient() {
       if (!res.ok) return
       const json = (await res.json()) as InboxData
       setData(json)
+      setLastFetchedAt(Date.now())
     } catch {
       /* non-fatal — keep stale data */
     } finally {
@@ -221,9 +226,16 @@ export default function InboxClient() {
           {busyBulk === 'mark-all-read' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
           Mark all read{notifCount > 0 ? ` (${notifCount})` : ''}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => void fetchData()}>
-          <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Refresh
-        </Button>
+        <AutoRefreshSelect
+          value={autoRefreshMin}
+          onChange={setAutoRefreshMin}
+          onTick={() => void fetchData()}
+        />
+        <FreshnessIndicator
+          lastFetchedAt={lastFetchedAt}
+          onRefresh={() => void fetchData()}
+          loading={loading}
+        />
         <div className="flex-1" />
         <Button size="sm" variant="ghost" onClick={() => router.push('/sync-logs/outbound-queue')}>
           Outbound queue →

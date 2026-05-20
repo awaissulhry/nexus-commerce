@@ -17,7 +17,6 @@ import {
   Trash2,
   Edit,
   Loader2,
-  RefreshCw,
   Power,
   Play,
   LayoutTemplate,
@@ -30,6 +29,8 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   ACTIONS,
@@ -63,18 +64,27 @@ export default function AutomationListClient({
   const [editing, setEditing] = useState<RuleRow | null>(null)
   const [creating, setCreating] = useState(false)
   const [presetsOpen, setPresetsOpen] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(Date.now())
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     setRules(initialRules)
   }, [initialRules])
 
   const refresh = async () => {
-    const res = await fetch(`${apiBase}/api/marketing-automation/rules`, {
-      cache: 'no-store',
-    })
-    if (res.ok) {
-      const data = (await res.json()) as { rules: SharedRuleRow[] }
-      setRules(data.rules.map(normaliseRule))
+    setRefreshing(true)
+    try {
+      const res = await fetch(`${apiBase}/api/marketing-automation/rules`, {
+        cache: 'no-store',
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { rules: SharedRuleRow[] }
+        setRules(data.rules.map(normaliseRule))
+        setLastFetchedAt(Date.now())
+      }
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -150,17 +160,22 @@ export default function AutomationListClient({
         description={t('automation.description')}
         actions={
           <>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={() => {
                 router.refresh()
                 void refresh()
               }}
-            >
-              <RefreshCw className="w-4 h-4 mr-1" />
-              {t('common.refresh')}
-            </Button>
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={() => {
+                router.refresh()
+                void refresh()
+              }}
+              loading={refreshing}
+            />
             <Link
               href="/marketing/automation/history"
               className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"

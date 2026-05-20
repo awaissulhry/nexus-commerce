@@ -14,7 +14,6 @@ import {
   Loader2,
   PackageCheck,
   Plus,
-  RefreshCw,
   Search,
   Send,
   ShoppingCart,
@@ -24,6 +23,8 @@ import {
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -595,6 +596,8 @@ export default function PurchaseOrdersClient() {
   const [search, setSearch] = useState('')
   // F2.8 — Create PO modal toggle.
   const [createOpen, setCreateOpen] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const fetchPos = useCallback(async () => {
     setLoading(true)
@@ -615,6 +618,7 @@ export default function PurchaseOrdersClient() {
       }
       const data = await res.json()
       setPos(data.items ?? [])
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -718,10 +722,16 @@ export default function PurchaseOrdersClient() {
             <Plus className="w-3.5 h-3.5" />
             {t('po.newPo')}
           </Button>
-          <Button variant="secondary" size="sm" onClick={fetchPos} disabled={loading}>
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
-            {t('common.refresh')}
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchPos}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchPos}
+            loading={loading}
+          />
         </div>
       </div>
 

@@ -6,12 +6,13 @@ import { COUNTRY_NAMES } from '@/lib/country-names'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   PackagePlus,
-  RefreshCw,
   Calendar,
   AlertTriangle,
   XCircle,
   Image,
 } from 'lucide-react'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,8 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
   const [startDate, setStartDate] = useState('')
   const [scheduleMsg, setScheduleMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(Date.now())
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const refreshData = useCallback(async (mp: string) => {
     const [gr, pr] = await Promise.all([
@@ -92,6 +95,7 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
     if (gr?.ok) setGap(await gr.json().catch(() => null))
     if (pr?.ok) setProgress(await pr.json().catch(() => null))
     setSelected(new Set())
+    setLastFetchedAt(Date.now())
   }, [backend])
 
   const handleMarketplace = (mp: string) => {
@@ -160,14 +164,18 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
           { label: `Gaps · ${marketLabel}` },
         ]}
         actions={
-          <button
-            onClick={() => startTransition(() => refreshData(marketplace))}
-            disabled={isPending}
-            className="h-8 px-3 text-sm inline-flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isPending ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={() => startTransition(() => refreshData(marketplace))}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={() => startTransition(() => refreshData(marketplace))}
+              loading={isPending}
+            />
+          </div>
         }
       />
 

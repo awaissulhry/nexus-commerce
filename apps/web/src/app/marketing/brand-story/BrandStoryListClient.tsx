@@ -18,13 +18,14 @@ import {
   AlertTriangle,
   Languages,
   Layers,
-  RefreshCw,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { COMMON_MARKETPLACES } from '../aplus/_lib/types'
 import {
@@ -60,6 +61,11 @@ export default function BrandStoryListClient({
   const [status, setStatus] = useState<string>('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  // Server-rendered list — track when the user last asked for a refresh
+  // so FreshnessIndicator shows a meaningful "Xs ago" beside the chrome.
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(Date.now())
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
+  const refresh = () => { router.refresh(); setLastFetchedAt(Date.now()) }
 
   const visible = useMemo(() => {
     return items.filter((row) => {
@@ -84,10 +90,16 @@ export default function BrandStoryListClient({
         description={t('brandStory.description')}
         actions={
           <>
-            <Button variant="secondary" size="sm" onClick={() => router.refresh()}>
-              <RefreshCw className="w-4 h-4 mr-1" />
-              {t('common.refresh')}
-            </Button>
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={refresh}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={refresh}
+              loading={false}
+            />
             <Button
               variant="primary"
               size="sm"

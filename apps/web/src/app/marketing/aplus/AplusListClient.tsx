@@ -15,12 +15,13 @@ import {
   Languages,
   Image as ImageIcon,
   Layers,
-  RefreshCw,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useRouter } from 'next/navigation'
 import {
@@ -59,6 +60,8 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
   const [status, setStatus] = useState<string>('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(Date.now())
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const visible = useMemo(() => {
     return items.filter((row) => {
@@ -76,7 +79,7 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
     })
   }, [items, marketplace, status, search])
 
-  const refresh = () => router.refresh()
+  const refresh = () => { router.refresh(); setLastFetchedAt(Date.now()) }
 
   return (
     <div className="space-y-4">
@@ -85,10 +88,16 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
         description={t('aplus.description')}
         actions={
           <>
-            <Button variant="secondary" size="sm" onClick={refresh}>
-              <RefreshCw className="w-4 h-4 mr-1" />
-              {t('common.refresh')}
-            </Button>
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={refresh}
+            />
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={refresh}
+              loading={false}
+            />
             <Button
               variant="primary"
               size="sm"

@@ -9,7 +9,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  RefreshCw,
   Network,
   Trash2,
   X,
@@ -20,9 +19,10 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
+import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
+import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { cn } from '@/lib/utils'
 
 interface Warehouse {
   id: string
@@ -101,6 +101,8 @@ export default function RoutingRulesClient() {
   })
   const [previewResult, setPreviewResult] = useState<RouteResult | null>(null)
   const [previewing, setPreviewing] = useState(false)
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
+  const [autoRefreshMin, setAutoRefreshMin] = useState<0 | 5 | 15>(0)
 
   const { toast } = useToast()
 
@@ -117,6 +119,7 @@ export default function RoutingRulesClient() {
       const json = await res.json()
       setData(json)
       setError(null)
+      setLastFetchedAt(Date.now())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -248,10 +251,16 @@ export default function RoutingRulesClient() {
           {t('routingRules.summary', { rules: data?.rules.length ?? 0, warehouses: data?.warehouses.length ?? 0 })}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading} aria-label={t('common.refresh')}>
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} aria-hidden="true" />
-            {t('common.refresh')}
-          </Button>
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
           <Button variant="primary" size="sm" onClick={startCreate}>
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             {t('routingRules.newRule')}
