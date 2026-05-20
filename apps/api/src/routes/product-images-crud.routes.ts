@@ -329,6 +329,84 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── POST /api/products/:id/images/import-from-dam ────────────────────
+  // IR.7.4 — Pull a DigitalAsset into the product's master gallery.
+  // Creates a ProductImage that mirrors the asset's storage + dim
+  // metadata, plus an AssetUsage row so the DAM library can show
+  // "used in this product" on its side.
+  fastify.post<{
+    Params: { id: string }
+    Body: { assetId: string; type?: string; alt?: string | null }
+  }>(
+    '/products/:id/images/import-from-dam',
+    async (req, reply) => {
+      const { id } = req.params
+      const { assetId, type, alt } = req.body ?? ({} as any)
+      if (!assetId) return reply.status(400).send({ error: 'ASSET_ID_REQUIRED' })
+      if (type !== undefined && !VALID_TYPES.has(type)) {
+        return reply.status(400).send({ error: 'INVALID_TYPE', validTypes: [...VALID_TYPES] })
+      }
+
+      const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
+      if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
+
+      const asset = await prisma.digitalAsset.findUnique({ where: { id: assetId } })
+      if (!asset) return reply.status(404).send({ error: 'ASSET_NOT_FOUND' })
+      if (asset.type !== 'image') {
+        return reply.status(400).send({ error: 'ASSET_NOT_IMAGE', assetType: asset.type })
+      }
+
+      const meta = (asset.metadata ?? null) as Record<string, unknown> | null
+      const width = typeof meta?.width === 'number' ? meta.width : null
+      const height = typeof meta?.height === 'number' ? meta.height : null
+
+      const count = await prisma.productImage.count({ where: { productId: id } })
+      const resolvedType = type ?? 'ALT'
+      const resolvedAlt = alt !== undefined ? alt : (asset.label || null)
+
+      // Reuse-or-create ProductImage by (productId, publicId). Prevents
+      // double-import on rapid clicks + keeps the round-trip idempotent.
+      const existing = asset.storageProvider === 'cloudinary'
+        ? await prisma.productImage.findFirst({
+            where: { productId: id, publicId: asset.storageId },
+          })
+        : null
+
+      const image = existing ?? await prisma.productImage.create({
+        data: {
+          productId: id,
+          url: asset.url,
+          publicId: asset.storageProvider === 'cloudinary' ? asset.storageId : null,
+          type: resolvedType,
+          alt: resolvedAlt,
+          sortOrder: count,
+          width,
+          height,
+          mimeType: asset.mimeType,
+          fileSize: asset.sizeBytes || null,
+        },
+      })
+
+      // Best-effort AssetUsage mirror so the DAM side reflects the link.
+      const existingUsage = await prisma.assetUsage.findFirst({
+        where: { assetId: asset.id, scope: 'product', productId: id, role: resolvedType.toLowerCase() },
+      })
+      if (!existingUsage) {
+        await prisma.assetUsage.create({
+          data: {
+            assetId: asset.id,
+            scope: 'product',
+            productId: id,
+            role: resolvedType.toLowerCase(),
+            sortOrder: image.sortOrder,
+          },
+        })
+      }
+
+      return reply.status(existing ? 200 : 201).send({ ok: true, image, reused: !!existing })
+    },
+  )
+
   // ── POST /api/products/:id/images/:imageId/push-to-dam ───────────────
   // IR.7.1 — Bridge master gallery → DAM library. Creates a
   // DigitalAsset reusing the same Cloudinary publicId as storageId,

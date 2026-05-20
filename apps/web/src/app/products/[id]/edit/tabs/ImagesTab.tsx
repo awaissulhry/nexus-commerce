@@ -24,6 +24,7 @@ import EbayPanel from './images/ebay/EbayPanel'
 import ShopifyPanel from './images/shopify/ShopifyPanel'
 import LightboxModal from './images/LightboxModal'
 import ImageEditorModal from './images/ImageEditorModal'
+import DamPickerModal from './images/DamPickerModal'
 import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
 import type { LightboxImage } from './images/useLightbox'
 import type { ProductImage } from './images/types'
@@ -46,6 +47,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
   const [activeChannel, setActiveChannel] = useState<ChannelTab>('master')
   const [toast, setToast] = useState<string | null>(null)
   const [editorImage, setEditorImage] = useState<ProductImage | null>(null)
+  const [damPickerOpen, setDamPickerOpen] = useState(false)
   const lightbox = useLightbox()
 
   const workspace = useImagesWorkspace(product.id, discardSignal, onDirtyChange)
@@ -281,6 +283,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onAddToChannel={workspace.addToChannel}
               onToast={showToast}
               onOpenLightbox={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
+              onOpenDamPicker={() => setDamPickerOpen(true)}
             />
           )}
           {activeChannel === 'amazon' && (
@@ -434,6 +437,18 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
             setEditorImage(null)
             lightbox.close()
             showToast('Derivative saved')
+            void workspace.reload()
+          }}
+        />
+      )}
+
+      {/* ── DAM library picker (IR.7) ────────────────────────────────── */}
+      {damPickerOpen && (
+        <DamPickerModal
+          productId={product.id}
+          onClose={() => setDamPickerOpen(false)}
+          onImported={() => {
+            showToast('Imported from DAM library')
             void workspace.reload()
           }}
         />
