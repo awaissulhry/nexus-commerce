@@ -34,6 +34,7 @@ import {
   type DeriveTransforms,
 } from '../services/cloudinary.service.js'
 import { analyzeProductImage } from '../services/ai/image-vision.service.js'
+import { applyImagesToProducts } from '../services/images/bulk-apply.service.js'
 
 const VALID_PRESETS: AutoEnhancePreset[] = ['AMAZON_MAIN', 'EBAY_MAIN', 'SHOPIFY_PORTRAIT']
 
@@ -326,6 +327,99 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return reply.status(201).send({ ok: true, preset, image: created })
+    },
+  )
+
+  // ── POST /api/products/:id/images/apply-to-children ──────────────────
+  // IR.8.1 — Parent-only bulk action. Mirrors this product's master
+  // gallery onto every child Product (parentId === :id). Each affected
+  // child gets an AuditLog row. Returns counts so the FE can show a
+  // result toast without polling.
+  fastify.post<{
+    Params: { id: string }
+    Body: { mode?: 'replace' | 'append' }
+  }>(
+    '/products/:id/images/apply-to-children',
+    async (req, reply) => {
+      const { id } = req.params
+      const mode = req.body?.mode ?? 'replace'
+
+      const product = await prisma.product.findUnique({
+        where: { id },
+        select: { id: true, isParent: true },
+      })
+      if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
+      if (!product.isParent) {
+        return reply.status(400).send({
+          error: 'NOT_A_PARENT',
+          message: 'apply-to-children only works on parent products (isParent=true).',
+        })
+      }
+
+      const children = await prisma.product.findMany({
+        where: { parentId: id },
+        select: { id: true },
+      })
+      if (children.length === 0) {
+        return reply.send({
+          sourceProductId: id,
+          targetsTotal: 0,
+          targetsUpdated: 0,
+          imagesCreated: 0,
+          imagesDeleted: 0,
+          errors: [],
+        })
+      }
+
+      const result = await applyImagesToProducts({
+        sourceProductId: id,
+        targetProductIds: children.map((c) => c.id),
+        mode,
+      })
+      return reply.send(result)
+    },
+  )
+
+  // ── POST /api/products/images/bulk-apply ─────────────────────────────
+  // IR.8.2 — Generic bulk apply. Operator picks a source + a list of
+  // arbitrary targets (typically gathered from a multi-select on the
+  // /products listing). Same per-target transaction + audit pattern
+  // as apply-to-children.
+  fastify.post<{
+    Body: {
+      sourceProductId?: string
+      targetProductIds?: string[]
+      mode?: 'replace' | 'append'
+    }
+  }>(
+    '/products/images/bulk-apply',
+    async (req, reply) => {
+      const { sourceProductId, targetProductIds, mode = 'replace' } = req.body ?? {}
+      if (!sourceProductId) return reply.status(400).send({ error: 'SOURCE_REQUIRED' })
+      if (!Array.isArray(targetProductIds) || targetProductIds.length === 0) {
+        return reply.status(400).send({ error: 'TARGETS_REQUIRED' })
+      }
+      if (targetProductIds.length > 500) {
+        return reply.status(400).send({
+          error: 'TOO_MANY_TARGETS',
+          message: 'Hard cap of 500 targets per call. Split into smaller batches.',
+        })
+      }
+
+      try {
+        const result = await applyImagesToProducts({
+          sourceProductId,
+          targetProductIds,
+          mode,
+        })
+        return reply.send(result)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Bulk apply failed'
+        return reply.status(message.startsWith('SOURCE_NOT_FOUND') ? 404 : 500).send({
+          error: 'BULK_APPLY_FAILED',
+          message,
+        })
+      }
     },
   )
 
