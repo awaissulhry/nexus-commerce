@@ -792,36 +792,34 @@ export default function PricingMatrixClient() {
       {/* Bulk action bar — Toast handles success/error feedback so the bar
           stays minimal: count + mode + value + Apply + Deselect. */}
       {selected.size > 0 && (
-        <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-3 flex items-center gap-3 flex-wrap shadow-lg">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelected(new Set())}
-            icon={<X size={12} />}
-            aria-label={t('pricing.bulk.deselect')}
-            className="text-slate-300 hover:text-white hover:bg-slate-800 border-transparent"
-          >
-            {t('pricing.bulk.deselect')}
-          </Button>
-          <div className="h-4 w-px bg-slate-700" />
-          <span className="text-base font-semibold tabular-nums">
+        <div className="sticky top-2 z-20 bg-slate-900 text-white rounded-lg px-4 py-2.5 flex items-center gap-2.5 flex-wrap shadow-lg ring-1 ring-slate-800">
+          {/* Selection count — leftmost so the operator's eye lands
+              here first. Big white tabular-nums, full opacity. */}
+          <span className="text-base font-semibold tabular-nums text-white">
             {t('pricing.bulk.selected', {
               n: selected.size,
               s: selected.size === 1 ? '' : 's',
             })}
           </span>
-          <div className="h-4 w-px bg-slate-700" />
+
+          <div className="h-5 w-px bg-slate-600" />
+
+          {/* Mode dropdown — proper visible border, white text on a
+              lighter slate fill so the dropdown reads as an input
+              control on the dark bar. */}
           <select
             value={bulkMode}
             onChange={(e) =>
               setBulkMode(e.target.value as typeof bulkMode)
             }
-            className="h-7 px-2 rounded border border-slate-600 bg-slate-800 text-white text-base"
+            aria-label={t('pricing.bulk.setFixed')}
+            className="h-8 px-2.5 rounded-md border border-slate-500 bg-slate-700 text-white text-sm font-medium hover:bg-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
             <option value="SET_FIXED">{t('pricing.bulk.setFixed')}</option>
             <option value="SET_PERCENT_DISCOUNT">{t('pricing.bulk.percentDiscount')}</option>
             <option value="CLEAR">{t('pricing.bulk.clearOverride')}</option>
           </select>
+
           {bulkMode !== 'CLEAR' && (
             <input
               type="number"
@@ -830,19 +828,39 @@ export default function PricingMatrixClient() {
               placeholder={bulkMode === 'SET_FIXED' ? '0.00' : '0–99'}
               value={bulkValue}
               onChange={(e) => setBulkValue(e.target.value)}
-              className="h-7 w-24 px-2 rounded border border-slate-600 bg-slate-800 text-white text-base tabular-nums"
+              aria-label={bulkMode === 'SET_FIXED' ? 'New price' : 'Discount %'}
+              className="h-8 w-28 px-2.5 rounded-md border border-slate-500 bg-slate-700 text-white text-sm tabular-nums placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
             />
           )}
+
+          {/* Apply — primary CTA, white pill, biggest visual weight. */}
           <Button
             variant="primary"
             size="sm"
             onClick={() => setBulkConfirmOpen(true)}
             loading={bulkApplying}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
-            className="ml-auto bg-white text-slate-900 hover:bg-slate-100 border-white"
+            className="bg-white text-slate-900 hover:bg-slate-100 border border-white font-semibold"
           >
             {t('pricing.bulk.apply')}
           </Button>
+
+          {/* Spacer pushes Clear to the right edge so it never
+              competes with Apply for the operator's attention. */}
+          <div className="ml-auto" />
+
+          {/* Clear / Deselect — secondary outlined pill (not the muted
+              ghost). Now legibly says "Clear" with the X icon, distinct
+              from Apply, but visually subordinate. */}
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            aria-label={t('pricing.bulk.deselect')}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-500 bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            <X size={13} aria-hidden="true" />
+            {t('pricing.bulk.deselect')}
+          </button>
         </div>
       )}
 
