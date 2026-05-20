@@ -38,6 +38,8 @@ interface Props {
   onSavePending: () => Promise<boolean>
   onReload: () => void
   onToast: (msg: string) => void
+  /** IR.3.3 — open the shared lightbox for a filled matrix cell. */
+  onOpenLightboxForCell?: (listingImageId: string | undefined, fallbackUrl: string) => void
   onCopyToEbayGallery: () => CopyResult
   onCopyToEbayColorSets: () => CopyResult
   onCopyToShopifyPool: () => CopyResult
@@ -59,6 +61,7 @@ export default function AmazonPanel({
   pendingUpserts,
   addPendingUpsert,
   onToast,
+  onOpenLightboxForCell,
   onCopyToEbayGallery,
   onCopyToEbayColorSets,
   onCopyToShopifyPool,
@@ -238,6 +241,9 @@ export default function AmazonPanel({
             activeAxis={activeAxis}
             resolveCell={amazon.resolveCell}
             onCellClick={(groupValue, slot) => amazon.setImagePicker({ groupValue, slot })}
+            onCellLightbox={onOpenLightboxForCell
+              ? (_g, _s, cell) => onOpenLightboxForCell(cell.listingImageId, cell.url)
+              : undefined}
             onCellDrop={(groupValue, slot, url, sourceId) => amazon.assignCell(groupValue, slot, url, sourceId)}
             onColumnHeaderDrop={(slot, url, sourceId) => amazon.assignColumn(slot, url, 'empty', sourceId)}
             onPublishRow={() => amazon.publish(

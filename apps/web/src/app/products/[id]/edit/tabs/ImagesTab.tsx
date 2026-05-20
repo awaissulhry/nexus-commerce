@@ -23,7 +23,8 @@ import AmazonPanel from './images/amazon/AmazonPanel'
 import EbayPanel from './images/ebay/EbayPanel'
 import ShopifyPanel from './images/shopify/ShopifyPanel'
 import LightboxModal from './images/LightboxModal'
-import { fromMaster, useLightbox } from './images/useLightbox'
+import { fromListing, fromMaster, useLightbox } from './images/useLightbox'
+import type { LightboxImage } from './images/useLightbox'
 import type { ChannelTab } from './images/types'
 
 interface Props {
@@ -163,6 +164,31 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     ).length
   }
 
+  // IR.3.3 — open lightbox for a channel cell. listingImageId set → real
+  // saved row; null → pending image, synthesize minimal LightboxImage.
+  function openLightboxForListingCell(
+    platform: 'AMAZON' | 'EBAY' | 'SHOPIFY',
+    listingImageId: string | undefined,
+    fallbackUrl: string,
+  ) {
+    if (listingImageId) {
+      const li = listing.find((l) => l.id === listingImageId)
+      if (li) {
+        const siblings = listing.filter((l) => l.platform === platform).map(fromListing)
+        lightbox.open(fromListing(li), siblings)
+        return
+      }
+    }
+    // Pending image — no saved row yet, no siblings list
+    const synthetic: LightboxImage = {
+      kind: 'listing',
+      id: `pending-${fallbackUrl}`,
+      url: fallbackUrl,
+      platform,
+    }
+    lightbox.open(synthetic, [])
+  }
+
   return (
     <div className="space-y-4">
       {/* ── Toast notification ──────────────────────────────────────── */}
@@ -272,6 +298,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onSavePending={savePending}
               onReload={workspace.reload}
               onToast={showToast}
+              onOpenLightboxForCell={(id, url) => openLightboxForListingCell('AMAZON', id, url)}
               onCopyToEbayGallery={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
               onCopyToEbayColorSets={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'colorSets', activeAxis })}
               onCopyToShopifyPool={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
@@ -291,6 +318,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               addPendingUpsert={workspace.addPendingUpsert}
               addPendingDelete={workspace.addPendingDelete}
               onToast={showToast}
+              onOpenLightboxForCell={(id, url) => openLightboxForListingCell('EBAY', id, url)}
               onCopyFromMaster={() => workspace.copyChannelImages({ fromPlatform: 'MASTER', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
               onCopyFromAmazonGallery={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'gallery', activeAxis })}
               onCopyFromAmazonColorSets={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'EBAY', type: 'colorSets', activeAxis })}
@@ -326,6 +354,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               addPendingUpsert={workspace.addPendingUpsert}
               addPendingDelete={workspace.addPendingDelete}
               onToast={showToast}
+              onOpenLightboxForCell={(id, url) => openLightboxForListingCell('SHOPIFY', id, url)}
               onCopyFromMaster={() => workspace.copyChannelImages({ fromPlatform: 'MASTER', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
               onCopyFromAmazonPool={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'gallery', activeAxis })}
               onCopyFromAmazonAssignments={() => workspace.copyChannelImages({ fromPlatform: 'AMAZON', toPlatform: 'SHOPIFY', type: 'colorSets', activeAxis })}

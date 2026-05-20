@@ -18,6 +18,7 @@ interface MatrixProps {
   activeAxis: string
   resolveCell: (groupValue: string | null, slot: AmazonSlot) => CellDisplay | null
   onCellClick: (groupValue: string | null, slot: AmazonSlot) => void
+  onCellLightbox?: (groupValue: string | null, slot: AmazonSlot, cell: CellDisplay) => void
   onCellDrop: (groupValue: string | null, slot: AmazonSlot, url: string, sourceId?: string) => void
   onColumnHeaderDrop: (slot: AmazonSlot, url: string, sourceId?: string) => void
   onPublishRow: (groupValue: string) => void
@@ -52,7 +53,7 @@ function SlotCell({
   cellRef,
   onDrop,
   onClick,
-  onLightbox: _onLightbox,
+  onLightbox,
   onKeyDown,
   onFocus,
   onFileDrop,
@@ -89,7 +90,9 @@ function SlotCell({
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      onClick()
+      // Filled cell + lightbox wired → preview; empty or no lightbox → picker.
+      if (cell && onLightbox) onLightbox()
+      else onClick()
       return
     }
     onKeyDown(e)
@@ -123,7 +126,7 @@ function SlotCell({
           title={cell.width != null && cell.width < 1000
             ? `${cell.width}×${cell.height ?? '?'} — below Amazon 1000 px minimum`
             : undefined}
-          onClick={onClick}
+          onClick={() => (onLightbox ?? onClick)()}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={cell.url} alt="" className="w-full h-full object-contain bg-white" loading="lazy" />
@@ -163,10 +166,16 @@ function SlotCell({
             <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 rounded-full bg-red-400" title={cell.publishError ?? 'Error'} />
           )}
 
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded">
-            <span className="text-white text-[10px] font-medium">Change</span>
-          </div>
+          {/* Hover overlay — explicit picker trigger so plain click can open lightbox */}
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={(e) => { e.stopPropagation(); onClick() }}
+            aria-label="Replace image"
+            className="absolute inset-x-0 bottom-0 h-6 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-medium pointer-events-none group-hover:pointer-events-auto"
+          >
+            Change
+          </button>
         </div>
       ) : (
         <button
@@ -291,6 +300,7 @@ export default function AmazonMatrix({
   activeAxis,
   resolveCell,
   onCellClick,
+  onCellLightbox,
   onCellDrop,
   onColumnHeaderDrop,
   onPublishRow,
@@ -456,25 +466,31 @@ export default function AmazonMatrix({
                 </div>
 
                 {/* Slot cells */}
-                {ALL_SLOTS.map((slot, colIdx) => (
-                  <SlotCell
-                    key={slot}
-                    cell={resolveCell(groupValue, slot)}
-                    slot={slot}
-                    rowLabel={rowLabel}
-                    isFocused={focusedCell.row === rowIdx && focusedCell.col === colIdx}
-                    cellRef={(el) => {
-                      const key = `${rowIdx}-${colIdx}`
-                      if (el) cellRefs.current.set(key, el)
-                      else cellRefs.current.delete(key)
-                    }}
-                    onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
-                    onClick={() => onCellClick(groupValue, slot)}
-                    onKeyDown={handleCellKeyDown(rowIdx, colIdx)}
-                    onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
-                    onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
-                  />
-                ))}
+                {ALL_SLOTS.map((slot, colIdx) => {
+                  const cell = resolveCell(groupValue, slot)
+                  return (
+                    <SlotCell
+                      key={slot}
+                      cell={cell}
+                      slot={slot}
+                      rowLabel={rowLabel}
+                      isFocused={focusedCell.row === rowIdx && focusedCell.col === colIdx}
+                      cellRef={(el) => {
+                        const key = `${rowIdx}-${colIdx}`
+                        if (el) cellRefs.current.set(key, el)
+                        else cellRefs.current.delete(key)
+                      }}
+                      onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
+                      onClick={() => onCellClick(groupValue, slot)}
+                      onLightbox={cell && onCellLightbox
+                        ? () => onCellLightbox(groupValue, slot, cell)
+                        : undefined}
+                      onKeyDown={handleCellKeyDown(rowIdx, colIdx)}
+                      onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
+                      onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
+                    />
+                  )
+                })}
 
                 {/* Row actions */}
                 <div

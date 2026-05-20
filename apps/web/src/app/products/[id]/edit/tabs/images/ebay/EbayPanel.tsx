@@ -48,6 +48,8 @@ interface Props {
   addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
   addPendingDelete: (id: string) => void
   onToast: (msg: string) => void
+  /** IR.3.3 — open lightbox for a clicked image. */
+  onOpenLightboxForCell?: (listingImageId: string | undefined, fallbackUrl: string) => void
   onCopyFromMaster: () => CopyResult
   onCopyFromAmazonGallery: () => CopyResult
   onCopyFromAmazonColorSets: () => CopyResult
@@ -74,6 +76,7 @@ export default function EbayPanel({
   addPendingUpsert,
   addPendingDelete,
   onToast,
+  onOpenLightboxForCell,
   onCopyFromMaster,
   onCopyFromAmazonGallery,
   onCopyFromAmazonColorSets,
@@ -322,12 +325,17 @@ export default function EbayPanel({
                 onDragOver={(e) => onDragOver(e, index)}
                 onDragLeave={() => setDragOverIndex(null)}
                 onDrop={(e) => onDrop(e, index)}
+                onClick={() => onOpenLightboxForCell?.(
+                  item.id.startsWith('tmp_') ? undefined : item.id,
+                  item.url,
+                )}
                 className={cn(
                   'group relative w-20 h-20 rounded-xl border-2 overflow-hidden bg-slate-50 dark:bg-slate-800 transition-all flex-shrink-0',
                   dragOverIndex === index
                     ? 'border-blue-400 ring-2 ring-blue-300'
                     : 'border-slate-200 dark:border-slate-700',
                   item.isPending && 'ring-1 ring-amber-400',
+                  onOpenLightboxForCell && 'cursor-zoom-in',
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -351,11 +359,12 @@ export default function EbayPanel({
                   <GripVertical className="w-3 h-3 text-white drop-shadow" />
                 </div>
 
-                {/* Delete button */}
+                {/* Delete button — stopPropagation so it doesn't also open lightbox */}
                 <button
                   type="button"
+                  aria-label="Remove from gallery"
                   className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded p-0.5"
-                  onClick={() => addPendingDelete(item.id)}
+                  onClick={(e) => { e.stopPropagation(); addPendingDelete(item.id) }}
                 >
                   <Trash2 className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -420,7 +429,14 @@ export default function EbayPanel({
                         key={img.id}
                         role="img"
                         aria-label={`${colorValue} variation image${img.isPending ? ', unsaved' : ''}`}
-                        className="group relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900"
+                        onClick={() => onOpenLightboxForCell?.(
+                          img.id.startsWith('tmp_') ? undefined : img.id,
+                          img.url,
+                        )}
+                        className={cn(
+                          'group relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900',
+                          onOpenLightboxForCell && 'cursor-zoom-in',
+                        )}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" />
@@ -431,7 +447,7 @@ export default function EbayPanel({
                           type="button"
                           aria-label={`Remove ${colorValue} variation image`}
                           className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                          onClick={() => addPendingDelete(img.id)}
+                          onClick={(e) => { e.stopPropagation(); addPendingDelete(img.id) }}
                         >
                           <Trash2 className="w-3.5 h-3.5 text-white" />
                         </button>

@@ -47,6 +47,8 @@ interface Props {
   addPendingUpsert: (u: Omit<PendingUpsert, '_tempId'>) => void
   addPendingDelete: (id: string) => void
   onToast: (msg: string) => void
+  /** IR.3.3 — open lightbox for a clicked image. */
+  onOpenLightboxForCell?: (listingImageId: string | undefined, fallbackUrl: string) => void
   onCopyFromMaster: () => CopyResult
   onCopyFromAmazonPool: () => CopyResult
   onCopyFromAmazonAssignments: () => CopyResult
@@ -74,6 +76,7 @@ export default function ShopifyPanel({
   addPendingUpsert,
   addPendingDelete,
   onToast,
+  onOpenLightboxForCell,
   onCopyFromMaster,
   onCopyFromAmazonPool,
   onCopyFromAmazonAssignments,
@@ -335,12 +338,17 @@ export default function ShopifyPanel({
                 onDragOver={(e) => onDragOver(e, index)}
                 onDragLeave={() => setDragOverIndex(null)}
                 onDrop={(e) => onDrop(e, index)}
+                onClick={() => onOpenLightboxForCell?.(
+                  item.id.startsWith('tmp_') ? undefined : item.id,
+                  item.url,
+                )}
                 className={cn(
                   'group relative w-20 h-20 rounded-xl border-2 overflow-hidden bg-slate-50 dark:bg-slate-800 flex-shrink-0 transition-all',
                   dragOverIndex === index
                     ? 'border-emerald-400 ring-2 ring-emerald-300'
                     : 'border-slate-200 dark:border-slate-700',
                   item.isPending && 'ring-1 ring-amber-400',
+                  onOpenLightboxForCell && 'cursor-zoom-in',
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -364,8 +372,9 @@ export default function ShopifyPanel({
 
                 <button
                   type="button"
+                  aria-label="Remove from pool"
                   className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 rounded p-0.5"
-                  onClick={() => addPendingDelete(item.id)}
+                  onClick={(e) => { e.stopPropagation(); addPendingDelete(item.id) }}
                 >
                   <Trash2 className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -412,10 +421,17 @@ export default function ShopifyPanel({
 
                 {/* Assigned image or placeholder */}
                 {assignedImage ? (
-                  <div className={cn(
-                    'relative w-12 h-12 rounded-lg border overflow-hidden bg-white dark:bg-slate-900 flex-shrink-0',
-                    assignedImage.isPending ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200 dark:border-slate-700',
-                  )}>
+                  <div
+                    onClick={() => onOpenLightboxForCell?.(
+                      assignedImage.id.startsWith('tmp_') ? undefined : assignedImage.id,
+                      assignedImage.url,
+                    )}
+                    className={cn(
+                      'relative w-12 h-12 rounded-lg border overflow-hidden bg-white dark:bg-slate-900 flex-shrink-0',
+                      assignedImage.isPending ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200 dark:border-slate-700',
+                      onOpenLightboxForCell && 'cursor-zoom-in',
+                    )}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={assignedImage.url} alt="" className="w-full h-full object-contain" loading="lazy" />
                     {assignedImage.isPending && (
