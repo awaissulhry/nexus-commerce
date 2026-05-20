@@ -117,7 +117,7 @@ export function KeyboardShortcutsButton({ groups, footer }: KeyboardShortcutsBut
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+        className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
         title="Keyboard shortcuts (?)"
         aria-label="Keyboard shortcuts"
       >

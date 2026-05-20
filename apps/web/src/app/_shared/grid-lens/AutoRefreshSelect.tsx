@@ -43,7 +43,7 @@ export function AutoRefreshSelect({ value, onChange, onTick, className }: AutoRe
     <select
       value={value}
       onChange={(e) => onChange(Number(e.target.value) as AutoRefreshInterval)}
-      className={`h-7 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 ${className ?? ''}`}
+      className={`h-8 px-2 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 ${className ?? ''}`}
       title="Auto-refresh interval (paused when tab is hidden)"
       aria-label="Auto-refresh interval"
     >

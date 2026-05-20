@@ -83,7 +83,7 @@ export function ColumnPicker<K extends string = string>({
       <button
         ref={btnRef}
         onClick={() => setOpen((o) => !o)}
-        className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
+        className="h-8 px-2.5 text-sm inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
         title="Show / hide / reorder columns"
       >
         <Columns size={12} /> {buttonLabel ?? 'Columns'}

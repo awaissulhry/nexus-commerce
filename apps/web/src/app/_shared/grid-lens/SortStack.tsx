@@ -127,7 +127,7 @@ function AddSortButton({
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Add a sort dimension"
-        className="h-7 px-2 text-sm border border-slate-200 dark:border-slate-800 rounded text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
+        className="h-8 px-2.5 text-sm border border-slate-200 dark:border-slate-800 rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1"
       >
         + Sort
       </button>
