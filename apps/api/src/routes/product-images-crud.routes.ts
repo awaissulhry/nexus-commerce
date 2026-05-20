@@ -329,6 +329,81 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── POST /api/products/:id/images/:imageId/push-to-dam ───────────────
+  // IR.7.1 — Bridge master gallery → DAM library. Creates a
+  // DigitalAsset reusing the same Cloudinary publicId as storageId,
+  // plus an AssetUsage scoping it to the product with role mirroring
+  // the ProductImage.type.
+  //
+  // Idempotent: if a DigitalAsset already exists with this storageId,
+  // we reuse it instead of duplicating. Same for the AssetUsage row.
+  fastify.post<{ Params: { id: string; imageId: string } }>(
+    '/products/:id/images/:imageId/push-to-dam',
+    async (req, reply) => {
+      const { id, imageId } = req.params
+      const image = await prisma.productImage.findFirst({
+        where: { id: imageId, productId: id },
+      })
+      if (!image) return reply.status(404).send({ error: 'IMAGE_NOT_FOUND' })
+      if (!image.publicId) {
+        return reply.status(400).send({
+          error: 'NO_PUBLIC_ID',
+          message: 'Image has no Cloudinary publicId — DAM library only accepts assets we own.',
+        })
+      }
+
+      const role = image.type.toLowerCase() // 'main' / 'alt' / 'lifestyle' / 'swatch' / 'diagram'
+
+      // Reuse-or-create the DigitalAsset by storageId. Cloudinary
+      // publicId is globally unique within an account.
+      let asset = await prisma.digitalAsset.findFirst({
+        where: { storageProvider: 'cloudinary', storageId: image.publicId },
+      })
+      if (!asset) {
+        asset = await prisma.digitalAsset.create({
+          data: {
+            label: image.alt ?? image.publicId.split('/').pop() ?? image.id,
+            type: 'image',
+            mimeType: image.mimeType ?? 'image/jpeg',
+            sizeBytes: image.fileSize ?? 0,
+            storageProvider: 'cloudinary',
+            storageId: image.publicId,
+            url: image.url,
+            metadata: {
+              productImageId: image.id,
+              width: image.width,
+              height: image.height,
+              pushedFromMaster: true,
+            } as object,
+          },
+        })
+      }
+
+      // Reuse-or-create the AssetUsage. The unique constraint covers
+      // (assetId, scope, productId, role, sortOrder) so duplicate calls
+      // collide cleanly.
+      const existingUsage = await prisma.assetUsage.findFirst({
+        where: {
+          assetId: asset.id,
+          scope: 'product',
+          productId: id,
+          role,
+        },
+      })
+      const usage = existingUsage ?? await prisma.assetUsage.create({
+        data: {
+          assetId: asset.id,
+          scope: 'product',
+          productId: id,
+          role,
+          sortOrder: image.sortOrder,
+        },
+      })
+
+      return reply.send({ ok: true, asset, usage, created: !existingUsage })
+    },
+  )
+
   // ── POST /api/products/:id/images/:imageId/analyze ───────────────────
   // IR.6.2 — Run Gemini Vision on a master ProductImage, persist
   // hasWhiteBackground / frameFillPct / hasTextOverlay / offCenterScore
