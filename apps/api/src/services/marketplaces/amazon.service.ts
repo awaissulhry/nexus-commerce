@@ -919,17 +919,18 @@ export class AmazonService {
       MarketplaceIds: [marketplaceId],
       MaxResultsPerPage: 100, // SP-API max
     }
+    // SP-API rejects CreatedBefore / LastUpdatedBefore values within ~2
+    // minutes of "now" (its data-propagation window). Use 3 min for safety.
+    const SP_API_CLOCK_SKEW_MS = 180_000
     if (options.from && options.to) {
       // Explicit window — used by the historical backfill runner. SP-API
-      // accepts CreatedAfter + CreatedBefore together. Same 60s clamp on
-      // the upper bound to avoid InvalidInput.
-      const minAgo = new Date(Date.now() - 60_000)
+      // accepts CreatedAfter + CreatedBefore together.
+      const minAgo = new Date(Date.now() - SP_API_CLOCK_SKEW_MS)
       const upperBound = options.to.getTime() > minAgo.getTime() ? minAgo : options.to
       query.CreatedAfter = options.from.toISOString()
       query.CreatedBefore = upperBound.toISOString()
     } else if (options.since) {
-      // Clamp to 60s ago to avoid InvalidInput.
-      const minAgo = new Date(Date.now() - 60_000)
+      const minAgo = new Date(Date.now() - SP_API_CLOCK_SKEW_MS)
       const cursor = options.since.getTime() > minAgo.getTime() ? minAgo : options.since
       query.LastUpdatedAfter = cursor.toISOString()
     } else {

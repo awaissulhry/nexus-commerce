@@ -1520,7 +1520,11 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
           ? await amazonOrdersService.syncNewOrders(latest, { limit: body.limit })
           : await amazonOrdersService.syncAllOrders({ limit: body.limit })
       }
-      return { success: true, ...summary }
+      // The service catches SP-API fetch errors and stuffs them in
+      // summary.errors with orderId='FETCH'; surface that as success=false
+      // so callers don't silently treat a failed pull as a clean run.
+      const fetchFailed = summary.errors.some((e) => e.orderId === 'FETCH')
+      return { success: !fetchFailed, ...summary }
     } catch (error) {
       fastify.log.error({ err: error }, '[amazon/orders/sync] failed')
       return reply.code(500).send({
