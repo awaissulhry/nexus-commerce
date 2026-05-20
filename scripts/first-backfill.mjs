@@ -63,7 +63,7 @@ if (!['amazon', 'ebay'].includes(channel)) {
   console.error('Env:   API_URL=https://your-api.up.railway.app (defaults to http://localhost:3000)')
   process.exit(2)
 }
-if (!['orders', 'financial', 'returns'].includes(domain)) {
+if (!['orders', 'financial', 'returns', 'settlement'].includes(domain)) {
   console.error(`Unknown domain: ${domain}`)
   process.exit(2)
 }
@@ -100,12 +100,15 @@ function chunks(from, to, daysPerChunk) {
 }
 
 const chunkDays = {
-  'amazon-orders':    30,   // SP-API supports arbitrary; 30d = operator-friendly
-  'amazon-financial': 30,   // listFinancialEvents 180d max — 30d for safety
-  'amazon-returns':   30,
-  'ebay-orders':       7,   // matches eBay rolling window
-  'ebay-financial':   30,
-  'ebay-returns':      7,
+  'amazon-orders':     30,   // SP-API supports arbitrary; 30d = operator-friendly
+  'amazon-financial':  30,   // listFinancialEvents 180d max — 30d for safety
+  'amazon-returns':    30,
+  'amazon-settlement': 90,   // settlement reports list endpoint has no hard
+                             //   window cap; 90d chunks keep listResults <100
+                             //   (settlement cycle is ~weekly per marketplace)
+  'ebay-orders':        7,   // matches eBay rolling window
+  'ebay-financial':    30,
+  'ebay-returns':       7,
 }
 
 // ── Active eBay connection lookup ──────────────────────────────────
@@ -177,6 +180,19 @@ async function handleChunk({ channel, domain, from, to, dryRun }) {
         fetched: (r.orderEventsFetched ?? 0) + (r.refundEventsFetched ?? 0),
         upserted: r.txCreated ?? 0,
         failed: 0,
+        cursor: to.toISOString(),
+      }
+    }
+    case 'amazon-settlement': {
+      const r = await postJson('/api/amazon/settlements/sync', {
+        from: from.toISOString(),
+        to: to.toISOString(),
+      })
+      const t = r.totals ?? {}
+      return {
+        fetched: t.reportsListed ?? 0,
+        upserted: t.reportsUpserted ?? 0,
+        failed: t.errors ?? 0,
         cursor: to.toISOString(),
       }
     }

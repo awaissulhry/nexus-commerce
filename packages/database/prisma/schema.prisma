@@ -4389,6 +4389,64 @@ model RetailEventPriceAction {
   @@index([isActive])
 }
 
+/// Phase 6.B — Amazon SP-API settlement reports.
+///
+/// Bank-reconciliation surface. Where FinancialTransaction captures the
+/// per-event ledger (one row per fee/refund/order event from
+/// listFinancialEvents), SettlementReport captures Amazon's bank-side
+/// aggregation — one row per (marketplace, settlement period) with the
+/// deposit total.
+///
+/// Reports are auto-published by Amazon every ~7-14 days per marketplace.
+/// The ingester (amazon-settlements.service.ts) calls GET /reports/...
+/// to LIST already-published reports (no createReport needed), downloads
+/// each via getReportDocument, and upserts a summary row.
+///
+/// The full tab-separated body is preserved in `rawBody` so a future
+/// per-line reconciliation feature can parse it without re-fetching.
+/// Splitting into a SettlementLine table is deferred until that ships.
+///
+/// reportId is globally unique on Amazon's side, so the unique index
+/// gives idempotent upsert semantics: re-running the sync on the same
+/// window is a no-op.
+model SettlementReport {
+  id String @id @default(cuid())
+
+  // SP-API identifiers
+  reportId   String  @unique
+  documentId String?
+  reportType String  @default("GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2")
+
+  // Marketplace scope (the SP-API marketplaceId, e.g. APJ6JRA9NG5V4)
+  marketplaceId String
+
+  // Settlement window (from the report header)
+  startDate DateTime
+  endDate   DateTime
+
+  // Bank-side totals (from the summary row)
+  depositDate      DateTime?
+  totalAmount      Decimal   @default(0) @db.Decimal(14, 2)
+  currencyCode     String    @default("EUR")
+  transactionCount Int       @default(0)
+
+  // Raw flat-file body — tab-separated. NULL when ingester runs in
+  // "summary-only" mode. Postgres TEXT has no length cap so multi-MB
+  // monthly settlements fit fine.
+  rawBody String?
+
+  // Tracking + operator notes
+  fetchedAt      DateTime @default(now())
+  status         String   @default("INGESTED") // INGESTED | RECONCILED | EXCEPTION
+  reconcileNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([marketplaceId, startDate])
+  @@index([depositDate])
+}
+
 model FinancialTransaction {
   id String @id @default(cuid())
 

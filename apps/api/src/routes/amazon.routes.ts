@@ -1594,6 +1594,58 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/amazon/settlements/sync — Phase 6.B settlement-report ingester.
+  // Lists already-published settlement reports in the window, downloads each,
+  // parses the summary row, upserts SettlementReport. Idempotent.
+  //
+  // Body shape — pick one:
+  //   { from, to }              — ISO timestamps for createdSince/Until
+  //   { daysBack: N }           — last N days (defaults to 14)
+  //   {}                        — defaults to last 14 days (one settlement cycle)
+  //
+  // Optional:
+  //   marketplaceIds?: string[] — limit to specific marketplaces; otherwise
+  //                               iterates every active AMAZON Marketplace
+  //   storeRawBody?: boolean    — default true; set false to skip rawBody
+  //                               (saves DB space when only summaries are needed)
+  fastify.post<{
+    Body?: {
+      from?: string
+      to?: string
+      daysBack?: number
+      marketplaceIds?: string[]
+      storeRawBody?: boolean
+    }
+  }>('/settlements/sync', async (request, reply) => {
+    const { syncSettlementReports } = await import('../services/amazon-settlements.service.js')
+    try {
+      const body = request.body ?? {}
+      let from: Date
+      let to: Date
+      if (body.from && body.to) {
+        from = new Date(body.from)
+        to = new Date(body.to)
+        if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+          return reply.code(400).send({ success: false, error: `Invalid 'from' or 'to' timestamp` })
+        }
+      } else {
+        const days = typeof body.daysBack === 'number' ? body.daysBack : 14
+        to = new Date()
+        from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000)
+      }
+      const summary = await syncSettlementReports({
+        from,
+        to,
+        marketplaceIds: body.marketplaceIds,
+        storeRawBody: body.storeRawBody,
+      })
+      return { success: true, ...summary }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/settlements/sync] failed')
+      return reply.code(500).send({ success: false, error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   /**
    * GET /api/amazon/sp-api/health
    *
