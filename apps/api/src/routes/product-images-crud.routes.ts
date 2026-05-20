@@ -25,13 +25,17 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import {
+  buildAutoEnhanceUrl,
   buildDerivedUrl,
   deleteFromCloudinary,
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
+  type AutoEnhancePreset,
   type DeriveTransforms,
 } from '../services/cloudinary.service.js'
 import { analyzeProductImage } from '../services/ai/image-vision.service.js'
+
+const VALID_PRESETS: AutoEnhancePreset[] = ['AMAZON_MAIN', 'EBAY_MAIN', 'SHOPIFY_PORTRAIT']
 
 const VALID_TYPES = new Set(['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'])
 
@@ -268,6 +272,60 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return reply.status(201).send(created)
+    },
+  )
+
+  // ── POST /api/products/:id/images/:imageId/auto-enhance ──────────────
+  // IR.6.4 — Apply a marketplace-tuned Cloudinary chain (background
+  // removal + white pad + square or portrait) and save the result as
+  // a derivative. Single click → derivative ready to assign.
+  fastify.post<{
+    Params: { id: string; imageId: string }
+    Body: { preset?: AutoEnhancePreset; type?: string; alt?: string | null }
+  }>(
+    '/products/:id/images/:imageId/auto-enhance',
+    async (req, reply) => {
+      const { id, imageId } = req.params
+      const source = await prisma.productImage.findFirst({
+        where: { id: imageId, productId: id },
+      })
+      if (!source) return reply.status(404).send({ error: 'IMAGE_NOT_FOUND' })
+      if (!source.publicId) {
+        return reply.status(400).send({
+          error: 'NO_PUBLIC_ID',
+          message: 'Source image has no Cloudinary publicId — auto-enhance only works on images we own.',
+        })
+      }
+
+      const preset = req.body?.preset ?? 'AMAZON_MAIN'
+      if (!VALID_PRESETS.includes(preset)) {
+        return reply.status(400).send({ error: 'INVALID_PRESET', validPresets: VALID_PRESETS })
+      }
+
+      if (!isCloudinaryConfigured()) {
+        return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
+      }
+
+      const { url, width, height } = buildAutoEnhanceUrl(source.publicId, preset)
+      const count = await prisma.productImage.count({ where: { productId: id } })
+
+      const created = await prisma.productImage.create({
+        data: {
+          productId: id,
+          url,
+          publicId: null,
+          type: req.body?.type ?? source.type,
+          alt: req.body?.alt !== undefined ? req.body.alt : source.alt,
+          sortOrder: count,
+          width,
+          height,
+          mimeType: 'image/jpeg', // Cloudinary serves auto-format; jpeg is the broad-compat default
+          fileSize: null,
+          derivedFromImageId: source.id,
+        },
+      })
+
+      return reply.status(201).send({ ok: true, preset, image: created })
     },
   )
 

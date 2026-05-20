@@ -139,6 +139,75 @@ export interface DeriveTransforms {
   flipV?: boolean
 }
 
+/**
+ * IR.6.4 — Marketplace auto-enhance presets.
+ *
+ * Each preset is a Cloudinary transformation chain that takes a
+ * source product photo and produces a derivative tuned for the
+ * channel's requirements:
+ *
+ *   AMAZON_MAIN: background-removal + white pad + 1500×1500 square,
+ *                quality auto:best. Result is Amazon-MAIN-ready when
+ *                the source had a recognizable subject.
+ *
+ *   EBAY_MAIN: white pad + 1500×1500 square. No background removal —
+ *              eBay accepts lifestyle/colored backgrounds.
+ *
+ *   SHOPIFY_PORTRAIT: 4:5 aspect at 1600×2000, fit + white pad.
+ *                     Matches Dawn theme defaults.
+ *
+ * The background-removal step requires Cloudinary's "AI Background
+ * Removal" add-on. Without it, e_background_removal still resolves
+ * but returns the original image — call sites can detect by
+ * comparing dimensions or by an explicit feature flag.
+ */
+export type AutoEnhancePreset = 'AMAZON_MAIN' | 'EBAY_MAIN' | 'SHOPIFY_PORTRAIT'
+
+export function buildAutoEnhanceUrl(publicId: string, preset: AutoEnhancePreset): {
+  url: string
+  width: number
+  height: number
+} {
+  ensureConfigured()
+  let transformation: Array<Record<string, string | number>>
+  let width: number
+  let height: number
+
+  switch (preset) {
+    case 'AMAZON_MAIN':
+      width = 1500
+      height = 1500
+      transformation = [
+        { effect: 'background_removal' },
+        { background: 'white', crop: 'pad', width, height, gravity: 'center' },
+        { quality: 'auto:best', fetch_format: 'auto' },
+      ]
+      break
+    case 'EBAY_MAIN':
+      width = 1500
+      height = 1500
+      transformation = [
+        { background: 'white', crop: 'pad', width, height, gravity: 'center' },
+        { quality: 'auto:best', fetch_format: 'auto' },
+      ]
+      break
+    case 'SHOPIFY_PORTRAIT':
+      width = 1600
+      height = 2000
+      transformation = [
+        { background: 'white', crop: 'pad', width, height, gravity: 'center' },
+        { quality: 'auto:best', fetch_format: 'auto' },
+      ]
+      break
+  }
+
+  return {
+    url: cloudinary.url(publicId, { secure: true, transformation }),
+    width,
+    height,
+  }
+}
+
 export function buildDerivedUrl(publicId: string, transforms: DeriveTransforms): string {
   ensureConfigured()
   const chain: Array<Record<string, string | number>> = []

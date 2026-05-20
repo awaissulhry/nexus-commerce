@@ -14,7 +14,7 @@
 //   - inline alt + type edit (IR.3.5 — master only)
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Crop as CropIcon, Loader2, Pencil, Sparkles, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Crop as CropIcon, Loader2, Pencil, Sparkles, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
@@ -83,6 +83,10 @@ export default function LightboxModal({
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
 
+  // IR.6.4 — Auto-enhance state.
+  const [enhancing, setEnhancing] = useState<null | 'AMAZON_MAIN' | 'EBAY_MAIN' | 'SHOPIFY_PORTRAIT'>(null)
+  const [enhanceError, setEnhanceError] = useState<string | null>(null)
+
   useEffect(() => {
     setEditing(false)
     setEditError(null)
@@ -129,6 +133,29 @@ export default function LightboxModal({
       setAnalyzeError(err instanceof Error ? err.message : 'Analyze failed')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  async function autoEnhance(preset: 'AMAZON_MAIN' | 'EBAY_MAIN' | 'SHOPIFY_PORTRAIT') {
+    if (image.kind !== 'master') return
+    setEnhancing(preset)
+    setEnhanceError(null)
+    try {
+      const res = await beFetch(`/api/products/${productId}/images/${image.id}/auto-enhance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.message ?? body?.error ?? `Auto-enhance failed: ${res.status}`)
+      }
+      const { image: updated } = await res.json() as { image: ProductImage }
+      onMasterImageUpdated?.(updated)
+    } catch (err) {
+      setEnhanceError(err instanceof Error ? err.message : 'Auto-enhance failed')
+    } finally {
+      setEnhancing(null)
     }
   }
 
@@ -439,6 +466,59 @@ export default function LightboxModal({
               </div>
             )
           })()}
+
+          {/* IR.6.4 — Auto-enhance presets (master only). One click → derivative
+              with background removal + white pad sized for the target channel. */}
+          {image.kind === 'master' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Auto-enhance</h4>
+                <span className="text-[10px] text-slate-400">creates a new derivative</span>
+              </div>
+              {enhanceError && (
+                <p className="text-[11px] text-red-600 dark:text-red-400">{enhanceError}</p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => autoEnhance('AMAZON_MAIN')}
+                  disabled={enhancing !== null}
+                  className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/30 disabled:opacity-50"
+                >
+                  {enhancing === 'AMAZON_MAIN'
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Wand2 className="w-3 h-3" />}
+                  Amazon MAIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => autoEnhance('EBAY_MAIN')}
+                  disabled={enhancing !== null}
+                  className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 disabled:opacity-50"
+                >
+                  {enhancing === 'EBAY_MAIN'
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Wand2 className="w-3 h-3" />}
+                  eBay main
+                </button>
+                <button
+                  type="button"
+                  onClick={() => autoEnhance('SHOPIFY_PORTRAIT')}
+                  disabled={enhancing !== null}
+                  className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-50"
+                >
+                  {enhancing === 'SHOPIFY_PORTRAIT'
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Wand2 className="w-3 h-3" />}
+                  Shopify 4:5
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                Amazon: bg-removal + white pad to 1500×1500.
+                eBay / Shopify: white pad to the channel's preferred aspect.
+              </p>
+            </div>
+          )}
 
           {image.kind === 'listing' && (
             <div className="space-y-1.5">
