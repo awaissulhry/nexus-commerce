@@ -666,6 +666,10 @@ export default function PricingMatrixClient() {
   // Search input ref for the `/` keyboard shortcut.
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
+  // Memo'd to keep stable identity across renders (VirtualizedGrid uses
+  // shallow compare). Re-builds only when locale flips.
+  const pricingColumns = useMemo(() => buildPricingColumns(t), [t])
+
   const applyBulkOverride = async () => {
     if (selected.size === 0) return
     setBulkApplying(true)
@@ -866,7 +870,7 @@ export default function PricingMatrixClient() {
         <Card noPadding>
           <VirtualizedGrid<GridRow>
             rows={data.rows}
-            visible={PRICING_COLUMNS}
+            visible={pricingColumns}
             density={density}
             cellPad={DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable}
             selected={displaySelected}
@@ -885,16 +889,17 @@ export default function PricingMatrixClient() {
             riskFlaggedSkus={new Set()}
             storageKey="pricing-matrix"
             showExpandColumn={true}
-            renderCell={(row, key) => renderPricingCell(row as ParentRow | VariantRow, key, { selected, toggleRow, openDrawer })}
+            renderCell={(row, key) => renderPricingCell(row as ParentRow | VariantRow, key, { selected, toggleRow, openDrawer, t })}
           />
 
           {/* Pagination — by parent product, not by snapshot. */}
           <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
             <span>
-              {data.total} product{data.total === 1 ? '' : 's'} · page {data.page + 1} / {Math.max(1, totalPages)}
+              {t('pricing.grid.productsFooter', { n: data.total, s: data.total === 1 ? '' : 's' })}
+              {' · '}page {data.page + 1} / {Math.max(1, totalPages)}
               {selected.size > 0 && (
                 <span className="ml-3 text-blue-600 font-medium">
-                  {selected.size} snapshot{selected.size === 1 ? '' : 's'} selected
+                  {t('pricing.grid.snapshotsSelectedFooter', { n: selected.size, s: selected.size === 1 ? '' : 's' })}
                 </span>
               )}
             </span>
@@ -946,14 +951,14 @@ export default function PricingMatrixClient() {
           size="md"
           title={
             <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
-              Confirm bulk override
+              {t('pricing.bulk.confirm.title')}
             </div>
           }
         >
           <ModalBody className="space-y-4">
             <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-4">
               <div className="text-sm uppercase tracking-wider text-blue-700 dark:text-blue-300 font-semibold">
-                Cascade scope
+                {t('pricing.bulk.confirm.scope')}
               </div>
               <div className="mt-2 grid grid-cols-3 gap-3">
                 <div>
@@ -961,7 +966,7 @@ export default function PricingMatrixClient() {
                     {cascadeScope.snapshots}
                   </div>
                   <div className="text-xs uppercase tracking-wider text-slate-500">
-                    snapshot{cascadeScope.snapshots === 1 ? '' : 's'}
+                    {t('pricing.bulk.confirm.snapshots', { s: cascadeScope.snapshots === 1 ? '' : 's' })}
                   </div>
                 </div>
                 <div>
@@ -969,7 +974,7 @@ export default function PricingMatrixClient() {
                     {cascadeScope.variants}
                   </div>
                   <div className="text-xs uppercase tracking-wider text-slate-500">
-                    variant{cascadeScope.variants === 1 ? '' : 's'}
+                    {t('pricing.bulk.confirm.variants', { s: cascadeScope.variants === 1 ? '' : 's' })}
                   </div>
                 </div>
                 <div>
@@ -977,21 +982,20 @@ export default function PricingMatrixClient() {
                     {cascadeScope.products}
                   </div>
                   <div className="text-xs uppercase tracking-wider text-slate-500">
-                    product{cascadeScope.products === 1 ? '' : 's'}
+                    {t('pricing.bulk.confirm.products', { s: cascadeScope.products === 1 ? '' : 's' })}
                   </div>
                 </div>
               </div>
             </div>
             <div className="space-y-1.5 text-base text-slate-700 dark:text-slate-300">
               <div>
-                <span className="font-medium">Action:</span>{' '}
-                {bulkMode === 'SET_FIXED' && `Set every selected price to ${bulkValue} EUR`}
-                {bulkMode === 'SET_PERCENT_DISCOUNT' && `Discount every selected price by ${bulkValue}%`}
-                {bulkMode === 'CLEAR' && 'Clear every selected override (back to engine default)'}
+                <span className="font-medium">{t('pricing.bulk.confirm.action')}:</span>{' '}
+                {bulkMode === 'SET_FIXED' && t('pricing.bulk.confirm.actionSetFixed', { value: bulkValue })}
+                {bulkMode === 'SET_PERCENT_DISCOUNT' && t('pricing.bulk.confirm.actionPercent', { value: bulkValue })}
+                {bulkMode === 'CLEAR' && t('pricing.bulk.confirm.actionClear')}
               </div>
               <div className="text-sm text-slate-500 dark:text-slate-400">
-                Writes one ChannelListingOverride row per snapshot for
-                audit. Pushes happen out-of-band via the outbound queue.
+                {t('pricing.bulk.confirm.audit')}
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
@@ -1001,7 +1005,7 @@ export default function PricingMatrixClient() {
                 onClick={() => setBulkConfirmOpen(false)}
                 disabled={bulkApplying}
               >
-                Cancel
+                {t('pricing.bulk.confirm.cancel')}
               </Button>
               <Button
                 variant="primary"
@@ -1013,7 +1017,7 @@ export default function PricingMatrixClient() {
                 loading={bulkApplying}
                 disabled={cascadeScope.snapshots === 0}
               >
-                Apply to {cascadeScope.snapshots} snapshot{cascadeScope.snapshots === 1 ? '' : 's'}
+                {t('pricing.bulk.confirm.apply', { n: cascadeScope.snapshots, s: cascadeScope.snapshots === 1 ? '' : 's' })}
               </Button>
             </div>
           </ModalBody>
@@ -1044,19 +1048,26 @@ const PRICING_SHORTCUTS: ShortcutGroup[] = [
 //   source   : parent → most-common; variant → primary source
 //   channels : per-channel chips on variant rows; chip count on parent
 //   warnings : count of snapshots with warnings (parent) / per-row chip (variant)
-const PRICING_COLUMNS: GridLensColumn[] = [
-  { key: 'identity', label: 'Product',  subLabel: 'Name · SKU · ASIN',      width: 360 },
-  { key: 'price',    label: 'Price',    subLabel: 'Primary · IT-FBA',       width: 130 },
-  { key: 'source',   label: 'Source',   subLabel: 'Resolver',               width: 130 },
-  { key: 'channels', label: 'Channels', subLabel: 'Other markets',          width: 280 },
-  { key: 'warnings', label: 'Warnings', subLabel: 'Clamped · fallback',     width: 130 },
-  { key: 'actions',  label: '',                                              width: 40  },
-]
+// Column labels resolve via t() at render time so locale flips refresh
+// the headers — see buildPricingColumns().
+function buildPricingColumns(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): GridLensColumn[] {
+  return [
+    { key: 'identity', label: t('pricing.grid.col.product'),  subLabel: t('pricing.grid.col.productSub'),  width: 360 },
+    { key: 'price',    label: t('pricing.grid.col.price'),    subLabel: t('pricing.grid.col.priceSub'),    width: 130 },
+    { key: 'source',   label: t('pricing.grid.col.source'),   subLabel: t('pricing.grid.col.sourceSub'),   width: 130 },
+    { key: 'channels', label: t('pricing.grid.col.channels'), subLabel: t('pricing.grid.col.channelsSub'), width: 280 },
+    { key: 'warnings', label: t('pricing.grid.col.warnings'), subLabel: t('pricing.grid.col.warningsSub'), width: 130 },
+    { key: 'actions',  label: '',                                                                          width: 40  },
+  ]
+}
 
 interface RenderCellCtx {
   selected: Set<string>
   toggleRow: (id: string) => void
   openDrawer: (snap: SnapshotRow) => void
+  t: (key: string, vars?: Record<string, string | number>) => string
 }
 
 function formatPriceCents(cents: number | null): string {
@@ -1077,13 +1088,14 @@ function renderPricingCell(
   return renderParentCell(row, key, ctx)
 }
 
-function renderParentCell(row: ParentRow, key: string, _ctx: RenderCellCtx): React.ReactNode {
+function renderParentCell(row: ParentRow, key: string, ctx: RenderCellCtx): React.ReactNode {
+  const { t } = ctx
   switch (key) {
     case 'identity':
       return (
         <ProductIdentityCell
           id={row.productId ?? row.id}
-          name={row.isOrphan ? `Orphan SKU · ${row.sku}` : row.name}
+          name={row.isOrphan ? t('pricing.grid.orphan', { sku: row.sku }) : row.name}
           sku={row.sku}
           amazonAsin={row.amazonAsin}
           isParent={row.isParent}
@@ -1100,7 +1112,7 @@ function renderParentCell(row: ParentRow, key: string, _ctx: RenderCellCtx): Rea
           {row.avgPriceCents != null ? `€${formatPriceCents(row.avgPriceCents)}` : '—'}
           {row.snapshotCount > 0 && (
             <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">
-              avg · {row.snapshotCount}
+              {t('pricing.grid.avgSuffix', { n: row.snapshotCount })}
             </span>
           )}
         </span>
@@ -1109,14 +1121,14 @@ function renderParentCell(row: ParentRow, key: string, _ctx: RenderCellCtx): Rea
       return (
         <span className="text-sm text-slate-500 dark:text-slate-400">
           {row.fallbackCount > 0
-            ? <span className="text-amber-700 dark:text-amber-300">{row.fallbackCount} fallback</span>
+            ? <span className="text-amber-700 dark:text-amber-300">{t('pricing.grid.fallbackCount', { n: row.fallbackCount })}</span>
             : <span>—</span>}
         </span>
       )
     case 'channels':
       return (
         <span className="text-sm text-slate-500 dark:text-slate-400">
-          {row.snapshotCount} snapshot{row.snapshotCount === 1 ? '' : 's'}
+          {t('pricing.grid.snapshotCount', { n: row.snapshotCount, s: row.snapshotCount === 1 ? '' : 's' })}
         </span>
       )
     case 'warnings':
@@ -1124,12 +1136,12 @@ function renderParentCell(row: ParentRow, key: string, _ctx: RenderCellCtx): Rea
         <div className="flex items-center gap-1.5 text-xs">
           {row.clampedCount > 0 && (
             <span className="text-amber-700 dark:text-amber-300" title="Clamped to min/max">
-              {row.clampedCount} clamped
+              {t('pricing.grid.clampedCount', { n: row.clampedCount })}
             </span>
           )}
           {row.warningsCount > 0 && (
             <span className="text-amber-700 dark:text-amber-300 inline-flex items-center gap-0.5">
-              <AlertCircle size={11} /> {row.warningsCount}
+              <AlertCircle size={11} aria-hidden="true" /> {row.warningsCount}
             </span>
           )}
           {row.clampedCount === 0 && row.warningsCount === 0 && (
@@ -1155,20 +1167,37 @@ function ChannelChip({
   isSelected,
   onToggle,
   onClick,
+  t,
 }: {
   snap: SnapshotRow
   isSelected: boolean
   onToggle: () => void
   onClick: () => void
+  t: (key: string, vars?: Record<string, string | number>) => string
 }) {
   const market = snap.marketplace.replace(/^AMAZON_/, '').replace(/^EBAY_/, '')
+  // P.F — WCAG AA: use the bold slate text instead of the muted -400
+  // for the market code so contrast on white meets 4.5:1.
   const tone = snap.source === 'FALLBACK' || snap.isClamped ? CHIP_TONE.FALLBACK : CHIP_TONE.NEUTRAL
   const warningCount = snap.warnings?.length ?? 0
+  const baseAria = t('pricing.grid.chipAria', {
+    channel: snap.channel,
+    marketplace: snap.marketplace,
+    fm: snap.fulfillmentMethod ?? '',
+    price: Number(snap.computedPrice).toFixed(2),
+  })
+  const ariaLabel = [
+    baseAria,
+    snap.isClamped ? t('pricing.grid.chipClamped', { from: snap.clampedFrom ?? '?' }) : '',
+    warningCount > 0 ? t('pricing.grid.chipWarnings', { n: warningCount, s: warningCount === 1 ? '' : 's' }) : '',
+  ].filter(Boolean).join(' · ')
   return (
     <button
       type="button"
+      aria-label={ariaLabel}
+      aria-pressed={isSelected}
       onClick={(e) => {
-        // Cmd/Ctrl + click = select for bulk; bare click opens drawer.
+        // Cmd/Ctrl/Shift + click = select for bulk; bare click opens drawer.
         if (e.metaKey || e.ctrlKey || e.shiftKey) {
           e.preventDefault()
           onToggle()
@@ -1176,23 +1205,39 @@ function ChannelChip({
           onClick()
         }
       }}
+      onKeyDown={(e) => {
+        // Keyboard parity: Space/Enter opens drawer; Cmd/Ctrl+Enter
+        // toggles selection. Lets keyboard-only operators do everything
+        // the mouse can.
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault()
+          if (e.metaKey || e.ctrlKey || e.shiftKey) {
+            onToggle()
+          } else {
+            onClick()
+          }
+        }
+      }}
       className={cn(
-        'inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-xs font-mono tabular-nums hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-700',
+        'inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-xs font-mono tabular-nums',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+        'hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-700',
         tone,
         isSelected && 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800',
       )}
-      title={`${snap.channel} · ${snap.marketplace}${snap.fulfillmentMethod ? ' · ' + snap.fulfillmentMethod : ''}${snap.isClamped ? ' · clamped from ' + (snap.clampedFrom ?? '?') : ''}${warningCount > 0 ? ' · ' + warningCount + ' warning(s)' : ''} — click to open · ⌘+click to select`}
+      title={ariaLabel}
     >
-      <span className="text-slate-400 dark:text-slate-500 font-sans not-italic font-medium">{market}</span>
+      <span className="text-slate-600 dark:text-slate-300 font-sans not-italic font-semibold">{market}</span>
       <span>{Number(snap.computedPrice).toFixed(2)}</span>
       {(snap.isClamped || warningCount > 0) && (
-        <AlertCircle size={9} className="text-amber-600 dark:text-amber-400" />
+        <AlertCircle size={9} className="text-amber-700 dark:text-amber-300" aria-hidden="true" />
       )}
     </button>
   )
 }
 
 function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): React.ReactNode {
+  const { t } = ctx
   const primary = row.primary
   const primarySelected = ctx.selected.has(primary.id)
   switch (key) {
@@ -1253,6 +1298,7 @@ function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): Re
                 isSelected={ctx.selected.has(chip.id)}
                 onToggle={() => ctx.toggleRow(chip.id)}
                 onClick={() => ctx.openDrawer(chip)}
+                t={t}
               />
             ))
           )}
@@ -1265,8 +1311,15 @@ function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): Re
             type="checkbox"
             checked={primarySelected}
             onChange={(e) => { e.stopPropagation(); ctx.toggleRow(primary.id) }}
-            className="rounded"
-            title="Select primary channel snapshot for bulk override"
+            className="rounded focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-label={t('pricing.grid.primaryCheckboxAria', {
+              channel: primary.channel,
+              marketplace: primary.marketplace,
+            })}
+            title={t('pricing.grid.primaryCheckboxAria', {
+              channel: primary.channel,
+              marketplace: primary.marketplace,
+            })}
           />
           {primary.warnings.length > 0 ? (
             <span
