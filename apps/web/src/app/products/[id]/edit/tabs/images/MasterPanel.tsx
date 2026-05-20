@@ -29,6 +29,22 @@ import type { ProductImage, WorkspaceProduct } from './types'
 const IMAGE_TYPES = ['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'] as const
 type ImageType = typeof IMAGE_TYPES[number]
 
+// IR.2.5 — Compact metadata subtitle: "1200×1200 · JPG · 245 KB"
+// Skips silently when every field is NULL (legacy row pre-backfill).
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatImageMeta(img: ProductImage): string | null {
+  const parts: string[] = []
+  if (img.width && img.height) parts.push(`${img.width}×${img.height}`)
+  if (img.mimeType) parts.push(img.mimeType.replace(/^image\//, '').toUpperCase())
+  if (img.fileSize) parts.push(formatBytes(img.fileSize))
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 const TYPE_COLORS: Record<ImageType, string> = {
   MAIN:      'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
   ALT:       'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
@@ -539,6 +555,14 @@ export default function MasterPanel({
                     {img.alt && editingId !== img.id && (
                       <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate" title={img.alt}>{img.alt}</p>
                     )}
+                    {editingId !== img.id && (() => {
+                      const meta = formatImageMeta(img)
+                      return meta ? (
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate" title={meta}>
+                          {meta}
+                        </p>
+                      ) : null
+                    })()}
                   </div>
                 </div>
               ))}
