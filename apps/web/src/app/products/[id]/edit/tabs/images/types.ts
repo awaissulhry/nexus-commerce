@@ -8,6 +8,11 @@ export interface ProductImage {
   type: string
   sortOrder: number
   publicId: string | null
+  // IR.2 — asset metadata, NULL on legacy rows pre-backfill.
+  width: number | null
+  height: number | null
+  mimeType: string | null
+  fileSize: number | null
   createdAt: string
 }
 
