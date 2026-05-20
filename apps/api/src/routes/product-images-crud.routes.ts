@@ -31,6 +31,7 @@ import {
   uploadBufferToCloudinary,
   type DeriveTransforms,
 } from '../services/cloudinary.service.js'
+import { analyzeProductImage } from '../services/ai/image-vision.service.js'
 
 const VALID_TYPES = new Set(['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'])
 
@@ -267,6 +268,35 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return reply.status(201).send(created)
+    },
+  )
+
+  // ── POST /api/products/:id/images/:imageId/analyze ───────────────────
+  // IR.6.2 — Run Gemini Vision on a master ProductImage, persist
+  // hasWhiteBackground / frameFillPct / hasTextOverlay / offCenterScore
+  // on the row. Audit hits AiUsageLog.
+  fastify.post<{ Params: { id: string; imageId: string } }>(
+    '/products/:id/images/:imageId/analyze',
+    async (req, reply) => {
+      const { id, imageId } = req.params
+      const source = await prisma.productImage.findFirst({
+        where: { id: imageId, productId: id },
+      })
+      if (!source) return reply.status(404).send({ error: 'IMAGE_NOT_FOUND' })
+
+      try {
+        const result = await analyzeProductImage({
+          productImageId: source.id,
+          url: source.url,
+        })
+        // Return the updated row so the FE can render new badges
+        // without a workspace reload round-trip.
+        const updated = await prisma.productImage.findUnique({ where: { id: source.id } })
+        return reply.send({ ok: true, result, image: updated })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Vision analysis failed'
+        return reply.status(502).send({ error: 'VISION_FAILED', message })
+      }
     },
   )
 
