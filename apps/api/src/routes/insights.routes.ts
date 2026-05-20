@@ -38,6 +38,10 @@ import {
   computeCustomerReport,
   customerReportToCsv,
 } from '../services/insights/insights-customers.service.js'
+import {
+  computeInventoryReport,
+  inventoryReportToCsv,
+} from '../services/insights/insights-inventory.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -231,6 +235,34 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'insights.customers failed')
         reply.code(500)
         return { error: 'insights_customers_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { format?: string } }>(
+    '/insights/inventory',
+    async (request, reply) => {
+      const filters = parseInsightsFilters(request)
+      try {
+        const report = await computeInventoryReport(filters)
+        if (request.query.format === 'csv') {
+          reply.header('Content-Type', 'text/csv; charset=utf-8')
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="insights-inventory-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          reply.header('Cache-Control', 'private, no-store')
+          return inventoryReportToCsv(report)
+        }
+        reply.header(
+          'Cache-Control',
+          'private, max-age=30, stale-while-revalidate=60',
+        )
+        return report
+      } catch (err) {
+        request.log.error({ err }, 'insights.inventory failed')
+        reply.code(500)
+        return { error: 'insights_inventory_failed' }
       }
     },
   )
