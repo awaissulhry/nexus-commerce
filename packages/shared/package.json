@@ -5,7 +5,8 @@
   "type": "module",
   "main": "vault.ts",
   "exports": {
-    ".": "./vault.ts"
+    ".": "./vault.ts",
+    "./image-validation": "./image-validation.ts"
   },
   "scripts": {
     "dev": "echo \"Add your shared dev command here\"",
