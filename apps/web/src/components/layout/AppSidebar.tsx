@@ -647,10 +647,13 @@ export default function AppSidebar() {
             href="/insights"
             icon={BarChart3}
             label="Insights"
-            active={
-              pathname.startsWith('/insights') ||
-              pathname === '/dashboard/overview'
-            }
+            active={pathname.startsWith('/insights')}
+          />
+          <NavItem
+            href="/dashboard/overview"
+            icon={BarChart3}
+            label="Command Center"
+            active={pathname === '/dashboard/overview'}
           />
         </NavGroup>
 
