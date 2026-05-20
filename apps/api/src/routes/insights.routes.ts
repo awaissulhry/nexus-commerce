@@ -47,6 +47,7 @@ import {
   fiscalReportToCsv,
 } from '../services/insights/insights-fiscal.service.js'
 import { computeAnomalies } from '../services/insights/insights-anomalies.service.js'
+import { computeExecutiveBrief } from '../services/insights/insights-brief.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -296,6 +297,22 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'insights.fiscal failed')
         reply.code(500)
         return { error: 'insights_fiscal_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { language?: string } }>(
+    '/insights/brief',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, max-age=300')
+      const filters = parseInsightsFilters(request)
+      const language = request.query.language === 'en' ? 'en' : 'it'
+      try {
+        return await computeExecutiveBrief(filters, { language })
+      } catch (err) {
+        request.log.error({ err }, 'insights.brief failed')
+        reply.code(500)
+        return { error: 'insights_brief_failed' }
       }
     },
   )
