@@ -219,6 +219,7 @@ export default function PricingMatrixClient() {
   const [bulkMode, setBulkMode] = useState<'SET_FIXED' | 'SET_PERCENT_DISCOUNT' | 'CLEAR'>('SET_FIXED')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const { toast } = useToast()
 
   // Lazy-load a parent's variant rows. Cached after first fetch.
@@ -365,10 +366,41 @@ export default function PricingMatrixClient() {
   }
 
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0
-  // P.C — bulk select operates on per-channel snapshot ids. Until
-  // P.D wires parent-cascade, only variant rows expose select. The
-  // "select all on page" affordance is omitted in the new grid; users
-  // pick snapshots from variant rows directly.
+  // P.D — bulk-select cascade. `selected` stays canonical at the
+  // per-snapshot-id level (because that's what the bulk-override API
+  // consumes). On top of that we derive a set of row ids whose entire
+  // underlying snapshot set is selected — used by VirtualizedGrid for
+  // the row checkbox display. `toggleRow` interprets the id:
+  //   - parent productId  → cascade to every variant × every channel
+  //   - variant:SKU       → cascade to every channel chip
+  //   - snapshot id       → toggle that one
+
+  // Walk every parent's variants (cached + visible only) and return
+  // the snapshot ids that belong to a given row id, plus the variant
+  // ids belonging to a parent id (for derived display).
+  const snapshotIdsForRow = useCallback((rowId: string): string[] => {
+    // Variant row?
+    if (rowId.startsWith('variant:')) {
+      for (const parentId of Object.keys(childrenByParent)) {
+        const variant = childrenByParent[parentId].find((v) => v.id === rowId)
+        if (variant) return [...variant.snapshotIds]
+      }
+      return []
+    }
+    // Parent row? Only cascade snapshots that we've actually loaded
+    // (i.e. the variants in cache). Operators have to expand the
+    // parent at least once before a cascade is possible — that's the
+    // same guarantee /products gives.
+    const variants = childrenByParent[rowId]
+    if (!variants) return []
+    const ids: string[] = []
+    for (const v of variants) ids.push(...v.snapshotIds)
+    return ids
+  }, [childrenByParent])
+
+  // Page-level "select all": every snapshot id under every loaded
+  // variant. Parents whose chevron has never been opened contribute
+  // nothing (consistent with /products lazy hierarchy).
   const allPageSnapshotIds = useMemo(() => {
     const ids: string[] = []
     for (const parent of data?.rows ?? []) {
@@ -379,6 +411,31 @@ export default function PricingMatrixClient() {
   }, [data, childrenByParent])
   const allPageSelected =
     allPageSnapshotIds.length > 0 && allPageSnapshotIds.every((id) => selected.has(id))
+
+  // Derived display set: includes parent + variant row ids whose
+  // entire snapshot set is in `selected`. VirtualizedGrid reads this
+  // to fill the row checkbox.
+  const displaySelected = useMemo(() => {
+    const out = new Set<string>(selected)
+    // Variants
+    for (const variants of Object.values(childrenByParent)) {
+      for (const v of variants) {
+        if (v.snapshotIds.length > 0 && v.snapshotIds.every((id) => selected.has(id))) {
+          out.add(v.id)
+        }
+      }
+    }
+    // Parents — only if every loaded variant beneath is fully selected
+    for (const parent of data?.rows ?? []) {
+      const variants = childrenByParent[parent.id]
+      if (!variants || variants.length === 0) continue
+      const allFull = variants.every(
+        (v) => v.snapshotIds.length > 0 && v.snapshotIds.every((id) => selected.has(id)),
+      )
+      if (allFull) out.add(parent.id)
+    }
+    return out
+  }, [selected, childrenByParent, data])
 
   const toggleAll = () => {
     if (allPageSelected) {
@@ -392,13 +449,58 @@ export default function PricingMatrixClient() {
     }
   }
 
-  const toggleRow = (id: string) => {
+  const toggleRow = useCallback((id: string) => {
+    // Cascade-capable ids: parent productId, or 'variant:SKU'.
+    const cascadeIds = snapshotIdsForRow(id)
+    if (cascadeIds.length > 0) {
+      setSelected((prev) => {
+        // If every cascade target is already selected, deselect all.
+        // Otherwise, add them all.
+        const allOn = cascadeIds.every((sid) => prev.has(sid))
+        const next = new Set(prev)
+        if (allOn) {
+          for (const sid of cascadeIds) next.delete(sid)
+        } else {
+          for (const sid of cascadeIds) next.add(sid)
+        }
+        return next
+      })
+      return
+    }
+    // Single snapshot id (from ChannelChip ⌘+click, or variant's
+    // primary checkbox in the warnings cell).
     setSelected((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
-  }
+  }, [snapshotIdsForRow])
+
+  // Cascade-scope summary for the confirmation modal.
+  // Crosses every variant cache and counts (snapshots, variants,
+  // products) currently in the selection set.
+  const cascadeScope = useMemo(() => {
+    let snapshots = 0
+    const variants = new Set<string>()
+    const products = new Set<string>()
+    for (const parent of data?.rows ?? []) {
+      const childVariants = childrenByParent[parent.id] ?? []
+      let parentTouched = false
+      for (const v of childVariants) {
+        let variantTouched = false
+        for (const sid of v.snapshotIds) {
+          if (selected.has(sid)) {
+            snapshots += 1
+            variantTouched = true
+            parentTouched = true
+          }
+        }
+        if (variantTouched) variants.add(v.id)
+      }
+      if (parentTouched) products.add(parent.id)
+    }
+    return { snapshots, variants: variants.size, products: products.size }
+  }, [selected, childrenByParent, data])
 
   // Open the drawer from any per-channel snapshot. The drawer is the
   // primary affordance for inspecting + pushing a single price; it
@@ -603,7 +705,7 @@ export default function PricingMatrixClient() {
           <Button
             variant="primary"
             size="sm"
-            onClick={applyBulkOverride}
+            onClick={() => setBulkConfirmOpen(true)}
             loading={bulkApplying}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
             className="ml-auto bg-white text-slate-900 hover:bg-slate-100 border-white"
@@ -640,7 +742,7 @@ export default function PricingMatrixClient() {
             visible={PRICING_COLUMNS}
             density={density}
             cellPad={DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable}
-            selected={selected}
+            selected={displaySelected}
             toggleSelect={(id) => toggleRow(id)}
             toggleSelectAll={toggleAll}
             allSelected={allPageSelected}
@@ -705,6 +807,90 @@ export default function PricingMatrixClient() {
           groups={PRICING_SHORTCUTS}
           onClose={() => setShortcutsOpen(false)}
         />
+      )}
+
+      {/* P.D — Bulk override confirmation modal. Shows the cascade
+          scope explicitly so the operator knows the blast radius
+          before committing. */}
+      {bulkConfirmOpen && (
+        <Modal
+          open
+          onClose={() => setBulkConfirmOpen(false)}
+          size="md"
+          title={
+            <div className="text-md font-semibold text-slate-900 dark:text-slate-100">
+              Confirm bulk override
+            </div>
+          }
+        >
+          <ModalBody className="space-y-4">
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 p-4">
+              <div className="text-sm uppercase tracking-wider text-blue-700 dark:text-blue-300 font-semibold">
+                Cascade scope
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                    {cascadeScope.snapshots}
+                  </div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500">
+                    snapshot{cascadeScope.snapshots === 1 ? '' : 's'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                    {cascadeScope.variants}
+                  </div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500">
+                    variant{cascadeScope.variants === 1 ? '' : 's'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[24px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                    {cascadeScope.products}
+                  </div>
+                  <div className="text-xs uppercase tracking-wider text-slate-500">
+                    product{cascadeScope.products === 1 ? '' : 's'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1.5 text-base text-slate-700 dark:text-slate-300">
+              <div>
+                <span className="font-medium">Action:</span>{' '}
+                {bulkMode === 'SET_FIXED' && `Set every selected price to ${bulkValue} EUR`}
+                {bulkMode === 'SET_PERCENT_DISCOUNT' && `Discount every selected price by ${bulkValue}%`}
+                {bulkMode === 'CLEAR' && 'Clear every selected override (back to engine default)'}
+              </div>
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                Writes one ChannelListingOverride row per snapshot for
+                audit. Pushes happen out-of-band via the outbound queue.
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setBulkConfirmOpen(false)}
+                disabled={bulkApplying}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={async () => {
+                  setBulkConfirmOpen(false)
+                  await applyBulkOverride()
+                }}
+                loading={bulkApplying}
+                disabled={cascadeScope.snapshots === 0}
+              >
+                Apply to {cascadeScope.snapshots} snapshot{cascadeScope.snapshots === 1 ? '' : 's'}
+              </Button>
+            </div>
+          </ModalBody>
+        </Modal>
       )}
     </div>
   )
