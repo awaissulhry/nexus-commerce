@@ -3,13 +3,25 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "main": "vault.ts",
+  "main": "./dist/vault.js",
+  "types": "./dist/vault.d.ts",
   "exports": {
-    ".": "./vault.ts",
-    "./image-validation": "./image-validation.ts"
+    ".": {
+      "types": "./dist/vault.d.ts",
+      "default": "./dist/vault.js"
+    },
+    "./image-validation": {
+      "types": "./dist/image-validation.d.ts",
+      "default": "./dist/image-validation.js"
+    }
   },
   "scripts": {
-    "dev": "echo \"Add your shared dev command here\"",
-    "build": "echo \"Add your shared build command here\""
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
   }
 }
