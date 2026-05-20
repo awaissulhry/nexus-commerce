@@ -13,6 +13,9 @@ export interface ProductImage {
   height: number | null
   mimeType: string | null
   fileSize: number | null
+  // IR.4 — Self-FK to the source ProductImage when this row was created
+  // by the in-app editor (crop / rotate / flip). NULL for originals.
+  derivedFromImageId: string | null
   createdAt: string
 }
 

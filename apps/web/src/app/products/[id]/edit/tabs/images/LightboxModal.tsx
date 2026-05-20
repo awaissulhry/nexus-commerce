@@ -39,6 +39,9 @@ interface Props {
   onMasterImageUpdated?: (updated: ProductImage) => void
   /** IR.4.4 — open the in-app image editor for a master ProductImage. */
   onEditMaster?: (img: ProductImage) => void
+  /** IR.4.5 — switch the focused image to a different master without
+   *  closing the lightbox. Used by the derivation chain section. */
+  onSwitchToMaster?: (img: ProductImage) => void
   onClose: () => void
   onNavigate: (dir: 'prev' | 'next') => void
 }
@@ -62,6 +65,7 @@ export default function LightboxModal({
   productId,
   onMasterImageUpdated,
   onEditMaster,
+  onSwitchToMaster,
   onClose,
   onNavigate,
 }: Props) {
@@ -130,6 +134,15 @@ export default function LightboxModal({
   const masterSource = image.kind === 'listing' && image.sourceProductImageId
     ? masterImages.find((m) => m.id === image.sourceProductImageId)
     : null
+
+  // IR.4.5 — derivation chain (master only). Parent + children of the
+  // currently-focused master image, lifted out of the workspace payload.
+  const derivationParent = image.kind === 'master' && image.derivedFromImageId
+    ? masterImages.find((m) => m.id === image.derivedFromImageId)
+    : null
+  const derivationChildren = image.kind === 'master'
+    ? masterImages.filter((m) => m.derivedFromImageId === image.id)
+    : []
 
   const hasSiblings = siblings.length > 1
   const idx = siblings.findIndex((s) => s.id === image.id)
@@ -347,6 +360,55 @@ export default function LightboxModal({
                   </>
                 )}
               </dl>
+            </div>
+          )}
+
+          {/* IR.4.5 — Version chain (master only). Shows parent in the
+              derivation tree + any children created by the editor. */}
+          {image.kind === 'master' && (derivationParent || derivationChildren.length > 0) && (
+            <div>
+              <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Version chain</h4>
+              {derivationParent && (
+                <div className="text-xs text-slate-700 dark:text-slate-200 mb-1.5">
+                  <span className="text-slate-500 dark:text-slate-400">↑ derived from </span>
+                  <button
+                    type="button"
+                    onClick={() => onSwitchToMaster?.(derivationParent)}
+                    disabled={!onSwitchToMaster}
+                    className="font-mono text-blue-600 dark:text-blue-400 hover:underline disabled:no-underline disabled:text-slate-700 dark:disabled:text-slate-200"
+                  >
+                    {derivationParent.type}
+                  </button>
+                  {derivationParent.width && derivationParent.height && (
+                    <span className="text-slate-400 ml-1">({derivationParent.width}×{derivationParent.height})</span>
+                  )}
+                </div>
+              )}
+              {derivationChildren.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {derivationChildren.length} derivative{derivationChildren.length === 1 ? '' : 's'}:
+                  </p>
+                  <ul className="space-y-1 text-xs">
+                    {derivationChildren.map((child) => (
+                      <li key={child.id} className="flex items-center gap-2">
+                        <span className="text-slate-400">↓</span>
+                        <button
+                          type="button"
+                          onClick={() => onSwitchToMaster?.(child)}
+                          disabled={!onSwitchToMaster}
+                          className="font-mono text-blue-600 dark:text-blue-400 hover:underline disabled:no-underline disabled:text-slate-700 dark:disabled:text-slate-200"
+                        >
+                          {child.type}
+                        </button>
+                        {child.width && child.height && (
+                          <span className="text-slate-400 text-[11px]">{child.width}×{child.height}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

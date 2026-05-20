@@ -29,6 +29,9 @@ export interface LightboxImage {
   height?: number | null
   mimeType?: string | null
   fileSize?: number | null
+  // IR.4 — master rows only — parent in the derivation chain (NULL for
+  // originals). Lets the drawer render "Derived from MAIN" + walk back.
+  derivedFromImageId?: string | null
   // For listing rows: which channel + slot this image is on.
   platform?: string | null
   marketplace?: string | null
@@ -58,6 +61,7 @@ export function fromMaster(p: ProductImage): LightboxImage {
     height: p.height,
     mimeType: p.mimeType,
     fileSize: p.fileSize,
+    derivedFromImageId: p.derivedFromImageId,
   }
 }
 

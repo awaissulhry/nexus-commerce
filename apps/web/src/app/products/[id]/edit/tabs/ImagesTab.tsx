@@ -416,6 +416,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           productId={product.id}
           onMasterImageUpdated={() => { void workspace.reload() }}
           onEditMaster={(img) => setEditorImage(img)}
+          onSwitchToMaster={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
           onClose={lightbox.close}
           onNavigate={lightbox.navigate}
         />
