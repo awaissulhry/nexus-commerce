@@ -61,6 +61,8 @@ interface Props {
   onToast?: (msg: string) => void
   // IR.3.2 — click on a thumbnail opens the shared lightbox at ImagesTab.
   onOpenLightbox?: (img: ProductImage) => void
+  // IR.7.4 — open the DAM library picker.
+  onOpenDamPicker?: () => void
 }
 
 export default function MasterPanel({
@@ -70,6 +72,7 @@ export default function MasterPanel({
   onAddToChannel,
   onToast,
   onOpenLightbox,
+  onOpenDamPicker,
 }: Props) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
