@@ -25,9 +25,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import {
+  buildDerivedUrl,
   deleteFromCloudinary,
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
+  type DeriveTransforms,
 } from '../services/cloudinary.service.js'
 
 const VALID_TYPES = new Set(['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'])
@@ -178,6 +180,93 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
       return reply.send(updated)
+    },
+  )
+
+  // ── POST /api/products/:id/images/:imageId/derive ────────────────────
+  // IR.4.2 — Create a new ProductImage as a Cloudinary-transformation
+  // derivative of the source. No re-upload — the new row's URL is just
+  // a fresh signed URL pointing at the same source bytes with the
+  // operator's crop/rotate/flip chain baked into the path.
+  fastify.post<{
+    Params: { id: string; imageId: string }
+    Body: DeriveTransforms & {
+      type?: string
+      alt?: string | null
+    }
+  }>(
+    '/products/:id/images/:imageId/derive',
+    async (req, reply) => {
+      const { id, imageId } = req.params
+      const source = await prisma.productImage.findFirst({
+        where: { id: imageId, productId: id },
+      })
+      if (!source) return reply.status(404).send({ error: 'IMAGE_NOT_FOUND' })
+      if (!source.publicId) {
+        return reply.status(400).send({
+          error: 'NO_PUBLIC_ID',
+          message: 'Source image has no Cloudinary publicId (legacy or external import) — cannot derive in-place.',
+        })
+      }
+
+      const body = req.body ?? {}
+      const { crop, rotate, flipH, flipV, type: typeOverride, alt: altOverride } = body
+
+      // At least one transform must be requested.
+      const hasTransform = !!crop || (typeof rotate === 'number' && rotate !== 0) || flipH || flipV
+      if (!hasTransform) {
+        return reply.status(400).send({ error: 'NO_TRANSFORMS' })
+      }
+
+      if (typeOverride !== undefined && !VALID_TYPES.has(typeOverride)) {
+        return reply.status(400).send({ error: 'INVALID_TYPE', validTypes: [...VALID_TYPES] })
+      }
+
+      if (!isCloudinaryConfigured()) {
+        return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
+      }
+
+      // Compute derived dimensions from the request — Cloudinary doesn't
+      // round-trip metadata on transformation URLs, and re-fetching to
+      // measure adds latency. crop's w/h is authoritative; pure rotation
+      // ±90° swaps axes.
+      let derivedWidth: number | null = source.width
+      let derivedHeight: number | null = source.height
+      if (crop) {
+        derivedWidth = Math.round(crop.width)
+        derivedHeight = Math.round(crop.height)
+      }
+      if (typeof rotate === 'number' && Math.abs(rotate) % 180 === 90) {
+        ;[derivedWidth, derivedHeight] = [derivedHeight, derivedWidth]
+      }
+
+      const derivedUrl = buildDerivedUrl(source.publicId, { crop, rotate, flipH, flipV })
+
+      const count = await prisma.productImage.count({ where: { productId: id } })
+
+      const created = await prisma.productImage.create({
+        data: {
+          productId: id,
+          url: derivedUrl,
+          // publicId stays NULL — this row doesn't own a Cloudinary asset.
+          // Deleting it doesn't remove the source; deleting the source
+          // sets derivedFromImageId to NULL via the FK.
+          publicId: null,
+          type: typeOverride ?? source.type,
+          alt: altOverride !== undefined ? altOverride : source.alt,
+          sortOrder: count,
+          width: derivedWidth,
+          height: derivedHeight,
+          mimeType: source.mimeType,
+          // fileSize stays NULL — transformations change byte count
+          // unpredictably and a HEAD request to measure would slow the
+          // request path. Set when the derivative is first served.
+          fileSize: null,
+          derivedFromImageId: source.id,
+        },
+      })
+
+      return reply.status(201).send(created)
     },
   )
 

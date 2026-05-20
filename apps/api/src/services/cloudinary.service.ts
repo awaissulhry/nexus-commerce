@@ -120,6 +120,53 @@ export function uploadBufferToCloudinary(
  * was already gone (result.result === 'not found'). Throws on network
  * or auth errors so callers can decide whether to surface them.
  */
+/**
+ * IR.4.2 — Build a Cloudinary transformation URL from an existing
+ * publicId without re-uploading. Lets the editor commit crop / rotate /
+ * flip operations as a new derived ProductImage whose `url` is just a
+ * fresh signed URL pointing at the same source bytes with a transform
+ * chain applied.
+ *
+ * Transformation order matters: crop → rotate → flips. Cloudinary
+ * applies transformations left-to-right, so a crop after rotation
+ * would crop in the rotated coordinate space — usually not what the
+ * operator drew on screen.
+ */
+export interface DeriveTransforms {
+  crop?: { x: number; y: number; width: number; height: number }
+  rotate?: number   // degrees; multiples of 90 recommended
+  flipH?: boolean
+  flipV?: boolean
+}
+
+export function buildDerivedUrl(publicId: string, transforms: DeriveTransforms): string {
+  ensureConfigured()
+  const chain: Array<Record<string, string | number>> = []
+  if (transforms.crop) {
+    const { x, y, width, height } = transforms.crop
+    chain.push({
+      crop: 'crop',
+      width: Math.round(width),
+      height: Math.round(height),
+      x: Math.round(x),
+      y: Math.round(y),
+    })
+  }
+  if (transforms.rotate && transforms.rotate !== 0) {
+    chain.push({ angle: Math.round(transforms.rotate) })
+  }
+  if (transforms.flipH) {
+    chain.push({ angle: 'hflip' })
+  }
+  if (transforms.flipV) {
+    chain.push({ angle: 'vflip' })
+  }
+  return cloudinary.url(publicId, {
+    secure: true,
+    transformation: chain,
+  })
+}
+
 export async function deleteFromCloudinary(
   publicId: string,
   resourceType: 'image' | 'video' | 'raw' = 'image',
