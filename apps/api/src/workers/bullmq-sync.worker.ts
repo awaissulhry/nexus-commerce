@@ -14,6 +14,7 @@ import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
 import OutboundSyncService from '../services/outbound-sync.service.js'
+import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
 import { calculateTargetPrice } from '../services/repricer.service.js'
 import { productEventService } from '../services/product-event.service.js'
 
@@ -126,6 +127,34 @@ async function processOutboundSyncJob(job: Job) {
         currentStatus: queueRecord.syncStatus,
       })
       return { status: 'SKIPPED', queueId, reason: 'Not in PENDING status' }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // D.2 — Delist branch. UNPUBLISH_LISTING / DELETE_LISTING rows are
+    // enqueued by /products bulk-hard-delete (D.1) to push the local
+    // delete out to Amazon/eBay/Shopify. By the time we drain, the
+    // Product + ChannelListing rows are typically gone, so we skip
+    // every downstream check (publishing controls, pricing recompute,
+    // VARIATION_SYNC routing) and go straight to the channel adapter
+    // using only the data on the OutboundSyncQueue row itself.
+    if (syncType === 'UNPUBLISH_LISTING' || syncType === 'DELETE_LISTING') {
+      const result = await dispatchChannelDelist({
+        queueId,
+        productId: queueRecord.productId,
+        channelListingId: queueRecord.channelListingId,
+        targetChannel: targetChannel as string,
+        targetRegion: queueRecord.targetRegion,
+        externalListingId: queueRecord.externalListingId,
+        syncType,
+        payload: queueRecord.payload,
+      })
+      await applyDelistResultToQueue(queueId, result)
+      if (result.success) {
+        successCount++
+        return { status: 'SUCCESS', queueId, result }
+      }
+      failureCount++
+      return { status: 'FAILED', queueId, result }
     }
 
     // ─────────────────────────────────────────────────────────────────────

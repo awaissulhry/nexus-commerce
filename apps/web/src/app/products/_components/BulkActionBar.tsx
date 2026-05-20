@@ -40,6 +40,7 @@ import {
   ExternalLink,
   X,
   Trash2,
+  AlertTriangle,
   RotateCcw,
   Calendar,
   Pencil,
@@ -268,20 +269,20 @@ export function BulkActionBar({
   // deletedAt != null, so this only fires once rows are already
   // soft-deleted. Emits product.deleted so other open pages (PDP,
   // related pickers, replenishment) drop the rows without a refetch.
-  const hardDeleteBulk = async () =>
+  const hardDeleteBulk = async (channelAction: 'none' | 'unpublish' | 'delete' = 'none') =>
     run('Permanently deleting…', async () => {
       const res = await fetch(
         `${getBackendUrl()}/api/products/bulk-hard-delete`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productIds: selectedIds }),
+          body: JSON.stringify({ productIds: selectedIds, channelAction }),
         },
       )
       if (!res.ok) throw new Error((await res.json()).error)
       emitInvalidation({
         type: 'product.deleted',
-        meta: { productIds: selectedIds, source: 'bulk-hard-delete' },
+        meta: { productIds: selectedIds, source: 'bulk-hard-delete', channelAction },
       })
     })
 
@@ -825,12 +826,13 @@ export function BulkActionBar({
       {hardDeleteConfirmOpen && (
         <HardDeleteConfirmModal
           count={selectedIds.length}
+          productIds={selectedIds}
           productLookup={productLookup.filter((p) => selectedIds.includes(p.id))}
           busy={busy}
           onCancel={() => setHardDeleteConfirmOpen(false)}
-          onConfirm={async () => {
+          onConfirm={async (channelAction) => {
             setHardDeleteConfirmOpen(false)
-            await hardDeleteBulk()
+            await hardDeleteBulk(channelAction)
           }}
         />
       )}
@@ -838,31 +840,92 @@ export function BulkActionBar({
   )
 }
 
-// F.1 — hard-delete confirm. Lists up to ~8 SKUs (full count in the
-// header) and requires typing DELETE before the action is enabled.
-// The cascade (productImages + marketplaceSyncs + listings + stockLogs
-// + fbaShipmentItems) is irreversible, so this is the second checkpoint
-// after the row already being in the recycle bin.
+interface PreflightWarnings {
+  channelListings: Array<{ productId: string; channel: string; marketplace: string | null; externalListingId: string }>
+  openOrders: Array<{ productId: string; orderId: string; channelOrderId: string; channel: string; status: string }>
+  activeBundles: Array<{ productId: string; bundleId: string; role: 'master' | 'component' }>
+  fbaInventory: Array<{ productId: string; marketplaceId: string; fulfillmentCenterId: string; quantity: number; condition: string }>
+}
+
+// D.4 — hard-delete confirm. Three-channelAction radio (Local-only /
+// Unpublish / Delete-on-channel), pre-flight warnings panel (channel
+// listings + open orders + active bundles + FBA stranded inventory),
+// and a typed-DELETE confirmation. The radio defaults to 'unpublish'
+// when any channel listing exists, 'none' otherwise (no listings to
+// touch). All paths still walk the same backend cascade — only the
+// payload differs.
 function HardDeleteConfirmModal({
   count,
+  productIds,
   productLookup,
   busy,
   onCancel,
   onConfirm,
 }: {
   count: number
+  productIds: string[]
   productLookup: BulkActionProduct[]
   busy: boolean
   onCancel: () => void
-  onConfirm: () => void
+  onConfirm: (channelAction: 'none' | 'unpublish' | 'delete') => void
 }) {
   const [typed, setTyped] = useState('')
+  const [preflight, setPreflight] = useState<PreflightWarnings | null>(null)
+  const [preflightLoading, setPreflightLoading] = useState(true)
+  const [preflightError, setPreflightError] = useState<string | null>(null)
+  const [channelAction, setChannelAction] = useState<'none' | 'unpublish' | 'delete'>('unpublish')
+
+  useEffect(() => {
+    let cancelled = false
+    setPreflightLoading(true)
+    setPreflightError(null)
+    fetch(
+      `${getBackendUrl()}/api/products/hard-delete-preflight?ids=${productIds.join(',')}`,
+      { cache: 'no-store' },
+    )
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `${res.status} ${res.statusText}`)
+        return res.json()
+      })
+      .then((data: PreflightWarnings) => {
+        if (cancelled) return
+        setPreflight(data)
+        // Sensible default: if there are no channel listings, "Local-only"
+        // is the right choice; if there are listings, "Unpublish" is the
+        // safer non-destructive default.
+        setChannelAction(data.channelListings.length === 0 ? 'none' : 'unpublish')
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setPreflightError(e?.message ?? 'Failed to load preflight')
+      })
+      .finally(() => {
+        if (!cancelled) setPreflightLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [productIds.join(',')])
+
   const armed = typed.trim().toUpperCase() === 'DELETE'
   const preview = productLookup.slice(0, 8)
   const overflow = Math.max(0, count - preview.length)
 
+  // Group channel listings by channel for compact summary.
+  const channelSummary = (preflight?.channelListings ?? []).reduce<Record<string, number>>(
+    (acc, l) => {
+      const key = `${l.channel}${l.marketplace ? ` · ${l.marketplace}` : ''}`
+      acc[key] = (acc[key] ?? 0) + 1
+      return acc
+    },
+    {},
+  )
+
+  const hasListings = (preflight?.channelListings.length ?? 0) > 0
+  const hasOpenOrders = (preflight?.openOrders.length ?? 0) > 0
+  const hasBundles = (preflight?.activeBundles.length ?? 0) > 0
+  const hasFba = (preflight?.fbaInventory.length ?? 0) > 0
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/50"
         onClick={busy ? undefined : onCancel}
@@ -872,9 +935,9 @@ function HardDeleteConfirmModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="hard-delete-title"
-        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-rose-200 dark:border-rose-900 w-full max-w-md"
+        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-rose-200 dark:border-rose-900 w-full max-w-2xl max-h-[90vh] flex flex-col"
       >
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <h2
             id="hard-delete-title"
             className="text-lg font-semibold text-rose-700 dark:text-rose-300 inline-flex items-center gap-2"
@@ -883,38 +946,152 @@ function HardDeleteConfirmModal({
             Permanently delete {count} product{count !== 1 ? 's' : ''}?
           </h2>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            This wipes the products and every dependent record — channel
-            listings, sync history, stock log, image metadata, FBA
-            shipment lines. It cannot be undone.
+            Local rows + every dependent (channel listings, sync history,
+            stock log, FBA shipment lines) are wiped. Pick how you want the
+            channel side handled below — undoable on the local side only
+            when you choose "Local-only".
           </p>
         </div>
-        <div className="px-5 py-4 space-y-3">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Affected SKUs
+
+        <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
+          {/* Affected SKUs */}
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+              Affected SKUs
+            </div>
+            <div className="max-h-32 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+              {preview.map((p) => (
+                <div
+                  key={p.id}
+                  className="px-3 py-1.5 text-sm flex items-center justify-between gap-2"
+                >
+                  <span className="font-mono text-slate-700 dark:text-slate-300 shrink-0">{p.sku}</span>
+                  <span className="text-slate-500 dark:text-slate-400 truncate">{p.name}</span>
+                </div>
+              ))}
+              {overflow > 0 && (
+                <div className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400">…and {overflow} more</div>
+              )}
+            </div>
           </div>
-          <div className="max-h-40 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-            {preview.map((p) => (
-              <div
-                key={p.id}
-                className="px-3 py-1.5 text-sm flex items-center justify-between gap-2"
-              >
-                <span className="font-mono text-slate-700 dark:text-slate-300 shrink-0">
-                  {p.sku}
+
+          {/* Pre-flight warnings */}
+          {preflightLoading && (
+            <div className="text-sm text-slate-500 dark:text-slate-400">Checking for live listings, open orders, bundles, FBA stock…</div>
+          )}
+          {preflightError && (
+            <div className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+              Pre-flight check failed: {preflightError}. You can still delete, but channel-side state isn't visible.
+            </div>
+          )}
+          {!preflightLoading && preflight && (
+            <div className="space-y-2">
+              {hasListings && (
+                <div className="rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2">
+                  <div className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                    Live on {preflight!.channelListings.length} channel listing{preflight!.channelListings.length !== 1 ? 's' : ''}
+                  </div>
+                  <ul className="mt-1 text-xs text-blue-900 dark:text-blue-200 space-y-0.5">
+                    {Object.entries(channelSummary).map(([key, n]) => (
+                      <li key={key}>
+                        <span className="font-mono">{key}</span> · {n} SKU{n !== 1 ? 's' : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {hasOpenOrders && (
+                <div className="rounded border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2">
+                  <div className="text-sm font-medium text-rose-900 dark:text-rose-200 inline-flex items-center gap-1.5">
+                    <AlertTriangle size={13} />
+                    {preflight!.openOrders.length} open order{preflight!.openOrders.length !== 1 ? 's' : ''} reference these SKUs
+                  </div>
+                  <p className="mt-1 text-xs text-rose-900 dark:text-rose-200">
+                    Reports will dangle. Consider fulfilling or cancelling first.
+                  </p>
+                </div>
+              )}
+              {hasBundles && (
+                <div className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+                  <div className="text-sm font-medium text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5">
+                    <AlertTriangle size={13} />
+                    Active bundle{preflight!.activeBundles.length !== 1 ? 's' : ''} reference these SKUs
+                  </div>
+                  <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
+                    Bundles will break. Edit the bundle definition first.
+                  </p>
+                </div>
+              )}
+              {hasFba && (
+                <div className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+                  <div className="text-sm font-medium text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5">
+                    <AlertTriangle size={13} />
+                    FBA inventory still at fulfillment centers
+                  </div>
+                  <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
+                    Stock becomes stranded. Create a removal order in Seller Central before delisting.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Channel-action radio */}
+          {hasListings && (
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                Channel action
+              </legend>
+              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'unpublish' ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40' : 'border-slate-200 dark:border-slate-700'}`}>
+                <input
+                  type="radio"
+                  name="channelAction"
+                  value="unpublish"
+                  checked={channelAction === 'unpublish'}
+                  onChange={() => setChannelAction('unpublish')}
+                  className="mt-0.5"
+                  disabled={busy}
+                />
+                <span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Unpublish (recommended)</span>
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">Pause the offer on each channel — keeps the listing record so you can republish later. Amazon: discontinued; eBay: end listing; Shopify: status DRAFT.</span>
                 </span>
-                <span className="text-slate-500 dark:text-slate-400 truncate">
-                  {p.name}
+              </label>
+              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'delete' ? 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-slate-200 dark:border-slate-700'}`}>
+                <input
+                  type="radio"
+                  name="channelAction"
+                  value="delete"
+                  checked={channelAction === 'delete'}
+                  onChange={() => setChannelAction('delete')}
+                  className="mt-0.5"
+                  disabled={busy}
+                />
+                <span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Delete on channel</span>
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">Remove the listing from each channel's catalog where possible (Amazon SKU offer removed, Shopify product deleted). Republishing later means starting over.</span>
                 </span>
-              </div>
-            ))}
-            {overflow > 0 && (
-              <div className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400">
-                …and {overflow} more
-              </div>
-            )}
-          </div>
+              </label>
+              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'none' ? 'border-slate-400 bg-slate-50 dark:border-slate-500 dark:bg-slate-800' : 'border-slate-200 dark:border-slate-700'}`}>
+                <input
+                  type="radio"
+                  name="channelAction"
+                  value="none"
+                  checked={channelAction === 'none'}
+                  onChange={() => setChannelAction('none')}
+                  className="mt-0.5"
+                  disabled={busy}
+                />
+                <span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Local-only</span>
+                  <span className="block text-xs text-slate-600 dark:text-slate-400">Wipe the local rows but leave the channel listings in place. Useful if you want to keep selling on Amazon/eBay/Shopify while cleaning up the local catalog.</span>
+                </span>
+              </label>
+            </fieldset>
+          )}
+
           <label className="block text-sm text-slate-700 dark:text-slate-300">
-            Type <span className="font-mono font-semibold">DELETE</span> to
-            confirm:
+            Type <span className="font-mono font-semibold">DELETE</span> to confirm:
             <input
               type="text"
               autoFocus
@@ -926,19 +1103,22 @@ function HardDeleteConfirmModal({
             />
           </label>
         </div>
-        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+
+        <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2 flex-shrink-0">
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
           <Button
             size="sm"
-            onClick={onConfirm}
+            onClick={() => onConfirm(channelAction)}
             disabled={!armed || busy}
             loading={busy}
             className="bg-rose-600 hover:bg-rose-700 border-rose-600 text-white disabled:bg-rose-300 disabled:border-rose-300"
             icon={<Trash2 size={12} />}
           >
-            Permanently delete
+            {channelAction === 'delete' ? 'Delete locally + on channel' :
+             channelAction === 'unpublish' ? 'Delete locally + unpublish' :
+             'Delete locally only'}
           </Button>
         </div>
       </div>
