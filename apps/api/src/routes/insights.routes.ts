@@ -42,6 +42,10 @@ import {
   computeInventoryReport,
   inventoryReportToCsv,
 } from '../services/insights/insights-inventory.service.js'
+import {
+  computeFiscalReport,
+  fiscalReportToCsv,
+} from '../services/insights/insights-fiscal.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -263,6 +267,34 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'insights.inventory failed')
         reply.code(500)
         return { error: 'insights_inventory_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { format?: string } }>(
+    '/insights/fiscal',
+    async (request, reply) => {
+      const filters = parseInsightsFilters(request)
+      try {
+        const report = await computeFiscalReport(filters)
+        if (request.query.format === 'csv') {
+          reply.header('Content-Type', 'text/csv; charset=utf-8')
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="insights-fiscal-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          reply.header('Cache-Control', 'private, no-store')
+          return fiscalReportToCsv(report)
+        }
+        reply.header(
+          'Cache-Control',
+          'private, max-age=30, stale-while-revalidate=60',
+        )
+        return report
+      } catch (err) {
+        request.log.error({ err }, 'insights.fiscal failed')
+        reply.code(500)
+        return { error: 'insights_fiscal_failed' }
       }
     },
   )
