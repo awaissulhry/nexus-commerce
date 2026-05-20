@@ -157,6 +157,7 @@ export default function InboundWorkspace() {
   const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
   const sortBy = searchParams.get('sortBy') ?? 'createdAt'
   const sortDir = (searchParams.get('sortDir') as 'asc' | 'desc') ?? 'desc'
+  const showDeleted = searchParams.get('deleted') === 'true'
 
   const [searchInput, setSearchInput] = useState(search)
   const [items, setItems] = useState<Inbound[]>([])
@@ -217,6 +218,7 @@ export default function InboundWorkspace() {
       qs.set('pageSize', '50')
       qs.set('sortBy', sortBy)
       qs.set('sortDir', sortDir)
+      if (showDeleted) qs.set('deleted', 'true')
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound?${qs.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`inbound list failed: ${res.status}`)
       const data = await res.json()
@@ -229,7 +231,7 @@ export default function InboundWorkspace() {
     } finally {
       setLoading(false)
     }
-  }, [tab, status, delayed, search, page, sortBy, sortDir])
+  }, [tab, status, delayed, search, page, sortBy, sortDir, showDeleted])
 
   const fetchKpis = useCallback(async () => {
     try {
@@ -320,6 +322,19 @@ export default function InboundWorkspace() {
             </button>
             <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('inbound.newInbound')}
+            </button>
+            <button
+              type="button"
+              onClick={() => updateUrl({ deleted: showDeleted ? undefined : 'true', page: undefined })}
+              title={showDeleted ? t('inbound.recycleBin.exit') : t('inbound.recycleBin.enter')}
+              className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 transition-colors ${
+                showDeleted
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
+                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Trash2 size={12} />
+              {showDeleted ? t('inbound.recycleBin.label') : <span className="sr-only">{t('inbound.recycleBin.enter')}</span>}
             </button>
           </div>
         }
@@ -845,6 +860,7 @@ const DISCREPANCY_REASONS: Array<{ value: string; label: string }> = [
 const ATTACHMENT_KINDS = ['INVOICE', 'PACKING', 'CUSTOMS', 'ASN', 'PHOTO', 'OTHER']
 
 function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  const { t } = useTranslations()
   const { toast } = useToast()
   const askConfirm = useConfirm()
   const [shipment, setShipment] = useState<any>(null)
@@ -1254,6 +1270,65 @@ function InboundDrawer({ id, onClose, onChanged }: { id: string; onClose: () => 
                 onClick={async () => { if (await askConfirm({ title: 'Cancel shipment?', description: 'This is terminal — the shipment cannot be reopened.', confirmLabel: 'Cancel shipment', cancelLabel: 'Keep open', tone: 'danger' })) transition('CANCELLED') }}
                 className="ml-auto h-8 px-3 text-base text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded"
               >Cancel</button>
+            )}
+            {/* RB.1 — per-row Delete / Restore. Soft-deletes the
+                inbound shipment via bulk-soft-delete (single-id array
+                for code-path consistency). Hard-delete is gated behind
+                the bulk Recycle Bin scope; per-row we only surface the
+                bin entry point. */}
+            {shipment.deletedAt ? (
+              <button
+                onClick={async () => {
+                  setBusy(true)
+                  try {
+                    const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/bulk-restore`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ids: [id] }),
+                    })
+                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Restore failed')
+                    fetchOne()
+                    onChanged()
+                  } catch (e: any) {
+                    toast.error(e.message)
+                  } finally { setBusy(false) }
+                }}
+                disabled={busy}
+                className={`${shipment.status === 'CLOSED' || shipment.status === 'CANCELLED' ? 'ml-auto ' : ''}h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50 inline-flex items-center gap-1.5`}
+              >
+                <RefreshCw size={12} /> {t('inbound.bulk.restore')}
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  if (!(await askConfirm({
+                    title: t('inbound.bulk.confirmHardDelete.title'),
+                    description: shipment.type === 'FBA'
+                      ? t('inbound.bulk.confirmHardDelete.fbaWarningBody')
+                      : t('inbound.bulk.confirmHardDelete.body', { n: 1 }),
+                    confirmLabel: t('inbound.bulk.delete'),
+                    tone: 'danger',
+                  }))) return
+                  setBusy(true)
+                  try {
+                    const res = await fetch(`${getBackendUrl()}/api/fulfillment/inbound/bulk-soft-delete`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ids: [id] }),
+                    })
+                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Delete failed')
+                    toast.success(t('inbound.bulk.movedToBin', { n: 1 }))
+                    onChanged()
+                    onClose()
+                  } catch (e: any) {
+                    toast.error(e.message)
+                  } finally { setBusy(false) }
+                }}
+                disabled={busy}
+                className={`${shipment.status === 'CLOSED' || shipment.status === 'CANCELLED' ? 'ml-auto ' : ''}h-8 px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded hover:bg-rose-100 dark:hover:bg-rose-900/40 disabled:opacity-50 inline-flex items-center gap-1.5`}
+              >
+                <Trash2 size={12} /> {t('inbound.bulk.delete')}
+              </button>
             )}
           </footer>
         )}

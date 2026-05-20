@@ -587,6 +587,17 @@ export default function PurchaseOrdersClient() {
     [pathname, router, searchParams],
   )
 
+  // RB.1 — recycle-bin scope via ?deleted=true. Backend defaults to
+  // live-only; toggling this flag flips the list into bin mode.
+  const showDeleted = searchParams.get('deleted') === 'true'
+  const toggleShowDeleted = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (showDeleted) params.delete('deleted')
+    else params.set('deleted', 'true')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname)
+  }, [pathname, router, searchParams, showDeleted])
+
   const [pos, setPos] = useState<PORow[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -611,6 +622,7 @@ export default function PurchaseOrdersClient() {
       } else if (statusFilter === 'active') {
         url.searchParams.set('status', Array.from(ACTIVE_STATUSES).join(','))
       }
+      if (showDeleted) url.searchParams.set('deleted', 'true')
       const res = await fetch(url.toString(), { cache: 'no-store' })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -624,7 +636,7 @@ export default function PurchaseOrdersClient() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter])
+  }, [statusFilter, showDeleted])
 
   useEffect(() => {
     fetchPos()
@@ -736,10 +748,28 @@ export default function PurchaseOrdersClient() {
           />
         }
         trailingSlot={
-          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="w-3.5 h-3.5" />
-            {t('po.newPo')}
-          </Button>
+          <div className="inline-flex items-center gap-2">
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-3.5 h-3.5" />
+              {t('po.newPo')}
+            </Button>
+            {/* RB.1 — recycle-bin toggle. Rose tone when active, sr-only
+                label otherwise. Mirrors the /orders pattern. */}
+            <button
+              type="button"
+              onClick={toggleShowDeleted}
+              title={showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.enter')}
+              className={cn(
+                'h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors',
+                showDeleted
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
+                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
+              )}
+            >
+              <Trash2 className="w-3 h-3" />
+              {showDeleted ? t('purchaseOrders.recycleBin.label') : <span className="sr-only">{t('purchaseOrders.recycleBin.enter')}</span>}
+            </button>
+          </div>
         }
       />
 

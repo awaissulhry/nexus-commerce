@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, Crown, AlertTriangle, Clock, Package, X, Plus,
   Bookmark, BookmarkPlus, ChevronDown, Trash2, Star, ArrowRight, Sparkles,
-  Bell, BellOff, Download, Keyboard,
+  Bell, BellOff, Download, Keyboard, RotateCcw,
 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
@@ -142,6 +142,7 @@ export default function PendingShipmentsClient() {
   const urgencyFilter = (params.get('urgency') as Urgency | 'ALL' | null) ?? 'ALL'
   const search = params.get('q') ?? ''
   const sort = (params.get('sort') as 'ship-by-asc' | 'value-desc' | 'age-desc' | null) ?? 'ship-by-asc'
+  const showDeleted = params.get('deleted') === 'true'
 
   const [data, setData] = useState<Response | null>(null)
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
@@ -484,6 +485,7 @@ export default function PendingShipmentsClient() {
       if (urgencyFilter && urgencyFilter !== 'ALL') qs.set('urgency', urgencyFilter)
       if (search) qs.set('search', search)
       if (sort) qs.set('sort', sort)
+      if (showDeleted) qs.set('deleted', 'true')
       const [pendingRes, carriersRes] = await Promise.all([
         fetch(
           `${getBackendUrl()}/api/fulfillment/outbound/pending-orders?${qs.toString()}`,
@@ -504,7 +506,7 @@ export default function PendingShipmentsClient() {
     } finally {
       setLoading(false)
     }
-  }, [channelFilter.join(','), urgencyFilter, search, sort, toast])
+  }, [channelFilter.join(','), urgencyFilter, search, sort, showDeleted, toast])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -591,6 +593,71 @@ export default function PendingShipmentsClient() {
     } finally {
       setPreflightLoading(false)
     }
+  }
+
+  // RB.1 — soft-delete / restore / hard-delete on selected shipments.
+  // Lives on the Pending tab so operators can hide stale orders/
+  // shipments without losing them. Backend endpoints are shipment-
+  // rooted; here we forward the in-selection ids (orderIds on the
+  // pending tab become a proxy for "delete the future shipment that
+  // would be created from this order" — symmetric with the listings
+  // surface).
+  const [confirmHardDelete, setConfirmHardDelete] = useState(false)
+  const [recycleBusy, setRecycleBusy] = useState(false)
+
+  const softDeleteSelected = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    setRecycleBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-soft-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(out.error ?? t('common.error')); return }
+      toast.success(t('outbound.bulk.movedToBin', { n: out.changed ?? selected.size }))
+      emitInvalidation({ type: 'shipment.deleted', meta: { count: out.changed } })
+      setSelected(new Set())
+      fetchData()
+    } finally { setRecycleBusy(false) }
+  }
+
+  const restoreSelected = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    setRecycleBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(out.error ?? t('common.error')); return }
+      toast.success(t('outbound.bulk.restored', { n: out.changed ?? selected.size }))
+      emitInvalidation({ type: 'shipment.updated', meta: { count: out.changed } })
+      setSelected(new Set())
+      fetchData()
+    } finally { setRecycleBusy(false) }
+  }
+
+  const hardDeleteSelected = async () => {
+    if (selected.size === 0) { setConfirmHardDelete(false); return }
+    setRecycleBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-hard-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(out.error ?? t('common.error')); return }
+      toast.success(t('outbound.bulk.permanentlyDeleted', { n: out.purged ?? selected.size }))
+      emitInvalidation({ type: 'shipment.deleted', meta: { count: out.purged } })
+      setConfirmHardDelete(false)
+      setSelected(new Set())
+      fetchData()
+    } finally { setRecycleBusy(false) }
   }
 
   const bulkCreateShipments = async () => {
@@ -902,43 +969,65 @@ export default function PendingShipmentsClient() {
           </button>
         }
         trailingSlot={
-          /* O.70 + O.89: show-snoozed toggle + clear-all wake. Only
-             renders when at least one snooze is currently in effect.
-             Clicking the count flips the show-toggle; clicking the X
-             wakes them all (clears the localStorage snooze map). */
-          (() => {
-            const activeSnoozeCount = Object.values(snoozedUntil).filter(
-              (until) => until > Date.now(),
-            ).length
-            if (activeSnoozeCount === 0) return null
-            return (
-              <div className="inline-flex items-center">
-                <button
-                  onClick={() => setShowSnoozed((s) => !s)}
-                  className={`h-8 px-3 text-base border rounded-l-md inline-flex items-center gap-1.5 ${
-                    showSnoozed
-                      ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
-                      : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Clock size={12} />
-                  {t('outbound.pending.snooze.showToggle', { n: activeSnoozeCount })}
-                </button>
-                <button
-                  onClick={() => {
-                    setSnoozedUntil({})
-                    try { localStorage.setItem(SNOOZE_KEY, '{}') } catch { /* quota */ }
-                    setShowSnoozed(false)
-                    toast.success(t('outbound.pending.snooze.wakeAllToast', { n: activeSnoozeCount }))
-                  }}
-                  className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-slate-200 dark:border-slate-700 rounded-r-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  title={t('outbound.pending.snooze.wakeAllTooltip')}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            )
-          })() ?? undefined
+          /* O.70 + O.89: show-snoozed toggle + clear-all wake +
+             RB.1 recycle-bin toggle. Snooze chip only renders when
+             snoozes are in effect; recycle-bin button always renders
+             and mirrors the /orders pattern (rose tone when active,
+             sr-only label otherwise). */
+          <div className="inline-flex items-center gap-2">
+            {(() => {
+              const activeSnoozeCount = Object.values(snoozedUntil).filter(
+                (until) => until > Date.now(),
+              ).length
+              if (activeSnoozeCount === 0) return null
+              return (
+                <div className="inline-flex items-center">
+                  <button
+                    onClick={() => setShowSnoozed((s) => !s)}
+                    className={`h-8 px-3 text-base border rounded-l-md inline-flex items-center gap-1.5 ${
+                      showSnoozed
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900'
+                        : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Clock size={12} />
+                    {t('outbound.pending.snooze.showToggle', { n: activeSnoozeCount })}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSnoozedUntil({})
+                      try { localStorage.setItem(SNOOZE_KEY, '{}') } catch { /* quota */ }
+                      setShowSnoozed(false)
+                      toast.success(t('outbound.pending.snooze.wakeAllToast', { n: activeSnoozeCount }))
+                    }}
+                    className="h-8 w-8 inline-flex items-center justify-center border border-l-0 border-slate-200 dark:border-slate-700 rounded-r-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    title={t('outbound.pending.snooze.wakeAllTooltip')}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )
+            })()}
+            <button
+              type="button"
+              onClick={() => {
+                const next = new URLSearchParams(params.toString())
+                if (showDeleted) next.delete('deleted')
+                else next.set('deleted', 'true')
+                router.replace(`?${next.toString()}`, { scroll: false })
+                setSelected(new Set())
+              }}
+              title={showDeleted ? t('outbound.recycleBin.exit') : t('outbound.recycleBin.enter')}
+              className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${
+                showDeleted
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
+                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Trash2 size={12} />
+              {showDeleted ? t('outbound.recycleBin.label') : <span className="sr-only">{t('outbound.recycleBin.enter')}</span>}
+            </button>
+          </div>
         }
       />
 
@@ -985,6 +1074,25 @@ export default function PendingShipmentsClient() {
                 {t('outbound.pending.selectedCount', { n: selected.size })}
               </span>
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+              {showDeleted ? (
+                <>
+                  <button
+                    onClick={restoreSelected}
+                    disabled={recycleBusy}
+                    className="h-11 md:h-7 px-4 md:px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <RotateCcw size={12} /> {t('outbound.bulk.restore')}
+                  </button>
+                  <button
+                    onClick={() => setConfirmHardDelete(true)}
+                    disabled={recycleBusy}
+                    className="h-11 md:h-7 px-4 md:px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <Trash2 size={12} /> {t('outbound.bulk.permanentlyDelete')}
+                  </button>
+                </>
+              ) : (
+                <>
               <button
                 onClick={bulkCreateShipments}
                 disabled={creating}
@@ -1078,6 +1186,15 @@ export default function PendingShipmentsClient() {
               >
                 <Download size={12} /> {t('outbound.pending.exportCsv.button')}
               </button>
+              <button
+                onClick={softDeleteSelected}
+                disabled={recycleBusy}
+                className="h-11 md:h-7 px-4 md:px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> {t('outbound.bulk.delete')}
+              </button>
+                </>
+              )}
               <button
                 onClick={() => setSelected(new Set())}
                 className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
@@ -1336,6 +1453,54 @@ export default function PendingShipmentsClient() {
           groups={PENDING_SHORTCUTS}
           onClose={() => setShortcutsOpen(false)}
         />
+      )}
+
+      {/* RB.1 — hard-delete confirm. No label-print warning here because
+          this tab predates any shipment creation; the warning lives in
+          the sibling ShipmentsClient bulk-delete modal. */}
+      {confirmHardDelete && (
+        <div
+          className="fixed inset-0 z-[1000] bg-slate-900/40 flex items-center justify-center p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmHardDelete(false) }}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-5"
+            role="dialog"
+            aria-label={t('outbound.bulk.confirmHardDelete.title')}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-9 w-9 shrink-0 rounded-full bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {t('outbound.bulk.confirmHardDelete.title')}
+                </h2>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  {t('outbound.bulk.confirmHardDelete.body', { n: selected.size })}
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmHardDelete(false)}
+                disabled={recycleBusy}
+                className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={hardDeleteSelected}
+                disabled={recycleBusy}
+                className="h-8 px-3 text-sm bg-rose-600 text-white border border-rose-600 rounded hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> {t('outbound.bulk.confirmHardDelete.confirm', { n: selected.size })}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

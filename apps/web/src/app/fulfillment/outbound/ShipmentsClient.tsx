@@ -13,7 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, Printer, ExternalLink, X, CheckCircle2,
   AlertTriangle, Send, Download, RotateCcw, Trash, Pause, Play,
-  Copy, Keyboard,
+  Copy, Keyboard, Trash2,
 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
@@ -109,6 +109,9 @@ export default function ShipmentsClient() {
   // on the shipments tab pre-filtered. Initialized from the URL once;
   // subsequent edits flow through the input → state path.
   const [search, setSearch] = useState(() => params.get('search') ?? '')
+  // RB.1 — recycle-bin scope via ?deleted=true. Backend defaults to
+  // live-only; this flag flips the list + selection into bin mode.
+  const showDeleted = params.get('deleted') === 'true'
   const [items, setItems] = useState<Shipment[]>([])
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -134,6 +137,7 @@ export default function ShipmentsClient() {
       const qs = new URLSearchParams()
       if (statusFilter !== 'ALL') qs.set('status', statusFilter)
       if (search) qs.set('search', search)
+      if (showDeleted) qs.set('deleted', 'true')
       const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments?${qs.toString()}`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
@@ -141,7 +145,7 @@ export default function ShipmentsClient() {
         setLastFetchedAt(Date.now())
       }
     } finally { setLoading(false) }
-  }, [statusFilter, search])
+  }, [statusFilter, search, showDeleted])
 
   const fetchCarriers = useCallback(async () => {
     try {
@@ -490,6 +494,76 @@ export default function ShipmentsClient() {
     setSelected(next)
   }
 
+  // RB.1 — recycle-bin handlers. Soft-delete from live scope, restore
+  // + hard-delete from bin scope. The hard-delete confirm modal warns
+  // when any selected shipment has a printed label (the carrier-side
+  // label/charge isn't reversed by a database delete).
+  const [confirmHardDelete, setConfirmHardDelete] = useState(false)
+  const [recycleBusy, setRecycleBusy] = useState(false)
+
+  const softDeleteSelected = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    setRecycleBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-soft-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(out.error ?? t('common.error')); return }
+      toast.success(t('outbound.bulk.movedToBin', { n: out.changed ?? selected.size }))
+      emitInvalidation({ type: 'shipment.deleted', meta: { count: out.changed } })
+      setSelected(new Set())
+      fetchShipments()
+    } finally { setRecycleBusy(false) }
+  }
+
+  const restoreSelected = async () => {
+    if (selected.size === 0) { toast.error(t('outbound.pending.toast.selectFirst')); return }
+    setRecycleBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(out.error ?? t('common.error')); return }
+      toast.success(t('outbound.bulk.restored', { n: out.changed ?? selected.size }))
+      emitInvalidation({ type: 'shipment.updated', meta: { count: out.changed } })
+      setSelected(new Set())
+      fetchShipments()
+    } finally { setRecycleBusy(false) }
+  }
+
+  const hardDeleteSelected = async () => {
+    if (selected.size === 0) { setConfirmHardDelete(false); return }
+    setRecycleBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/fulfillment/shipments/bulk-hard-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(out.error ?? t('common.error')); return }
+      toast.success(t('outbound.bulk.permanentlyDeleted', { n: out.purged ?? selected.size }))
+      emitInvalidation({ type: 'shipment.deleted', meta: { count: out.purged } })
+      setConfirmHardDelete(false)
+      setSelected(new Set())
+      fetchShipments()
+    } finally { setRecycleBusy(false) }
+  }
+
+  // Selected rows that had a label printed — surface as a warning in
+  // the hard-delete confirm modal so the operator knows the carrier
+  // side isn't reversed by a local delete.
+  const printedLabelSelected = useMemo(
+    () => items.filter((s) => selected.has(s.id) && s.labelPrintedAt != null),
+    [items, selected],
+  )
+
   return (
     <div className="space-y-3">
       {!sendcloudConnected && (
@@ -561,6 +635,30 @@ export default function ShipmentsClient() {
             <Keyboard size={12} />
           </button>
         }
+        trailingSlot={
+          /* RB.1 — recycle-bin toggle. Mirrors the /orders pattern
+             (rose tone when active, sr-only label otherwise). Resets
+             page selection so the bin scope starts clean. */
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(params.toString())
+              if (showDeleted) next.delete('deleted')
+              else next.set('deleted', 'true')
+              router.replace(`?${next.toString()}`, { scroll: false })
+              setSelected(new Set())
+            }}
+            title={showDeleted ? t('outbound.recycleBin.exit') : t('outbound.recycleBin.enter')}
+            className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${
+              showDeleted
+                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
+                : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Trash2 size={12} />
+            {showDeleted ? t('outbound.recycleBin.label') : <span className="sr-only">{t('outbound.recycleBin.enter')}</span>}
+          </button>
+        }
       />
 
       {selected.size > 0 && (
@@ -569,27 +667,58 @@ export default function ShipmentsClient() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-base font-semibold text-slate-700 dark:text-slate-300">{t('outbound.pending.selectedCount', { n: selected.size })}</span>
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-              <button onClick={bulkPrint} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5">
-                <Printer size={12} /> {t('outbound.shipments.bulk.printLabels')}
-              </button>
-              <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
-                <Send size={12} /> {t('outbound.shipments.bulk.markShipped')}
-              </button>
-              {/* F1.9 — bulk void-label. Destructive (cancels carrier
-                  parcel + resets the shipment to PACKED), so confirm
-                  modal lives in bulkVoidLabel(). */}
-              <button onClick={bulkVoidLabel} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 dark:hover:bg-rose-900/60 inline-flex items-center gap-1.5">
-                <X size={12} /> {t('outbound.shipments.bulk.voidLabel')}
-              </button>
-              <button onClick={bulkHold} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60 inline-flex items-center gap-1.5">
-                <Pause size={12} /> {t('outbound.shipments.bulk.hold')}
-              </button>
-              <button onClick={bulkRelease} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
-                <Play size={12} /> {t('outbound.shipments.bulk.release')}
-              </button>
-              <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 inline-flex items-center gap-1.5">
-                <Download size={12} /> {t('outbound.shipments.bulk.exportCsv')}
-              </button>
+              {showDeleted ? (
+                /* RB.1 — bin scope: only restore + permanently delete.
+                   All print/ship/void/hold actions are hidden because
+                   they don't make sense against soft-deleted rows. */
+                <>
+                  <button
+                    onClick={restoreSelected}
+                    disabled={recycleBusy}
+                    className="h-7 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <RotateCcw size={12} /> {t('outbound.bulk.restore')}
+                  </button>
+                  <button
+                    onClick={() => setConfirmHardDelete(true)}
+                    disabled={recycleBusy}
+                    className="h-7 px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <Trash2 size={12} /> {t('outbound.bulk.permanentlyDelete')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={bulkPrint} className="h-7 px-3 text-base bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900 dark:hover:bg-blue-900/60 inline-flex items-center gap-1.5">
+                    <Printer size={12} /> {t('outbound.shipments.bulk.printLabels')}
+                  </button>
+                  <button onClick={bulkMarkShipped} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
+                    <Send size={12} /> {t('outbound.shipments.bulk.markShipped')}
+                  </button>
+                  {/* F1.9 — bulk void-label. Destructive (cancels carrier
+                      parcel + resets the shipment to PACKED), so confirm
+                      modal lives in bulkVoidLabel(). */}
+                  <button onClick={bulkVoidLabel} className="h-7 px-3 text-base bg-rose-50 text-rose-700 border border-rose-200 rounded hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900 dark:hover:bg-rose-900/60 inline-flex items-center gap-1.5">
+                    <X size={12} /> {t('outbound.shipments.bulk.voidLabel')}
+                  </button>
+                  <button onClick={bulkHold} className="h-7 px-3 text-base bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60 inline-flex items-center gap-1.5">
+                    <Pause size={12} /> {t('outbound.shipments.bulk.hold')}
+                  </button>
+                  <button onClick={bulkRelease} className="h-7 px-3 text-base bg-emerald-50 text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900 dark:hover:bg-emerald-900/60 inline-flex items-center gap-1.5">
+                    <Play size={12} /> {t('outbound.shipments.bulk.release')}
+                  </button>
+                  <button onClick={bulkExportCsv} className="h-7 px-3 text-base bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 inline-flex items-center gap-1.5">
+                    <Download size={12} /> {t('outbound.shipments.bulk.exportCsv')}
+                  </button>
+                  <button
+                    onClick={softDeleteSelected}
+                    disabled={recycleBusy}
+                    className="h-7 px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded hover:bg-rose-100 dark:hover:bg-rose-900/60 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <Trash2 size={12} /> {t('outbound.bulk.delete')}
+                  </button>
+                </>
+              )}
               <button onClick={() => setSelected(new Set())} className="ml-auto h-7 w-7 inline-flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
                 <X size={14} />
               </button>
@@ -759,6 +888,77 @@ export default function ShipmentsClient() {
           groups={SHIPMENTS_SHORTCUTS}
           onClose={() => setShortcutsOpen(false)}
         />
+      )}
+
+      {/* RB.1 — hard-delete confirm. Surfaces a label-print warning
+          when any selected shipment has labelPrintedAt set: voiding
+          the carrier label is a carrier operation, not a database
+          delete, so the operator needs to know the carrier-side
+          parcel + charge survives this action. */}
+      {confirmHardDelete && (
+        <div
+          className="fixed inset-0 z-[1000] bg-slate-900/40 flex items-center justify-center p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirmHardDelete(false) }}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-5"
+            role="dialog"
+            aria-label={t('outbound.bulk.confirmHardDelete.title')}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-9 w-9 shrink-0 rounded-full bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-rose-600 dark:text-rose-400" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {t('outbound.bulk.confirmHardDelete.title')}
+                </h2>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  {t('outbound.bulk.confirmHardDelete.body', { n: selected.size })}
+                </p>
+                {printedLabelSelected.length > 0 && (
+                  <div className="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                      {t('outbound.bulk.confirmHardDelete.labelWarningTitle', { n: printedLabelSelected.length })}
+                    </p>
+                    <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                      {t('outbound.bulk.confirmHardDelete.labelWarningBody')}
+                    </p>
+                    <ul className="mt-1.5 text-xs text-amber-800 dark:text-amber-300 space-y-0.5">
+                      {printedLabelSelected.slice(0, 5).map((s) => (
+                        <li key={s.id}>
+                          <span className="font-mono">{s.carrierCode}</span>
+                          {s.trackingNumber ? <> · {s.trackingNumber}</> : null}
+                        </li>
+                      ))}
+                      {printedLabelSelected.length > 5 && (
+                        <li className="italic">… +{printedLabelSelected.length - 5} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmHardDelete(false)}
+                disabled={recycleBusy}
+                className="h-8 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={hardDeleteSelected}
+                disabled={recycleBusy}
+                className="h-8 px-3 text-sm bg-rose-600 text-white border border-rose-600 rounded hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> {t('outbound.bulk.confirmHardDelete.confirm', { n: selected.size })}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
