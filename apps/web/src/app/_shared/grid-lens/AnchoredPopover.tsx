@@ -9,12 +9,14 @@
  * measured on open + on resize + on any (capture-phase) scroll so the
  * panel tracks the trigger when ancestors scroll.
  *
- * The panel is clamped to the page's content area (the right edge of
- * the sidebar through the right edge of the viewport) — never spills
- * onto the sidebar, never off-screen. Width is capped via maxWidth
- * derived purely from the content bounds (NOT from scrollWidth, which
- * would create a feedback loop where each measurement shrunk the
- * panel further on scroll).
+ * The panel's NATURAL size (set by the consumer via className, e.g.
+ * `w-[480px]`) is measured exactly once on first mount and cached in
+ * a ref. Subsequent measures (resize / scroll) reuse the cached size
+ * to compute position + clamp into the page content area — so the
+ * panel keeps its requested width as long as it fits, and scrolling
+ * never re-shrinks it. When the natural width would overflow the
+ * content bounds, the panel shifts position (preferred) or shrinks
+ * via maxWidth (fallback).
  */
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
@@ -43,19 +45,13 @@ export interface AnchoredPopoverProps {
 
 interface Coords {
   top: number
-  /** One of left / right is set (CSS anchor) — the other is undefined. */
-  left?: number
-  right?: number
-  maxWidth: number
+  left: number
+  maxWidth?: number
   maxHeight: number
 }
 
 const MAIN_ID = 'main-content'
 
-/**
- * Bounding box of the page's content area. Falls back to the viewport
- * when the main element isn't there (different layout).
- */
 function getContentBounds(): { left: number; right: number; top: number; bottom: number } {
   const main = typeof document !== 'undefined' ? document.getElementById(MAIN_ID) : null
   if (main) {
@@ -83,41 +79,46 @@ export function AnchoredPopover({
   children,
 }: AnchoredPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  /** Natural width set by the consumer (e.g. w-[480px]). Measured ONCE
+   *  on first paint before any maxWidth is applied, then frozen so
+   *  scroll-driven re-measures can never shrink it. */
+  const naturalWidth = useRef<number | null>(null)
   const [coords, setCoords] = useState<Coords | null>(null)
 
   useLayoutEffect(() => {
     const measure = () => {
       const anchor = anchorRef.current
-      if (!anchor) return
+      const panel = panelRef.current
+      if (!anchor || !panel) return
+
+      // Capture the panel's natural width on the first measurement,
+      // BEFORE we've applied any maxWidth via coords. From then on we
+      // never re-read it — so resize/scroll-triggered measures don't
+      // create a shrinking feedback loop.
+      if (naturalWidth.current == null) {
+        naturalWidth.current = panel.offsetWidth
+      }
+      const natW = naturalWidth.current
 
       const btn = anchor.getBoundingClientRect()
       const bounds = getContentBounds()
-      const vpW = typeof window !== 'undefined' ? window.innerWidth : bounds.right
       const vpH = typeof window !== 'undefined' ? window.innerHeight : 0
 
-      // Horizontal: anchor one edge of the panel to the corresponding
-      // edge of the trigger; cap maxWidth so the OPPOSITE edge can't
-      // cross the page content bounds. maxWidth derives ONLY from
-      // bounds + anchor — never from the panel's own measured width —
-      // so re-measures on scroll can't create a shrinking feedback
-      // loop.
-      let left: number | undefined
-      let right: number | undefined
-      let maxWidth: number
-      if (align === 'right') {
-        right = Math.max(edgePad, vpW - btn.right)
-        // Panel's right edge sits at btn.right; its left edge must
-        // stay ≥ bounds.left + edgePad. So:
-        maxWidth = btn.right - (bounds.left + edgePad)
-      } else {
-        left = Math.max(bounds.left + edgePad, btn.left)
-        maxWidth = bounds.right - edgePad - (left ?? 0)
-      }
-      maxWidth = Math.max(160, maxWidth) // sanity floor
+      // Available horizontal space inside the page content area.
+      const availW = Math.max(0, bounds.right - bounds.left - edgePad * 2)
+      const targetW = Math.min(natW, availW)
 
-      // Vertical: open below by default; flip above if there's
-      // visibly more room above. Cap with a maxHeight so the panel
-      // never overflows the viewport bottom.
+      // Anchor one edge of the panel to the matching edge of the
+      // trigger; then clamp into the content bounds so the OPPOSITE
+      // edge can't cross sidebar / right-of-viewport.
+      let left = align === 'right' ? btn.right - targetW : btn.left
+      left = Math.max(bounds.left + edgePad, Math.min(left, bounds.right - targetW - edgePad))
+
+      const maxWidth = targetW < natW ? targetW : undefined
+
+      // Vertical: open below; flip above when more room exists there.
+      // maxHeight is derived from available viewport space (never from
+      // the panel's own measured height) — same no-feedback principle.
       const spaceBelow = vpH - btn.bottom - offsetY - edgePad
       const spaceAbove = btn.top - offsetY - edgePad
       let top: number
@@ -126,15 +127,11 @@ export function AnchoredPopover({
         top = btn.bottom + offsetY
         maxHeight = Math.max(160, spaceBelow)
       } else {
-        // Flip above: anchor the panel's bottom at btn.top - offsetY.
-        // Without measuring panel.scrollHeight (avoiding the same
-        // feedback loop), give it the full spaceAbove and let the
-        // panel's internal max-h handle scroll.
         top = Math.max(edgePad, btn.top - offsetY - spaceAbove)
         maxHeight = Math.max(160, spaceAbove)
       }
 
-      setCoords({ top, left, right, maxWidth, maxHeight })
+      setCoords({ top, left, maxWidth, maxHeight })
     }
 
     measure()
@@ -173,8 +170,7 @@ export function AnchoredPopover({
       style={{
         position: 'fixed',
         top: coords?.top ?? -9999,
-        left: coords?.left,
-        right: coords?.right,
+        left: coords?.left ?? -9999,
         maxWidth: coords?.maxWidth,
         maxHeight: coords?.maxHeight,
         opacity: coords ? 1 : 0,
