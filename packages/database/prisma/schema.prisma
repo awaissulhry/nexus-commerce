@@ -329,6 +329,7 @@ model Product {
   wizardStepEvents          WizardStepEvent[] // C.0: per-step wizard telemetry
   channelPublishAttempts    ChannelPublishAttempt[] // C.6: every publish attempt audit
   amazonImageFeedJobs       AmazonImageFeedJob[] // IM.1: Amazon image feed submissions
+  channelImagePublishJobs   ChannelImagePublishJob[] // IR.9: eBay + Shopify image publish log
   listingRecoveryEvents     ListingRecoveryEvent[] // W5.49: delete+relist audit
   buyBoxHistory             BuyBoxHistory[] // Pricing F.1: Buy Box observation log
   scheduledChanges          ScheduledProductChange[] // F.3: deferred mutations
@@ -6140,6 +6141,54 @@ model AmazonImageFeedJob {
   @@index([productId, marketplace])
   @@index([feedId])
   @@index([status, submittedAt])
+}
+
+/// IR.9.1 — eBay + Shopify image publish job log.
+///
+/// Parallel to AmazonImageFeedJob but for the non-Amazon channels.
+/// Lets the publish-history dashboard surface the full lifecycle
+/// (submission → success/failure) for every channel, not just Amazon,
+/// and lets the retry button re-run a failed publish without the
+/// operator hunting through logs.
+///
+/// status: SUBMITTING | DONE | FATAL | CANCELLED
+///   - SUBMITTING: row pre-created at the start of the publish call
+///   - DONE: vendor accepted the request (200 / Ack=Success)
+///   - FATAL: vendor returned an error OR the call threw
+///   - CANCELLED: operator-initiated retry replaces the original
+///
+/// requestPayload + response are JSON snapshots for traceability —
+/// when an eBay ReviseItem comes back with "ErrorPicture", the
+/// operator can read the exact payload that was sent without
+/// recreating state.
+model ChannelImagePublishJob {
+  id           String  @id @default(cuid())
+  productId    String
+  channel      String  // 'EBAY' | 'SHOPIFY'
+  // Optional marketplace narrowing for future per-locale eBay sites
+  // (eBay UK vs DE vs IT). Shopify is single-store today; column stays
+  // for forward compat.
+  marketplace  String?
+
+  status       String  @default("SUBMITTING")
+  errorMessage String?
+
+  requestPayload Json?
+  response       Json?
+
+  // IDs the operator can use to verify on the vendor side (item id,
+  // product id, listing version). Always strings — eBay returns
+  // numeric strings, Shopify gid:// URIs.
+  vendorEntityId String?
+
+  submittedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, channel])
+  @@index([status, submittedAt])
+  @@index([channel, status])
 }
 
 // Append-only log of every detected schema change (added/removed
