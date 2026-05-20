@@ -13,7 +13,7 @@ import {
   ArrowDownToLine, ChevronRight,
   Boxes, AlertTriangle, CalendarClock,
   FileText, ChevronUp, ChevronDown,
-  Upload, Link2, Trash2, Camera, Unlock, History, Check,
+  Upload, Link2, Trash2, ArrowLeft, Camera, Unlock, History, Check,
   Smartphone, Tag, Keyboard,
 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
@@ -327,14 +327,16 @@ export default function InboundWorkspace() {
               type="button"
               onClick={() => updateUrl({ deleted: showDeleted ? undefined : 'true', page: undefined })}
               title={showDeleted ? t('inbound.recycleBin.exit') : t('inbound.recycleBin.enter')}
+              aria-pressed={showDeleted}
+              aria-label={showDeleted ? t('inbound.recycleBin.exit') : t('inbound.recycleBin.label')}
               className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 transition-colors ${
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
                   : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
               }`}
             >
-              <Trash2 size={12} />
-              {showDeleted ? t('inbound.recycleBin.label') : <span className="sr-only">{t('inbound.recycleBin.enter')}</span>}
+              {showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
+              {showDeleted ? t('inbound.recycleBin.exit') : t('inbound.recycleBin.label')}
             </button>
           </div>
         }

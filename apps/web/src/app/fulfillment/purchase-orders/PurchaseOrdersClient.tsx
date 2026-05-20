@@ -18,6 +18,7 @@ import {
   Send,
   ShoppingCart,
   Trash2,
+  ArrowLeft,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -753,12 +754,15 @@ export default function PurchaseOrdersClient() {
               <Plus className="w-3.5 h-3.5" />
               {t('po.newPo')}
             </Button>
-            {/* RB.1 — recycle-bin toggle. Rose tone when active, sr-only
-                label otherwise. Mirrors the /orders pattern. */}
+            {/* RB.1 — recycle-bin toggle. Icon + label both swap on state
+                so the button always names the destination, not the
+                current scope (enter Trash2 → exit ArrowLeft). */}
             <button
               type="button"
               onClick={toggleShowDeleted}
               title={showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.enter')}
+              aria-pressed={showDeleted}
+              aria-label={showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.label')}
               className={cn(
                 'h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors',
                 showDeleted
@@ -766,8 +770,8 @@ export default function PurchaseOrdersClient() {
                   : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800',
               )}
             >
-              <Trash2 className="w-3 h-3" />
-              {showDeleted ? t('purchaseOrders.recycleBin.label') : <span className="sr-only">{t('purchaseOrders.recycleBin.enter')}</span>}
+              {showDeleted ? <ArrowLeft className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+              {showDeleted ? t('purchaseOrders.recycleBin.exit') : t('purchaseOrders.recycleBin.label')}
             </button>
           </div>
         }

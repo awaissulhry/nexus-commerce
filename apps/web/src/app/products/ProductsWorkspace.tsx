@@ -16,6 +16,7 @@ import {
   DollarSign, Download,
   AlignJustify, Menu as MenuIcon, Equal,
   Trash2,
+  ArrowLeft,
   GitBranch,
   Globe,
   Search, BarChart2,
@@ -1241,23 +1242,20 @@ export default function ProductsWorkspace() {
                   ? 'Back to active products'
                   : 'View soft-deleted products'
               }
+              aria-pressed={showDeleted}
+              aria-label={showDeleted ? 'Back to active products' : 'Recycle bin'}
               className={
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
                   : ''
               }
-              icon={<Trash2 size={12} />}
+              icon={showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
             >
-              {/* U.30 — was empty when !showDeleted, leaving the button
-                  with only an icon and no accessible name. Always
-                  render a label; on desktop, hide it via sr-only when
-                  inactive so the icon-only chrome stays compact but
-                  screen readers still announce a button. */}
-              {showDeleted ? (
-                'Recycle bin'
-              ) : (
-                <span className="sr-only">Open recycle bin</span>
-              )}
+              {/* Icon + label both swap on state so the button always
+                  names the destination, not the current scope.
+                  Inactive: "Recycle bin" (Trash2). Active: "Back to
+                  active products" (ArrowLeft). */}
+              {showDeleted ? 'Back to active products' : 'Recycle bin'}
             </Button>
             <Link
               href="/products/new"

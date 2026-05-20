@@ -13,7 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Truck, Search, Printer, ExternalLink, X, CheckCircle2,
   AlertTriangle, Send, Download, RotateCcw, Trash, Pause, Play,
-  Copy, Keyboard, Trash2,
+  Copy, Keyboard, Trash2, ArrowLeft,
 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
@@ -649,14 +649,16 @@ export default function ShipmentsClient() {
               setSelected(new Set())
             }}
             title={showDeleted ? t('outbound.recycleBin.exit') : t('outbound.recycleBin.enter')}
+            aria-pressed={showDeleted}
+            aria-label={showDeleted ? t('outbound.recycleBin.exit') : t('outbound.recycleBin.label')}
             className={`h-8 px-3 text-base border rounded-md inline-flex items-center gap-1.5 transition-colors ${
               showDeleted
                 ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
                 : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
             }`}
           >
-            <Trash2 size={12} />
-            {showDeleted ? t('outbound.recycleBin.label') : <span className="sr-only">{t('outbound.recycleBin.enter')}</span>}
+            {showDeleted ? <ArrowLeft size={12} /> : <Trash2 size={12} />}
+            {showDeleted ? t('outbound.recycleBin.exit') : t('outbound.recycleBin.label')}
           </button>
         }
       />
