@@ -1825,10 +1825,20 @@ model ProductImage {
   mimeType String?
   fileSize Int?
 
+  /// IR.4 — Self-FK for the in-app image editor. When the operator crops /
+  /// rotates / flips an existing master image, the result is saved as a NEW
+  /// ProductImage row (URL = Cloudinary transformation of the source) and
+  /// derivedFromImageId points at the source. Lets the lightbox drawer show
+  /// "Derived from MAIN (v1)" + "N derivatives" without scanning every row.
+  derivedFromImageId String?
+  derivedFrom        ProductImage?  @relation("ProductImageDerivation", fields: [derivedFromImageId], references: [id], onDelete: SetNull)
+  derivatives        ProductImage[] @relation("ProductImageDerivation")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([productId, sortOrder])
+  @@index([derivedFromImageId])
 }
 
 // (Phase 31 Image model removed 2026-05-02 — see RESTORATION_NOTES.
