@@ -29,6 +29,12 @@ function csvParam(v: unknown): string[] | undefined {
   return v.split(',').map((s) => s.trim()).filter(Boolean)
 }
 
+// Single-tenant: derive a stable userId from the request. When auth lands
+// this becomes req.user.id. Mirrors products-catalog.routes' userIdFor.
+function userIdFor(_req: any): string {
+  return 'default-user'
+}
+
 export async function ordersRoutes(app: FastifyInstance) {
   // ── Mock ingest (kept for demo/testing) ──────────────────────────
   app.post('/api/orders/ingest', async (_request, reply) => {
@@ -91,7 +97,12 @@ export async function ordersRoutes(app: FastifyInstance) {
       const sortBy = (q.sortBy ?? 'purchaseDate') as string
       const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
 
+      // RB.1 — recycle-bin scope. Default = live-only (deletedAt IS NULL).
+      // ?deleted=true flips to bin-only (deletedAt IS NOT NULL).
+      const showDeleted = q.deleted === 'true'
+
       const where: any = {}
+      where.deletedAt = showDeleted ? { not: null } : null
       if (channels && channels.length) where.channel = { in: channels }
       if (marketplaces && marketplaces.length) where.marketplace = { in: marketplaces }
       if (statuses && statuses.length) where.status = { in: statuses }
@@ -992,5 +1003,194 @@ export async function ordersRoutes(app: FastifyInstance) {
     })
 
     await new Promise(() => {})
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // RB.1 — SOFT-DELETE + RESTORE + HARD-DELETE (Order)
+  //
+  // Mirrors the /products bulk pattern (products-catalog.routes.ts
+  // ~1460–1710). Soft-delete sets Order.deletedAt = now(); restore
+  // clears it back to null; hard-delete only acts on rows already
+  // in the bin and lets the schema's onDelete:Cascade fan-out clean
+  // up OrderItem / OrderNote / OrderTag / OrderRiskScore / FiscalInvoice
+  // / RoutingDecision / FinancialTransaction / MCFShipment / ReviewRequest.
+  // Shipment.orderId + Return.orderId are SetNull (they outlive the order).
+  //
+  // Cap: 200 ids per call.
+  // ═══════════════════════════════════════════════════════════════════
+  const flipOrderDeletedAt = async (
+    ids: string[],
+    target: Date | null,
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.code(400).send({ error: 'ids[] required' })
+    }
+    if (ids.length > 200) {
+      return reply.code(400).send({
+        error: `max 200 orders per call (got ${ids.length})`,
+      })
+    }
+    const actor = userIdFor(request)
+    const action = target ? 'soft-delete' : 'restore'
+
+    const result = await prisma.$transaction(async (tx) => {
+      const rows = await tx.order.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, channelOrderId: true, channel: true, deletedAt: true },
+      })
+      const eligible = rows.filter((r) =>
+        target ? r.deletedAt === null : r.deletedAt !== null,
+      )
+      if (eligible.length === 0) {
+        return { changed: 0, skipped: rows.length }
+      }
+      const updated = await tx.order.updateMany({
+        where: { id: { in: eligible.map((r) => r.id) } },
+        data: { deletedAt: target },
+      })
+      await tx.auditLog.createMany({
+        data: eligible.map((r) => ({
+          userId: actor,
+          entityType: 'Order',
+          entityId: r.id,
+          action,
+          before: { deletedAt: r.deletedAt?.toISOString() ?? null },
+          after: { deletedAt: target?.toISOString() ?? null },
+          metadata: {
+            channel: r.channel,
+            channelOrderId: r.channelOrderId,
+            source: 'orders-bulk',
+          },
+        })),
+      })
+      return { changed: updated.count, skipped: rows.length - updated.count }
+    })
+
+    return result
+  }
+
+  app.post('/api/orders/bulk-soft-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipOrderDeletedAt(ids, new Date(), request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      logger.error('[ORDERS API] bulk-soft-delete failed', { message: err?.message })
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  app.post('/api/orders/bulk-restore', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipOrderDeletedAt(ids, null, request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      logger.error('[ORDERS API] bulk-restore failed', { message: err?.message })
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  app.post('/api/orders/bulk-hard-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      if (ids.length === 0) {
+        return reply.code(400).send({ error: 'ids[] required' })
+      }
+      if (ids.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 orders per call (got ${ids.length})`,
+        })
+      }
+      const actor = userIdFor(request)
+
+      const result = await prisma.$transaction(async (tx) => {
+        // Safety: only purge rows already in the bin.
+        const eligible = await tx.order.findMany({
+          where: { id: { in: ids }, deletedAt: { not: null } },
+          select: {
+            id: true,
+            channel: true,
+            channelOrderId: true,
+            customerEmail: true,
+            deletedAt: true,
+          },
+        })
+
+        if (eligible.length === 0) {
+          return {
+            purged: 0,
+            skipped: ids.length,
+            warnings: [] as Array<{ id: string; channel: string; channelOrderId: string }>,
+            dependents: { orders: 0 },
+          }
+        }
+
+        // Channel-sync warning: surface live channel order ids so the
+        // caller can render "this was already pushed to the channel —
+        // delete is local-only" in the response. We still proceed —
+        // the operator confirmed in the UI.
+        const warnings = eligible
+          .filter((r) => !!r.channelOrderId)
+          .map((r) => ({
+            id: r.id,
+            channel: r.channel as string,
+            channelOrderId: r.channelOrderId,
+          }))
+
+        const eligibleIds = eligible.map((r) => r.id)
+
+        // AuditLog BEFORE the cascade (AuditLog has no FK to Order).
+        await tx.auditLog.createMany({
+          data: eligible.map((r) => ({
+            userId: actor,
+            entityType: 'Order',
+            entityId: r.id,
+            action: 'hard-delete',
+            before: {
+              channel: r.channel,
+              channelOrderId: r.channelOrderId,
+              customerEmail: r.customerEmail,
+              deletedAt: r.deletedAt?.toISOString() ?? null,
+            },
+            after: null,
+            metadata: {
+              source: 'orders-bulk-hard-delete',
+              ...(r.channelOrderId
+                ? { channelSyncWarning: true }
+                : {}),
+            },
+          })),
+        })
+
+        // The schema's onDelete:Cascade fans out to OrderItem, OrderNote,
+        // OrderTag, OrderRiskScore, FiscalInvoice, RoutingDecision,
+        // FinancialTransaction, MCFShipment, ReviewRequest. Shipment +
+        // Return are SetNull (they outlive the order). Nothing manual
+        // needed here.
+        const purged = await tx.order.deleteMany({
+          where: { id: { in: eligibleIds } },
+        })
+
+        return {
+          purged: purged.count,
+          skipped: ids.length - eligible.length,
+          warnings,
+          dependents: { orders: purged.count },
+        }
+      })
+
+      return { ok: true, ...result }
+    } catch (err: any) {
+      logger.error('[ORDERS API] bulk-hard-delete failed', { message: err?.message })
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
   })
 }

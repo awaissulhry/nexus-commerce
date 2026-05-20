@@ -268,6 +268,12 @@ function safeNum(v: unknown, fallback?: number): number | undefined {
   return Number.isFinite(n) ? n : fallback
 }
 
+// Single-tenant: derive a stable userId from the request. When auth lands
+// this becomes req.user.id. Mirrors products-catalog.routes' userIdFor.
+function userIdFor(_req: any): string {
+  return 'default-user'
+}
+
 /**
  * H.0a — recompute PurchaseOrderItem.quantityReceived as
  * SUM(InboundShipmentItem.quantityReceived WHERE purchaseOrderItemId = X).
@@ -910,7 +916,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const q = request.query as any
       const page = Math.max(1, safeNum(q.page, 1) ?? 1)
       const pageSize = Math.min(200, safeNum(q.pageSize, 50) ?? 50)
+      // RB.1 — recycle-bin scope. Default = live-only.
+      const showDeleted = q.deleted === 'true'
       const where: any = {}
+      where.deletedAt = showDeleted ? { not: null } : null
       if (q.status && q.status !== 'ALL') {
         // F1.10 — IN_FLIGHT pseudo-status. Operationally an aggregate
         // of "label is with the carrier but hasn't been delivered" —
@@ -4166,6 +4175,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const q = request.query as any
       const where: any = {}
+      // RB.1 — recycle-bin scope. Default = live-only.
+      const showDeleted = q.deleted === 'true'
+      where.deletedAt = showDeleted ? { not: null } : null
       if (q.type && q.type !== 'ALL') where.type = q.type
       // H.3: status accepts comma-separated multi-select.
       if (q.status && q.status !== 'ALL') {
@@ -5594,6 +5606,9 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const q = request.query as any
       const where: any = {}
+      // RB.1 — recycle-bin scope. Default = live-only.
+      const showDeleted = q.deleted === 'true'
+      where.deletedAt = showDeleted ? { not: null } : null
       // H.4: status accepts comma-separated multi-select. Used by the
       // create-inbound modal to limit the PO picker to in-flight POs
       // (SUBMITTED, CONFIRMED, PARTIAL).
@@ -11374,6 +11389,524 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(buffer)
     } catch (err: any) {
       fastify.log.error({ err }, '[fnsku/pdf] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // RB.1 — SOFT-DELETE + RESTORE + HARD-DELETE
+  //
+  // InboundShipment + Shipment + PurchaseOrder, mirroring the /products
+  // bulk pattern (products-catalog.routes.ts ~1460–1710). Each entity
+  // gets three endpoints + relies on the GET list patches above
+  // (?deleted=true → bin scope; default → live scope).
+  //
+  // Cap: 200 ids per call. Hard-delete only acts on rows already
+  // in the bin (deletedAt IS NOT NULL).
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ─────────────────────────────────────────────────────────────────
+  // InboundShipment bulk
+  // ─────────────────────────────────────────────────────────────────
+  const flipInboundDeletedAt = async (
+    ids: string[],
+    target: Date | null,
+    request: any,
+    reply: any,
+  ) => {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.code(400).send({ error: 'ids[] required' })
+    }
+    if (ids.length > 200) {
+      return reply.code(400).send({
+        error: `max 200 inbound shipments per call (got ${ids.length})`,
+      })
+    }
+    const actor = userIdFor(request)
+    const action = target ? 'soft-delete' : 'restore'
+
+    const result = await prisma.$transaction(async (tx) => {
+      const rows = await tx.inboundShipment.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, reference: true, type: true, status: true, deletedAt: true },
+      })
+      const eligible = rows.filter((r) =>
+        target ? r.deletedAt === null : r.deletedAt !== null,
+      )
+      if (eligible.length === 0) {
+        return { changed: 0, skipped: rows.length }
+      }
+      const updated = await tx.inboundShipment.updateMany({
+        where: { id: { in: eligible.map((r) => r.id) } },
+        data: { deletedAt: target },
+      })
+      await tx.auditLog.createMany({
+        data: eligible.map((r) => ({
+          userId: actor,
+          entityType: 'InboundShipment',
+          entityId: r.id,
+          action,
+          before: { deletedAt: r.deletedAt?.toISOString() ?? null },
+          after: { deletedAt: target?.toISOString() ?? null },
+          metadata: {
+            reference: r.reference,
+            type: r.type,
+            status: r.status,
+            source: 'inbound-bulk',
+          },
+        })),
+      })
+      return { changed: updated.count, skipped: rows.length - updated.count }
+    })
+
+    return result
+  }
+
+  fastify.post('/fulfillment/inbound/bulk-soft-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipInboundDeletedAt(ids, new Date(), request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/bulk-soft-delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/inbound/bulk-restore', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipInboundDeletedAt(ids, null, request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/bulk-restore] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/inbound/bulk-hard-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      if (ids.length === 0) {
+        return reply.code(400).send({ error: 'ids[] required' })
+      }
+      if (ids.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 inbound shipments per call (got ${ids.length})`,
+        })
+      }
+      const actor = userIdFor(request)
+
+      const result = await prisma.$transaction(async (tx) => {
+        const eligible = await tx.inboundShipment.findMany({
+          where: { id: { in: ids }, deletedAt: { not: null } },
+          select: {
+            id: true,
+            reference: true,
+            type: true,
+            status: true,
+            deletedAt: true,
+          },
+        })
+        if (eligible.length === 0) {
+          return {
+            purged: 0,
+            skipped: ids.length,
+            dependents: { inboundShipments: 0 },
+          }
+        }
+        const eligibleIds = eligible.map((r) => r.id)
+
+        // AuditLog BEFORE the cascade (AuditLog has no FK).
+        await tx.auditLog.createMany({
+          data: eligible.map((r) => ({
+            userId: actor,
+            entityType: 'InboundShipment',
+            entityId: r.id,
+            action: 'hard-delete',
+            before: {
+              reference: r.reference,
+              type: r.type,
+              status: r.status,
+              deletedAt: r.deletedAt?.toISOString() ?? null,
+            },
+            after: null,
+            metadata: { source: 'inbound-bulk-hard-delete' },
+          })),
+        })
+
+        // Schema cascades: InboundShipmentItem, InboundShipmentAttachment,
+        // InboundDiscrepancy all have onDelete:Cascade. FbaInboundPlanV2
+        // is SetNull (separate plan, can outlive the shipment).
+        const purged = await tx.inboundShipment.deleteMany({
+          where: { id: { in: eligibleIds } },
+        })
+
+        return {
+          purged: purged.count,
+          skipped: ids.length - eligible.length,
+          dependents: { inboundShipments: purged.count },
+        }
+      })
+
+      return { ok: true, ...result }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[inbound/bulk-hard-delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // Shipment (outbound) bulk
+  // ─────────────────────────────────────────────────────────────────
+  const flipShipmentDeletedAt = async (
+    ids: string[],
+    target: Date | null,
+    request: any,
+    reply: any,
+  ) => {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.code(400).send({ error: 'ids[] required' })
+    }
+    if (ids.length > 200) {
+      return reply.code(400).send({
+        error: `max 200 shipments per call (got ${ids.length})`,
+      })
+    }
+    const actor = userIdFor(request)
+    const action = target ? 'soft-delete' : 'restore'
+
+    const result = await prisma.$transaction(async (tx) => {
+      const rows = await tx.shipment.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          status: true,
+          trackingNumber: true,
+          carrierCode: true,
+          deletedAt: true,
+        },
+      })
+      const eligible = rows.filter((r) =>
+        target ? r.deletedAt === null : r.deletedAt !== null,
+      )
+      if (eligible.length === 0) {
+        return { changed: 0, skipped: rows.length }
+      }
+      const updated = await tx.shipment.updateMany({
+        where: { id: { in: eligible.map((r) => r.id) } },
+        data: { deletedAt: target },
+      })
+      await tx.auditLog.createMany({
+        data: eligible.map((r) => ({
+          userId: actor,
+          entityType: 'Shipment',
+          entityId: r.id,
+          action,
+          before: { deletedAt: r.deletedAt?.toISOString() ?? null },
+          after: { deletedAt: target?.toISOString() ?? null },
+          metadata: {
+            status: r.status,
+            trackingNumber: r.trackingNumber,
+            carrierCode: r.carrierCode,
+            source: 'outbound-bulk',
+          },
+        })),
+      })
+      return { changed: updated.count, skipped: rows.length - updated.count }
+    })
+
+    return result
+  }
+
+  fastify.post('/fulfillment/shipments/bulk-soft-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipShipmentDeletedAt(ids, new Date(), request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[shipments/bulk-soft-delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/shipments/bulk-restore', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipShipmentDeletedAt(ids, null, request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[shipments/bulk-restore] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/shipments/bulk-hard-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      if (ids.length === 0) {
+        return reply.code(400).send({ error: 'ids[] required' })
+      }
+      if (ids.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 shipments per call (got ${ids.length})`,
+        })
+      }
+      const actor = userIdFor(request)
+
+      const result = await prisma.$transaction(async (tx) => {
+        const eligible = await tx.shipment.findMany({
+          where: { id: { in: ids }, deletedAt: { not: null } },
+          select: {
+            id: true,
+            status: true,
+            trackingNumber: true,
+            carrierCode: true,
+            deletedAt: true,
+          },
+        })
+        if (eligible.length === 0) {
+          return {
+            purged: 0,
+            skipped: ids.length,
+            dependents: { shipments: 0 },
+          }
+        }
+        const eligibleIds = eligible.map((r) => r.id)
+
+        // AuditLog BEFORE the cascade.
+        await tx.auditLog.createMany({
+          data: eligible.map((r) => ({
+            userId: actor,
+            entityType: 'Shipment',
+            entityId: r.id,
+            action: 'hard-delete',
+            before: {
+              status: r.status,
+              trackingNumber: r.trackingNumber,
+              carrierCode: r.carrierCode,
+              deletedAt: r.deletedAt?.toISOString() ?? null,
+            },
+            after: null,
+            metadata: { source: 'outbound-bulk-hard-delete' },
+          })),
+        })
+
+        // Schema cascades: ShipmentItem, TrackingEvent, TrackingMessageLog
+        // all onDelete:Cascade. Order.shipments is SetNull on the Shipment
+        // side (Shipment.orderId → Order is SetNull on the order side; not
+        // relevant here — Order outlives the Shipment).
+        const purged = await tx.shipment.deleteMany({
+          where: { id: { in: eligibleIds } },
+        })
+
+        return {
+          purged: purged.count,
+          skipped: ids.length - eligible.length,
+          dependents: { shipments: purged.count },
+        }
+      })
+
+      return { ok: true, ...result }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[shipments/bulk-hard-delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  // ─────────────────────────────────────────────────────────────────
+  // PurchaseOrder bulk
+  // ─────────────────────────────────────────────────────────────────
+  const flipPoDeletedAt = async (
+    ids: string[],
+    target: Date | null,
+    request: any,
+    reply: any,
+  ) => {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.code(400).send({ error: 'ids[] required' })
+    }
+    if (ids.length > 200) {
+      return reply.code(400).send({
+        error: `max 200 purchase orders per call (got ${ids.length})`,
+      })
+    }
+    const actor = userIdFor(request)
+    const action = target ? 'soft-delete' : 'restore'
+
+    const result = await prisma.$transaction(async (tx) => {
+      const rows = await tx.purchaseOrder.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          poNumber: true,
+          status: true,
+          supplierId: true,
+          deletedAt: true,
+        },
+      })
+      const eligible = rows.filter((r) =>
+        target ? r.deletedAt === null : r.deletedAt !== null,
+      )
+      if (eligible.length === 0) {
+        return { changed: 0, skipped: rows.length }
+      }
+      const updated = await tx.purchaseOrder.updateMany({
+        where: { id: { in: eligible.map((r) => r.id) } },
+        data: { deletedAt: target },
+      })
+      await tx.auditLog.createMany({
+        data: eligible.map((r) => ({
+          userId: actor,
+          entityType: 'PurchaseOrder',
+          entityId: r.id,
+          action,
+          before: { deletedAt: r.deletedAt?.toISOString() ?? null },
+          after: { deletedAt: target?.toISOString() ?? null },
+          metadata: {
+            poNumber: r.poNumber,
+            status: r.status,
+            supplierId: r.supplierId,
+            source: 'po-bulk',
+          },
+        })),
+      })
+      return { changed: updated.count, skipped: rows.length - updated.count }
+    })
+
+    return result
+  }
+
+  fastify.post('/fulfillment/purchase-orders/bulk-soft-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipPoDeletedAt(ids, new Date(), request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/bulk-soft-delete] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/purchase-orders/bulk-restore', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      const r = await flipPoDeletedAt(ids, null, request, reply)
+      if (r === undefined) return
+      return { ok: true, ...r }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/bulk-restore] failed')
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
+  fastify.post('/fulfillment/purchase-orders/bulk-hard-delete', async (request, reply) => {
+    try {
+      const body = request.body as { ids?: string[] }
+      const ids = Array.isArray(body?.ids) ? body.ids : []
+      if (ids.length === 0) {
+        return reply.code(400).send({ error: 'ids[] required' })
+      }
+      if (ids.length > 200) {
+        return reply.code(400).send({
+          error: `max 200 purchase orders per call (got ${ids.length})`,
+        })
+      }
+      const actor = userIdFor(request)
+
+      // Pre-flight check OUTSIDE the transaction so the refusal returns
+      // before we open a write txn. InboundShipment.purchaseOrderId has
+      // NO onDelete rule (defaults to NoAction/Restrict at the DB level);
+      // a hard-delete would either fail with an FK error or orphan the
+      // inbound shipment. Refuse explicitly with the list of linked
+      // shipments so the operator can clean them up first. Soft-delete
+      // is fine — it just hides the PO in the UI.
+      const linked = await prisma.inboundShipment.findMany({
+        where: { purchaseOrderId: { in: ids } },
+        select: { id: true, purchaseOrderId: true },
+      })
+      if (linked.length > 0) {
+        return reply.code(409).send({
+          error: 'PO has linked inbound shipments — delete them first',
+          linkedInboundIds: linked.map((r) => r.id),
+          linkedByPo: linked.reduce<Record<string, string[]>>((acc, r) => {
+            const key = r.purchaseOrderId ?? ''
+            if (!key) return acc
+            if (!acc[key]) acc[key] = []
+            acc[key].push(r.id)
+            return acc
+          }, {}),
+        })
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const eligible = await tx.purchaseOrder.findMany({
+          where: { id: { in: ids }, deletedAt: { not: null } },
+          select: {
+            id: true,
+            poNumber: true,
+            status: true,
+            supplierId: true,
+            deletedAt: true,
+          },
+        })
+        if (eligible.length === 0) {
+          return {
+            purged: 0,
+            skipped: ids.length,
+            dependents: { purchaseOrders: 0 },
+          }
+        }
+        const eligibleIds = eligible.map((r) => r.id)
+
+        // AuditLog BEFORE the cascade.
+        await tx.auditLog.createMany({
+          data: eligible.map((r) => ({
+            userId: actor,
+            entityType: 'PurchaseOrder',
+            entityId: r.id,
+            action: 'hard-delete',
+            before: {
+              poNumber: r.poNumber,
+              status: r.status,
+              supplierId: r.supplierId,
+              deletedAt: r.deletedAt?.toISOString() ?? null,
+            },
+            after: null,
+            metadata: { source: 'po-bulk-hard-delete' },
+          })),
+        })
+
+        // Schema cascades: PurchaseOrderItem has onDelete:Cascade.
+        // InboundShipment.purchaseOrderId has no rule and is blocked
+        // by the pre-flight check above.
+        const purged = await tx.purchaseOrder.deleteMany({
+          where: { id: { in: eligibleIds } },
+        })
+
+        return {
+          purged: purged.count,
+          skipped: ids.length - eligible.length,
+          dependents: { purchaseOrders: purged.count },
+        }
+      })
+
+      return { ok: true, ...result }
+    } catch (err: any) {
+      fastify.log.error({ err }, '[purchase-orders/bulk-hard-delete] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })

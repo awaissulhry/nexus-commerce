@@ -2658,7 +2658,7 @@ model AmazonAdsReportJob {
 // poll GET /exports/{id} with per-resource MIME → COMPLETED with
 // signed S3 url (1h TTL) → download + gunzip + upsert local tables.
 model AmazonAdsExportJob {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   profileId        String
   // 'campaigns' | 'adGroups' | 'targets' | 'ads' — drives both the
   // POST path and the Accept MIME on status polls.
@@ -2666,23 +2666,23 @@ model AmazonAdsExportJob {
   // Subset filter from the request; mostly informational since v1
   // exports return records for ALL ad products by default. Common values:
   // ['SPONSORED_PRODUCTS','SPONSORED_BRANDS','SPONSORED_DISPLAY'].
-  adProducts       String[] @default([])
+  adProducts       String[]  @default([])
   externalExportId String
   // PENDING | IN_PROGRESS | COMPLETED | FAILED
-  status           String   @default("PENDING")
+  status           String    @default("PENDING")
   // Signed S3 URL from Amazon when status=COMPLETED. Expires 1h after
   // generation — ingest cron must fire within that window.
   url              String?
   urlExpiresAt     DateTime?
   fileSize         Int?
-  rowsIngested     Int      @default(0)
+  rowsIngested     Int       @default(0)
   errorMessage     String?
-  attempts         Int      @default(0)
+  attempts         Int       @default(0)
   // Original request body for replay/debug.
   configuration    Json
   lastPolledAt     DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   completedAt      DateTime?
 
   @@index([status, lastPolledAt])
@@ -2941,13 +2941,13 @@ model AccountSettings {
 }
 
 model NotificationPreference {
-  id        String  @id @default(cuid())
+  id     String       @id @default(cuid())
   // Phase E — per-user prefs. Nullable for backwards-compat with the
   // existing workspace-global rows; new rows created from the
   // /settings/notifications UI populate this. Once Phase I (auth)
   // lands and every preference has a user, the column flips NOT NULL.
-  userId    String?
-  user      UserProfile? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+  user   UserProfile? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   eventType String // NEW_ORDER, LOW_STOCK, RETURN_REQUEST, SYNC_FAILURE, AI_COMPLETE
   email     Boolean @default(true)
@@ -2981,26 +2981,26 @@ model NotificationPreference {
 // subscription CRUD + test-payload land here, real event-triggered
 // delivery is wired when the emitters get touched).
 model NotificationWebhook {
-  id          String       @id @default(cuid())
-  userId      String?
-  user        UserProfile? @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label       String       // operator-supplied
-  url         String
+  id               String       @id @default(cuid())
+  userId           String?
+  user             UserProfile? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label            String // operator-supplied
+  url              String
   // HMAC secret. Generated server-side at create time; we show the
   // plaintext exactly once and store the bcrypt hash for verification.
-  secretHash  String
-  secretPrefix String      // first 8 chars of the raw secret for UI display
+  secretHash       String
+  secretPrefix     String // first 8 chars of the raw secret for UI display
   // Which event-types this subscription covers. Empty = ALL events.
-  events      String[]     @default([])
-  isActive    Boolean      @default(true)
+  events           String[]     @default([])
+  isActive         Boolean      @default(true)
   // Last-fire telemetry; populated by the dispatch worker. Surfaced
   // on the subscription row so operators can spot stale endpoints.
-  lastFiredAt    DateTime?
-  lastStatus     Int?
-  lastError      String?
-  consecutiveFails Int     @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  lastFiredAt      DateTime?
+  lastStatus       Int?
+  lastError        String?
+  consecutiveFails Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@index([userId])
   @@index([isActive])
@@ -3022,13 +3022,13 @@ model ApiKey {
   //   apps/api/src/lib/api-key-auth.ts. Empty array means "full access"
   //   for backwards-compat with the original keys; new keys default to
   //   a narrow scope set chosen at create time.
-  scopes       String[]   @default([])
+  scopes             String[]  @default([])
   // ipAllowlist: optional IPv4/IPv6 CIDR or plain-IP list. Empty array
   //   means "any IP". Non-empty restricts the key to those addresses
   //   (24/64-bit prefix; CIDR notation accepted).
-  ipAllowlist  String[]   @default([])
+  ipAllowlist        String[]  @default([])
   // Optional hard expiry. Null = never expires (legacy default).
-  expiresAt    DateTime?
+  expiresAt          DateTime?
   // Rotation pair: when a key is rotated we issue a new ApiKey row
   // and stamp the old one with rotatedAt + rotatedToId. The old key
   // keeps validating until rotationGraceUntil, after which the
@@ -3039,50 +3039,50 @@ model ApiKey {
 }
 
 model UserProfile {
-  id                  String               @id @default(cuid())
-  displayName         String               @default("")
-  email               String               @default("")
-  avatarUrl           String               @default("")
+  id                   String                   @id @default(cuid())
+  displayName          String                   @default("")
+  email                String                   @default("")
+  avatarUrl            String                   @default("")
   // Password hash. Phase C migrates from sha256 (legacy) to bcrypt;
   // the verifier auto-detects format and re-hashes on next successful
   // login. Empty string = no password set yet.
-  passwordHash        String               @default("")
+  passwordHash         String                   @default("")
   // Phase C — locale / scheduling fields surfaced on /settings/profile.
   // All nullable so the existing seeded row keeps working without a
   // backfill; defaults applied at the UI layer.
-  phone               String?
-  timezone            String?              // IANA, e.g. "Europe/Rome"
-  language            String?              // BCP-47, e.g. "it-IT"
-  dateFormat          String?              // "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"
-  weekStart           Int?                 // 0 = Sunday, 1 = Monday
-  workingHoursStart   String?              // "09:00"
-  workingHoursEnd     String?              // "18:00"
+  phone                String?
+  timezone             String? // IANA, e.g. "Europe/Rome"
+  language             String? // BCP-47, e.g. "it-IT"
+  dateFormat           String? // "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD"
+  weekStart            Int? // 0 = Sunday, 1 = Monday
+  workingHoursStart    String? // "09:00"
+  workingHoursEnd      String? // "18:00"
   // Phase E — quiet hours. Distinct from working hours: a notification
   // suppressed during quiet hours is held (and rolled into the next
   // digest, if applicable) rather than dropped. Null = no quiet hours.
   // Stored as "HH:MM" strings; the user's timezone above resolves them.
   // If start > end (e.g. "22:00" → "07:00"), the window wraps midnight.
-  quietHoursStart     String?
-  quietHoursEnd       String?
+  quietHoursStart      String?
+  quietHoursEnd        String?
   // Phase C — 2FA (TOTP). Secret is base32; null when 2FA is off.
   // enabledAt is set when the user verifies the first 6-digit code;
   // a pending-but-not-confirmed enrollment leaves enabledAt null.
-  twoFactorSecret     String?
-  twoFactorEnabledAt  DateTime?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  twoFactorSecret      String?
+  twoFactorEnabledAt   DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
   // W9.x — workflow assignments this user appears in
-  workflowAssignments WorkflowAssignment[]
+  workflowAssignments  WorkflowAssignment[]
   // Phase C — security tables.
-  recoveryCodes       TwoFactorRecoveryCode[]
-  sessions            UserSession[]
-  loginEvents         LoginEvent[]
+  recoveryCodes        TwoFactorRecoveryCode[]
+  sessions             UserSession[]
+  loginEvents          LoginEvent[]
   // Phase E — per-user notification prefs + webhook subscriptions.
-  notificationPrefs   NotificationPreference[]
+  notificationPrefs    NotificationPreference[]
   notificationWebhooks NotificationWebhook[]
   // Phase H — privacy + consent + export requests.
-  consents          ConsentRecord[]
-  exportRequests    DataExportRequest[]
+  consents             ConsentRecord[]
+  exportRequests       DataExportRequest[]
 }
 
 // Phase H — consent log (GDPR Art. 7). Append-only; each row pins a
@@ -3090,21 +3090,21 @@ model UserProfile {
 // operator accepted, when. Marketing-comms opt-in/out flips create
 // new rows rather than mutating the previous one.
 model ConsentRecord {
-  id        String      @id @default(cuid())
+  id        String       @id @default(cuid())
   userId    String?
   user      UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
   // 'DPA' | 'COOKIE_ANALYTICS' | 'COOKIE_MARKETING' | 'TOS' |
   // 'PRIVACY_POLICY' | 'MARKETING_EMAIL' | 'MARKETING_SMS'
   kind      String
-  version   String      // semver-ish: 'v2026-05' or '1.4.0'
-  accepted  Boolean     // true on accept, false on opt-out
+  version   String // semver-ish: 'v2026-05' or '1.4.0'
+  accepted  Boolean // true on accept, false on opt-out
   // Free-form context: which page surfaced the consent, IP, UA.
   // GDPR requires we can prove the consent was given freely +
   // informed; this metadata helps.
   ip        String?
   userAgent String?
   metadata  Json?
-  createdAt DateTime    @default(now())
+  createdAt DateTime     @default(now())
 
   @@index([userId])
   @@index([userId, kind])
@@ -3131,17 +3131,17 @@ model DataRetentionPolicy {
 // shape supports a real out-of-process worker later without UI
 // changes.
 model DataExportRequest {
-  id          String      @id @default(cuid())
+  id          String       @id @default(cuid())
   userId      String?
   user        UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
   // 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
-  status      String      @default("QUEUED")
+  status      String       @default("QUEUED")
   // Format the operator picked. 'json' for the MVP; 'zip' lands when
   // we add a worker that builds a real archive.
-  format      String      @default("json")
+  format      String       @default("json")
   // What's in the export. Free-form array of data-type keys for
   // future-proofing ('all' covers everything).
-  scope       String[]    @default([])
+  scope       String[]     @default([])
   // Where to fetch the result. For synchronous JSON dumps this is a
   // route handle the UI calls; for async ZIPs it'd be an S3/CDN URL.
   downloadUrl String?
@@ -3153,7 +3153,7 @@ model DataExportRequest {
   bytes       Int?
   // Free-form error context on FAILED.
   error       String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime     @default(now())
   completedAt DateTime?
 
   @@index([userId])
@@ -3172,7 +3172,7 @@ model TwoFactorRecoveryCode {
   id        String      @id @default(cuid())
   userId    String
   user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
-  codeHash  String      // bcrypt of the raw code
+  codeHash  String // bcrypt of the raw code
   usedAt    DateTime?
   createdAt DateTime    @default(now())
 
@@ -3189,18 +3189,18 @@ model TwoFactorRecoveryCode {
 // mostly — the UI renders rows so the schema is plumbed end-to-end,
 // even if the only writer for now is the eventual auth handshake.
 model UserSession {
-  id            String      @id @default(cuid())
-  userId        String
-  user          UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String      @id @default(cuid())
+  userId      String
+  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Stable per-device identifier; safe to display in the UI.
-  tokenPrefix   String      // first 8 chars of the hashed refresh token
-  userAgent     String?     // "Chrome 126 on macOS"
-  ipAddress     String?     // truncated IPv4 /24 or IPv6 /64 for privacy
-  ipCity        String?     // GeoIP lookup result, best-effort
-  ipCountry     String?     // ISO 3166-1 alpha-2
-  createdAt     DateTime    @default(now())
-  lastSeenAt    DateTime    @default(now())
-  revokedAt     DateTime?
+  tokenPrefix String // first 8 chars of the hashed refresh token
+  userAgent   String? // "Chrome 126 on macOS"
+  ipAddress   String? // truncated IPv4 /24 or IPv6 /64 for privacy
+  ipCity      String? // GeoIP lookup result, best-effort
+  ipCountry   String? // ISO 3166-1 alpha-2
+  createdAt   DateTime    @default(now())
+  lastSeenAt  DateTime    @default(now())
+  revokedAt   DateTime?
 
   @@index([userId])
   @@index([userId, revokedAt])
@@ -3214,19 +3214,19 @@ model UserSession {
 // enum migrations as new outcomes appear (e.g. "totp_failed",
 // "recovery_code_used").
 model LoginEvent {
-  id         String      @id @default(cuid())
+  id         String       @id @default(cuid())
   userId     String?
   user       UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
   // Even on failed logins we capture the email tried so the user
   // can spot stuffing attempts against their address.
   emailTried String?
-  outcome    String      // "success" | "bad_password" | "totp_failed" | "recovery_code_used" | "locked"
+  outcome    String // "success" | "bad_password" | "totp_failed" | "recovery_code_used" | "locked"
   userAgent  String?
   ipAddress  String?
   ipCity     String?
   ipCountry  String?
   metadata   Json?
-  createdAt  DateTime    @default(now())
+  createdAt  DateTime     @default(now())
 
   @@index([userId])
   @@index([createdAt])
@@ -3512,6 +3512,11 @@ model Order {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  // RB.1 — soft-delete (recycle bin). NULL = live, non-NULL = in recycle bin.
+  // Status enum CANCELLED is the workflow state (refund processed, etc.);
+  // deletedAt is purely a UI hide. They coexist independently.
+  deletedAt DateTime?
+
   @@unique([channel, channelOrderId])
   @@index([channel])
   @@index([marketplace])
@@ -3527,6 +3532,7 @@ model Order {
   @@index([status, shipByDate])
   @@index([customerId])
   @@index([fiscalKind]) // F.1 — batch SDI submission filters by B2B
+  @@index([status, deletedAt]) // RB.1 — hot-path filter: live vs bin
 }
 
 // ── O.20: Customer model ─────────────────────────────────────────────
@@ -4112,15 +4118,15 @@ model BrandSettings {
   // checksum); pecEmail = certified email (PEC) used as the
   // alternative when no SDI code is provisioned. One of (sdiCode |
   // pecEmail) must be present for valid Italian B2B invoicing.
-  piva           String?
-  codiceFiscale  String?
-  sdiCode        String?
-  pecEmail       String?
+  piva          String?
+  codiceFiscale String?
+  sdiCode       String?
+  pecEmail      String?
   // VAT regime selector. Drives downstream invoice math and the
   // /fulfillment/stock rimanenze valuation. Free-text would be
   // fragile here — we constrain to a known set.
   // Values: 'ORDINARIO' | 'FORFETTARIO' | 'OSS' | 'IOSS' | 'ESENTE'.
-  vatScheme      String?
+  vatScheme     String?
 
   // ── Letterhead assets ───────────────────────────────────────────
   // Cloudinary or other hosted URL — pdfkit downloads + embeds at
@@ -7009,11 +7015,15 @@ model Shipment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // RB.1 — soft-delete (recycle bin).
+  deletedAt DateTime?
+
   @@index([orderId])
   @@index([status])
   @@index([carrierCode])
   @@index([trackingNumber])
   @@index([createdAt])
+  @@index([status, deletedAt])
 }
 
 // O.2: Carrier scan log per shipment (append-only). Sendcloud webhook
@@ -7306,8 +7316,12 @@ model PurchaseOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // RB.1 — soft-delete (recycle bin).
+  deletedAt DateTime?
+
   @@index([supplierId])
   @@index([status])
+  @@index([status, deletedAt])
 }
 
 model PurchaseOrderItem {
@@ -7400,6 +7414,9 @@ model InboundShipment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // RB.1 — soft-delete (recycle bin).
+  deletedAt DateTime?
+
   @@index([type])
   @@index([status])
   @@index([fbaShipmentId])
@@ -7407,6 +7424,7 @@ model InboundShipment {
   @@index([carrierCode])
   @@index([trackingNumber])
   @@index([expectedAt])
+  @@index([status, deletedAt])
 }
 
 // H.1 — Attachments at the shipment level (invoices, packing lists,
@@ -10088,17 +10106,17 @@ model ListingReconciliation {
 // later without joining a deleted product row.
 
 model FlatFilePullRecord {
-  id             String   @id @default(cuid())
-  channel        String   // 'AMAZON' (Phase 2). 'EBAY' added in Phase 3.
-  marketplace    String   // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
-  productType    String
+  id          String @id @default(cuid())
+  channel     String // 'AMAZON' (Phase 2). 'EBAY' added in Phase 3.
+  marketplace String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  productType String
 
   // Source job (in-memory only) so support can correlate logs.
-  jobId          String?
+  jobId String?
 
   // Scope summary — what the user asked the pull to cover.
-  skusRequested  String[] @default([])
-  skusReturned   Int      @default(0)
+  skusRequested String[] @default([])
+  skusReturned  Int      @default(0)
 
   // Result summary — what they ultimately applied via the diff modal.
   // columnsApplied stores pull-group ids: 'content' | 'pricing' |
@@ -10108,12 +10126,12 @@ model FlatFilePullRecord {
   fieldsApplied  Int      @default(0)
 
   // null = operator cancelled the diff modal without applying.
-  appliedAt      DateTime?
+  appliedAt DateTime?
 
   // Free-form operator note (Phase 5 surfaces this in the history drawer).
-  operatorNote   String?
+  operatorNote String?
 
-  pulledAt       DateTime @default(now())
+  pulledAt DateTime @default(now())
 
   @@index([channel, marketplace, pulledAt])
   @@index([productType, pulledAt])
@@ -10135,22 +10153,22 @@ model FlatFilePullRecord {
 // later phase can prune rows older than 30 days.
 
 model FlatFilePullJob {
-  id           String   @id          // jobId, e.g. 'ffpreview-…' or 'ebpreview-…'
-  channel      String                // 'AMAZON' | 'EBAY'
-  marketplace  String                // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
-  productType  String?               // null on eBay (editor isn't scoped by type)
-  skus         String[] @default([]) // requested SKU list
-  status       String   @default("running") // 'running' | 'done' | 'failed'
-  progress     Int      @default(0)
-  total        Int      @default(0)
-  pulled       Int      @default(0)
-  skipped      Int      @default(0)
-  failed       Int      @default(0)
-  errors       Json     @default("[]")     // Array<{ sku, error }>
-  rows         Json     @default("[]")     // FlatFileRow[] at completion (empty while running)
-  startedAt    DateTime @default(now())
-  doneAt       DateTime?
-  fatalError   String?
+  id          String    @id // jobId, e.g. 'ffpreview-…' or 'ebpreview-…'
+  channel     String // 'AMAZON' | 'EBAY'
+  marketplace String // 'IT' | 'DE' | 'FR' | 'ES' | 'UK'
+  productType String? // null on eBay (editor isn't scoped by type)
+  skus        String[]  @default([]) // requested SKU list
+  status      String    @default("running") // 'running' | 'done' | 'failed'
+  progress    Int       @default(0)
+  total       Int       @default(0)
+  pulled      Int       @default(0)
+  skipped     Int       @default(0)
+  failed      Int       @default(0)
+  errors      Json      @default("[]") // Array<{ sku, error }>
+  rows        Json      @default("[]") // FlatFileRow[] at completion (empty while running)
+  startedAt   DateTime  @default(now())
+  doneAt      DateTime?
+  fatalError  String?
 
   @@index([channel, marketplace, status])
   @@index([startedAt])
