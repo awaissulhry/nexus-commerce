@@ -28,6 +28,7 @@
     "react-dom": "^18.2.0",
     "react-dropzone": "^15.0.0",
     "react-hook-form": "^7.73.1",
+    "react-image-crop": "^11.0.10",
     "recharts": "^3.8.1",
     "use-immer": "^0.11.0",
     "zod": "^4.3.6"
