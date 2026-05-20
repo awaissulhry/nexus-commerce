@@ -93,6 +93,9 @@ export interface WorkspaceData {
   variants: VariantSummary[]
   availableAxes: string[]
   amazonJobs: AmazonJobSummary[]
+  // IR.7.2 — Map productImage.id → DigitalAsset.id for rows mirrored in
+  // the DAM library. Empty when no master image has been pushed yet.
+  damLinks: Record<string, string>
 }
 
 export type ChannelTab = 'master' | 'amazon' | 'ebay' | 'shopify'

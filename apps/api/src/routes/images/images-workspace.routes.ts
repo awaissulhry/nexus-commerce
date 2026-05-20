@@ -197,6 +197,28 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const availableAxes = Array.from(axisSet).sort()
 
+      // IR.7.2 — Map productImage.id → DigitalAsset.id for master rows
+      // that are mirrored in the DAM library. Single batched query
+      // keyed on Cloudinary publicId, so the FE can render "Linked to
+      // DAM" badges + disable Push-to-DAM when already pushed.
+      const publicIds = master
+        .map((m) => m.publicId)
+        .filter((v): v is string => !!v)
+      const damLinks: Record<string, string> = {}
+      if (publicIds.length > 0) {
+        const assets = await prisma.digitalAsset.findMany({
+          where: { storageProvider: 'cloudinary', storageId: { in: publicIds } },
+          select: { id: true, storageId: true },
+        })
+        const byStorageId = new Map(assets.map((a) => [a.storageId, a.id]))
+        for (const m of master) {
+          if (m.publicId) {
+            const assetId = byStorageId.get(m.publicId)
+            if (assetId) damLinks[m.id] = assetId
+          }
+        }
+      }
+
       return {
         product,
         master,
@@ -204,6 +226,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         variants: rawVariants,
         availableAxes,
         amazonJobs: recentJobs,
+        damLinks,
       }
     },
   )
