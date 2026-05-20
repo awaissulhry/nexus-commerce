@@ -413,10 +413,12 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           state={lightbox.state}
           masterImages={master}
           listingImages={listing}
+          damLinks={data.damLinks ?? {}}
           productId={product.id}
           onMasterImageUpdated={() => { void workspace.reload() }}
           onEditMaster={(img) => setEditorImage(img)}
           onSwitchToMaster={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
+          onPushToDam={() => { void workspace.reload(); showToast('Pushed to DAM library') }}
           onClose={lightbox.close}
           onNavigate={lightbox.navigate}
         />

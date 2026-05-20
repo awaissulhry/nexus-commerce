@@ -14,7 +14,7 @@
 //   - inline alt + type edit (IR.3.5 — master only)
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Crop as CropIcon, Loader2, Pencil, Sparkles, Wand2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Crop as CropIcon, FolderUp, Library, Loader2, Pencil, Sparkles, Wand2, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
@@ -31,6 +31,8 @@ interface Props {
   // sourceProductImageId === current master image id).
   masterImages: ProductImage[]
   listingImages: ListingImage[]
+  /** IR.7.2 — map productImage.id → DigitalAsset.id from workspace.damLinks. */
+  damLinks: Record<string, string>
   // IR.3.5 — required for inline alt/type edit on master images.
   // Identifies which product the PATCH endpoint should target.
   productId: string
@@ -42,6 +44,9 @@ interface Props {
   /** IR.4.5 — switch the focused image to a different master without
    *  closing the lightbox. Used by the derivation chain section. */
   onSwitchToMaster?: (img: ProductImage) => void
+  /** IR.7.3 — after push-to-DAM completes; parent typically reloads
+   *  workspace so damLinks refreshes. */
+  onPushToDam?: () => void
   onClose: () => void
   onNavigate: (dir: 'prev' | 'next') => void
 }
@@ -63,9 +68,11 @@ export default function LightboxModal({
   masterImages,
   listingImages,
   productId,
+  damLinks,
   onMasterImageUpdated,
   onEditMaster,
   onSwitchToMaster,
+  onPushToDam,
   onClose,
   onNavigate,
 }: Props) {
@@ -86,6 +93,10 @@ export default function LightboxModal({
   // IR.6.4 — Auto-enhance state.
   const [enhancing, setEnhancing] = useState<null | 'AMAZON_MAIN' | 'EBAY_MAIN' | 'SHOPIFY_PORTRAIT'>(null)
   const [enhanceError, setEnhanceError] = useState<string | null>(null)
+
+  // IR.7.3 — DAM push state.
+  const [pushingDam, setPushingDam] = useState(false)
+  const [damError, setDamError] = useState<string | null>(null)
 
   useEffect(() => {
     setEditing(false)
@@ -133,6 +144,26 @@ export default function LightboxModal({
       setAnalyzeError(err instanceof Error ? err.message : 'Analyze failed')
     } finally {
       setAnalyzing(false)
+    }
+  }
+
+  async function pushToDam() {
+    if (image.kind !== 'master') return
+    setPushingDam(true)
+    setDamError(null)
+    try {
+      const res = await beFetch(`/api/products/${productId}/images/${image.id}/push-to-dam`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.message ?? body?.error ?? `Push to DAM failed: ${res.status}`)
+      }
+      onPushToDam?.()
+    } catch (err) {
+      setDamError(err instanceof Error ? err.message : 'Push to DAM failed')
+    } finally {
+      setPushingDam(false)
     }
   }
 
@@ -519,6 +550,50 @@ export default function LightboxModal({
               </p>
             </div>
           )}
+
+          {/* IR.7.3 — DAM library linkage (master only). */}
+          {image.kind === 'master' && (() => {
+            const linkedAssetId = damLinks[image.id]
+            return (
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">DAM library</h4>
+                {damError && (
+                  <p className="text-[11px] text-red-600 dark:text-red-400">{damError}</p>
+                )}
+                {linkedAssetId ? (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                      <Library className="w-3 h-3" />
+                      Linked
+                    </span>
+                    <a
+                      href={`/marketing/content?asset=${encodeURIComponent(linkedAssetId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Open in library ↗
+                    </a>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={pushToDam}
+                    disabled={pushingDam}
+                    className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {pushingDam
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <FolderUp className="w-3 h-3" />}
+                    Push to DAM library
+                  </button>
+                )}
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                  Pushing shares this asset with /marketing/content via Cloudinary publicId — no re-upload.
+                </p>
+              </div>
+            )
+          })()}
 
           {image.kind === 'listing' && (
             <div className="space-y-1.5">
