@@ -17,6 +17,7 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
+  Share2,
   Square,
   Star,
   Trash2,
@@ -78,6 +79,9 @@ export default function MasterPanel({
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // IR.8.3 — apply-to-children flow state.
+  const [applyConfirm, setApplyConfirm] = useState(false)
+  const [applying, setApplying] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAlt, setEditAlt] = useState('')
   const [editType, setEditType] = useState<ImageType>('ALT')
@@ -213,6 +217,38 @@ export default function MasterPanel({
     }
   }
 
+  // ── IR.8.3 — Apply this product's master gallery to all children ────
+  async function handleApplyToChildren() {
+    setApplying(true)
+    try {
+      const res = await beFetch(`/api/products/${product.id}/images/apply-to-children`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'replace' }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.message ?? body?.error ?? `Apply failed: ${res.status}`)
+      }
+      const data = await res.json() as {
+        targetsTotal: number
+        targetsUpdated: number
+        imagesCreated: number
+        errors: unknown[]
+      }
+      if (data.targetsTotal === 0) {
+        onToast?.('No child products to update.')
+      } else {
+        onToast?.(`Applied to ${data.targetsUpdated}/${data.targetsTotal} children · ${data.imagesCreated} images written${data.errors.length > 0 ? ` · ${data.errors.length} errors` : ''}`)
+      }
+      setApplyConfirm(false)
+    } catch (err) {
+      onToast?.(err instanceof Error ? err.message : 'Apply to children failed')
+    } finally {
+      setApplying(false)
+    }
+  }
+
   // ── Alt / type edit ──────────────────────────────────────────────────
   function startEdit(img: ProductImage) {
     setMenuOpenId(null)
@@ -304,6 +340,30 @@ export default function MasterPanel({
         </div>
       )}
 
+      {/* IR.8.3 — Apply-to-children confirmation banner */}
+      {applyConfirm && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
+          <div className="flex items-start gap-2 flex-1 min-w-0">
+            <Share2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-500" />
+            <div className="space-y-0.5 text-blue-800 dark:text-blue-200">
+              <div className="font-medium">Replace child gallery images with this parent's?</div>
+              <div className="text-xs text-blue-700/80 dark:text-blue-300/80">
+                Each child product's existing master gallery will be deleted and replaced with the {images.length} image{images.length === 1 ? '' : 's'} above. Cloudinary publicIds are reused — no re-upload.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button size="sm" variant="ghost" onClick={() => setApplyConfirm(false)} disabled={applying} className="text-xs h-7">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleApplyToChildren} disabled={applying} className="text-xs h-7 gap-1.5">
+              {applying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}
+              Apply
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
         {/* Header */}
         <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap">
@@ -358,6 +418,19 @@ export default function MasterPanel({
               >
                 <Library className="w-3.5 h-3.5" />
                 From library
+              </Button>
+            )}
+            {product.isParent && images.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={() => setApplyConfirm(true)}
+                disabled={uploading || applying}
+                title="Mirror this gallery to every child product (replaces their current images)"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Apply to children
               </Button>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" onChange={handleFileInput} />
