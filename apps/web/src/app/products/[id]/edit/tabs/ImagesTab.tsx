@@ -329,7 +329,6 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
 
       {/* ── Action bar ───────────────────────────────────────────────── */}
       <ImageActionBar
-        activeChannel={activeChannel}
         dirtyCount={dirtyCount}
         saving={saving}
         onSave={async () => {
