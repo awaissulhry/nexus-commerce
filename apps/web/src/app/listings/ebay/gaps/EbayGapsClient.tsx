@@ -12,7 +12,7 @@ import {
   Image,
 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -163,35 +163,39 @@ export default function EbayGapsClient({ marketplace: initMarketplace, initialGa
           { label: 'eBay', href: '/listings/ebay' },
           { label: `Gaps · ${marketLabel}` },
         ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={() => startTransition(() => refreshData(marketplace))}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={() => startTransition(() => refreshData(marketplace))}
-              loading={isPending}
-            />
+      />
+
+      <GridToolbar
+        quickFilterSlot={
+          <div className="flex gap-2 flex-wrap">
+            {MARKETPLACE_OPTIONS.map(mp => (
+              <button
+                key={mp}
+                onClick={() => handleMarketplace(mp)}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
+              >
+                {COUNTRY_NAMES[mp] ?? mp}
+              </button>
+            ))}
           </div>
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => startTransition(() => refreshData(marketplace))}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => startTransition(() => refreshData(marketplace))}
+            loading={isPending}
+          />
         }
       />
 
       <div className="space-y-4">
-        {/* Marketplace selector */}
-        <div className="flex gap-2">
-          {MARKETPLACE_OPTIONS.map(mp => (
-            <button
-              key={mp}
-              onClick={() => handleMarketplace(mp)}
-              className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors ${marketplace === mp ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700 dark:hover:border-slate-500'}`}
-            >
-              {COUNTRY_NAMES[mp] ?? mp}
-            </button>
-          ))}
-        </div>
 
         {/* Stats strip */}
         <div className="grid grid-cols-4 gap-3 mb-5">

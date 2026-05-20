@@ -26,6 +26,7 @@ import {
   StockSplit,
   DensityToggle as SharedDensityToggle,
   AutoRefreshSelect,
+  GridToolbar,
   KpiStrip,
   BulkActionShell,
   KeyboardShortcutsModal,
@@ -907,7 +908,7 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
         </div>
       )}
 
-      {/* Lens switcher + saved views menu + global stats strip */}
+      {/* Lens switcher + saved views menu */}
       <div className="flex items-center gap-2 flex-wrap">
         <LensTabs
           current={lens}
@@ -985,62 +986,71 @@ export default function ListingsWorkspace({ lockChannel, lockMarketplace, titleO
             })
           }}
         />
-        <div className="ml-auto flex items-center gap-3">
-          {/* S.4 — live indicator. Green pulse = SSE connected (sub-200ms updates). */}
-          <Tooltip
-            content={
-              sseConnected
-                ? t('listings.live.tooltipConnected')
-                : t('listings.live.tooltipDisconnected')
-            }
-          >
-            <span
-              className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
-              aria-label={sseConnected ? t('listings.live.tooltipConnected') : t('listings.live.tooltipDisconnected')}
+      </div>
+
+      {/* Canonical chrome toolbar */}
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            {/* S.4 — live indicator. Green pulse = SSE connected (sub-200ms updates). */}
+            <Tooltip
+              content={
+                sseConnected
+                  ? t('listings.live.tooltipConnected')
+                  : t('listings.live.tooltipDisconnected')
+              }
             >
               <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                }`}
-                aria-hidden
-              />
-              {sseConnected ? t('listings.live') : t('listings.polling')}
-            </span>
-          </Tooltip>
-          {facets && (
-            <div className="flex items-center gap-3 text-base text-slate-500 dark:text-slate-400">
-              <span><span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{facets.total}</span> {t('listings.stats.total')}</span>
-              <span className="text-slate-300 dark:text-slate-600">·</span>
-              <span className={facets.errorCount > 0 ? 'text-rose-600 dark:text-rose-400' : ''}>
-                <span className="font-semibold tabular-nums">{facets.errorCount}</span> {t('listings.stats.errors')}
+                className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                aria-label={sseConnected ? t('listings.live.tooltipConnected') : t('listings.live.tooltipDisconnected')}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    sseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
+                  }`}
+                  aria-hidden
+                />
+                {sseConnected ? t('listings.live') : t('listings.polling')}
               </span>
-            </div>
-          )}
-          {lens === 'grid' && (
-            <>
-              <AutoRefreshSelect
-                value={autoRefreshMin}
-                onChange={setAutoRefreshMin}
-                onTick={() => { fetchGrid(); fetchFacets() }}
-              />
-              <FreshnessIndicator
-                lastFetchedAt={gridFetchedAt}
-                onRefresh={() => { fetchGrid(); fetchFacets() }}
-                loading={gridLoading}
-                error={!!gridError}
-              />
-            </>
-          )}
-          {lens !== 'grid' && (
+            </Tooltip>
+            {facets && (
+              <div className="flex items-center gap-3 text-base text-slate-500 dark:text-slate-400">
+                <span><span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{facets.total}</span> {t('listings.stats.total')}</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
+                <span className={facets.errorCount > 0 ? 'text-rose-600 dark:text-rose-400' : ''}>
+                  <span className="font-semibold tabular-nums">{facets.errorCount}</span> {t('listings.stats.errors')}
+                </span>
+              </div>
+            )}
+          </>
+        }
+        autoRefresh={
+          lens === 'grid' ? (
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={() => { fetchGrid(); fetchFacets() }}
+            />
+          ) : undefined
+        }
+        freshness={
+          lens === 'grid' ? (
+            <FreshnessIndicator
+              lastFetchedAt={gridFetchedAt}
+              onRefresh={() => { fetchGrid(); fetchFacets() }}
+              loading={gridLoading}
+              error={!!gridError}
+            />
+          ) : (
             <button
               onClick={() => { fetchGrid(); fetchFacets() }}
               className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
             >
               <RefreshCw size={12} /> Refresh
             </button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {/* U.1 — Quick filter presets. One-click pills for the
           high-frequency filter combos operators reach for daily.

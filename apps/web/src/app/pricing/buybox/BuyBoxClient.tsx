@@ -21,7 +21,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
@@ -126,37 +126,43 @@ export default function BuyBoxClient() {
   return (
     <div className="space-y-4">
       {/* Window selector + refresh */}
-      <div className="flex items-center gap-2">
-          <div className="text-base text-slate-700 dark:text-slate-300">{t('pricing.buybox.window')}</div>
-        {WINDOWS.map((w) => (
-          <button
-            key={w.days}
-            onClick={() => setDays(w.days)}
-            aria-pressed={days === w.days}
-            aria-label={w.label}
-            className={cn(
-              'h-8 px-3 text-base border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
-              days === w.days
-                ? 'bg-slate-900 text-white border-slate-900'
-                : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
-            )}
-          >
-            {w.label}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            <div className="text-base text-slate-700 dark:text-slate-300">{t('pricing.buybox.window')}</div>
+            {WINDOWS.map((w) => (
+              <button
+                key={w.days}
+                onClick={() => setDays(w.days)}
+                aria-pressed={days === w.days}
+                aria-label={w.label}
+                className={cn(
+                  'h-8 px-3 text-base border rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40',
+                  days === w.days
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
+                )}
+              >
+                {w.label}
+              </button>
+            ))}
+          </>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchData}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchData}
             loading={loading}
           />
-        </div>
-      </div>
+        }
+      />
 
       {/* Headline */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

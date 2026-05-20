@@ -11,7 +11,7 @@
 // automatically.
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Plus, Square, Trash2, AlertCircle, Tag, Repeat, MessageCircle, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
+import { Plus, Square, Trash2, AlertCircle, Tag, Repeat, MessageCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { Card } from '@/components/ui/Card'
@@ -22,7 +22,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -269,12 +269,6 @@ export default function EbayMarkdownsClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
-    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
-    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
-    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
-  ]
-
   return (
     <div className="space-y-4">
       <PageHeader
@@ -324,52 +318,39 @@ export default function EbayMarkdownsClient() {
         </div>
       </Card>
 
-      {/* Toolbar: status filter + density + count + create */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
-          aria-label="Filter by status"
-        >
-          <option value="">All statuses</option>
-          <option value="DRAFT">Draft</option>
-          <option value="SCHEDULED">Scheduled</option>
-          <option value="ACTIVE">Active</option>
-          <option value="ENDED">Ended</option>
-          <option value="CANCELLED">Cancelled</option>
-          <option value="FAILED">Failed</option>
-        </select>
-
-        {/* Density toggle */}
-        <div className="flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
-          {DENSITY_OPTIONS.map(({ d, icon, label }) => (
-            <button
-              key={d}
-              onClick={() => setDensity(d)}
-              title={label}
-              aria-pressed={density === d}
-              className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${
-                density === d
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
+      {/* Canonical chrome toolbar */}
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="h-8 px-2 text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-blue-500"
+              aria-label="Filter by status"
             >
-              {icon}
-            </button>
-          ))}
-        </div>
-
-        <span className="text-sm text-slate-500 dark:text-slate-400">
-          {rows.length} markdown{rows.length === 1 ? '' : 's'}
-        </span>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="ml-auto h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
-        >
-          <Plus size={12} /> New markdown
-        </button>
-      </div>
+              <option value="">All statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="SCHEDULED">Scheduled</option>
+              <option value="ACTIVE">Active</option>
+              <option value="ENDED">Ended</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="FAILED">Failed</option>
+            </select>
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {rows.length} markdown{rows.length === 1 ? '' : 's'}
+            </span>
+          </>
+        }
+        density={<DensityToggle density={density} onChange={setDensity} />}
+        trailingSlot={
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="h-8 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1.5"
+          >
+            <Plus size={12} /> New markdown
+          </button>
+        }
+      />
 
       {/* Grid */}
       {loading && !data ? (

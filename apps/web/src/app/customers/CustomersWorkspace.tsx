@@ -20,6 +20,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type Density,
@@ -213,59 +214,34 @@ export default function CustomersWorkspace() {
             : t('customers.subtitle.empty')
         }
         actions={
-          <div className="flex items-center gap-2">
-            <a
-              href={`${getBackendUrl()}/api/customers/export.csv?${searchParams.toString()}`}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
-              download
-            >
-              <Download size={12} /> {t('customers.action.exportCsv')}
-            </a>
-            <SharedDensityToggle density={density} onChange={setDensity} />
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={fetchCustomers}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchCustomers}
-              loading={loading}
-            />
-            <button
-              type="button"
-              onClick={() => setShortcutsOpen(true)}
-              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-              title="Keyboard shortcuts (?)"
-              aria-label="Keyboard shortcuts"
-            >
-              <Keyboard size={12} />
-            </button>
-          </div>
+          <a
+            href={`${getBackendUrl()}/api/customers/export.csv?${searchParams.toString()}`}
+            className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+            download
+          >
+            <Download size={12} /> {t('customers.action.exportCsv')}
+          </a>
         }
       />
 
-      <Card>
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 max-w-md relative">
-              <Search
-                size={12}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
-              />
-              <Input
-                id="customers-search"
-                placeholder={t('customers.search.placeholder')}
-                value={searchInput}
-                onChange={(e: any) => setSearchInput(e.target.value)}
-                className="pl-7"
-              />
-            </div>
-            <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums ml-auto">
-              {t('customers.pagination.summary', { total, page, totalPages })}
-            </span>
+      <GridToolbar
+        searchSlot={
+          <div className="flex-1 max-w-md relative">
+            <Search
+              size={12}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+            />
+            <Input
+              id="customers-search"
+              placeholder={t('customers.search.placeholder')}
+              value={searchInput}
+              onChange={(e: any) => setSearchInput(e.target.value)}
+              className="pl-7"
+            />
           </div>
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800">
+        }
+        quickFilterSlot={
+          <>
             <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               {t('customers.filter.risk')}
             </span>
@@ -328,9 +304,41 @@ export default function CustomersWorkspace() {
                 {t('orders.filter.clear')}
               </button>
             )}
-          </div>
-        </div>
-      </Card>
+          </>
+        }
+        density={<SharedDensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchCustomers}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchCustomers}
+            loading={loading}
+          />
+        }
+        shortcuts={
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
+          </button>
+        }
+      />
+
+      <div className="flex items-center justify-end">
+        <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
+          {t('customers.pagination.summary', { total, page, totalPages })}
+        </span>
+      </div>
 
       {loading && customers.length === 0 ? (
         <Card>

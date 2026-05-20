@@ -26,7 +26,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 
 type RiskRow = {
@@ -142,20 +142,6 @@ export default function RiskQueueClient() {
           { label: 'Customers', href: '/customers' },
           { label: 'Risk Queue' },
         ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={refresh}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={refresh}
-              loading={loading}
-            />
-          </div>
-        }
       />
 
       <div className="grid grid-cols-3 gap-3">
@@ -174,28 +160,46 @@ export default function RiskQueueClient() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setFilter('PENDING')}
-          className={`h-8 px-3 text-sm rounded border ${
-            filter === 'PENDING'
-              ? 'bg-slate-900 text-white border-slate-900'
-              : 'border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          Pending only
-        </button>
-        <button
-          onClick={() => setFilter('ALL')}
-          className={`h-8 px-3 text-sm rounded border ${
-            filter === 'ALL'
-              ? 'bg-slate-900 text-white border-slate-900'
-              : 'border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          All flagged
-        </button>
-      </div>
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            <button
+              onClick={() => setFilter('PENDING')}
+              className={`h-8 px-3 text-sm rounded border ${
+                filter === 'PENDING'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              Pending only
+            </button>
+            <button
+              onClick={() => setFilter('ALL')}
+              className={`h-8 px-3 text-sm rounded border ${
+                filter === 'ALL'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              All flagged
+            </button>
+          </>
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={refresh}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={refresh}
+            loading={loading}
+          />
+        }
+      />
 
       <Card title={`Queue (${filtered.length})`}>
         {loading ? (
