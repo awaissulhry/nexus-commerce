@@ -16,6 +16,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KeyboardShortcutsModal,
   KpiStrip,
   type AutoRefreshInterval,
@@ -648,33 +649,51 @@ export default function ReturnsWorkspace() {
 
       <div className="space-y-2">
         {/* Top row: search + tab + saved-views + actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={searchInput}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="RMA, order, customer, tracking…   /"
-              className="h-8 w-72 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+        <GridToolbar
+          searchSlot={
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={searchInput}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="RMA, order, customer, tracking…   /"
+                className="h-8 w-72 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
+            </div>
+          }
+          quickFilterSlot={
+            <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
+              {(['ALL', 'NON_FBA', 'FBA'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setFilters({ tab: t === 'ALL' ? null : t, page: '1' })}
+                  className={`h-7 px-3 text-base font-medium rounded transition-colors ${tab === t ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
+                >
+                  {t === 'NON_FBA' ? 'Warehouse' : t === 'FBA' ? 'FBA (read-only)' : 'All'}
+                </button>
+              ))}
+            </div>
+          }
+          density={<SharedDensityToggle density={density} onChange={setDensity} />}
+          autoRefresh={
+            <AutoRefreshSelect
+              value={autoRefreshMin}
+              onChange={setAutoRefreshMin}
+              onTick={fetchReturns}
             />
-          </div>
-
-          <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-            {(['ALL', 'NON_FBA', 'FBA'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilters({ tab: t === 'ALL' ? null : t, page: '1' })}
-                className={`h-7 px-3 text-base font-medium rounded transition-colors ${tab === t ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}`}
-              >
-                {t === 'NON_FBA' ? 'Warehouse' : t === 'FBA' ? 'FBA (read-only)' : 'All'}
-              </button>
-            ))}
-          </div>
-
-          {/* Saved views dropdown */}
-          <div className="relative">
+          }
+          freshness={
+            <FreshnessIndicator
+              lastFetchedAt={lastFetchedAt}
+              onRefresh={fetchReturns}
+              loading={loading}
+            />
+          }
+          savedViews={
+            /* Saved views dropdown */
+            <div className="relative">
             <button
               onClick={() => setViewsOpen((v) => !v)}
               className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
@@ -719,35 +738,8 @@ export default function ReturnsWorkspace() {
               </div>
             )}
           </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <a
-              href="/fulfillment/returns/analytics"
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
-            >
-              <Activity size={12} /> Analytics
-            </a>
-            <button
-              onClick={exportCsv}
-              className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
-              title="Export current filtered set as CSV"
-            >
-              <Download size={12} /> Export
-            </button>
-            <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
-              <Plus size={12} /> New return
-            </button>
-            <SharedDensityToggle density={density} onChange={setDensity} />
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={fetchReturns}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchReturns}
-              loading={loading}
-            />
+          }
+          shortcuts={
             <button
               type="button"
               onClick={() => setShortcutsOpen(true)}
@@ -757,8 +749,28 @@ export default function ReturnsWorkspace() {
             >
               <Keyboard size={12} />
             </button>
-          </div>
-        </div>
+          }
+          trailingSlot={
+            <>
+              <a
+                href="/fulfillment/returns/analytics"
+                className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+              >
+                <Activity size={12} /> Analytics
+              </a>
+              <button
+                onClick={exportCsv}
+                className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
+                title="Export current filtered set as CSV"
+              >
+                <Download size={12} /> Export
+              </button>
+              <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+                <Plus size={12} /> New return
+              </button>
+            </>
+          }
+        />
 
         {/* Filter chips row: status + channel */}
         <div className="flex items-center gap-2 flex-wrap">

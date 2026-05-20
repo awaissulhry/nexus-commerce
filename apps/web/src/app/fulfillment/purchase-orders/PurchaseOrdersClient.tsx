@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -682,32 +682,9 @@ export default function PurchaseOrdersClient() {
   return (
     <div className="space-y-3">
       {/* Filter bar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1 flex-wrap">
-          {STATUS_FILTERS.map((f) => {
-            const count = f.key === 'all' ? pos?.length ?? 0 : counts[f.key] ?? 0
-            return (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setStatusFilter(f.key)}
-                className={cn(
-                  'px-3 py-1 text-sm font-medium rounded border transition-colors',
-                  statusFilter === f.key
-                    ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-                )}
-              >
-                {t(f.labelKey as any)}
-                {pos && count > 0 && (
-                  <span className="ml-1 opacity-70">{count}</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* F2.8 — local search across poNumber + supplier + SKU. */}
+      <GridToolbar
+        searchSlot={
+          /* F2.8 — local search across poNumber + supplier + SKU. */
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
@@ -718,22 +695,53 @@ export default function PurchaseOrdersClient() {
               className="h-8 pl-7 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 w-56"
             />
           </div>
-          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="w-3.5 h-3.5" />
-            {t('po.newPo')}
-          </Button>
+        }
+        quickFilterSlot={
+          <div className="flex items-center gap-1 flex-wrap">
+            {STATUS_FILTERS.map((f) => {
+              const count = f.key === 'all' ? pos?.length ?? 0 : counts[f.key] ?? 0
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setStatusFilter(f.key)}
+                  className={cn(
+                    'px-3 py-1 text-sm font-medium rounded border transition-colors',
+                    statusFilter === f.key
+                      ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                  )}
+                >
+                  {t(f.labelKey as any)}
+                  {pos && count > 0 && (
+                    <span className="ml-1 opacity-70">{count}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchPos}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchPos}
             loading={loading}
           />
-        </div>
-      </div>
+        }
+        trailingSlot={
+          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="w-3.5 h-3.5" />
+            {t('po.newPo')}
+          </Button>
+        }
+      />
 
       {/* Error toasts */}
       {error && (

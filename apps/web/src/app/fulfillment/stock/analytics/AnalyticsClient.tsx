@@ -14,7 +14,6 @@ import {
   TrendingDown, ArrowLeft, Package, RefreshCw, AlertCircle,
   TrendingUp, Boxes, Activity, AlertTriangle, Snowflake,
   BarChart3, Calculator, Check,
-  AlignJustify, Menu as MenuIcon, Equal,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import PageHeader from '@/components/layout/PageHeader'
@@ -27,7 +26,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
-import { VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -401,12 +400,6 @@ export default function AnalyticsClient() {
     }
   }, [applyingId, applyRecommendation, t])
 
-  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
-    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
-    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
-    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
-  ]
-
   return (
     <div className="space-y-4">
       <PageHeader
@@ -434,31 +427,27 @@ export default function AnalyticsClient() {
       />
       <StockSubNav />
 
-      {/* Period selector + density toggle */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">
-          {t('stock.analytics.period')}
-        </span>
-        <div className="flex items-center gap-1">
-          {PERIOD_OPTIONS.map((d) => (
-            <button key={d} type="button" onClick={() => setDays(d)}
-              className={cn('min-h-[44px] sm:min-h-0 px-3 py-1 text-sm font-medium rounded border transition-colors',
-                days === d
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300')}>
-              {d}d
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
-          {DENSITY_OPTIONS.map(({ d, icon, label }) => (
-            <button key={d} onClick={() => setDensity(d)} title={label} aria-pressed={density === d}
-              className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${density === d ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-              {icon}
-            </button>
-          ))}
-        </div>
-      </div>
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            <span className="text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mr-1">
+              {t('stock.analytics.period')}
+            </span>
+            <div className="flex items-center gap-1">
+              {PERIOD_OPTIONS.map((d) => (
+                <button key={d} type="button" onClick={() => setDays(d)}
+                  className={cn('min-h-[44px] sm:min-h-0 px-3 py-1 text-sm font-medium rounded border transition-colors',
+                    days === d
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300')}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </>
+        }
+        density={<DensityToggle density={density} onChange={setDensity} />}
+      />
 
       {error && (
         <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">

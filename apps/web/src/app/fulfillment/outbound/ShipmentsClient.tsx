@@ -19,6 +19,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type Density,
@@ -506,20 +507,8 @@ export default function ShipmentsClient() {
         </Card>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {PIPELINE.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => setStatusFilter(p.key)}
-            className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
-          >
-            {t(p.tKey)}
-            {counts[p.key] != null && (
-              <span className={`tabular-nums ${statusFilter === p.key ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>{counts[p.key]}</span>
-            )}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2">
+      <GridToolbar
+        searchSlot={
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <Input
@@ -529,17 +518,39 @@ export default function ShipmentsClient() {
               className="pl-7 w-56"
             />
           </div>
-          <SharedDensityToggle density={density} onChange={setDensity} />
+        }
+        quickFilterSlot={
+          <>
+            {PIPELINE.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setStatusFilter(p.key)}
+                className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${statusFilter === p.key ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
+              >
+                {t(p.tKey)}
+                {counts[p.key] != null && (
+                  <span className={`tabular-nums ${statusFilter === p.key ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>{counts[p.key]}</span>
+                )}
+              </button>
+            ))}
+          </>
+        }
+        density={<SharedDensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchShipments}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchShipments}
             loading={loading}
           />
+        }
+        shortcuts={
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
@@ -549,8 +560,8 @@ export default function ShipmentsClient() {
           >
             <Keyboard size={12} />
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {selected.size > 0 && (
         <div className="sticky top-2 z-20">

@@ -17,6 +17,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type Density,
@@ -695,42 +696,8 @@ export default function PendingShipmentsClient() {
       )}
 
       {/* ── Urgency filter row + counts ─────────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {URGENCY_FILTERS.map((f) => {
-          const count =
-            f.key === 'ALL'
-              ? data?.total ?? 0
-              : f.key === 'OVERDUE' ? data?.counts.overdue
-              : f.key === 'TODAY' ? data?.counts.today
-              : f.key === 'TOMORROW' ? data?.counts.tomorrow
-              : f.key === 'THIS_WEEK' ? data?.counts.thisWeek
-              : f.key === 'LATER' ? data?.counts.later
-              : f.key === 'UNKNOWN' ? data?.counts.unknown
-              : 0
-          const isActive = urgencyFilter === f.key
-          const isOverdue = f.key === 'OVERDUE' && (count ?? 0) > 0
-          return (
-            <button
-              key={f.key}
-              onClick={() => setParam('urgency', f.key === 'ALL' ? null : f.key)}
-              className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${
-                isActive
-                  ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
-                  : isOverdue && !isActive
-                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/60'
-                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              }`}
-            >
-              {t(f.tKey)}
-              {count != null && (
-                <span className={`tabular-nums ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-        <div className="ml-auto flex items-center gap-2">
+      <GridToolbar
+        searchSlot={
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <Input
@@ -747,6 +714,46 @@ export default function PendingShipmentsClient() {
               className="pl-7 w-64"
             />
           </div>
+        }
+        quickFilterSlot={
+          <>
+            {URGENCY_FILTERS.map((f) => {
+              const count =
+                f.key === 'ALL'
+                  ? data?.total ?? 0
+                  : f.key === 'OVERDUE' ? data?.counts.overdue
+                  : f.key === 'TODAY' ? data?.counts.today
+                  : f.key === 'TOMORROW' ? data?.counts.tomorrow
+                  : f.key === 'THIS_WEEK' ? data?.counts.thisWeek
+                  : f.key === 'LATER' ? data?.counts.later
+                  : f.key === 'UNKNOWN' ? data?.counts.unknown
+                  : 0
+              const isActive = urgencyFilter === f.key
+              const isOverdue = f.key === 'OVERDUE' && (count ?? 0) > 0
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setParam('urgency', f.key === 'ALL' ? null : f.key)}
+                  className={`h-7 px-3 text-base border rounded-full inline-flex items-center gap-1.5 transition-colors ${
+                    isActive
+                      ? 'bg-slate-900 dark:bg-slate-100 text-white border-slate-900'
+                      : isOverdue && !isActive
+                      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/60'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+                >
+                  {t(f.tKey)}
+                  {count != null && (
+                    <span className={`tabular-nums ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </>
+        }
+        sort={
           <select
             value={sort}
             onChange={(e) => setParam('sort', e.target.value === 'ship-by-asc' ? null : e.target.value)}
@@ -756,7 +763,24 @@ export default function PendingShipmentsClient() {
             <option value="value-desc">{t('outbound.pending.sort.value')}</option>
             <option value="age-desc">{t('outbound.pending.sort.age')}</option>
           </select>
-          {/* O.27: saved views dropdown */}
+        }
+        density={<SharedDensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
+        }
+        savedViews={
+          /* O.27: saved views dropdown */
           <div className="relative">
             <button
               onClick={() => setShowViewsMenu((v) => !v)}
@@ -865,11 +889,24 @@ export default function PendingShipmentsClient() {
               </>
             )}
           </div>
-          {/* O.70 + O.89: show-snoozed toggle + clear-all wake. Only
-              renders when at least one snooze is currently in effect.
-              Clicking the count flips the show-toggle; clicking the X
-              wakes them all (clears the localStorage snooze map). */}
-          {(() => {
+        }
+        shortcuts={
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
+          </button>
+        }
+        trailingSlot={
+          /* O.70 + O.89: show-snoozed toggle + clear-all wake. Only
+             renders when at least one snooze is currently in effect.
+             Clicking the count flips the show-toggle; clicking the X
+             wakes them all (clears the localStorage snooze map). */
+          (() => {
             const activeSnoozeCount = Object.values(snoozedUntil).filter(
               (until) => until > Date.now(),
             ).length
@@ -901,29 +938,9 @@ export default function PendingShipmentsClient() {
                 </button>
               </div>
             )
-          })()}
-          <SharedDensityToggle density={density} onChange={setDensity} />
-          <AutoRefreshSelect
-            value={autoRefreshMin}
-            onChange={setAutoRefreshMin}
-            onTick={fetchData}
-          />
-          <FreshnessIndicator
-            lastFetchedAt={lastFetchedAt}
-            onRefresh={fetchData}
-            loading={loading}
-          />
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(true)}
-            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-          >
-            <Keyboard size={12} />
-          </button>
-        </div>
-      </div>
+          })() ?? undefined
+        }
+      />
 
       {/* ── Channel filter chips ────────────────────────────────────────── */}
       {channelChips.length > 0 && (

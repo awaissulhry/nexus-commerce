@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, X, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Button } from '@/components/ui/Button'
@@ -23,7 +23,7 @@ import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { getBackendUrl } from '@/lib/backend-url'
-import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -283,12 +283,6 @@ export default function ChannelDriftClient() {
     }
   }, [t, busy, apply, openIgnore])
 
-  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
-    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
-    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
-    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
-  ]
-
   return (
     <div className="p-3 sm:p-6 space-y-3 sm:space-y-6">
       <PageHeader
@@ -299,20 +293,6 @@ export default function ChannelDriftClient() {
           { label: t('stock.title'), href: '/fulfillment/stock' },
           { label: t('channelDrift.pageTitle') },
         ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={fetchEvents}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchEvents}
-              loading={loading}
-            />
-          </div>
-        }
       />
       <StockSubNav />
 
@@ -352,23 +332,31 @@ export default function ChannelDriftClient() {
         )}
       </div>
 
-      {/* Density toolbar */}
-      {events && events.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500 dark:text-slate-400">
-            {rows.length} event{rows.length === 1 ? '' : 's'}
-            {reviewIds.size > 0 && <span className="ml-1.5 text-amber-700 dark:text-amber-400 font-medium">· {reviewIds.size} need review</span>}
-          </span>
-          <div className="ml-auto flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
-            {DENSITY_OPTIONS.map(({ d, icon, label }) => (
-              <button key={d} onClick={() => setDensity(d)} title={label} aria-pressed={density === d}
-                className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${density === d ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                {icon}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <GridToolbar
+        quickFilterSlot={
+          events && events.length > 0 ? (
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {rows.length} event{rows.length === 1 ? '' : 's'}
+              {reviewIds.size > 0 && <span className="ml-1.5 text-amber-700 dark:text-amber-400 font-medium">· {reviewIds.size} need review</span>}
+            </span>
+          ) : undefined
+        }
+        density={<DensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchEvents}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchEvents}
+            loading={loading}
+          />
+        }
+      />
 
       {!loading && rows.length === 0 && (
         <EmptyState icon={CheckCircle2} title={t('channelDrift.empty.title')} description={t('channelDrift.empty.description')} />

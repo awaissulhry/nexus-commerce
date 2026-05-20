@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Store, ArrowLeft, RefreshCw, AlertCircle, Search, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
+import { Store, ArrowLeft, RefreshCw, AlertCircle, Search } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Button } from '@/components/ui/Button'
@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -189,12 +189,6 @@ export default function ShopifyLocationsClient() {
     }
   }, [t, toggleActive, togglingId])
 
-  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
-    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
-    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
-    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
-  ]
-
   return (
     <div className="space-y-4">
       <PageHeader
@@ -211,16 +205,6 @@ export default function ShopifyLocationsClient() {
               className="inline-flex items-center gap-1.5 h-11 sm:h-8 px-3 text-base text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
               <ArrowLeft size={14} /> {t('stock.title')}
             </Link>
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={fetchData}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchData}
-              loading={loading}
-            />
             <Button variant="primary" size="sm" onClick={runDiscover} disabled={discovering}>
               {discovering ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
               {t('stock.shopifyLocations.discover')}
@@ -230,18 +214,26 @@ export default function ShopifyLocationsClient() {
       />
       <StockSubNav />
 
-      {/* Density toolbar */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-500 dark:text-slate-400">{rows.length} location{rows.length === 1 ? '' : 's'}</span>
-        <div className="ml-auto flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
-          {DENSITY_OPTIONS.map(({ d, icon, label }) => (
-            <button key={d} onClick={() => setDensity(d)} title={label} aria-pressed={density === d}
-              className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${density === d ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-              {icon}
-            </button>
-          ))}
-        </div>
-      </div>
+      <GridToolbar
+        quickFilterSlot={
+          <span className="text-sm text-slate-500 dark:text-slate-400">{rows.length} location{rows.length === 1 ? '' : 's'}</span>
+        }
+        density={<DensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchData}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchData}
+            loading={loading}
+          />
+        }
+      />
 
       {error && (
         <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">

@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/Input'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 
@@ -246,27 +246,33 @@ export default function RoutingRulesClient() {
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="text-base text-slate-500 dark:text-slate-400">
-          {t('routingRules.summary', { rules: data?.rules.length ?? 0, warehouses: data?.warehouses.length ?? 0 })}
-        </div>
-        <div className="flex items-center gap-2">
+      <GridToolbar
+        quickFilterSlot={
+          <div className="text-base text-slate-500 dark:text-slate-400">
+            {t('routingRules.summary', { rules: data?.rules.length ?? 0, warehouses: data?.warehouses.length ?? 0 })}
+          </div>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchData}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchData}
             loading={loading}
           />
+        }
+        trailingSlot={
           <Button variant="primary" size="sm" onClick={startCreate}>
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
             {t('routingRules.newRule')}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <div role="alert" className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded px-3 py-2 inline-flex items-center gap-2">

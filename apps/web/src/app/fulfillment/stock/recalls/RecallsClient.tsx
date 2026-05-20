@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
@@ -124,40 +124,46 @@ export default function RecallsClient() {
       />
       <StockSubNav recallsOpen={openRecallsCount} />
 
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
-          {(['OPEN', 'CLOSED', 'ALL'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={
-                'h-8 px-3 text-sm rounded ' +
-                (statusFilter === s
-                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')
-              }
-              aria-pressed={statusFilter === s}
-            >
-              {t(`stock.recalls.filter.${s.toLowerCase()}` as any)}
-            </button>
-          ))}
-        </div>
-        <div className="inline-flex items-center gap-2">
+      <GridToolbar
+        quickFilterSlot={
+          <div className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
+            {(['OPEN', 'CLOSED', 'ALL'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={
+                  'h-8 px-3 text-sm rounded ' +
+                  (statusFilter === s
+                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800')
+                }
+                aria-pressed={statusFilter === s}
+              >
+                {t(`stock.recalls.filter.${s.toLowerCase()}` as any)}
+              </button>
+            ))}
+          </div>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchRecalls}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchRecalls}
             loading={loading}
           />
+        }
+        trailingSlot={
           <Button variant="primary" size="sm" onClick={() => setOpenModal(true)}>
             <Plus size={12} aria-hidden="true" /> {t('stock.recalls.openNew')}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <Card>

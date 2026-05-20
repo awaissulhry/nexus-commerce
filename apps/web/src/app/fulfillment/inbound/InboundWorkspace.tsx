@@ -20,6 +20,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type Density,
@@ -320,28 +321,37 @@ export default function InboundWorkspace() {
             <button onClick={() => setCreateOpen(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
               <Plus size={12} /> {t('inbound.newInbound')}
             </button>
-            <SharedDensityToggle density={density} onChange={setDensity} />
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={() => { fetchAll(); fetchKpis() }}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={() => { fetchAll(); fetchKpis() }}
-              loading={loading}
-              error={!!error}
-            />
-            <button
-              type="button"
-              onClick={() => setShortcutsOpen(true)}
-              className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-              title="Keyboard shortcuts (?)"
-              aria-label="Keyboard shortcuts"
-            >
-              <Keyboard size={12} />
-            </button>
           </div>
+        }
+      />
+
+      <GridToolbar
+        density={<SharedDensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => { fetchAll(); fetchKpis() }}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => { fetchAll(); fetchKpis() }}
+            loading={loading}
+            error={!!error}
+          />
+        }
+        shortcuts={
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
+          </button>
         }
       />
 

@@ -18,7 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
@@ -187,56 +187,64 @@ export default function CycleCountListClient() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1 flex-wrap">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setStatusFilter(f.key)}
-              className={cn(
-                'px-3 py-1 text-sm font-medium rounded border transition-colors',
-                statusFilter === f.key
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
-              )}
-            >
-              {t(f.labelKey)}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
+      <GridToolbar
+        quickFilterSlot={
+          <div className="flex items-center gap-1 flex-wrap">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setStatusFilter(f.key)}
+                className={cn(
+                  'px-3 py-1 text-sm font-medium rounded border transition-colors',
+                  statusFilter === f.key
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
+                )}
+              >
+                {t(f.labelKey)}
+              </button>
+            ))}
+          </div>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchData}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchData}
             loading={loading}
           />
-          {/* S.17 — manual trigger for the ABC-driven scheduler.
-              Daily cron runs at 02:30 UTC; this button lets the
-              operator force a session immediately when desired. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleAutoSchedule}
-            disabled={autoScheduling}
-            title={t('cycleCount.list.actionAutoScheduleTitle')}
-          >
-            {autoScheduling
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Zap className="w-3.5 h-3.5" />}
-            {t('cycleCount.list.actionAutoSchedule')}
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="w-3.5 h-3.5" />
-            {t('cycleCount.list.actionNew')}
-          </Button>
-        </div>
-      </div>
+        }
+        trailingSlot={
+          <>
+            {/* S.17 — manual trigger for the ABC-driven scheduler.
+                Daily cron runs at 02:30 UTC; this button lets the
+                operator force a session immediately when desired. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleAutoSchedule}
+              disabled={autoScheduling}
+              title={t('cycleCount.list.actionAutoScheduleTitle')}
+            >
+              {autoScheduling
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Zap className="w-3.5 h-3.5" />}
+              {t('cycleCount.list.actionAutoSchedule')}
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-3.5 h-3.5" />
+              {t('cycleCount.list.actionNew')}
+            </Button>
+          </>
+        }
+      />
 
       {error && (
         <div className="text-base text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 inline-flex items-center gap-2">

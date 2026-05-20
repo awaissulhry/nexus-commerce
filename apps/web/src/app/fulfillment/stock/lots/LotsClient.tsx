@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Package, AlertCircle, AlignJustify, Menu as MenuIcon, Equal } from 'lucide-react'
+import { Package, AlertCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'
@@ -19,7 +19,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatRelative } from '@/components/inventory/formatRelative'
-import { AutoRefreshSelect, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, DensityToggle, GridToolbar, VirtualizedGrid, GridFooter } from '@/app/_shared/grid-lens'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { type Density, DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
@@ -174,12 +174,6 @@ export default function LotsClient() {
     }
   }, [t])
 
-  const DENSITY_OPTIONS: { d: Density; icon: React.ReactNode; label: string }[] = [
-    { d: 'compact',     icon: <AlignJustify size={13} />, label: 'Compact' },
-    { d: 'comfortable', icon: <MenuIcon size={13} />,     label: 'Comfortable' },
-    { d: 'spacious',    icon: <Equal size={13} />,        label: 'Spacious' },
-  ]
-
   return (
     <div className="p-3 sm:p-6 space-y-3 sm:space-y-6">
       <PageHeader
@@ -190,52 +184,46 @@ export default function LotsClient() {
           { label: t('stock.title'), href: '/fulfillment/stock' },
           { label: t('stock.lots.pageTitle') },
         ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={fetchLots}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchLots}
-              loading={loading}
-            />
-          </div>
-        }
       />
       <StockSubNav />
 
-      {/* Filters + density */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
-          {(['all', 'expiring30', 'expiring90'] as const).map(e => (
-            <button
-              key={e}
-              onClick={() => setExpiry(e)}
-              aria-pressed={expiry === e}
-              className={`h-8 px-3 text-sm rounded ${expiry === e ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              {t(`stock.lots.filter.${e}` as any)}
-            </button>
-          ))}
-        </div>
-        <label className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-          <input type="checkbox" checked={activeOnly} onChange={e => setActiveOnly(e.target.checked)} />
-          {t('stock.lots.activeOnly')}
-        </label>
-
-        {/* Density */}
-        <div className="ml-auto flex items-center gap-0.5 border border-slate-200 dark:border-slate-700 rounded p-0.5">
-          {DENSITY_OPTIONS.map(({ d, icon, label }) => (
-            <button key={d} onClick={() => setDensity(d)} title={label} aria-pressed={density === d}
-              className={`h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${density === d ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-              {icon}
-            </button>
-          ))}
-        </div>
-      </div>
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            <div className="inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
+              {(['all', 'expiring30', 'expiring90'] as const).map(e => (
+                <button
+                  key={e}
+                  onClick={() => setExpiry(e)}
+                  aria-pressed={expiry === e}
+                  className={`h-8 px-3 text-sm rounded ${expiry === e ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  {t(`stock.lots.filter.${e}` as any)}
+                </button>
+              ))}
+            </div>
+            <label className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={activeOnly} onChange={e => setActiveOnly(e.target.checked)} />
+              {t('stock.lots.activeOnly')}
+            </label>
+          </>
+        }
+        density={<DensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchLots}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchLots}
+            loading={loading}
+          />
+        }
+      />
 
       {error && (
         <Card>

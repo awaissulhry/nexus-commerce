@@ -46,6 +46,7 @@ import {
   StockSplit,
   DensityToggle,
   AutoRefreshSelect,
+  GridToolbar,
   SharedColumnPicker,
   BulkActionShell,
   SortStack,
@@ -1237,78 +1238,63 @@ export default function ReplenishmentWorkspace() {
       )}
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-          {(['NEEDS_REORDER', 'CRITICAL', 'HIGH', 'MEDIUM', 'ALL'] as const).map(
-            (t) => (
-              <button
-                key={t}
-                onClick={() => setFilter(t)}
-                className={cn(
-                  'h-7 px-3 text-base font-medium rounded transition-colors',
-                  filter === t
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
-                )}
-              >
-                {t === 'NEEDS_REORDER'
-                  ? 'Needs reorder'
-                  : t.charAt(0) + t.slice(1).toLowerCase()}
-              </button>
-            ),
-          )}
-        </div>
-        <select
-          value={channelFilter}
-          onChange={(e) => setChannelFilter(e.target.value)}
-          className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-        >
-          <option value="">All channels</option>
-          <option value="AMAZON">Amazon</option>
-          <option value="EBAY">eBay</option>
-          <option value="SHOPIFY">Shopify</option>
-          <option value="WOOCOMMERCE">WooCommerce</option>
-        </select>
-        <select
-          value={marketplaceFilter}
-          onChange={(e) => setMarketplaceFilter(e.target.value)}
-          className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-        >
-          <option value="">All marketplaces</option>
-          {marketplaceOptions.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <SavedViewsButton
-          currentState={{
-            filter,
-            channelFilter,
-            marketplaceFilter,
-            search: urlSearch,
-            sortBy,
-            sortDir,
-          }}
-          onLoad={(state) => {
-            updateUrl({
-              filter: state.filter === 'NEEDS_REORDER' ? undefined : state.filter,
-              channel: state.channelFilter || undefined,
-              marketplace: state.marketplaceFilter || undefined,
-              search: state.search || undefined,
-              sortBy: state.sortBy === 'urgency' ? undefined : state.sortBy,
-              sortDir: state.sortDir === 'desc' ? undefined : state.sortDir,
-            })
-          }}
-        />
-
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
+      <GridToolbar
+        searchSlot={
           <Input
             placeholder="Search SKU…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="w-44 sm:w-56"
           />
+        }
+        quickFilterSlot={
+          <>
+            <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
+              {(['NEEDS_REORDER', 'CRITICAL', 'HIGH', 'MEDIUM', 'ALL'] as const).map(
+                (t) => (
+                  <button
+                    key={t}
+                    onClick={() => setFilter(t)}
+                    className={cn(
+                      'h-7 px-3 text-base font-medium rounded transition-colors',
+                      filter === t
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100',
+                    )}
+                  >
+                    {t === 'NEEDS_REORDER'
+                      ? 'Needs reorder'
+                      : t.charAt(0) + t.slice(1).toLowerCase()}
+                  </button>
+                ),
+              )}
+            </div>
+            <select
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value)}
+              className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            >
+              <option value="">All channels</option>
+              <option value="AMAZON">Amazon</option>
+              <option value="EBAY">eBay</option>
+              <option value="SHOPIFY">Shopify</option>
+              <option value="WOOCOMMERCE">WooCommerce</option>
+            </select>
+            <select
+              value={marketplaceFilter}
+              onChange={(e) => setMarketplaceFilter(e.target.value)}
+              className="h-8 px-2 border border-slate-200 dark:border-slate-700 rounded-md text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            >
+              <option value="">All marketplaces</option>
+              {marketplaceOptions.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </>
+        }
+        filter={
           <FilterPopover
             dimensions={replenishmentFilterDimensions}
             onClearAll={clearReplenishmentSecondaryFilters}
@@ -1321,12 +1307,15 @@ export default function ReplenishmentWorkspace() {
             onOrderChange={setReplenishmentFilterOrder}
             onResetOrder={replenishmentFilterOrder.length > 0 ? () => setReplenishmentFilterOrder([]) : undefined}
           />
+        }
+        sort={
           <SortStack
             fields={REP_SORT_FIELDS}
             stack={sortStack}
             onChange={(next) => updateUrl({ sorts: next.length > 0 ? next.join(',') : undefined })}
           />
-          <DensityToggle density={density} onChange={setDensity} />
+        }
+        columns={
           <SharedColumnPicker<RepColumnKey>
             allColumns={REP_COLUMN_PICKER_OPTIONS}
             visible={visibleColumns}
@@ -1334,29 +1323,46 @@ export default function ReplenishmentWorkspace() {
             defaultVisible={REP_DEFAULT_VISIBLE}
             buttonLabel={`Columns (${visibleColumns.length})`}
           />
+        }
+        density={<DensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchData}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchData}
             loading={loading}
             error={fetchError}
           />
-          {/* R.5 — CSV export of currently filtered + sorted suggestions */}
-          <Button
-            onClick={() => exportSuggestionsCsv(filtered)}
-            variant="secondary"
-            size="md"
-            icon={<Download size={12} aria-hidden="true" />}
-            title="Export the currently filtered + sorted suggestions to CSV"
-            disabled={filtered.length === 0}
-          >
-            Export CSV
-          </Button>
-          <WidgetLauncher store={widgetStore} onToggle={toggleWidget} />
+        }
+        savedViews={
+          <SavedViewsButton
+            currentState={{
+              filter,
+              channelFilter,
+              marketplaceFilter,
+              search: urlSearch,
+              sortBy,
+              sortDir,
+            }}
+            onLoad={(state) => {
+              updateUrl({
+                filter: state.filter === 'NEEDS_REORDER' ? undefined : state.filter,
+                channel: state.channelFilter || undefined,
+                marketplace: state.marketplaceFilter || undefined,
+                search: state.search || undefined,
+                sortBy: state.sortBy === 'urgency' ? undefined : state.sortBy,
+                sortDir: state.sortDir === 'desc' ? undefined : state.sortDir,
+              })
+            }}
+          />
+        }
+        shortcuts={
           <button
             onClick={() => setHelpOpen(true)}
             className="h-8 w-8 grid place-items-center text-base border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
@@ -1365,8 +1371,24 @@ export default function ReplenishmentWorkspace() {
           >
             <Keyboard size={12} />
           </button>
-        </div>
-      </div>
+        }
+        trailingSlot={
+          <>
+            {/* R.5 — CSV export of currently filtered + sorted suggestions */}
+            <Button
+              onClick={() => exportSuggestionsCsv(filtered)}
+              variant="secondary"
+              size="md"
+              icon={<Download size={12} aria-hidden="true" />}
+              title="Export the currently filtered + sorted suggestions to CSV"
+              disabled={filtered.length === 0}
+            >
+              Export CSV
+            </Button>
+            <WidgetLauncher store={widgetStore} onToggle={toggleWidget} />
+          </>
+        }
+      />
 
       {/* Bulk action bar — shared shell across all 4 grids */}
       <BulkActionShell
