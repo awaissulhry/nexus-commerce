@@ -122,7 +122,7 @@ interface SyncSummary {
   startedAt: Date
   completedAt: Date
   durationMs: number
-  cursor: { mode: 'since' | 'daysBack'; value: string }
+  cursor: { mode: 'since' | 'daysBack' | 'range'; value: string }
   ordersFetched: number
   ordersUpserted: number
   ordersFailed: number
@@ -165,6 +165,20 @@ export class AmazonOrdersService {
     )
   }
 
+  /**
+   * Historical backfill — pulls every order with
+   * `CreatedAfter >= from AND CreatedBefore <= to`.
+   * Used by `scripts/first-backfill.ts` to walk 24 months of history in
+   * 30-day chunks. Idempotent: re-running the same window upserts on the
+   * (channel, channelOrderId) unique constraint.
+   */
+  async syncOrdersInRange(opts: { from: Date; to: Date; limit?: number }): Promise<SyncSummary> {
+    return this.runSync(
+      { from: opts.from, to: opts.to, limit: opts.limit },
+      { mode: 'range', value: `${opts.from.toISOString()}..${opts.to.toISOString()}` },
+    )
+  }
+
   /** Find the most recent purchase date we already have for AMAZON.
    *  Used by the polling cron to derive `since` if no explicit cursor.
    *  Returns null if no Amazon orders exist (caller should fall back to backfill). */
@@ -180,8 +194,8 @@ export class AmazonOrdersService {
   // ── internals ────────────────────────────────────────────────────────
 
   private async runSync(
-    fetchOpts: { since?: Date; daysBack?: number; limit?: number },
-    cursor: { mode: 'since' | 'daysBack'; value: string },
+    fetchOpts: { since?: Date; daysBack?: number; from?: Date; to?: Date; limit?: number },
+    cursor: { mode: 'since' | 'daysBack' | 'range'; value: string },
   ): Promise<SyncSummary> {
     const startedAt = new Date()
     const summary: SyncSummary = {

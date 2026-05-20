@@ -178,6 +178,11 @@ export interface FinancialEventsPayload {
 export interface FetchOrdersOptions {
   since?: Date
   daysBack?: number
+  // Explicit date-range mode — use with `to`. When both `from` and `to` are
+  // set, SP-API is called with `CreatedAfter=from` + `CreatedBefore=to`,
+  // overriding `since` / `daysBack`. Drives the historical backfill runner.
+  from?: Date
+  to?: Date
   limit?: number          // hard cap on total orders returned (default 1000)
   marketplaceId?: string  // defaults to env AMAZON_MARKETPLACE_ID
 }
@@ -914,7 +919,15 @@ export class AmazonService {
       MarketplaceIds: [marketplaceId],
       MaxResultsPerPage: 100, // SP-API max
     }
-    if (options.since) {
+    if (options.from && options.to) {
+      // Explicit window — used by the historical backfill runner. SP-API
+      // accepts CreatedAfter + CreatedBefore together. Same 60s clamp on
+      // the upper bound to avoid InvalidInput.
+      const minAgo = new Date(Date.now() - 60_000)
+      const upperBound = options.to.getTime() > minAgo.getTime() ? minAgo : options.to
+      query.CreatedAfter = options.from.toISOString()
+      query.CreatedBefore = upperBound.toISOString()
+    } else if (options.since) {
       // Clamp to 60s ago to avoid InvalidInput.
       const minAgo = new Date(Date.now() - 60_000)
       const cursor = options.since.getTime() > minAgo.getTime() ? minAgo : options.since

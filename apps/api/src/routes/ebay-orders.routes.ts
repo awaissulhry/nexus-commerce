@@ -10,6 +10,10 @@ import { logger } from '../utils/logger.js'
 
 interface SyncOrdersBody {
   connectionId: string
+  // Historical-backfill mode — when both set, calls
+  // syncEbayOrdersInRange instead of the rolling-7d syncEbayOrders.
+  from?: string
+  to?: string
 }
 
 export async function ebayOrdersRoutes(app: FastifyInstance) {
@@ -48,10 +52,24 @@ export async function ebayOrdersRoutes(app: FastifyInstance) {
         })
       }
 
-      logger.info('Starting eBay orders sync', { connectionId })
+      const { from, to } = request.body
+      logger.info('Starting eBay orders sync', { connectionId, from, to })
 
-      // Execute sync
-      const result = await ebayOrdersService.syncEbayOrders(connectionId)
+      // Execute sync — range mode if explicit window, else default rolling-7d
+      let result
+      if (from && to) {
+        const fromDate = new Date(from)
+        const toDate = new Date(to)
+        if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+          return reply.status(400).send({
+            success: false,
+            error: `Invalid 'from' or 'to' timestamp`,
+          })
+        }
+        result = await ebayOrdersService.syncEbayOrdersInRange(connectionId, fromDate, toDate)
+      } else {
+        result = await ebayOrdersService.syncEbayOrders(connectionId)
+      }
 
       // Update connection with sync status
       await (prisma as any).channelConnection.update({

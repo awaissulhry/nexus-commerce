@@ -164,6 +164,63 @@ export class EbayOrdersService {
   }
 
   /**
+   * Historical backfill — fetch eBay orders inside an explicit
+   * `[from, to]` window with pagination via `offset` + `limit`. Used by
+   * the first-backfill runner to walk 24 months of history in 7-day
+   * chunks (matches eBay's natural rolling window). Idempotent at the
+   * processOrder layer (upsert on channelOrderId).
+   */
+  async fetchEbayOrdersInRange(
+    accessToken: string,
+    from: Date,
+    to: Date,
+  ): Promise<EbayOrder[]> {
+    const pageSize = 200 // eBay's max per call
+    const collected: EbayOrder[] = []
+    let offset = 0
+    while (true) {
+      const filter = `creationdate:[${from.toISOString()}..${to.toISOString()}]`
+      const url =
+        `https://api.ebay.com/sell/fulfillment/v1/order?` +
+        `filter=${encodeURIComponent(filter)}&limit=${pageSize}&offset=${offset}`
+      const data = await recordApiCall<{ orders?: EbayOrder[]; total?: number }>(
+        {
+          channel: 'EBAY',
+          operation: 'getOrders',
+          endpoint: '/sell/fulfillment/v1/order',
+          method: 'GET',
+          triggeredBy: 'manual',
+        },
+        async () => {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => '')
+            const err = new Error(
+              `eBay API error ${response.status}: ${errorBody.slice(0, 500)}`,
+            ) as Error & { statusCode: number; body: string }
+            err.statusCode = response.status
+            err.body = errorBody
+            throw err
+          }
+          return (await response.json()) as { orders?: EbayOrder[]; total?: number }
+        },
+      )
+      const page = data.orders ?? []
+      collected.push(...page)
+      if (page.length < pageSize) return collected
+      offset += pageSize
+      // Polite spacing — keeps us well under the 5000/day daily call cap.
+      await new Promise(r => setTimeout(r, 250))
+    }
+  }
+
+  /**
    * Resolve an eBay SKU back to a Nexus Product. Tries (in order):
    *   1. VariantChannelListing keyed on externalSku / externalListingId
    *      — the canonical cross-channel link.
@@ -568,6 +625,92 @@ export class EbayOrdersService {
       logger.error('eBay orders sync failed', { error: message })
       return {
         syncId: `ebay-orders-${Date.now()}`,
+        status: 'FAILED',
+        ordersFetched: this.stats.ordersFetched,
+        ordersCreated: this.stats.ordersCreated,
+        ordersUpdated: this.stats.ordersUpdated,
+        itemsProcessed: this.stats.itemsProcessed,
+        itemsLinked: this.stats.itemsLinked,
+        inventoryDeducted: this.stats.inventoryDeducted,
+        errors: [{ error: message }],
+        startedAt,
+        completedAt: new Date(),
+      }
+    }
+  }
+
+  /**
+   * Historical backfill wrapper — same shape as `syncEbayOrders` but
+   * pulls every order inside an explicit `[from, to]` window via
+   * `fetchEbayOrdersInRange`. Driven by `scripts/first-backfill.ts`.
+   */
+  async syncEbayOrdersInRange(
+    connectionId: string,
+    from: Date,
+    to: Date,
+  ): Promise<SyncResult> {
+    const startedAt = new Date()
+    const errors: Array<{ orderId?: string; error: string }> = []
+    this.resetStats()
+
+    try {
+      const connection = await (prisma as any).channelConnection.findUnique({
+        where: { id: connectionId },
+      })
+      if (!connection) {
+        throw new Error(`ChannelConnection not found: ${connectionId}`)
+      }
+      if (!connection.isActive) {
+        throw new Error('eBay connection is not active')
+      }
+
+      const authService = new EbayAuthService()
+      const accessToken = await authService.getValidToken(connection)
+
+      const orders = await this.fetchEbayOrdersInRange(accessToken, from, to)
+      this.stats.ordersFetched = orders.length
+      logger.info('Fetched eBay orders (range)', {
+        count: orders.length,
+        from: from.toISOString(),
+        to: to.toISOString(),
+      })
+
+      for (const order of orders) {
+        try {
+          await this.processOrder(order, connectionId)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          errors.push({ orderId: order.orderId, error: message })
+          logger.error('Failed to process eBay order (range)', {
+            orderId: order.orderId,
+            error: message,
+          })
+        }
+      }
+
+      return {
+        syncId: `ebay-orders-range-${Date.now()}`,
+        status:
+          errors.length === 0
+            ? 'SUCCESS'
+            : errors.length < orders.length
+              ? 'PARTIAL'
+              : 'FAILED',
+        ordersFetched: this.stats.ordersFetched,
+        ordersCreated: this.stats.ordersCreated,
+        ordersUpdated: this.stats.ordersUpdated,
+        itemsProcessed: this.stats.itemsProcessed,
+        itemsLinked: this.stats.itemsLinked,
+        inventoryDeducted: this.stats.inventoryDeducted,
+        errors,
+        startedAt,
+        completedAt: new Date(),
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.error('eBay orders range sync failed', { error: message })
+      return {
+        syncId: `ebay-orders-range-${Date.now()}`,
         status: 'FAILED',
         ordersFetched: this.stats.ordersFetched,
         ordersCreated: this.stats.ordersCreated,

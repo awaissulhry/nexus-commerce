@@ -1470,7 +1470,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // yet. Mirrors the cron's auto-cursor behaviour so manual + cron
   // produce identical results.
   fastify.post<{
-    Body?: { since?: string; daysBack?: number; limit?: number }
+    Body?: { since?: string; daysBack?: number; from?: string; to?: string; limit?: number }
   }>('/orders/sync', async (request, reply) => {
     if (!amazonOrdersService.isConfigured()) {
       return reply.code(503).send({
@@ -1483,7 +1483,23 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     const body = request.body ?? {}
     try {
       let summary
-      if (body.since) {
+      if (body.from && body.to) {
+        // Historical-backfill mode — explicit window. Used by
+        // scripts/first-backfill.mjs to walk multi-month history in chunks.
+        const fromDate = new Date(body.from)
+        const toDate = new Date(body.to)
+        if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+          return reply.code(400).send({
+            success: false,
+            error: `Invalid 'from' or 'to' timestamp`,
+          })
+        }
+        summary = await amazonOrdersService.syncOrdersInRange({
+          from: fromDate,
+          to: toDate,
+          limit: body.limit,
+        })
+      } else if (body.since) {
         const since = new Date(body.since)
         if (isNaN(since.getTime())) {
           return reply.code(400).send({
