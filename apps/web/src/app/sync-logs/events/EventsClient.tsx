@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -129,33 +129,36 @@ export default function EventsClient() {
 
   return (
     <div className="space-y-4">
-      {/* Filter + refresh bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex flex-wrap gap-1.5">
-          {EVENT_FILTERS.map(f => (
-            <button key={f.value} onClick={() => setTypeFilter(f.value)}
-              className={cn('px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
-                typeFilter === f.value
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
-              )}>
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            {EVENT_FILTERS.map(f => (
+              <button key={f.value} onClick={() => setTypeFilter(f.value)}
+                className={cn('px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+                  typeFilter === f.value
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                )}>
+                {f.label}
+              </button>
+            ))}
+          </>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={() => fetchEvents()}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => fetchEvents()}
             loading={loading}
           />
-        </div>
-      </div>
+        }
+      />
 
       {loading && (
         <div className="flex justify-center py-16">

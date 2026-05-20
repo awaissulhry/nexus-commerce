@@ -31,7 +31,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import TimeSeriesChart from './TimeSeriesChart'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -610,18 +610,25 @@ export default function ApiCallsClient() {
             <Download className="w-3.5 h-3.5" />
             {t('syncLogs.apiCalls.csv')}
           </Button>
+        </div>
+      </div>
+
+      <GridToolbar
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={() => void fetchAll(true)}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => void fetchAll(true)}
             loading={loading}
           />
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI strip */}
       {rollup && (

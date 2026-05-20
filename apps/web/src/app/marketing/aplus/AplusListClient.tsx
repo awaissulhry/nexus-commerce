@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { useRouter } from 'next/navigation'
 import {
@@ -87,26 +87,31 @@ export default function AplusListClient({ items, error, apiBase }: Props) {
         title={t('aplus.title')}
         description={t('aplus.description')}
         actions={
-          <>
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={refresh}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={refresh}
-              loading={false}
-            />
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              {t('aplus.createNew')}
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            {t('aplus.createNew')}
+          </Button>
+        }
+      />
+
+      <GridToolbar
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={refresh}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={refresh}
+            loading={false}
+          />
         }
       />
 

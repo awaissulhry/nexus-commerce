@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -279,18 +279,23 @@ export default function AlertsClient() {
         </div>
       )}
 
-      <div className="flex justify-end items-center gap-2">
-        <AutoRefreshSelect
-          value={autoRefreshMin}
-          onChange={setAutoRefreshMin}
-          onTick={() => void fetchAll()}
-        />
-        <FreshnessIndicator
-          lastFetchedAt={lastFetchedAt}
-          onRefresh={() => void fetchAll()}
-          loading={loading}
-        />
-      </div>
+      <GridToolbar
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void fetchAll()}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void fetchAll()}
+            loading={loading}
+          />
+        }
+      />
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* RULES COLUMN */}

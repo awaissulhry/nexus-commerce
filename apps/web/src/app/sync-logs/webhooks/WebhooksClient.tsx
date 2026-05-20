@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/Button'
 import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -167,132 +167,138 @@ export default function WebhooksClient() {
 
   return (
     <div className="space-y-3">
-      {/* Filter bar */}
-      <div className="flex items-center gap-x-1 gap-y-1.5 flex-wrap">
-        <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-          {t('syncLogs.webhooks.filter.channel')}
-        </span>
-        <button
-          type="button"
-          onClick={() => updateUrl({ channel: '' })}
-          className={cn(
-            'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
-            !urlChannel
-              ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-          )}
-        >
-          {t('syncLogs.webhooks.filter.all')}
-        </button>
-        {(totals?.byChannel ?? []).map((c) => (
-          <button
-            key={c.channel}
-            type="button"
-            onClick={() =>
-              updateUrl({ channel: urlChannel === c.channel ? '' : c.channel })
-            }
-            className={cn(
-              'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
-              urlChannel === c.channel
-                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-            )}
-          >
-            {c.channel}
-            <span className="ml-1 opacity-70">{c.count}</span>
-          </button>
-        ))}
-
-        <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-          {t('syncLogs.webhooks.filter.status')}
-        </span>
-        <button
-          type="button"
-          onClick={() =>
-            updateUrl({
-              processed: urlProcessed === 'true' ? '' : 'true',
-            })
-          }
-          className={cn(
-            'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
-            urlProcessed === 'true'
-              ? 'bg-emerald-600 text-white border-emerald-600'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-          )}
-        >
-          {t('syncLogs.webhooks.filter.processed')}{totals && ` ${totals.processed}`}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            updateUrl({
-              processed: urlProcessed === 'false' ? '' : 'false',
-            })
-          }
-          className={cn(
-            'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
-            urlProcessed === 'false'
-              ? 'bg-rose-600 text-white border-rose-600'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-          )}
-        >
-          {t('syncLogs.webhooks.filter.unprocessed')}{totals && ` ${totals.unprocessed}`}
-        </button>
-
-        {eventTypeOptions.length > 0 && (
+      <GridToolbar
+        quickFilterSlot={
           <>
-            <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-              {t('syncLogs.webhooks.filter.event')}
+            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
+              {t('syncLogs.webhooks.filter.channel')}
             </span>
-            {eventTypeOptions.slice(0, 8).map((et) => (
+            <button
+              type="button"
+              onClick={() => updateUrl({ channel: '' })}
+              className={cn(
+                'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
+                !urlChannel
+                  ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+              )}
+            >
+              {t('syncLogs.webhooks.filter.all')}
+            </button>
+            {(totals?.byChannel ?? []).map((c) => (
               <button
-                key={et}
+                key={c.channel}
                 type="button"
                 onClick={() =>
-                  updateUrl({ eventType: urlEventType === et ? '' : et })
+                  updateUrl({ channel: urlChannel === c.channel ? '' : c.channel })
                 }
                 className={cn(
-                  'px-2 py-0.5 text-sm font-mono rounded border transition-colors',
-                  urlEventType === et
+                  'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
+                  urlChannel === c.channel
                     ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                 )}
               >
-                {et}
+                {c.channel}
+                <span className="ml-1 opacity-70">{c.count}</span>
               </button>
             ))}
+
+            <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
+              {t('syncLogs.webhooks.filter.status')}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                updateUrl({
+                  processed: urlProcessed === 'true' ? '' : 'true',
+                })
+              }
+              className={cn(
+                'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
+                urlProcessed === 'true'
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+              )}
+            >
+              {t('syncLogs.webhooks.filter.processed')}{totals && ` ${totals.processed}`}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                updateUrl({
+                  processed: urlProcessed === 'false' ? '' : 'false',
+                })
+              }
+              className={cn(
+                'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
+                urlProcessed === 'false'
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+              )}
+            >
+              {t('syncLogs.webhooks.filter.unprocessed')}{totals && ` ${totals.unprocessed}`}
+            </button>
+
+            {eventTypeOptions.length > 0 && (
+              <>
+                <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
+                  {t('syncLogs.webhooks.filter.event')}
+                </span>
+                {eventTypeOptions.slice(0, 8).map((et) => (
+                  <button
+                    key={et}
+                    type="button"
+                    onClick={() =>
+                      updateUrl({ eventType: urlEventType === et ? '' : et })
+                    }
+                    className={cn(
+                      'px-2 py-0.5 text-sm font-mono rounded border transition-colors',
+                      urlEventType === et
+                        ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                    )}
+                  >
+                    {et}
+                  </button>
+                ))}
+              </>
+            )}
           </>
-        )}
-
-        <div className="ml-auto" />
-        <SavedSearchPicker
-          surface="webhooks"
-          currentFilters={{
-            channel: urlChannel,
-            processed: urlProcessed,
-            eventType: urlEventType,
-          }}
-          onApply={(filters) =>
-            updateUrl({
-              channel: '',
-              processed: '',
-              eventType: '',
-              ...filters,
-            })
-          }
-        />
-
-        <AutoRefreshSelect
-          value={autoRefreshMin}
-          onChange={setAutoRefreshMin}
-          onTick={() => void fetchList(true)}
-        />
-        <FreshnessIndicator
-          lastFetchedAt={lastFetchedAt}
-          onRefresh={() => void fetchList(true)}
-          loading={loading}
-        />
-      </div>
+        }
+        savedViews={
+          <SavedSearchPicker
+            surface="webhooks"
+            currentFilters={{
+              channel: urlChannel,
+              processed: urlProcessed,
+              eventType: urlEventType,
+            }}
+            onApply={(filters) =>
+              updateUrl({
+                channel: '',
+                processed: '',
+                eventType: '',
+                ...filters,
+              })
+            }
+          />
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void fetchList(true)}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void fetchList(true)}
+            loading={loading}
+          />
+        }
+      />
 
       {error && (
         <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300 flex items-center gap-2">

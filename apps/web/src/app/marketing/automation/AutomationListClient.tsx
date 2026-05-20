@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import {
   ACTIONS,
@@ -160,22 +160,6 @@ export default function AutomationListClient({
         description={t('automation.description')}
         actions={
           <>
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={() => {
-                router.refresh()
-                void refresh()
-              }}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={() => {
-                router.refresh()
-                void refresh()
-              }}
-              loading={refreshing}
-            />
             <Link
               href="/marketing/automation/history"
               className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
@@ -202,6 +186,29 @@ export default function AutomationListClient({
               {t('automation.createNew')}
             </Button>
           </>
+        }
+      />
+
+      <GridToolbar
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => {
+              router.refresh()
+              void refresh()
+            }}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => {
+              router.refresh()
+              void refresh()
+            }}
+            loading={refreshing}
+          />
         }
       />
 

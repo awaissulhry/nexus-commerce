@@ -11,7 +11,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -200,74 +200,80 @@ export default function InboxClient() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
 
-      {/* Quick action strip */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm" variant="secondary"
-          disabled={deadCount === 0 || busyBulk === 'retry-dead'}
-          onClick={() => void doBulk('retry-dead')}
-        >
-          {busyBulk === 'retry-dead' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
-          Retry dead letters{deadCount > 0 ? ` (${deadCount})` : ''}
-        </Button>
-        <Button
-          size="sm" variant="secondary"
-          disabled={alertCount === 0 || busyBulk === 'ack-all-alerts'}
-          onClick={() => void doBulk('ack-all-alerts')}
-        >
-          {busyBulk === 'ack-all-alerts' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
-          Ack all alerts{alertCount > 0 ? ` (${alertCount})` : ''}
-        </Button>
-        <Button
-          size="sm" variant="secondary"
-          disabled={notifCount === 0 || busyBulk === 'mark-all-read'}
-          onClick={() => void doBulk('mark-all-read')}
-        >
-          {busyBulk === 'mark-all-read' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
-          Mark all read{notifCount > 0 ? ` (${notifCount})` : ''}
-        </Button>
-        <AutoRefreshSelect
-          value={autoRefreshMin}
-          onChange={setAutoRefreshMin}
-          onTick={() => void fetchData()}
-        />
-        <FreshnessIndicator
-          lastFetchedAt={lastFetchedAt}
-          onRefresh={() => void fetchData()}
-          loading={loading}
-        />
-        <div className="flex-1" />
-        <Button size="sm" variant="ghost" onClick={() => router.push('/sync-logs/outbound-queue')}>
-          Outbound queue →
-        </Button>
-      </div>
-
-      {/* Source filter tabs */}
-      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700">
-        {(['all', 'sync', 'alert', 'notification', 'webhook'] as SourceTab[]).map((t) => {
-          const c = t === 'all' ? counts?.all : counts?.[t]
-          return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-                tab === t
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
-              )}
+      <GridToolbar
+        quickFilterSlot={
+          <>
+            {(['all', 'sync', 'alert', 'notification', 'webhook'] as SourceTab[]).map((t) => {
+              const c = t === 'all' ? counts?.all : counts?.[t]
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={cn(
+                    'px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+                    tab === t
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+                  )}
+                >
+                  {t === 'all' ? 'All' : SOURCE_LABELS[t]}
+                  {c != null && c > 0 && (
+                    <span className="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0 text-xs tabular-nums">
+                      {c}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </>
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void fetchData()}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void fetchData()}
+            loading={loading}
+          />
+        }
+        trailingSlot={
+          <>
+            <Button
+              size="sm" variant="secondary"
+              disabled={deadCount === 0 || busyBulk === 'retry-dead'}
+              onClick={() => void doBulk('retry-dead')}
             >
-              {t === 'all' ? 'All' : SOURCE_LABELS[t]}
-              {c != null && c > 0 && (
-                <span className="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0 text-xs tabular-nums">
-                  {c}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+              {busyBulk === 'retry-dead' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
+              Retry dead letters{deadCount > 0 ? ` (${deadCount})` : ''}
+            </Button>
+            <Button
+              size="sm" variant="secondary"
+              disabled={alertCount === 0 || busyBulk === 'ack-all-alerts'}
+              onClick={() => void doBulk('ack-all-alerts')}
+            >
+              {busyBulk === 'ack-all-alerts' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
+              Ack all alerts{alertCount > 0 ? ` (${alertCount})` : ''}
+            </Button>
+            <Button
+              size="sm" variant="secondary"
+              disabled={notifCount === 0 || busyBulk === 'mark-all-read'}
+              onClick={() => void doBulk('mark-all-read')}
+            >
+              {busyBulk === 'mark-all-read' ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />}
+              Mark all read{notifCount > 0 ? ` (${notifCount})` : ''}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => router.push('/sync-logs/outbound-queue')}>
+              Outbound queue →
+            </Button>
+          </>
+        }
+      />
 
       {/* Feed */}
       {loading && (

@@ -35,7 +35,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { cn } from '@/lib/utils'
@@ -525,25 +525,29 @@ export default function ImportsClient() {
       )}
 
       {/* History */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
-        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+      <GridToolbar
+        searchSlot={
           <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5">
             <HistoryIcon className="w-3.5 h-3.5" />
             Recent imports
           </div>
-          <div className="flex items-center gap-2">
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={fetchJobs}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={fetchJobs}
-              loading={historyLoading}
-            />
-          </div>
-        </div>
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={fetchJobs}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={fetchJobs}
+            loading={historyLoading}
+          />
+        }
+      />
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
         {jobs.length === 0 ? (
           <div className="px-3 py-6 text-center text-sm text-slate-500">
             No imports yet. Choose a file above to get started.

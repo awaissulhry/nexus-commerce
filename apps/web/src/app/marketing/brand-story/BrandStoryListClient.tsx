@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { COMMON_MARKETPLACES } from '../aplus/_lib/types'
 import {
@@ -89,26 +89,31 @@ export default function BrandStoryListClient({
         title={t('brandStory.title')}
         description={t('brandStory.description')}
         actions={
-          <>
-            <AutoRefreshSelect
-              value={autoRefreshMin}
-              onChange={setAutoRefreshMin}
-              onTick={refresh}
-            />
-            <FreshnessIndicator
-              lastFetchedAt={lastFetchedAt}
-              onRefresh={refresh}
-              loading={false}
-            />
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              {t('brandStory.createNew')}
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            {t('brandStory.createNew')}
+          </Button>
+        }
+      />
+
+      <GridToolbar
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={refresh}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={refresh}
+            loading={false}
+          />
         }
       />
 

@@ -36,7 +36,7 @@ import SavedSearchPicker from '../_shared/SavedSearchPicker'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { cn } from '@/lib/utils'
@@ -202,71 +202,77 @@ export default function ErrorGroupsClient() {
 
   return (
     <div className="space-y-3">
-      {/* Filter bar */}
-      <div className="flex items-center gap-x-1 gap-y-1.5 flex-wrap">
-        <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-          {t('syncLogs.errors.filter.status')}
-        </span>
-        {STATUS_OPTIONS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => updateUrl({ status: s === 'ACTIVE' ? '' : s })}
-            className={cn(
-              'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
-              urlStatus === s
-                ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
-            )}
-          >
-            {t(`syncLogs.errorStatus.${s}`)}
-            {s !== 'ALL' && totalsMap.has(s) && (
-              <span className="ml-1 opacity-70">{totalsMap.get(s)}</span>
-            )}
-          </button>
-        ))}
-
-        {channels.length > 0 && (
+      <GridToolbar
+        quickFilterSlot={
           <>
-            <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
-              {t('syncLogs.errors.filter.channel')}
+            <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
+              {t('syncLogs.errors.filter.status')}
             </span>
-            {channels.map((c) => (
+            {STATUS_OPTIONS.map((s) => (
               <button
-                key={c}
+                key={s}
                 type="button"
-                onClick={() => updateUrl({ channel: urlChannel === c ? '' : c })}
+                onClick={() => updateUrl({ status: s === 'ACTIVE' ? '' : s })}
                 className={cn(
                   'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
-                  urlChannel === c
+                  urlStatus === s
                     ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
                 )}
               >
-                {c}
+                {t(`syncLogs.errorStatus.${s}`)}
+                {s !== 'ALL' && totalsMap.has(s) && (
+                  <span className="ml-1 opacity-70">{totalsMap.get(s)}</span>
+                )}
               </button>
             ))}
+
+            {channels.length > 0 && (
+              <>
+                <span className="ml-3 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 font-medium mr-1">
+                  {t('syncLogs.errors.filter.channel')}
+                </span>
+                {channels.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => updateUrl({ channel: urlChannel === c ? '' : c })}
+                    className={cn(
+                      'px-2 py-0.5 text-sm font-medium rounded border transition-colors',
+                      urlChannel === c
+                        ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 border-slate-900 dark:border-slate-100'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+                    )}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </>
+            )}
           </>
-        )}
-
-        <div className="ml-auto" />
-        <SavedSearchPicker
-          surface="errors"
-          currentFilters={{ status: urlStatus, channel: urlChannel }}
-          onApply={(filters) => updateUrl({ status: '', channel: '', ...filters })}
-        />
-
-        <AutoRefreshSelect
-          value={autoRefreshMin}
-          onChange={setAutoRefreshMin}
-          onTick={() => void fetchList(true)}
-        />
-        <FreshnessIndicator
-          lastFetchedAt={lastFetchedAt}
-          onRefresh={() => void fetchList(true)}
-          loading={loading}
-        />
-      </div>
+        }
+        savedViews={
+          <SavedSearchPicker
+            surface="errors"
+            currentFilters={{ status: urlStatus, channel: urlChannel }}
+            onApply={(filters) => updateUrl({ status: '', channel: '', ...filters })}
+          />
+        }
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => void fetchList(true)}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => void fetchList(true)}
+            loading={loading}
+          />
+        }
+      />
 
       {error && (
         <div className="border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 rounded-md px-3 py-2 text-base text-rose-800 dark:text-rose-300 flex items-center gap-2">

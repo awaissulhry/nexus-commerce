@@ -55,7 +55,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import PageHeader from '@/components/layout/PageHeader'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import { usePolledList } from '@/lib/sync/use-polled-list'
@@ -372,8 +372,8 @@ function GroupsTab({
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
+      <GridToolbar
+        searchSlot={
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
@@ -384,6 +384,8 @@ function GroupsTab({
               className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
+        }
+        quickFilterSlot={
           <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
             Min confidence
             <input
@@ -397,50 +399,58 @@ function GroupsTab({
             />
             <span className="w-8 text-right tabular-nums">{minConfidence}%</span>
           </label>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={() => void fetchDetection()}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => void fetchDetection()}
             loading={loading}
           />
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={loading || filtered.length === 0}
-            onClick={() =>
-              setApproved(
-                new Set(
-                  filtered.filter((g) => g.confidence >= 80).map((g) => g.id),
-                ),
-              )
-            }
-          >
-            Auto-approve 80%+
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={applying}
-            disabled={approved.size === 0}
-            onClick={() => void applyApproved()}
-          >
-            Apply {approved.size || ''}
-          </Button>
-        </div>
-        <div className="mt-2 flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-          <span>
-            <strong className="text-slate-900 dark:text-slate-100">{filtered.length}</strong> group
-            {filtered.length === 1 ? '' : 's'} ·{' '}
-            <strong className="text-slate-900 dark:text-slate-100">{totalMembers}</strong> products
-          </span>
-          <span className="text-emerald-700 dark:text-emerald-300">{approved.size} approved</span>
-          <span className="text-rose-700 dark:text-rose-300">{rejected.size} rejected</span>
-          <span className="text-slate-500 dark:text-slate-400">{pending} pending</span>
-        </div>
+        }
+        trailingSlot={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={loading || filtered.length === 0}
+              onClick={() =>
+                setApproved(
+                  new Set(
+                    filtered.filter((g) => g.confidence >= 80).map((g) => g.id),
+                  ),
+                )
+              }
+            >
+              Auto-approve 80%+
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={applying}
+              disabled={approved.size === 0}
+              onClick={() => void applyApproved()}
+            >
+              Apply {approved.size || ''}
+            </Button>
+          </>
+        }
+      />
+      <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+        <span>
+          <strong className="text-slate-900 dark:text-slate-100">{filtered.length}</strong> group
+          {filtered.length === 1 ? '' : 's'} ·{' '}
+          <strong className="text-slate-900 dark:text-slate-100">{totalMembers}</strong> products
+        </span>
+        <span className="text-emerald-700 dark:text-emerald-300">{approved.size} approved</span>
+        <span className="text-rose-700 dark:text-rose-300">{rejected.size} rejected</span>
+        <span className="text-slate-500 dark:text-slate-400">{pending} pending</span>
       </div>
 
       {loading && groups.length === 0 ? (
@@ -736,8 +746,8 @@ export function StandaloneTab({
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      <GridToolbar
+        searchSlot={
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
@@ -748,6 +758,8 @@ export function StandaloneTab({
               className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
+        }
+        quickFilterSlot={
           <select
             value={coverage}
             onChange={(e) => setCoverage(e.target.value as any)}
@@ -758,17 +770,23 @@ export function StandaloneTab({
             <option value="partial">Partial coverage</option>
             <option value="complete">Fully listed</option>
           </select>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={() => void refetch()}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => void refetch()}
             loading={loading}
           />
-          {selected.size > 0 && (
+        }
+        trailingSlot={
+          selected.size > 0 ? (
             <>
               <Button
                 variant="primary"
@@ -795,12 +813,12 @@ export function StandaloneTab({
                 Promote {selected.size} to parents
               </Button>
             </>
-          )}
-        </div>
-        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}
-          {total} standalone product{total === 1 ? '' : 's'}.
-        </div>
+          ) : null
+        }
+      />
+      <div className="text-sm text-slate-500 dark:text-slate-400">
+        <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}
+        {total} standalone product{total === 1 ? '' : 's'}.
       </div>
 
       {loading && items.length === 0 ? (
@@ -2060,8 +2078,8 @@ export function ParentsTab({
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 px-4 py-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      <GridToolbar
+        searchSlot={
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             <input
@@ -2072,6 +2090,8 @@ export function ParentsTab({
               className="w-full h-8 pl-8 pr-2 text-base border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
+        }
+        quickFilterSlot={
           <label className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
             <input
               type="checkbox"
@@ -2080,21 +2100,25 @@ export function ParentsTab({
             />
             Incomplete only
           </label>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={() => void refetch()}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => void refetch()}
             loading={loading}
           />
-        </div>
-        <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}
-          {total} parent product{total === 1 ? '' : 's'}.
-        </div>
+        }
+      />
+      <div className="text-sm text-slate-500 dark:text-slate-400">
+        <strong className="text-slate-900 dark:text-slate-100">{items.length}</strong> shown of{' '}
+        {total} parent product{total === 1 ? '' : 's'}.
       </div>
 
       {loading && items.length === 0 ? (

@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
-import { AutoRefreshSelect } from '@/app/_shared/grid-lens'
+import { AutoRefreshSelect, GridToolbar } from '@/app/_shared/grid-lens'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 
@@ -210,27 +210,32 @@ export default function SchedulesClient() {
 
   return (
     <div className="px-3 md:px-6 space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="text-sm text-slate-600 dark:text-slate-300 inline-flex items-center gap-1.5">
-          <CalendarClock className="w-3.5 h-3.5 text-purple-500" />
-          {schedules.length === 0
-            ? 'No schedules yet — operators create them from the bulk-apply modal.'
-            : `${schedules.length} schedule${schedules.length === 1 ? '' : 's'} · ` +
-              `${grouped.due.length} due · ${grouped.upcoming.length} upcoming · ` +
-              `${grouped.paused.length} paused · ${grouped.exhausted.length} exhausted`}
-        </div>
-        <div className="ml-auto flex items-center gap-1.5">
+      <GridToolbar
+        searchSlot={
+          <div className="text-sm text-slate-600 dark:text-slate-300 inline-flex items-center gap-1.5">
+            <CalendarClock className="w-3.5 h-3.5 text-purple-500" />
+            {schedules.length === 0
+              ? 'No schedules yet — operators create them from the bulk-apply modal.'
+              : `${schedules.length} schedule${schedules.length === 1 ? '' : 's'} · ` +
+                `${grouped.due.length} due · ${grouped.upcoming.length} upcoming · ` +
+                `${grouped.paused.length} paused · ${grouped.exhausted.length} exhausted`}
+          </div>
+        }
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={fetchSchedules}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={fetchSchedules}
             loading={loading}
           />
+        }
+        trailingSlot={
           <Button
             variant="primary"
             size="sm"
@@ -246,8 +251,8 @@ export default function SchedulesClient() {
             <PlayCircle className="w-3 h-3 mr-1" />
             Run tick now
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <div className="text-base text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded px-3 py-2">

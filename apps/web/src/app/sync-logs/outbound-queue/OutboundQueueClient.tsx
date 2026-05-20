@@ -28,6 +28,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KeyboardShortcutsModal,
   type AutoRefreshInterval,
   type Density,
@@ -422,95 +423,75 @@ export default function OutboundQueueClient() {
         ))}
       </div>
 
-      {/* Filter chips row */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {tab === 'active' && (
+      <GridToolbar
+        quickFilterSlot={
           <>
-            {(['PENDING', 'IN_PROGRESS', 'FAILED'] as const).map((s) => (
+            {tab === 'active' && (
+              <>
+                {(['PENDING', 'IN_PROGRESS', 'FAILED'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => updateUrl({ status: filterStatus === s ? '' : s })}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
+                      filterStatus === s
+                        ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800',
+                    )}
+                  >
+                    {s.replace('_', ' ')}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => updateUrl({ stuckOnly: stuckOnly ? '' : 'true' })}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors flex items-center gap-1',
+                    stuckOnly
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800',
+                  )}
+                >
+                  <AlertTriangle className="w-3 h-3" /> Stuck only
+                </button>
+              </>
+            )}
+
+            {/* Sync type filter */}
+            {Object.entries(SYNC_TYPE_LABELS).map(([key, label]) => (
               <button
-                key={s}
+                key={key}
                 type="button"
-                onClick={() => updateUrl({ status: filterStatus === s ? '' : s })}
+                onClick={() => updateUrl({ syncType: filterType === key ? '' : key })}
                 className={cn(
                   'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
-                  filterStatus === s
-                    ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800',
+                  filterType === key
+                    ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900'
+                    : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-500 dark:hover:bg-slate-800',
                 )}
               >
-                {s.replace('_', ' ')}
+                {label}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={() => updateUrl({ stuckOnly: stuckOnly ? '' : 'true' })}
-              className={cn(
-                'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors flex items-center gap-1',
-                stuckOnly
-                  ? 'bg-amber-600 text-white border-amber-600'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800',
-              )}
-            >
-              <AlertTriangle className="w-3 h-3" /> Stuck only
-            </button>
           </>
-        )}
-
-        {/* Sync type filter */}
-        {Object.entries(SYNC_TYPE_LABELS).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => updateUrl({ syncType: filterType === key ? '' : key })}
-            className={cn(
-              'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
-              filterType === key
-                ? 'bg-slate-800 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900'
-                : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-500 dark:hover:bg-slate-800',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-
-        <div className="ml-auto flex items-center gap-2">
-          {tab === 'active' && (stats?.failed ?? 0) > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void retryAllFailed()}
-              disabled={actionLoading === 'bulk-retry-all'}
-            >
-              {actionLoading === 'bulk-retry-all'
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
-              Retry all failed
-            </Button>
-          )}
-          {tab === 'dead' && (stats?.dead ?? 0) > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void retryAllFailed()}
-              disabled={actionLoading === 'bulk-retry-all'}
-            >
-              {actionLoading === 'bulk-retry-all'
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
-              Re-enqueue all dead
-            </Button>
-          )}
-          <SharedDensityToggle density={density} onChange={setDensity} />
+        }
+        density={<SharedDensityToggle density={density} onChange={setDensity} />}
+        autoRefresh={
           <AutoRefreshSelect
             value={autoRefreshMin}
             onChange={setAutoRefreshMin}
             onTick={() => void load(true)}
           />
+        }
+        freshness={
           <FreshnessIndicator
             lastFetchedAt={lastFetchedAt}
             onRefresh={() => void load(true)}
             loading={loading}
           />
+        }
+        shortcuts={
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
@@ -520,8 +501,38 @@ export default function OutboundQueueClient() {
           >
             <Keyboard className="w-3.5 h-3.5" />
           </button>
-        </div>
-      </div>
+        }
+        trailingSlot={
+          <>
+            {tab === 'active' && (stats?.failed ?? 0) > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void retryAllFailed()}
+                disabled={actionLoading === 'bulk-retry-all'}
+              >
+                {actionLoading === 'bulk-retry-all'
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                  : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
+                Retry all failed
+              </Button>
+            )}
+            {tab === 'dead' && (stats?.dead ?? 0) > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void retryAllFailed()}
+                disabled={actionLoading === 'bulk-retry-all'}
+              >
+                {actionLoading === 'bulk-retry-all'
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                  : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
+                Re-enqueue all dead
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Bulk action bar */}
       {someSelected && (
