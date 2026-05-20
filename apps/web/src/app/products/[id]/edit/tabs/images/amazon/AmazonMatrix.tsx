@@ -378,13 +378,13 @@ export default function AmazonMatrix({
           <div
             role="row"
             aria-rowindex={1}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10"
           >
-            {/* Row label column header */}
+            {/* Row label column header — sticky-left so it stays visible while scrolling slots */}
             <div
               role="columnheader"
               aria-colindex={1}
-              className="w-44 flex-shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide"
+              className="w-44 flex-shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 shadow-[2px_0_4px_rgba(0,0,0,0.04)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]"
             >
               {activeAxis}{activeMarketplace !== 'ALL' ? ` / ${activeMarketplace}` : ''}
             </div>
@@ -415,11 +415,16 @@ export default function AmazonMatrix({
                   isAllColors ? 'bg-slate-50/50 dark:bg-slate-800/20' : 'bg-white dark:bg-slate-900',
                 )}
               >
-                {/* Row label (rowheader) */}
+                {/* Row label (rowheader) — sticky-left, opaque bg to cover scrolling slots beneath */}
                 <div
                   role="rowheader"
                   aria-colindex={1}
-                  className="w-44 flex-shrink-0 min-w-0"
+                  className={cn(
+                    'w-44 flex-shrink-0 min-w-0 sticky left-0 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.04)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.3)]',
+                    isAllColors
+                      ? 'bg-slate-50 dark:bg-slate-800'
+                      : 'bg-white dark:bg-slate-900',
+                  )}
                 >
                   <div className="flex items-center gap-1.5">
                     {isAllColors ? (
