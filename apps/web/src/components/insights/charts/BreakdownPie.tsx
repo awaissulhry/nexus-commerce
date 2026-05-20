@@ -79,8 +79,8 @@ export function BreakdownPie({
               padding: '6px 10px',
             }}
             wrapperClassName="dark:[&>div]:!bg-slate-900 dark:[&>div]:!border-slate-700 dark:[&>div]:!text-slate-100"
-            formatter={(value, name) => {
-              const v = Number(value ?? 0)
+            formatter={(value: unknown, name: unknown) => {
+              const v = typeof value === 'number' ? value : Number(value ?? 0)
               return [
                 format === 'currency'
                   ? formatCurrency(v, currency)
