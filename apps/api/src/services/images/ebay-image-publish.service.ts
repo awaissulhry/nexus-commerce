@@ -24,6 +24,7 @@ export interface EbayPublishResult {
   pictureCount: number
   colorSetCount: number
   error?: string
+  jobId?: string // IR.9.2 — set when a ChannelImagePublishJob row was created
 }
 
 export async function publishEbayImages(
@@ -40,6 +41,19 @@ export async function publishEbayImages(
   }
 
   const axis = activeAxis ?? product.imageAxisPreference ?? 'Color'
+
+  // IR.9.2 — Pre-create the publish job row so the dashboard sees the
+  // attempt the moment it starts, and the eventual DONE/FATAL update
+  // is a single completion write rather than racing the dashboard.
+  const job = await prisma.channelImagePublishJob.create({
+    data: {
+      productId,
+      channel: 'EBAY',
+      status: 'SUBMITTING',
+      vendorEntityId: product.ebayItemId,
+      requestPayload: { activeAxis: axis } as object,
+    },
+  })
 
   // Load all eBay listing images in one query
   const allEbayImages = await prisma.listingImage.findMany({
@@ -69,7 +83,11 @@ export async function publishEbayImages(
   }))
 
   if (galleryUrls.length === 0 && colorSets.length === 0) {
-    return { success: false, message: 'No eBay images to publish', pictureCount: 0, colorSetCount: 0, error: 'No images assigned to eBay' }
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: { status: 'FATAL', errorMessage: 'No images assigned to eBay', completedAt: new Date() },
+    })
+    return { success: false, message: 'No eBay images to publish', pictureCount: 0, colorSetCount: 0, error: 'No images assigned to eBay', jobId: job.id }
   }
 
   const provider = new eBayAPIProvider()
@@ -86,17 +104,35 @@ export async function publishEbayImages(
       where: { id: { in: affectedIds } },
       data: { publishStatus: 'PUBLISHED', publishedAt: new Date(), publishError: null },
     })
-    logger.info('[ebay-image-publish] published', { productId, pictureCount: galleryUrls.length, colorSetCount: colorSets.length })
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: {
+        status: 'DONE',
+        completedAt: new Date(),
+        response: { pictureCount: galleryUrls.length, colorSetCount: colorSets.length } as object,
+      },
+    })
+    logger.info('[ebay-image-publish] published', { productId, jobId: job.id, pictureCount: galleryUrls.length, colorSetCount: colorSets.length })
     return {
       success: true,
       message: `Published ${galleryUrls.length} gallery image${galleryUrls.length === 1 ? '' : 's'} and ${colorSets.length} colour set${colorSets.length === 1 ? '' : 's'} to eBay`,
       pictureCount: galleryUrls.length,
       colorSetCount: colorSets.length,
+      jobId: job.id,
     }
   } else {
     await prisma.listingImage.updateMany({
       where: { id: { in: affectedIds } },
       data: { publishStatus: 'ERROR', publishError: result.error ?? 'Unknown error' },
+    })
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: {
+        status: 'FATAL',
+        errorMessage: result.error ?? 'Unknown error',
+        completedAt: new Date(),
+        response: { error: result.error } as object,
+      },
     })
     return {
       success: false,
@@ -104,6 +140,7 @@ export async function publishEbayImages(
       pictureCount: galleryUrls.length,
       colorSetCount: colorSets.length,
       error: result.error,
+      jobId: job.id,
     }
   }
 }

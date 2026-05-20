@@ -27,6 +27,7 @@ export interface ShopifyPublishResult {
   poolImagesPublished: number
   variantsAssigned: number
   error?: string
+  jobId?: string // IR.9.2 — set when a ChannelImagePublishJob row was created
 }
 
 export async function publishShopifyImages(
@@ -44,6 +45,17 @@ export async function publishShopifyImages(
 
   const axis = activeAxis ?? product.imageAxisPreference ?? 'Color'
   const shopifyProductId = product.shopifyProductId
+
+  // IR.9.2 — Pre-create the publish job row.
+  const job = await prisma.channelImagePublishJob.create({
+    data: {
+      productId,
+      channel: 'SHOPIFY',
+      status: 'SUBMITTING',
+      vendorEntityId: shopifyProductId,
+      requestPayload: { activeAxis: axis } as object,
+    },
+  })
 
   // Load pool images (platform=SHOPIFY, no variantGroup), ordered by position
   const poolImages = await prisma.listingImage.findMany({
@@ -65,19 +77,29 @@ export async function publishShopifyImages(
   })
 
   if (poolImages.length === 0) {
-    return { success: false, message: 'No Shopify pool images to publish', poolImagesPublished: 0, variantsAssigned: 0, error: 'Pool is empty' }
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: { status: 'FATAL', errorMessage: 'Pool is empty', completedAt: new Date() },
+    })
+    return { success: false, message: 'No Shopify pool images to publish', poolImagesPublished: 0, variantsAssigned: 0, error: 'Pool is empty', jobId: job.id }
   }
 
   // Validate credentials by instantiating the service — it throws if env vars missing
   try {
     new ShopifyService()
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: { status: 'FATAL', errorMessage: `not-configured: ${message}`, completedAt: new Date() },
+    })
     return {
       success: false,
       message: 'Shopify not configured (SHOPIFY_SHOP_NAME / SHOPIFY_ACCESS_TOKEN missing)',
       poolImagesPublished: 0,
       variantsAssigned: 0,
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
+      jobId: job.id,
     }
   }
 
@@ -123,7 +145,11 @@ export async function publishShopifyImages(
       where: { productId, platform: 'SHOPIFY' },
       data: { publishStatus: 'ERROR', publishError: message },
     })
-    return { success: false, message, poolImagesPublished: 0, variantsAssigned: 0, error: message }
+    await prisma.channelImagePublishJob.update({
+      where: { id: job.id },
+      data: { status: 'FATAL', errorMessage: message, completedAt: new Date() },
+    })
+    return { success: false, message, poolImagesPublished: 0, variantsAssigned: 0, error: message, jobId: job.id }
   }
 
   // Mark pool images as published
@@ -193,11 +219,20 @@ export async function publishShopifyImages(
     })
   }
 
-  logger.info('[shopify-image-publish] published', { productId, poolCount: poolImages.length, variantsAssigned })
+  await prisma.channelImagePublishJob.update({
+    where: { id: job.id },
+    data: {
+      status: 'DONE',
+      completedAt: new Date(),
+      response: { poolImagesPublished: poolImages.length, variantsAssigned } as object,
+    },
+  })
+  logger.info('[shopify-image-publish] published', { productId, jobId: job.id, poolCount: poolImages.length, variantsAssigned })
   return {
     success: true,
     message: `Published ${poolImages.length} pool image${poolImages.length === 1 ? '' : 's'} and assigned ${variantsAssigned} variant${variantsAssigned === 1 ? '' : 's'} on Shopify`,
     poolImagesPublished: poolImages.length,
     variantsAssigned,
+    jobId: job.id,
   }
 }
