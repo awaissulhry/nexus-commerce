@@ -30,6 +30,10 @@ import {
   computeAdvertisingReport,
   advertisingReportToCsv,
 } from '../services/insights/insights-advertising.service.js'
+import {
+  computeProductReport,
+  productReportToCsv,
+} from '../services/insights/insights-products.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -167,6 +171,34 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'insights.advertising failed')
         reply.code(500)
         return { error: 'insights_advertising_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { format?: string } }>(
+    '/insights/products',
+    async (request, reply) => {
+      const filters = parseInsightsFilters(request)
+      try {
+        const report = await computeProductReport(filters)
+        if (request.query.format === 'csv') {
+          reply.header('Content-Type', 'text/csv; charset=utf-8')
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="insights-products-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          reply.header('Cache-Control', 'private, no-store')
+          return productReportToCsv(report)
+        }
+        reply.header(
+          'Cache-Control',
+          'private, max-age=30, stale-while-revalidate=60',
+        )
+        return report
+      } catch (err) {
+        request.log.error({ err }, 'insights.products failed')
+        reply.code(500)
+        return { error: 'insights_products_failed' }
       }
     },
   )
