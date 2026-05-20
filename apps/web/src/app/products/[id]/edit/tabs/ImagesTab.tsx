@@ -10,7 +10,7 @@
 // Channel listing-image assignments are staged locally and committed
 // via the Save button in the action bar.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { beFetch } from './images/api'
 import { Button } from '@/components/ui/Button'
@@ -94,6 +94,36 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
     ebay:   listing.filter((i) => i.platform === 'EBAY'   && i.publishStatus === 'PUBLISHED').length,
     shopify: listing.filter((i) => i.platform === 'SHOPIFY' && i.publishStatus === 'PUBLISHED').length,
   }), [listing])
+
+  // Cmd+S to save pending changes from any channel tab.
+  // Ref keeps the latest workspace state so the listener binds once.
+  const saveRef = useRef<{ save: () => Promise<boolean>; dirty: number }>({
+    save: workspace.savePending,
+    dirty: workspace.dirtyCount,
+  })
+  useEffect(() => {
+    saveRef.current = { save: workspace.savePending, dirty: workspace.dirtyCount }
+  }, [workspace.savePending, workspace.dirtyCount])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 's') return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable === true) {
+        // Let browser/inputs handle Cmd+S normally (textareas don't, but we
+        // shouldn't hijack focus that's clearly typing-context).
+        return
+      }
+      e.preventDefault()
+      if (saveRef.current.dirty === 0) return
+      void saveRef.current.save().then((ok) => {
+        if (ok) showToast('Changes saved')
+      })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // ── Loading / error states ───────────────────────────────────────────
   if (workspace.loading) {

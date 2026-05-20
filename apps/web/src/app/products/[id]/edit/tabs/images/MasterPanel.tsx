@@ -99,8 +99,16 @@ export default function MasterPanel({
     clearSelection()
   }
 
-  // Cmd+A to select all, Escape to deselect
+  // Cmd+A select-all, Esc deselect.
+  // Guard against firing while the operator is typing — alt-text inputs,
+  // textareas, and contenteditable nodes get the keystroke first.
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    const target = e.target as HTMLElement | null
+    const tag = target?.tagName
+    const isEditing =
+      tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable === true
+    if (isEditing) return
+
     if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
       e.preventDefault()
       selectAll()
