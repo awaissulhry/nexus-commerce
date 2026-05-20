@@ -23,7 +23,7 @@ import AmazonPanel from './images/amazon/AmazonPanel'
 import EbayPanel from './images/ebay/EbayPanel'
 import ShopifyPanel from './images/shopify/ShopifyPanel'
 import LightboxModal from './images/LightboxModal'
-import { useLightbox } from './images/useLightbox'
+import { fromMaster, useLightbox } from './images/useLightbox'
 import type { ChannelTab } from './images/types'
 
 interface Props {
@@ -251,6 +251,7 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
               onImagesChange={() => { void workspace.reload() }}
               onAddToChannel={workspace.addToChannel}
               onToast={showToast}
+              onOpenLightbox={(img) => lightbox.open(fromMaster(img), master.map(fromMaster))}
             />
           )}
           {activeChannel === 'amazon' && (

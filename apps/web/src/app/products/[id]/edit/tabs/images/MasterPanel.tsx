@@ -59,6 +59,8 @@ interface Props {
   onImagesChange: (images: ProductImage[]) => void
   onAddToChannel: (url: string, masterImageId: string, channel: 'amazon' | 'ebay' | 'shopify' | 'all') => void
   onToast?: (msg: string) => void
+  // IR.3.2 — click on a thumbnail opens the shared lightbox at ImagesTab.
+  onOpenLightbox?: (img: ProductImage) => void
 }
 
 export default function MasterPanel({
@@ -67,6 +69,7 @@ export default function MasterPanel({
   onImagesChange,
   onAddToChannel,
   onToast,
+  onOpenLightbox,
 }: Props) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -423,8 +426,14 @@ export default function MasterPanel({
                         : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600',
                   )}
                 >
-                  {/* Thumbnail */}
-                  <div className="aspect-square relative bg-slate-100 dark:bg-slate-700">
+                  {/* Thumbnail — click anywhere outside the corner buttons opens lightbox */}
+                  <div
+                    className={cn(
+                      'aspect-square relative bg-slate-100 dark:bg-slate-700',
+                      onOpenLightbox && 'cursor-zoom-in',
+                    )}
+                    onClick={() => onOpenLightbox?.(img)}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={img.url} alt={img.alt ?? img.type} className="w-full h-full object-contain" loading="lazy" />
 
@@ -473,9 +482,15 @@ export default function MasterPanel({
                     {/* Context menu dropdown */}
                     {menuOpenId === img.id && (
                       <>
-                        {/* Backdrop */}
-                        <div className="fixed inset-0 z-20" onClick={() => setMenuOpenId(null)} />
-                        <div className="absolute top-7 right-1 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px] text-sm">
+                        {/* Backdrop — stopPropagation so closing the menu doesn't also open the lightbox */}
+                        <div
+                          className="fixed inset-0 z-20"
+                          onClick={(e) => { e.stopPropagation(); setMenuOpenId(null) }}
+                        />
+                        <div
+                          className="absolute top-7 right-1 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[160px] text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button className="w-full text-left px-3 py-1.5 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700" onClick={() => startEdit(img)}>
                             Edit alt text
                           </button>
