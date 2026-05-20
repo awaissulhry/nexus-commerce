@@ -9,7 +9,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { IconButton } from '@/components/ui/IconButton'
-import { Modal } from '@/components/ui/Modal'
+import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
@@ -285,7 +285,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
         </span>
       }
     >
-      <div className="space-y-4">
+      <ModalBody className="space-y-4">
           {!rule && (
             <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded p-3">
               <div className="text-sm font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300 mb-2">Start from a preset</div>
@@ -363,10 +363,10 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
             Rule is active (the engine includes inactive rules in dry-runs but never sends from them)
           </label>
-      </div>
-      <footer className="-mx-5 -mb-5 mt-4 px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 justify-end sticky bottom-0 bg-white dark:bg-slate-900">
-        {/* Cancel/Save — promoted to shared Button so they inherit the
-            global focus-visible ring + the new app-wide disabled state
+      </ModalBody>
+      <ModalFooter>
+        {/* Cancel/Save — explicit colours + the new app-wide disabled
+            state so neither button collapses to a transparent ghost
             (was: native <button> + low-contrast white-on-white outline
             for Cancel and slate-on-slate text for Save). */}
         <button
@@ -384,7 +384,7 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
         >
           {rule ? 'Save changes' : 'Create rule'}
         </button>
-      </footer>
+      </ModalFooter>
     </Modal>
   )
 }
@@ -429,7 +429,7 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
         </span>
       }
     >
-      <div className="space-y-3">
+      <ModalBody className="space-y-3">
         {loading ? <div className="text-md text-slate-500 dark:text-slate-400 py-4 text-center">Computing matches…</div> : !data ? (
           <div className="text-md text-rose-600 dark:text-rose-400">Failed to load dry-run.</div>
         ) : (
@@ -454,15 +454,28 @@ function PreviewModal({ rule, onClose, onRun }: { rule: Rule; onClose: () => voi
                 </ul>
               </div>
             )}
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 justify-end">
-              <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Close</button>
-              <button onClick={runIt} disabled={running || data.matchCount === 0} className="h-8 px-3 text-base bg-emerald-600 dark:bg-emerald-700 text-white rounded hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5">
-                <Play size={12} /> Enqueue all {data.matchCount}
-              </button>
-            </div>
           </>
         )}
-      </div>
+      </ModalBody>
+      {data && (
+        <ModalFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 px-3 text-sm font-medium bg-white text-slate-900 border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={runIt}
+            disabled={running || data.matchCount === 0}
+            className="h-8 px-3 text-sm font-semibold bg-emerald-600 text-white border border-emerald-600 rounded-md hover:bg-emerald-700 dark:bg-emerald-700 dark:border-emerald-700 dark:hover:bg-emerald-800 disabled:cursor-not-allowed disabled:!bg-slate-200 disabled:!text-slate-500 disabled:!border-slate-200 disabled:dark:!bg-slate-700 disabled:dark:!text-slate-400 disabled:dark:!border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1.5"
+          >
+            <Play size={12} /> Enqueue all {data.matchCount}
+          </button>
+        </ModalFooter>
+      )}
     </Modal>
   )
 }

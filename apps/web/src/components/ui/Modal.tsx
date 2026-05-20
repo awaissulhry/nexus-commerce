@@ -315,6 +315,7 @@ export function ModalBody({
     <div className={cn('flex-1 overflow-y-auto p-5', className)}>{children}</div>
   )
 }
+ModalBody.displayName = 'ModalBody'
 
 /**
  * ModalFooter — sticky-bottom action bar. Use for the cancel/save
@@ -338,3 +339,4 @@ export function ModalFooter({
     </div>
   )
 }
+ModalFooter.displayName = 'ModalFooter'
