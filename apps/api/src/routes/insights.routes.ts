@@ -48,6 +48,10 @@ import {
 } from '../services/insights/insights-fiscal.service.js'
 import { computeAnomalies } from '../services/insights/insights-anomalies.service.js'
 import { computeExecutiveBrief } from '../services/insights/insights-brief.service.js'
+import {
+  computeForecastReport,
+  forecastReportToCsv,
+} from '../services/insights/insights-forecast.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -313,6 +317,34 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'insights.brief failed')
         reply.code(500)
         return { error: 'insights_brief_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { format?: string } }>(
+    '/insights/forecast',
+    async (request, reply) => {
+      const filters = parseInsightsFilters(request)
+      try {
+        const report = await computeForecastReport(filters)
+        if (request.query.format === 'csv') {
+          reply.header('Content-Type', 'text/csv; charset=utf-8')
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="insights-forecast-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          reply.header('Cache-Control', 'private, no-store')
+          return forecastReportToCsv(report)
+        }
+        reply.header(
+          'Cache-Control',
+          'private, max-age=300, stale-while-revalidate=600',
+        )
+        return report
+      } catch (err) {
+        request.log.error({ err }, 'insights.forecast failed')
+        reply.code(500)
+        return { error: 'insights_forecast_failed' }
       }
     },
   )

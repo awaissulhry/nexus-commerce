@@ -10,6 +10,7 @@ import {
   Bookmark,
   Calculator,
   Download,
+  LineChart,
   Megaphone,
   MonitorPlay,
   Package,
@@ -99,6 +100,13 @@ const HUB_LINKS: Array<{
     blurb: 'Daily narrative, anomalies, recommended actions',
     icon: Sparkles,
     phase: 'IH.11',
+  },
+  {
+    href: '/insights/forecast',
+    title: 'Forecast & projections',
+    blurb: '90-day demand forecast, projected stockouts, accuracy MAPE',
+    icon: LineChart,
+    phase: 'IH.17',
   },
   {
     href: '/insights/anomalies',

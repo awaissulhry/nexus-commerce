@@ -52,6 +52,7 @@ import {
   Bookmark,
   Calculator,
   Download,
+  LineChart,
   MonitorPlay,
   Receipt,
   Sparkles,
@@ -666,6 +667,7 @@ export default function AppSidebar() {
               '/insights/customers',
               '/insights/inventory',
               '/insights/fiscal',
+              '/insights/forecast',
               '/insights/brief',
               '/insights/anomalies',
               '/insights/scenarios',
@@ -723,6 +725,13 @@ export default function AppSidebar() {
               label="Italian fiscal"
               nested
               active={pathname === '/insights/fiscal'}
+            />
+            <NavItem
+              href="/insights/forecast"
+              icon={LineChart}
+              label="Forecast"
+              nested
+              active={pathname === '/insights/forecast'}
             />
             <NavItem
               href="/insights/brief"
