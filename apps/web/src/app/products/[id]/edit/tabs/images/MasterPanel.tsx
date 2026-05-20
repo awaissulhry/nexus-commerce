@@ -12,7 +12,6 @@ import { beFetch } from './api'
 import {
   AlertTriangle,
   CheckSquare,
-  GripVertical,
   Image as ImageIcon,
   Loader2,
   MoreHorizontal,
@@ -405,15 +404,11 @@ export default function MasterPanel({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={img.url} alt={img.alt ?? img.type} className="w-full h-full object-contain" loading="lazy" />
 
-                    {/* Position number */}
-                    <div className="absolute bottom-1 left-1.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white/70 dark:bg-slate-900/70 rounded px-1">
-                      {index + 1}
-                    </div>
-
-                    {/* IM.8 — Selection checkbox (always visible on hover, solid when selected) */}
+                    {/* Selection checkbox — top-left */}
                     <button
                       type="button"
                       onClick={(e) => toggleSelect(img.id, e)}
+                      aria-label={selectedIds.has(img.id) ? 'Deselect image' : 'Select image'}
                       className={cn(
                         'absolute top-1 left-1 transition-opacity',
                         selectedIds.has(img.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
@@ -424,34 +419,32 @@ export default function MasterPanel({
                         : <Square className="w-4 h-4 text-white drop-shadow" />}
                     </button>
 
-                    {/* Drag handle */}
-                    <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-                      <div className="bg-white/80 dark:bg-slate-900/80 rounded p-1">
-                        <GripVertical className="w-3.5 h-3.5 text-slate-500" />
-                      </div>
-                    </div>
-
-                    {/* MAIN star */}
-                    {img.type === 'MAIN' && (
-                      <div className="absolute top-1 right-1">
-                        <div className="bg-blue-500 rounded p-0.5">
-                          <Star className="w-3 h-3 text-white fill-white" />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Context menu button — appears on hover */}
+                    {/* Context menu button — top-right, visible on hover (incl. MAIN) */}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         setMenuOpenId(menuOpenId === img.id ? null : img.id)
                       }}
+                      aria-label="Image actions"
                       className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 dark:bg-slate-900/80 rounded p-1"
-                      style={img.type === 'MAIN' ? { display: 'none' } : {}}
                     >
                       <MoreHorizontal className="w-3.5 h-3.5 text-slate-500" />
                     </button>
+
+                    {/* Position number — bottom-left */}
+                    <div className="absolute bottom-1 left-1.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white/70 dark:bg-slate-900/70 rounded px-1">
+                      {index + 1}
+                    </div>
+
+                    {/* MAIN star — bottom-right (only when type=MAIN) */}
+                    {img.type === 'MAIN' && (
+                      <div className="absolute bottom-1 right-1" title="Main image">
+                        <div className="bg-blue-500 rounded p-0.5">
+                          <Star className="w-3 h-3 text-white fill-white" />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Context menu dropdown */}
                     {menuOpenId === img.id && (
