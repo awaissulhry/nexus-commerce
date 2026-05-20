@@ -18,6 +18,14 @@ import { computeInsightsSummary } from '../services/insights/insights-summary.se
 import { computeInsightsBreakdown } from '../services/insights/insights-breakdown.service.js'
 import { computeTopSKUs } from '../services/insights/insights-top-skus.service.js'
 import { computeWhatChanged } from '../services/insights/insights-what-changed.service.js'
+import {
+  computeSalesReport,
+  salesReportToCsv,
+} from '../services/insights/insights-sales.service.js'
+import {
+  computeProfitReport,
+  profitReportToCsv,
+} from '../services/insights/insights-profit.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -71,6 +79,62 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error({ err }, 'insights.top-skus failed')
         reply.code(500)
         return { error: 'insights_top_skus_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { format?: string } }>(
+    '/insights/sales',
+    async (request, reply) => {
+      const filters = parseInsightsFilters(request)
+      try {
+        const report = await computeSalesReport(filters)
+        if (request.query.format === 'csv') {
+          reply.header('Content-Type', 'text/csv; charset=utf-8')
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="insights-sales-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          reply.header('Cache-Control', 'private, no-store')
+          return salesReportToCsv(report)
+        }
+        reply.header(
+          'Cache-Control',
+          'private, max-age=30, stale-while-revalidate=60',
+        )
+        return report
+      } catch (err) {
+        request.log.error({ err }, 'insights.sales failed')
+        reply.code(500)
+        return { error: 'insights_sales_failed' }
+      }
+    },
+  )
+
+  fastify.get<{ Querystring: { format?: string } }>(
+    '/insights/profit',
+    async (request, reply) => {
+      const filters = parseInsightsFilters(request)
+      try {
+        const report = await computeProfitReport(filters)
+        if (request.query.format === 'csv') {
+          reply.header('Content-Type', 'text/csv; charset=utf-8')
+          reply.header(
+            'Content-Disposition',
+            `attachment; filename="insights-profit-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          reply.header('Cache-Control', 'private, no-store')
+          return profitReportToCsv(report)
+        }
+        reply.header(
+          'Cache-Control',
+          'private, max-age=30, stale-while-revalidate=60',
+        )
+        return report
+      } catch (err) {
+        request.log.error({ err }, 'insights.profit failed')
+        reply.code(500)
+        return { error: 'insights_profit_failed' }
       }
     },
   )
