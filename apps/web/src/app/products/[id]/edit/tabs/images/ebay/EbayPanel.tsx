@@ -15,7 +15,7 @@
 
 import { useRef, useState, useMemo } from 'react'
 import {
-  AlertTriangle, CheckCircle2, GripVertical, Loader2, Plus, ShoppingBag,
+  AlertTriangle, CheckCircle2, ChevronDown, Eye, GripVertical, Loader2, Plus, ShoppingBag,
   Trash2, Upload,
 } from 'lucide-react'
 import { PLATFORM_RULES } from '@nexus/shared/image-validation'
@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
 import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
+import ChannelPreview from '../ChannelPreview'
 import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, WorkspaceProduct } from '../types'
 
 interface CopyResult { copied: number; skipped: number }
@@ -70,6 +71,7 @@ interface DisplayItem {
 
 export default function EbayPanel({
   productId,
+  product,
   masterImages,
   listingImages,
   variants,
@@ -86,6 +88,7 @@ export default function EbayPanel({
   publishedCount,
   onPublish,
 }: Props) {
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [lastPublish, setLastPublish] = useState<{ success: boolean; message: string; ts: string } | null>(null)
   const [pickerTarget, setPickerTarget] = useState<'gallery' | { colorValue: string } | null>(null)
@@ -484,6 +487,32 @@ export default function EbayPanel({
         onCopyFromAmazonColorSets={onCopyFromAmazonColorSets}
         onToast={onToast}
       />
+
+      {/* IR.5.4 — Buyer preview */}
+      <div className="border-t border-slate-100 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setPreviewOpen((p) => !p)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+          aria-expanded={previewOpen}
+        >
+          <Eye className="w-3.5 h-3.5 text-slate-400" />
+          <span className="font-medium">Buyer preview</span>
+          <span className="text-slate-400 ml-1">— eBay listing card as a buyer would see it</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 ml-auto text-slate-400 transition-transform', previewOpen && 'rotate-180')} />
+        </button>
+        {previewOpen && (
+          <div className="px-4 pb-4">
+            <ChannelPreview
+              platform="EBAY"
+              product={product}
+              masterImages={masterImages}
+              listingImages={listingImages}
+              variants={variants}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Publish */}
       <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5">
