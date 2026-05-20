@@ -552,6 +552,8 @@ export default function OrdersWorkspace() {
               type="button"
               onClick={() => updateUrl({ deleted: showDeleted ? undefined : 'true', page: undefined })}
               title={showDeleted ? t('orders.recycleBin.exit') : t('orders.recycleBin.enter')}
+              aria-pressed={showDeleted}
+              aria-label={showDeleted ? t('orders.recycleBin.exit') : t('orders.recycleBin.enter')}
               className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 transition-colors ${
                 showDeleted
                   ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'

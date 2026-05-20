@@ -47,6 +47,7 @@ import {
   Monitor,
   GitCompare,
   Inbox,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
@@ -727,6 +728,12 @@ export default function AppSidebar() {
               (pathname.startsWith('/settings/') &&
                 !pathname.startsWith('/settings/channels'))
             }
+          />
+          <NavItem
+            href="/admin/recycle-bin"
+            icon={Trash2}
+            label="Recycle bin"
+            active={pathname.startsWith('/admin/recycle-bin')}
           />
         </NavGroup>
       </nav>

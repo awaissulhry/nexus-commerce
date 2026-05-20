@@ -843,8 +843,12 @@ export async function ordersRoutes(app: FastifyInstance) {
       const dateFrom = q.dateFrom ? new Date(q.dateFrom) : null
       const dateTo = q.dateTo ? new Date(q.dateTo) : null
       const reviewEligible = q.reviewEligible === 'true'
+      const showDeleted = q.deleted === 'true'
 
       const where: any = {}
+      // RB.1 — CSV export respects the recycle-bin scope so operators
+      // exporting from the bin get the deleted rows (and vice versa).
+      where.deletedAt = showDeleted ? { not: null } : null
       if (channels && channels.length) where.channel = { in: channels }
       if (marketplaces && marketplaces.length) where.marketplace = { in: marketplaces }
       if (statuses && statuses.length) where.status = { in: statuses }
