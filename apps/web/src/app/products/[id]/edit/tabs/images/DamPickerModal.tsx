@@ -11,8 +11,8 @@
 // uses, so search / folder / tag / quality filters land for free over
 // time without per-feature wiring here.
 
-import { useCallback, useEffect, useState } from 'react'
-import { ImageIcon, Loader2, Search, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Folder, ImageIcon, Loader2, Search, Tag as TagIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
@@ -36,6 +36,19 @@ interface LibraryResponse {
   pageSize: number
 }
 
+interface FolderItem {
+  id: string
+  name: string
+  parentId: string | null
+  _count: { assets: number }
+}
+
+interface TagItem {
+  id: string
+  name: string
+  _count: { assets: number }
+}
+
 interface Props {
   productId: string
   onClose: () => void
@@ -47,10 +60,42 @@ interface Props {
 export default function DamPickerModal({ productId, onClose, onImported }: Props) {
   const [items, setItems] = useState<LibraryItem[]>([])
   const [search, setSearch] = useState('')
+  const [folderId, setFolderId] = useState<string>('') // '' = any, 'unfiled' = none, else folder id
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set())
+  const [missingAltOnly, setMissingAltOnly] = useState(false)
+  const [folders, setFolders] = useState<FolderItem[]>([])
+  const [tags, setTags] = useState<TagItem[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [importingId, setImportingId] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+
+  // Fetch folders + tags once on mount — they don't change while
+  // the picker is open, and the response is small enough to skip
+  // pagination.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [foldersRes, tagsRes] = await Promise.all([
+          beFetch('/api/asset-folders'),
+          beFetch('/api/asset-tags'),
+        ])
+        if (foldersRes.ok) {
+          const body = await foldersRes.json()
+          setFolders(body.folders ?? [])
+        }
+        if (tagsRes.ok) {
+          const body = await tagsRes.json()
+          // Show only tags that have at least one asset — empty tags
+          // would surface as dead options.
+          setTags((body.tags ?? []).filter((t: TagItem) => (t._count?.assets ?? 0) > 0))
+        }
+      } catch {
+        // Filter loading is non-fatal — the picker still works with
+        // search only if folder/tag endpoints fail.
+      }
+    })()
+  }, [])
 
   const fetchLibrary = useCallback(async () => {
     setLoading(true)
@@ -62,6 +107,9 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
         pageSize: '60',
       })
       if (search) params.set('search', search)
+      if (folderId) params.set('folderId', folderId)
+      if (selectedTagIds.size > 0) params.set('tagIds', Array.from(selectedTagIds).join(','))
+      if (missingAltOnly) params.set('missingAlt', '1')
       const res = await beFetch(`/api/assets/library?${params.toString()}`)
       if (!res.ok) throw new Error(`Library fetch failed: ${res.status}`)
       const body: LibraryResponse = await res.json()
@@ -71,9 +119,30 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
     } finally {
       setLoading(false)
     }
-  }, [search])
+  }, [search, folderId, selectedTagIds, missingAltOnly])
 
   useEffect(() => { void fetchLibrary() }, [fetchLibrary])
+
+  function toggleTag(tagId: string) {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next
+    })
+  }
+
+  function clearFilters() {
+    setSearch('')
+    setFolderId('')
+    setSelectedTagIds(new Set())
+    setMissingAltOnly(false)
+  }
+
+  const hasActiveFilters = useMemo(
+    () => !!search || !!folderId || selectedTagIds.size > 0 || missingAltOnly,
+    [search, folderId, selectedTagIds, missingAltOnly],
+  )
 
   // Esc to close
   useEffect(() => {
@@ -138,6 +207,70 @@ export default function DamPickerModal({ productId, onClose, onImported }: Props
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Filter strip — folder, tags, missing-alt + clear */}
+        <div className="flex items-center gap-2 px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 flex-wrap text-xs">
+          {/* Folder */}
+          <div className="flex items-center gap-1.5">
+            <Folder className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={folderId}
+              onChange={(e) => setFolderId(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 max-w-[180px]"
+            >
+              <option value="">Any folder</option>
+              <option value="unfiled">Unfiled</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f._count?.assets ?? 0})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tags */}
+          {tags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <TagIcon className="w-3.5 h-3.5 text-slate-400" />
+              {tags.slice(0, 10).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => toggleTag(t.id)}
+                  className={cn(
+                    'text-[11px] px-2 py-0.5 rounded-full border transition-colors',
+                    selectedTagIds.has(t.id)
+                      ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 text-blue-700 dark:text-blue-300'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
+                  )}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Missing alt */}
+          <label className="flex items-center gap-1.5 cursor-pointer text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={missingAltOnly}
+              onChange={(e) => setMissingAltOnly(e.target.checked)}
+              className="rounded border-slate-300 dark:border-slate-600 text-blue-500 focus:ring-blue-400"
+            />
+            Missing alt
+          </label>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-auto text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 underline"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
         {/* Body */}
