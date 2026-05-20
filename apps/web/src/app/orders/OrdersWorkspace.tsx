@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   ShoppingCart, RefreshCw, Star, User, DollarSign, Undo2, Download,
-  CheckCircle2, Truck, Package, Keyboard,
+  CheckCircle2, Truck, Package, Keyboard, Trash2,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -115,6 +115,7 @@ export default function OrdersWorkspace() {
   const hasRefund = searchParams.get('hasRefund')
   const reviewEligible = searchParams.get('reviewEligible') === 'true'
   const customerEmail = searchParams.get('customerEmail') ?? ''
+  const showDeleted = searchParams.get('deleted') === 'true'
 
   const [searchInput, setSearchInput] = useState(search)
   const [orders, setOrders] = useState<Order[]>([])
@@ -241,6 +242,7 @@ export default function OrdersWorkspace() {
       if (customerEmail) qs.set('customerEmail', customerEmail)
       qs.set('sortBy', sortBy)
       qs.set('sortDir', sortDir)
+      if (showDeleted) qs.set('deleted', 'true')
       const res = await fetch(`${getBackendUrl()}/api/orders?${qs.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       const data = await res.json()
@@ -252,7 +254,7 @@ export default function OrdersWorkspace() {
       setError(e?.message ?? 'Failed to load')
       setOrders([])
     } finally { setLoading(false) }
-  }, [page, pageSize, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, customerEmail, sortBy, sortDir])
+  }, [page, pageSize, search, channelFilters.join(','), marketplaceFilters.join(','), statusFilters.join(','), fulfillmentFilters.join(','), reviewStatusFilters.join(','), hasReturn, hasRefund, reviewEligible, customerEmail, sortBy, sortDir, showDeleted])
 
   const fetchStats = useCallback(async () => {
     try {
@@ -546,6 +548,19 @@ export default function OrdersWorkspace() {
             >
               <Download size={12} /> {t('orders.action.exportCsv')}
             </a>
+            <button
+              type="button"
+              onClick={() => updateUrl({ deleted: showDeleted ? undefined : 'true', page: undefined })}
+              title={showDeleted ? t('orders.recycleBin.exit') : t('orders.recycleBin.enter')}
+              className={`h-8 px-3 text-base border rounded inline-flex items-center gap-1.5 transition-colors ${
+                showDeleted
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800 dark:hover:bg-rose-900/40'
+                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Trash2 size={12} />
+              {showDeleted ? t('orders.recycleBin.label') : <span className="sr-only">{t('orders.recycleBin.enter')}</span>}
+            </button>
             <button onClick={() => fetchOrders()} className="h-8 px-3 text-base border border-slate-200 rounded hover:bg-slate-50 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> {t('orders.action.refresh')}
             </button>
@@ -661,6 +676,8 @@ export default function OrdersWorkspace() {
       {lens === 'grid' && selected.size > 0 && (
         <BulkActionBar
           selectedIds={Array.from(selected)}
+          showDeleted={showDeleted}
+          orders={orders}
           onClear={() => setSelected(new Set())}
           onComplete={() => { setSelected(new Set()); fetchOrders() }}
         />

@@ -40,6 +40,7 @@ type Tab = 'summary' | 'fulfillment' | 'activity' | 'fiscal'
 export default function OrderDetailClient({ id }: { id: string }) {
   const { toast } = useToast()
   const router = useRouter()
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const tabParam = (searchParams.get('tab') as Tab) || 'summary'
@@ -88,6 +89,43 @@ export default function OrderDetailClient({ id }: { id: string }) {
     } catch (e: any) {
       toast.error(e.message)
     } finally { setReviewBusy(false) }
+  }
+
+  // RB.1 — per-row delete + restore. Calls the bulk endpoints with a
+  // 1-element array so there's a single backend code path.
+  const moveToBin = async () => {
+    if (!window.confirm('Move this order to the recycle bin?')) return
+    setDeleteBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/orders/bulk-soft-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success('Moved to recycle bin')
+      router.push('/orders')
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally { setDeleteBusy(false) }
+  }
+
+  const restoreFromBin = async () => {
+    setDeleteBusy(true)
+    try {
+      const res = await fetch(`${getBackendUrl()}/api/orders/bulk-restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success('Restored')
+      refresh()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally { setDeleteBusy(false) }
   }
 
   if (loading && !order) {
@@ -167,9 +205,38 @@ export default function OrderDetailClient({ id }: { id: string }) {
             <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
               <RefreshCw size={12} /> Refresh
             </button>
+            {order.deletedAt ? (
+              <button
+                onClick={restoreFromBin}
+                disabled={deleteBusy}
+                className="h-8 px-3 text-base bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Undo2 size={12} /> Restore
+              </button>
+            ) : (
+              <button
+                onClick={moveToBin}
+                disabled={deleteBusy}
+                className="h-8 px-3 text-base bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded hover:bg-rose-100 dark:hover:bg-rose-900/40 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+            )}
           </div>
         }
       />
+
+      {order.deletedAt && (
+        <div className="rounded-md border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-sm text-rose-800 dark:text-rose-200 inline-flex items-center gap-2">
+          <Trash2 size={14} aria-hidden="true" />
+          <span>
+            In recycle bin since {new Date(order.deletedAt).toLocaleString()}.
+            {order.channelOrderId && (
+              <> The source order on {order.channel} is unaffected.</>
+            )}
+          </span>
+        </div>
+      )}
 
       {/* AU.1 — tab nav. Summary is default; others gate their
           content blocks. URL-backed via ?tab= so deep-links work
