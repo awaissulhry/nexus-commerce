@@ -4,13 +4,19 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
+  AlertTriangle,
   ArrowRight,
   BarChart3,
+  Bookmark,
+  Calculator,
+  Download,
   Megaphone,
+  MonitorPlay,
   Package,
   Receipt,
   ShoppingCart,
   Sparkles,
+  TableProperties,
   Truck,
   Users,
 } from 'lucide-react'
@@ -93,6 +99,48 @@ const HUB_LINKS: Array<{
     blurb: 'Daily narrative, anomalies, recommended actions',
     icon: Sparkles,
     phase: 'IH.11',
+  },
+  {
+    href: '/insights/anomalies',
+    title: 'Anomalies',
+    blurb: 'Z-score deviations vs 90-day reference',
+    icon: AlertTriangle,
+    phase: 'IH.9',
+  },
+  {
+    href: '/insights/scenarios',
+    title: 'What-if scenarios',
+    blurb: 'Project revenue / profit under pricing + ad changes',
+    icon: Calculator,
+    phase: 'IH.10',
+  },
+  {
+    href: '/insights/builder',
+    title: 'Report builder',
+    blurb: 'Pivot any metric × dimension; save + export',
+    icon: TableProperties,
+    phase: 'IH.12',
+  },
+  {
+    href: '/insights/exports',
+    title: 'Export hub',
+    blurb: 'CSV downloads for every report + bundle all',
+    icon: Download,
+    phase: 'IH.13',
+  },
+  {
+    href: '/insights/live',
+    title: 'Live monitor (TV mode)',
+    blurb: 'Today vs yesterday, auto-refreshing',
+    icon: MonitorPlay,
+    phase: 'IH.14',
+  },
+  {
+    href: '/insights/notebook',
+    title: 'Notebook',
+    blurb: 'Annotate dates with operator notes — context layer',
+    icon: Bookmark,
+    phase: 'IH.15',
   },
 ]
 
