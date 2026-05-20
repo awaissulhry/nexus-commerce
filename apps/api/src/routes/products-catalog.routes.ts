@@ -1572,10 +1572,142 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // UI reads from the cache, and historic cache drift (a Product
   // purged without its cache row) caused the original "still see them
   // after delete" symptom.
+  // ═══════════════════════════════════════════════════════════════════
+  // D.3 — Hard-delete pre-flight. Reports the operational warnings the
+  // confirm modal needs to render before the operator picks a
+  // channelAction. Read-only; no state changes.
+  //
+  // GET /api/products/hard-delete-preflight?ids=id1,id2,...
+  //   → {
+  //       channelListings: [{ productId, channel, marketplace, externalListingId }, ...],
+  //       openOrders:      [{ productId, orderId, channelOrderId, channel, status }, ...],
+  //       activeBundles:   [{ productId, bundleId, role: 'master' | 'component' }, ...],
+  //       fbaInventory:    [{ productId, marketplaceId, fulfillmentCenterId, quantity }, ...],
+  //     }
+  // ═══════════════════════════════════════════════════════════════════
+  fastify.get('/products/hard-delete-preflight', async (request, reply) => {
+    try {
+      const q = request.query as { ids?: string }
+      const ids = (q.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+      if (ids.length === 0) {
+        return reply.code(400).send({ error: 'ids query param required (comma-separated)' })
+      }
+      if (ids.length > 200) {
+        return reply.code(400).send({ error: `max 200 ids per call (got ${ids.length})` })
+      }
+      const [channelListings, orderItems, bundleMasters, bundleComponents, fbaRows] =
+        await Promise.all([
+          prisma.channelListing.findMany({
+            where: {
+              productId: { in: ids },
+              listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
+              externalListingId: { not: null },
+            },
+            select: {
+              productId: true,
+              channel: true,
+              marketplace: true,
+              region: true,
+              externalListingId: true,
+            },
+          }),
+          prisma.orderItem.findMany({
+            where: {
+              productId: { in: ids },
+              order: {
+                status: { notIn: ['DELIVERED', 'CANCELLED', 'REFUNDED', 'RETURNED'] },
+                deletedAt: null,
+              },
+            },
+            select: {
+              productId: true,
+              order: {
+                select: {
+                  id: true,
+                  channelOrderId: true,
+                  channel: true,
+                  status: true,
+                },
+              },
+            },
+          }),
+          prisma.bundle.findMany({
+            where: { productId: { in: ids }, isActive: true },
+            select: { id: true, productId: true },
+          }),
+          prisma.bundleComponent.findMany({
+            where: { productId: { in: ids }, bundle: { isActive: true } },
+            select: { productId: true, bundleId: true },
+          }),
+          prisma.fbaInventoryDetail.findMany({
+            where: { productId: { in: ids }, quantity: { gt: 0 } },
+            select: {
+              productId: true,
+              marketplaceId: true,
+              fulfillmentCenterId: true,
+              quantity: true,
+              condition: true,
+            },
+          }),
+        ])
+
+      return reply.send({
+        channelListings: channelListings.map((l) => ({
+          productId: l.productId,
+          channel: l.channel,
+          marketplace: l.marketplace ?? l.region,
+          externalListingId: l.externalListingId,
+        })),
+        openOrders: orderItems
+          .filter((oi) => !!oi.productId && !!oi.order)
+          .map((oi) => ({
+            productId: oi.productId,
+            orderId: oi.order!.id,
+            channelOrderId: oi.order!.channelOrderId,
+            channel: oi.order!.channel,
+            status: oi.order!.status,
+          })),
+        activeBundles: [
+          ...bundleMasters.map((b) => ({
+            productId: b.productId,
+            bundleId: b.id,
+            role: 'master' as const,
+          })),
+          ...bundleComponents.map((c) => ({
+            productId: c.productId,
+            bundleId: c.bundleId,
+            role: 'component' as const,
+          })),
+        ],
+        fbaInventory: fbaRows.map((f) => ({
+          productId: f.productId,
+          marketplaceId: f.marketplaceId,
+          fulfillmentCenterId: f.fulfillmentCenterId,
+          quantity: f.quantity,
+          condition: f.condition,
+        })),
+      })
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? String(err) })
+    }
+  })
+
   fastify.post('/products/bulk-hard-delete', async (request, reply) => {
     try {
-      const body = request.body as { productIds?: string[] }
+      const body = request.body as {
+        productIds?: string[]
+        /** D.1 — what to do with each channel listing as part of the
+         *  cascade. 'none' = local-only delete, channel listings stay
+         *  in place (but their parent Product is gone, so they cascade
+         *  via FK). 'unpublish' = pause the offer on each channel but
+         *  keep the listing record (Amazon: discontinued; eBay: end
+         *  listing; Shopify: set status=DRAFT). 'delete' = best-effort
+         *  remove the listing on each channel. Default 'none' for
+         *  back-compat with callers that haven't been updated. */
+        channelAction?: 'none' | 'unpublish' | 'delete'
+      }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
+      const channelAction: 'none' | 'unpublish' | 'delete' = body.channelAction ?? 'none'
       if (productIds.length === 0) {
         return reply.code(400).send({ error: 'productIds[] required' })
       }
@@ -1613,6 +1745,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             purged: 0,
             ghostCacheRemoved: 0,
             skipped: productIds.length,
+            channelCascadeEnqueued: 0,
             dependents: {
               productImages: 0,
               marketplaceSyncs: 0,
@@ -1626,6 +1759,63 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
         const ids = eligible.map((r) => r.id)
         const productIdFilter = { productId: { in: ids } }
+
+        // D.1 — Channel cascade. Before we drop the ChannelListing
+        // rows (they cascade via Product FK), read which channels this
+        // product is live on so we can enqueue an unpublish/delete sync
+        // job per (productId, channel, marketplace). The channel-sync
+        // worker drains these after the transaction commits — by then
+        // the local Product + ChannelListing are gone, but the queue
+        // rows still carry productId + externalListingId + channel so
+        // the adapters can finish the channel-side work.
+        let channelCascadeEnqueued = 0
+        if (channelAction !== 'none' && ids.length > 0) {
+          const liveListings = await tx.channelListing.findMany({
+            where: {
+              productId: { in: ids },
+              listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
+              externalListingId: { not: null },
+            },
+            select: {
+              id: true,
+              productId: true,
+              channel: true,
+              region: true,
+              marketplace: true,
+              externalListingId: true,
+              externalParentId: true,
+            },
+          })
+          // OutboundSyncQueue.targetChannel is the SyncChannel enum
+          // (AMAZON|EBAY|SHOPIFY|WOOCOMMERCE). ChannelListing.channel is
+          // a free String including 'ETSY'. Filter to enum-compatible
+          // values and drop the rest — Etsy doesn't have a delist
+          // adapter yet (D.2 covers Amazon/eBay/Shopify only).
+          const SUPPORTED: ReadonlyArray<string> = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE']
+          const enqueueable = liveListings.filter((l) => SUPPORTED.includes(l.channel))
+          if (enqueueable.length > 0) {
+            const syncType =
+              channelAction === 'unpublish' ? 'UNPUBLISH_LISTING' : 'DELETE_LISTING'
+            await tx.outboundSyncQueue.createMany({
+              data: enqueueable.map((l) => ({
+                productId: l.productId,
+                channelListingId: l.id,
+                targetChannel: l.channel as any, // SyncChannel enum, validated above
+                targetRegion: l.region ?? l.marketplace ?? null,
+                syncStatus: 'PENDING' as const,
+                syncType,
+                externalListingId: l.externalListingId,
+                payload: {
+                  source: 'products-bulk-hard-delete',
+                  channelAction,
+                  marketplace: l.marketplace ?? l.region ?? null,
+                  externalParentId: l.externalParentId,
+                },
+              })),
+            })
+            channelCascadeEnqueued = enqueueable.length
+          }
+        }
 
         // One AuditLog row per affected row (both real + ghost) BEFORE
         // the cascade so the trail survives the actual deletion
@@ -1643,7 +1833,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
                 deletedAt: r.deletedAt?.toISOString() ?? null,
               },
               after: null,
-              metadata: { source: 'products-bulk-hard-delete' },
+              metadata: {
+                source: 'products-bulk-hard-delete',
+                channelAction,
+              },
             })),
             ...ghostCacheRows.map((r) => ({
               userId: actor,
@@ -1708,6 +1901,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           ghostCacheRemoved: ghostCacheRows.length,
           skipped:
             productIds.length - eligible.length - ghostCacheRows.length,
+          channelCascadeEnqueued,
           dependents: {
             productImages,
             marketplaceSyncs,
