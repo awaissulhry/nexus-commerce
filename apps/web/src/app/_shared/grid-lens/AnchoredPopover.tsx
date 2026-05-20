@@ -44,7 +44,9 @@ export interface AnchoredPopoverProps {
 }
 
 interface Coords {
-  top: number
+  /** One of top / bottom is set (CSS vertical anchor). */
+  top?: number
+  bottom?: number
   left: number
   maxWidth?: number
   maxHeight: number
@@ -108,30 +110,50 @@ export function AnchoredPopover({
       const availW = Math.max(0, bounds.right - bounds.left - edgePad * 2)
       const targetW = Math.min(natW, availW)
 
-      // Anchor one edge of the panel to the matching edge of the
-      // trigger; then clamp into the content bounds so the OPPOSITE
-      // edge can't cross sidebar / right-of-viewport.
-      let left = align === 'right' ? btn.right - targetW : btn.left
-      left = Math.max(bounds.left + edgePad, Math.min(left, bounds.right - targetW - edgePad))
+      const minLeft = bounds.left + edgePad
+      const maxLeft = bounds.right - targetW - edgePad
+
+      // Compute both alignment options. Pick the one that keeps the
+      // panel adjacent to the trigger AND inside content bounds. The
+      // `align` prop is a hint, not a hard rule — if it would overflow
+      // (trigger near the opposite edge of the page), we auto-flip so
+      // the panel still sits next to the button instead of drifting
+      // to a clamp position somewhere far away.
+      const rightAlignLeft = btn.right - targetW  // panel right edge sits at trigger right edge
+      const leftAlignLeft = btn.left              // panel left edge sits at trigger left edge
+
+      let left: number
+      if (align === 'right') {
+        left = rightAlignLeft >= minLeft ? rightAlignLeft : leftAlignLeft
+      } else {
+        left = leftAlignLeft <= maxLeft ? leftAlignLeft : rightAlignLeft
+      }
+      // Final clamp (catches the rare case where neither alignment
+      // fits perfectly — e.g. trigger wider than the content area).
+      left = Math.max(minLeft, Math.min(left, maxLeft))
 
       const maxWidth = targetW < natW ? targetW : undefined
 
-      // Vertical: open below; flip above when more room exists there.
-      // maxHeight is derived from available viewport space (never from
-      // the panel's own measured height) — same no-feedback principle.
+      // Vertical: open below; flip above only when below is genuinely
+      // too tight AND above has more room. When flipping, anchor the
+      // panel's BOTTOM (via CSS `bottom`) so it sits right above the
+      // trigger — measuring scrollHeight would re-create the feedback
+      // loop, but CSS `bottom` lets the browser place the panel by its
+      // natural height for free.
       const spaceBelow = vpH - btn.bottom - offsetY - edgePad
       const spaceAbove = btn.top - offsetY - edgePad
-      let top: number
+      let top: number | undefined
+      let bottom: number | undefined
       let maxHeight: number
       if (spaceBelow >= 240 || spaceBelow >= spaceAbove) {
         top = btn.bottom + offsetY
         maxHeight = Math.max(160, spaceBelow)
       } else {
-        top = Math.max(edgePad, btn.top - offsetY - spaceAbove)
+        bottom = vpH - btn.top + offsetY
         maxHeight = Math.max(160, spaceAbove)
       }
 
-      setCoords({ top, left, maxWidth, maxHeight })
+      setCoords({ top, bottom, left, maxWidth, maxHeight })
     }
 
     measure()
@@ -169,8 +191,11 @@ export function AnchoredPopover({
       aria-label={ariaLabel}
       style={{
         position: 'fixed',
-        top: coords?.top ?? -9999,
+        top: coords?.top,
+        bottom: coords?.bottom,
         left: coords?.left ?? -9999,
+        // First paint: off-screen until coords are measured.
+        ...(!coords && { top: -9999 }),
         maxWidth: coords?.maxWidth,
         maxHeight: coords?.maxHeight,
         opacity: coords ? 1 : 0,
