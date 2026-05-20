@@ -22,6 +22,8 @@ import ImageActionBar from './images/ImageActionBar'
 import AmazonPanel from './images/amazon/AmazonPanel'
 import EbayPanel from './images/ebay/EbayPanel'
 import ShopifyPanel from './images/shopify/ShopifyPanel'
+import LightboxModal from './images/LightboxModal'
+import { useLightbox } from './images/useLightbox'
 import type { ChannelTab } from './images/types'
 
 interface Props {
@@ -40,6 +42,7 @@ const CHANNEL_TABS: { key: ChannelTab; label: string }[] = [
 export default function ImagesTab({ product, discardSignal, onDirtyChange }: Props) {
   const [activeChannel, setActiveChannel] = useState<ChannelTab>('master')
   const [toast, setToast] = useState<string | null>(null)
+  const lightbox = useLightbox()
 
   const workspace = useImagesWorkspace(product.id, discardSignal, onDirtyChange)
 
@@ -370,6 +373,17 @@ export default function ImagesTab({ product, discardSignal, onDirtyChange }: Pro
           showToast('Changes discarded')
         }}
       />
+
+      {/* ── Lightbox modal (IR.3) ────────────────────────────────────── */}
+      {lightbox.state && (
+        <LightboxModal
+          state={lightbox.state}
+          masterImages={master}
+          listingImages={listing}
+          onClose={lightbox.close}
+          onNavigate={lightbox.navigate}
+        />
+      )}
     </div>
   )
 }
