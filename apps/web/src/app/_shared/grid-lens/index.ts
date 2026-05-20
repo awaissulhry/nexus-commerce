@@ -20,6 +20,7 @@ export { KeyboardShortcutsModal, KeyboardShortcutsButton } from './KeyboardShort
 export { LensTabs as SharedLensTabs } from './LensTabs'
 export { FilterPopover } from './FilterPopover'
 export { GridToolbar } from './GridToolbar'
+export { AnchoredPopover } from './AnchoredPopover'
 export type { GridLensColumn, GridLensRow } from './types'
 export type { VirtualizedGridProps } from './VirtualizedGrid'
 export type { SavedView } from './SavedViewsButton'
@@ -35,3 +36,4 @@ export type { KeyboardShortcutsModalProps, ShortcutGroup, ShortcutRow } from './
 export type { LensTabsProps, LensTab } from './LensTabs'
 export type { FilterPopoverProps, FilterDimension, FilterOption } from './FilterPopover'
 export type { GridToolbarProps } from './GridToolbar'
+export type { AnchoredPopoverProps } from './AnchoredPopover'

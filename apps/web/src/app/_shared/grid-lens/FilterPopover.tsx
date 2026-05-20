@@ -15,7 +15,8 @@
  * cleanly so the table area isn't cluttered with eight inline filters.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Filter as FilterIcon, GripVertical, Search, X } from 'lucide-react'
 import {
   DndContext,
@@ -249,6 +250,29 @@ export function FilterPopover({
     }
   }, [open])
 
+  // Anchor the portaled desktop popover to the trigger button. Recomputed
+  // on open, on window resize, and on any scroll (capture phase catches
+  // scrolls inside ancestor scroll containers too — e.g. a scrolling
+  // workspace shell). Falls back to off-screen until first measurement
+  // to avoid a flash at (0,0).
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null)
+  useLayoutEffect(() => {
+    if (!open || isMobile) return
+    const measure = () => {
+      const btn = btnRef.current
+      if (!btn) return
+      const r = btn.getBoundingClientRect()
+      setAnchor({ top: r.bottom + 4, right: window.innerWidth - r.right })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [open, isMobile])
+
   return (
     <div className="relative">
       <button
@@ -278,14 +302,44 @@ export function FilterPopover({
         )}
       </button>
 
-      {open && isMobile && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm flex items-end sm:hidden"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
-        >
+      {open && typeof document !== 'undefined' && createPortal(
+        isMobile ? (
+          <div
+            className="fixed inset-0 z-[1000] bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm flex items-end sm:hidden"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
+          >
+            <div
+              ref={popRef}
+              className="w-full bg-white dark:bg-slate-900 rounded-t-xl shadow-2xl max-h-[88vh] flex flex-col"
+              role="dialog"
+              aria-label="Filters"
+            >
+              <FilterPopoverContents
+                orderedDimensions={orderedDimensions}
+                activeCount={activeCount}
+                appliedChips={appliedChips}
+                draggable={draggable}
+                sensors={sensors}
+                onDragEnd={onDragEnd}
+                onClearAll={onClearAll}
+                onResetOrder={onResetOrder}
+                onSaveView={onSaveView}
+                saveViewLabel={saveViewLabel}
+                onClose={() => setOpen(false)}
+                bodyMaxHeight="max-h-[calc(88vh-7rem)]"
+              />
+            </div>
+          </div>
+        ) : (
           <div
             ref={popRef}
-            className="w-full bg-white dark:bg-slate-900 rounded-t-xl shadow-2xl max-h-[88vh] flex flex-col"
+            style={{
+              position: 'fixed',
+              top: anchor?.top ?? -9999,
+              right: anchor?.right ?? -9999,
+              opacity: anchor ? 1 : 0,
+            }}
+            className="z-[1000] w-[480px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl"
             role="dialog"
             aria-label="Filters"
           >
@@ -301,33 +355,11 @@ export function FilterPopover({
               onSaveView={onSaveView}
               saveViewLabel={saveViewLabel}
               onClose={() => setOpen(false)}
-              bodyMaxHeight="max-h-[calc(88vh-7rem)]"
+              bodyMaxHeight="max-h-[60vh]"
             />
           </div>
-        </div>
-      )}
-      {open && !isMobile && (
-        <div
-          ref={popRef}
-          className="absolute right-0 top-full mt-1 z-40 w-[480px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl"
-          role="dialog"
-          aria-label="Filters"
-        >
-          <FilterPopoverContents
-            orderedDimensions={orderedDimensions}
-            activeCount={activeCount}
-            appliedChips={appliedChips}
-            draggable={draggable}
-            sensors={sensors}
-            onDragEnd={onDragEnd}
-            onClearAll={onClearAll}
-            onResetOrder={onResetOrder}
-            onSaveView={onSaveView}
-            saveViewLabel={saveViewLabel}
-            onClose={() => setOpen(false)}
-            bodyMaxHeight="max-h-[60vh]"
-          />
-        </div>
+        ),
+        document.body,
       )}
     </div>
   )

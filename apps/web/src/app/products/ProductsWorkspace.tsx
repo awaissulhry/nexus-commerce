@@ -33,6 +33,7 @@ import {
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
+  AnchoredPopover,
   DensityToggle as SharedDensityToggle,
   GridToolbar,
   KpiStrip,
@@ -2117,19 +2118,13 @@ function GridLens(props: any) {
             )
           })}
         </div>
-        <div className="relative">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => setColumnPickerOpen(!columnPickerOpen)}
-            icon={<Settings2 size={12} />}
-          >
-            Columns ({visibleColumns.length})
-          </Button>
-          {columnPickerOpen && (
-            <ColumnPickerMenu visible={visibleColumns} setVisible={setVisibleColumns} onClose={() => setColumnPickerOpen(false)} />
-          )}
-        </div>
+        <ColumnPickerTrigger
+          open={columnPickerOpen}
+          setOpen={setColumnPickerOpen}
+          count={visibleColumns.length}
+          visible={visibleColumns}
+          setVisible={setVisibleColumns}
+        />
       </div>
 
       {/* U.25 — was `hidden md:block` which forced tablet portrait
@@ -2374,6 +2369,7 @@ function AddSortButton({
   onAdd: (field: string, dir: 'asc' | 'desc') => void
 }) {
   const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const usedFields = new Set(activeStack.map((p) => p.split(':')[0]))
   const available = SORT_FIELD_OPTIONS.filter((o) => !usedFields.has(o.value))
 
@@ -2381,6 +2377,7 @@ function AddSortButton({
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Add a sort dimension"
@@ -2389,13 +2386,12 @@ function AddSortButton({
         + Sort
       </button>
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-30"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div className="absolute right-0 top-full mt-1 z-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm">
+        <AnchoredPopover
+          anchorRef={btnRef}
+          onClose={() => setOpen(false)}
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm"
+          ariaLabel="Add sort"
+        >
             <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Add sort by
             </div>
@@ -2433,8 +2429,44 @@ function AddSortButton({
                 </span>
               </div>
             ))}
-          </div>
-        </>
+        </AnchoredPopover>
+      )}
+    </div>
+  )
+}
+
+function ColumnPickerTrigger({
+  open,
+  setOpen,
+  count,
+  visible,
+  setVisible,
+}: {
+  open: boolean
+  setOpen: (v: boolean) => void
+  count: number
+  visible: string[]
+  setVisible: (v: string[]) => void
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  return (
+    <div className="relative">
+      <Button
+        ref={btnRef}
+        size="sm"
+        variant="secondary"
+        onClick={() => setOpen(!open)}
+        icon={<Settings2 size={12} />}
+      >
+        Columns ({count})
+      </Button>
+      {open && (
+        <ColumnPickerMenu
+          visible={visible}
+          setVisible={setVisible}
+          onClose={() => setOpen(false)}
+          anchorRef={btnRef}
+        />
       )}
     </div>
   )

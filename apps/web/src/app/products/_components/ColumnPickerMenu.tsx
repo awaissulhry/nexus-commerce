@@ -11,31 +11,28 @@
  * the rendered grid via the workspace's visible useMemo.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useState, type RefObject } from 'react'
 import { ALL_COLUMNS, DEFAULT_VISIBLE } from '../_columns'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { AnchoredPopover } from '@/app/_shared/grid-lens/AnchoredPopover'
 
 interface ColumnPickerMenuProps {
   visible: string[]
   setVisible: (v: string[]) => void
   onClose: () => void
+  /** Element to anchor against. When provided, the panel portals to the
+   *  document body so it can never be trapped behind a sticky sidebar. */
+  anchorRef?: RefObject<HTMLElement | null>
 }
 
 export function ColumnPickerMenu({
   visible,
   setVisible,
   onClose,
+  anchorRef,
 }: ColumnPickerMenuProps) {
   const { t } = useTranslations()
-  const ref = useRef<HTMLDivElement>(null)
   const [dragKey, setDragKey] = useState<string | null>(null)
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [onClose])
   const togglable = ALL_COLUMNS.filter((c) => !c.locked && c.label)
 
   // Picker shows columns in the user's current order (visible[]) for
@@ -73,11 +70,8 @@ export function ColumnPickerMenu({
     setDragKey(null)
   }
 
-  return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-1.5 max-h-[480px] overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
-    >
+  const content = (
+    <>
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5 flex items-center justify-between">
         <span>{t('products.colPicker.visibleHeader')}</span>
       </div>
@@ -134,6 +128,18 @@ export function ColumnPickerMenu({
           {t('products.colPicker.close')}
         </button>
       </div>
-    </div>
+    </>
+  )
+
+  if (!anchorRef) return null
+  return (
+    <AnchoredPopover
+      anchorRef={anchorRef}
+      onClose={onClose}
+      className="w-64 bg-white border border-slate-200 rounded-md shadow-lg p-1.5 max-h-[480px] overflow-y-auto dark:bg-slate-900 dark:border-slate-800"
+      ariaLabel="Columns"
+    >
+      {content}
+    </AnchoredPopover>
   )
 }

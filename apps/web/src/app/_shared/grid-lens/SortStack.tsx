@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { AnchoredPopover } from './AnchoredPopover'
 
 export interface SortFieldOption {
   /** Stable id used in the `field:dir` pair (e.g. "sku", "updatedAt"). */
@@ -114,6 +115,7 @@ function AddSortButton({
   onAdd: (field: string, dir: 'asc' | 'desc') => void
 }) {
   const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const usedFields = new Set(stack.map((p) => p.split(':')[0]))
   const available = fields.filter((f) => !usedFields.has(f.value))
 
@@ -121,6 +123,7 @@ function AddSortButton({
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((s) => !s)}
         title="Add a sort dimension"
@@ -129,9 +132,12 @@ function AddSortButton({
         + Sort
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute right-0 top-full mt-1 z-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm">
+        <AnchoredPopover
+          anchorRef={btnRef}
+          onClose={() => setOpen(false)}
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg py-1 min-w-[200px] text-sm"
+          ariaLabel="Add sort"
+        >
             <div className="px-3 py-1 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Add sort by
             </div>
@@ -161,8 +167,7 @@ function AddSortButton({
                 </span>
               </div>
             ))}
-          </div>
-        </>
+        </AnchoredPopover>
       )}
     </div>
   )

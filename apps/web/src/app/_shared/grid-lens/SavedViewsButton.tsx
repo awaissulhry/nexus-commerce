@@ -16,12 +16,13 @@
  * by default and amber when an alert fired in the last 24h.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Bell, Bookmark, BookmarkPlus, ChevronDown, Star, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
 import { useTranslations } from '@/lib/i18n/use-translations'
+import { AnchoredPopover } from './AnchoredPopover'
 
 export type SavedView = {
   id: string
@@ -66,20 +67,14 @@ export function SavedViewsButton({
   const [saveMode, setSaveMode] = useState(false)
   const [name, setName] = useState('')
   const [isDefault, setIsDefault] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [setOpen])
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   const p = tKeyPrefix
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <Button
+        ref={btnRef}
         variant="secondary"
         onClick={() => setOpen(!open)}
         icon={<Bookmark size={12} />}
@@ -87,7 +82,12 @@ export function SavedViewsButton({
         {t(`${p}.savedViews.button`)} <ChevronDown size={12} />
       </Button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-slate-200 rounded-md shadow-lg z-20 p-2 dark:bg-slate-900 dark:border-slate-800">
+        <AnchoredPopover
+          anchorRef={btnRef}
+          onClose={() => setOpen(false)}
+          className="w-72 bg-white border border-slate-200 rounded-md shadow-lg p-2 dark:bg-slate-900 dark:border-slate-800"
+          ariaLabel="Saved views"
+        >
           {!saveMode ? (
             <>
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2 py-1.5">
@@ -241,7 +241,7 @@ export function SavedViewsButton({
               </div>
             </div>
           )}
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   )

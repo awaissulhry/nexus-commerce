@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Columns, GripVertical, Plus, X } from 'lucide-react'
+import { AnchoredPopover } from './AnchoredPopover'
 import {
   DndContext,
   KeyboardSensor,
@@ -52,6 +53,7 @@ export function ColumnPicker<K extends string = string>({
   allColumns, visible, onChange, defaultVisible, buttonLabel,
 }: ColumnPickerProps<K>) {
   const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -79,6 +81,7 @@ export function ColumnPicker<K extends string = string>({
   return (
     <div className="relative">
       <button
+        ref={btnRef}
         onClick={() => setOpen((o) => !o)}
         className="h-11 sm:h-8 px-2.5 text-base inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-600"
         title="Show / hide / reorder columns"
@@ -86,12 +89,12 @@ export function ColumnPicker<K extends string = string>({
         <Columns size={12} /> {buttonLabel ?? 'Columns'}
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div
-            className="absolute right-0 top-full mt-1 w-64 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <AnchoredPopover
+          anchorRef={btnRef}
+          onClose={() => setOpen(false)}
+          className="w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg p-2 text-base"
+          ariaLabel="Columns"
+        >
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold px-1.5 pb-1.5 inline-flex items-center gap-1">
               Visible
               <span className="text-slate-400 dark:text-slate-500 normal-case font-normal">· drag to reorder</span>
@@ -144,8 +147,7 @@ export function ColumnPicker<K extends string = string>({
             >
               Reset to default
             </button>
-          </div>
-        </>
+        </AnchoredPopover>
       )}
     </div>
   )
