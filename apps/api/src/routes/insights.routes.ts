@@ -15,6 +15,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { parseInsightsFilters } from '../services/insights/index.js'
 import { computeInsightsSummary } from '../services/insights/insights-summary.service.js'
+import { computeInsightsBreakdown } from '../services/insights/insights-breakdown.service.js'
+import { computeTopSKUs } from '../services/insights/insights-top-skus.service.js'
+import { computeWhatChanged } from '../services/insights/insights-what-changed.service.js'
 
 const insightsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/insights/ping', async (_request, reply) => {
@@ -35,6 +38,55 @@ const insightsRoutes: FastifyPluginAsync = async (fastify) => {
       request.log.error({ err }, 'insights.summary failed')
       reply.code(500)
       return { error: 'insights_summary_failed' }
+    }
+  })
+
+  fastify.get('/insights/breakdown', async (request, reply) => {
+    reply.header(
+      'Cache-Control',
+      'private, max-age=30, stale-while-revalidate=60',
+    )
+    const filters = parseInsightsFilters(request)
+    try {
+      return await computeInsightsBreakdown(filters)
+    } catch (err) {
+      request.log.error({ err }, 'insights.breakdown failed')
+      reply.code(500)
+      return { error: 'insights_breakdown_failed' }
+    }
+  })
+
+  fastify.get<{ Querystring: { limit?: string } }>(
+    '/insights/top-skus',
+    async (request, reply) => {
+      reply.header(
+        'Cache-Control',
+        'private, max-age=30, stale-while-revalidate=60',
+      )
+      const filters = parseInsightsFilters(request)
+      const limit = Math.min(50, Math.max(1, Number(request.query.limit ?? 10)))
+      try {
+        return { rows: await computeTopSKUs(filters, limit) }
+      } catch (err) {
+        request.log.error({ err }, 'insights.top-skus failed')
+        reply.code(500)
+        return { error: 'insights_top_skus_failed' }
+      }
+    },
+  )
+
+  fastify.get('/insights/what-changed', async (request, reply) => {
+    reply.header(
+      'Cache-Control',
+      'private, max-age=30, stale-while-revalidate=60',
+    )
+    const filters = parseInsightsFilters(request)
+    try {
+      return await computeWhatChanged(filters)
+    } catch (err) {
+      request.log.error({ err }, 'insights.what-changed failed')
+      reply.code(500)
+      return { error: 'insights_what_changed_failed' }
     }
   })
 }

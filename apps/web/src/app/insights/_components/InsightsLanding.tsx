@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   ArrowRight,
@@ -15,7 +15,6 @@ import {
   Users,
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { getBackendUrl } from '@/lib/backend-url'
 import {
   InsightsHeader,
   KPICard,
@@ -26,19 +25,11 @@ import {
   trendColor,
 } from '@/components/insights'
 import type { InsightsFilterState } from '@/components/insights'
-
-interface InsightsSummary {
-  window: { from: string; to: string }
-  compare: { from: string; to: string } | null
-  currency: string
-  totals: {
-    revenue: { current: number; previous: number; deltaPct: number | null }
-    orders: { current: number; previous: number; deltaPct: number | null }
-    units: { current: number; previous: number; deltaPct: number | null }
-    aov: { current: number; previous: number; deltaPct: number | null }
-  }
-  spark: Array<{ date: string; revenue: number; orders: number }>
-}
+import { useInsightsHubData } from './useInsightsData'
+import { ChannelSplitWidget } from './ChannelSplitWidget'
+import { MarketSplitWidget } from './MarketSplitWidget'
+import { TopSKUsWidget } from './TopSKUsWidget'
+import { WhatChangedWidget } from './WhatChangedWidget'
 
 const HUB_LINKS: Array<{
   href: string
@@ -110,63 +101,13 @@ export default function InsightsLanding() {
   const filterState: InsightsFilterState = readFilterState(
     new URLSearchParams(params?.toString() ?? ''),
   )
-  const [summary, setSummary] = useState<InsightsSummary | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setRefreshing(summary !== null)
-      try {
-        const search = new URLSearchParams()
-        if (filterState.window) search.set('window', filterState.window)
-        if (filterState.from) search.set('from', filterState.from)
-        if (filterState.to) search.set('to', filterState.to)
-        if (filterState.compare) search.set('compare', filterState.compare)
-        if (filterState.channels.length)
-          search.set('channels', filterState.channels.join(','))
-        if (filterState.markets.length)
-          search.set('markets', filterState.markets.join(','))
-        if (filterState.brands.length)
-          search.set('brands', filterState.brands.join(','))
-        const url = `${getBackendUrl()}/api/insights/summary?${search.toString()}`
-        const res = await fetch(url, { credentials: 'include' })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const json: InsightsSummary = await res.json()
-        if (!cancelled) {
-          setSummary(json)
-          setError(null)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-          setRefreshing(false)
-        }
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    filterState.window,
-    filterState.from,
-    filterState.to,
-    filterState.compare,
-    filterState.channels.join(','),
-    filterState.markets.join(','),
-    filterState.brands.join(','),
+  const { data, loading, refreshing, error } = useInsightsHubData(
+    filterState,
     nonce,
-  ])
+  )
 
+  const summary = data.summary
   const currency = summary?.currency ?? 'EUR'
 
   return (
@@ -201,73 +142,94 @@ export default function InsightsLanding() {
         />
         <KPICard
           label="Orders"
-          value={summary ? formatNum(summary.totals.orders.current) : loading ? '…' : '—'}
+          value={
+            summary ? formatNum(summary.totals.orders.current) : loading ? '…' : '—'
+          }
           deltaPct={summary?.totals.orders.deltaPct ?? null}
           series={summary?.spark.map((p) => p.orders)}
           accent="blue"
         />
         <KPICard
           label="Units sold"
-          value={summary ? formatNum(summary.totals.units.current) : loading ? '…' : '—'}
+          value={
+            summary ? formatNum(summary.totals.units.current) : loading ? '…' : '—'
+          }
           deltaPct={summary?.totals.units.deltaPct ?? null}
           accent="violet"
         />
         <KPICard
           label="AOV"
           value={
-            summary ? formatCurrency(summary.totals.aov.current, currency) : loading ? '…' : '—'
+            summary
+              ? formatCurrency(summary.totals.aov.current, currency)
+              : loading
+                ? '…'
+                : '—'
           }
           deltaPct={summary?.totals.aov.deltaPct ?? null}
           accent="amber"
         />
       </div>
 
-      <Card
-        title="Revenue & orders trend"
-        description={
-          summary
-            ? `${new Date(summary.window.from).toLocaleDateString('it-IT')} → ${new Date(summary.window.to).toLocaleDateString('it-IT')}`
-            : undefined
-        }
-        className="mb-5"
-        noPadding
-      >
-        <div className="p-4">
-          {summary && summary.spark.length > 0 ? (
-            <TrendChart
-              data={summary.spark.map((p) => ({
-                date: p.date,
-                revenue: p.revenue,
-                orders: p.orders,
-              }))}
-              series={[
-                {
-                  key: 'revenue',
-                  label: 'Revenue',
-                  color: trendColor(0),
-                  format: 'currency',
-                },
-                {
-                  key: 'orders',
-                  label: 'Orders',
-                  color: trendColor(1),
-                  dashed: true,
-                  format: 'number',
-                  yAxisId: 'right',
-                },
-              ]}
-              currency={currency}
-              variant="area"
-              height={260}
-              rightAxisFormat="number"
-            />
-          ) : (
-            <div className="h-[260px] flex items-center justify-center text-slate-400 text-sm">
-              {loading ? 'Loading…' : 'No data for this window'}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+        <div className="lg:col-span-2">
+          <Card
+            title="Revenue & orders trend"
+            description={
+              summary
+                ? `${new Date(summary.window.from).toLocaleDateString('it-IT')} → ${new Date(summary.window.to).toLocaleDateString('it-IT')}`
+                : undefined
+            }
+            noPadding
+          >
+            <div className="p-4">
+              {summary && summary.spark.length > 0 ? (
+                <TrendChart
+                  data={summary.spark.map((p) => ({
+                    date: p.date,
+                    revenue: p.revenue,
+                    orders: p.orders,
+                  }))}
+                  series={[
+                    {
+                      key: 'revenue',
+                      label: 'Revenue',
+                      color: trendColor(0),
+                      format: 'currency',
+                    },
+                    {
+                      key: 'orders',
+                      label: 'Orders',
+                      color: trendColor(1),
+                      dashed: true,
+                      format: 'number',
+                      yAxisId: 'right',
+                    },
+                  ]}
+                  currency={currency}
+                  variant="area"
+                  height={260}
+                  rightAxisFormat="number"
+                />
+              ) : (
+                <div className="h-[260px] flex items-center justify-center text-slate-400 text-sm">
+                  {loading ? 'Loading…' : 'No data for this window'}
+                </div>
+              )}
             </div>
-          )}
+          </Card>
         </div>
-      </Card>
+        <WhatChangedWidget items={data.whatChanged} loading={loading} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+        <ChannelSplitWidget breakdown={data.breakdown} loading={loading} />
+        <MarketSplitWidget breakdown={data.breakdown} loading={loading} />
+      </div>
+
+      <div className="mb-5">
+        <TopSKUsWidget rows={data.topSkus} currency={currency} loading={loading} />
+      </div>
 
       <div>
         <h2 className="text-md font-semibold text-slate-900 dark:text-slate-100 mb-3">
