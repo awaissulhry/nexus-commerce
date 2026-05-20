@@ -14,7 +14,7 @@
 //   - inline alt + type edit (IR.3.5 — master only)
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Crop as CropIcon, Loader2, Pencil, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Crop as CropIcon, Loader2, Pencil, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
@@ -79,6 +79,10 @@ export default function LightboxModal({
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
+  // IR.6.3 — Gemini Vision analysis state.
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+
   useEffect(() => {
     setEditing(false)
     setEditError(null)
@@ -104,6 +108,27 @@ export default function LightboxModal({
       setEditError(err instanceof Error ? err.message : 'Save failed')
     } finally {
       setSavingEdit(false)
+    }
+  }
+
+  async function analyze() {
+    if (image.kind !== 'master') return
+    setAnalyzing(true)
+    setAnalyzeError(null)
+    try {
+      const res = await beFetch(`/api/products/${productId}/images/${image.id}/analyze`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.message ?? body?.error ?? `Analyze failed: ${res.status}`)
+      }
+      const { image: updated } = await res.json() as { image: ProductImage }
+      onMasterImageUpdated?.(updated)
+    } catch (err) {
+      setAnalyzeError(err instanceof Error ? err.message : 'Analyze failed')
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -330,6 +355,90 @@ export default function LightboxModal({
               </div>
             </div>
           )}
+
+          {/* IR.6.3 — AI vision analysis (master only). Shows results
+              when they exist, with a button to re-run. */}
+          {image.kind === 'master' && (() => {
+            const currentMaster = masterImages.find((m) => m.id === image.id)
+            const analyzed = currentMaster?.aiAnalyzedAt != null
+            const failed = analyzed && currentMaster?.aiNotes && 'error' in currentMaster.aiNotes
+            const ai = currentMaster
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">AI quality check</h4>
+                  <button
+                    type="button"
+                    onClick={analyze}
+                    disabled={analyzing}
+                    className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                  >
+                    {analyzing
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Sparkles className="w-3 h-3" />}
+                    {analyzed ? 'Re-analyze' : 'Analyze'}
+                  </button>
+                </div>
+
+                {analyzeError && (
+                  <p className="text-[11px] text-red-600 dark:text-red-400">{analyzeError}</p>
+                )}
+
+                {!analyzed && !analyzing && !analyzeError && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                    Click Analyze to run Gemini Vision and grade this image.
+                  </p>
+                )}
+
+                {failed && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    Last run failed: {String(currentMaster?.aiNotes?.error ?? 'unknown error')}
+                  </p>
+                )}
+
+                {analyzed && !failed && ai && (
+                  <dl className="text-xs grid grid-cols-[100px_1fr] gap-y-0.5 text-slate-700 dark:text-slate-200">
+                    <dt className="text-slate-500 dark:text-slate-400">White bg</dt>
+                    <dd className={cn(ai.aiHasWhiteBackground ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+                      {ai.aiHasWhiteBackground ? '✓ yes' : '✗ no'}
+                    </dd>
+                    <dt className="text-slate-500 dark:text-slate-400">Frame fill</dt>
+                    <dd className={cn(
+                      (ai.aiFrameFillPct ?? 0) >= 85
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : (ai.aiFrameFillPct ?? 0) >= 60
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-red-600 dark:text-red-400',
+                    )}>
+                      {ai.aiFrameFillPct ?? '—'}% {(ai.aiFrameFillPct ?? 0) < 85 && '(Amazon wants ≥ 85%)'}
+                    </dd>
+                    <dt className="text-slate-500 dark:text-slate-400">Text overlay</dt>
+                    <dd className={cn(ai.aiHasTextOverlay ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                      {ai.aiHasTextOverlay ? '✗ detected' : '✓ none'}
+                    </dd>
+                    <dt className="text-slate-500 dark:text-slate-400">Centered</dt>
+                    <dd className={cn(
+                      (ai.aiOffCenterScore ?? 0) <= 0.15
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : (ai.aiOffCenterScore ?? 0) <= 0.3
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-red-600 dark:text-red-400',
+                    )}>
+                      {ai.aiOffCenterScore != null
+                        ? `${Math.round((1 - ai.aiOffCenterScore) * 100)}%`
+                        : '—'}
+                    </dd>
+                    {ai.aiNotes?.rationale && (
+                      <>
+                        <dt className="text-slate-500 dark:text-slate-400 col-span-2 mt-1">Rationale</dt>
+                        <dd className="text-[11px] text-slate-500 dark:text-slate-400 italic col-span-2">{ai.aiNotes.rationale}</dd>
+                      </>
+                    )}
+                  </dl>
+                )}
+              </div>
+            )
+          })()}
 
           {image.kind === 'listing' && (
             <div className="space-y-1.5">

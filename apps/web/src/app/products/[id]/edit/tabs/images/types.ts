@@ -16,6 +16,13 @@ export interface ProductImage {
   // IR.4 — Self-FK to the source ProductImage when this row was created
   // by the in-app editor (crop / rotate / flip). NULL for originals.
   derivedFromImageId: string | null
+  // IR.6 — Gemini Vision analysis results. All NULL until /analyze runs.
+  aiAnalyzedAt: string | null
+  aiHasWhiteBackground: boolean | null
+  aiFrameFillPct: number | null
+  aiHasTextOverlay: boolean | null
+  aiOffCenterScore: number | null
+  aiNotes: { rationale?: string; error?: string; model?: string } | null
   createdAt: string
 }
 
