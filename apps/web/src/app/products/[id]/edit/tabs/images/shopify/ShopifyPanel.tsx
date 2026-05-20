@@ -17,6 +17,7 @@ import {
   AlertTriangle, CheckCircle2, GripVertical, Loader2, Plus,
   Star, Store, Trash2, Upload,
 } from 'lucide-react'
+import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
@@ -26,7 +27,7 @@ import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, Workspa
 
 interface CopyResult { copied: number; skipped: number }
 
-const SHOPIFY_MAX = 250
+const SHOPIFY_MAX = PLATFORM_RULES.SHOPIFY.maxImages ?? 250
 
 function elapsedTime(from: string): string {
   const m = Math.floor((Date.now() - new Date(from).getTime()) / 60000)

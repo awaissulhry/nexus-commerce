@@ -1,9 +1,16 @@
 'use client'
 
-// IM.3 — Per-channel completeness checklist shown alongside the master panel.
+// IM.3 / IR.5.2 — Per-channel completeness checklist shown alongside
+// the master panel. Reads channel thresholds from @nexus/shared so the
+// numbers line up with the backend validation pipeline.
 
 import { CheckCircle2, Circle, AlertTriangle } from 'lucide-react'
+import { PLATFORM_RULES, isAspectOnTarget } from '@nexus/shared/image-validation'
 import type { ProductImage, ListingImage, WorkspaceProduct, VariantSummary } from './types'
+
+const AMAZON_MIN = PLATFORM_RULES.AMAZON.minDimensionPx
+const EBAY_MIN   = PLATFORM_RULES.EBAY.minDimensionPx
+const SHOPIFY_ASPECT_LABEL = PLATFORM_RULES.SHOPIFY.recommendedAspectLabel
 
 interface Props {
   product: WorkspaceProduct
@@ -72,33 +79,40 @@ export default function QualityChecklist({ masterImages, listingImages, variants
     { label: 'Has MAIN image', pass: hasMain },
     { label: '3+ images', pass: masterImages.length >= 3, warn: masterImages.length > 0 && masterImages.length < 3 },
     { label: 'Alt text on MAIN', pass: !!mainImg?.alt },
-    // IR.2.6 — readable now that ProductImage carries width. Skips for
-    // legacy rows pre-backfill (width null) so the line doesn't lie.
     {
-      label: 'MAIN ≥ 1000 px',
-      pass: (mainImg?.width ?? 0) >= 1000,
-      warn: !!mainImg && mainImg.width != null && mainImg.width < 1000,
+      label: `MAIN ≥ ${AMAZON_MIN} px`,
+      pass: (mainImg?.width ?? 0) >= AMAZON_MIN,
+      warn: !!mainImg && mainImg.width != null && mainImg.width < AMAZON_MIN,
     },
   ]
 
+  const amazonMain = amazonImages.find((i) => i.amazonSlot === 'MAIN')
+  const amazonMainAspectOk = amazonMain ? isAspectOnTarget(amazonMain.width, amazonMain.height, 'AMAZON') : null
   const amazonChecks: CheckItem[] = [
     { label: 'MAIN slot assigned', pass: amazonHasMain || hasMain, warn: !amazonHasMain && hasMain },
     { label: 'MAIN has white background', pass: amazonMainWhiteBg === true, warn: amazonMainWhiteBg === false || amazonMainWhiteBg == null },
-    { label: 'MAIN ≥ 1000 px', pass: (amazonMainBig?.width ?? 0) >= 1000, warn: true },
+    { label: `MAIN ≥ ${AMAZON_MIN} px`, pass: (amazonMainBig?.width ?? 0) >= AMAZON_MIN, warn: true },
+    { label: 'MAIN aspect 1:1', pass: amazonMainAspectOk === true, warn: amazonMainAspectOk === false },
     { label: 'SWCH for colour variants', pass: amazonHasSwch || variants.length === 0, warn: !amazonHasSwch && variants.length > 0 },
     { label: 'All variants have ASINs', pass: variantsWithAsin.length === variants.length || variants.length === 0, warn: true },
   ]
 
   const ebayImages = listingImages.filter((i) => i.platform === 'EBAY')
+  const ebayMain = ebayImages[0]
+  const ebayMainAspectOk = ebayMain ? isAspectOnTarget(ebayMain.width, ebayMain.height, 'EBAY') : null
   const ebayChecks: CheckItem[] = [
     { label: '3+ gallery images', pass: ebayImages.length >= 3 || masterImages.length >= 3, warn: true },
-    { label: 'Images ≥ 500 px', pass: ebayImages.every((i) => (i.width ?? 0) >= 500), warn: true },
+    { label: `Images ≥ ${EBAY_MIN} px`, pass: ebayImages.every((i) => (i.width ?? 0) >= EBAY_MIN), warn: true },
+    { label: 'Main aspect 1:1', pass: ebayMainAspectOk === true, warn: ebayMainAspectOk === false },
   ]
 
   const shopifyImages = listingImages.filter((i) => i.platform === 'SHOPIFY')
+  const shopifyFeatured = shopifyImages.find((i) => i.position === 0)
+  const shopifyAspectOk = shopifyFeatured ? isAspectOnTarget(shopifyFeatured.width, shopifyFeatured.height, 'SHOPIFY') : null
   const shopifyChecks: CheckItem[] = [
     { label: 'Featured image set', pass: shopifyImages.some((i) => i.position === 0) || masterImages.length > 0, warn: true },
     { label: 'Variant images assigned', pass: shopifyImages.length > 0 || variants.length === 0, warn: true },
+    { label: `Featured aspect ${SHOPIFY_ASPECT_LABEL}`, pass: shopifyAspectOk === true, warn: shopifyAspectOk === false },
   ]
 
   const sections = [

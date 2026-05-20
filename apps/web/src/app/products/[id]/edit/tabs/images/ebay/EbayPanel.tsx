@@ -18,6 +18,7 @@ import {
   AlertTriangle, CheckCircle2, GripVertical, Loader2, Plus, ShoppingBag,
   Trash2, Upload,
 } from 'lucide-react'
+import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { beFetch } from '../api'
@@ -27,7 +28,9 @@ import type { ListingImage, PendingUpsert, ProductImage, VariantSummary, Workspa
 
 interface CopyResult { copied: number; skipped: number }
 
-const EBAY_MAX = 24
+// Single source of truth — bumping eBay's gallery max means editing
+// PLATFORM_RULES in packages/shared/image-validation, not here.
+const EBAY_MAX = PLATFORM_RULES.EBAY.maxImages ?? 24
 
 function elapsedTime(from: string): string {
   const m = Math.floor((Date.now() - new Date(from).getTime()) / 60000)

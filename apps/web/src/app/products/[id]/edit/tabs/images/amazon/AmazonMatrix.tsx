@@ -7,10 +7,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, MoreHorizontal, Plus } from 'lucide-react'
+import { PLATFORM_RULES } from '@nexus/shared/image-validation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import type { AmazonSlot, AmazonMarketplace, CellDisplay, VariantGroup } from './useAmazonImages'
 import { ALL_SLOTS, SLOT_LABELS } from './useAmazonImages'
+
+const AMAZON_MIN_DIM = PLATFORM_RULES.AMAZON.minDimensionPx
 
 interface MatrixProps {
   variantGroups: VariantGroup[]
@@ -119,12 +122,12 @@ function SlotCell({
           'w-full h-full rounded-lg border overflow-hidden relative group cursor-pointer',
           cell.origin === 'inherited' ? 'opacity-60 border-slate-200 dark:border-slate-700' : 'border-slate-300 dark:border-slate-600',
           cell.isPending && 'ring-2 ring-amber-400 ring-offset-1',
-          // IR.2.6 — red outline when image is below Amazon's 1000 px floor.
-          // outline stacks alongside ring without competing.
-          cell.width != null && cell.width < 1000 && 'outline outline-2 outline-red-500/70',
+          // IR.2.6 / IR.5.2 — red outline when image is below the
+          // shared per-channel min (PLATFORM_RULES.AMAZON.minDimensionPx).
+          cell.width != null && cell.width < AMAZON_MIN_DIM && 'outline outline-2 outline-red-500/70',
         )}
-          title={cell.width != null && cell.width < 1000
-            ? `${cell.width}×${cell.height ?? '?'} — below Amazon 1000 px minimum`
+          title={cell.width != null && cell.width < AMAZON_MIN_DIM
+            ? `${cell.width}×${cell.height ?? '?'} — below Amazon ${AMAZON_MIN_DIM} px minimum`
             : undefined}
           onClick={() => (onLightbox ?? onClick)()}
         >
