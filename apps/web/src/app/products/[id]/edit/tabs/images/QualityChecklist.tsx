@@ -72,6 +72,13 @@ export default function QualityChecklist({ masterImages, listingImages, variants
     { label: 'Has MAIN image', pass: hasMain },
     { label: '3+ images', pass: masterImages.length >= 3, warn: masterImages.length > 0 && masterImages.length < 3 },
     { label: 'Alt text on MAIN', pass: !!mainImg?.alt },
+    // IR.2.6 — readable now that ProductImage carries width. Skips for
+    // legacy rows pre-backfill (width null) so the line doesn't lie.
+    {
+      label: 'MAIN ≥ 1000 px',
+      pass: (mainImg?.width ?? 0) >= 1000,
+      warn: !!mainImg && mainImg.width != null && mainImg.width < 1000,
+    },
   ]
 
   const amazonChecks: CheckItem[] = [

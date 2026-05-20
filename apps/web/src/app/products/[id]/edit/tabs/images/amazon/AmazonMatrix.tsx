@@ -112,7 +112,13 @@ function SlotCell({
           'w-full h-full rounded-lg border overflow-hidden relative group cursor-pointer',
           cell.origin === 'inherited' ? 'opacity-60 border-slate-200 dark:border-slate-700' : 'border-slate-300 dark:border-slate-600',
           cell.isPending && 'ring-2 ring-amber-400 ring-offset-1',
+          // IR.2.6 — red outline when image is below Amazon's 1000 px floor.
+          // outline stacks alongside ring without competing.
+          cell.width != null && cell.width < 1000 && 'outline outline-2 outline-red-500/70',
         )}
+          title={cell.width != null && cell.width < 1000
+            ? `${cell.width}×${cell.height ?? '?'} — below Amazon 1000 px minimum`
+            : undefined}
           onClick={onClick}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
