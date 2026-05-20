@@ -120,6 +120,50 @@ function activeCountFor(d: FilterDimension): number {
   }
 }
 
+interface AppliedChip {
+  key: string
+  label: string
+  value: string | null
+  onRemove: () => void
+}
+
+function appliedChipsFor(dimensions: ReadonlyArray<FilterDimension>): AppliedChip[] {
+  const chips: AppliedChip[] = []
+  for (const d of dimensions) {
+    if (d.type === 'multi-select') {
+      for (const v of d.values) {
+        const opt = d.options.find((o) => o.value === v)
+        chips.push({
+          key: `${d.key}:${v}`,
+          label: d.label,
+          value: opt?.label ?? v,
+          onRemove: () => d.onChange(d.values.filter((x) => x !== v)),
+        })
+      }
+    } else if (d.type === 'single-select') {
+      if (d.value) {
+        const opt = d.options.find((o) => o.value === d.value)
+        chips.push({
+          key: d.key,
+          label: d.label,
+          value: opt?.label ?? d.value,
+          onRemove: () => d.onChange(null),
+        })
+      }
+    } else if (d.type === 'toggle') {
+      if (d.value) {
+        chips.push({
+          key: d.key,
+          label: d.label,
+          value: null,
+          onRemove: () => d.onChange(false),
+        })
+      }
+    }
+  }
+  return chips
+}
+
 export function FilterPopover({
   dimensions, onClearAll, activeCount, buttonLabel, order, onOrderChange, onResetOrder,
   openEventName, onSaveView, saveViewLabel,
@@ -174,6 +218,8 @@ export function FilterPopover({
     }
     return result
   }, [dimensions, order])
+
+  const appliedChips = useMemo(() => appliedChipsFor(orderedDimensions), [orderedDimensions])
 
   const onDragEnd = (e: DragEndEvent) => {
     if (!onOrderChange) return
@@ -246,6 +292,7 @@ export function FilterPopover({
             <FilterPopoverContents
               orderedDimensions={orderedDimensions}
               activeCount={activeCount}
+              appliedChips={appliedChips}
               draggable={draggable}
               sensors={sensors}
               onDragEnd={onDragEnd}
@@ -269,6 +316,7 @@ export function FilterPopover({
           <FilterPopoverContents
             orderedDimensions={orderedDimensions}
             activeCount={activeCount}
+            appliedChips={appliedChips}
             draggable={draggable}
             sensors={sensors}
             onDragEnd={onDragEnd}
@@ -286,11 +334,12 @@ export function FilterPopover({
 }
 
 function FilterPopoverContents({
-  orderedDimensions, activeCount, draggable, sensors, onDragEnd,
+  orderedDimensions, activeCount, appliedChips, draggable, sensors, onDragEnd,
   onClearAll, onResetOrder, onSaveView, saveViewLabel, onClose, bodyMaxHeight,
 }: {
   orderedDimensions: ReadonlyArray<FilterDimension>
   activeCount: number
+  appliedChips: ReadonlyArray<AppliedChip>
   draggable: boolean
   sensors: ReturnType<typeof useSensors>
   onDragEnd: (e: DragEndEvent) => void
@@ -321,6 +370,28 @@ function FilterPopoverContents({
           <X size={12} />
         </button>
       </div>
+
+      {appliedChips.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
+          {appliedChips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center h-6 text-xs rounded-full bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-100 dark:border-blue-800 pl-2 pr-1 gap-1 max-w-[200px]"
+            >
+              <span className="font-medium text-blue-700 dark:text-blue-300">{chip.label}{chip.value ? ':' : ''}</span>
+              {chip.value && <span className="truncate">{chip.value}</span>}
+              <button
+                type="button"
+                onClick={chip.onRemove}
+                className="hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full p-0.5"
+                aria-label={`Remove ${chip.label}${chip.value ? `: ${chip.value}` : ''} filter`}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className={`overflow-y-auto p-2 ${bodyMaxHeight}`}>
         {orderedDimensions.length === 0 ? (

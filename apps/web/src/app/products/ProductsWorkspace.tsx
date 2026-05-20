@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
-  Boxes, AlertTriangle, LayoutGrid, Sparkles, RefreshCw,
+  Boxes, AlertTriangle, LayoutGrid, Sparkles,
   Settings2, X,
   Package, Plus, FolderTree, Network,
   Upload,
@@ -34,6 +34,7 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
+  GridToolbar,
   KpiStrip,
   KeyboardShortcutsModal,
   FilterPopover,
@@ -1148,24 +1149,12 @@ export default function ProductsWorkspace() {
     marketplaces: undefined,
     missingChannels: undefined,
     driftOnly: undefined,
+    hasPhotos: undefined,
+    hasDescription: undefined,
+    hasBrand: undefined,
+    hasGtin: undefined,
     page: undefined,
   })
-
-  // Active pills shown in Row 2 right-side (only secondary/popover filters).
-  const activePills: Array<{ key: string; label: string; value: string; clear: () => void }> = []
-  if (missingChannelFilters.length > 0) activePills.push({ key: 'missing', label: 'Missing on', value: missingChannelFilters.join(', '), clear: () => updateUrl({ missingChannels: undefined, page: undefined }) })
-  if (marketplaceFilters.length > 0) activePills.push({ key: 'mkt', label: 'Marketplace', value: marketplaceFilters.join(', '), clear: () => updateUrl({ marketplaces: undefined, page: undefined }) })
-  if (fulfillmentFilters.length > 0) activePills.push({ key: 'fba', label: 'FBA/FBM', value: fulfillmentFilters.join(', '), clear: () => updateUrl({ fulfillment: undefined, page: undefined }) })
-  if (productTypeFilters.length > 0) activePills.push({ key: 'type', label: 'Type', value: productTypeFilters.join(', '), clear: () => updateUrl({ productTypes: undefined, page: undefined }) })
-  if (brandFilters.length > 0) activePills.push({ key: 'brand', label: 'Brand', value: brandFilters.join(', '), clear: () => updateUrl({ brands: undefined, page: undefined }) })
-  if (familyFilters.length > 0) activePills.push({ key: 'family', label: 'Family', value: familyFilters.join(', '), clear: () => updateUrl({ families: undefined, page: undefined }) })
-  if (workflowStageFilters.length > 0) activePills.push({ key: 'stage', label: 'Stage', value: workflowStageFilters.join(', '), clear: () => updateUrl({ workflowStages: undefined, page: undefined }) })
-  if (tagFilters.length > 0) activePills.push({ key: 'tags', label: 'Tags', value: tagFilters.join(', '), clear: () => updateUrl({ tags: undefined, page: undefined }) })
-  if (driftOnly === 'true') activePills.push({ key: 'drift', label: 'Drift', value: 'Has overrides', clear: () => updateUrl({ driftOnly: undefined, page: undefined }) })
-  if (hasPhotos) activePills.push({ key: 'photos', label: 'Photos', value: hasPhotos === 'true' ? 'With photos' : 'No photos', clear: () => updateUrl({ hasPhotos: undefined, page: undefined }) })
-  if (hasDescription) activePills.push({ key: 'desc', label: 'Description', value: hasDescription === 'true' ? 'With desc.' : 'No desc.', clear: () => updateUrl({ hasDescription: undefined, page: undefined }) })
-  if (hasBrand) activePills.push({ key: 'brand-set', label: 'Brand set', value: hasBrand === 'true' ? 'Brand set' : 'No brand', clear: () => updateUrl({ hasBrand: undefined, page: undefined }) })
-  if (hasGtin) activePills.push({ key: 'gtin', label: 'GTIN', value: hasGtin === 'true' ? 'With GTIN' : 'No GTIN', clear: () => updateUrl({ hasGtin: undefined, page: undefined }) })
 
   // Refs for search focus + filter popover anchor.
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -1275,41 +1264,6 @@ export default function ProductsWorkspace() {
             >
               <Plus size={12} /> New product
             </Link>
-            {lens === 'grid' && (
-              <>
-                <SharedDensityToggle density={density} onChange={setDensity} />
-                <AutoRefreshSelect
-                  value={autoRefreshMin}
-                  onChange={setAutoRefreshMin}
-                  onTick={() => fetchProducts()}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShortcutsOpen(true)}
-                  className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-                  title="Keyboard shortcuts (?)"
-                  aria-label="Keyboard shortcuts"
-                >
-                  <Keyboard size={12} />
-                </button>
-              </>
-            )}
-            {lens === 'grid' ? (
-              <FreshnessIndicator
-                lastFetchedAt={productsFetchedAt}
-                onRefresh={() => fetchProducts()}
-                loading={productsLoading}
-                error={!!productsError}
-              />
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={() => fetchProducts()}
-                icon={<RefreshCw size={12} />}
-              >
-                Refresh
-              </Button>
-            )}
           </div>
         }
       />
@@ -1363,63 +1317,82 @@ export default function ProductsWorkspace() {
         />
       )}
 
-      {/* ── Row 1: Command bar ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[180px] max-w-sm">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search products…"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full h-8 pl-8 pr-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
-          />
-        </div>
-
-        {/* FP.4 — shared FilterPopover hosts all secondary dimensions. */}
-        <FilterPopover
-          dimensions={secondaryFilterDimensions}
-          onClearAll={clearSecondaryFilters}
-          activeCount={secondaryFilterCount}
-          order={filterOrder}
-          onOrderChange={setFilterOrder}
-          onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
-          openEventName="nexus:open-filter-menu"
+      {/* ── Row D: Lens tabs (own row, matches /listings + /orders) ──── */}
+      <div className="flex items-center">
+        <LensTabs
+          current={lens}
+          onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
+          lensTabOrder={lensTabOrder}
+          setLensTabOrder={setLensTabOrder}
         />
+      </div>
 
-        {/* Sort */}
-        <AddSortButton
-          activeStack={sortStack}
-          onAdd={(field, dir) => updateUrl({ sorts: [...sortStack, `${field}:${dir}`].join(','), page: undefined })}
-        />
-        {sortStack.length > 0 && (
-          <SortStackBar
-            stack={sortStack}
-            onChange={(next) => updateUrl({ sorts: next.length > 0 ? next.join(',') : undefined, page: undefined })}
+      {/* ── Row E: Canonical GridToolbar ─────────────────────────────── */}
+      <GridToolbar
+        searchSlot={
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search products…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full h-8 pl-8 pr-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600"
+            />
+          </div>
+        }
+        filter={
+          <FilterPopover
+            dimensions={secondaryFilterDimensions}
+            onClearAll={clearSecondaryFilters}
+            activeCount={secondaryFilterCount}
+            order={filterOrder}
+            onOrderChange={setFilterOrder}
+            onResetOrder={filterOrder.length > 0 ? () => setFilterOrder([]) : undefined}
+            openEventName="nexus:open-filter-menu"
           />
-        )}
-
-        {/* Clear all when any filter active */}
-        {filterCount > 0 && (
-          <button
-            type="button"
-            onClick={onClearFilters}
-            className="h-8 px-2.5 text-sm inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-md transition-colors"
-          >
-            <X size={13} /> Clear
-          </button>
-        )}
-
-        {/* LensTabs + SavedViews right-aligned */}
-        <div className="ml-auto flex items-center gap-2">
-          <LensTabs
-            current={lens}
-            onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })}
-            lensTabOrder={lensTabOrder}
-            setLensTabOrder={setLensTabOrder}
+        }
+        sort={
+          <>
+            <AddSortButton
+              activeStack={sortStack}
+              onAdd={(field, dir) => updateUrl({ sorts: [...sortStack, `${field}:${dir}`].join(','), page: undefined })}
+            />
+            {sortStack.length > 0 && (
+              <SortStackBar
+                stack={sortStack}
+                onChange={(next) => updateUrl({ sorts: next.length > 0 ? next.join(',') : undefined, page: undefined })}
+              />
+            )}
+            {filterCount > 0 && (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="h-8 px-2.5 text-sm inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded-md transition-colors"
+              >
+                <X size={13} /> Clear
+              </button>
+            )}
+          </>
+        }
+        density={lens === 'grid' ? <SharedDensityToggle density={density} onChange={setDensity} /> : undefined}
+        autoRefresh={lens === 'grid' ? (
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => fetchProducts()}
           />
+        ) : undefined}
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={productsFetchedAt}
+            onRefresh={() => fetchProducts()}
+            loading={productsLoading}
+            error={!!productsError}
+          />
+        }
+        savedViews={
           <SavedViewsButton
             open={savedViewMenuOpen}
             setOpen={setSavedViewMenuOpen}
@@ -1572,12 +1545,22 @@ export default function ProductsWorkspace() {
               setSavedViewMenuOpen(false)
             }}
           />
-        </div>
-        {/* ↑ ml-auto closes */}
-      </div>
-      {/* ── End Row 1 ──────────────────────────────────────────────────── */}
+        }
+        shortcuts={lens === 'grid' ? (
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} />
+          </button>
+        ) : undefined}
+      />
+      {/* ── End Row E (GridToolbar) ────────────────────────────────────── */}
 
-      {/* ── Row 2: Quick filters + active pills (grid lens only) ─────── */}
+      {/* ── Row 2: Quick filters (grid lens only) ────────────────────── */}
       {lens === 'grid' && !showDeleted && (
         <div className="flex items-center gap-3 flex-wrap">
           {/* All / Fix / Draft shortcuts */}
@@ -1656,20 +1639,6 @@ export default function ProductsWorkspace() {
             onChange={(next) => updateUrl({ channels: next.join(',') || undefined, page: undefined })}
           />
 
-          {/* Active secondary filter pills — right-aligned */}
-          {activePills.length > 0 && (
-            <div className="ml-auto flex items-center gap-1.5 flex-wrap">
-              {activePills.map((p) => (
-                <span key={p.key} className="inline-flex items-center h-6 text-xs rounded-full bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-100 dark:border-blue-800 pl-2 pr-1 gap-1">
-                  <span className="font-medium text-blue-700 dark:text-blue-300">{p.label}:</span>
-                  <span className="truncate max-w-[120px]">{p.value}</span>
-                  <button type="button" onClick={p.clear} className="hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-full p-0.5">
-                    <X size={10} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       )}
       {/* ── End Row 2 ──────────────────────────────────────────────────── */}

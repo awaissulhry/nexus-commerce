@@ -9,7 +9,7 @@
 // breakdown lives in Commit 4.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, FilterPopover, type AutoRefreshInterval, type BulkAction, type ShortcutGroup, type FilterDimension } from '@/app/_shared/grid-lens'
+import { VirtualizedGrid, GridFooter, ProductIdentityCell, StockSplit, DensityToggle as SharedDensityToggle, AutoRefreshSelect, BulkActionShell, KeyboardShortcutsModal, FilterPopover, GridToolbar, type AutoRefreshInterval, type BulkAction, type ShortcutGroup, type FilterDimension } from '@/app/_shared/grid-lens'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
@@ -1336,63 +1336,60 @@ export default function StockWorkspace() {
         />
       )}
 
-      {/* Grid toolbar — density, columns, freshness, auto-refresh,
-          saved views, refresh, shortcuts, filter popover. Sits just
-          above the filter card so the controls are adjacent to the
-          table they govern (matches /listings + /replenishment). */}
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-        <FilterPopover
-          dimensions={stockFilterDimensions}
-          onClearAll={clearStockSecondaryFilters}
-          activeCount={abcClassFilters.length + fulfillmentMethodFilters.length}
-          order={stockFilterOrder}
-          onOrderChange={setStockFilterOrder}
-          onResetOrder={stockFilterOrder.length > 0 ? () => setStockFilterOrder([]) : undefined}
-          onSaveView={() => setSaveViewModalOpen(true)}
-        />
-        <FreshnessIndicator
-          lastFetchedAt={lastFetchedAt}
-          onRefresh={() => { fetchStock(); fetchSidecar() }}
-          loading={loading}
-          error={!!error}
-        />
-        <AutoRefreshSelect
-          value={autoRefreshMin}
-          onChange={setAutoRefreshMin}
-          onTick={() => { fetchStock(); fetchSidecar() }}
-        />
-        {view === 'table' && (
-          <>
-            <SharedDensityToggle density={density} onChange={setDensity} />
-            <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} />
-          </>
-        )}
-        <SavedViewsButton
-          savedViews={savedViews}
-          open={savedViewsOpen}
-          onToggle={() => setSavedViewsOpen((o) => !o)}
-          onApply={applySavedView}
-          onDelete={deleteSavedView}
-          onToggleDefault={toggleDefaultView}
-          onOpenSaveModal={() => { setSavedViewsOpen(false); setSaveViewModalOpen(true) }}
-          t={t}
-        />
-        <button
-          onClick={() => { fetchStock(); fetchSidecar() }}
-          className="h-7 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-300"
-          aria-label={t('stock.action.refresh')}
-        >
-          <RefreshCw size={12} aria-hidden="true" /> {t('stock.action.refresh')}
-        </button>
-        <button
-          onClick={() => setShortcutsOpen(true)}
-          className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-        >
-          <Keyboard size={12} aria-hidden="true" />
-        </button>
-      </div>
+      {/* Canonical chrome toolbar — locks position/order across all
+          list pages via the shared GridToolbar primitive. */}
+      <GridToolbar
+        filter={
+          <FilterPopover
+            dimensions={stockFilterDimensions}
+            onClearAll={clearStockSecondaryFilters}
+            activeCount={abcClassFilters.length + fulfillmentMethodFilters.length}
+            order={stockFilterOrder}
+            onOrderChange={setStockFilterOrder}
+            onResetOrder={stockFilterOrder.length > 0 ? () => setStockFilterOrder([]) : undefined}
+            onSaveView={() => setSaveViewModalOpen(true)}
+          />
+        }
+        columns={view === 'table' ? <ColumnPicker visible={visibleColumns} onChange={setVisibleColumns} /> : undefined}
+        density={view === 'table' ? <SharedDensityToggle density={density} onChange={setDensity} /> : undefined}
+        autoRefresh={
+          <AutoRefreshSelect
+            value={autoRefreshMin}
+            onChange={setAutoRefreshMin}
+            onTick={() => { fetchStock(); fetchSidecar() }}
+          />
+        }
+        freshness={
+          <FreshnessIndicator
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={() => { fetchStock(); fetchSidecar() }}
+            loading={loading}
+            error={!!error}
+          />
+        }
+        savedViews={
+          <SavedViewsButton
+            savedViews={savedViews}
+            open={savedViewsOpen}
+            onToggle={() => setSavedViewsOpen((o) => !o)}
+            onApply={applySavedView}
+            onDelete={deleteSavedView}
+            onToggleDefault={toggleDefaultView}
+            onOpenSaveModal={() => { setSavedViewsOpen(false); setSaveViewModalOpen(true) }}
+            t={t}
+          />
+        }
+        shortcuts={
+          <button
+            onClick={() => setShortcutsOpen(true)}
+            className="h-8 w-8 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={12} aria-hidden="true" />
+          </button>
+        }
+      />
 
       {/* Filter bar */}
       <Card>
