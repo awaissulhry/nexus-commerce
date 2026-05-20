@@ -292,9 +292,12 @@ export default function ShopifyPanel({
       </div>
 
       {/* ── Image pool ─────────────────────────────────────────────── */}
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+      <section
+        aria-labelledby="shopify-pool-heading"
+        className="px-5 py-4 border-b border-slate-100 dark:border-slate-800"
+      >
         <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Image Pool</h3>
+          <h3 id="shopify-pool-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Image Pool</h3>
           <span className="text-xs text-slate-400">
             <Star className="w-3 h-3 inline mr-0.5 text-blue-500" />
             Position 1 = featured product image
@@ -303,18 +306,30 @@ export default function ShopifyPanel({
 
         {effectivePool.length === 0 ? (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Add images to the Shopify pool"
             className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-slate-400 cursor-pointer hover:border-emerald-300 transition-colors"
             onClick={() => setPickerTarget('pool')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPickerTarget('pool') } }}
           >
             <Store className="w-8 h-8" />
             <span className="text-sm">Add images to the Shopify pool</span>
             <span className="text-xs">Position 1 becomes the featured image</span>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-3">
+          <div
+            role="listbox"
+            aria-labelledby="shopify-pool-heading"
+            aria-orientation="horizontal"
+            className="flex flex-wrap gap-3"
+          >
             {effectivePool.map((item, index) => (
               <div
                 key={item.id}
+                role="option"
+                aria-selected={false}
+                aria-label={`Position ${index + 1}${index === 0 ? ' (featured image)' : ''}${item.isPending ? ', unsaved' : ''}`}
                 draggable
                 onDragStart={(e) => onDragStart(e, index)}
                 onDragOver={(e) => onDragOver(e, index)}
@@ -360,6 +375,7 @@ export default function ShopifyPanel({
             {!atMax && (
               <button
                 type="button"
+                aria-label="Add image to Shopify pool"
                 onClick={() => setPickerTarget('pool')}
                 className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-emerald-300 transition-colors flex-shrink-0"
               >
@@ -369,19 +385,26 @@ export default function ShopifyPanel({
             )}
           </div>
         )}
-      </div>
+      </section>
 
       {/* ── Variant image assignment ────────────────────────────────── */}
       {variantGroups.length > 0 && (
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+        <section
+          aria-labelledby="shopify-variant-heading"
+          className="px-5 py-4 border-b border-slate-100 dark:border-slate-800"
+        >
           <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Variant Image Assignment</h3>
+            <h3 id="shopify-variant-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Variant Image Assignment</h3>
             <span className="text-xs text-slate-400">shown when buyer selects that {activeAxis.toLowerCase()}</span>
           </div>
 
-          <div className="space-y-2">
+          <ul role="list" className="space-y-2">
             {variantGroups.map(({ groupValue, assignedImage }) => (
-              <div key={groupValue} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+              <li
+                key={groupValue}
+                aria-label={`${groupValue}${assignedImage ? ', image assigned' : ', no image assigned'}${assignedImage?.isPending ? ', unsaved' : ''}`}
+                className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50"
+              >
                 {/* Colour label */}
                 <div className="w-24 flex-shrink-0">
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{groupValue}</span>
@@ -400,7 +423,10 @@ export default function ShopifyPanel({
                     )}
                   </div>
                 ) : (
-                  <div className="w-12 h-12 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-300 flex-shrink-0">
+                  <div
+                    className="w-12 h-12 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-300 flex-shrink-0"
+                    aria-hidden="true"
+                  >
                     <Plus className="w-4 h-4" />
                   </div>
                 )}
@@ -410,6 +436,7 @@ export default function ShopifyPanel({
                   <Button
                     size="sm"
                     variant="ghost"
+                    aria-label={assignedImage ? `Change image for ${groupValue}` : `Assign image to ${groupValue}`}
                     className="text-xs h-7 px-2.5"
                     onClick={() => setPickerTarget({ colorValue: groupValue })}
                   >
@@ -419,6 +446,7 @@ export default function ShopifyPanel({
                     <Button
                       size="sm"
                       variant="ghost"
+                      aria-label={`Clear image for ${groupValue}`}
                       className="text-xs h-7 px-2.5 text-slate-400 hover:text-red-500"
                       onClick={() => handleClearAssignment(groupValue)}
                     >
@@ -428,14 +456,14 @@ export default function ShopifyPanel({
                 </div>
 
                 {!assignedImage && (
-                  <span title={`${groupValue} has no image assigned`}>
+                  <span title={`${groupValue} has no image assigned`} aria-hidden="true">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                   </span>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </section>
       )}
 
       {/* IM.7 — Cross-channel sync */}

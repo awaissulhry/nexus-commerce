@@ -280,22 +280,32 @@ export default function EbayPanel({
       </div>
 
       {/* ── Gallery section ─────────────────────────────────────────── */}
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+      <section
+        aria-labelledby="ebay-gallery-heading"
+        className="px-5 py-4 border-b border-slate-100 dark:border-slate-800"
+      >
         <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gallery</h3>
+          <h3 id="ebay-gallery-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Gallery</h3>
           <span className="text-xs text-slate-400">Position 1 = main listing image</span>
         </div>
 
         {effectiveGallery.length === 0 ? (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Add gallery images"
             className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-10 flex flex-col items-center gap-2 text-slate-400 cursor-pointer hover:border-blue-300 transition-colors"
             onClick={() => setPickerTarget('gallery')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPickerTarget('gallery') } }}
           >
             <Plus className="w-6 h-6" />
             <span className="text-sm">Add gallery images</span>
           </div>
         ) : (
           <div
+            role="listbox"
+            aria-labelledby="ebay-gallery-heading"
+            aria-orientation="horizontal"
             className={cn('flex flex-wrap gap-3', dropZoneActive && 'ring-2 ring-blue-300 rounded-lg p-1')}
             onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropZoneActive(true) } }}
             onDragLeave={() => setDropZoneActive(false)}
@@ -304,6 +314,9 @@ export default function EbayPanel({
             {effectiveGallery.map((item, index) => (
               <div
                 key={item.id}
+                role="option"
+                aria-selected={false}
+                aria-label={`Position ${index + 1}${index === 0 ? ' (main listing image)' : ''}${item.isPending ? ', unsaved' : ''}`}
                 draggable
                 onDragStart={(e) => onDragStart(e, index)}
                 onDragOver={(e) => onDragOver(e, index)}
@@ -369,13 +382,16 @@ export default function EbayPanel({
             Gallery full (24 max). Remove images to add more.
           </div>
         )}
-      </div>
+      </section>
 
       {/* ── Color Sets section ──────────────────────────────────────── */}
       {variants.length > 0 && (
-        <div className="px-5 py-4">
+        <section
+          aria-labelledby="ebay-colorsets-heading"
+          className="px-5 py-4"
+        >
           <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Color Sets</h3>
+            <h3 id="ebay-colorsets-heading" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Color Sets</h3>
             <span className="text-xs text-slate-400">(VariationSpecificPictureSet — picture dimension: {activeAxis})</span>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
@@ -383,44 +399,59 @@ export default function EbayPanel({
           </p>
 
           <div className="space-y-3">
-            {Array.from(colorSets.entries()).map(([colorValue, images]) => (
-              <div key={colorValue} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-                {/* Color label */}
-                <div className="w-28 flex-shrink-0 pt-1">
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{colorValue}</span>
-                </div>
+            {Array.from(colorSets.entries()).map(([colorValue, images]) => {
+              const groupId = `ebay-colorset-${colorValue.replace(/\s+/g, '-').toLowerCase()}`
+              return (
+                <div
+                  key={colorValue}
+                  role="group"
+                  aria-labelledby={groupId}
+                  className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl"
+                >
+                  {/* Color label */}
+                  <div className="w-28 flex-shrink-0 pt-1">
+                    <span id={groupId} className="text-sm font-medium text-slate-800 dark:text-slate-200">{colorValue}</span>
+                  </div>
 
-                {/* Images */}
-                <div className="flex flex-wrap gap-2 flex-1">
-                  {images.map((img) => (
-                    <div key={img.id} className="group relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" />
-                      {img.isPending && (
-                        <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                      )}
-                      <button
-                        type="button"
-                        className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        onClick={() => addPendingDelete(img.id)}
+                  {/* Images */}
+                  <div className="flex flex-wrap gap-2 flex-1">
+                    {images.map((img) => (
+                      <div
+                        key={img.id}
+                        role="img"
+                        aria-label={`${colorValue} variation image${img.isPending ? ', unsaved' : ''}`}
+                        className="group relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900"
                       >
-                        <Trash2 className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    </div>
-                  ))}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} alt="" className="w-full h-full object-contain" loading="lazy" />
+                        {img.isPending && (
+                          <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${colorValue} variation image`}
+                          className="absolute inset-0 bg-red-500/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          onClick={() => addPendingDelete(img.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-white" />
+                        </button>
+                      </div>
+                    ))}
 
-                  <button
-                    type="button"
-                    onClick={() => setPickerTarget({ colorValue })}
-                    className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:border-blue-300 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                    <button
+                      type="button"
+                      aria-label={`Add ${colorValue} variation image`}
+                      onClick={() => setPickerTarget({ colorValue })}
+                      className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:border-blue-300 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
-        </div>
+        </section>
       )}
 
       {/* IM.7 — Cross-channel sync */}

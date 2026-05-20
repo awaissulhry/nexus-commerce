@@ -5,7 +5,7 @@
 // Cells are drop targets accepting drags from MasterPanel or desktop files.
 // Column headers are also drop targets for column-fill operations.
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, MoreHorizontal, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
@@ -28,19 +28,31 @@ interface MatrixProps {
 
 // ── Slot cell ──────────────────────────────────────────────────────────
 
+interface SlotCellProps {
+  cell: CellDisplay | null
+  slot: AmazonSlot
+  rowLabel: string
+  isFocused: boolean
+  cellRef: (el: HTMLDivElement | null) => void
+  onDrop: (url: string, sourceId?: string) => void
+  onClick: () => void
+  onKeyDown: (e: React.KeyboardEvent) => void
+  onFocus: () => void
+  onFileDrop?: (file: File) => void
+}
+
 function SlotCell({
   cell,
   slot,
+  rowLabel,
+  isFocused,
+  cellRef,
   onDrop,
   onClick,
+  onKeyDown,
+  onFocus,
   onFileDrop,
-}: {
-  cell: CellDisplay | null
-  slot: AmazonSlot
-  onDrop: (url: string, sourceId?: string) => void
-  onClick: () => void
-  onFileDrop?: (file: File) => void
-}) {
+}: SlotCellProps) {
   const [isOver, setIsOver] = useState(false)
   const isMain = slot === 'MAIN'
 
@@ -64,10 +76,31 @@ function SlotCell({
     if (files.length && onFileDrop) { onFileDrop(files[0]); return }
   }
 
+  const ariaLabel = `${rowLabel}, ${SLOT_LABELS[slot]}: ${
+    cell
+      ? cell.origin === 'inherited' ? 'inherited image' : 'image set'
+      : 'empty, click or drop to assign'
+  }`
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onClick()
+      return
+    }
+    onKeyDown(e)
+  }
+
   return (
     <div
+      ref={cellRef}
+      role="gridcell"
+      aria-label={ariaLabel}
+      tabIndex={isFocused ? 0 : -1}
+      onKeyDown={handleKey}
+      onFocus={onFocus}
       className={cn(
-        'relative w-[72px] h-[72px] rounded-lg border-2 transition-all flex-shrink-0',
+        'relative w-[72px] h-[72px] rounded-lg border-2 transition-all flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
         isOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'border-transparent',
       )}
       onDragOver={handleDragOver}
@@ -128,6 +161,8 @@ function SlotCell({
       ) : (
         <button
           type="button"
+          tabIndex={-1}
+          aria-hidden="true"
           className="w-full h-full border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center text-slate-300 dark:text-slate-600 hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-400 transition-all"
           onClick={onClick}
         >
@@ -258,6 +293,10 @@ export default function AmazonMatrix({
     slot: AmazonSlot; url: string; sourceId?: string
   } | null>(null)
 
+  // Roving tabindex for keyboard navigation across cells.
+  const [focusedCell, setFocusedCell] = useState<{ row: number; col: number }>({ row: 0, col: 0 })
+  const cellRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+
   function handleColumnHeaderDrop(slot: AmazonSlot, url: string, sourceId?: string) {
     setPendingColumnFill({ slot, url, sourceId })
   }
@@ -279,6 +318,36 @@ export default function AmazonMatrix({
     { groupValue: null, label: 'All Colors', sublabel: 'Shared / platform-wide', asin: null, sku: '' },
   ]
 
+  const rowCount = rows.length
+  const colCount = ALL_SLOTS.length
+
+  // Clamp the focused cell when the row/col count changes (variant axis swap).
+  useEffect(() => {
+    setFocusedCell((prev) => ({
+      row: Math.min(prev.row, Math.max(0, rowCount - 1)),
+      col: Math.min(prev.col, Math.max(0, colCount - 1)),
+    }))
+  }, [rowCount, colCount])
+
+  const handleCellKeyDown = useCallback((row: number, col: number) => (e: React.KeyboardEvent) => {
+    let nextRow = row
+    let nextCol = col
+    switch (e.key) {
+      case 'ArrowLeft':  nextCol = Math.max(0, col - 1); break
+      case 'ArrowRight': nextCol = Math.min(colCount - 1, col + 1); break
+      case 'ArrowUp':    nextRow = Math.max(0, row - 1); break
+      case 'ArrowDown':  nextRow = Math.min(rowCount - 1, row + 1); break
+      case 'Home':       nextCol = 0; break
+      case 'End':        nextCol = colCount - 1; break
+      default: return
+    }
+    if (nextRow === row && nextCol === col) return
+    e.preventDefault()
+    setFocusedCell({ row: nextRow, col: nextCol })
+    const next = cellRefs.current.get(`${nextRow}-${nextCol}`)
+    next?.focus()
+  }, [rowCount, colCount])
+
   return (
     <div>
       {/* Column fill confirmation popover */}
@@ -298,38 +367,60 @@ export default function AmazonMatrix({
 
       {/* Scrollable matrix */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-        <div className="min-w-max">
+        <div
+          role="grid"
+          aria-label={`Amazon image matrix grouped by ${activeAxis}${activeMarketplace !== 'ALL' ? `, ${activeMarketplace} marketplace` : ''}`}
+          aria-rowcount={rowCount + 1}
+          aria-colcount={colCount + 2}
+          className="min-w-max"
+        >
           {/* Header row */}
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
-            {/* Row label column */}
-            <div className="w-44 flex-shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+          <div
+            role="row"
+            aria-rowindex={1}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10"
+          >
+            {/* Row label column header */}
+            <div
+              role="columnheader"
+              aria-colindex={1}
+              className="w-44 flex-shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide"
+            >
               {activeAxis}{activeMarketplace !== 'ALL' ? ` / ${activeMarketplace}` : ''}
             </div>
-            {/* Slot columns — each is a drag target */}
-            {ALL_SLOTS.map((slot) => (
-              <ColumnHeader
-                key={slot}
-                slot={slot}
-                onHeaderDrop={handleColumnHeaderDrop}
-              />
+            {/* Slot column headers — each is a drag target */}
+            {ALL_SLOTS.map((slot, i) => (
+              <div key={slot} role="columnheader" aria-colindex={i + 2}>
+                <ColumnHeader
+                  slot={slot}
+                  onHeaderDrop={handleColumnHeaderDrop}
+                />
+              </div>
             ))}
-            {/* Actions column */}
-            <div className="w-8 flex-shrink-0" />
+            {/* Actions column header */}
+            <div role="columnheader" aria-colindex={colCount + 2} aria-label="Row actions" className="w-8 flex-shrink-0" />
           </div>
 
           {/* Data rows */}
-          {rows.map(({ groupValue, label, sublabel, asin, sku }) => {
+          {rows.map(({ groupValue, label, sublabel, asin, sku }, rowIdx) => {
             const isAllColors = groupValue === null
+            const rowLabel = isAllColors ? 'All Colors' : label
             return (
               <div
                 key={groupValue ?? '__all_colors__'}
+                role="row"
+                aria-rowindex={rowIdx + 2}
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 border-b border-slate-100 dark:border-slate-800 last:border-0',
                   isAllColors ? 'bg-slate-50/50 dark:bg-slate-800/20' : 'bg-white dark:bg-slate-900',
                 )}
               >
-                {/* Row label */}
-                <div className="w-44 flex-shrink-0 min-w-0">
+                {/* Row label (rowheader) */}
+                <div
+                  role="rowheader"
+                  aria-colindex={1}
+                  className="w-44 flex-shrink-0 min-w-0"
+                >
                   <div className="flex items-center gap-1.5">
                     {isAllColors ? (
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400 italic">All Colors</span>
@@ -350,19 +441,32 @@ export default function AmazonMatrix({
                 </div>
 
                 {/* Slot cells */}
-                {ALL_SLOTS.map((slot) => (
+                {ALL_SLOTS.map((slot, colIdx) => (
                   <SlotCell
                     key={slot}
                     cell={resolveCell(groupValue, slot)}
                     slot={slot}
+                    rowLabel={rowLabel}
+                    isFocused={focusedCell.row === rowIdx && focusedCell.col === colIdx}
+                    cellRef={(el) => {
+                      const key = `${rowIdx}-${colIdx}`
+                      if (el) cellRefs.current.set(key, el)
+                      else cellRefs.current.delete(key)
+                    }}
                     onDrop={(url, sourceId) => onCellDrop(groupValue, slot, url, sourceId)}
                     onClick={() => onCellClick(groupValue, slot)}
+                    onKeyDown={handleCellKeyDown(rowIdx, colIdx)}
+                    onFocus={() => setFocusedCell({ row: rowIdx, col: colIdx })}
                     onFileDrop={(file) => onCellFileDrop(groupValue, slot, file)}
                   />
                 ))}
 
                 {/* Row actions */}
-                <div className="w-8 flex-shrink-0 flex items-center justify-center">
+                <div
+                  role="gridcell"
+                  aria-colindex={colCount + 2}
+                  className="w-8 flex-shrink-0 flex items-center justify-center"
+                >
                   {!isAllColors && (
                     <RowMenu
                       groupValue={groupValue}
