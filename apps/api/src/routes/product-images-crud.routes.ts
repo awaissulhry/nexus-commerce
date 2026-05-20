@@ -32,6 +32,23 @@ import {
 
 const VALID_TYPES = new Set(['MAIN', 'ALT', 'LIFESTYLE', 'SWATCH', 'DIAGRAM'])
 
+// Cloudinary returns `format` as a bare extension ('jpg', 'png', 'webp', ...).
+// Convert to a proper MIME type so the ProductImage.mimeType column matches
+// ListingImage.mimeType conventions ('image/jpeg', etc.) and downstream
+// validation can compare against acceptedMimeTypes lists uniformly.
+function formatToMimeType(format: string | undefined): string | null {
+  if (!format) return null
+  const f = format.toLowerCase()
+  if (f === 'jpg' || f === 'jpeg') return 'image/jpeg'
+  if (f === 'png') return 'image/png'
+  if (f === 'webp') return 'image/webp'
+  if (f === 'gif') return 'image/gif'
+  if (f === 'svg') return 'image/svg+xml'
+  if (f === 'avif') return 'image/avif'
+  if (f === 'heic' || f === 'heif') return 'image/heic'
+  return `image/${f}`
+}
+
 const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET /api/products/:id/images ─────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
@@ -85,6 +102,13 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
           type,
           alt,
           sortOrder: existing,
+          // IR.2.2 — persist Cloudinary's asset metadata so QualityChecklist
+          // + Amazon matrix dim warnings + master gallery card subtitle
+          // have real numbers to read instead of guessing.
+          width: cloudResult.width,
+          height: cloudResult.height,
+          fileSize: cloudResult.bytes,
+          mimeType: formatToMimeType(cloudResult.format),
         },
       })
 
