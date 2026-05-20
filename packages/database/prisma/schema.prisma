@@ -1834,6 +1834,25 @@ model ProductImage {
   derivedFrom        ProductImage?  @relation("ProductImageDerivation", fields: [derivedFromImageId], references: [id], onDelete: SetNull)
   derivatives        ProductImage[] @relation("ProductImageDerivation")
 
+  /// IR.6 — Gemini Vision analysis results. Populated by
+  /// POST /api/products/:id/images/:imageId/analyze. NULL until run.
+  ///
+  /// aiHasWhiteBackground: binary "is the background a clean white"?
+  ///   Drives Amazon MAIN-image validation (Amazon requires white-bg).
+  /// aiFrameFillPct: 0-100, how much of the frame the subject occupies.
+  ///   Amazon wants ≥ 85 %.
+  /// aiHasTextOverlay: binary, is there text printed on top of the
+  ///   product? Disqualifies for marketplace MAIN images.
+  /// aiOffCenterScore: 0-1, distance of subject centroid from frame
+  ///   center as fraction of half-diagonal. 0 = perfectly centered.
+  /// aiNotes: model's raw JSON for debugging + future model upgrades.
+  aiAnalyzedAt         DateTime?
+  aiHasWhiteBackground Boolean?
+  aiFrameFillPct       Int?
+  aiHasTextOverlay     Boolean?
+  aiOffCenterScore     Float?
+  aiNotes              Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
