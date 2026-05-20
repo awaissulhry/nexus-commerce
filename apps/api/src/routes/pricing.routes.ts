@@ -326,6 +326,29 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // P.A — Hierarchy-aware matrix endpoint.
+  //
+  //   ?hierarchy=parents              → one row per parent product, with
+  //                                     aggregated metrics across every
+  //                                     snapshot underneath. Paginated by
+  //                                     parent, not by snapshot.
+  //   ?hierarchy=children&parentId=X  → one row per variant SKU of parent
+  //                                     X, with the "primary channel"
+  //                                     snapshot data inline plus a
+  //                                     channelChips[] array describing
+  //                                     every other channel for the same
+  //                                     SKU. Primary channel defaults to
+  //                                     Amazon IT FBA (Xavia primary) and
+  //                                     is overridable via the
+  //                                     ?primaryChannel / ?primaryMarketplace
+  //                                     / ?primaryFulfillmentMethod query
+  //                                     params.
+  //   ?hierarchy=flat (or omitted)    → flat snapshots, enriched with
+  //                                     productId / parentId / name /
+  //                                     thumbnailUrl / amazonAsin so the
+  //                                     existing matrix UI can render
+  //                                     identity cells without a second
+  //                                     round-trip. Back-compat default.
   fastify.get('/pricing/matrix', async (request, reply) => {
     try {
       const q = request.query as Record<string, string | undefined>
@@ -336,25 +359,363 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       const search = q.search?.trim()
       const page = Math.max(0, parseInt(q.page ?? '0', 10) || 0)
       const limit = Math.min(500, Math.max(1, parseInt(q.limit ?? '50', 10) || 50))
+      const hierarchy = (q.hierarchy ?? 'flat').toLowerCase() as 'flat' | 'parents' | 'children'
+      const parentIdFilter = q.parentId?.trim() || undefined
+      const primaryChannel = (q.primaryChannel ?? 'AMAZON').toUpperCase()
+      const primaryMarketplace = (q.primaryMarketplace ?? 'AMAZON_IT').toUpperCase()
+      const primaryFulfillmentMethod = (q.primaryFulfillmentMethod ?? 'FBA').toUpperCase()
 
-      const where: any = {}
-      if (channel) where.channel = channel
-      if (marketplace) where.marketplace = marketplace
-      if (sourceFilter) where.source = sourceFilter
-      if (isClampedFilter !== undefined) where.isClamped = isClampedFilter
-      if (search) where.sku = { contains: search, mode: 'insensitive' }
+      const snapshotWhere: any = {}
+      if (channel) snapshotWhere.channel = channel
+      if (marketplace) snapshotWhere.marketplace = marketplace
+      if (sourceFilter) snapshotWhere.source = sourceFilter
+      if (isClampedFilter !== undefined) snapshotWhere.isClamped = isClampedFilter
+      if (search) snapshotWhere.sku = { contains: search, mode: 'insensitive' }
 
-      const [rows, total] = await Promise.all([
+      // ── Mode: parents ─────────────────────────────────────────────────
+      if (hierarchy === 'parents') {
+        // Step 1: pull the SKU universe from filtered snapshots.
+        const allSkus = await prisma.pricingSnapshot
+          .findMany({ where: snapshotWhere, select: { sku: true }, distinct: ['sku'] })
+          .then((rows) => rows.map((r) => r.sku))
+
+        if (allSkus.length === 0) {
+          return { rows: [], total: 0, page, limit, hierarchy: 'parents' as const }
+        }
+
+        // Step 2: resolve every snapshot SKU to its owning Product id.
+        // Variation.sku → Variation.productId (the parent Product), and
+        // Product.sku → Product.id covers both standalone products and
+        // self-ref parents whose own SKU has a snapshot.
+        const [variants, products] = await Promise.all([
+          prisma.productVariation.findMany({
+            where: { sku: { in: allSkus } },
+            select: { sku: true, productId: true },
+          }),
+          prisma.product.findMany({
+            where: { sku: { in: allSkus } },
+            select: { sku: true, id: true, parentId: true },
+          }),
+        ])
+        const productIdBySku = new Map<string, string>()
+        for (const v of variants) productIdBySku.set(v.sku, v.productId)
+        for (const p of products) productIdBySku.set(p.sku, p.id)
+
+        // Step 3: roll each productId up to the *root* parent so an
+        // operator never sees the same variant tree split across two rows.
+        const allProductIds = [...new Set(productIdBySku.values())]
+        const productsForRollup = await prisma.product.findMany({
+          where: { id: { in: allProductIds } },
+          select: { id: true, parentId: true },
+        })
+        const parentByProductId = new Map<string, string>()
+        for (const p of productsForRollup) {
+          parentByProductId.set(p.id, p.parentId ?? p.id)
+        }
+
+        const rootIdBySku = new Map<string, string>()
+        for (const [sku, pid] of productIdBySku) {
+          rootIdBySku.set(sku, parentByProductId.get(pid) ?? pid)
+        }
+
+        // Orphan snapshots: SKUs with no matching Product or Variation.
+        // We surface these as their own pseudo-root keyed on the SKU so
+        // the operator can still see + fix them.
+        for (const sku of allSkus) {
+          if (!rootIdBySku.has(sku)) rootIdBySku.set(sku, `orphan:${sku}`)
+        }
+
+        // Step 4: fetch root product details for display.
+        const rootIds = [...new Set(rootIdBySku.values())].filter((id) => !id.startsWith('orphan:'))
+        const rootProducts = rootIds.length === 0
+          ? []
+          : await prisma.product.findMany({
+              where: { id: { in: rootIds } },
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                amazonAsin: true,
+                parentId: true,
+                images: {
+                  select: { url: true },
+                  orderBy: { sortOrder: 'asc' },
+                  take: 1,
+                },
+                _count: { select: { children: true, variations: true } },
+              },
+            })
+
+        const productById = new Map(rootProducts.map((p) => [p.id, p] as const))
+
+        // Step 5: aggregate snapshot counts per root.
+        const filteredSnapshots = await prisma.pricingSnapshot.findMany({
+          where: snapshotWhere,
+          select: { sku: true, isClamped: true, source: true, warnings: true, computedPrice: true },
+        })
+
+        const aggByRoot = new Map<string, {
+          snapshotCount: number
+          clampedCount: number
+          fallbackCount: number
+          warningsCount: number
+          priceSum: bigint
+          priceCount: number
+        }>()
+        for (const s of filteredSnapshots) {
+          const rootId = rootIdBySku.get(s.sku)
+          if (!rootId) continue
+          let agg = aggByRoot.get(rootId)
+          if (!agg) {
+            agg = { snapshotCount: 0, clampedCount: 0, fallbackCount: 0, warningsCount: 0, priceSum: 0n, priceCount: 0 }
+            aggByRoot.set(rootId, agg)
+          }
+          agg.snapshotCount += 1
+          if (s.isClamped) agg.clampedCount += 1
+          if (s.source === 'FALLBACK') agg.fallbackCount += 1
+          if (Array.isArray(s.warnings) && s.warnings.length > 0) agg.warningsCount += 1
+          // Price is Decimal — convert via .toString() → BigInt cents.
+          const priceStr = s.computedPrice?.toString?.() ?? '0'
+          const priceCents = BigInt(Math.round(Number(priceStr) * 100))
+          agg.priceSum += priceCents
+          agg.priceCount += 1
+        }
+
+        const allRootEntries = [...rootIdBySku.values()]
+        const uniqueRoots = [...new Set(allRootEntries)]
+
+        // Step 6: build parent rows.
+        const parentRows = uniqueRoots.map((rootId) => {
+          const isOrphan = rootId.startsWith('orphan:')
+          const orphanSku = isOrphan ? rootId.slice('orphan:'.length) : null
+          const p = isOrphan ? null : productById.get(rootId)
+          const agg = aggByRoot.get(rootId) ?? {
+            snapshotCount: 0, clampedCount: 0, fallbackCount: 0, warningsCount: 0, priceSum: 0n, priceCount: 0,
+          }
+          const childCount = (p?._count.children ?? 0) + (p?._count.variations ?? 0)
+          return {
+            id: rootId,
+            isParent: childCount > 0,
+            parentId: null as string | null,
+            childCount,
+            productId: isOrphan ? null : rootId,
+            sku: p?.sku ?? orphanSku ?? rootId,
+            name: p?.name ?? orphanSku ?? rootId,
+            amazonAsin: p?.amazonAsin ?? null,
+            thumbnailUrl: p?.images[0]?.url ?? null,
+            isOrphan,
+            // Aggregates across all snapshots underneath.
+            snapshotCount: agg.snapshotCount,
+            clampedCount: agg.clampedCount,
+            fallbackCount: agg.fallbackCount,
+            warningsCount: agg.warningsCount,
+            avgPriceCents: agg.priceCount === 0 ? null : Number(agg.priceSum / BigInt(agg.priceCount)),
+          }
+        })
+
+        // Step 7: sort + paginate.
+        // Orphans last so they don't push real products off the first
+        // page; then alpha by name so operators can scan.
+        parentRows.sort((a, b) => {
+          if (a.isOrphan !== b.isOrphan) return a.isOrphan ? 1 : -1
+          return a.name.localeCompare(b.name)
+        })
+
+        const total = parentRows.length
+        const start = page * limit
+        const sliced = parentRows.slice(start, start + limit)
+        return { rows: sliced, total, page, limit, hierarchy: 'parents' as const }
+      }
+
+      // ── Mode: children ────────────────────────────────────────────────
+      if (hierarchy === 'children' && parentIdFilter) {
+        // The parentId here is a root Product id. Discover the SKU set
+        // that belongs underneath: the root's own SKU (if it's a leaf-
+        // standalone), its ProductVariation children's SKUs, and any
+        // self-ref Product children's SKUs.
+        const root = await prisma.product.findUnique({
+          where: { id: parentIdFilter },
+          select: { id: true, sku: true },
+        })
+        if (!root) {
+          return { rows: [], total: 0, page, limit, hierarchy: 'children' as const }
+        }
+        const [variationChildren, selfRefChildren] = await Promise.all([
+          prisma.productVariation.findMany({
+            where: { productId: parentIdFilter },
+            select: { id: true, sku: true, productId: true, variationAttributes: true, name: true, value: true, amazonAsin: true },
+          }),
+          prisma.product.findMany({
+            where: { parentId: parentIdFilter },
+            select: {
+              id: true,
+              sku: true,
+              name: true,
+              amazonAsin: true,
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+            },
+          }),
+        ])
+
+        const variantSkus = new Set<string>()
+        variantSkus.add(root.sku)
+        for (const v of variationChildren) variantSkus.add(v.sku)
+        for (const c of selfRefChildren) variantSkus.add(c.sku)
+
+        // Combine the snapshot filter with the variant-sku scope.
+        const childWhere: any = { ...snapshotWhere, sku: { in: [...variantSkus] } }
+        if (search) {
+          // Drop the search filter inside a parent drill — operator already
+          // scoped to a specific product by clicking the chevron. Re-apply
+          // search at the parent level only.
+          delete childWhere.sku
+          childWhere.sku = { in: [...variantSkus] }
+        }
+
+        const snapshots = await prisma.pricingSnapshot.findMany({
+          where: childWhere,
+          orderBy: [{ sku: 'asc' }, { channel: 'asc' }, { marketplace: 'asc' }],
+        })
+
+        // Group snapshots per variant SKU.
+        const bySku = new Map<string, typeof snapshots>()
+        for (const s of snapshots) {
+          const arr = bySku.get(s.sku) ?? []
+          arr.push(s)
+          bySku.set(s.sku, arr)
+        }
+
+        // Build one row per variant SKU. Primary channel = the snapshot
+        // matching the operator's primary preference; channel chips =
+        // every other snapshot for the same SKU.
+        const rows: any[] = []
+        for (const variantSku of variantSkus) {
+          const snaps = bySku.get(variantSku) ?? []
+          if (snaps.length === 0) continue // variant has no snapshot under the current filters
+
+          // Identity fallback chain: ProductVariation → self-ref Product → root.
+          const variation = variationChildren.find((v) => v.sku === variantSku)
+          const selfRefChild = selfRefChildren.find((c) => c.sku === variantSku)
+          const isRootRow = variantSku === root.sku
+
+          const primary = snaps.find((s) =>
+            s.channel === primaryChannel &&
+            s.marketplace === primaryMarketplace &&
+            (s.fulfillmentMethod ?? 'FBM') === primaryFulfillmentMethod,
+          ) ?? snaps[0]
+
+          const channelChips = snaps
+            .filter((s) => s.id !== primary.id)
+            .map((s) => ({
+              id: s.id,
+              channel: s.channel,
+              marketplace: s.marketplace,
+              fulfillmentMethod: s.fulfillmentMethod,
+              computedPrice: s.computedPrice,
+              currency: s.currency,
+              source: s.source,
+              isClamped: s.isClamped,
+              warnings: s.warnings,
+            }))
+
+          rows.push({
+            id: `variant:${variantSku}`,
+            isParent: false,
+            parentId: parentIdFilter,
+            childCount: 0,
+            productId: selfRefChild?.id ?? (isRootRow ? root.id : variation?.productId ?? null),
+            variantSku,
+            sku: variantSku,
+            name: selfRefChild?.name ?? variation?.name ?? variation?.value ?? variantSku,
+            amazonAsin: selfRefChild?.amazonAsin ?? variation?.amazonAsin ?? null,
+            thumbnailUrl: selfRefChild?.images?.[0]?.url ?? null,
+            variationAttributes: variation?.variationAttributes ?? null,
+            // Primary-channel snapshot inline so the row reads scannably.
+            primary: {
+              id: primary.id,
+              channel: primary.channel,
+              marketplace: primary.marketplace,
+              fulfillmentMethod: primary.fulfillmentMethod,
+              computedPrice: primary.computedPrice,
+              currency: primary.currency,
+              source: primary.source,
+              isClamped: primary.isClamped,
+              warnings: primary.warnings,
+              breakdown: primary.breakdown,
+            },
+            channelChips,
+            snapshotCount: snaps.length,
+            // Snapshot ids underneath so bulk-select cascades cleanly.
+            snapshotIds: snaps.map((s) => s.id),
+          })
+        }
+
+        rows.sort((a, b) => a.variantSku.localeCompare(b.variantSku))
+        return {
+          rows,
+          total: rows.length,
+          page: 0,
+          limit: rows.length,
+          hierarchy: 'children' as const,
+        }
+      }
+
+      // ── Mode: flat (default, backwards compatible) ────────────────────
+      const [rawRows, total] = await Promise.all([
         prisma.pricingSnapshot.findMany({
-          where,
+          where: snapshotWhere,
           orderBy: [{ sku: 'asc' }, { channel: 'asc' }, { marketplace: 'asc' }],
           skip: page * limit,
           take: limit,
         }),
-        prisma.pricingSnapshot.count({ where }),
+        prisma.pricingSnapshot.count({ where: snapshotWhere }),
       ])
 
-      return { rows, total, page, limit }
+      // Enrich flat rows with hierarchy fields so the matrix UI can show
+      // identity cells without a second round-trip.
+      const skus = [...new Set(rawRows.map((r) => r.sku))]
+      const [variants, products] = await Promise.all([
+        prisma.productVariation.findMany({
+          where: { sku: { in: skus } },
+          select: { sku: true, productId: true },
+        }),
+        prisma.product.findMany({
+          where: { sku: { in: skus } },
+          select: { sku: true, id: true, parentId: true },
+        }),
+      ])
+      const productIdBySku = new Map<string, string>()
+      for (const v of variants) productIdBySku.set(v.sku, v.productId)
+      for (const p of products) productIdBySku.set(p.sku, p.id)
+      const productIds = [...new Set(productIdBySku.values())]
+      const productMeta = productIds.length === 0
+        ? []
+        : await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: {
+              id: true,
+              name: true,
+              amazonAsin: true,
+              parentId: true,
+              images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+            },
+          })
+      const metaById = new Map(productMeta.map((p) => [p.id, p] as const))
+
+      const rows = rawRows.map((r) => {
+        const pid = productIdBySku.get(r.sku)
+        const meta = pid ? metaById.get(pid) : undefined
+        return {
+          ...r,
+          productId: pid ?? null,
+          parentId: meta?.parentId ?? null,
+          productName: meta?.name ?? null,
+          thumbnailUrl: meta?.images[0]?.url ?? null,
+          productAsin: meta?.amazonAsin ?? null,
+        }
+      })
+
+      return { rows, total, page, limit, hierarchy: 'flat' as const }
     } catch (error: any) {
       fastify.log.error({ err: error }, '[pricing/matrix] failed')
       return reply.code(500).send({ error: error?.message ?? String(error) })
