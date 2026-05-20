@@ -1815,6 +1815,16 @@ model ProductImage {
   /// the asset from Cloudinary as well as the DB row. NULL for images
   /// imported from external URLs (Amazon sync, URL paste).
   publicId  String?
+
+  /// IR.2 — Asset metadata captured at upload (from Cloudinary) or
+  /// backfilled. Mirrors the same columns on ListingImage so QualityChecklist
+  /// + per-channel dim warnings can rely on them uniformly. NULL for legacy
+  /// rows until scripts/backfill-product-image-metadata.mjs runs.
+  width    Int?
+  height   Int?
+  mimeType String?
+  fileSize Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
