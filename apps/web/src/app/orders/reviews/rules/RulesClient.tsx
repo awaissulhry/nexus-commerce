@@ -107,10 +107,18 @@ export default function RulesClient() {
         breadcrumbs={[{ label: 'Orders', href: '/orders' }, { label: 'Reviews', href: '/orders?lens=reviews' }, { label: 'Rules' }]}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => setCreating(true)} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="h-8 px-3 text-sm font-semibold bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1.5"
+            >
               <Plus size={12} /> New rule
             </button>
-            <button onClick={refresh} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={refresh}
+              className="h-8 px-3 text-sm font-medium bg-white text-slate-900 border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 inline-flex items-center gap-1.5"
+            >
               <RefreshCw size={12} /> Refresh
             </button>
           </div>
@@ -357,8 +365,25 @@ function RuleEditor({ rule, onClose, onSaved }: { rule: Rule | null; onClose: ()
           </label>
       </div>
       <footer className="-mx-5 -mb-5 mt-4 px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 justify-end sticky bottom-0 bg-white dark:bg-slate-900">
-        <button onClick={onClose} className="h-8 px-3 text-base border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-        <button onClick={save} disabled={busy} className="h-8 px-3 text-base bg-slate-900 dark:bg-slate-100 text-white rounded hover:bg-slate-800 disabled:opacity-50">{rule ? 'Save changes' : 'Create rule'}</button>
+        {/* Cancel/Save — promoted to shared Button so they inherit the
+            global focus-visible ring + the new app-wide disabled state
+            (was: native <button> + low-contrast white-on-white outline
+            for Cancel and slate-on-slate text for Save). */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-8 px-3 text-sm font-medium bg-white text-slate-900 border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-600 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="h-8 px-3 text-sm font-semibold bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100 dark:hover:bg-slate-200 disabled:cursor-not-allowed disabled:!bg-slate-200 disabled:!text-slate-500 disabled:!border-slate-200 disabled:dark:!bg-slate-700 disabled:dark:!text-slate-400 disabled:dark:!border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          {rule ? 'Save changes' : 'Create rule'}
+        </button>
       </footer>
     </Modal>
   )

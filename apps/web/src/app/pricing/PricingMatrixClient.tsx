@@ -833,14 +833,20 @@ export default function PricingMatrixClient() {
             />
           )}
 
-          {/* Apply — primary CTA, white pill, biggest visual weight. */}
+          {/* Apply — primary CTA. Stays on the standard blue variant
+              so it remains legible at the disabled state on the dark
+              slate-900 bar. (The old `bg-white` override blended with
+              the parent at opacity-50 and produced a near-invisible
+              block. The new global disabled state in Button.tsx
+              forces all disabled actions to a single muted slate
+              palette, regardless of variant.) */}
           <Button
             variant="primary"
             size="sm"
             onClick={() => setBulkConfirmOpen(true)}
             loading={bulkApplying}
             disabled={bulkApplying || (bulkMode !== 'CLEAR' && !bulkValue)}
-            className="bg-white text-slate-900 hover:bg-slate-100 border border-white font-semibold"
+            className="font-semibold"
           >
             {t('pricing.bulk.apply')}
           </Button>

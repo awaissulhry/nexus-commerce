@@ -8,6 +8,41 @@
   box-sizing: border-box;
 }
 
+/* ─── Disabled button contrast pass ─────────────────────────────────
+   The codebase has ~126 native <button> sites that use the Tailwind
+   class `disabled:opacity-50`. That works fine on a white tray but
+   blends every pixel with the parent at 50% — so a white-on-dark
+   Apply button (the /pricing bulk-action bar) and a rose-on-rose
+   "Delete permanently" button (the /products recycle bin) both
+   collapse to barely-distinguishable mid-grey rectangles when
+   disabled. WCAG 1.4.3 requires 4.5:1 contrast for non-decorative
+   text; opacity-50 on small button text on a coloured tray is well
+   below that.
+
+   Override the rule globally: when a disabled button (button OR an
+   element with role=button) carries the `disabled:opacity-50` class,
+   force the consistent muted-slate disabled state instead. The
+   shared <Button> component already uses the explicit slate state;
+   this layer catches every other native button site without having
+   to touch all 126 files individually. */
+button[disabled].\!opacity-100,
+button[disabled].\!opacity-100\:disabled,
+.disabled\:opacity-50:disabled,
+button:disabled.disabled\:opacity-50,
+button.disabled\:opacity-50:disabled {
+  opacity: 1;
+  background-color: rgb(241 245 249); /* slate-100 */
+  color: rgb(148 163 184); /* slate-400 */
+  border-color: rgb(226 232 240); /* slate-200 */
+  cursor: not-allowed;
+}
+.dark button.disabled\:opacity-50:disabled,
+.dark .disabled\:opacity-50:disabled {
+  background-color: rgb(30 41 59); /* slate-800 */
+  color: rgb(100 116 139); /* slate-500 */
+  border-color: rgb(51 65 85); /* slate-700 */
+}
+
 html {
   scroll-behavior: smooth;
 }

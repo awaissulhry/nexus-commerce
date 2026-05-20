@@ -43,7 +43,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           // the ring but mouse-clickers don't get a sticky outline
           // after every click. Matches WAI-ARIA 1.3 guidance.
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
+          // Disabled state — keep the button legible at 4.5:1 contrast
+          // regardless of the parent background (white tray, dark
+          // slate-900 bulk bar, rose/emerald confirmation tray, …).
+          // Previously used `disabled:opacity-50`, which blends every
+          // pixel with the parent and turns a white-on-dark Apply
+          // button into a near-invisible block of mid-grey.
+          // `disabled:` overrides every variant/className color so
+          // disabled actions read as the same muted state app-wide.
+          'disabled:cursor-not-allowed disabled:!bg-slate-100 disabled:!text-slate-400 disabled:!border-slate-200',
+          'disabled:dark:!bg-slate-800 disabled:dark:!text-slate-500 disabled:dark:!border-slate-700',
           VARIANT[variant],
           SIZE[size],
           className
