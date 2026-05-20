@@ -10,7 +10,7 @@
 // G.6 — Row checkboxes + floating bulk-override bar: select N rows,
 // apply SET_FIXED / SET_PERCENT_DISCOUNT / CLEAR, snapshots refresh.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertCircle,
@@ -33,8 +33,12 @@ import {
   AutoRefreshSelect,
   DensityToggle as SharedDensityToggle,
   KeyboardShortcutsModal,
+  ProductIdentityCell,
+  VirtualizedGrid,
   type AutoRefreshInterval,
   type Density,
+  type GridLensColumn,
+  type GridLensRow,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
 import { Card } from '@/components/ui/Card'
@@ -52,7 +56,11 @@ import { useTranslations } from '@/lib/i18n/use-translations'
 import RepricerStatusBanner from './_components/RepricerStatusBanner'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
+import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
 
+// SnapshotRow is the unit of the drawer (per-channel pricing). It's the
+// shape returned by the legacy flat matrix endpoint plus the new
+// "channelChips" entries on variant rows. The drawer needs all of these.
 interface SnapshotRow {
   id: string
   sku: string
@@ -66,14 +74,63 @@ interface SnapshotRow {
   isClamped: boolean
   clampedFrom: string | null
   warnings: string[]
-  computedAt: string
+  computedAt?: string
 }
 
-interface MatrixResponse {
-  rows: SnapshotRow[]
+// P.A — Parent row from /api/pricing/matrix?hierarchy=parents.
+interface ParentRow extends GridLensRow {
+  id: string
+  isParent: boolean
+  parentId: null
+  childCount: number
+  productId: string | null
+  sku: string
+  name: string
+  amazonAsin: string | null
+  thumbnailUrl: string | null
+  isOrphan: boolean
+  snapshotCount: number
+  clampedCount: number
+  fallbackCount: number
+  warningsCount: number
+  avgPriceCents: number | null
+}
+
+// P.A — Variant row from /api/pricing/matrix?hierarchy=children.
+interface VariantRow extends GridLensRow {
+  id: string
+  isParent: false
+  parentId: string
+  childCount: 0
+  productId: string | null
+  variantSku: string
+  sku: string
+  name: string
+  amazonAsin: string | null
+  thumbnailUrl: string | null
+  variationAttributes: Record<string, unknown> | null
+  primary: SnapshotRow
+  channelChips: SnapshotRow[]
+  snapshotCount: number
+  snapshotIds: string[]
+}
+
+// A "row" in the grid is either a parent or a variant — both implement
+// GridLensRow so VirtualizedGrid can lay them out side by side.
+type GridRow = ParentRow
+
+interface ParentsResponse {
+  rows: ParentRow[]
   total: number
   page: number
   limit: number
+  hierarchy: 'parents'
+}
+
+interface ChildrenResponse {
+  rows: VariantRow[]
+  total: number
+  hierarchy: 'children'
 }
 
 interface KpiResponse {
@@ -115,7 +172,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function PricingMatrixClient() {
   const { t } = useTranslations()
-  const [data, setData] = useState<MatrixResponse | null>(null)
+  const [data, setData] = useState<ParentsResponse | null>(null)
   const [kpis, setKpis] = useState<KpiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -139,21 +196,87 @@ export default function PricingMatrixClient() {
   const [sourceFilter, setSourceFilter] = useState('')
   const [clampedOnly, setClampedOnly] = useState(false)
   const [page, setPage] = useState(0)
-  const [drawerKey, setDrawerKey] = useState<string | null>(null)
+  const [drawerRow, setDrawerRow] = useState<SnapshotRow | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
-  // G.6 — bulk selection
+  // P.C — hierarchy state. Mirror the /products + /stock pattern:
+  //   expandedParents  : parents whose chevron is open
+  //   childrenByParent : variant rows already fetched (cached)
+  //   loadingChildren  : parents whose fetch is in flight
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  const [childrenByParent, setChildrenByParent] = useState<Record<string, VariantRow[]>>({})
+  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set())
+  // Mirror in a ref so fetchData can read the current expanded set on
+  // poll-refresh without re-creating itself on every expand. Mirrors
+  // /fulfillment/stock/StockWorkspace.tsx:665-710 — the fix for the
+  // "fetch failed — try collapsing and re-opening" bug.
+  const expandedParentsRef = useRef<Set<string>>(new Set())
+  useEffect(() => { expandedParentsRef.current = expandedParents }, [expandedParents])
+
+  // G.6 — bulk selection. Until P.D, parent rows are non-selectable and
+  // we operate on per-channel snapshot ids selected on variant rows.
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkMode, setBulkMode] = useState<'SET_FIXED' | 'SET_PERCENT_DISCOUNT' | 'CLEAR'>('SET_FIXED')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
   const { toast } = useToast()
 
+  // Lazy-load a parent's variant rows. Cached after first fetch.
+  const fetchChildrenFor = useCallback(async (parentId: string) => {
+    if (childrenByParent[parentId]) return // cache hit
+    setLoadingChildren((prev) => {
+      const next = new Set(prev)
+      next.add(parentId)
+      return next
+    })
+    try {
+      const qs = new URLSearchParams({ hierarchy: 'children', parentId })
+      if (channel) qs.set('channel', channel)
+      if (marketplace) qs.set('marketplace', marketplace)
+      if (sourceFilter) qs.set('source', sourceFilter)
+      if (clampedOnly) qs.set('isClamped', 'true')
+      const res = await fetch(
+        `${getBackendUrl()}/api/pricing/matrix?${qs.toString()}`,
+        { cache: 'no-store' },
+      )
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      const json = (await res.json()) as ChildrenResponse
+      setChildrenByParent((prev) => ({ ...prev, [parentId]: json.rows ?? [] }))
+    } catch {
+      // On failure, cache [] so the row shows "no variants" instead of
+      // an infinite spinner. Re-collapse + re-expand retries.
+      setChildrenByParent((prev) => ({ ...prev, [parentId]: [] }))
+    } finally {
+      setLoadingChildren((prev) => {
+        const next = new Set(prev)
+        next.delete(parentId)
+        return next
+      })
+    }
+  }, [childrenByParent, channel, marketplace, sourceFilter, clampedOnly])
+
+  const toggleExpand = useCallback((parentId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev)
+      if (next.has(parentId)) {
+        next.delete(parentId)
+      } else {
+        next.add(parentId)
+        void fetchChildrenFor(parentId)
+      }
+      return next
+    })
+  }, [fetchChildrenFor])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const qs = new URLSearchParams({ page: String(page), limit: '100' })
+      const qs = new URLSearchParams({
+        hierarchy: 'parents',
+        page: String(page),
+        limit: '100',
+      })
       if (search) qs.set('search', search)
       if (channel) qs.set('channel', channel)
       if (marketplace) qs.set('marketplace', marketplace)
@@ -164,10 +287,39 @@ export default function PricingMatrixClient() {
         { cache: 'no-store' },
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = (await res.json()) as MatrixResponse
+      const json = (await res.json()) as ParentsResponse
       setData(json)
       setLastFetchedAt(Date.now())
-      // Clear selection on page change / filter change
+      // Stale-expansion fix (mirrors /stock): re-fetch every currently-
+      // expanded parent so their variant rows stay in step with the new
+      // top-level state. Wiping outright leaves the cache empty while
+      // expandedParents stays populated → "Reloading variants…" placeholder.
+      const expanded = Array.from(expandedParentsRef.current)
+      if (expanded.length > 0) {
+        const fresh = await Promise.all(
+          expanded.map(async (pid) => {
+            try {
+              const childQs = new URLSearchParams({ hierarchy: 'children', parentId: pid })
+              if (channel) childQs.set('channel', channel)
+              if (marketplace) childQs.set('marketplace', marketplace)
+              if (sourceFilter) childQs.set('source', sourceFilter)
+              if (clampedOnly) childQs.set('isClamped', 'true')
+              const r = await fetch(
+                `${getBackendUrl()}/api/pricing/matrix?${childQs.toString()}`,
+                { cache: 'no-store' },
+              )
+              if (!r.ok) return [pid, [] as VariantRow[]] as const
+              const d = (await r.json()) as ChildrenResponse
+              return [pid, d.rows ?? []] as const
+            } catch {
+              return [pid, [] as VariantRow[]] as const
+            }
+          }),
+        )
+        setChildrenByParent(Object.fromEntries(fresh))
+      } else {
+        setChildrenByParent({})
+      }
       setSelected(new Set())
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -212,27 +364,31 @@ export default function PricingMatrixClient() {
     }
   }
 
-  const drawerRow = useMemo(
-    () => data?.rows.find((r) => r.id === drawerKey) ?? null,
-    [data, drawerKey],
-  )
-
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0
-  const allPageIds = useMemo(() => data?.rows.map((r) => r.id) ?? [], [data])
+  // P.C — bulk select operates on per-channel snapshot ids. Until
+  // P.D wires parent-cascade, only variant rows expose select. The
+  // "select all on page" affordance is omitted in the new grid; users
+  // pick snapshots from variant rows directly.
+  const allPageSnapshotIds = useMemo(() => {
+    const ids: string[] = []
+    for (const parent of data?.rows ?? []) {
+      const variants = childrenByParent[parent.id] ?? []
+      for (const v of variants) ids.push(...v.snapshotIds)
+    }
+    return ids
+  }, [data, childrenByParent])
   const allPageSelected =
-    allPageIds.length > 0 && allPageIds.every((id) => selected.has(id))
-  const somePageSelected =
-    !allPageSelected && allPageIds.some((id) => selected.has(id))
+    allPageSnapshotIds.length > 0 && allPageSnapshotIds.every((id) => selected.has(id))
 
   const toggleAll = () => {
     if (allPageSelected) {
       setSelected((prev) => {
         const next = new Set(prev)
-        allPageIds.forEach((id) => next.delete(id))
+        allPageSnapshotIds.forEach((id) => next.delete(id))
         return next
       })
     } else {
-      setSelected((prev) => new Set([...prev, ...allPageIds]))
+      setSelected((prev) => new Set([...prev, ...allPageSnapshotIds]))
     }
   }
 
@@ -243,6 +399,14 @@ export default function PricingMatrixClient() {
       return next
     })
   }
+
+  // Open the drawer from any per-channel snapshot. The drawer is the
+  // primary affordance for inspecting + pushing a single price; it
+  // continues to operate at snapshot granularity even though the grid
+  // groups them under variants/parents.
+  const openDrawer = useCallback((snap: SnapshotRow) => {
+    setDrawerRow(snap)
+  }, [])
 
   const applyBulkOverride = async () => {
     if (selected.size === 0) return
@@ -449,7 +613,9 @@ export default function PricingMatrixClient() {
         </div>
       )}
 
-      {/* Table */}
+      {/* P.C — VirtualizedGrid replaces the flat <table>. Parent rows come
+          from /api/pricing/matrix?hierarchy=parents; clicking a chevron
+          lazy-loads variant rows via ?hierarchy=children&parentId=. */}
       {loading && !data ? (
         <Card>
           <div className="text-md text-slate-500 dark:text-slate-400 py-8 text-center inline-flex items-center justify-center gap-2 w-full">
@@ -469,152 +635,37 @@ export default function PricingMatrixClient() {
         />
       ) : (
         <Card noPadding>
-          <div className="overflow-x-auto">
-            <table className="w-full text-md">
-              <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
-                <tr>
-                  <th scope="col" className="px-3 py-2 w-8">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = somePageSelected
-                      }}
-                      onChange={toggleAll}
-                      className="rounded"
-                    />
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    SKU
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Channel · Marketplace
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    FM
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-right text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Price
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Source
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Warnings
-                  </th>
-                  <th scope="col" className="px-3 py-2 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((r) => {
-                  const isSelected = selected.has(r.id)
-                  return (
-                    <tr
-                      key={r.id}
-                      className={cn(
-                        'border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800',
-                        isSelected && 'bg-blue-50 dark:bg-blue-950 hover:bg-blue-50 dark:hover:bg-blue-950',
-                      )}
-                    >
-                      <td
-                        className="px-3 py-2 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleRow(r.id)
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleRow(r.id)}
-                          className="rounded"
-                        />
-                      </td>
-                      <td
-                        className="px-3 py-2 font-mono text-base text-slate-800 dark:text-slate-200 cursor-pointer"
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        {r.sku}
-                      </td>
-                      <td
-                        className="px-3 py-2 text-slate-700 dark:text-slate-300 cursor-pointer"
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        <span className="font-medium">{r.channel}</span>
-                        <span className="text-slate-400 dark:text-slate-500"> · </span>
-                        <span className="font-mono text-sm">{r.marketplace}</span>
-                      </td>
-                      <td
-                        className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 cursor-pointer"
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        {r.fulfillmentMethod ?? '—'}
-                      </td>
-                      <td
-                        className={cn(
-                          'px-3 py-2 text-right tabular-nums font-semibold cursor-pointer',
-                          r.isClamped ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-slate-100',
-                        )}
-                        title={
-                          r.isClamped
-                            ? `Clamped from ${r.clampedFrom} ${r.currency}`
-                            : undefined
-                        }
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        {Number(r.computedPrice).toFixed(2)}{' '}
-                        <span className="text-sm text-slate-500 dark:text-slate-400 font-normal">
-                          {r.currency}
-                        </span>
-                      </td>
-                      <td
-                        className="px-3 py-2 cursor-pointer"
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        <span
-                          className={cn(
-                            'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded',
-                            SOURCE_TONE[r.source] ?? SOURCE_TONE.FALLBACK,
-                          )}
-                        >
-                          {SOURCE_LABEL[r.source] ?? r.source}
-                        </span>
-                      </td>
-                      <td
-                        className="px-3 py-2 cursor-pointer"
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        {r.warnings.length > 0 ? (
-                          <span
-                            className="text-sm text-amber-700 dark:text-amber-300 inline-flex items-center gap-1"
-                            title={r.warnings.join('; ')}
-                          >
-                            <AlertCircle size={11} /> {r.warnings.length}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-slate-400 dark:text-slate-500">—</span>
-                        )}
-                      </td>
-                      <td
-                        className="px-3 py-2 text-slate-400 dark:text-slate-500 cursor-pointer"
-                        onClick={() => setDrawerKey(r.id)}
-                      >
-                        <ChevronRight size={14} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <VirtualizedGrid<GridRow>
+            rows={data.rows}
+            visible={PRICING_COLUMNS}
+            density={density}
+            cellPad={DENSITY_CELL_CLASS[density] ?? DENSITY_CELL_CLASS.comfortable}
+            selected={selected}
+            toggleSelect={(id) => toggleRow(id)}
+            toggleSelectAll={toggleAll}
+            allSelected={allPageSelected}
+            sortBy=""
+            onSort={() => {}}
+            sortKeys={{}}
+            expandedParents={expandedParents}
+            childrenByParent={childrenByParent as unknown as Record<string, GridRow[]>}
+            loadingChildren={loadingChildren}
+            onToggleExpand={toggleExpand}
+            focusedRowId={null}
+            searchTerm={search}
+            riskFlaggedSkus={new Set()}
+            storageKey="pricing-matrix"
+            showExpandColumn={true}
+            renderCell={(row, key) => renderPricingCell(row as ParentRow | VariantRow, key, { selected, toggleRow, openDrawer })}
+          />
 
-          {/* Pagination */}
+          {/* Pagination — by parent product, not by snapshot. */}
           <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-base text-slate-600 dark:text-slate-400">
             <span>
-              {data.total} snapshot{data.total === 1 ? '' : 's'} · page {data.page + 1} / {Math.max(1, totalPages)}
+              {data.total} product{data.total === 1 ? '' : 's'} · page {data.page + 1} / {Math.max(1, totalPages)}
               {selected.size > 0 && (
                 <span className="ml-3 text-blue-600 font-medium">
-                  {selected.size} selected
+                  {selected.size} snapshot{selected.size === 1 ? '' : 's'} selected
                 </span>
               )}
             </span>
@@ -644,7 +695,7 @@ export default function PricingMatrixClient() {
       {drawerRow && (
         <PricingDetailDrawer
           row={drawerRow}
-          onClose={() => setDrawerKey(null)}
+          onClose={() => setDrawerRow(null)}
           onPushed={() => fetchData()}
         />
       )}
@@ -673,6 +724,264 @@ const PRICING_SHORTCUTS: ShortcutGroup[] = [
     rows: [{ keys: ['?'], label: 'Toggle this overlay' }],
   },
 ]
+
+// P.C — Column layout for the new hierarchical grid.
+//   identity : product/variant name + thumb + SKU/ASIN (ProductIdentityCell)
+//   price    : parent → avg across snapshots; variant → primary channel
+//   source   : parent → most-common; variant → primary source
+//   channels : per-channel chips on variant rows; chip count on parent
+//   warnings : count of snapshots with warnings (parent) / per-row chip (variant)
+const PRICING_COLUMNS: GridLensColumn[] = [
+  { key: 'identity', label: 'Product',  subLabel: 'Name · SKU · ASIN',      width: 360 },
+  { key: 'price',    label: 'Price',    subLabel: 'Primary · IT-FBA',       width: 130 },
+  { key: 'source',   label: 'Source',   subLabel: 'Resolver',               width: 130 },
+  { key: 'channels', label: 'Channels', subLabel: 'Other markets',          width: 280 },
+  { key: 'warnings', label: 'Warnings', subLabel: 'Clamped · fallback',     width: 130 },
+  { key: 'actions',  label: '',                                              width: 40  },
+]
+
+interface RenderCellCtx {
+  selected: Set<string>
+  toggleRow: (id: string) => void
+  openDrawer: (snap: SnapshotRow) => void
+}
+
+function formatPriceCents(cents: number | null): string {
+  if (cents == null) return '—'
+  return (cents / 100).toFixed(2)
+}
+
+function isVariantRow(row: ParentRow | VariantRow): row is VariantRow {
+  return !row.isParent && row.parentId != null
+}
+
+function renderPricingCell(
+  row: ParentRow | VariantRow,
+  key: string,
+  ctx: RenderCellCtx,
+): React.ReactNode {
+  if (isVariantRow(row)) return renderVariantCell(row, key, ctx)
+  return renderParentCell(row, key, ctx)
+}
+
+function renderParentCell(row: ParentRow, key: string, _ctx: RenderCellCtx): React.ReactNode {
+  switch (key) {
+    case 'identity':
+      return (
+        <ProductIdentityCell
+          id={row.productId ?? row.id}
+          name={row.isOrphan ? `Orphan SKU · ${row.sku}` : row.name}
+          sku={row.sku}
+          amazonAsin={row.amazonAsin}
+          isParent={row.isParent}
+          parentId={null}
+          childCount={row.childCount}
+          imageUrl={row.thumbnailUrl}
+          showThumb={true}
+          productHref={row.isOrphan ? undefined : `/products/${row.productId}/edit`}
+        />
+      )
+    case 'price':
+      return (
+        <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+          {row.avgPriceCents != null ? `€${formatPriceCents(row.avgPriceCents)}` : '—'}
+          {row.snapshotCount > 0 && (
+            <span className="ml-1 text-xs font-normal text-slate-400 dark:text-slate-500">
+              avg · {row.snapshotCount}
+            </span>
+          )}
+        </span>
+      )
+    case 'source':
+      return (
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {row.fallbackCount > 0
+            ? <span className="text-amber-700 dark:text-amber-300">{row.fallbackCount} fallback</span>
+            : <span>—</span>}
+        </span>
+      )
+    case 'channels':
+      return (
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {row.snapshotCount} snapshot{row.snapshotCount === 1 ? '' : 's'}
+        </span>
+      )
+    case 'warnings':
+      return (
+        <div className="flex items-center gap-1.5 text-xs">
+          {row.clampedCount > 0 && (
+            <span className="text-amber-700 dark:text-amber-300" title="Clamped to min/max">
+              {row.clampedCount} clamped
+            </span>
+          )}
+          {row.warningsCount > 0 && (
+            <span className="text-amber-700 dark:text-amber-300 inline-flex items-center gap-0.5">
+              <AlertCircle size={11} /> {row.warningsCount}
+            </span>
+          )}
+          {row.clampedCount === 0 && row.warningsCount === 0 && (
+            <span className="text-slate-400 dark:text-slate-500">—</span>
+          )}
+        </div>
+      )
+    case 'actions':
+      return null
+    default:
+      return null
+  }
+}
+
+const CHIP_TONE: Record<string, string> = {
+  FALLBACK: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  CLAMPED:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  NEUTRAL:  'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+}
+
+function ChannelChip({
+  snap,
+  isSelected,
+  onToggle,
+  onClick,
+}: {
+  snap: SnapshotRow
+  isSelected: boolean
+  onToggle: () => void
+  onClick: () => void
+}) {
+  const market = snap.marketplace.replace(/^AMAZON_/, '').replace(/^EBAY_/, '')
+  const tone = snap.source === 'FALLBACK' || snap.isClamped ? CHIP_TONE.FALLBACK : CHIP_TONE.NEUTRAL
+  const warningCount = snap.warnings?.length ?? 0
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        // Cmd/Ctrl + click = select for bulk; bare click opens drawer.
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          e.preventDefault()
+          onToggle()
+        } else {
+          onClick()
+        }
+      }}
+      className={cn(
+        'inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-xs font-mono tabular-nums hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-700',
+        tone,
+        isSelected && 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800',
+      )}
+      title={`${snap.channel} · ${snap.marketplace}${snap.fulfillmentMethod ? ' · ' + snap.fulfillmentMethod : ''}${snap.isClamped ? ' · clamped from ' + (snap.clampedFrom ?? '?') : ''}${warningCount > 0 ? ' · ' + warningCount + ' warning(s)' : ''} — click to open · ⌘+click to select`}
+    >
+      <span className="text-slate-400 dark:text-slate-500 font-sans not-italic font-medium">{market}</span>
+      <span>{Number(snap.computedPrice).toFixed(2)}</span>
+      {(snap.isClamped || warningCount > 0) && (
+        <AlertCircle size={9} className="text-amber-600 dark:text-amber-400" />
+      )}
+    </button>
+  )
+}
+
+function renderVariantCell(row: VariantRow, key: string, ctx: RenderCellCtx): React.ReactNode {
+  const primary = row.primary
+  const primarySelected = ctx.selected.has(primary.id)
+  switch (key) {
+    case 'identity':
+      return (
+        <ProductIdentityCell
+          id={row.productId ?? row.id}
+          name={row.name}
+          sku={row.sku}
+          amazonAsin={row.amazonAsin}
+          isParent={false}
+          parentId={row.parentId}
+          imageUrl={row.thumbnailUrl}
+          showThumb={true}
+          productHref={row.productId ? `/products/${row.productId}/edit` : undefined}
+          variantDetailHref={row.productId ? `/products/${row.productId}/edit` : undefined}
+        />
+      )
+    case 'price':
+      return (
+        <button
+          type="button"
+          onClick={() => ctx.openDrawer(primary)}
+          className={cn(
+            'tabular-nums font-semibold hover:underline cursor-pointer',
+            primary.isClamped ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-slate-100',
+          )}
+          title={primary.isClamped ? `Clamped from ${primary.clampedFrom} ${primary.currency}` : undefined}
+        >
+          {Number(primary.computedPrice).toFixed(2)}
+          <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">
+            {primary.currency}
+          </span>
+        </button>
+      )
+    case 'source':
+      return (
+        <span
+          className={cn(
+            'inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded cursor-pointer',
+            SOURCE_TONE[primary.source] ?? SOURCE_TONE.FALLBACK,
+          )}
+          onClick={() => ctx.openDrawer(primary)}
+        >
+          {SOURCE_LABEL[primary.source] ?? primary.source}
+        </span>
+      )
+    case 'channels':
+      return (
+        <div className="flex items-center gap-1 flex-wrap">
+          {row.channelChips.length === 0 ? (
+            <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+          ) : (
+            row.channelChips.map((chip) => (
+              <ChannelChip
+                key={chip.id}
+                snap={chip}
+                isSelected={ctx.selected.has(chip.id)}
+                onToggle={() => ctx.toggleRow(chip.id)}
+                onClick={() => ctx.openDrawer(chip)}
+              />
+            ))
+          )}
+        </div>
+      )
+    case 'warnings':
+      return (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={primarySelected}
+            onChange={(e) => { e.stopPropagation(); ctx.toggleRow(primary.id) }}
+            className="rounded"
+            title="Select primary channel snapshot for bulk override"
+          />
+          {primary.warnings.length > 0 ? (
+            <span
+              className="text-xs text-amber-700 dark:text-amber-300 inline-flex items-center gap-0.5"
+              title={primary.warnings.join('; ')}
+            >
+              <AlertCircle size={11} /> {primary.warnings.length}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400 dark:text-slate-500">—</span>
+          )}
+        </div>
+      )
+    case 'actions':
+      return (
+        <button
+          type="button"
+          onClick={() => ctx.openDrawer(primary)}
+          className="text-slate-400 dark:text-slate-500 hover:text-slate-700"
+          title="Open detail drawer"
+        >
+          <ChevronRight size={14} />
+        </button>
+      )
+    default:
+      return null
+  }
+}
 
 function PricingDetailDrawer({
   row,
@@ -831,11 +1140,13 @@ function PricingDetailDrawer({
           </Button>
         </div>
 
-        <div className="text-sm text-slate-400 dark:text-slate-500">
-          {t('pricing.drawer.lastComputed', {
-            when: new Date(row.computedAt).toLocaleString(),
-          })}
-        </div>
+        {row.computedAt && (
+          <div className="text-sm text-slate-400 dark:text-slate-500">
+            {t('pricing.drawer.lastComputed', {
+              when: new Date(row.computedAt).toLocaleString(),
+            })}
+          </div>
+        )}
       </ModalBody>
     </Modal>
   )
