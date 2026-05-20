@@ -35,7 +35,10 @@ interface SlotCellProps {
   isFocused: boolean
   cellRef: (el: HTMLDivElement | null) => void
   onDrop: (url: string, sourceId?: string) => void
+  /** Picker (assign/replace) — fires for empty cells and the hover "Change" overlay on filled cells. */
   onClick: () => void
+  /** Lightbox preview — fires for plain click on a filled cell. */
+  onLightbox?: () => void
   onKeyDown: (e: React.KeyboardEvent) => void
   onFocus: () => void
   onFileDrop?: (file: File) => void
@@ -49,6 +52,7 @@ function SlotCell({
   cellRef,
   onDrop,
   onClick,
+  onLightbox: _onLightbox,
   onKeyDown,
   onFocus,
   onFileDrop,
