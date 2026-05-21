@@ -20,6 +20,7 @@ import {
   resolveCompareRange,
   deltaPct,
 } from './index.js'
+import { decimalToCents, centsToMajor } from './money.js'
 
 export interface SalesTrendPoint {
   date: string
@@ -124,13 +125,15 @@ interface OrderRow {
   channel: string
   marketplace: string | null
   fulfillmentMethod: string | null
-  totalPrice: number
+  /** I7 — order total in integer cents (native currency). */
+  totalPriceCents: number
   currencyCode: string | null
   createdAt: Date
   items: Array<{
     sku: string
     quantity: number
-    price: number
+    /** I7 — unit price in integer cents (native currency). */
+    priceCents: number
     productBrand: string | null
     productType: string | null
   }>
@@ -183,7 +186,7 @@ async function loadOrders(
       channel: o.channel,
       marketplace: o.marketplace,
       fulfillmentMethod: o.fulfillmentMethod,
-      totalPrice: Number(o.totalPrice ?? 0),
+      totalPriceCents: decimalToCents(o.totalPrice),
       currencyCode: o.currencyCode,
       // Surface the event date (purchaseDate) as createdAt to downstream
       // bucketing; fall back to ingestion createdAt for legacy rows.
@@ -191,7 +194,7 @@ async function loadOrders(
       items: o.items.map((it) => ({
         sku: it.sku,
         quantity: it.quantity ?? 0,
-        price: Number(it.price ?? 0),
+        priceCents: decimalToCents(it.price),
         productBrand: it.product?.brand ?? null,
         productType: it.product?.productType ?? null,
       })),
@@ -241,37 +244,38 @@ async function loadRefundsValue(
 }
 
 interface Slot {
-  revenue: number
+  /** I7 — integer cents. Convert with centsToMajor() at response boundary. */
+  revenueCents: number
   orders: Set<string>
   units: number
 }
 
 function emptySlot(): Slot {
-  return { revenue: 0, orders: new Set(), units: 0 }
+  return { revenueCents: 0, orders: new Set(), units: 0 }
 }
 
 function bucketize(
   current: Map<string, Slot>,
   previous: Map<string, Slot>,
-  total: number,
+  totalCents: number,
   labelFor: (key: string) => string,
 ): SalesBucket[] {
   return [...current.entries()].map(([key, slot]) => {
-    const prev = previous.get(key)?.revenue ?? 0
+    const prevCents = previous.get(key)?.revenueCents ?? 0
     return {
       key,
       label: labelFor(key),
-      revenue: Math.round(slot.revenue),
+      revenue: Math.round(centsToMajor(slot.revenueCents)),
       orders: slot.orders.size,
       units: slot.units,
-      share: total > 0 ? slot.revenue / total : 0,
-      deltaPct: deltaPct(slot.revenue, prev),
+      share: totalCents > 0 ? slot.revenueCents / totalCents : 0,
+      deltaPct: deltaPct(slot.revenueCents, prevCents),
     }
   })
 }
 
 function aggregateOrders(orders: OrderRow[]): {
-  trend: Map<string, { revenue: number; orders: Set<string>; units: number }>
+  trend: Map<string, { revenueCents: number; orders: Set<string>; units: number }>
   byChannel: Map<string, Slot>
   byMarket: Map<string, Slot>
   byBrand: Map<string, Slot>
@@ -279,21 +283,23 @@ function aggregateOrders(orders: OrderRow[]): {
   byFulfillment: Map<string, Slot>
   matrix: Map<string, Slot>
   bySku: Map<string, Slot>
+  /** I7 — currencies map values in integer cents. */
   currencies: Map<string, number>
-  /** I3 — per-(channel, marketplace, currency) native rollup */
+  /** I3 — per-(channel, marketplace, currency) native rollup, cents. */
   byMarketplaceNative: Map<string, {
     channel: string
     marketplace: string
     currency: string
-    revenue: number
+    revenueCents: number
     orders: Set<string>
     units: number
   }>
-  total: number
+  /** I7 — totalCents in integer cents. */
+  totalCents: number
 } {
   const trend = new Map<
     string,
-    { revenue: number; orders: Set<string>; units: number }
+    { revenueCents: number; orders: Set<string>; units: number }
   >()
   const byChannel = new Map<string, Slot>()
   const byMarket = new Map<string, Slot>()
@@ -302,45 +308,48 @@ function aggregateOrders(orders: OrderRow[]): {
   const byFulfillment = new Map<string, Slot>()
   const matrix = new Map<string, Slot>()
   const bySku = new Map<string, Slot>()
+  /** I7 — currencies map values are integer cents per code. */
   const currencies = new Map<string, number>()
   // I3 — per-(channel, marketplace, currency) tuple. Each row stands
   // alone in its native currency; no implicit conversion.
+  // I7 — revenueCents = integer cents native to each currency.
   const byMarketplaceNative = new Map<
     string,
     {
       channel: string
       marketplace: string
       currency: string
-      revenue: number
+      revenueCents: number
       orders: Set<string>
       units: number
     }
   >()
-  let total = 0
+  let totalCents = 0
 
   for (const o of orders) {
     const units = o.items.reduce((s, it) => s + it.quantity, 0)
-    const lineRevenue = o.items.reduce(
-      (s, it) => s + it.price * it.quantity,
+    // I7 — line math entirely in integer cents (priceCents × quantity).
+    const lineCents = o.items.reduce(
+      (s, it) => s + it.priceCents * it.quantity,
       0,
     )
-    const orderRevenue = o.totalPrice > 0 ? o.totalPrice : lineRevenue
-    total += orderRevenue
+    const orderCents = o.totalPriceCents > 0 ? o.totalPriceCents : lineCents
+    totalCents += orderCents
 
     const dk = dayKey(o.createdAt)
     const ts = trend.get(dk) ?? {
-      revenue: 0,
+      revenueCents: 0,
       orders: new Set<string>(),
       units: 0,
     }
-    ts.revenue += orderRevenue
+    ts.revenueCents += orderCents
     ts.orders.add(o.id)
     ts.units += units
     trend.set(dk, ts)
 
     const push = (map: Map<string, Slot>, key: string, addUnits = units) => {
       const slot = map.get(key) ?? emptySlot()
-      slot.revenue += orderRevenue
+      slot.revenueCents += orderCents
       slot.orders.add(o.id)
       slot.units += addUnits
       map.set(key, slot)
@@ -357,7 +366,7 @@ function aggregateOrders(orders: OrderRow[]): {
     const typeSet = new Set<string>()
     for (const it of o.items) {
       const slot = bySku.get(it.sku) ?? emptySlot()
-      slot.revenue += it.price * it.quantity
+      slot.revenueCents += it.priceCents * it.quantity
       slot.orders.add(o.id)
       slot.units += it.quantity
       bySku.set(it.sku, slot)
@@ -368,7 +377,7 @@ function aggregateOrders(orders: OrderRow[]): {
     for (const t of typeSet) push(byProductType, t, 0)
 
     const code = o.currencyCode ?? 'EUR'
-    currencies.set(code, (currencies.get(code) ?? 0) + orderRevenue)
+    currencies.set(code, (currencies.get(code) ?? 0) + orderCents)
     // I3 — per-(channel, marketplace, currency) bucketing for native-
     // currency rollup. Mirrors the summary service pattern.
     const mkKey = `${o.channel}|${market}|${code}`
@@ -376,11 +385,11 @@ function aggregateOrders(orders: OrderRow[]): {
       channel: o.channel,
       marketplace: market,
       currency: code,
-      revenue: 0,
+      revenueCents: 0,
       orders: new Set<string>(),
       units: 0,
     }
-    mkSlot.revenue += orderRevenue
+    mkSlot.revenueCents += orderCents
     mkSlot.orders.add(o.id)
     mkSlot.units += units
     byMarketplaceNative.set(mkKey, mkSlot)
@@ -397,7 +406,7 @@ function aggregateOrders(orders: OrderRow[]): {
     bySku,
     currencies,
     byMarketplaceNative,
-    total,
+    totalCents,
   }
 }
 
@@ -419,11 +428,12 @@ export async function computeSalesReport(
   const currentAgg = aggregateOrders(currentOrders)
   const compareAgg = aggregateOrders(compareOrders)
 
+  // I7 — currencies values are integer cents; comparison is exact.
   let primaryCurrency = 'EUR'
-  let primaryAmount = 0
-  for (const [code, amt] of currentAgg.currencies.entries()) {
-    if (amt > primaryAmount) {
-      primaryAmount = amt
+  let primaryAmountCents = 0
+  for (const [code, cents] of currentAgg.currencies.entries()) {
+    if (cents > primaryAmountCents) {
+      primaryAmountCents = cents
       primaryCurrency = code
     }
   }
@@ -448,25 +458,29 @@ export async function computeSalesReport(
     const prevSlot = prevKey ? compareAgg.trend.get(prevKey) : undefined
     return {
       date: d,
-      revenue: Math.round(slot?.revenue ?? 0),
+      revenue: Math.round(centsToMajor(slot?.revenueCents ?? 0)),
       ordersCount: slot?.orders.size ?? 0,
       units: slot?.units ?? 0,
-      revenuePrev: prevSlot ? Math.round(prevSlot.revenue) : undefined,
+      revenuePrev: prevSlot
+        ? Math.round(centsToMajor(prevSlot.revenueCents))
+        : undefined,
     }
   })
 
+  // I7 — Pareto math stays in cents until the final cumulativeRevenue
+  // emission. Share is a ratio so cents/cents is dimensionless.
   const skuEntries = [...currentAgg.bySku.entries()]
-    .map(([sku, slot]) => ({ sku, revenue: slot.revenue }))
-    .sort((a, b) => b.revenue - a.revenue)
-  let cumulative = 0
+    .map(([sku, slot]) => ({ sku, revenueCents: slot.revenueCents }))
+    .sort((a, b) => b.revenueCents - a.revenueCents)
+  let cumulativeCents = 0
   const pareto: ParetoPoint[] = skuEntries.map((row, i) => {
-    cumulative += row.revenue
+    cumulativeCents += row.revenueCents
     return {
       rank: i + 1,
       sku: row.sku,
-      cumulativeRevenue: Math.round(cumulative),
+      cumulativeRevenue: Math.round(centsToMajor(cumulativeCents)),
       cumulativeShare:
-        currentAgg.total > 0 ? cumulative / currentAgg.total : 0,
+        currentAgg.totalCents > 0 ? cumulativeCents / currentAgg.totalCents : 0,
     }
   })
   let topNCount = 0
@@ -490,19 +504,24 @@ export async function computeSalesReport(
       : null,
     currency: primaryCurrency,
     totals: {
-      revenue: Math.round(currentAgg.total),
+      revenue: Math.round(centsToMajor(currentAgg.totalCents)),
       orders: ordersCount,
       units: [...currentAgg.bySku.values()].reduce((s, x) => s + x.units, 0),
-      aov: ordersCount ? Math.round(currentAgg.total / ordersCount) : 0,
+      // I7 — AOV computed in cents then converted; exact 2dp.
+      aov: ordersCount
+        ? Math.round(centsToMajor(currentAgg.totalCents / ordersCount))
+        : 0,
       refundsValue: Math.round(refunds.refundsCents / 100),
       returnsCount: refunds.returnsCount,
       discountValue: 0,
     },
     totalsPrev: {
-      revenue: Math.round(compareAgg.total),
+      revenue: Math.round(centsToMajor(compareAgg.totalCents)),
       orders: ordersPrevCount,
       units: [...compareAgg.bySku.values()].reduce((s, x) => s + x.units, 0),
-      aov: ordersPrevCount ? Math.round(compareAgg.total / ordersPrevCount) : 0,
+      aov: ordersPrevCount
+        ? Math.round(centsToMajor(compareAgg.totalCents / ordersPrevCount))
+        : 0,
       refundsValue: Math.round(refundsPrev.refundsCents / 100),
       returnsCount: refundsPrev.returnsCount,
     },
@@ -510,31 +529,31 @@ export async function computeSalesReport(
     byChannel: bucketize(
       currentAgg.byChannel,
       compareAgg.byChannel,
-      currentAgg.total,
+      currentAgg.totalCents,
       (k) => CHANNEL_LABELS[k] ?? k,
     ),
     byMarket: bucketize(
       currentAgg.byMarket,
       compareAgg.byMarket,
-      currentAgg.total,
+      currentAgg.totalCents,
       (k) => k,
     ),
     byBrand: bucketize(
       currentAgg.byBrand,
       compareAgg.byBrand,
-      currentAgg.total,
+      currentAgg.totalCents,
       (k) => k,
     ),
     byProductType: bucketize(
       currentAgg.byProductType,
       compareAgg.byProductType,
-      currentAgg.total,
+      currentAgg.totalCents,
       (k) => k,
     ),
     byFulfillment: bucketize(
       currentAgg.byFulfillment,
       compareAgg.byFulfillment,
-      currentAgg.total,
+      currentAgg.totalCents,
       (k) => FULFILLMENT_LABELS[k] ?? k,
     ),
     matrix: [...currentAgg.matrix.entries()].map(([key, slot]) => {
@@ -542,7 +561,7 @@ export async function computeSalesReport(
       return {
         channel: channel ?? '',
         market: market ?? '',
-        revenue: Math.round(slot.revenue),
+        revenue: Math.round(centsToMajor(slot.revenueCents)),
         orders: slot.orders.size,
       }
     }),
@@ -550,15 +569,19 @@ export async function computeSalesReport(
     // Sorted by current revenue desc. Each row stands alone in its
     // own currency; no implicit conversion. Use this for the
     // operator-facing per-marketplace KPI strip.
+    // I7 — composed from integer cents; centsToMajor gives exact 2dp.
     byMarketplaceNative: [...currentAgg.byMarketplaceNative.values()]
       .map((s) => ({
         channel: s.channel,
         marketplace: s.marketplace,
         currency: s.currency,
-        revenue: Math.round(s.revenue * 100) / 100,
+        revenue: centsToMajor(s.revenueCents),
         orders: s.orders.size,
         units: s.units,
-        aov: s.orders.size > 0 ? Math.round((s.revenue / s.orders.size) * 100) / 100 : 0,
+        aov:
+          s.orders.size > 0
+            ? centsToMajor(Math.round(s.revenueCents / s.orders.size))
+            : 0,
       }))
       .sort((a, b) => b.revenue - a.revenue),
     pareto,

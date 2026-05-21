@@ -31,6 +31,7 @@ import {
   resolveCompareRange,
   deltaPct,
 } from './index.js'
+import { decimalToCents, centsToMajor } from './money.js'
 
 const CHANNEL_FEE_PCT: Record<string, number> = {
   AMAZON: 0.15,
@@ -148,8 +149,10 @@ interface RawOrderItem {
   currency: string
   sku: string
   quantity: number
-  price: number
-  costPrice: number | null
+  /** I7 — unit price in integer cents (native currency). */
+  priceCents: number
+  /** I7 — unit cost in integer cents, or null if not set. */
+  costPriceCents: number | null
   brand: string | null
   productName: string | null
 }
@@ -195,9 +198,11 @@ async function loadOrderItems(
       currency: it.order.currencyCode ?? 'EUR',
       sku: it.sku,
       quantity: it.quantity ?? 0,
-      price: Number(it.price ?? 0),
-      costPrice:
-        it.product?.costPrice == null ? null : Number(it.product.costPrice),
+      priceCents: decimalToCents(it.price),
+      costPriceCents:
+        it.product?.costPrice == null
+          ? null
+          : decimalToCents(it.product.costPrice),
       brand: it.product?.brand ?? null,
       productName: it.product?.name ?? null,
     }))
@@ -263,21 +268,25 @@ async function loadRefunds(
 }
 
 interface Acc {
-  revenue: number
-  cogs: number
-  fees: number
+  /** I7 — all money fields in integer cents. Convert with centsToMajor()
+   *  only at the response boundary. */
+  revenueCents: number
+  cogsCents: number
+  feesCents: number
   units: number
   orders: Set<string>
 }
 
 function emptyAcc(): Acc {
-  return { revenue: 0, cogs: 0, fees: 0, units: 0, orders: new Set() }
+  return { revenueCents: 0, cogsCents: 0, feesCents: 0, units: 0, orders: new Set() }
 }
 
-function computeFee(channel: string, revenue: number, orders: number): number {
+/** I7 — fees computed in cents. pct math is exact when applied to integer
+ *  cents and rounded at the end. */
+function computeFeeCents(channel: string, revenueCents: number, orders: number): number {
   const pct = CHANNEL_FEE_PCT[channel] ?? 0.1
   const fixedCents = CHANNEL_FEE_FIXED_CENTS[channel] ?? 0
-  return revenue * pct + (fixedCents / 100) * orders
+  return Math.round(revenueCents * pct) + fixedCents * orders
 }
 
 function aggregate(items: RawOrderItem[]): {
@@ -302,16 +311,18 @@ function aggregate(items: RawOrderItem[]): {
   >()
 
   for (const it of items) {
-    const line = it.price * it.quantity
-    const cogsLine = (it.costPrice ?? 0) * it.quantity
-    total.revenue += line
-    total.cogs += cogsLine
+    // I7 — all line math in integer cents. priceCents × quantity stays
+    // exact (both are integers); cogsCents likewise. No float drift.
+    const lineCents = it.priceCents * it.quantity
+    const cogsLineCents = (it.costPriceCents ?? 0) * it.quantity
+    total.revenueCents += lineCents
+    total.cogsCents += cogsLineCents
     total.units += it.quantity
     total.orders.add(it.orderId)
 
     const chSlot = byChannel.get(it.channel) ?? emptyAcc()
-    chSlot.revenue += line
-    chSlot.cogs += cogsLine
+    chSlot.revenueCents += lineCents
+    chSlot.cogsCents += cogsLineCents
     chSlot.units += it.quantity
     chSlot.orders.add(it.orderId)
     byChannel.set(it.channel, chSlot)
@@ -325,8 +336,8 @@ function aggregate(items: RawOrderItem[]): {
         marketplace: it.marketplace,
         currency: it.currency,
       } as Acc & { channel: string; marketplace: string; currency: string })
-    mkSlot.revenue += line
-    mkSlot.cogs += cogsLine
+    mkSlot.revenueCents += lineCents
+    mkSlot.cogsCents += cogsLineCents
     mkSlot.units += it.quantity
     mkSlot.orders.add(it.orderId)
     byMarketplace.set(mkKey, mkSlot)
@@ -343,22 +354,22 @@ function aggregate(items: RawOrderItem[]): {
         brand: string | null
         channel: string
       })
-    skuSlot.revenue += line
-    skuSlot.cogs += cogsLine
+    skuSlot.revenueCents += lineCents
+    skuSlot.cogsCents += cogsLineCents
     skuSlot.units += it.quantity
     skuSlot.orders.add(it.orderId)
     bySku.set(it.sku, skuSlot)
   }
 
   for (const [ch, slot] of byChannel.entries()) {
-    slot.fees = computeFee(ch, slot.revenue, slot.orders.size)
+    slot.feesCents = computeFeeCents(ch, slot.revenueCents, slot.orders.size)
   }
   for (const [, slot] of byMarketplace.entries()) {
-    slot.fees = computeFee(slot.channel, slot.revenue, slot.orders.size)
+    slot.feesCents = computeFeeCents(slot.channel, slot.revenueCents, slot.orders.size)
   }
-  total.fees = [...byChannel.values()].reduce((s, a) => s + a.fees, 0)
+  total.feesCents = [...byChannel.values()].reduce((s, a) => s + a.feesCents, 0)
   for (const [, slot] of bySku.entries()) {
-    slot.fees = computeFee(slot.channel, slot.revenue, slot.orders.size)
+    slot.feesCents = computeFeeCents(slot.channel, slot.revenueCents, slot.orders.size)
   }
   return { total, byChannel, byMarketplace, bySku }
 }
@@ -382,35 +393,45 @@ export async function computeProfitReport(
   const currentAgg = aggregate(currentItems)
   const compareAgg = aggregate(compareItems)
 
-  const grossCurrent = currentAgg.total.revenue - currentAgg.total.cogs
-  const netCurrent =
-    grossCurrent - currentAgg.total.fees - adSpend - refunds
-  const grossPrev = compareAgg.total.revenue - compareAgg.total.cogs
-  const netPrev = grossPrev - compareAgg.total.fees - adSpendPrev - refundsPrev
+  // I7 — convert ad-spend + refunds (loaded as major units from micros÷1e6
+  // and refundCents÷100) into cents once, do all arithmetic in cents, then
+  // convert at the response boundary. Eliminates the float drift that used
+  // to compound across thousands of order lines.
+  const adSpendCents = Math.round(adSpend * 100)
+  const refundsCents = Math.round(refunds * 100)
+  const adSpendPrevCents = Math.round(adSpendPrev * 100)
+  const refundsPrevCents = Math.round(refundsPrev * 100)
+
+  const grossCurrentCents = currentAgg.total.revenueCents - currentAgg.total.cogsCents
+  const netCurrentCents =
+    grossCurrentCents - currentAgg.total.feesCents - adSpendCents - refundsCents
+  const grossPrevCents = compareAgg.total.revenueCents - compareAgg.total.cogsCents
+  const netPrevCents =
+    grossPrevCents - compareAgg.total.feesCents - adSpendPrevCents - refundsPrevCents
 
   const marginCurrent =
-    currentAgg.total.revenue > 0
-      ? (netCurrent / currentAgg.total.revenue) * 100
+    currentAgg.total.revenueCents > 0
+      ? (netCurrentCents / currentAgg.total.revenueCents) * 100
       : null
   const marginPrev =
-    compareAgg.total.revenue > 0
-      ? (netPrev / compareAgg.total.revenue) * 100
+    compareAgg.total.revenueCents > 0
+      ? (netPrevCents / compareAgg.total.revenueCents) * 100
       : null
 
   const byChannel: ProfitBreakdownEntry[] = [...currentAgg.byChannel.entries()].map(
     ([ch, slot]) => {
-      const gross = slot.revenue - slot.cogs
-      const net = gross - slot.fees
+      const grossCents = slot.revenueCents - slot.cogsCents
+      const netCents = grossCents - slot.feesCents
       return {
         key: ch,
         label: CHANNEL_LABELS[ch] ?? ch,
-        revenue: Math.round(slot.revenue),
-        cogs: Math.round(slot.cogs),
-        fees: Math.round(slot.fees),
+        revenue: centsToMajor(slot.revenueCents),
+        cogs: centsToMajor(slot.cogsCents),
+        fees: centsToMajor(slot.feesCents),
         refunds: 0,
-        grossProfit: Math.round(gross),
-        netProfit: Math.round(net),
-        marginPct: slot.revenue > 0 ? (net / slot.revenue) * 100 : null,
+        grossProfit: centsToMajor(grossCents),
+        netProfit: centsToMajor(netCents),
+        marginPct: slot.revenueCents > 0 ? (netCents / slot.revenueCents) * 100 : null,
         unitsSold: slot.units,
       }
     },
@@ -418,16 +439,16 @@ export async function computeProfitReport(
 
   const bySku: ProfitSkuRow[] = [...currentAgg.bySku.entries()]
     .map(([sku, slot]) => {
-      const gross = slot.revenue - slot.cogs - slot.fees
+      const grossCents = slot.revenueCents - slot.cogsCents - slot.feesCents
       return {
         sku,
         productName: slot.productName,
         brand: slot.brand,
-        revenue: Math.round(slot.revenue),
-        cogs: Math.round(slot.cogs),
-        fees: Math.round(slot.fees),
-        grossProfit: Math.round(gross),
-        marginPct: slot.revenue > 0 ? (gross / slot.revenue) * 100 : null,
+        revenue: centsToMajor(slot.revenueCents),
+        cogs: centsToMajor(slot.cogsCents),
+        fees: centsToMajor(slot.feesCents),
+        grossProfit: centsToMajor(grossCents),
+        marginPct: slot.revenueCents > 0 ? (grossCents / slot.revenueCents) * 100 : null,
         unitsSold: slot.units,
       }
     })
@@ -442,37 +463,37 @@ export async function computeProfitReport(
     {
       key: 'revenue',
       label: 'Revenue',
-      value: Math.round(currentAgg.total.revenue),
+      value: centsToMajor(currentAgg.total.revenueCents),
       kind: 'start',
     },
     {
       key: 'cogs',
       label: 'COGS',
-      value: Math.round(currentAgg.total.cogs),
+      value: centsToMajor(currentAgg.total.cogsCents),
       kind: 'sub',
     },
     {
       key: 'fees',
       label: 'Channel fees',
-      value: Math.round(currentAgg.total.fees),
+      value: centsToMajor(currentAgg.total.feesCents),
       kind: 'sub',
     },
     {
       key: 'ads',
       label: 'Ad spend',
-      value: Math.round(adSpend),
+      value: centsToMajor(adSpendCents),
       kind: 'sub',
     },
     {
       key: 'refunds',
       label: 'Refunds',
-      value: Math.round(refunds),
+      value: centsToMajor(refundsCents),
       kind: 'sub',
     },
     {
       key: 'net',
       label: 'Net profit',
-      value: Math.round(netCurrent),
+      value: centsToMajor(netCurrentCents),
       kind: 'total',
     },
   ]
@@ -486,52 +507,56 @@ export async function computeProfitReport(
       : null,
     currency,
     totals: {
-      revenue: Math.round(currentAgg.total.revenue),
-      cogs: Math.round(currentAgg.total.cogs),
-      fees: Math.round(currentAgg.total.fees),
-      adSpend: Math.round(adSpend),
-      refunds: Math.round(refunds),
-      grossProfit: Math.round(grossCurrent),
-      netProfit: Math.round(netCurrent),
+      revenue: centsToMajor(currentAgg.total.revenueCents),
+      cogs: centsToMajor(currentAgg.total.cogsCents),
+      fees: centsToMajor(currentAgg.total.feesCents),
+      adSpend: centsToMajor(adSpendCents),
+      refunds: centsToMajor(refundsCents),
+      grossProfit: centsToMajor(grossCurrentCents),
+      netProfit: centsToMajor(netCurrentCents),
       marginPct: marginCurrent,
     },
     totalsPrev: {
-      revenue: Math.round(compareAgg.total.revenue),
-      cogs: Math.round(compareAgg.total.cogs),
-      fees: Math.round(compareAgg.total.fees),
-      adSpend: Math.round(adSpendPrev),
-      refunds: Math.round(refundsPrev),
-      grossProfit: Math.round(grossPrev),
-      netProfit: Math.round(netPrev),
+      revenue: centsToMajor(compareAgg.total.revenueCents),
+      cogs: centsToMajor(compareAgg.total.cogsCents),
+      fees: centsToMajor(compareAgg.total.feesCents),
+      adSpend: centsToMajor(adSpendPrevCents),
+      refunds: centsToMajor(refundsPrevCents),
+      grossProfit: centsToMajor(grossPrevCents),
+      netProfit: centsToMajor(netPrevCents),
       marginPct: marginPrev,
     },
     deltas: {
-      revenue: deltaPct(currentAgg.total.revenue, compareAgg.total.revenue),
-      cogs: deltaPct(currentAgg.total.cogs, compareAgg.total.cogs),
-      fees: deltaPct(currentAgg.total.fees, compareAgg.total.fees),
-      adSpend: deltaPct(adSpend, adSpendPrev),
-      refunds: deltaPct(refunds, refundsPrev),
-      grossProfit: deltaPct(grossCurrent, grossPrev),
-      netProfit: deltaPct(netCurrent, netPrev),
+      revenue: deltaPct(currentAgg.total.revenueCents, compareAgg.total.revenueCents),
+      cogs: deltaPct(currentAgg.total.cogsCents, compareAgg.total.cogsCents),
+      fees: deltaPct(currentAgg.total.feesCents, compareAgg.total.feesCents),
+      adSpend: deltaPct(adSpendCents, adSpendPrevCents),
+      refunds: deltaPct(refundsCents, refundsPrevCents),
+      grossProfit: deltaPct(grossCurrentCents, grossPrevCents),
+      netProfit: deltaPct(netCurrentCents, netPrevCents),
     },
     waterfall,
     byChannel,
     // I6 — per-(channel, marketplace, currency) P&L. Each row in native
     // currency; no implicit conversion. Sorted by current revenue desc.
+    // I7 — composed from integer cents; centsToMajor gives exact 2dp.
     byMarketplace: [...currentAgg.byMarketplace.values()]
       .map((slot) => {
-        const gross = slot.revenue - slot.cogs
-        const net = gross - slot.fees
+        const grossCents = slot.revenueCents - slot.cogsCents
+        const netCents = grossCents - slot.feesCents
         return {
           channel: slot.channel,
           marketplace: slot.marketplace,
           currency: slot.currency,
-          revenue: Math.round(slot.revenue * 100) / 100,
-          cogs: Math.round(slot.cogs * 100) / 100,
-          fees: Math.round(slot.fees * 100) / 100,
-          grossProfit: Math.round(gross * 100) / 100,
-          netProfit: Math.round(net * 100) / 100,
-          marginPct: slot.revenue > 0 ? Math.round((net / slot.revenue) * 10000) / 100 : null,
+          revenue: centsToMajor(slot.revenueCents),
+          cogs: centsToMajor(slot.cogsCents),
+          fees: centsToMajor(slot.feesCents),
+          grossProfit: centsToMajor(grossCents),
+          netProfit: centsToMajor(netCents),
+          marginPct:
+            slot.revenueCents > 0
+              ? Math.round((netCents / slot.revenueCents) * 10000) / 100
+              : null,
           unitsSold: slot.units,
         }
       })

@@ -15,6 +15,7 @@ import {
   resolveCompareRange,
   deltaPct,
 } from './index.js'
+import { decimalToCents, centsToMajor } from './money.js'
 
 export interface TopSKURow {
   sku: string
@@ -28,9 +29,11 @@ export interface TopSKURow {
 }
 
 interface RawSku {
-  revenue: number
+  /** I7 — integer cents to avoid float drift across many lines. */
+  revenueCents: number
   units: number
   orderIds: Set<string>
+  /** I7 — per-day revenue in cents (matches outer accumulator). */
   byDay: Map<string, number>
 }
 
@@ -82,17 +85,18 @@ async function loadSkus(
         continue
     }
     const slot = map.get(it.sku) ?? {
-      revenue: 0,
+      revenueCents: 0,
       units: 0,
       orderIds: new Set(),
       byDay: new Map(),
     }
-    const line = Number(it.price ?? 0) * (it.quantity ?? 0)
-    slot.revenue += line
+    // I7 — priceCents × quantity is integer math; no float drift.
+    const lineCents = decimalToCents(it.price) * (it.quantity ?? 0)
+    slot.revenueCents += lineCents
     slot.units += it.quantity ?? 0
     slot.orderIds.add(it.orderId)
     const dk = dayKey(it.order.purchaseDate ?? it.order.createdAt)
-    slot.byDay.set(dk, (slot.byDay.get(dk) ?? 0) + line)
+    slot.byDay.set(dk, (slot.byDay.get(dk) ?? 0) + lineCents)
     map.set(it.sku, slot)
   }
   return map
@@ -121,22 +125,23 @@ export async function computeTopSKUs(
 
   const rows: TopSKURow[] = skus.map((sku) => {
     const slot = currentMap.get(sku)!
-    const prev = compareMap.get(sku)?.revenue ?? 0
+    const prevCents = compareMap.get(sku)?.revenueCents ?? 0
     const product = productMap.get(sku)
     const days: string[] = []
     const dayMs = 24 * 3600_000
     for (let t = current.from.getTime(); t < current.to.getTime(); t += dayMs) {
       days.push(dayKey(new Date(t)))
     }
-    const series = days.map((d) => Math.round(slot.byDay.get(d) ?? 0))
+    // I7 — series stored in cents; convert each daily bucket to major.
+    const series = days.map((d) => Math.round(centsToMajor(slot.byDay.get(d) ?? 0)))
     return {
       sku,
       productName: product?.name ?? null,
       brand: product?.brand ?? null,
-      revenue: Math.round(slot.revenue),
+      revenue: Math.round(centsToMajor(slot.revenueCents)),
       units: slot.units,
       orders: slot.orderIds.size,
-      deltaPct: deltaPct(slot.revenue, prev),
+      deltaPct: deltaPct(slot.revenueCents, prevCents),
       series,
     }
   })
