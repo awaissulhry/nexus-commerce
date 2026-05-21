@@ -1813,6 +1813,26 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // for completion. For Railway gateway timeouts, prefer smaller windows
   // and call repeatedly, or trigger from a long-lived job.
 
+  // POST /api/amazon/fba/inbound/backfill — HB.4 FBA inbound shipment
+  // history backfill. Walks SP-API getShipments with LastUpdatedAfter,
+  // paginates via NextToken, upserts FBAShipment rows.
+  // Body: { daysBack?: number } — default 730 (24 months).
+  fastify.post<{
+    Body?: { daysBack?: number }
+  }>('/fba/inbound/backfill', async (request, reply) => {
+    const { backfillFbaInboundShipments } = await import('../services/fba-inbound.service.js')
+    try {
+      const result = await backfillFbaInboundShipments(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/fba/inbound/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   // POST /api/amazon/returns/backfill — HB.x returns 24mo
   fastify.post<{
     Body?: { daysBack?: number; marketplaceIds?: string[] }

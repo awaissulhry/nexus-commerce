@@ -482,12 +482,21 @@ export async function getInboundShipmentsBatch(args: {
     qs.set('QueryType', 'SHIPMENT')
     qs.set('ShipmentIdList', args.shipmentIdList.join(','))
   } else {
-    qs.set('QueryType', 'SHIPMENT')
-    const statuses = args.shipmentStatusList ?? [
-      'WORKING', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT',
-      'DELIVERED', 'CHECKED_IN', 'RECEIVING',
-    ]
-    qs.set('ShipmentStatusList', statuses.join(','))
+    // HB.4 — when discovering historical shipments, pass
+    // LastUpdatedAfter to scope to the backfill window. Without it,
+    // SP-API defaults to the last 30 days only.
+    if (args.lastUpdatedAfter) {
+      qs.set('QueryType', 'DATE_RANGE')
+      qs.set('LastUpdatedAfter', args.lastUpdatedAfter)
+      if (args.lastUpdatedBefore) qs.set('LastUpdatedBefore', args.lastUpdatedBefore)
+    } else {
+      qs.set('QueryType', 'SHIPMENT')
+      const statuses = args.shipmentStatusList ?? [
+        'WORKING', 'READY_TO_SHIP', 'SHIPPED', 'IN_TRANSIT',
+        'DELIVERED', 'CHECKED_IN', 'RECEIVING',
+      ]
+      qs.set('ShipmentStatusList', statuses.join(','))
+    }
   }
 
   const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments?${qs.toString()}`
@@ -608,4 +617,145 @@ export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<s
     if (fnskuInventoryCache.map[sku]) result[sku] = fnskuInventoryCache.map[sku]
   }
   return result
+}
+
+// ─── HB.4 — Historical FBA inbound shipment backfill ──────────────────
+
+export interface FbaInboundBackfillResult {
+  ranAt: string
+  durationMs: number
+  daysBack: number
+  pages: number
+  shipmentsFetched: number
+  shipmentsUpserted: number
+  shipmentsSkipped: number
+  shipmentsFailed: number
+  errors: string[]
+}
+
+/**
+ * HB.4 — walk every historical FBA inbound shipment for the operator's
+ * marketplace and upsert into FBAShipment. Uses SP-API getShipments
+ * with QueryType=DATE_RANGE + LastUpdatedAfter so we get ALL shipments
+ * (any status) updated in the window.
+ *
+ * Idempotent: upserts on FBAShipment.shipmentId (Amazon's id). Re-running
+ * refreshes status + name + destinationFC.
+ *
+ * Status is mapped via mapAmazonShipmentStatusToLocal — lossy
+ * (Amazon's 11 → local 5). Operationally fine for historical view.
+ *
+ * Note on items: getShipments returns shipment headers only. Per-item
+ * detail (FBAShipmentItem) would require getShipmentItemsByShipmentId
+ * per shipment, which is rate-limited (2 req/s). Items are NOT
+ * populated here; can be a follow-up if needed.
+ */
+export async function backfillFbaInboundShipments(args: {
+  daysBack?: number
+} = {}): Promise<FbaInboundBackfillResult> {
+  const t0 = Date.now()
+  const daysBack = args.daysBack ?? 730
+  const errors: string[] = []
+
+  if (!isFbaInboundConfigured()) {
+    throw new Error('SP-API FBA inbound not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
+  }
+
+  const lastUpdatedAfter = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
+
+  let nextToken: string | undefined
+  let pages = 0
+  let shipmentsFetched = 0
+  let shipmentsUpserted = 0
+  let shipmentsSkipped = 0
+  let shipmentsFailed = 0
+
+  // Cap pages defensively. Each page returns up to ~50 shipments.
+  // 200 pages = ~10,000 shipments — more than any single seller's
+  // 24mo backfill.
+  const MAX_PAGES = 200
+
+  while (pages < MAX_PAGES) {
+    let batch: AmazonShipmentRow[] = []
+    try {
+      const result = await getInboundShipmentsBatch(
+        nextToken
+          ? { nextToken }
+          : { lastUpdatedAfter },
+      )
+      batch = result.shipments
+      nextToken = result.nextToken
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      errors.push(`page ${pages + 1}: ${msg}`)
+      logger.warn('fba-inbound: backfill page failed', { page: pages + 1, error: msg })
+      break
+    }
+
+    pages++
+    shipmentsFetched += batch.length
+
+    for (const row of batch) {
+      try {
+        const mappedStatus = mapAmazonShipmentStatusToLocal(row.ShipmentStatus)
+        const existing = await prisma.fBAShipment.findUnique({
+          where: { shipmentId: row.ShipmentId },
+          select: { id: true },
+        })
+        if (existing) {
+          await prisma.fBAShipment.update({
+            where: { id: existing.id },
+            data: {
+              name: row.ShipmentName ?? null,
+              status: mappedStatus,
+              destinationFC: row.DestinationFulfillmentCenterId ?? 'UNKNOWN',
+            },
+          })
+          shipmentsSkipped++
+        } else {
+          await prisma.fBAShipment.create({
+            data: {
+              shipmentId: row.ShipmentId,
+              name: row.ShipmentName ?? null,
+              status: mappedStatus,
+              destinationFC: row.DestinationFulfillmentCenterId ?? 'UNKNOWN',
+            },
+          })
+          shipmentsUpserted++
+        }
+      } catch (err) {
+        shipmentsFailed++
+        const msg = err instanceof Error ? err.message : String(err)
+        errors.push(`${row.ShipmentId}: ${msg.slice(0, 200)}`)
+        logger.warn('fba-inbound: backfill row upsert failed', {
+          shipmentId: row.ShipmentId,
+          error: msg,
+        })
+      }
+    }
+
+    if (!nextToken) break
+
+    // SP-API throttle: getShipments is 2 req/s sustained, burst 30.
+    // 250ms pause between pages keeps us well under.
+    await new Promise((r) => setTimeout(r, 250))
+  }
+
+  const durationMs = Date.now() - t0
+  logger.info('[fba-inbound] backfill complete', {
+    daysBack, pages, shipmentsFetched, shipmentsUpserted, shipmentsSkipped, shipmentsFailed,
+    errorCount: errors.length, durationMs,
+  })
+
+  return {
+    ranAt: new Date().toISOString(),
+    durationMs,
+    daysBack,
+    pages,
+    shipmentsFetched,
+    shipmentsUpserted,
+    shipmentsSkipped,
+    shipmentsFailed,
+    errors: errors.slice(0, 20),
+  }
 }
