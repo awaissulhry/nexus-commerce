@@ -1816,6 +1816,26 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // for completion. For Railway gateway timeouts, prefer smaller windows
   // and call repeatedly, or trigger from a long-lived job.
 
+  // POST /api/amazon/suppression/backfill — HB.11 listing-health backfill.
+  // Pulls GET_MERCHANT_LISTINGS_DEFECT_DATA per participating marketplace,
+  // upserts AmazonSuppression rows joined to ChannelListing by SKU.
+  // Body: { daysBack?: number } default 30.
+  fastify.post<{
+    Body?: { daysBack?: number }
+  }>('/suppression/backfill', async (request, reply) => {
+    const { ingestAmazonSuppressionAllMarketplaces } = await import('../services/amazon-suppression-ingest.service.js')
+    try {
+      const result = await ingestAmazonSuppressionAllMarketplaces(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/suppression/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   // POST /api/amazon/fba/reimbursements/backfill — HB.5 reimbursements
   fastify.post<{
     Body?: { daysBack?: number; marketplaceId?: string }
