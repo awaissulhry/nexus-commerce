@@ -20,7 +20,7 @@
 | **SettlementReport** (60d) | 0 | **26** | ✅ Bank-side deposits |
 | **APlusContent** | 0 | **72** | ✅ Metadata pulled from Amazon |
 | **FxRate** (24mo) | 0 | **2,924** | ✅ EUR→{GBP,PLN,SEK,USD} daily |
-| **Return** (60d) | 0 | _backfilling_ | ⏳ Running |
+| **Return** (60d) | 0 | **60** | ✅ 32 distinct orders, 60 ReturnItems linked |
 | Customers | 0 | 0 | ⚠ Expected (Amazon anonymizes) |
 | eBay Orders | 0 | 0 | ⏸️ Route timeouts; eBay underused |
 | Cost data on Products | 0 of 268 | 0 of 268 | ⏸️ Operator CSV upload pending |
