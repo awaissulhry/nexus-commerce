@@ -46,6 +46,7 @@ import {
   Pencil,
   Folder,
   GitBranch,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { IconButton } from '@/components/ui/IconButton'
@@ -76,6 +77,12 @@ const ScheduleChangeModal = dynamic(
 // opens — operator filters → selects → applies one field set across
 // N products via the bulk-set-field endpoint.
 const SetFieldModal = dynamic(() => import('../_modals/SetFieldModal'), {
+  ssr: false,
+})
+// IR.12 — bulk "Apply images" modal. Mirrors a source product's
+// master gallery onto every selected target via /api/products/
+// images/bulk-apply.
+const BulkImagesModal = dynamic(() => import('../_modals/BulkImagesModal'), {
   ssr: false,
 })
 // W2.13 — bulk attach-family modal. Lazy because the family list +
@@ -144,6 +151,8 @@ export function BulkActionBar({
   const [moveStageModalOpen, setMoveStageModalOpen] = useState(false)
   // U.28 — bulk-set-field modal state. Active scope only.
   const [setFieldModalOpen, setSetFieldModalOpen] = useState(false)
+  // IR.12 — bulk-images modal state. Active scope only.
+  const [bulkImagesModalOpen, setBulkImagesModalOpen] = useState(false)
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false)
   // F.1 — hard-delete confirm. Two-step so a stray click in the
   // recycle bin can't wipe rows.
@@ -679,6 +688,19 @@ export function BulkActionBar({
             Set field
           </Button>
 
+          {/* IR.12 — Mirror a source product's master gallery onto every
+              selected target. Disabled when nothing's picked. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setBulkImagesModalOpen(true)}
+            disabled={busy || !hasSelection}
+            title={t('products.bulkImages.buttonTooltip')}
+            icon={<ImageIcon size={12} />}
+          >
+            {t('products.bulkImages.buttonLabel')}
+          </Button>
+
           {/* MA.1 — bulk offer availability: pause or activate offers
               across selected products for specific channel+market combos */}
           <Button
@@ -823,6 +845,16 @@ export function BulkActionBar({
           onClose={() => setSetFieldModalOpen(false)}
           onComplete={() => {
             setSetFieldModalOpen(false)
+            onComplete()
+          }}
+        />
+      )}
+      {bulkImagesModalOpen && (
+        <BulkImagesModal
+          productIds={selectedIds}
+          onClose={() => setBulkImagesModalOpen(false)}
+          onComplete={() => {
+            setBulkImagesModalOpen(false)
             onComplete()
           }}
         />
