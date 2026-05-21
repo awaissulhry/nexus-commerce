@@ -40,6 +40,7 @@ import { NewPlanModal } from './NewPlanModal'
 import { PackingOptionsPicker } from './PackingOptionsPicker'
 import { PlacementOptionsPicker } from './PlacementOptionsPicker'
 import { TransportOptionsPicker } from './TransportOptionsPicker'
+import { LabelsPicker } from './LabelsPicker'
 
 interface Plan {
   id: string
@@ -242,23 +243,10 @@ function StepTracker({ plan }: { plan: Plan }) {
 
 function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
   const { toast } = useToast()
+  // F.6.5: callApi() helper removed — every step now renders its own
+  // picker component that owns its loading state. `busy` survives for
+  // the FAILED-state retry button (handleRetry below).
   const [busy, setBusy] = useState(false)
-
-  const callApi = async (path: string, init?: RequestInit) => {
-    setBusy(true)
-    try {
-      const r = await fetch(`${getBackendUrl()}${path}`, init)
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
-      onAction()
-      return j
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
-      throw e
-    } finally {
-      setBusy(false)
-    }
-  }
 
   if (plan.status === 'FAILED') {
     // F.6.4: retry-on-FAIL. The service is idempotent per-step so
@@ -323,10 +311,23 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
       </div>
     )
   }
+  // F.6.5: LABELS_READY (plan complete). Re-render the labels picker
+  // with the persisted labels JSON pre-loaded so the operator can
+  // re-download or re-fetch with different format/page settings
+  // without losing context. Amazon's label URLs expire after ~1-2h,
+  // so re-fetch is the common path on a returning visit.
   if (plan.status === 'LABELS_READY') {
     return (
-      <div className="border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 rounded p-3 text-sm text-emerald-700 dark:text-emerald-300">
-        Plan complete. Labels: {Object.keys(plan.labels ?? {}).length} shipment(s).
+      <div className="space-y-3">
+        <div className="border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 rounded p-2.5 text-sm text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5">
+          <CheckCircle2 size={12} /> Plan complete — labels available for {plan.shipmentIds.length} shipment{plan.shipmentIds.length === 1 ? '' : 's'}
+        </div>
+        <LabelsPicker
+          planRowId={plan.id}
+          shipmentIds={plan.shipmentIds}
+          cachedLabels={plan.labels}
+          onAction={onAction}
+        />
       </div>
     )
   }
@@ -361,26 +362,27 @@ function PlanActions({ plan, onAction }: { plan: Plan; onAction: () => void }) {
     )
   }
 
-  // Only the final GET_LABELS step uses the legacy button now.
-  // F.6.5 polishes labels into a per-shipment PDF download UI.
-  const nextLabel = plan.currentStep === 'GET_LABELS' ? 'Fetch labels' : 'Continue'
-
-  const handleNext = async () => {
-    if (plan.currentStep === 'GET_LABELS') {
-      const r = await callApi(`/api/fba/inbound/v2/${plan.id}/labels`)
-      toast.success(`Labels fetched for ${Object.keys(r?.labels ?? {}).length} shipment(s)`)
-    }
+  // F.6.5: GET_LABELS step. Replaces the legacy "Fetch labels" button
+  // (which toasted but left nothing to click) with the LabelsPicker —
+  // format + page-size selectors with PDF/A4 defaults, per-shipment
+  // download list with expiration countdown.
+  if (plan.currentStep === 'GET_LABELS') {
+    return (
+      <LabelsPicker
+        planRowId={plan.id}
+        shipmentIds={plan.shipmentIds}
+        cachedLabels={plan.labels}
+        onAction={onAction}
+      />
+    )
   }
 
+  // Fallback — should be unreachable, but keep a graceful empty state
+  // in case a new server-side state lands before the UI knows about it.
   return (
-    <button
-      onClick={handleNext}
-      disabled={busy}
-      className="h-9 px-3 text-base bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
-    >
-      {busy && <Loader2 size={12} className="animate-spin" />}
-      {nextLabel}
-    </button>
+    <div className="text-xs text-slate-500 dark:text-slate-400">
+      Unknown step: {plan.currentStep}
+    </div>
   )
 }
 
