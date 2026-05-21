@@ -404,14 +404,8 @@ export default function OrdersWorkspace() {
       values: statusFilters,
       onChange: (next) => updateUrl({ status: next.length > 0 ? next.join(',') : undefined, page: undefined }),
     },
-    {
-      key: 'fulfillment',
-      label: 'Fulfillment',
-      type: 'multi-select',
-      options: ['FBA', 'FBM'].map((v) => ({ value: v, label: v })),
-      values: fulfillmentFilters,
-      onChange: (next) => updateUrl({ fulfillment: next.length > 0 ? next.join(',') : undefined, page: undefined }),
-    },
+    // OX.1: Fulfillment moved out of the secondary filter popover into
+    // the prominent FulfilmentSegmentedControl above the lens tabs.
     {
       key: 'reviewStatus',
       label: 'Review status',
@@ -570,6 +564,28 @@ export default function OrdersWorkspace() {
         }
       />
 
+      {/* OX.1 — primary fulfilment scope (Amazon-style two-page model).
+          Sits above the lens tabs because it's a higher-level scope than
+          lens choice. Maps directly to the existing `fulfillment` URL
+          param so list/stats/facets all update via the same path. */}
+      {lens === 'grid' && (
+        <FulfilmentSegmentedControl
+          current={
+            fulfillmentFilters.length === 1 && (fulfillmentFilters[0] === 'FBM' || fulfillmentFilters[0] === 'FBA')
+              ? (fulfillmentFilters[0] as 'FBM' | 'FBA')
+              : 'ALL'
+          }
+          onChange={(next) =>
+            updateUrl({
+              fulfillment: next === 'ALL' ? undefined : next,
+              page: undefined,
+            })
+          }
+          facets={facets?.fulfillment}
+          totalCount={stats?.total ?? null}
+        />
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         <LensTabs current={lens} onChange={(next) => updateUrl({ lens: next === 'grid' ? undefined : next, page: undefined })} />
       </div>
@@ -724,6 +740,77 @@ export default function OrdersWorkspace() {
           onClose={() => setShortcutsOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * OX.1 — primary FBM / FBA / All scope toggle. Mirrors Amazon Seller
+ * Central's two-page model (Manage Orders → Seller fulfilled vs
+ * Fulfilled by Amazon) while still supporting our unified "All" view
+ * across Amazon + eBay + Shopify.
+ *
+ * Drives the existing `fulfillment` URL param so the list query, stats,
+ * and facets all stay consistent. Counts come from the facets endpoint;
+ * the "All" count comes from the top-level stats (which already counts
+ * orders across every fulfilment method).
+ */
+function FulfilmentSegmentedControl({
+  current,
+  onChange,
+  facets,
+  totalCount,
+}: {
+  current: 'ALL' | 'FBM' | 'FBA'
+  onChange: (next: 'ALL' | 'FBM' | 'FBA') => void
+  facets: Array<{ value: string; count: number }> | undefined
+  totalCount: number | null
+}) {
+  const fbmCount = facets?.find((f) => f.value === 'FBM')?.count
+  const fbaCount = facets?.find((f) => f.value === 'FBA')?.count
+  const segments: Array<{ key: 'ALL' | 'FBM' | 'FBA'; label: string; sub: string; count: number | undefined }> = [
+    { key: 'ALL', label: 'All channels', sub: 'Amazon · eBay · Shopify', count: totalCount ?? undefined },
+    { key: 'FBM', label: 'Seller fulfilled', sub: 'FBM', count: fbmCount },
+    { key: 'FBA', label: 'Fulfilled by Amazon', sub: 'FBA', count: fbaCount },
+  ]
+  return (
+    <div
+      role="tablist"
+      aria-label="Fulfilment scope"
+      className="inline-flex items-stretch bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden divide-x divide-slate-200 dark:divide-slate-700"
+    >
+      {segments.map((s) => {
+        const active = current === s.key
+        return (
+          <button
+            key={s.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(s.key)}
+            className={`px-4 py-2 text-left transition-colors min-w-[160px] ${
+              active
+                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                : 'bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800'
+            }`}
+          >
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-semibold">{s.label}</span>
+              {s.count != null && (
+                <span
+                  className={`text-xs tabular-nums font-medium ${
+                    active ? 'text-white/80 dark:text-slate-700' : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {s.count.toLocaleString()}
+                </span>
+              )}
+            </div>
+            <div className={`text-xs ${active ? 'text-white/60 dark:text-slate-500' : 'text-slate-500 dark:text-slate-400'}`}>
+              {s.sub}
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 }
