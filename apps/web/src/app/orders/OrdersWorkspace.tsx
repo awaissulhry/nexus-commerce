@@ -25,6 +25,7 @@ import {
   type FilterDimension,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
+import { GlobalSnapshot } from '@/components/dashboard/GlobalSnapshot'
 import { CustomerLens } from './_lenses/CustomerLens'
 import { FinancialsLens } from './_lenses/FinancialsLens'
 import { ReturnsLens } from './_lenses/ReturnsLens'
@@ -652,6 +653,10 @@ export default function OrdersWorkspace() {
           </div>
         }
       />
+
+      {/* GS.2 — Global Snapshot strip. Same component is mounted on
+          /dashboard in GS.6 — single source of truth. */}
+      {lens === 'grid' && <GlobalSnapshot />}
 
       {/* OX.1 — primary fulfilment scope (Amazon-style two-page model).
           Sits above the lens tabs because it's a higher-level scope than
