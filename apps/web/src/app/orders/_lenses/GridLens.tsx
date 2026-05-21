@@ -55,6 +55,20 @@ export type GridOrder = {
   customerOrderCount: number
   reviewRequests: ReviewRequest[]
   tags?: Tag[]
+  // OX.4 — added for the Amazon-parity row layout
+  shipByDate?: string | null
+  latestDeliveryDate?: string | null
+  isPrime?: boolean | null
+  isBusinessOrder?: boolean
+  firstItem?: {
+    sku: string
+    quantity: number
+    price: number
+    subtotal: number
+    productName: string | null
+    amazonAsin: string | null
+    thumbnailUrl: string | null
+  } | null
 }
 
 interface GridLensProps {
@@ -386,6 +400,34 @@ export function GridLens(props: GridLensProps) {
   )
 }
 
+// OX.4 — flag emojis for the marketplaces Xavia sells on. Used in the
+// "Order details" cell to mirror Amazon Seller Central's "Sales channel"
+// line (e.g. "Amazon.it 🇮🇹"). Falls back to no flag for unknown codes.
+const MARKETPLACE_FLAGS: Record<string, string> = {
+  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', UK: '🇬🇧', GB: '🇬🇧',
+  NL: '🇳🇱', PL: '🇵🇱', SE: '🇸🇪', IE: '🇮🇪', BE: '🇧🇪', SA: '🇸🇦',
+  AE: '🇦🇪', TR: '🇹🇷', US: '🇺🇸', CA: '🇨🇦', JP: '🇯🇵',
+}
+
+// OX.4 — coarse relative-time formatter for the "Order date" cell.
+// Mirrors Amazon's "8 hours ago / 2 days ago" treatment. Fall through
+// to absolute date for anything older than 14 days.
+function relativeFromNow(input: string | null): string | null {
+  if (!input) return null
+  const ts = new Date(input).getTime()
+  if (Number.isNaN(ts)) return null
+  const diffMs = Date.now() - ts
+  if (diffMs < 0) return null
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  if (days <= 14) return `${days} day${days === 1 ? '' : 's'} ago`
+  return null
+}
+
 function OrderCell({
   col,
   order,
@@ -409,6 +451,180 @@ function OrderCell({
           aria-label={`Select order ${o.channelOrderId}`}
         />
       )
+    // OX.4 — Amazon-parity cells ────────────────────────────────────
+    case 'orderDate': {
+      const dateLocale = locale === 'it' ? 'it-IT' : 'en-GB'
+      const ts = o.purchaseDate ?? o.createdAt
+      const relative = relativeFromNow(ts)
+      const d = new Date(ts)
+      const absolute = d.toLocaleDateString(dateLocale, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+      const time = d.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
+      return (
+        <div className="flex flex-col gap-0.5">
+          {relative && (
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{relative}</span>
+          )}
+          <span className="text-sm text-slate-700 dark:text-slate-300 tabular-nums">{absolute}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{time}</span>
+        </div>
+      )
+    }
+    case 'orderDetails': {
+      const link = deepLinkForOrder({
+        channel: o.channel,
+        marketplace: o.marketplace,
+        channelOrderId: o.channelOrderId,
+      })
+      const flag = o.marketplace ? MARKETPLACE_FLAGS[o.marketplace] ?? '' : ''
+      const channelLabel =
+        o.channel === 'AMAZON' && o.marketplace
+          ? `Amazon.${o.marketplace.toLowerCase()}`
+          : o.channel.charAt(0) + o.channel.slice(1).toLowerCase()
+      return (
+        <div className="min-w-0 space-y-0.5">
+          <div className="flex items-center gap-1">
+            <Link
+              href={`/orders/${o.id}`}
+              className="text-base font-mono text-blue-600 dark:text-blue-400 hover:underline truncate"
+            >
+              {o.channelOrderId}
+            </Link>
+            {link && (
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={link.label}
+                title={link.label}
+                className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 flex-shrink-0"
+              >
+                <ExternalLink size={11} aria-hidden="true" />
+              </a>
+            )}
+          </div>
+          <div className="text-sm text-slate-700 dark:text-slate-300 truncate">
+            <span className="text-slate-500 dark:text-slate-400">Buyer:</span> {o.customerName || '—'}
+          </div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            <span>Fulfilment:</span> {o.fulfillmentMethod ?? '—'}
+            <span className="mx-1.5">·</span>
+            <span>{channelLabel}</span>
+            {flag && <span className="ml-1" aria-hidden="true">{flag}</span>}
+          </div>
+        </div>
+      )
+    }
+    case 'image': {
+      const fi = o.firstItem
+      if (!fi?.thumbnailUrl) {
+        return (
+          <div className="w-12 h-12 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+            <ShoppingCart size={14} aria-hidden="true" />
+          </div>
+        )
+      }
+      return (
+        <img
+          src={fi.thumbnailUrl}
+          alt=""
+          loading="lazy"
+          className="w-12 h-12 rounded object-cover bg-slate-100 dark:bg-slate-800"
+        />
+      )
+    }
+    case 'productName': {
+      const fi = o.firstItem
+      const display = formatOrderTotal({
+        totalPrice: fi ? fi.subtotal : o.totalPrice,
+        currencyCode: o.currencyCode,
+        status: o.status,
+      })
+      const extra = o.itemCount > 1 ? ` (+${o.itemCount - 1} more)` : ''
+      return (
+        <div className="min-w-0 space-y-0.5">
+          <Link
+            href={`/orders/${o.id}`}
+            className="text-base text-slate-900 dark:text-slate-100 hover:text-blue-600 line-clamp-2 leading-tight"
+            title={fi?.productName ?? undefined}
+          >
+            {fi?.productName ?? <span className="italic text-slate-500">(product missing)</span>}
+            {extra && <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">{extra}</span>}
+          </Link>
+          {(fi?.amazonAsin || fi?.sku) && (
+            <div className="text-xs text-slate-500 dark:text-slate-400 truncate space-x-2 font-mono">
+              {fi.amazonAsin && (
+                <span>
+                  <span className="not-italic">ASIN:</span> {fi.amazonAsin}
+                </span>
+              )}
+              {fi.sku && (
+                <span>
+                  <span className="not-italic">SKU:</span> {fi.sku}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            <span>Qty: <span className="text-slate-700 dark:text-slate-300 font-medium tabular-nums">{fi?.quantity ?? 0}</span></span>
+            <span className="mx-1.5">·</span>
+            <span>Item subtotal:</span>{' '}
+            {display.kind === 'pending' ? (
+              <span className="text-amber-700 dark:text-amber-300 font-medium">Awaiting payment</span>
+            ) : (
+              <span className="text-slate-900 dark:text-slate-100 font-semibold tabular-nums">
+                {display.symbol}{display.amount}{display.trailingCode ? ` ${display.trailingCode}` : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    }
+    case 'orderType': {
+      const dateLocale = locale === 'it' ? 'it-IT' : 'en-GB'
+      const fmtDate = (d: string | null | undefined) => {
+        if (!d) return null
+        return new Date(d).toLocaleDateString(dateLocale, { weekday: 'short', day: '2-digit', month: 'short' })
+      }
+      const shipBy = fmtDate(o.shipByDate)
+      const deliverBy = fmtDate(o.latestDeliveryDate)
+      // Ship-by urgency: < 24h to ship → amber; overdue → rose
+      let shipByTone = 'text-slate-600 dark:text-slate-400'
+      if (o.shipByDate && o.status !== 'SHIPPED' && o.status !== 'DELIVERED' && o.status !== 'CANCELLED') {
+        const remainingHours = (new Date(o.shipByDate).getTime() - Date.now()) / 3_600_000
+        if (remainingHours < 0) shipByTone = 'text-rose-600 dark:text-rose-400 font-semibold'
+        else if (remainingHours < 24) shipByTone = 'text-amber-600 dark:text-amber-400 font-semibold'
+      }
+      const typeBadge = o.isBusinessOrder ? 'Business' : o.isPrime ? 'Prime' : 'Standard'
+      const typeTone =
+        typeBadge === 'Business'
+          ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900'
+          : typeBadge === 'Prime'
+          ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900'
+          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+      return (
+        <div className="space-y-0.5">
+          <span className={`inline-block text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 border rounded ${typeTone}`}>
+            {typeBadge}
+          </span>
+          {shipBy && (
+            <div className={`text-xs ${shipByTone}`}>
+              <span className="text-slate-500 dark:text-slate-400">Ship by:</span> {shipBy}
+            </div>
+          )}
+          {deliverBy && (
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              <span>Deliver by:</span> {deliverBy}
+            </div>
+          )}
+        </div>
+      )
+    }
+    // ────────────────────────────────────────────────────────────────
     case 'channel': {
       const link = deepLinkForOrder({
         channel: o.channel,
@@ -513,12 +729,41 @@ function OrderCell({
         </span>
       )
     }
-    case 'status':
+    case 'status': {
+      // OX.4 — Amazon-style: badge + secondary line. The secondary
+      // text gives the operator context for what the status means or
+      // what to do next.
+      const secondary =
+        o.status === 'PENDING' || o.status === 'AWAITING_PAYMENT'
+          ? 'Awaiting payment verification'
+          : o.status === 'PROCESSING'
+          ? 'Ready to ship'
+          : o.status === 'ON_HOLD'
+          ? 'Hold — review required'
+          : o.status === 'PARTIALLY_SHIPPED'
+          ? 'Some items shipped'
+          : o.status === 'SHIPPED'
+          ? 'In transit'
+          : o.status === 'DELIVERED'
+          ? 'Completed'
+          : o.status === 'CANCELLED'
+          ? 'Cancelled'
+          : o.status === 'REFUNDED'
+          ? 'Refunded'
+          : o.status === 'RETURNED'
+          ? 'Returned'
+          : null
       return (
-        <Badge variant={STATUS_VARIANT[o.status] ?? 'default'} size="sm">
-          {o.status}
-        </Badge>
+        <div className="space-y-0.5">
+          <Badge variant={STATUS_VARIANT[o.status] ?? 'default'} size="sm">
+            {o.status}
+          </Badge>
+          {secondary && (
+            <div className="text-xs text-slate-500 dark:text-slate-400">{secondary}</div>
+          )}
+        </div>
       )
+    }
     case 'fulfillment':
       return o.fulfillmentMethod ? (
         <Badge
@@ -594,6 +839,13 @@ function OrderCell({
         </div>
       )
     case 'actions':
+      // OX.4 — Amazon-parity action column: 3 visible quick actions
+      // (Manage invoice · Print packing slip · Refund) + More dropdown
+      // (Edit consignment / Open detail / Request review / Cancel).
+      // Wires deep-links to detail-page sections; OX.5 will add the
+      // bulk variants and OX.6 will wire functional handlers.
+      return <RowActionMenu order={o} />
+    case 'open':
       return (
         <Link
           href={`/orders/${o.id}`}
@@ -605,6 +857,85 @@ function OrderCell({
     default:
       return null
   }
+}
+
+/**
+ * OX.4 — Amazon-style row action column. 3 visible buttons mirror the
+ * Seller Central row ("Manage invoice", "Print packing slip", "Refund
+ * Order") and a "More" dropdown houses the long tail. Handlers are
+ * deep-links for now; OX.5/OX.6 wire functional invoice generation
+ * and bulk packing slips.
+ */
+function RowActionMenu({ order }: { order: GridOrder }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const baseHref = `/orders/${order.id}`
+  const stop = (e: React.MouseEvent) => e.stopPropagation()
+
+  const primary = [
+    { label: 'Manage invoice', href: `${baseHref}?tab=fiscal` },
+    { label: 'Print packing slip', href: `${baseHref}?tab=fulfillment#packing` },
+    { label: 'Refund', href: `${baseHref}?tab=fulfillment#refund` },
+  ]
+  const more = [
+    { label: 'Open detail', href: baseHref },
+    { label: 'Edit consignment', href: `${baseHref}?tab=fulfillment#consignment` },
+    { label: 'Request a review', href: `${baseHref}#review` },
+    { label: 'Add note', href: `${baseHref}#notes` },
+    { label: 'View timeline', href: `${baseHref}?tab=activity` },
+  ]
+
+  return (
+    <div className="flex items-center gap-1" onClick={stop}>
+      {primary.map((a) => (
+        <Link
+          key={a.label}
+          href={a.href}
+          className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center"
+          title={a.label}
+        >
+          {a.label}
+        </Link>
+      ))}
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={(e) => {
+            stop(e)
+            setOpen((v) => !v)
+          }}
+          className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+          aria-label="More actions"
+          title="More actions"
+        >
+          <MoreHorizontal size={12} aria-hidden="true" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg py-1">
+            {more.map((a) => (
+              <Link
+                key={a.label}
+                href={a.href}
+                onClick={() => setOpen(false)}
+                className="block px-3 py-1.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                {a.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function ColumnPickerMenu({
