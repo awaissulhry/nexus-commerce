@@ -1806,6 +1806,47 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── HB-series historical backfill orchestrators ─────────────────────
+  //
+  // Both routes walk 24 months (configurable via daysBack) in 30-day
+  // chunks, fanning out per-marketplace. Synchronous — the caller waits
+  // for completion. For Railway gateway timeouts, prefer smaller windows
+  // and call repeatedly, or trigger from a long-lived job.
+
+  // POST /api/amazon/returns/backfill — HB.x returns 24mo
+  fastify.post<{
+    Body?: { daysBack?: number; marketplaceIds?: string[] }
+  }>('/returns/backfill', async (request, reply) => {
+    const { runReturnsBackfill } = await import('../services/historical-backfill.service.js')
+    try {
+      const result = await runReturnsBackfill(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/returns/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
+  // POST /api/amazon/settlements/backfill — HB.2 settlements 24mo
+  fastify.post<{
+    Body?: { daysBack?: number; marketplaceIds?: string[]; storeRawBody?: boolean }
+  }>('/settlements/backfill', async (request, reply) => {
+    const { runSettlementsBackfill } = await import('../services/historical-backfill.service.js')
+    try {
+      const result = await runSettlementsBackfill(request.body ?? {})
+      return { success: true, ...result }
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/settlements/backfill] failed')
+      return reply.code(500).send({
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
   // POST /api/amazon/participations/refresh — M1. Calls SP-API
   // getMarketplaceParticipations + writes back to our Marketplace table.
   // Records which markets the operator's auth scope actually permits;
