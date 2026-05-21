@@ -76,6 +76,15 @@ interface SalesReport {
   byProductType: SalesBucket[]
   byFulfillment: SalesBucket[]
   matrix: Array<{ channel: string; market: string; revenue: number; orders: number }>
+  /** I3 — per-(channel, marketplace, currency) rollup, native currency. */
+  byMarketplaceNative?: Array<{
+    channel: string
+    marketplace: string
+    currency: string
+    revenue: number
+    orders: number
+    units: number
+  }>
   pareto: ParetoPoint[]
   paretoSummary: { topNCount: number; topNShare: number; skuCount: number }
 }
@@ -488,6 +497,63 @@ export default function SalesClient() {
           )}
         </div>
       </Card>
+
+      {report && report.byMarketplaceNative && report.byMarketplaceNative.length > 0 && (
+        <Card
+          title="Native-currency rollup"
+          description="Per (channel × marketplace × currency) — exact native values, no implicit conversion"
+          className="mb-3"
+          noPadding
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th className="text-left font-medium px-3 py-2">Channel</th>
+                  <th className="text-left font-medium px-3 py-2">Market</th>
+                  <th className="text-left font-medium px-3 py-2">Currency</th>
+                  <th className="text-right font-medium px-3 py-2">Revenue</th>
+                  <th className="text-right font-medium px-3 py-2">Orders</th>
+                  <th className="text-right font-medium px-3 py-2">Units</th>
+                  <th className="text-right font-medium px-3 py-2">AOV</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byMarketplaceNative.map((row) => (
+                  <tr
+                    key={`${row.channel}|${row.marketplace}|${row.currency}`}
+                    className="border-b border-slate-100 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
+                  >
+                    <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
+                      {row.channel}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                      {row.marketplace}
+                    </td>
+                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400 font-mono text-[12px]">
+                      {row.currency}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+                      {formatCurrency(row.revenue, row.currency)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                      {formatNum(row.orders)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                      {formatNum(row.units)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                      {row.orders > 0
+                        ? formatCurrency(row.revenue / row.orders, row.currency)
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Card
         title="Pareto: SKU revenue concentration"

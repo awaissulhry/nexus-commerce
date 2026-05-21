@@ -85,6 +85,19 @@ interface ProfitReport {
   }
   waterfall: WaterfallStep[]
   byChannel: ProfitChannel[]
+  /** I6 — per-(channel, marketplace, currency) P&L in native currency. */
+  byMarketplace?: Array<{
+    channel: string
+    marketplace: string
+    currency: string
+    revenue: number
+    cogs: number
+    fees: number
+    grossProfit: number
+    netProfit: number
+    marginPct: number | null
+    unitsSold: number
+  }>
   bySku: ProfitSkuRow[]
   lossMakers: ProfitSkuRow[]
   feeNotes: { label: string; detail: string }[]
@@ -406,6 +419,97 @@ export default function ProfitClient() {
           )}
         </Card>
       </div>
+
+      {report && report.byMarketplace && report.byMarketplace.length > 0 && (
+        <Card
+          title="P&L per marketplace"
+          description="One row per (channel × marketplace × currency) — native currency, no implicit conversion"
+          className="mb-3"
+          noPadding
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th className="text-left font-medium px-3 py-2">Channel</th>
+                  <th className="text-left font-medium px-3 py-2">Market</th>
+                  <th className="text-right font-medium px-3 py-2">Revenue</th>
+                  <th className="text-right font-medium px-3 py-2">COGS</th>
+                  <th className="text-right font-medium px-3 py-2">Fees</th>
+                  <th className="text-right font-medium px-3 py-2">Gross</th>
+                  <th className="text-right font-medium px-3 py-2">Net</th>
+                  <th className="text-right font-medium px-3 py-2">Margin</th>
+                  <th className="text-right font-medium px-3 py-2">Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byMarketplace.map((row) => {
+                  const positive = row.netProfit >= 0
+                  return (
+                    <tr
+                      key={`${row.channel}|${row.marketplace}|${row.currency}`}
+                      className="border-b border-slate-100 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/30"
+                    >
+                      <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
+                        {row.channel}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {row.marketplace}
+                        </span>
+                        <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+                          {row.currency}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+                        {formatCurrency(row.revenue, row.currency)}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-400">
+                        {row.cogs > 0
+                          ? `−${formatCurrency(row.cogs, row.currency)}`
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-400">
+                        {row.fees > 0
+                          ? `−${formatCurrency(row.fees, row.currency)}`
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                        {formatCurrency(row.grossProfit, row.currency)}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right tabular-nums font-semibold ${
+                          positive
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {formatCurrency(row.netProfit, row.currency)}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right tabular-nums ${
+                          row.marginPct == null
+                            ? 'text-slate-400'
+                            : row.marginPct >= 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {row.marginPct == null
+                          ? '—'
+                          : `${row.marginPct.toFixed(1)}%`}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                        {row.unitsSold.toLocaleString('it-IT')}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {report && report.lossMakers.length > 0 && (
         <Card

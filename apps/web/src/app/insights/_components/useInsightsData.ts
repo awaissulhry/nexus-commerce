@@ -4,16 +4,37 @@ import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { InsightsFilterState } from '@/components/insights'
 
+export interface MarketplaceMetric {
+  current: number
+  previous: number
+  deltaPct: number | null
+}
+
+export interface MarketplaceMetricsRow {
+  channel: string
+  marketplace: string
+  currency: string
+  revenue: MarketplaceMetric
+  refunds: MarketplaceMetric
+  netRevenue: MarketplaceMetric
+  orders: MarketplaceMetric
+  units: MarketplaceMetric
+  aov: MarketplaceMetric
+}
+
 export interface InsightsSummary {
   window: { from: string; to: string }
   compare: { from: string; to: string } | null
   currency: string
   totals: {
-    revenue: { current: number; previous: number; deltaPct: number | null }
-    orders: { current: number; previous: number; deltaPct: number | null }
-    units: { current: number; previous: number; deltaPct: number | null }
-    aov: { current: number; previous: number; deltaPct: number | null }
+    revenue: MarketplaceMetric
+    refunds?: MarketplaceMetric
+    netRevenue?: MarketplaceMetric
+    orders: MarketplaceMetric
+    units: MarketplaceMetric
+    aov: MarketplaceMetric
   }
+  byMarketplace: MarketplaceMetricsRow[]
   spark: Array<{ date: string; revenue: number; orders: number }>
 }
 

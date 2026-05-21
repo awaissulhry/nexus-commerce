@@ -35,6 +35,7 @@ import type { InsightsFilterState } from '@/components/insights'
 import { useInsightsHubData } from './useInsightsData'
 import { ChannelSplitWidget } from './ChannelSplitWidget'
 import { MarketSplitWidget } from './MarketSplitWidget'
+import { MarketplaceMatrixWidget } from './MarketplaceMatrixWidget'
 import { TopSKUsWidget } from './TopSKUsWidget'
 import { WhatChangedWidget } from './WhatChangedWidget'
 
@@ -282,6 +283,15 @@ export default function InsightsLanding() {
         <ChannelSplitWidget breakdown={data.breakdown} loading={loading} />
         <MarketSplitWidget breakdown={data.breakdown} loading={loading} />
       </div>
+
+      {summary && summary.byMarketplace.length > 0 && (
+        <div className="mb-3">
+          <MarketplaceMatrixWidget
+            rows={summary.byMarketplace}
+            loading={loading}
+          />
+        </div>
+      )}
 
       <div className="mb-5">
         <TopSKUsWidget rows={data.topSkus} currency={currency} loading={loading} />
