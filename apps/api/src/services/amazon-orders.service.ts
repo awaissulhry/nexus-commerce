@@ -209,17 +209,31 @@ export class AmazonOrdersService {
       orderBy: { purchaseDate: 'asc' },
       take: limit,
     })
-    const result = { scanned: stale.length, repaired: 0, skipped: 0, failed: 0, errors: [] as Array<{ orderId: string; error: string }> }
+    const result = {
+      scanned: stale.length,
+      repaired: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [] as Array<{ orderId: string; error: string }>,
+      skips: [] as Array<{ orderId: string; reason: string; status?: string }>,
+    }
     for (const row of stale) {
       try {
         const raw = await amazonService.fetchOrderById(row.channelOrderId)
-        if (!raw || !raw.OrderTotal?.Amount) {
+        if (!raw) {
           result.skipped += 1
+          result.skips.push({ orderId: row.channelOrderId, reason: 'getOrder returned null (NotFound or unavailable)' })
+          continue
+        }
+        if (!raw.OrderTotal?.Amount) {
+          result.skipped += 1
+          result.skips.push({ orderId: row.channelOrderId, reason: 'OrderTotal.Amount missing from response', status: raw.OrderStatus })
           continue
         }
         const amount = Number(raw.OrderTotal.Amount)
         if (!Number.isFinite(amount) || amount === 0) {
           result.skipped += 1
+          result.skips.push({ orderId: row.channelOrderId, reason: `OrderTotal.Amount=${raw.OrderTotal.Amount}`, status: raw.OrderStatus })
           continue
         }
         await prisma.order.update({
