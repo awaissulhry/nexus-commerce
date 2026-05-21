@@ -1723,6 +1723,45 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // POST /api/amazon/participations/refresh — M1. Calls SP-API
+  // getMarketplaceParticipations + writes back to our Marketplace table.
+  // Records which markets the operator's auth scope actually permits;
+  // backfills should fan out across only those flagged isParticipating.
+  fastify.post('/participations/refresh', async (_request, reply) => {
+    const { refreshAmazonParticipations } = await import('../services/amazon-participations.service.js')
+    try {
+      const result = await refreshAmazonParticipations()
+      return result
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/participations/refresh] failed')
+      return reply.code(500).send({
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })
+
+  // GET /api/amazon/participations — M1. Current per-marketplace
+  // participation status, read straight from our Marketplace table
+  // (last persisted snapshot). For a fresh read, POST /refresh first.
+  fastify.get('/participations', async (_request, _reply) => {
+    const { default: prisma } = await import('../db.js')
+    const rows = await prisma.marketplace.findMany({
+      where: { channel: 'AMAZON' },
+      select: {
+        code: true,
+        marketplaceId: true,
+        currency: true,
+        region: true,
+        isActive: true,
+        isParticipating: true,
+        participationStatus: true,
+        participationCheckedAt: true,
+      },
+      orderBy: { code: 'asc' },
+    })
+    return { marketplaces: rows }
+  })
+
   // GET /api/amazon/reconciliation/all — I11 per-marketplace fan-out.
   // Runs reconcileAmazon across every connected Amazon marketplace and
   // groups revenue drift per native currency. Sequential (not parallel)

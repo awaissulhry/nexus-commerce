@@ -1540,6 +1540,16 @@ model Marketplace {
   // cross-border from one origin (highest fees).
   fbaProgram   String? // 'PAN_EU' | 'MCI' | 'EFN' | null (non-Amazon)
 
+  // M1 — SP-API marketplace participation status. Distinct from isActive
+  // (operator-controlled enable/disable): isParticipating reflects what
+  // SP-API getMarketplaceParticipations actually says about the seller's
+  // auth scope on this marketplace. A sync should run only when
+  // `isActive && isParticipating`.
+  isParticipating        Boolean   @default(false)
+  // 'PARTICIPATING' | 'SUSPENDED' | 'NOT_PARTICIPATING' | 'ACCESS_DENIED' | 'UNKNOWN'
+  participationStatus    String?
+  participationCheckedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
