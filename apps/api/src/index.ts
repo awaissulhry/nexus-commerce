@@ -815,6 +815,22 @@ async function start() {
       startAmazonInventoryCron();
     }
 
+    // Daily Amazon settlement reports sync (03:30 UTC) — lists +
+    // downloads any new published settlements. Idempotent.
+    // Gated behind NEXUS_ENABLE_AMAZON_SETTLEMENT_CRON=1.
+    if (process.env.NEXUS_ENABLE_AMAZON_SETTLEMENT_CRON === '1') {
+      const { startAmazonSettlementCron } = await import('./jobs/amazon-settlement-sync.job.js');
+      startAmazonSettlementCron();
+    }
+
+    // Daily Amazon A+ Content metadata sync (04:00 UTC) — pulls all
+    // /aplus/2020-11-01/contentDocuments and upserts metadata.
+    // Gated behind NEXUS_ENABLE_AMAZON_APLUS_CRON=1.
+    if (process.env.NEXUS_ENABLE_AMAZON_APLUS_CRON === '1') {
+      const { startAmazonAplusCron } = await import('./jobs/amazon-aplus-sync.job.js');
+      startAmazonAplusCron();
+    }
+
     // Reservation TTL sweep — every 5 min, releases expired
     // PENDING_ORDER reservations so available = quantity - reserved
     // doesn't stay locked after a cancelled order. Default-ON; opt out

@@ -1704,6 +1704,25 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // GET /api/amazon/reconciliation — channel vs Nexus drift report.
+  // Compares SP-API order/revenue/inventory totals against our DB for
+  // a configurable window. Operationally surfaces backfill gaps + sync drift.
+  fastify.get<{ Querystring: { daysBack?: string; marketplaceId?: string } }>('/reconciliation', async (request, reply) => {
+    const { reconcileAmazon } = await import('../services/channel-reconciliation.service.js')
+    try {
+      const q = request.query
+      const daysBack = q.daysBack ? Math.min(180, Math.max(1, parseInt(q.daysBack, 10))) : 30
+      const report = await reconcileAmazon({
+        marketplaceId: q.marketplaceId,
+        daysBack,
+      })
+      return report
+    } catch (err) {
+      fastify.log.error({ err }, '[amazon/reconciliation] failed')
+      return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   // POST /api/amazon/aplus/sync — Phase 9 metadata reconciliation.
   // Pulls all A+ Content documents from Amazon for the marketplace and
   // upserts them into APlusContent. Body: { marketplaceId? }.

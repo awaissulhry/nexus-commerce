@@ -33,6 +33,8 @@ import { runFbaRestockCronOnce } from './fba-restock-ingestion.job.js'
 import { runFbaPanEuSyncOnce } from './fba-pan-eu-sync.job.js'
 import { runFbaStatusPoll } from './fba-status-poll.job.js'
 import { runPollSweep as runAmazonReturnsPoll } from './amazon-returns-poll.job.js'
+import { runSettlementSync as runAmazonSettlementSync } from './amazon-settlement-sync.job.js'
+import { runAplusSync as runAmazonAplusSync } from './amazon-aplus-sync.job.js'
 import { runRetrySweep as runRefundRetry } from './refund-retry.job.js'
 import { runRefundDeadlineScan } from './refund-deadline-tracker.job.js'
 import { runReservationSweep } from './reservation-sweep.job.js'
@@ -112,6 +114,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'amazon-inventory-sync': () => runAmazonInventorySweep(),
   'amazon-mcf-status': () => runMCFStatusSyncOnce(),
   'amazon-returns-poll': () => runAmazonReturnsPoll(),
+  'amazon-settlement-sync': () => runAmazonSettlementSync(),
+  'amazon-aplus-sync': () => runAmazonAplusSync(),
   'ebay-orders-sync': () => runEbayOrdersPoll(),
   'ebay-token-refresh': () => runEbayTokenRefresh(),
   'sync-drift-detection': () => runSyncDriftDetection(),
