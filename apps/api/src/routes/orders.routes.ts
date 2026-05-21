@@ -48,9 +48,48 @@ export async function ordersRoutes(app: FastifyInstance) {
   })
 
   // ── Stats (kept, lighter response shape) ─────────────────────────
-  app.get('/api/orders/stats', async (_request, reply) => {
+  app.get('/api/orders/stats', async (request, reply) => {
     try {
       reply.header('Cache-Control', 'private, max-age=30')
+      // OX.16 — stats counts now respect the same scope-level filters
+      // the list endpoint reads (date range, fulfillment, channel,
+      // marketplace). Without this the status tab numbers misled
+      // operators: "30 days" date range would still show "2152 shipped"
+      // (lifetime) above a list of 47 shipped (last 30 days).
+      //
+      // We intentionally do NOT honour `status` or `noInvoice` params
+      // here — those ARE the tabs, so the counts must stay unfiltered
+      // along that axis to remain meaningful.
+      const q = request.query as any
+      const channels = csvParam(q.channel)
+      const marketplaces = csvParam(q.marketplace)
+      const fulfillment = csvParam(q.fulfillment)
+      const dateFrom = q.dateFrom ? new Date(q.dateFrom) : null
+      const dateTo = q.dateTo ? new Date(q.dateTo) : null
+      const dateRangePreset = (q.dateRange ?? '').toString().trim() as
+        | ''
+        | '24h'
+        | '7d'
+        | '30d'
+        | '90d'
+      let presetFrom: Date | null = null
+      switch (dateRangePreset) {
+        case '24h': presetFrom = new Date(Date.now() - 24 * 60 * 60 * 1000); break
+        case '7d': presetFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); break
+        case '30d': presetFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); break
+        case '90d': presetFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); break
+      }
+      const effectiveFrom = dateFrom ?? presetFrom
+      const baseWhere: any = { deletedAt: null }
+      if (channels && channels.length) baseWhere.channel = { in: channels }
+      if (marketplaces && marketplaces.length) baseWhere.marketplace = { in: marketplaces }
+      if (fulfillment && fulfillment.length) baseWhere.fulfillmentMethod = { in: fulfillment }
+      if (effectiveFrom || dateTo) {
+        baseWhere.purchaseDate = {}
+        if (effectiveFrom) baseWhere.purchaseDate.gte = effectiveFrom
+        if (dateTo) baseWhere.purchaseDate.lte = dateTo
+      }
+
       // OX.2 — counts mirror the Amazon-style status tabs:
       //   Pending    → PENDING / AWAITING_PAYMENT
       //   Unshipped  → PROCESSING / ON_HOLD (paid + ready or held)
@@ -58,7 +97,6 @@ export async function ordersRoutes(app: FastifyInstance) {
       //   Cancelled  → CANCELLED / REFUNDED / RETURNED
       //   NoInvoice  → marketplace=IT + status NOT IN (PENDING, CANCELLED, …)
       //                AND fiscalInvoice IS NULL (Italian compliance gap)
-      const baseWhere = { deletedAt: null }
       const [total, pending, unshipped, shipped, cancelled, delivered, noInvoice] = await Promise.all([
         prisma.order.count({ where: baseWhere }),
         prisma.order.count({ where: { ...baseWhere, status: { in: ['PENDING', 'AWAITING_PAYMENT'] } } }),
@@ -103,7 +141,11 @@ export async function ordersRoutes(app: FastifyInstance) {
 
       const channels = csvParam(q.channel)
       const marketplaces = csvParam(q.marketplace)
-      const statuses = csvParam(q.status)
+      // OX.16 — "ALL" is the sentinel the StatusTabs uses to mark
+      // "user explicitly chose All" (distinct from no status param,
+      // which triggers the default-to-Unshipped redirect). Filter it
+      // out here so it doesn't reach the WHERE clause.
+      const statuses = csvParam(q.status)?.filter((s: string) => s !== 'ALL')
       const fulfillment = csvParam(q.fulfillment)
       const tagIds = csvParam(q.tags)
       const reviewStatus = csvParam(q.reviewStatus)
@@ -1201,7 +1243,11 @@ export async function ordersRoutes(app: FastifyInstance) {
       const search = (q.search ?? '').trim()
       const channels = csvParam(q.channel)
       const marketplaces = csvParam(q.marketplace)
-      const statuses = csvParam(q.status)
+      // OX.16 — "ALL" is the sentinel the StatusTabs uses to mark
+      // "user explicitly chose All" (distinct from no status param,
+      // which triggers the default-to-Unshipped redirect). Filter it
+      // out here so it doesn't reach the WHERE clause.
+      const statuses = csvParam(q.status)?.filter((s: string) => s !== 'ALL')
       const fulfillment = csvParam(q.fulfillment)
       const reviewStatus = csvParam(q.reviewStatus)
       const customerEmail = (q.customerEmail ?? '').trim() || null

@@ -141,7 +141,6 @@ export default function OrdersWorkspace() {
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [filtersOpen, setFiltersOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [density, setDensity] = useState<Density>(() => {
     if (typeof window === 'undefined') return 'comfortable'
@@ -226,6 +225,26 @@ export default function OrdersWorkspace() {
   })
   useEffect(() => { try { window.localStorage.setItem('orders.visibleColumns.v2', JSON.stringify(visibleColumns)) } catch {} }, [visibleColumns])
 
+  // OX.16 — default landing tab = Unshipped. Operators care about
+  // what's actionable, not the lifetime total. When the URL has no
+  // status / noInvoice / customerEmail / search filter at all, push
+  // ?status=PROCESSING,ON_HOLD once so the Unshipped tab is active.
+  // The "All" tab uses the `ALL` sentinel so clicking it doesn't
+  // re-trigger this redirect.
+  useEffect(() => {
+    const hasAnyScope =
+      searchParams.has('status')
+      || searchParams.has('noInvoice')
+      || searchParams.has('customerEmail')
+      || searchParams.has('search')
+    if (!hasAnyScope && lens === 'grid') {
+      updateUrl({ status: 'PROCESSING,ON_HOLD', page: undefined })
+    }
+    // intentionally only on first mount per session — re-runs would
+    // fight user-initiated tab clicks. The deps below are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const updateUrl = useCallback((patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams.toString())
     for (const [k, v] of Object.entries(patch)) {
@@ -281,10 +300,23 @@ export default function OrdersWorkspace() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch(`${getBackendUrl()}/api/orders/stats`, { cache: 'no-store' })
+      // OX.16 — stats counts respect scope filters (date range,
+      // fulfillment, channel, marketplace). Status / noInvoice are
+      // intentionally excluded — those ARE the tabs the counts label.
+      const qs = new URLSearchParams()
+      if (channelFilters.length) qs.set('channel', channelFilters.join(','))
+      if (marketplaceFilters.length) qs.set('marketplace', marketplaceFilters.join(','))
+      if (fulfillmentFilters.length) qs.set('fulfillment', fulfillmentFilters.join(','))
+      if (dateRangePreset) qs.set('dateRange', dateRangePreset)
+      if (dateFrom) qs.set('dateFrom', dateFrom)
+      if (dateTo) qs.set('dateTo', dateTo)
+      const url = qs.toString()
+        ? `${getBackendUrl()}/api/orders/stats?${qs.toString()}`
+        : `${getBackendUrl()}/api/orders/stats`
+      const res = await fetch(url, { cache: 'no-store' })
       if (res.ok) setStats(await res.json())
     } catch {}
-  }, [])
+  }, [channelFilters.join(','), marketplaceFilters.join(','), fulfillmentFilters.join(','), dateRangePreset, dateFrom, dateTo])
   const fetchFacets = useCallback(async () => {
     try {
       const res = await fetch(`${getBackendUrl()}/api/orders/facets`, { cache: 'no-store' })
@@ -408,10 +440,11 @@ export default function OrdersWorkspace() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lens, orders, activeRowIndex, searchInput, selected.size, router])
 
-  const filterCount =
-    channelFilters.length + marketplaceFilters.length + statusFilters.length +
-    fulfillmentFilters.length + reviewStatusFilters.length + orderTypeFilters.length +
-    (hasReturn ? 1 : 0) + (hasRefund ? 1 : 0) + (reviewEligible ? 1 : 0) + (customerEmail ? 1 : 0)
+  // OX.16 — the standalone filterCount badge moved out with the
+  // accordion-Filter button removal; only the toolbar FilterPopover
+  // shows a count (via secondaryFilterCount). If a future surface
+  // needs the cross-dimension count again, derive it from
+  // secondaryFilterCount + channelFilters + marketplaceFilters.
   // Secondary filter count — the dimensions hosted in the popover.
   // Channel + marketplace stay inline as preset chips for hot paths.
   // Date range lives in its own toolbar dropdown, not counted here.
@@ -688,25 +721,16 @@ export default function OrdersWorkspace() {
         </div>
       )}
 
-      {/* Filter bar — search input + inline channel/market chips.
-          Secondary dimensions (status, fulfillment, review, has-return,
-          has-refund, review-eligible) now live in the FilterPopover above. */}
+      {/* Filter bar — search input + inline channel/market chips only.
+          Every other dimension (status, fulfillment, review, has-return,
+          has-refund, review-eligible, order-type, date-range) lives in
+          the toolbar above so there's one canonical place per dimension. */}
       {lens === 'grid' && (
         <FilterBar
           searchInput={searchInput}
           setSearchInput={setSearchInput}
           channelFilters={channelFilters}
           marketplaceFilters={marketplaceFilters}
-          statusFilters={statusFilters}
-          fulfillmentFilters={fulfillmentFilters}
-          reviewStatusFilters={reviewStatusFilters}
-          hasReturn={hasReturn}
-          hasRefund={hasRefund}
-          reviewEligible={reviewEligible}
-          filterCount={filterCount}
-          filtersOpen={filtersOpen}
-          setFiltersOpen={setFiltersOpen}
-          facets={facets}
           updateUrl={updateUrl}
         />
       )}
@@ -885,8 +909,12 @@ const STATUS_TAB_DEFS: Array<{
     key: 'all',
     label: 'All',
     count: (s) => s.total,
-    spec: { status: undefined, noInvoice: undefined },
-    match: (sf, ni) => sf.length === 0 && !ni,
+    // OX.16 — "ALL" sentinel so clicking the All tab doesn't trigger
+    // the first-mount redirect-to-Unshipped (which fires when the
+    // status param is absent). API treats 'ALL' as "no status filter".
+    spec: { status: 'ALL', noInvoice: undefined },
+    match: (sf, ni) =>
+      (sf.length === 1 && sf[0] === 'ALL') || (sf.length === 0 && !ni),
   },
   {
     key: 'pending',
