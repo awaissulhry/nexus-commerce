@@ -132,54 +132,17 @@ async function fetchChannelOrderTotals(
 
 /**
  * Pull FBA inventory total units for the marketplace.
+ *
+ * Delegates to AmazonService.fetchFBAInventory — the same battle-tested
+ * pager the 15-min inventory cron uses. Earlier raw-fetch impl returned
+ * inconsistent numbers (42 vs 432) vs the cron's 432; the cause was
+ * subtly different query serialization.
  */
 async function fetchChannelFbaInventory(marketplaceId: string): Promise<number> {
-  const accessToken = await getLwaAccessToken()
-  const region = (process.env.AMAZON_REGION ?? 'eu') as string
-  const host = `sellingpartnerapi-${region}.amazon.com`
-
-  let totalUnits = 0
-  let nextToken: string | undefined
-  let pages = 0
-
-  while (pages < 20) {
-    const params = new URLSearchParams(
-      nextToken
-        ? { nextToken }
-        : {
-            marketplaceIds: marketplaceId,
-            granularityType: 'Marketplace',
-            granularityId: marketplaceId,
-            details: 'true',
-          },
-    )
-    const url = `https://${host}/fba/inventory/v1/summaries?${params.toString()}`
-    const res = await fetch(url, {
-      headers: { 'x-amz-access-token': accessToken },
-    })
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`getInventorySummaries ${res.status}: ${body.slice(0, 200)}`)
-    }
-    const data = (await res.json()) as {
-      payload?: {
-        inventorySummaries?: Array<{
-          inventoryDetails?: { fulfillableQuantity?: number }
-          totalQuantity?: number
-        }>
-        nextToken?: string
-      }
-    }
-    const summaries = data.payload?.inventorySummaries ?? []
-    for (const s of summaries) {
-      totalUnits += s.inventoryDetails?.fulfillableQuantity ?? s.totalQuantity ?? 0
-    }
-    pages++
-    nextToken = data.payload?.nextToken
-    if (!nextToken) break
-    await new Promise((r) => setTimeout(r, 500))
-  }
-  return totalUnits
+  const { AmazonService } = await import('./marketplaces/amazon.service.js')
+  const svc = new AmazonService()
+  const rows = await svc.fetchFBAInventory({ marketplaceId })
+  return rows.reduce((sum, r) => sum + (r.fulfillableQuantity ?? 0), 0)
 }
 
 /**
