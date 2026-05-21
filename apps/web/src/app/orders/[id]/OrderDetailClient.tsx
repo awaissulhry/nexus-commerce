@@ -239,6 +239,49 @@ export default function OrderDetailClient({ id }: { id: string }) {
         </div>
       )}
 
+      {/* OX.6 — sticky Amazon-style primary action bar. Stays visible
+          on scroll so operators can act on the order from any tab
+          without scrolling back up. */}
+      <div className="sticky top-0 z-20 -mx-5 px-5 py-2 bg-white/95 dark:bg-slate-950/95 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href={`${getBackendUrl()}/api/orders/${order.id}/invoice.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open invoice in a new tab — use Cmd/Ctrl+P to save as PDF"
+            className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
+          >
+            <Receipt size={12} /> Manage invoice
+          </a>
+          <a
+            href={`${getBackendUrl()}/api/orders/${order.id}/packing-slip.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open packing slip in a new tab — use Cmd/Ctrl+P to save as PDF"
+            className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
+          >
+            <Package size={12} /> Print packing slip
+          </a>
+          <Link
+            href={`/orders/${order.id}?tab=fulfillment#refund`}
+            className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
+          >
+            <Undo2 size={12} /> Refund order
+          </Link>
+          <button
+            onClick={requestReviewNow}
+            disabled={reviewBusy || !order.deliveredAt}
+            title={!order.deliveredAt ? 'Order must be delivered first' : 'Send Amazon review request (4–30 days post-delivery)'}
+            className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+          >
+            <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request a review
+          </button>
+          <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 hidden md:inline">
+            Order ID: <span className="font-mono text-slate-700 dark:text-slate-300">{order.channelOrderId}</span>
+          </span>
+        </div>
+      </div>
+
       {/* AU.1 — tab nav. Summary is default; others gate their
           content blocks. URL-backed via ?tab= so deep-links work
           (e.g. /orders/123?tab=fulfillment from a notification). */}
