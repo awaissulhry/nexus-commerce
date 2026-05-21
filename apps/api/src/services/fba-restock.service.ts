@@ -232,9 +232,12 @@ export async function ingestRestockReportForMarketplace(args: {
   const windowStart = new Date(now)
   windowStart.setUTCDate(windowStart.getUTCDate() - windowDays)
 
+  // HB.8 — write 2-letter code into `marketplace` (canonical), not the
+  // SP-API id. `marketplaceCode` mirrors the same value (kept for
+  // backwards-compat with existing readers).
   const reportRecord = await prisma.fbaRestockReport.create({
     data: {
-      marketplace: marketplaceId,
+      marketplace: code,
       marketplaceCode: code,
       status: 'REQUESTED',
       triggeredBy: args.triggeredBy,

@@ -114,14 +114,15 @@ export async function pullAPlusContentMetadata(opts: {
 
   logger.info('[aplus-pull] Listed', { documents: collected.length, pages })
 
-  // Map Amazon marketplaceId → Marketplace code (IT/DE/ES/FR/UK) for our schema
+  // HB.8 — canonical 2-letter code (IT / DE / ES / FR / UK / …). The
+  // legacy 'AMAZON_XX' prefixed form is migrated to plain code in the
+  // 20260521_hb8_marketplace_code_sweep migration; this writer must
+  // produce the same shape so re-ingests don't re-introduce the prefix.
   const marketplaceRow = await prisma.marketplace.findFirst({
     where: { channel: 'AMAZON', marketplaceId },
     select: { code: true },
   })
-  const marketCode = marketplaceRow?.code
-    ? `AMAZON_${marketplaceRow.code}`
-    : `AMAZON_${marketplaceId.slice(0, 6)}`
+  const marketCode = marketplaceRow?.code ?? marketplaceId.slice(0, 6)
 
   const errors: AplusPullSummary['errors'] = []
   let upserted = 0
