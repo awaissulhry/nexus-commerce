@@ -806,9 +806,32 @@ function SalesPanelPlaceholder({ data, onSelectMarketplace }: { data: Snapshot; 
         </div>
         {loading && <span className="text-xs text-slate-400">Loading…</span>}
         <div className="ml-auto text-xs tabular-nums text-slate-500 dark:text-slate-400">
-          Total: <span className="text-slate-900 dark:text-slate-100 font-semibold">{formatEur(panelData.sales.total.valueCents)}</span>
-          {' · '}
-          <span className="text-slate-700 dark:text-slate-300">{panelData.sales.total.units} units</span>
+          {(() => {
+            // Match the tile-level combined headline (SR.1) so the
+            // panel and tile don't disagree. Asterisk + sub-line on
+            // the tile is the trust marker; here we just sum.
+            const pend = panelData.sales.total.pending
+            const est = pend?.estimateCents ?? 0
+            const combined =
+              pend && pend.count > 0 && est > 0
+                ? panelData.sales.total.valueCents + est
+                : panelData.sales.total.valueCents
+            return (
+              <>
+                Total:{' '}
+                <span className="text-slate-900 dark:text-slate-100 font-semibold">
+                  {formatEur(combined)}
+                  {pend && pend.count > 0 && est > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400 ml-0.5" title={`Includes ~${formatEur(est)} estimated for ${pend.count} pending verification`}>
+                      *
+                    </span>
+                  )}
+                </span>
+                {' · '}
+                <span className="text-slate-700 dark:text-slate-300">{panelData.sales.total.units} units</span>
+              </>
+            )
+          })()}
         </div>
       </div>
 
