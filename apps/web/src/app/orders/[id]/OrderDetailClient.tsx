@@ -475,6 +475,11 @@ export default function OrderDetailClient({ id }: { id: string }) {
 
         {/* Sidebar */}
         <div className="space-y-4">
+          {/* OX.10 — sales proceeds card. Mirrors Amazon Seller Central:
+              Payment method · Items total (excl + incl VAT) · Grand
+              total (excl + incl VAT) · drill-down for fee breakdown. */}
+          <SalesProceedsCard order={order} financials={financials} />
+
           <Card title="Customer">
             <div className="space-y-2">
               <div className="text-md font-semibold text-slate-900 dark:text-slate-100">{order.customerName}</div>
@@ -1289,6 +1294,148 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
               </span>
             )}
           </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * OX.10 — sales proceeds sidebar card. Amazon Seller Central shows:
+ *
+ *   Payment methods: Standard
+ *   ────────────────────────────────
+ *   Items total:             €105.00
+ *     Items total — Incl VAT:  €18.93
+ *   Grand total:             €105.00
+ *     Grand total — Incl VAT:  €18.93
+ *
+ * Plus an expandable fee-breakdown panel when FinancialTransaction
+ * rows exist (Amazon fee, FBA fee, payment fee, refund).
+ *
+ * Math: prices stored are VAT-inclusive (matches SP-API B2C). VAT-
+ * excl = price / (1 + rate/100). Default rate = 22% (IT) or 0% (non-IT).
+ */
+function SalesProceedsCard({ order, financials }: { order: any; financials: any }) {
+  const isIT = order.marketplace === 'IT'
+  const items: any[] = order.items ?? []
+  let itemsTotalIncl = 0
+  let itemsVatTotal = 0
+  for (const it of items) {
+    const rate = it.itVatRatePct == null ? (isIT ? 22 : 0) : Number(it.itVatRatePct)
+    const incl = Number(it.price) * it.quantity
+    const excl = rate > 0 ? incl / (1 + rate / 100) : incl
+    itemsTotalIncl += incl
+    itemsVatTotal += incl - excl
+  }
+  const grandTotalIncl = Number(order.totalPrice ?? itemsTotalIncl)
+  // Best-effort grand-total VAT: scale per-item VAT to the grand-total
+  // when shipping is rolled into totalPrice (Amazon's behaviour).
+  const grandTotalVat = itemsTotalIncl > 0 ? (itemsVatTotal / itemsTotalIncl) * grandTotalIncl : 0
+
+  const paymentMethod = order.amazonMetadata?.PaymentMethod ?? 'Standard'
+  const symbol = order.currencyCode === 'EUR' || !order.currencyCode ? '€' : ''
+  const fmt = (n: number) => `${symbol}${n.toFixed(2)}${order.currencyCode && order.currencyCode !== 'EUR' ? ` ${order.currencyCode}` : ''}`
+
+  // Fee breakdown rolled up across financial transactions
+  const feeRollup = financials?.transactions?.reduce(
+    (acc: any, tx: any) => {
+      acc.amazonFee += Number(tx.amazonFee ?? 0)
+      acc.fbaFee += Number(tx.fbaFee ?? 0)
+      acc.paymentServicesFee += Number(tx.paymentServicesFee ?? 0)
+      acc.ebayFee += Number(tx.ebayFee ?? 0)
+      acc.paypalFee += Number(tx.paypalFee ?? 0)
+      acc.otherFees += Number(tx.otherFees ?? 0)
+      return acc
+    },
+    { amazonFee: 0, fbaFee: 0, paymentServicesFee: 0, ebayFee: 0, paypalFee: 0, otherFees: 0 },
+  )
+  const hasFees = feeRollup && Object.values(feeRollup as Record<string, number>).some((v) => v > 0)
+
+  return (
+    <Card title="Sales proceeds">
+      <div className="space-y-3 text-sm">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-slate-500 dark:text-slate-400">Payment methods:</span>
+          <span className="text-slate-700 dark:text-slate-200">{paymentMethod}</span>
+        </div>
+
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-slate-700 dark:text-slate-200">Items total:</span>
+            <span className="tabular-nums font-medium text-slate-900 dark:text-slate-100">{fmt(itemsTotalIncl)}</span>
+          </div>
+          {isIT && itemsVatTotal > 0 && (
+            <div className="flex items-baseline justify-between gap-2 pl-3">
+              <span className="text-xs text-slate-500 dark:text-slate-400">Items total — Included VAT:</span>
+              <span className="text-xs tabular-nums text-slate-600 dark:text-slate-400">{fmt(itemsVatTotal)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Grand total:</span>
+            <span className="text-base tabular-nums font-bold text-slate-900 dark:text-slate-100">{fmt(grandTotalIncl)}</span>
+          </div>
+          {isIT && grandTotalVat > 0 && (
+            <div className="flex items-baseline justify-between gap-2 pl-3">
+              <span className="text-xs text-slate-500 dark:text-slate-400">Grand total — Included VAT:</span>
+              <span className="text-xs tabular-nums text-slate-600 dark:text-slate-400">{fmt(grandTotalVat)}</span>
+            </div>
+          )}
+        </div>
+
+        {hasFees && (
+          <details className="pt-2 border-t border-slate-200 dark:border-slate-700">
+            <summary className="cursor-pointer text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold hover:text-slate-900 dark:hover:text-slate-100">
+              Fee breakdown
+            </summary>
+            <div className="mt-2 space-y-1 pl-3">
+              {feeRollup.amazonFee > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Amazon referral:</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">-{fmt(feeRollup.amazonFee)}</span>
+                </div>
+              )}
+              {feeRollup.fbaFee > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">FBA fee:</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">-{fmt(feeRollup.fbaFee)}</span>
+                </div>
+              )}
+              {feeRollup.paymentServicesFee > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Payment services:</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">-{fmt(feeRollup.paymentServicesFee)}</span>
+                </div>
+              )}
+              {feeRollup.ebayFee > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">eBay fee:</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">-{fmt(feeRollup.ebayFee)}</span>
+                </div>
+              )}
+              {feeRollup.paypalFee > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">PayPal fee:</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">-{fmt(feeRollup.paypalFee)}</span>
+                </div>
+              )}
+              {feeRollup.otherFees > 0 && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Other fees:</span>
+                  <span className="tabular-nums text-rose-700 dark:text-rose-300">-{fmt(feeRollup.otherFees)}</span>
+                </div>
+              )}
+              {financials?.rollup?.net != null && (
+                <div className="flex justify-between text-xs pt-1 mt-1 border-t border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-700 dark:text-slate-200 font-medium">Net proceeds:</span>
+                  <span className="tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">{fmt(Number(financials.rollup.net))}</span>
+                </div>
+              )}
+            </div>
+          </details>
         )}
       </div>
     </Card>
