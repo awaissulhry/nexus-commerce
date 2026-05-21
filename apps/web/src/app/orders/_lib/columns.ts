@@ -35,7 +35,9 @@ export const ALL_COLUMNS: OrderColumn[] = [
   { key: 'productName', label: 'Product name', width: 320 },
   { key: 'orderType', label: 'Order type', width: 180 },
   { key: 'status', label: 'Order status', width: 130 },
-  { key: 'actions', label: '', width: 200, locked: true },
+  // OX.4 follow-up: vertically-stacked action buttons + sticky right
+  // edge → matches Amazon Seller Central's right-pinned action column.
+  { key: 'actions', label: 'Action', width: 170, locked: true },
   // Legacy / optional cells (off by default; opt-in via column picker)
   { key: 'channel', label: 'Channel', width: 100 },
   { key: 'orderId', label: 'Order ID (raw)', width: 160 },

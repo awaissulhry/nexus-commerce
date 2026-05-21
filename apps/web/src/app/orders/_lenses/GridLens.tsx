@@ -17,8 +17,9 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { ChevronRight, ExternalLink, MoreHorizontal, Settings2, ShoppingCart } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Settings2, ShoppingCart } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -279,16 +280,23 @@ export function GridLens(props: GridLensProps) {
                   // is the only one with no visible label; layout
                   // would render the handle floating in dead space.
                   const showResize = !col.locked
+                  const isSticky = col.key === 'actions'
                   return (
                     <th
                       key={col.key}
                       role="columnheader"
                       scope="col"
                       aria-sort={ariaSort}
-                      style={{ width, minWidth: width }}
+                      style={{
+                        width,
+                        minWidth: width,
+                        ...(isSticky
+                          ? { position: 'sticky' as const, right: 0, zIndex: 11 }
+                          : {}),
+                      }}
                       className={`px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-left relative group ${
                         isSortable ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700' : ''
-                      }`}
+                      } ${isSticky ? 'bg-slate-50 dark:bg-slate-800 shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)]' : ''}`}
                       onClick={() => {
                         if (sortMap[col.key]) onSort(sortMap[col.key])
                       }}
@@ -350,11 +358,28 @@ export function GridLens(props: GridLensProps) {
                   >
                     {visible.map((col) => {
                       const w = widthFor(col)
+                      const isSticky = col.key === 'actions'
+                      // OX.4 follow-up — sticky right-pinned action column.
+                      // Background tracks hover/selected so the underlying
+                      // row doesn't bleed through the sticky cell.
+                      const stickyBg = isSelected
+                        ? 'bg-blue-50 dark:bg-blue-950/40'
+                        : isFocused
+                        ? 'bg-white dark:bg-slate-900'
+                        : 'bg-white dark:bg-slate-900 group-hover:bg-slate-50'
                       return (
                         <td
                           key={col.key}
-                          className="px-3 py-2 align-middle"
-                          style={{ width: w, minWidth: w }}
+                          className={`px-3 py-2 align-middle ${
+                            isSticky ? `${stickyBg} shadow-[-4px_0_8px_-4px_rgba(15,23,42,0.08)]` : ''
+                          }`}
+                          style={{
+                            width: w,
+                            minWidth: w,
+                            ...(isSticky
+                              ? { position: 'sticky' as const, right: 0, zIndex: 5 }
+                              : {}),
+                          }}
                         >
                           <OrderCell
                             col={col.key}
@@ -860,22 +885,38 @@ function OrderCell({
 }
 
 /**
- * OX.4 — Amazon-style row action column. 3 visible buttons mirror the
- * Seller Central row ("Manage invoice", "Print packing slip", "Refund
- * Order") and a "More" dropdown houses the long tail. Handlers are
- * deep-links for now; OX.5/OX.6 wire functional invoice generation
- * and bulk packing slips.
+ * OX.4 — Amazon-style row action column. Vertically stacked buttons in
+ * a single right-pinned column matching Seller Central's layout. The
+ * "More information" dropdown is rendered via React portal so it
+ * escapes the table's `overflow-x-auto` clip-rect — otherwise rows
+ * near the right edge or bottom edge would crop the menu.
+ *
+ * Handlers are deep-links for now; OX.5/OX.6 wire functional invoice
+ * generation and bulk packing slips.
  */
 function RowActionMenu({ order }: { order: GridOrder }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
     const onDocClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (triggerRef.current?.contains(t)) return
+      if (menuRef.current?.contains(t)) return
+      setOpen(false)
     }
+    const onScroll = () => setOpen(false)
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onScroll)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [open])
 
   const baseHref = `/orders/${order.id}`
@@ -883,44 +924,64 @@ function RowActionMenu({ order }: { order: GridOrder }) {
 
   const primary = [
     { label: 'Manage invoice', href: `${baseHref}?tab=fiscal` },
+    { label: 'Edit consignment', href: `${baseHref}?tab=fulfillment#consignment` },
     { label: 'Print packing slip', href: `${baseHref}?tab=fulfillment#packing` },
-    { label: 'Refund', href: `${baseHref}?tab=fulfillment#refund` },
+    { label: 'Refund Order', href: `${baseHref}?tab=fulfillment#refund` },
   ]
   const more = [
     { label: 'Open detail', href: baseHref },
-    { label: 'Edit consignment', href: `${baseHref}?tab=fulfillment#consignment` },
     { label: 'Request a review', href: `${baseHref}#review` },
     { label: 'Add note', href: `${baseHref}#notes` },
     { label: 'View timeline', href: `${baseHref}?tab=activity` },
   ]
 
+  const openMenu = (e: React.MouseEvent) => {
+    stop(e)
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (rect) {
+      const menuWidth = 200
+      const menuHeight = more.length * 32 + 8
+      const top = rect.bottom + 4 + menuHeight > window.innerHeight ? rect.top - menuHeight - 4 : rect.bottom + 4
+      const left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)
+      setCoords({ top, left })
+    }
+    setOpen(true)
+  }
+
   return (
-    <div className="flex items-center gap-1" onClick={stop}>
+    <div className="flex flex-col gap-1 items-stretch" onClick={stop}>
       {primary.map((a) => (
         <Link
           key={a.label}
           href={a.href}
-          className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center"
+          className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center whitespace-nowrap"
           title={a.label}
         >
           {a.label}
         </Link>
       ))}
-      <div ref={ref} className="relative">
-        <button
-          type="button"
-          onClick={(e) => {
-            stop(e)
-            setOpen((v) => !v)
-          }}
-          className="h-7 w-7 inline-flex items-center justify-center border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
-          aria-label="More actions"
-          title="More actions"
-        >
-          <MoreHorizontal size={12} aria-hidden="true" />
-        </button>
-        {open && (
-          <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg py-1">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={openMenu}
+        className="h-7 px-2 text-xs text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1 whitespace-nowrap"
+        aria-label="More information"
+        aria-expanded={open}
+        title="More information"
+      >
+        More information <ChevronDown size={11} aria-hidden="true" />
+      </button>
+      {open && coords && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: coords.top, left: coords.left, width: 200 }}
+            className="z-[1000] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1"
+          >
             {more.map((a) => (
               <Link
                 key={a.label}
@@ -931,9 +992,9 @@ function RowActionMenu({ order }: { order: GridOrder }) {
                 {a.label}
               </Link>
             ))}
-          </div>
+          </div>,
+          document.body,
         )}
-      </div>
     </div>
   )
 }
