@@ -9,8 +9,19 @@
 //
 // State is persisted server-side on FbaInboundPlanV2 — the page
 // can be reloaded mid-flow and resume from the recorded step.
+//
+// F.6.1 (2026-05-21):
+//   - NewPlanButton's prompt() + PLACEHOLDER body replaced by
+//     NewPlanModal: real SKU autocomplete + multi-item + source
+//     address inputs + destination marketplace dropdown.
+//   - Selected plan id round-trips through ?plan=<id> URL state so
+//     a refresh mid-flow resumes on the right plan.
+//   - CREATE step now visible in the step tracker (was previously
+//     skipped, making the wizard look like it started at "pick
+//     packing").
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Loader2,
   CheckCircle2,
@@ -25,6 +36,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
 import { usePolledList } from '@/lib/sync/use-polled-list'
+import { NewPlanModal } from './NewPlanModal'
 
 interface Plan {
   id: string
@@ -45,6 +57,9 @@ interface Breadcrumb {
   href?: string
 }
 
+// F.6.1: CREATE shows as the very first step (was previously absent
+// from the visible tracker, making the wizard look like it started
+// mid-flow). A plan that's past CREATE is treated as having completed it.
 const STEPS = [
   { key: 'CREATE', label: 'Create plan' },
   { key: 'LIST_PACKING', label: 'Pick packing' },
@@ -57,7 +72,28 @@ const STEPS = [
 ]
 
 export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Breadcrumb[] }) {
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
+  // F.6.1: URL deep-link. ?plan=<row id> survives refresh + lets
+  // operators bookmark a specific in-progress plan.
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const urlPlanId = searchParams?.get('plan') ?? null
+  const [selectedPlanId, setSelectedPlanIdState] = useState<string | null>(urlPlanId)
+  const [showNewPlanModal, setShowNewPlanModal] = useState(false)
+
+  const setSelectedPlanId = (id: string | null) => {
+    setSelectedPlanIdState(id)
+    // Push the plan id to the URL so a refresh / bookmark resumes here.
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
+    if (id) params.set('plan', id)
+    else params.delete('plan')
+    router.replace(`?${params.toString()}`, { scroll: false })
+  }
+
+  // Sync state if URL changes externally (e.g. back/forward nav).
+  useEffect(() => {
+    if (urlPlanId !== selectedPlanId) setSelectedPlanIdState(urlPlanId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlPlanId])
 
   const { data, loading, error, refetch } = usePolledList<{
     plans: Plan[]
@@ -80,6 +116,15 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
         breadcrumbs={breadcrumbs}
       />
 
+      <NewPlanModal
+        open={showNewPlanModal}
+        onClose={() => setShowNewPlanModal(false)}
+        onCreated={(id) => {
+          setSelectedPlanId(id)
+          refetch()
+        }}
+      />
+
       {/* Plans list */}
       <Card>
         <div className="space-y-2">
@@ -87,7 +132,13 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
             <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
               Plans · {data?.count ?? '—'}
             </div>
-            <NewPlanButton onCreated={(id) => { setSelectedPlanId(id); refetch() }} />
+            <button
+              onClick={() => setShowNewPlanModal(true)}
+              className="h-7 px-3 text-xs bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 inline-flex items-center gap-1"
+            >
+              <Plus size={11} />
+              New plan
+            </button>
           </div>
           {loading && !data ? (
             <Skeleton variant="block" height={120} />
@@ -145,70 +196,23 @@ export default function FbaInboundV2Wizard({ breadcrumbs }: { breadcrumbs?: Brea
   )
 }
 
-function NewPlanButton({ onCreated }: { onCreated: (id: string) => void }) {
-  const { toast } = useToast()
-  const [busy, setBusy] = useState(false)
-  const handleClick = async () => {
-    const name = prompt(
-      'Plan name (any short label so you can find it later)?',
-      `Inbound ${new Date().toLocaleDateString()}`,
-    )
-    if (!name) return
-    setBusy(true)
-    try {
-      // Minimal stub body — real wizard step would collect msku /
-      // items / sourceAddress. F.5 v1 keeps this MVP so the flow is
-      // testable end-to-end; full input form is a follow-up commit.
-      const body = {
-        spApi: {
-          name,
-          destinationMarketplaces: ['A1F83G8C2ARO7P'],
-          msku: 'PLACEHOLDER',
-          items: [{ msku: 'PLACEHOLDER', quantity: 1 }],
-          sourceAddress: {
-            name: 'Xavia',
-            addressLine1: 'Via Esempio 1',
-            city: 'Riccione',
-            stateOrProvinceCode: 'RN',
-            countryCode: 'IT',
-            postalCode: '47838',
-          },
-        },
-      }
-      const res = await fetch(`${getBackendUrl()}/api/fba/inbound/v2`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`)
-      toast.success('Plan created — listing packing options next')
-      onCreated(j.planRowId)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <button
-      onClick={handleClick}
-      disabled={busy}
-      className="h-7 px-3 text-xs bg-blue-600 dark:bg-blue-700 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1"
-    >
-      {busy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
-      New plan
-    </button>
-  )
-}
-
 function StepTracker({ plan }: { plan: Plan }) {
+  // F.6.1: CREATE is treated as complete once the plan exists in our
+  // DB (anything past CREATE is necessarily past CREATE). Previously
+  // CREATE was missing from the tracker entirely.
   const currentIdx = STEPS.findIndex((s) => s.key === plan.currentStep)
+  const planExists = Boolean(plan.planId) // server-side row created
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {STEPS.map((step, i) => {
-        const done = i < currentIdx || plan.status === 'LABELS_READY'
-        const active = i === currentIdx && plan.status !== 'FAILED'
+        // F.6.1: CREATE marks done as soon as planId is persisted (the
+        // FbaInboundPlanV2 row exists with a real SP-API planId), even
+        // when currentStep is still 'CREATE' due to retry semantics.
+        const done =
+          i < currentIdx ||
+          plan.status === 'LABELS_READY' ||
+          (step.key === 'CREATE' && planExists)
+        const active = i === currentIdx && plan.status !== 'FAILED' && !(step.key === 'CREATE' && planExists)
         const failed = i === currentIdx && plan.status === 'FAILED'
         return (
           <div key={step.key} className="flex items-center gap-1">
