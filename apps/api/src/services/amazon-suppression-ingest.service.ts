@@ -272,15 +272,30 @@ export async function ingestAmazonSuppressionForMarketplace(args: {
  */
 export async function ingestAmazonSuppressionAllMarketplaces(args: {
   daysBack?: number
+  /** HB.11.1 — restrict to specific 2-letter codes; default = all
+   *  isParticipating Amazon markets. Per-market is the recommended
+   *  pattern: each marketplace's defect-report fetch can take 30-120s
+   *  server-side, so 8 markets in sequence exceeds Railway's gateway. */
+  marketplaceCodes?: string[]
 } = {}): Promise<MultiMarketplaceSuppressionResult> {
   const t0 = Date.now()
+  const where: {
+    channel: string
+    isActive: boolean
+    isParticipating: boolean
+    marketplaceId: { not: null }
+    code?: { in: string[] }
+  } = {
+    channel: 'AMAZON',
+    isActive: true,
+    isParticipating: true,
+    marketplaceId: { not: null },
+  }
+  if (args.marketplaceCodes && args.marketplaceCodes.length > 0) {
+    where.code = { in: args.marketplaceCodes.map((c) => c.toUpperCase()) }
+  }
   const markets = await prisma.marketplace.findMany({
-    where: {
-      channel: 'AMAZON',
-      isActive: true,
-      isParticipating: true,
-      marketplaceId: { not: null },
-    },
+    where,
     select: { code: true, marketplaceId: true },
     orderBy: { code: 'asc' },
   })

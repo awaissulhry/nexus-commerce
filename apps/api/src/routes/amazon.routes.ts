@@ -1821,7 +1821,7 @@ const amazonRoutes: FastifyPluginAsync = async (fastify) => {
   // upserts AmazonSuppression rows joined to ChannelListing by SKU.
   // Body: { daysBack?: number } default 30.
   fastify.post<{
-    Body?: { daysBack?: number }
+    Body?: { daysBack?: number; marketplaceCodes?: string[] }
   }>('/suppression/backfill', async (request, reply) => {
     const { ingestAmazonSuppressionAllMarketplaces } = await import('../services/amazon-suppression-ingest.service.js')
     try {
