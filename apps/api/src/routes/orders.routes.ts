@@ -405,6 +405,12 @@ export async function ordersRoutes(app: FastifyInstance) {
           returns: { include: { items: true }, orderBy: { createdAt: 'desc' } },
           reviewRequests: { include: { rule: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } },
           tags: { include: { tag: true } },
+          // OX.14 — surface CE.4 routing audit so operators can see
+          // why a particular warehouse was picked for fulfilment.
+          routingDecisions: { orderBy: { createdAt: 'desc' } },
+          // OX.14 — Italian fiscal block needs the FiscalInvoice link
+          // (status + invoice number + SDI status) when one exists.
+          fiscalInvoice: true,
         },
       })
       if (!order) return reply.status(404).send({ error: 'Order not found' })
@@ -867,6 +873,42 @@ export async function ordersRoutes(app: FastifyInstance) {
     const html = await safeRender(() => packingSlipHtml(id), 'packing-slip')
     reply.header('Content-Type', 'text/html; charset=utf-8')
     return reply.send(html)
+  })
+
+  // OX.14 — single-order JSON export. Operator-triggered download of
+  // the full order payload (items + shipments + returns + financials
+  // + fiscal invoice + routing decisions + tags + review requests).
+  // Useful for support escalations, accounting reconciliation, or
+  // archiving outside Nexus. Mirrors the detail endpoint payload but
+  // serves with Content-Disposition: attachment.
+  app.get('/api/orders/:id/export.json', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string }
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: {
+          items: { include: { product: { select: { id: true, sku: true, name: true, amazonAsin: true } } } },
+          financialTransactions: { orderBy: { transactionDate: 'desc' } },
+          shipments: { include: { items: true, warehouse: { select: { code: true, name: true } } } },
+          returns: { include: { items: true } },
+          reviewRequests: true,
+          tags: { include: { tag: true } },
+          routingDecisions: { orderBy: { createdAt: 'desc' } },
+          fiscalInvoice: true,
+          notes: true,
+        },
+      })
+      if (!order) return reply.status(404).send({ error: 'Order not found' })
+      reply.header('Content-Type', 'application/json; charset=utf-8')
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="order-${order.channelOrderId.replace(/[^a-zA-Z0-9_-]/g, '_')}.json"`,
+      )
+      return reply.send(JSON.stringify(order, null, 2))
+    } catch (error: any) {
+      logger.error('[ORDERS API] export.json failed', { message: error.message })
+      return reply.status(500).send({ error: error.message })
+    }
   })
 
   // OX.5 — bulk packing slips. Operator selects N orders, hits "Print

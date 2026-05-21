@@ -6,7 +6,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Mail, MapPin, Package, Truck, Undo2, Star, RefreshCw,
   ExternalLink, Clock, CheckCircle2, XCircle, DollarSign,
-  ShoppingCart, FileText, Activity, Receipt, Pin, PinOff, Trash2,
+  ShoppingCart, FileText, Activity, Receipt, Pin, PinOff, Trash2, Download,
 } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -278,6 +278,15 @@ export default function OrderDetailClient({ id }: { id: string }) {
           >
             <Star size={12} className={reviewBusy ? 'animate-pulse' : ''} /> Request a review
           </button>
+          {/* OX.14 — JSON export of the full order payload */}
+          <a
+            href={`${getBackendUrl()}/api/orders/${order.id}/export.json`}
+            download
+            title="Download a JSON snapshot of this order"
+            className="h-8 px-3 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100 inline-flex items-center gap-1.5"
+          >
+            <Download size={12} /> Export
+          </a>
           <span className="ml-auto text-xs text-slate-500 dark:text-slate-400 hidden md:inline">
             Order ID: <span className="font-mono text-slate-700 dark:text-slate-300">{order.channelOrderId}</span>
           </span>
@@ -365,6 +374,20 @@ export default function OrderDetailClient({ id }: { id: string }) {
               promise sit beside the order summary. */}
           {tabParam === 'summary' && (
             <OrderSummaryTriptych order={order} />
+          )}
+
+          {/* OX.14 — Italian fiscal block. Surfaces the buyer's tax
+              identifiers (Codice Fiscale / Partita IVA / PEC / SDI
+              Codice Destinatario) and links to the FiscalInvoice if
+              one is issued. Only renders for IT marketplace. */}
+          {tabParam === 'summary' && order.marketplace === 'IT' && (
+            <ItalianFiscalBlock order={order} />
+          )}
+
+          {/* OX.14 — Routing decision panel. Renders when CE.4 recorded
+              an audit row for this order. */}
+          {tabParam === 'summary' && order.routingDecisions?.length > 0 && (
+            <RoutingDecisionCard decisions={order.routingDecisions} />
           )}
 
           {/* OX.8 — Order contents table (Italian fiscal: dual VAT cols) */}
@@ -1292,6 +1315,141 @@ function ShopifyDiscountsCard({ meta }: { meta: any }) {
           </div>
         )}
       </div>
+    </Card>
+  )
+}
+
+/**
+ * OX.14 — Italian fiscal block. Surfaces the buyer's tax identifiers
+ * (Codice Fiscale / Partita IVA / PEC / SDI Codice Destinatario) and
+ * links through to the FiscalInvoice if one has been issued. Only
+ * renders for IT marketplace orders.
+ */
+function ItalianFiscalBlock({ order }: { order: any }) {
+  const fi = order.fiscalInvoice ?? null
+  const kindLabel = order.fiscalKind === 'B2B' ? 'B2B (Fattura)' : 'B2C (Ricevuta)'
+  return (
+    <Card title="Fiscal — Italia" description={kindLabel}>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-6 text-sm">
+        {order.codiceFiscale && (
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Codice Fiscale</dt>
+            <dd className="font-mono text-slate-900 dark:text-slate-100">{order.codiceFiscale}</dd>
+          </div>
+        )}
+        {order.partitaIva && (
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Partita IVA</dt>
+            <dd className="font-mono text-slate-900 dark:text-slate-100">{order.partitaIva}</dd>
+          </div>
+        )}
+        {order.pecEmail && (
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">PEC</dt>
+            <dd className="text-slate-900 dark:text-slate-100 break-all">{order.pecEmail}</dd>
+          </div>
+        )}
+        {order.codiceDestinatario && (
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Codice Destinatario (SDI)</dt>
+            <dd className="font-mono text-slate-900 dark:text-slate-100">{order.codiceDestinatario}</dd>
+          </div>
+        )}
+      </dl>
+      {!order.codiceFiscale && !order.partitaIva && !order.pecEmail && !order.codiceDestinatario && (
+        <div className="text-sm text-slate-500 dark:text-slate-400 italic">
+          No buyer tax identifiers captured. {order.fiscalKind === 'B2B' ? 'A B2B invoice requires Partita IVA + Codice Destinatario or PEC.' : 'B2C orders typically only need a Codice Fiscale at invoice time.'}
+        </div>
+      )}
+
+      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-sm">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-slate-500 dark:text-slate-400">e-Invoice (FatturaPA / Ricevuta):</span>
+          {fi ? (
+            <span className="text-slate-900 dark:text-slate-100 font-mono">{fi.invoiceNumber}</span>
+          ) : (
+            <Badge variant="warning" size="sm">Not issued</Badge>
+          )}
+        </div>
+        {fi?.sdiStatus && (
+          <div className="flex items-baseline justify-between gap-2 mt-1">
+            <span className="text-slate-500 dark:text-slate-400">SDI dispatch:</span>
+            <Badge
+              variant={
+                fi.sdiStatus === 'ACCEPTED'
+                  ? 'success'
+                  : fi.sdiStatus === 'REJECTED'
+                  ? 'danger'
+                  : fi.sdiStatus === 'SENT'
+                  ? 'info'
+                  : 'warning'
+              }
+              size="sm"
+            >
+              {fi.sdiStatus}
+            </Badge>
+          </div>
+        )}
+        {fi?.issuedAt && (
+          <div className="flex items-baseline justify-between gap-2 mt-1">
+            <span className="text-slate-500 dark:text-slate-400">Issued:</span>
+            <span className="text-slate-700 dark:text-slate-200">{new Date(fi.issuedAt).toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * OX.14 — Routing decision audit panel. CE.4 records why a particular
+ * warehouse was selected for fulfilment ("rule" / "scored" / "fallback").
+ * Surfaces the audit so operators can sanity-check the engine without
+ * digging through logs.
+ */
+function RoutingDecisionCard({ decisions }: { decisions: any[] }) {
+  const latest = decisions[0]
+  return (
+    <Card title="Routing decision" description={`${decisions.length} decision${decisions.length === 1 ? '' : 's'} recorded`}>
+      <dl className="space-y-1.5 text-sm">
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Method:</dt>
+          <dd>
+            <Badge
+              variant={
+                latest.method === 'rule' ? 'info' : latest.method === 'scored' ? 'success' : latest.method === 'fallback' ? 'warning' : 'default'
+              }
+              size="sm"
+            >
+              {latest.method}
+            </Badge>
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">Picked warehouse:</dt>
+          <dd className="font-mono text-slate-900 dark:text-slate-100">{latest.warehouseId ?? '—'}</dd>
+        </div>
+        {latest.ruleId && (
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="text-slate-500 dark:text-slate-400">Rule:</dt>
+            <dd className="font-mono text-slate-900 dark:text-slate-100">{latest.ruleId}</dd>
+          </div>
+        )}
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="text-slate-500 dark:text-slate-400">When:</dt>
+          <dd className="text-slate-700 dark:text-slate-200">{new Date(latest.createdAt).toLocaleString()}</dd>
+        </div>
+      </dl>
+      {latest.scoreSummary && Object.keys(latest.scoreSummary).length > 0 && (
+        <details className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <summary className="cursor-pointer text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
+            Score breakdown
+          </summary>
+          <pre className="mt-2 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+            {JSON.stringify(latest.scoreSummary, null, 2)}
+          </pre>
+        </details>
+      )}
     </Card>
   )
 }
