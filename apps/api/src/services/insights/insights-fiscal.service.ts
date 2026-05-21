@@ -131,7 +131,9 @@ export async function computeFiscalReport(
   const [orders, refunds, invoices, creditNotes] = await Promise.all([
     prisma.order.findMany({
       where: {
-        createdAt: { gte: current.from, lt: current.to },
+        // Fiscal period is the buyer purchase date (when revenue was
+        // recognized) — NOT DB insert time. Wrong here = wrong tax filing.
+        purchaseDate: { gte: current.from, lt: current.to },
         deletedAt: null,
       },
       select: {

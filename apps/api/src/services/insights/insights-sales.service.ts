@@ -74,6 +74,18 @@ export interface SalesReport {
   byProductType: SalesBucket[]
   byFulfillment: SalesBucket[]
   matrix: Array<{ channel: string; market: string; revenue: number; orders: number }>
+  /** I3 — per-(channel, marketplace, currency) breakdown in native
+   *  currency. No mixing — each row stands alone. Sorted by current
+   *  revenue desc. */
+  byMarketplaceNative: Array<{
+    channel: string
+    marketplace: string
+    currency: string
+    revenue: number
+    orders: number
+    units: number
+    aov: number
+  }>
   pareto: ParetoPoint[]
   paretoSummary: {
     topNCount: number
@@ -138,7 +150,8 @@ async function loadOrders(
 
   const orders = await prisma.order.findMany({
     where: {
-      createdAt: { gte: from, lt: to },
+      // Filter by purchaseDate (real order placement); see I1 audit
+      purchaseDate: { gte: from, lt: to },
       deletedAt: null,
       ...(whereChannel ? { channel: whereChannel as never } : {}),
       ...(whereMarket ? { marketplace: whereMarket } : {}),
@@ -150,6 +163,7 @@ async function loadOrders(
       fulfillmentMethod: true,
       totalPrice: true,
       currencyCode: true,
+      purchaseDate: true,
       createdAt: true,
       items: {
         select: {
@@ -171,7 +185,9 @@ async function loadOrders(
       fulfillmentMethod: o.fulfillmentMethod,
       totalPrice: Number(o.totalPrice ?? 0),
       currencyCode: o.currencyCode,
-      createdAt: o.createdAt,
+      // Surface the event date (purchaseDate) as createdAt to downstream
+      // bucketing; fall back to ingestion createdAt for legacy rows.
+      createdAt: o.purchaseDate ?? o.createdAt,
       items: o.items.map((it) => ({
         sku: it.sku,
         quantity: it.quantity ?? 0,
@@ -264,6 +280,15 @@ function aggregateOrders(orders: OrderRow[]): {
   matrix: Map<string, Slot>
   bySku: Map<string, Slot>
   currencies: Map<string, number>
+  /** I3 — per-(channel, marketplace, currency) native rollup */
+  byMarketplaceNative: Map<string, {
+    channel: string
+    marketplace: string
+    currency: string
+    revenue: number
+    orders: Set<string>
+    units: number
+  }>
   total: number
 } {
   const trend = new Map<
@@ -278,6 +303,19 @@ function aggregateOrders(orders: OrderRow[]): {
   const matrix = new Map<string, Slot>()
   const bySku = new Map<string, Slot>()
   const currencies = new Map<string, number>()
+  // I3 — per-(channel, marketplace, currency) tuple. Each row stands
+  // alone in its native currency; no implicit conversion.
+  const byMarketplaceNative = new Map<
+    string,
+    {
+      channel: string
+      marketplace: string
+      currency: string
+      revenue: number
+      orders: Set<string>
+      units: number
+    }
+  >()
   let total = 0
 
   for (const o of orders) {
@@ -331,6 +369,21 @@ function aggregateOrders(orders: OrderRow[]): {
 
     const code = o.currencyCode ?? 'EUR'
     currencies.set(code, (currencies.get(code) ?? 0) + orderRevenue)
+    // I3 — per-(channel, marketplace, currency) bucketing for native-
+    // currency rollup. Mirrors the summary service pattern.
+    const mkKey = `${o.channel}|${market}|${code}`
+    const mkSlot = byMarketplaceNative.get(mkKey) ?? {
+      channel: o.channel,
+      marketplace: market,
+      currency: code,
+      revenue: 0,
+      orders: new Set<string>(),
+      units: 0,
+    }
+    mkSlot.revenue += orderRevenue
+    mkSlot.orders.add(o.id)
+    mkSlot.units += units
+    byMarketplaceNative.set(mkKey, mkSlot)
   }
 
   return {
@@ -343,6 +396,7 @@ function aggregateOrders(orders: OrderRow[]): {
     matrix,
     bySku,
     currencies,
+    byMarketplaceNative,
     total,
   }
 }
@@ -492,6 +546,21 @@ export async function computeSalesReport(
         orders: slot.orders.size,
       }
     }),
+    // I3 — per-(channel, marketplace, currency) native-currency rollup.
+    // Sorted by current revenue desc. Each row stands alone in its
+    // own currency; no implicit conversion. Use this for the
+    // operator-facing per-marketplace KPI strip.
+    byMarketplaceNative: [...currentAgg.byMarketplaceNative.values()]
+      .map((s) => ({
+        channel: s.channel,
+        marketplace: s.marketplace,
+        currency: s.currency,
+        revenue: Math.round(s.revenue * 100) / 100,
+        orders: s.orders.size,
+        units: s.units,
+        aov: s.orders.size > 0 ? Math.round((s.revenue / s.orders.size) * 100) / 100 : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue),
     pareto,
     paretoSummary,
   }

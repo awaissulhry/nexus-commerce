@@ -103,12 +103,15 @@ async function loadSeries(
   const [orderRows, returnRows, adRows] = await Promise.all([
     prisma.order.findMany({
       where: {
-        createdAt: { gte: from, lt: to },
+        // Anomaly detection must run on the buyer purchase timeline,
+        // not the DB ingest timeline (which collapses backfilled
+        // history into a single day = fake 80,000% spike on today).
+        purchaseDate: { gte: from, lt: to },
         deletedAt: null,
         ...(whereChannel ? { channel: whereChannel as never } : {}),
         ...(whereMarket ? { marketplace: whereMarket } : {}),
       },
-      select: { createdAt: true, totalPrice: true, channel: true },
+      select: { purchaseDate: true, createdAt: true, totalPrice: true, channel: true },
       take: 100_000,
     }),
     prisma.return.findMany({
@@ -131,7 +134,7 @@ async function loadSeries(
   const revenue: Series = { byDay: new Map(), channels: new Map() }
   const orders: Series = { byDay: new Map(), channels: new Map() }
   for (const o of orderRows) {
-    const dk = dayKey(o.createdAt)
+    const dk = dayKey(o.purchaseDate ?? o.createdAt)
     revenue.byDay.set(dk, (revenue.byDay.get(dk) ?? 0) + Number(o.totalPrice ?? 0))
     orders.byDay.set(dk, (orders.byDay.get(dk) ?? 0) + 1)
     const channelMap = revenue.channels!.get(o.channel) ?? new Map()

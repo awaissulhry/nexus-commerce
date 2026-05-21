@@ -72,7 +72,7 @@ async function loadBuckets(
 
   const orders = await prisma.order.findMany({
     where: {
-      createdAt: { gte: from, lt: to },
+      purchaseDate: { gte: from, lt: to },
       deletedAt: null,
       ...(whereChannel ? { channel: whereChannel as never } : {}),
       ...(whereMarket ? { marketplace: whereMarket } : {}),

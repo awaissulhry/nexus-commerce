@@ -58,7 +58,7 @@ async function loadSkus(
   const items = await prisma.orderItem.findMany({
     where: {
       order: {
-        createdAt: { gte: from, lt: to },
+        purchaseDate: { gte: from, lt: to },
         deletedAt: null,
         ...(whereChannel ? { channel: whereChannel as never } : {}),
         ...(whereMarket ? { marketplace: whereMarket } : {}),
@@ -70,7 +70,7 @@ async function loadSkus(
       quantity: true,
       price: true,
       product: { select: { brand: true } },
-      order: { select: { createdAt: true } },
+      order: { select: { purchaseDate: true, createdAt: true } },
     },
     take: 200_000,
   })
@@ -91,7 +91,7 @@ async function loadSkus(
     slot.revenue += line
     slot.units += it.quantity ?? 0
     slot.orderIds.add(it.orderId)
-    const dk = dayKey(it.order.createdAt)
+    const dk = dayKey(it.order.purchaseDate ?? it.order.createdAt)
     slot.byDay.set(dk, (slot.byDay.get(dk) ?? 0) + line)
     map.set(it.sku, slot)
   }

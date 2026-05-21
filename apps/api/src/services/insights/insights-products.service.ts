@@ -133,7 +133,7 @@ async function loadOrderItems(
   const items = await prisma.orderItem.findMany({
     where: {
       order: {
-        createdAt: { gte: from, lt: to },
+        purchaseDate: { gte: from, lt: to },
         deletedAt: null,
         ...(whereChannel ? { channel: whereChannel as never } : {}),
         ...(whereMarket ? { marketplace: whereMarket } : {}),
@@ -153,7 +153,7 @@ async function loadOrderItems(
           parentId: true,
         },
       },
-      order: { select: { createdAt: true } },
+      order: { select: { purchaseDate: true, createdAt: true } },
     },
     take: 200_000,
   })
@@ -168,7 +168,8 @@ async function loadOrderItems(
       brand: it.product?.brand ?? null,
       productType: it.product?.productType ?? null,
       parentId: it.product?.parentId ?? null,
-      createdAt: it.order.createdAt,
+      // Surface the buyer purchase date; fallback to DB ingest for legacy rows.
+      createdAt: it.order.purchaseDate ?? it.order.createdAt,
     }))
     .filter((it) =>
       !filters.brands.length

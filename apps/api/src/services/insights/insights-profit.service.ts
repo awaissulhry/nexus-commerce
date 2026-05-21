@@ -153,7 +153,8 @@ async function loadOrderItems(
   const items = await prisma.orderItem.findMany({
     where: {
       order: {
-        createdAt: { gte: from, lt: to },
+        // Filter by parent order's purchaseDate, not createdAt (I1)
+        purchaseDate: { gte: from, lt: to },
         deletedAt: null,
         ...(whereChannel ? { channel: whereChannel as never } : {}),
         ...(whereMarket ? { marketplace: whereMarket } : {}),

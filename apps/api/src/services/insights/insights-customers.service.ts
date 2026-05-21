@@ -114,7 +114,7 @@ export async function computeCustomerReport(
   const [windowOrders, customers] = await Promise.all([
     prisma.order.findMany({
       where: {
-        createdAt: { gte: current.from, lt: current.to },
+        purchaseDate: { gte: current.from, lt: current.to },
         deletedAt: null,
         ...(whereChannel ? { channel: whereChannel as never } : {}),
         ...(whereMarket ? { marketplace: whereMarket } : {}),
@@ -125,6 +125,7 @@ export async function computeCustomerReport(
         customerEmail: true,
         marketplace: true,
         totalPrice: true,
+        purchaseDate: true,
         createdAt: true,
       },
       take: 100_000,
@@ -211,6 +212,7 @@ export async function computeCustomerReport(
     },
     select: {
       customerEmail: true,
+      purchaseDate: true,
       createdAt: true,
     },
     take: 200_000,
@@ -218,9 +220,13 @@ export async function computeCustomerReport(
   const firstSeenByCustomer = new Map<string, Date>()
   for (const o of allOrders) {
     if (!o.customerEmail) continue
+    // First-seen uses purchaseDate (real first-order time); cohort math
+    // becomes meaningless when keyed off DB ingest time (every backfilled
+    // customer ends up "first seen today").
+    const eventDate = o.purchaseDate ?? o.createdAt
     const existing = firstSeenByCustomer.get(o.customerEmail)
-    if (!existing || o.createdAt < existing) {
-      firstSeenByCustomer.set(o.customerEmail, o.createdAt)
+    if (!existing || eventDate < existing) {
+      firstSeenByCustomer.set(o.customerEmail, eventDate)
     }
   }
   const cohortMembership = new Map<string, Set<string>>()
@@ -236,7 +242,7 @@ export async function computeCustomerReport(
     const firstDate = firstSeenByCustomer.get(o.customerEmail)
     if (!firstDate) continue
     const cohort = monthKey(firstDate)
-    const observedMonth = monthKey(o.createdAt)
+    const observedMonth = monthKey(o.purchaseDate ?? o.createdAt)
     const offset = monthOffset(cohort, observedMonth)
     if (offset < 0 || offset > 11) continue
     const map = cohortRetention.get(cohort) ?? new Map<number, Set<string>>()

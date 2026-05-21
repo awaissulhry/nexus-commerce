@@ -18,16 +18,40 @@ import {
   deltaPct,
 } from './index.js'
 
+/** I3 — per-marketplace × per-currency revenue. We never mix currencies.
+ *  One entry per (channel, marketplace, currency) tuple. Operators see
+ *  exact native values per market — same shape as Amazon Seller Central.
+ */
+export interface MarketplaceMetrics {
+  channel: string         // 'AMAZON' | 'EBAY' | 'SHOPIFY' | ...
+  marketplace: string     // 'IT' | 'DE' | 'GLOBAL' | ...
+  currency: string        // 'EUR' | 'GBP' | 'USD' | ...
+  revenue: { current: number; previous: number; deltaPct: number | null }
+  orders: { current: number; previous: number; deltaPct: number | null }
+  units: { current: number; previous: number; deltaPct: number | null }
+  aov: { current: number; previous: number; deltaPct: number | null }
+}
+
 export interface InsightsSummary {
   window: { from: string; to: string }
   compare: { from: string; to: string } | null
+  /** PRIMARY revenue currency (largest single-currency revenue contributor
+   *  in the window). Drives the headline KPI when a single-currency view
+   *  fits. Multi-currency operators should read `byMarketplace` instead. */
   currency: string
+  /** Aggregate counts that ARE currency-agnostic (orders, units). Revenue
+   *  here is the PRIMARY-CURRENCY-ONLY subset to avoid the mixed-currency
+   *  arithmetic that was previously summed as if all currencies were equal. */
   totals: {
     revenue: { current: number; previous: number; deltaPct: number | null }
     orders: { current: number; previous: number; deltaPct: number | null }
     units: { current: number; previous: number; deltaPct: number | null }
     aov: { current: number; previous: number; deltaPct: number | null }
   }
+  /** Canonical per-marketplace × per-currency breakdown — use this for
+   *  any multi-marketplace seller. Native currency per row; no implicit
+   *  conversion. */
+  byMarketplace: MarketplaceMetrics[]
   spark: Array<{ date: string; revenue: number; orders: number }>
   filterEcho: {
     channels: string[]
@@ -42,6 +66,9 @@ interface OrderAggregate {
   units: number
   byDay: Map<string, { revenue: number; orders: number }>
   currencies: Map<string, number>
+  /** I3 — per-(channel, marketplace, currency) bucket. Key is
+   *  `${channel}|${marketplace}|${currency}`. */
+  byMarketplace: Map<string, { channel: string; marketplace: string; currency: string; revenue: number; orders: number; units: number }>
 }
 
 function dayKey(d: Date): string {
@@ -67,13 +94,16 @@ async function aggregateRange(
 
   const orders = await prisma.order.findMany({
     where: {
-      createdAt: { gte: from, lt: to },
+      purchaseDate: { gte: from, lt: to },
       deletedAt: null,
       ...(whereChannel ? { channel: whereChannel as never } : {}),
       ...(whereMarket ? { marketplace: whereMarket } : {}),
     },
     select: {
       id: true,
+      channel: true,
+      marketplace: true,
+      purchaseDate: true,
       createdAt: true,
       totalPrice: true,
       currencyCode: true,
@@ -93,6 +123,7 @@ async function aggregateRange(
     units: 0,
     byDay: new Map(),
     currencies: new Map(),
+    byMarketplace: new Map(),
   }
 
   for (const o of orders) {
@@ -105,7 +136,7 @@ async function aggregateRange(
     }
     const amount = Number(o.totalPrice ?? 0)
     const units = o.items.reduce((s, it) => s + (it.quantity ?? 0), 0)
-    const key = dayKey(o.createdAt)
+    const key = dayKey(o.purchaseDate ?? o.createdAt)
     const slot = result.byDay.get(key) ?? { revenue: 0, orders: 0 }
     slot.revenue += amount
     slot.orders += 1
@@ -115,6 +146,24 @@ async function aggregateRange(
     result.units += units
     const code = o.currencyCode ?? 'EUR'
     result.currencies.set(code, (result.currencies.get(code) ?? 0) + amount)
+    // I3 — per-(channel, marketplace, currency) bucketing for native-
+    // currency rollup. We never mix currencies; each marketplace stands
+    // alone in its own currency.
+    const channel = String(o.channel)
+    const marketplace = o.marketplace ?? 'GLOBAL'
+    const mkKey = `${channel}|${marketplace}|${code}`
+    const mkSlot = result.byMarketplace.get(mkKey) ?? {
+      channel,
+      marketplace,
+      currency: code,
+      revenue: 0,
+      orders: 0,
+      units: 0,
+    }
+    mkSlot.revenue += amount
+    mkSlot.orders += 1
+    mkSlot.units += units
+    result.byMarketplace.set(mkKey, mkSlot)
   }
   return result
 }
@@ -135,9 +184,14 @@ export async function computeInsightsSummary(
           units: 0,
           byDay: new Map(),
           currencies: new Map(),
+          byMarketplace: new Map(),
         }),
   ])
 
+  // I2 — primary currency = single-currency contributor with the largest
+  // revenue. Drives the headline KPI when one currency dominates. For
+  // multi-currency sellers, the per-marketplace breakdown is the source
+  // of truth — we never blend currencies.
   let primaryCurrency = 'EUR'
   let primaryAmount = 0
   for (const [code, amt] of currentAgg.currencies.entries()) {
@@ -146,6 +200,7 @@ export async function computeInsightsSummary(
       primaryCurrency = code
     }
   }
+  const primaryAmountPrev = compareAgg.currencies.get(primaryCurrency) ?? 0
 
   const spark: Array<{ date: string; revenue: number; orders: number }> = []
   const dayMs = 24 * 3600_000
@@ -160,8 +215,50 @@ export async function computeInsightsSummary(
     })
   }
 
-  const aovCurrent = currentAgg.orders ? currentAgg.total / currentAgg.orders : 0
-  const aovPrev = compareAgg.orders ? compareAgg.total / compareAgg.orders : 0
+  // I2 — totals.revenue is restricted to the primary currency to avoid
+  // the previous bug of mixed-currency summation. Orders + units are
+  // currency-agnostic and stay as totals across the whole window.
+  const aovCurrent = currentAgg.orders ? primaryAmount / currentAgg.orders : 0
+  const aovPrev = compareAgg.orders ? primaryAmountPrev / compareAgg.orders : 0
+
+  // I3 — assemble per-marketplace metrics with native-currency current vs
+  // previous. Each marketplace stands alone in its own currency.
+  const byMarketplace: MarketplaceMetrics[] = []
+  for (const [key, cur] of currentAgg.byMarketplace.entries()) {
+    const prev = compareAgg.byMarketplace.get(key)
+    const prevRev = prev?.revenue ?? 0
+    const prevOrders = prev?.orders ?? 0
+    const prevUnits = prev?.units ?? 0
+    const aovCur = cur.orders > 0 ? cur.revenue / cur.orders : 0
+    const aovPr = prevOrders > 0 ? prevRev / prevOrders : 0
+    byMarketplace.push({
+      channel: cur.channel,
+      marketplace: cur.marketplace,
+      currency: cur.currency,
+      revenue: {
+        current: Math.round(cur.revenue * 100) / 100,
+        previous: Math.round(prevRev * 100) / 100,
+        deltaPct: deltaPct(cur.revenue, prevRev),
+      },
+      orders: {
+        current: cur.orders,
+        previous: prevOrders,
+        deltaPct: deltaPct(cur.orders, prevOrders),
+      },
+      units: {
+        current: cur.units,
+        previous: prevUnits,
+        deltaPct: deltaPct(cur.units, prevUnits),
+      },
+      aov: {
+        current: Math.round(aovCur * 100) / 100,
+        previous: Math.round(aovPr * 100) / 100,
+        deltaPct: deltaPct(aovCur, aovPr),
+      },
+    })
+  }
+  // Sort descending by current-period revenue so the biggest market is first
+  byMarketplace.sort((a, b) => b.revenue.current - a.revenue.current)
 
   return {
     window: {
@@ -174,9 +271,10 @@ export async function computeInsightsSummary(
     currency: primaryCurrency,
     totals: {
       revenue: {
-        current: Math.round(currentAgg.total),
-        previous: Math.round(compareAgg.total),
-        deltaPct: deltaPct(currentAgg.total, compareAgg.total),
+        // Restricted to primary currency — see I2 note above.
+        current: Math.round(primaryAmount * 100) / 100,
+        previous: Math.round(primaryAmountPrev * 100) / 100,
+        deltaPct: deltaPct(primaryAmount, primaryAmountPrev),
       },
       orders: {
         current: currentAgg.orders,
@@ -189,11 +287,12 @@ export async function computeInsightsSummary(
         deltaPct: deltaPct(currentAgg.units, compareAgg.units),
       },
       aov: {
-        current: Math.round(aovCurrent),
-        previous: Math.round(aovPrev),
+        current: Math.round(aovCurrent * 100) / 100,
+        previous: Math.round(aovPrev * 100) / 100,
         deltaPct: deltaPct(aovCurrent, aovPrev),
       },
     },
+    byMarketplace,
     spark,
     filterEcho: {
       channels: filters.channels,

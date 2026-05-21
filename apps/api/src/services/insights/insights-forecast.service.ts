@@ -241,7 +241,7 @@ export async function computeForecastReport(
       where: {
         sku: { in: skus },
         order: {
-          createdAt: { gte: new Date(today.getTime() - 30 * 24 * 3600_000) },
+          purchaseDate: { gte: new Date(today.getTime() - 30 * 24 * 3600_000) },
           deletedAt: null,
         },
       },
