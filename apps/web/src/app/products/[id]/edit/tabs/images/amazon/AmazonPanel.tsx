@@ -5,7 +5,7 @@
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { AlertTriangle, ChevronDown, Clock, Eye, Loader2 } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Clock, Eye, Info, Loader2 } from 'lucide-react'
 import { beFetch } from '../api'
 import AmazonMatrix from './AmazonMatrix'
 import AmazonPublishBar from './AmazonPublishBar'
@@ -13,6 +13,15 @@ import ImagePickerModal from '../ImagePickerModal'
 import CrossChannelSyncBar from '../CrossChannelSyncBar'
 import ChannelPreview from '../ChannelPreview'
 import ImagePublishHistory from '../ImagePublishHistory'
+import { useTranslations } from '@/lib/i18n/use-translations'
+
+// IR.10.3 — Per-marketplace audience guidance keys.
+const MARKETPLACE_GUIDANCE: Record<string, string> = {
+  IT: 'products.edit.images.marketGuidance.amazonIt',
+  DE: 'products.edit.images.marketGuidance.amazonDe',
+  FR: 'products.edit.images.marketGuidance.amazonFr',
+  ES: 'products.edit.images.marketGuidance.amazonEs',
+}
 import {
   useAmazonImages,
   AMAZON_MARKETPLACES,
@@ -75,6 +84,7 @@ export default function AmazonPanel({
   onSavePending,
   onReload,
 }: Props) {
+  const { t } = useTranslations()
   const noAxisData = variants.length > 0 && availableAxes.length === 0
   const [slotUploading, setSlotUploading] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -220,6 +230,19 @@ export default function AmazonPanel({
           </div>
         )}
       </div>
+
+      {/* IR.10.3 — Per-marketplace audience guidance.
+          Tips change as the operator switches Amazon IT / DE / FR / ES tabs;
+          ALL hides the card because there's no single audience to advise on. */}
+      {amazon.activeMarketplace !== 'ALL' && MARKETPLACE_GUIDANCE[amazon.activeMarketplace] && (
+        <div className="mx-4 mt-4 flex items-start gap-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs text-blue-800 dark:text-blue-200">
+          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-blue-500" />
+          <div className="space-y-0.5">
+            <span className="font-medium">{t('products.edit.images.marketGuidance.section')}</span>
+            <p>{t(MARKETPLACE_GUIDANCE[amazon.activeMarketplace])}</p>
+          </div>
+        </div>
+      )}
 
       {/* Missing axis-data warning */}
       {noAxisData && (
